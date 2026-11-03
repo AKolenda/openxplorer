@@ -577,15 +577,36 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     }
 }
 
+/// Rename items…, under Rename while several items are selected: the
+/// "Rename items" dialog with its `#` template (OPS-014). Disabled, saying
+/// why, in a previous version; its action is off wherever Rename is.
+fn rename_items_item(facts: &ItemFacts) -> Option<MenuEntry> {
+    if facts.is_single {
+        return None;
+    }
+    let rename_items = item(
+        ox_core::i18n::gettext_static("Rename items…"),
+        Icon::Rename,
+        WindowAction::RenameItems,
+    )
+    .disabled_because(
+        facts.is_read_only,
+        ox_core::i18n::gettext_static(READ_ONLY_VERSION),
+    );
+    Some(rename_items.into())
+}
+
 /// The Windows 10 style: every command as a row, with the folder's cache
-/// entry and an SMB item's Sign out (CMD-009).
+/// entry and an SMB item's Sign out (CMD-009), and Rename items… for
+/// several items (OPS-014).
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
     let mut entries = open_group(facts, MenuStyle::Classic);
     entries.push(MenuEntry::Divider);
     entries.extend([cut.into(), copy.into(), paste.into(), MenuEntry::Divider]);
+    entries.push(rename.into());
+    entries.extend(rename_items_item(facts));
     entries.extend([
-        rename.into(),
         delete.into(),
         duplicate_item(),
         copy_path_item(),
@@ -899,6 +920,47 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Rename items… follows Rename in the classic menu ("Show more
+    /// options") only while several items are selected, and is disabled,
+    /// saying why, in a previous version.
+    ///
+    /// parity: OPS-014, CMD-009
+    #[test]
+    fn rename_items_follows_rename_in_the_classic_menu_for_several_items_only() {
+        let several = ItemFacts {
+            is_single: false,
+            ..file()
+        };
+        let read_only = ItemFacts {
+            is_read_only: true,
+            ..several.clone()
+        };
+        let classic = labels(&item_menu(&several, MenuStyle::Classic).entries);
+        let one = labels(&item_menu(&file(), MenuStyle::Classic).entries);
+        let compact = labels(&item_menu(&several, MenuStyle::Compact).entries);
+        let rename = classic
+            .iter()
+            .position(|label| label == "Rename")
+            .expect("Rename is listed");
+
+        assert_eq!(classic[rename + 1], "Rename items…");
+        assert!(!one.iter().any(|label| label == "Rename items…"));
+        assert!(!compact.iter().any(|label| label == "Rename items…"));
+        assert!(
+            !disabled(&item_menu(&several, MenuStyle::Classic).entries).contains(&"Rename items…".to_owned())
+        );
+        assert!(disabled(&item_menu(&read_only, MenuStyle::Classic).entries)
+            .contains(&"Rename items…".to_owned()));
+        let action = item_menu(&several, MenuStyle::Classic)
+            .entries
+            .into_iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Item(item) if item.label == "Rename items…" => Some(item.action),
+                _ => None,
+            });
+        assert_eq!(action, Some(WindowAction::RenameItems.into()));
     }
 
     /// parity: CMD-009, CMD-016, TAB-028

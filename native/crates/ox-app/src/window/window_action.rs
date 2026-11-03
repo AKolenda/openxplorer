@@ -222,6 +222,9 @@ pub(crate) enum WindowAction {
     PasteInto,
     /// Rename (F2): asks for a new name for the one selected item.
     Rename,
+    /// Rename items…: renames several selected items with the "Rename
+    /// items" dialog's `#` template (OPS-014).
+    RenameItems,
     /// Delete: Move to Trash, or Delete permanently where the folder has
     /// no Trash, after asking.
     Trash,
@@ -532,6 +535,7 @@ impl WindowAction {
             WindowAction::Paste => "paste",
             WindowAction::PasteInto => "paste-into",
             WindowAction::Rename => "rename",
+            WindowAction::RenameItems => "rename-items",
             WindowAction::Trash => "trash",
             WindowAction::DeletePermanently => "delete-permanently",
             WindowAction::Duplicate => "duplicate",

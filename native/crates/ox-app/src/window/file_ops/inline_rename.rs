@@ -12,7 +12,12 @@
 //! disabled, so a second commit cannot start it again. A name that would
 //! hide the item asks first ([`super::hide_confirm`]). As in Dolphin, Tab
 //! and Shift+Tab, and Down and Up in the details view, commit and go on
-//! to rename the next or previous item (OPS-012).
+//! to rename the next or previous item (OPS-012). With several items
+//! selected, the field edits one of them and Enter gives the typed name to
+//! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab and
+//! the arrows are then the field's own keys.
+
+use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -21,6 +26,7 @@ use ox_core::entry::Entry;
 use ox_core::ops::rename_item;
 
 use super::names::check_typed_name;
+use super::numbered_rename::numbered_batch_for;
 use super::rename::selected_name_length;
 use crate::folder_view::cells::FileCell;
 use crate::window::folder_pane::FolderView;
@@ -38,6 +44,9 @@ struct RenameTarget {
     name: String,
     /// True for a folder, whose name has no extension.
     is_folder: bool,
+    /// Every selected item in the order shown, the edited one included,
+    /// when several are renamed together; `None` for one item.
+    several: Option<Rc<[Entry]>>,
 }
 
 /// How many places Tab, Shift+Tab, Down or Up move the rename on from
@@ -59,8 +68,9 @@ fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) ->
 }
 
 impl BrowserWindow {
-    /// Starts editing `entry`'s name in `cell`.
-    pub(super) fn rename_in_place(&self, cell: &FileCell, entry: &Entry) {
+    /// Starts editing `entry`'s name in `cell`; with `several`, the
+    /// selected items in the order shown, the typed name goes to them all.
+    pub(super) fn rename_in_place(&self, cell: &FileCell, entry: &Entry, several: Option<Vec<Entry>>) {
         let editor = gtk::Entry::builder()
             .text(&entry.name)
             .hexpand(true)
@@ -73,6 +83,7 @@ impl BrowserWindow {
             uri: entry.uri.clone(),
             name: entry.name.clone(),
             is_folder: entry.is_dir,
+            several: several.map(Rc::from),
         };
         self.connect_name_editor(cell, &editor, &target);
         cell.show_name_editor(&editor);
@@ -151,8 +162,8 @@ impl BrowserWindow {
             cell,
             #[weak]
             editor,
-            #[strong(rename_to = uri)]
-            target.uri,
+            #[strong]
+            target,
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
@@ -160,11 +171,16 @@ impl BrowserWindow {
                     window.end_rename_in_place(&cell);
                     return glib::Propagation::Stop;
                 }
+                // Several items get one name: there is no next one to
+                // rename.
+                if target.several.is_some() {
+                    return glib::Propagation::Proceed;
+                }
                 let in_details = window.folder_pane().view() == FolderView::Details;
                 let Some(step) = rename_step(key, modifiers, in_details) else {
                     return glib::Propagation::Proceed;
                 };
-                let next = window.neighbour_uri(&uri, step);
+                let next = window.neighbour_uri(&target.uri, step);
                 window.imp().file_operations.borrow_mut().rename_next = next;
                 editor.emit_activate();
                 glib::Propagation::Stop
@@ -230,6 +246,27 @@ impl BrowserWindow {
                 return;
             }
         };
+        if let Some(several) = &target.several {
+            editor.set_sensitive(false);
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                cell,
+                #[weak]
+                editor,
+                #[strong]
+                target,
+                #[strong]
+                several,
+                async move {
+                    window
+                        .run_several_in_place(&cell, &editor, &target, &several, &name)
+                        .await;
+                }
+            ));
+            return;
+        }
         editor.set_sensitive(false);
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -307,6 +344,47 @@ impl BrowserWindow {
                 self.show_message(&error.to_string());
             }
         }
+    }
+
+    /// Gives every item of `several` the name typed for the edited one,
+    /// numbered; a name refused before anything is renamed keeps the field
+    /// for another try.
+    async fn run_several_in_place(
+        &self,
+        cell: &FileCell,
+        editor: &gtk::Entry,
+        target: &RenameTarget,
+        several: &[Entry],
+        name: &str,
+    ) {
+        if self.refuses_writes() {
+            self.close_name_editor(cell);
+            return;
+        }
+        let Some(edited) = several.iter().find(|entry| entry.uri == target.uri) else {
+            self.close_name_editor(cell);
+            return;
+        };
+        let batch = numbered_batch_for(several, edited, name);
+        let base = match batch.base_name() {
+            Ok(base) => base,
+            Err(error) => {
+                editor.set_sensitive(true);
+                editor.grab_focus();
+                self.show_message(&error.to_string());
+                return;
+            }
+        };
+        if !self.confirm_numbered_extension(&batch, &base).await
+            || !self.confirm_hiding_rename(&target.name, &base).await
+        {
+            editor.set_sensitive(true);
+            editor.grab_focus();
+            return;
+        }
+        // Before the folder is listed again, which rebinds the cell.
+        self.close_name_editor(cell);
+        self.run_numbered_rename(&batch).await;
     }
 
     /// Ends the rename from one of the field's own signals, once it has

@@ -327,7 +327,7 @@ fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
 
-    test.activate("rename", None);
+    test.activate("rename-items", None);
     let dialog = open_dialog(&test);
     let field = text_field(&dialog);
 
@@ -366,7 +366,7 @@ fn a_batch_error_goes_once_a_name_is_accepted() {
     fs::write(fixture.path("README"), "read me").expect("the file is written");
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["README", "Notes 2.txt"]);
-    test.activate("rename", None);
+    test.activate("rename-items", None);
     let dialog = open_dialog(&test);
     let field = text_field(&dialog);
     field.set_text("");
@@ -401,7 +401,7 @@ fn a_batch_name_that_adds_an_extension_asks_first() {
     fs::write(fixture.path("README"), "read me").expect("the file is written");
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["README", "Notes 2.txt"]);
-    test.activate("rename", None);
+    test.activate("rename-items", None);
     let dialog = open_dialog(&test);
     let field = text_field(&dialog);
     field.set_text("Plan.md");

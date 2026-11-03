@@ -55,6 +55,7 @@ mod opening;
 mod panes_layout;
 mod recycle_bin;
 mod renaming;
+mod renaming_several;
 mod search;
 mod search_options;
 mod selection;
