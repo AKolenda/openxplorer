@@ -5,7 +5,7 @@
 //! a path the app already has: a copy to Documents, a removable drive or a
 //! saved network location goes through the transfer engine with the
 //! name-conflict dialog, progress and Undo, as a paste into that folder
-//! does; Compressed (zipped) folder is Compress to ZIP file; Mail
+//! does, and the sent items stay selected as in Windows; Compressed (zipped) folder is Compress to ZIP file; Mail
 //! recipient is Share, the desktop's Email portal; Desktop (create
 //! shortcut) makes Windows-named shortcuts with ox-core's
 //! [`ox_core::ops::create_shortcuts`], undone by moving them to the Trash; Bluetooth
@@ -146,7 +146,7 @@ impl BrowserWindow {
             uris,
             destination_folder: folder,
         };
-        self.transfer_with_conflicts(incoming).await;
+        self.send_copies(incoming).await;
     }
 
     /// Send to ▸ Desktop (create shortcut): a shortcut on the Desktop to

@@ -8,7 +8,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::location::file_uri;
+use ox_core::ops::JournalDirection;
 use ox_core::places::{FolderLocations, KnownFolder};
 use ox_core::settings::ContextMenu;
 
@@ -66,10 +68,19 @@ impl Folders {
     }
 }
 
+/// Waits until the operation that changed the Undo label from `before`
+/// has ended, so the next one may start.
+fn wait_for_operation_after(test: &TestWindow, before: &str) {
+    wait_until("the operation to be recorded and end", || {
+        test.window.journal_label(JournalDirection::Undo) != before
+            && test.window.imp().file_operations.borrow().is_idle()
+    });
+}
+
 /// Send to is a named, focusable row of the classic menu; Right opens it
 /// in place, listing Windows' destinations this computer has, and
-/// Documents copies the file there through the transfer engine, which
-/// Undo reverses.
+/// Documents copies the file there through the transfer engine, keeping
+/// it selected, which Undo reverses.
 ///
 /// parity: CMD-038, OPS-029
 #[gtk::test]
@@ -123,12 +134,17 @@ fn send_to_opens_from_the_keyboard_and_copies_to_documents_with_undo() {
         &documents,
         gtk::AccessibleProperty::Label
     ));
+    let before = test.window.journal_label(JournalDirection::Undo);
     documents.emit_activate();
 
     let copy = folders.path("Documents/report.txt");
     wait_until("the copy in Documents", || copy.is_file());
     assert_eq!(fs::read(&copy).expect("the copy"), b"Synthetic quarterly figures");
     assert!(folders.path("Work/report.txt").is_file(), "the original stays");
+    wait_for_operation_after(&test, &before);
+    wait_until("report.txt to stay selected, as in Windows", || {
+        test.selected_names() == ["report.txt"]
+    });
     test.activate("undo", None);
     wait_until("Undo to remove the copy", || !copy.exists());
     assert!(folders.path("Work/report.txt").is_file());
@@ -144,9 +160,12 @@ fn desktop_create_shortcut_makes_windows_named_links() {
     let test = folders.open_menu_on_report();
     let original = folders.path("Work/report.txt");
 
+    let before = test.window.journal_label(JournalDirection::Undo);
     test.activate("send-to-desktop", None);
     let first = folders.path("Desktop/report.txt - Shortcut");
     wait_until("the shortcut", || first.symlink_metadata().is_ok());
+    // One operation runs at a time: the next starts once this one ends.
+    wait_for_operation_after(&test, &before);
     test.window.context_menu().popdown();
     test.activate("send-to-desktop", None);
     let second = folders.path("Desktop/report.txt - Shortcut (2)");
