@@ -347,11 +347,7 @@ fn refuse_mounts_in(path: &Path) -> Result<(), TransferError> {
         Some(mount_point) if *mount_point == item => Err(mount_point_refusal(path)),
         Some(mount_point) => {
             let inside = mount_point.strip_prefix(&item).unwrap_or(mount_point);
-            Err(TransferError::failed(crate::i18n::format_message(
-                "A drive or share is mounted at {path}, inside the item being deleted. Nothing was \
-                 deleted. Unmount it first.",
-                &[("path", &path.join(inside).display().to_string())],
-            )))
+            Err(mount_inside_refusal(&path.join(inside)))
         }
         None => Ok(()),
     }
@@ -377,8 +373,18 @@ fn first_mount_in<'m>(
         .min()
 }
 
+/// The refusal to delete an item because the mount table shows a mount
+/// at `path` inside it, before anything was deleted.
+pub(super) fn mount_inside_refusal(path: &Path) -> TransferError {
+    TransferError::failed(crate::i18n::format_message(
+        "A drive or share is mounted at {path}, inside the item being deleted. Nothing was \
+         deleted. Unmount it first.",
+        &[("path", &path.display().to_string())],
+    ))
+}
+
 /// The refusal to delete a mount point.
-fn mount_point_refusal(path: &Path) -> TransferError {
+pub(super) fn mount_point_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first.",
         &[("path", &path.display().to_string())],
@@ -386,7 +392,7 @@ fn mount_point_refusal(path: &Path) -> TransferError {
 }
 
 /// The refusal to enter the mount point at `path` inside the deleted item.
-fn contained_mount_refusal(path: &Path) -> TransferError {
+pub(super) fn contained_mount_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "A drive or share is mounted at {path}. Deleting never goes into another drive, so it \
          stopped there. Unmount it first.",
