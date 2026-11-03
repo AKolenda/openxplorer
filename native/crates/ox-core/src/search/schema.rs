@@ -73,23 +73,23 @@ const CONTENT_REVISION: &str = "
 /// the roots every five seconds and after every change while it shows a
 /// window. The triggers make that one row instead, and they also observe
 /// writers from older releases, which know nothing of this table. A row
-/// follows the entries, not the root: a removed root's row goes only once
-/// none of its entries are left, so entries a writer leaves behind are
-/// still counted if the root comes back.
+/// follows the entries, not the root: it goes with a root's last entry, so
+/// entries a writer leaves behind are still counted if the root comes back,
+/// and nothing of a removed root stays once its entries are gone.
 const ROOT_COUNTS: &str = "
     CREATE TABLE IF NOT EXISTS root_counts(root TEXT PRIMARY KEY, entries INTEGER NOT NULL);
     CREATE TRIGGER IF NOT EXISTS root_count_insert AFTER INSERT ON entries BEGIN
         INSERT INTO root_counts(root, entries) VALUES(new.root, 1)
         ON CONFLICT(root) DO UPDATE SET entries=entries+1; END;
     CREATE TRIGGER IF NOT EXISTS root_count_delete AFTER DELETE ON entries BEGIN
-        UPDATE root_counts SET entries=entries-1 WHERE root=old.root; END;
+        UPDATE root_counts SET entries=entries-1 WHERE root=old.root;
+        DELETE FROM root_counts WHERE root=old.root AND entries<=0; END;
     CREATE TRIGGER IF NOT EXISTS root_count_move AFTER UPDATE OF root ON entries
         WHEN old.root IS NOT new.root BEGIN
         UPDATE root_counts SET entries=entries-1 WHERE root=old.root;
+        DELETE FROM root_counts WHERE root=old.root AND entries<=0;
         INSERT INTO root_counts(root, entries) VALUES(new.root, 1)
         ON CONFLICT(root) DO UPDATE SET entries=entries+1; END;
-    CREATE TRIGGER IF NOT EXISTS root_count_drop AFTER DELETE ON roots BEGIN
-        DELETE FROM root_counts WHERE root=old.uri AND entries=0; END;
 ";
 
 /// The name [`ROOT_COUNTS`] is recorded under once every cached entry was

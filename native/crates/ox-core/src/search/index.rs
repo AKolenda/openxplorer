@@ -504,6 +504,29 @@ mod tests {
         assert_eq!(root_state(&share.index, SHARE).entry_count, 2);
     }
 
+    /// A root deleted before its entries, as unpinning and turning frequent
+    /// folders off do, keeps no count of them once they are gone.
+    ///
+    /// parity: SRCH-022
+    #[test]
+    fn a_removed_roots_count_goes_with_its_last_entry() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf"), listed_file(SHARE, "b.pdf")]);
+        let connection = share.index.connect().unwrap();
+
+        connection
+            .execute("DELETE FROM roots WHERE uri=?1", [SHARE])
+            .unwrap();
+        connection
+            .execute("DELETE FROM entries WHERE root=?1", [SHARE])
+            .unwrap();
+
+        let rows: i64 = connection
+            .query_row("SELECT count(*) FROM root_counts", (), |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
+    }
+
     /// Monitoring errors are cut to 500 characters before they are stored.
     ///
     /// parity: SRCH-022
