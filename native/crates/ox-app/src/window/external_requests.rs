@@ -13,6 +13,11 @@
 //! item selected, and the item's Properties over it. When Settings opens
 //! folders from other apps in a new window, the application gives the
 //! request a window of its own, whose tabs are only the request's.
+//!
+//! Any program on the session bus can send a request, so a share it names
+//! is never mounted for it: the tab says the share is not mounted, and
+//! connects, signing in with a saved password if there is one, only when
+//! the user chooses Try again (NET-004).
 
 use gtk::subclass::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
@@ -86,6 +91,19 @@ impl BrowserWindow {
     fn open_folder_tab(&self, folder: &str) {
         if let Err(error) = self.add_tab(folder) {
             self.show_message(&error.to_string());
+            return;
+        }
+        let active = self.imp().session.borrow().active_id();
+        if let Some(id) = active {
+            self.wait_to_mount(id);
+        }
+    }
+
+    /// Makes the listing tab `id` runs, or runs next, leave its share
+    /// unmounted until the user asks to connect.
+    pub(super) fn wait_to_mount(&self, id: TabId) {
+        if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+            tab.waits_to_mount = true;
         }
     }
 
@@ -99,6 +117,7 @@ impl BrowserWindow {
         };
         self.switch_tab(id);
         self.mark_selection_to_reveal(id, items);
+        self.wait_to_mount(id);
         self.load_tab(id, LoadMode::Reload);
     }
 
@@ -111,6 +130,7 @@ impl BrowserWindow {
         }
         let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
+            self.wait_to_mount(id);
             self.mark_selection_to_reveal(id, items);
         }
     }

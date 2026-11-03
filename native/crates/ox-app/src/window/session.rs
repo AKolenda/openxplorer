@@ -149,6 +149,11 @@ pub(super) struct Tab {
     /// Its network folder changed while it was in the background: it is
     /// listed again when next shown (TAB-056).
     pub changed_while_hidden: bool,
+    /// Its next listing does not mount an unmounted share: another
+    /// application asked to show the location (`FileManager1`), so the
+    /// tab says it is not mounted until the user asks to connect with Try
+    /// again (NET-004).
+    pub waits_to_mount: bool,
     /// An item of this tab is being opened; a second one waits for it
     /// (`tab.opening` in `openEntry`).
     pub is_activating: bool,
@@ -188,6 +193,7 @@ impl Tab {
             watch: None,
             revealed_item: None,
             changed_while_hidden: false,
+            waits_to_mount: false,
             is_activating: false,
             opening: None,
             busy_clock: BusyClock::default(),
