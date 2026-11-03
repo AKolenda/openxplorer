@@ -59,7 +59,9 @@ impl NumberedRename {
     ///
     /// An empty name, or one that is not valid (such as one with a slash),
     /// also once an item's number and extension are added: a name too long
-    /// for one item is refused before any item is renamed.
+    /// for one item with the numbers the items take when none is taken is
+    /// refused before any item is renamed. A taken number that makes a
+    /// name longer still fails that item alone, which is reported.
     pub fn base_name(&self) -> Result<String, OpsError> {
         let typed = self.name.trim_end();
         let kept = if self.edited_is_dir {
