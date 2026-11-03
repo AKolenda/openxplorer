@@ -14,6 +14,8 @@ use gtk::{gdk, glib};
 use super::{
     tab_drag_content, Carried, CarriedLook, DraggedTab, Hover, OutgoingTabDrag, TabDragOutcome, TabDropSpot,
 };
+use crate::folder_view::sorting::SortOrder;
+use crate::window::folder_pane::FolderView;
 use crate::window::session::TabId;
 use crate::window::tab_moves::TabMoveRefusal;
 use crate::window::tab_strip::CARRIED_MARGIN;
@@ -332,11 +334,24 @@ impl BrowserWindow {
             return;
         };
         let search = self.kept_search();
+        let pane = self.folder_pane();
+        let style = (pane.view(), pane.details().sort_order());
         if let Some(outgoing) = self.imp().outgoing_tab.borrow_mut().as_mut() {
             outgoing.stepped_back = true;
             outgoing.stepped_back_search = search;
+            outgoing.stepped_back_style = Some(style);
         }
         self.switch_tab(successor);
+    }
+
+    /// The view and sort order of carried tab `tab`, out of its strip while
+    /// the tab beside it is in front, as its pane showed them then.
+    pub(in crate::window) fn carried_tab_style(&self, tab: TabId) -> Option<(FolderView, SortOrder)> {
+        let outgoing = self.imp().outgoing_tab.borrow();
+        outgoing
+            .as_ref()
+            .filter(|outgoing| outgoing.tab == tab && outgoing.stepped_back)
+            .and_then(|outgoing| outgoing.stepped_back_style)
     }
 
     /// Tab `tab`, carried out of this window's strip, is back over it or
@@ -420,6 +435,7 @@ impl BrowserWindow {
             over_own_strip: false,
             stepped_back: false,
             stepped_back_search: None,
+            stepped_back_style: None,
         }));
         let dragged = DraggedTab {
             source: self.downgrade(),

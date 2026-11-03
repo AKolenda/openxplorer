@@ -529,3 +529,33 @@ fn a_tab_from_another_window_is_captured_light_and_dark() {
     test.window.cancel_tab_drag(gdk::DragCancelReason::UserCancelled);
     test.window.end_tab_drag();
 }
+
+/// A split tab carried out of its strip, its active pane in icons, while
+/// the tab beside it, in front meanwhile, shows its pane in details: it
+/// takes its own view along when it moves, not the one in front.
+///
+/// parity: TAB-034, TAB-039
+#[gtk::test]
+fn a_carried_tab_out_of_its_strip_takes_its_own_view_along() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the second tab");
+    test.window
+        .split_tab(Some(&fixture.uri_of("Music")))
+        .expect("split");
+    test.wait_for_listing("the other pane");
+    test.window
+        .show_view(FolderView::Icons(crate::folder_view::grid::IconSize::LARGE));
+    let view = test.window.folder_pane().view();
+
+    let tab = start_dragging(&test.window, 1);
+    test.window.take_tab_off_strip(tab);
+    let in_front = test.window.folder_pane().view();
+    let moved = test.window.moved_tab(tab).expect("the tab is open");
+
+    assert_ne!(in_front, view, "the pane in front shows the other tab's view");
+    assert_eq!(moved.view, view, "the tab takes its own view");
+}

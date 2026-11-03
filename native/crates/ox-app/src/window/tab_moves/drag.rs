@@ -44,6 +44,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
+use crate::folder_view::sorting::SortOrder;
+use crate::window::folder_pane::FolderView;
 use crate::window::folder_search::KeptSearch;
 use crate::window::session::TabId;
 use crate::window::BrowserWindow;
@@ -107,6 +109,9 @@ pub(in crate::window) struct OutgoingTabDrag {
     stepped_back: bool,
     /// The search the window showed then, which comes back with the tab.
     stepped_back_search: Option<KeptSearch>,
+    /// The view and sort order of the pane the tab showed in then, which
+    /// it takes along if it moves: the pane in front shows the other tab's.
+    stepped_back_style: Option<(FolderView, SortOrder)>,
 }
 
 /// What follows the pointer while GTK's drag and drop carries a tab: the

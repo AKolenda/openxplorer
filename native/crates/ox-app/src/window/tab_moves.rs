@@ -174,6 +174,14 @@ impl BrowserWindow {
         if shows_its_view {
             self.save_tab_view();
         }
+        // A carried tab out of its strip: the pane in front shows the tab
+        // beside it.
+        let (view, sort) = self.carried_tab_style(id).unwrap_or_else(|| {
+            (
+                self.folder_pane().view(),
+                self.folder_pane().details().sort_order(),
+            )
+        });
         let session = self.imp().session.borrow();
         let tab = session.tab(id)?;
         let is_settings = Page::from_uri(tab.uri()) == Some(Page::Settings);
@@ -182,8 +190,8 @@ impl BrowserWindow {
             left_views: tab.left_views.clone(),
             selected: tab.selected.clone(),
             scroll: tab.scroll_after_listing.unwrap_or(tab.scroll),
-            view: self.folder_pane().view(),
-            sort: self.folder_pane().details().sort_order(),
+            view,
+            sort,
             settings_view: is_settings.then(|| self.settings_page().view()),
         })
     }
