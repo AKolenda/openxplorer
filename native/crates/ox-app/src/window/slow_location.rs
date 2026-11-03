@@ -23,6 +23,7 @@
 //! tab the user left may still open its folder there, but never launches
 //! a file (SAFE-013).
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
@@ -58,9 +59,48 @@ impl BrowserWindow {
     /// Whether tab `id` is opening or listing a location.
     pub(super) fn is_tab_busy(&self, id: TabId) -> bool {
         let session = self.imp().session.borrow();
-        session
-            .tab(id)
-            .is_some_and(|tab| tab.opening.is_some() || tab.listing_state.is_listing())
+        session.tab(id).is_some_and(super::session::Tab::is_busy)
+    }
+
+    /// Whether the tab in front has taken longer than the delay to open
+    /// and list its location.
+    pub(super) fn is_slow(&self) -> bool {
+        let session = self.imp().session.borrow();
+        session.active().is_some_and(super::session::Tab::is_slow)
+    }
+
+    /// Redraws tab `id` once its location becomes slow, if it is busy
+    /// and not slow yet, so a pane on screen then says it is working.
+    /// Each tab keeps its own time, so a tab shown again is as slow as
+    /// it was (VIEW-068).
+    pub(super) fn redraw_when_slow(&self, id: TabId) {
+        let wait = {
+            let mut session = self.imp().session.borrow_mut();
+            let Some(tab) = session.tab_mut(id) else { return };
+            let busy = tab.is_busy();
+            let now = std::time::Instant::now();
+            tab.busy_clock.follow(busy, now);
+            let wait = tab.busy_clock.until_slow(busy, now);
+            if wait.is_none() || tab.busy_clock.redraw_pending {
+                return;
+            }
+            tab.busy_clock.redraw_pending = true;
+            wait
+        };
+        let Some(wait) = wait else { return };
+        glib::timeout_add_local_once(
+            wait,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move || {
+                    if let Some(tab) = window.imp().session.borrow_mut().tab_mut(id) {
+                        tab.busy_clock.redraw_pending = false;
+                    }
+                    window.redraw_pane(id);
+                }
+            ),
+        );
     }
 
     /// Whether the tab in front is opening or listing a location.
@@ -86,6 +126,18 @@ impl BrowserWindow {
         let earlier = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else { return };
+            let was_busy = tab.is_busy();
+            tab.busy_clock.start(was_busy, std::time::Instant::now());
+            // A folder from the list that is still being opened holds the
+            // tab's one activation; replaced, it gives it back, as when
+            // it is cancelled.
+            if tab
+                .opening
+                .as_ref()
+                .is_some_and(|opening| opening.kind == OpeningKind::Item)
+            {
+                tab.is_activating = false;
+            }
             tab.opening.replace(Opening {
                 target: target.to_owned(),
                 kind,
@@ -104,13 +156,27 @@ impl BrowserWindow {
             let Some(tab) = session.tab_mut(id) else {
                 return false;
             };
-            tab.opening.take()
+            let opening = tab.opening.take();
+            if opening.is_some() {
+                // What the lookup found may be listed now, going on from
+                // the lookup's time.
+                tab.busy_clock.hand_over();
+            }
+            opening
         };
         if let Some(opening) = opening {
             opening.work.detach();
         }
         self.redraw_pane(id);
         true
+    }
+
+    /// The answer of tab `id`'s lookup has been acted on: a location the
+    /// tab opens later counts its own time.
+    pub(super) fn after_opening(&self, id: TabId) {
+        if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+            tab.busy_clock.end_hand_over();
+        }
     }
 
     /// Cancels the lookup tab `id` has running, if any; true when there

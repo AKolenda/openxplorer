@@ -57,18 +57,6 @@ impl BrowserWindow {
         self.connect_tab_drag_and_drop();
         self.follow_skin();
         self.install_view_zoom();
-        for pane in self.folder_panes() {
-            pane.connect_slow(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move || {
-                    // A location that takes a moment says "Working on
-                    // it..." and "Loading…" from now on (VIEW-068).
-                    window.update_content();
-                    window.update_beside_pane();
-                }
-            ));
-        }
         gestures::connect_history_buttons(
             self,
             glib::clone!(

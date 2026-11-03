@@ -15,7 +15,6 @@ use crate::folder_view::grid::{IconSize, IconView};
 use crate::folder_view::keep_top::TopKeeper;
 use crate::folder_view::model::FolderModel;
 use crate::window::empty_page::EmptyPage;
-use crate::window::slow_delay::SlowDelay;
 
 use super::{FolderView, PanePage};
 
@@ -41,8 +40,6 @@ pub(super) struct PaneParts {
     pub(super) empty_area: gtk::Box,
     /// The landing page's contents.
     pub(super) landing: gtk::Box,
-    /// When the pane's location has taken long enough to say so.
-    pub(super) slow_delay: SlowDelay,
     /// "This folder is empty." near the top of the list, as Windows
     /// Explorer says it, while the folder shown has no items.
     pub(super) empty_note: gtk::Label,
@@ -77,7 +74,6 @@ impl PaneParts {
             empty,
             empty_area,
             landing,
-            slow_delay: SlowDelay::default(),
             empty_note: empty_note(),
             drag_hint: drag_hint(),
             rubber_band: rubber_band(),

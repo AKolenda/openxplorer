@@ -30,6 +30,8 @@ pub(super) struct PaneState {
     loading: bool,
     /// It is going to another location, still looked up or mounted.
     opening: bool,
+    /// Its location has taken longer than the delay to open and list.
+    slow: bool,
     /// The running listing lists the same location again.
     reloading: bool,
     /// Why its last listing failed.
@@ -44,6 +46,7 @@ impl PaneState {
             page: Page::from_uri(tab.uri()),
             loading: tab.listing_state.is_listing(),
             opening: tab.opening.is_some(),
+            slow: tab.is_slow(),
             reloading: tab.reloading,
             error: tab.error.as_ref().map(ToString::to_string),
         }
@@ -64,17 +67,16 @@ pub(super) fn show_pane_state(
         page,
         loading,
         opening,
+        slow,
         reloading,
         error,
     } = state;
-    pane.set_loading(opening || (loading && page.is_none()));
     pane.hide_rows(false);
     // VIEW-068: once the location has taken a moment (the slow delay), the file area says "Working on it..." in place of the
     // previous folder, as Windows Explorer does. A reload keeps its rows,
     // and a location that answers sooner shows nothing.
-    let is_slow = pane.is_slow();
     let is_first_listing = loading && !reloading && page.is_none() && error.is_none();
-    if is_slow && (opening || (is_first_listing && pane.model().n_items() == 0)) {
+    if slow && (opening || (is_first_listing && pane.model().n_items() == 0)) {
         pane.show_page(PanePage::Listing);
         pane.show_working_note(opening);
         return None;
@@ -114,11 +116,12 @@ pub(super) fn show_pane_state(
 impl BrowserWindow {
     /// Shows the folder pane state that fits the active tab.
     pub(super) fn update_content(&self) {
-        let state = {
+        let (id, state) = {
             let session = self.imp().session.borrow();
             let Some(tab) = session.active() else { return };
-            PaneState::of(tab)
+            (tab.id, PaneState::of(tab))
         };
+        self.redraw_when_slow(id);
         self.folder_pane()
             .details()
             .show_listing(self.details_listing(&state.uri));

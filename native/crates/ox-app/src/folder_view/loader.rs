@@ -73,6 +73,8 @@ pub(crate) fn list_folder(
     Listing::spawn(async move {
         #[cfg(test)]
         crate::test_support::held::wait_while_held(&uri).await;
+        #[cfg(test)]
+        crate::test_support::held::wait_while_held(&crate::test_support::held::listing_key(&uri)).await;
         let result = if uri == RECENT_LOCATIONS_URI {
             list_recent_locations(on_batch).await
         } else {

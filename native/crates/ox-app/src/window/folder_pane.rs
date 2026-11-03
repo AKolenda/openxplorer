@@ -318,23 +318,6 @@ impl FolderPane {
         }
     }
 
-    /// Starts telling when the pane's location becomes slow while
-    /// `loading` lasts (see [`SlowDelay`](super::slow_delay::SlowDelay)).
-    pub(super) fn set_loading(&self, loading: bool) {
-        self.parts().slow_delay.set_running(loading);
-    }
-
-    /// Whether the pane's location has taken longer than the delay, after
-    /// which the file area and the status bar say so.
-    pub(super) fn is_slow(&self) -> bool {
-        self.parts().slow_delay.is_slow()
-    }
-
-    /// Calls `on_slow` each time the pane's location becomes slow.
-    pub(super) fn connect_slow(&self, on_slow: impl Fn() + 'static) {
-        self.parts().slow_delay.connect_slow(on_slow);
-    }
-
     /// Shows `hint` over the pane, saying what a drag would do there, or
     /// hides the note.
     pub(super) fn show_drag_hint(&self, hint: Option<&str>) {

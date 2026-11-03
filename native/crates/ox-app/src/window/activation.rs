@@ -136,6 +136,8 @@ pub(super) fn desktop_link(entry: &Entry) -> Option<Result<LinkTarget, String>> 
 pub(super) async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
     #[cfg(test)]
     crate::test_support::held::wait_while_held(uri).await;
+    #[cfg(test)]
+    crate::test_support::held::wait_while_held(&crate::test_support::held::lookup_key(uri)).await;
     let file = gio::File::for_uri(uri);
     let info = file
         .query_info_future(
@@ -273,6 +275,7 @@ impl BrowserWindow {
                 if window.end_item_activation(origin) {
                     window.show_item_activation(origin, &entry, outcome);
                 }
+                window.after_opening(origin.tab());
             }
         ));
         self.begin_opening(origin.tab(), &target, OpeningKind::Item, lookup);
@@ -528,6 +531,7 @@ impl BrowserWindow {
                 } else {
                     window.open_typed_folder_only(tab, &request, result);
                 }
+                window.after_opening(tab);
             }
         ));
         // The address stays in the address bar, with its progress, while

@@ -466,3 +466,126 @@ fn only_the_address_bar_shows_progress_while_a_location_loads() {
     settle();
     assert!(shows_nothing_busy(&test));
 }
+
+/// Another address entered while a folder from the list is still being
+/// opened replaces it, and the tab still opens items afterwards: the
+/// replaced opening no longer holds the tab's one activation.
+///
+/// parity: OPEN-001, VIEW-068
+#[gtk::test]
+fn another_address_while_a_folder_opens_from_the_list_keeps_items_openable() {
+    let fixture = Fixture::standard();
+    let other = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let hold = held::hold(&fixture.uri_of("Documents"));
+    test.window.activate_item(test.position_of("Documents"));
+    settle();
+    assert!(shows_stop(&test), "the folder is being opened");
+
+    enter_address(&test, &other.path("").display().to_string());
+    wait_until("the other folder", || {
+        test.window.current_uri() == Some(other.uri()) && !test.window.is_loading()
+    });
+    drop(hold);
+
+    test.window.activate_item(test.position_of("Documents"));
+    let documents = other.uri_of("Documents");
+    wait_until("a folder opened from the list", || {
+        test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
+    });
+}
+
+/// A location whose lookup and listing each take less than the delay,
+/// but together more, says "Working on it..." once the delay has passed
+/// since Enter, and keeps saying it from the lookup into the listing.
+///
+/// parity: VIEW-068
+#[gtk::test]
+fn working_on_it_carries_over_from_the_lookup_to_the_listing() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let documents = fixture.uri_of("Documents");
+    let lookup = held::hold(&held::lookup_key(&documents));
+    let listing = held::hold(&held::listing_key(&documents));
+    let phase = APPEARANCE_DELAY * 2 / 3;
+
+    let started = Instant::now();
+    enter_address(&test, &fixture.path("Documents").display().to_string());
+    wait_for(phase);
+    assert!(!says_working(&test), "not before the delay");
+    drop(lookup);
+    let mut first_said = None;
+    while started.elapsed() < phase * 2 {
+        settle();
+        if says_working(&test) {
+            first_said.get_or_insert(started.elapsed());
+        } else if first_said.is_some() {
+            panic!("Working on it... went away while the folder was still listed");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(held::waits(&held::listing_key(&documents)), 1, "the listing ran");
+    let first_said = first_said.expect("Working on it... showed during the two short phases");
+    assert!(first_said >= APPEARANCE_DELAY, "it waited for the delay");
+    drop(listing);
+    wait_until("the folder", || {
+        test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
+    });
+    settle();
+    assert!(shows_nothing_busy(&test));
+}
+
+/// Whether the status bar says the folder is loading.
+fn status_says_loading(test: &TestWindow) -> bool {
+    test.window.status_bar().texts().0.ends_with(" · Loading…")
+}
+
+/// Each tab keeps its own time: a slow tab shown again says "Working on
+/// it..." and "Loading…" at once, without waiting for the delay again,
+/// and a tab whose location finished in the background shows none of it.
+///
+/// parity: TAB-056, VIEW-050, VIEW-068
+#[gtk::test]
+fn each_tab_keeps_its_own_slow_state() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let documents = fixture.uri_of("Documents");
+    let hold = held::hold(&held::listing_key(&documents));
+    test.window.navigate(&documents).expect("a folder");
+    wait_until("Working on it...", || says_working(&test));
+    let slow_tab = test.active_tab().expect("a tab");
+
+    test.window
+        .open_tab(&fixture.uri(), TabPlacement::Foreground)
+        .expect("another tab");
+    test.wait_for_listing("the other tab");
+    settle();
+    let fast_tab = test.active_tab().expect("the other tab");
+    assert!(shows_nothing_busy(&test), "the other tab is not busy");
+    assert!(!status_says_loading(&test));
+
+    test.activate_tab(slow_tab);
+    settle();
+    assert!(says_working(&test), "the slow tab says so at once");
+    assert!(status_says_loading(&test));
+    assert!(address_shows_progress(&test));
+
+    // It finishes while another tab is in front.
+    test.activate_tab(fast_tab);
+    settle();
+    drop(hold);
+    wait_until("the background listing", || {
+        let session = test.window.imp().session.borrow();
+        session
+            .tab(slow_tab)
+            .is_some_and(|tab| !tab.listing_state.is_listing())
+    });
+    test.activate_tab(slow_tab);
+    settle();
+    assert!(shows_nothing_busy(&test), "nothing is left of its slow state");
+    assert!(!status_says_loading(&test));
+    assert_eq!(test.window.current_uri(), Some(documents));
+}

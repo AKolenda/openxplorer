@@ -53,6 +53,18 @@ pub(crate) fn mount_key(uri: &str) -> String {
     format!("mount {uri}")
 }
 
+/// What a lookup of `uri` waits on besides `uri` itself: holding it
+/// keeps the lookup alone, so the listing after it answers at once.
+pub(crate) fn lookup_key(uri: &str) -> String {
+    format!("lookup {uri}")
+}
+
+/// What a listing of `uri` waits on besides `uri` itself: holding it
+/// keeps the listing alone.
+pub(crate) fn listing_key(uri: &str) -> String {
+    format!("listing {uri}")
+}
+
 /// How many lookups, listings and mounts of `uri` have waited on its hold
 /// since it was held.
 pub(crate) fn waits(uri: &str) -> u32 {
