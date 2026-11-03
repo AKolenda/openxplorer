@@ -167,6 +167,20 @@ impl BrowserWindow {
         Ok(())
     }
 
+    /// Splits the tab in front of a window that opens split (VIEW-059)
+    /// for another application's request, keeping the request's own pane
+    /// in front, so what it selects stays where the user looks.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::split_tab`].
+    pub(crate) fn begin_split_keeping_front(&self) -> Result<(), LocationError> {
+        let side = self.active_side();
+        self.split_tab(None)?;
+        self.activate_pane(side);
+        Ok(())
+    }
+
     /// Closes the active pane of a split tab; the other pane stays, on
     /// its own, in the left folder pane, with its view and order.
     fn close_active_pane(&self) {

@@ -40,7 +40,6 @@ pub(super) fn run_scan(shared: &Shared, job: &ScanJob) {
     let root = &job.root.uri;
     let storage = RootStorage::current(root);
     scan_and_record(shared, job, storage);
-    shared.report_monitoring(root, storage);
     shared.finish_scan_job(root, &job.cancellable);
 }
 
@@ -61,6 +60,10 @@ fn scan_and_record(shared: &Shared, job: &ScanJob, storage: RootStorage) {
             error: error.to_string(),
         },
     };
+    // Recorded before the scan is finished: a status read woken by the
+    // finished scan must see the monitoring it has, not the root's initial
+    // "Not watching" left over from before it was scanned.
+    shared.report_monitoring(root, storage);
     if let Err(error) = shared.index.finish_scan(root, &generation, &outcome) {
         // Python reports a failure to record the outcome as the outcome. If
         // that fails too, the root stays "Indexing" until the next owner
