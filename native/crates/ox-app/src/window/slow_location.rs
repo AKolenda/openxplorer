@@ -35,8 +35,11 @@ use super::BrowserWindow;
 /// What a tab is going to before it moves there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum OpeningKind {
-    /// An address typed into the address bar, or pasted.
+    /// An address typed into the address bar.
     Typed,
+    /// An address pasted and gone to: a file it names is shown in its
+    /// folder rather than opened.
+    Pasted,
     /// A folder opened from the list, which marks the tab as activating.
     Item,
 }
@@ -127,14 +130,13 @@ impl BrowserWindow {
         }
     }
 
-    /// Whether tab `id` is looking up an address typed or pasted into the
-    /// address bar, which ends the edit once it answers.
-    pub(super) fn is_opening_typed(&self, id: TabId) -> bool {
+    /// What tab `id` is going to, if it is looking a location up.
+    pub(super) fn opening_kind(&self, id: TabId) -> Option<OpeningKind> {
         let session = self.imp().session.borrow();
         session
             .tab(id)
             .and_then(|tab| tab.opening.as_ref())
-            .is_some_and(|opening| opening.kind == OpeningKind::Typed)
+            .map(|opening| opening.kind)
     }
 
     /// Tab `id` starts going to `target`, which `work` looks up; any
@@ -233,7 +235,7 @@ impl BrowserWindow {
             let is_typed = tab
                 .opening
                 .as_ref()
-                .is_some_and(|opening| opening.kind == OpeningKind::Typed);
+                .is_some_and(|opening| opening.kind != OpeningKind::Item);
             if !is_typed {
                 return;
             }

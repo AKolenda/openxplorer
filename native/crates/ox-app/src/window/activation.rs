@@ -501,19 +501,25 @@ impl BrowserWindow {
         let Some(tab) = self.imp().session.borrow().active_id() else {
             return;
         };
+        let kind = match source {
+            AddressSource::Typed => OpeningKind::Typed,
+            AddressSource::Pasted => OpeningKind::Pasted,
+        };
         // VIEW-068: Enter on the address the tab is going to already does
-        // not start it over. A typed lookup ends the edit once it answers;
-        // nothing else would, so the address bar returns to its crumbs now.
-        // A typed lookup that lost its right to open a file, as the user
-        // looked at another tab meanwhile, is started over: this Enter
-        // asks for the file again (SAFE-013).
+        // not start it over. A lookup of an address ends the edit once it
+        // answers; nothing else would, so the address bar returns to its
+        // crumbs now. A lookup asked for another way (pasted rather than
+        // typed), or that lost its right to open a file as the user looked
+        // at another tab meanwhile, is started over: this Enter decides
+        // what a file it names does (SAFE-013).
         if self.is_going_to(tab, &folder) {
-            if !self.is_opening_typed(tab) {
-                self.accept_address(&typed, source);
-                return;
-            }
-            if self.has_current_activation(tab) {
-                return;
+            match self.opening_kind(tab) {
+                None | Some(OpeningKind::Item) => {
+                    self.accept_address(&typed, source);
+                    return;
+                }
+                Some(going) if going == kind && self.has_current_activation(tab) => return,
+                Some(_) => {}
             }
         }
         let pending = self.begin_activation(tab);
@@ -551,7 +557,7 @@ impl BrowserWindow {
         ));
         // The address stays in the address bar, with its progress, while
         // it is looked up, as in Windows Explorer.
-        self.begin_opening(tab, &target, OpeningKind::Typed, lookup);
+        self.begin_opening(tab, &target, kind, lookup);
     }
 
     /// Tab `id`, moved here from another window while it was going to
@@ -578,7 +584,7 @@ impl BrowserWindow {
                 window.after_opening(id);
             }
         ));
-        self.begin_opening(id, target, OpeningKind::Typed, lookup);
+        self.begin_opening(id, target, OpeningKind::Pasted, lookup);
     }
 
     /// Opens the location a typed address resolved to, in tab `id`, which

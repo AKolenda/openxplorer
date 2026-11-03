@@ -787,3 +787,64 @@ fn enter_again_after_leaving_the_tab_opens_the_typed_file() {
         test.context.recorded_launches().len() == 1
     });
 }
+
+/// Enter on a typed file address that is being looked up as a pasted one
+/// opens the file: the new Enter decides, rather than the paste's "show
+/// it in its folder".
+///
+/// parity: NAV-032, VIEW-068
+#[gtk::test]
+fn enter_on_a_file_being_gone_to_as_pasted_opens_it() {
+    let fixture = Fixture::standard();
+    std::fs::write(fixture.path("agenda.txt"), "agenda").expect("a file");
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let agenda = fixture.uri_of("agenda.txt");
+    let path = fixture.path("agenda.txt").display().to_string();
+    let hold = held::hold(&held::lookup_key(&agenda));
+    test.window.go_to_pasted_address(&path);
+    wait_until("the lookup to wait", || {
+        held::waits(&held::lookup_key(&agenda)) == 1
+    });
+
+    enter_address(&test, &path);
+    drop(hold);
+
+    wait_until("the typed file to open", || {
+        test.context.recorded_launches().len() == 1
+    });
+}
+
+/// A folder opened from the list with the keyboard keeps the keyboard in
+/// the list: hiding the previous folder's rows while it opens slowly does
+/// not leave keyboard focus nowhere.
+///
+/// parity: VIEW-068
+#[gtk::test]
+fn the_list_keeps_the_keyboard_across_a_slow_opening() {
+    let fixture = Fixture::standard();
+    std::fs::write(fixture.path("Documents/Agenda.txt"), "agenda").expect("a file");
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let documents = fixture.uri_of("Documents");
+    let hold = held::hold(&held::lookup_key(&documents));
+    test.window.folder_pane().focus_view();
+    settle();
+    assert!(
+        test.window.folder_pane().view_has_focus(),
+        "the list has the keyboard"
+    );
+
+    test.window.activate_item(test.position_of("Documents"));
+    wait_until("Working on it...", || says_working(&test));
+    drop(hold);
+    wait_until("the opened folder", || {
+        test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
+    });
+    settle();
+
+    assert!(
+        test.window.folder_pane().view_has_focus(),
+        "the list has the keyboard again"
+    );
+}
