@@ -759,14 +759,14 @@ fn duplicate_copies_next_to_the_item_and_selects_the_copy() {
 fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let panel = test.window.imp().transfer_panel.get();
+    let panel = test.window.transfer_panel().clone();
 
     let context = test.window.begin_operation("Preparing copy…");
     let second = test.window.begin_operation("Moving items…");
 
     let context = context.expect("the first operation starts");
     assert!(second.is_none(), "one operation at a time");
-    assert!(panel.is_visible());
+    assert!(panel.get_visible(), "its action shows in the progress window");
     assert_eq!(panel.status_text(), "Preparing copy…");
     assert!(
         !is_enabled(&test, "trash"),
@@ -777,36 +777,41 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     assert!(context.cancel.is_cancelled());
     assert_eq!(panel.status_text(), "Cancelling…");
     test.window.end_operation();
-    assert!(!panel.is_visible());
+    assert!(!panel.get_visible());
     assert!(!is_enabled(&test, "cancel-operation"));
 }
 
-/// A copied file's bytes fill a bar of their own: a full file bar leaves
-/// the batch bar where the batch is.
+/// A copied file's own progress never moves the action's bar: a full
+/// file leaves the bar where the batch is.
 ///
 /// parity: OPS-020
 #[gtk::test]
 fn a_full_file_bar_is_never_shown_as_the_batch_finishing() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let panel = test.window.imp().transfer_panel.get();
+    let panel = test.window.transfer_panel().clone();
     let report = |label: &str, fraction: f64, scope: ProgressScope| Progress {
         label: label.to_owned(),
         fraction,
         scope,
         bytes: None,
+        items: None,
+        name: None,
     };
     let _context = test.window.begin_operation("Preparing copy…");
 
     panel.show_progress(&report("Copy: a.txt (1/2)", 0.0, ProgressScope::Batch));
     panel.show_progress(&report("Copying a.txt · 10 / 10 bytes", 1.0, ProgressScope::File));
-    let file_done = panel.fractions();
+    let file_done = panel.fraction();
     panel.show_progress(&report("Copy: b.txt (2/2)", 0.5, ProgressScope::Batch));
-    let next_item = panel.fractions();
+    let next_item = panel.fraction();
     test.window.end_operation();
 
-    assert_eq!(file_done, (0.0, Some(1.0)));
-    assert_eq!(next_item, (0.5, None));
+    assert!(
+        file_done.abs() < f64::EPSILON,
+        "a full file is not the batch: {file_done}"
+    );
+    assert!((next_item - 0.5).abs() < f64::EPSILON, "{next_item}");
 }
 
 /// parity: TAB-049
@@ -848,7 +853,7 @@ fn closing_during_an_operation_asks_and_closes_only_once_it_stopped() {
 fn a_running_operation_inhibits_logout_and_a_focused_one_notifies_nothing() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let panel = test.window.imp().transfer_panel.get();
+    let panel = test.window.transfer_panel().clone();
 
     let context = test.window.begin_operation("Preparing copy…");
     assert!(context.is_some() && panel.inhibits_logout());

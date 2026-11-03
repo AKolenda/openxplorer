@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Bounded concurrent transfers. Conflicting source/destination trees stay exclusive.
-use crate::window::transfer_panel::{TransferKind, TransferPanel};
+//! Each job is an action of the application's progress window.
+use crate::window::transfer_panel::{Action, TransferKind, TransferPanel, Verb};
 use crate::window::BrowserWindow;
+use gtk::gio;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 use ox_core::ops::OperationContext;
 use ox_core::transfer::Cancellation;
 
@@ -64,9 +65,7 @@ impl BrowserWindow {
         context.move_by_copying = Some(self.move_by_copying_asker());
         context.item_failure = Some(self.failure_asker());
         let panel = if self.transfer_panel().is_busy() {
-            let panel: TransferPanel = glib::Object::new();
-            self.imp().transfer_panels.append(&panel);
-            panel
+            TransferPanel::for_window(self)
         } else {
             self.transfer_panel().clone()
         };
@@ -100,12 +99,58 @@ impl BrowserWindow {
         {
             let job = operations.jobs.remove(index);
             job.panel.finish();
-            if &job.panel != self.transfer_panel() {
-                self.imp().transfer_panels.remove(&job.panel);
-            }
         }
         drop(operations);
         self.update_file_commands();
+    }
+
+    /// Says what the operation that `cancel` stops does, in its action.
+    pub(in crate::window) fn describe_operation(&self, cancel: &Cancellation, action: Option<Action>) {
+        if let Some(action) = action {
+            self.panel_for_operation(cancel).describe(action);
+        }
+    }
+
+    /// Says that the operation `cancel` stops extracts `request`'s
+    /// archive into its folder.
+    pub(in crate::window) fn describe_extraction(
+        &self,
+        cancel: &Cancellation,
+        request: &ox_core::archive::ExtractionRequest,
+    ) {
+        let archive = [request.archive_uri.clone()];
+        let action = Action::of(Verb::Extracting, &archive, Some(&request.destination_uri));
+        self.describe_operation(cancel, action);
+    }
+
+    /// Says that the operation `cancel` stops compresses `request`'s
+    /// items.
+    pub(in crate::window) fn describe_compression(
+        &self,
+        cancel: &Cancellation,
+        request: &ox_core::archive::CompressionRequest,
+    ) {
+        let action = Action::of(Verb::Compressing, &request.uris, Some(&request.destination_uri));
+        self.describe_operation(cancel, action);
+    }
+
+    /// Ends the window's actions in the progress window when it goes:
+    /// their operations are cancelled, and closing asked first while they
+    /// ran (TAB-049).
+    pub(in crate::window) fn end_progress_actions(&self) {
+        let jobs: Vec<TransferPanel> = self
+            .imp()
+            .file_operations
+            .borrow()
+            .jobs
+            .iter()
+            .map(|job| job.panel.clone())
+            .collect();
+        let primary = self.imp().transfer_panel.get().cloned();
+        for panel in jobs.into_iter().chain(primary) {
+            panel.cancel();
+            panel.finish();
+        }
     }
 }
 

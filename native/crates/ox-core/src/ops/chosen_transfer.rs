@@ -14,6 +14,8 @@
 //! Every group keeps every safety rule of the engine; a cancellation stops
 //! the groups that have not started.
 
+use std::sync::{Arc, Mutex};
+
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::results::merge_results;
@@ -82,6 +84,21 @@ fn run_chosen_transfer_blocking(
     context: &OperationContext,
     mut progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
+    let renamed = request
+        .items
+        .iter()
+        .filter_map(|item| Some((item.uri.as_str(), item.rename_to.as_deref()?)));
+    let steps: Vec<Step> = groups_by_policy(request)
+        .into_iter()
+        .map(Step::Group)
+        .chain(renamed.map(|(uri, name)| Step::Renamed { uri, name }))
+        .collect();
+    let all_items = steps.iter().map(Step::items).sum::<u64>().max(1);
+    // One group's item counts are the paste's; several groups' are not.
+    let several_groups = steps.len() > 1;
+    // The items before the running group, and the group's own.
+    let place = Arc::new(Mutex::new((0_u64, 0_u64)));
+    let group_place = Arc::clone(&place);
     let mut previous_groups = 0_u64;
     let mut current_group = 0_u64;
     let mut engine = gio_transfer_engine(context, move |mut report: Progress| {
@@ -94,19 +111,33 @@ fn run_chosen_transfer_blocking(
             previous_groups = previous_groups.saturating_add(current_group);
             current_group = 0;
         }
+        // A group's fraction is its own: the paste is done only when its
+        // last group is, so a group's share of the items places it in the
+        // whole.
+        if report.scope == crate::transfer::ProgressScope::Batch {
+            let (before, items) = *group_place
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "a progress bar needs far less precision than f64 keeps"
+            )]
+            let fraction =
+                (before as f64 + report.fraction.clamp(0.0, 1.0) * items as f64) / all_items as f64;
+            report.fraction = fraction;
+        }
+        if several_groups {
+            report.items = None;
+        }
         progress(report);
     });
     let mut total = TransferOutcome::default();
     let mut undo = CombinedUndo::Nothing;
-    let renamed = request
-        .items
-        .iter()
-        .filter_map(|item| Some((item.uri.as_str(), item.rename_to.as_deref()?)));
-    for step in groups_by_policy(request)
-        .into_iter()
-        .map(Step::Group)
-        .chain(renamed.map(|(uri, name)| Step::Renamed { uri, name }))
-    {
+    let mut before = 0_u64;
+    for step in steps {
+        let items = step.items();
+        *place.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = (before, items);
+        before += items;
         let part = match step {
             Step::Group(group) => run_on_engine(&mut engine, &group, context)?,
             Step::Renamed { uri, name } => {
@@ -131,6 +162,16 @@ enum Step<'a> {
     Group(TransferRequest),
     /// One item answered with Rename, and its new name.
     Renamed { uri: &'a str, name: &'a str },
+}
+
+impl Step<'_> {
+    /// The selected items this run handles.
+    fn items(&self) -> u64 {
+        match self {
+            Step::Group(group) => group.uris.len() as u64,
+            Step::Renamed { .. } => 1,
+        }
+    }
 }
 
 /// One request per answer that some item has, in [`POLICY_ORDER`]; items

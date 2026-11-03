@@ -26,6 +26,10 @@ impl BrowserWindow {
             return;
         };
         let progress = self.progress_reporter(&context.cancel);
+        let folder = self.current_uri();
+        let verb = crate::window::transfer_panel::Verb::Copying;
+        let action = crate::window::transfer_panel::Action::of(verb, &uris, folder.as_deref());
+        self.describe_operation(&context.cancel, action);
         let outcome = duplicate_items(&uris, &context, progress).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
