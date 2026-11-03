@@ -12,7 +12,9 @@
 //! serialises writers across threads and processes, which replaces the
 //! in-process lock of the Python class.
 
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use rusqlite::{Connection, Transaction, TransactionBehavior};
@@ -34,6 +36,10 @@ const CACHE_DIRECTORY: &str = "winspace";
 /// How long a statement waits for another process's write.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(8);
 
+/// Most connections one process keeps open for its own reuse, so that
+/// concurrent operations still run on separate connections.
+const POOL_SIZE: usize = 4;
+
 /// Longest root label, in characters.
 const MAX_LABEL_CHARS: usize = 200;
 
@@ -49,6 +55,13 @@ pub struct SearchIndex {
     directory: PathBuf,
     database: PathBuf,
     engine: SearchEngine,
+    /// The connections this process opened and left open for the next
+    /// operation, at most [`POOL_SIZE`] of them.
+    ///
+    /// They also hold the WAL in place: SQLite deletes `-wal` and `-shm`
+    /// when the last connection closes, and this cache used to open and
+    /// close one per operation.
+    idle: Arc<Mutex<Vec<Connection>>>,
 }
 
 impl SearchIndex {
@@ -89,6 +102,7 @@ impl SearchIndex {
             directory: directory.to_path_buf(),
             database,
             engine: SearchEngine::SubstringFallback,
+            idle: Arc::new(Mutex::new(Vec::new())),
         };
         let mut connection = index.connect()?;
         index.engine = schema::prepare(&mut connection)?;
@@ -275,24 +289,82 @@ impl SearchIndex {
         Ok(())
     }
 
-    /// Opens a connection after checking the directory and database files.
+    /// Opens a connection, or takes one this process left open, after
+    /// checking the directory and database files.
     ///
     /// Safety rule "every open re-checks private storage" (`connect` in
     /// `search_index.py`): the directory must still be an owned 0700
     /// directory, and the database and its sidecars owned regular files
     /// with one link, so a symlink planted after start-up is refused
-    /// before SQLite follows it.
+    /// before SQLite follows it. The check runs where SQLite opens a path,
+    /// which reusing a connection does not do again.
     ///
     /// # Errors
     ///
     /// A storage refusal of the directory or a database file, or the
     /// database's error.
-    pub(super) fn connect(&self) -> Result<Connection, SearchError> {
-        private_directory(&self.directory)?;
-        validate_sqlite_files(&self.database)?;
-        let connection = Connection::open(&self.database)?;
-        connection.busy_timeout(BUSY_TIMEOUT)?;
-        Ok(connection)
+    pub(super) fn connect(&self) -> Result<PooledConnection, SearchError> {
+        let idle = {
+            let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
+            idle.pop()
+        };
+        let connection = if let Some(connection) = idle {
+            connection
+        } else {
+            private_directory(&self.directory)?;
+            validate_sqlite_files(&self.database)?;
+            let connection = Connection::open(&self.database)?;
+            connection.busy_timeout(BUSY_TIMEOUT)?;
+            connection
+        };
+        Ok(PooledConnection {
+            connection: Some(connection),
+            idle: Arc::clone(&self.idle),
+        })
+    }
+}
+
+/// A connection borrowed from its cache, returned to it when dropped.
+///
+/// Reusing connections is what keeps `-wal` and `-shm` in place: SQLite
+/// deletes both sidecars when the last connection closes, so a connection
+/// per operation created and deleted them about 95 times a second while a
+/// scan ran. A mapping of a deleted `-shm` faults on its next access
+/// instead of being re-read, which killed the process with SIGBUS on ZFS,
+/// and the churn also threw away the checkpointed WAL each time.
+#[derive(Debug)]
+pub(super) struct PooledConnection {
+    connection: Option<Connection>,
+    idle: Arc<Mutex<Vec<Connection>>>,
+}
+
+impl Deref for PooledConnection {
+    type Target = Connection;
+
+    fn deref(&self) -> &Connection {
+        // The connection is only taken in `drop`.
+        self.connection.as_ref().expect("a connection is borrowed")
+    }
+}
+
+impl DerefMut for PooledConnection {
+    fn deref_mut(&mut self) -> &mut Connection {
+        self.connection.as_mut().expect("a connection is borrowed")
+    }
+}
+
+impl Drop for PooledConnection {
+    fn drop(&mut self) {
+        let Some(connection) = self.connection.take() else {
+            return;
+        };
+        let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
+        // Past the cap the connection is dropped here, which closes it as
+        // it always did; the lock is released before that happens.
+        if idle.len() >= POOL_SIZE {
+            return;
+        }
+        idle.push(connection);
     }
 }
 
@@ -461,6 +533,23 @@ mod tests {
 
         assert!(found_names(&share.index, "bank").is_empty());
         assert!(share.index.roots().unwrap().is_empty());
+    }
+
+    /// The cache keeps a connection open, so SQLite does not delete the
+    /// write-ahead log and its shared-memory index after every operation.
+    /// A mapping of a deleted `-shm` faults on its next access instead of
+    /// being re-read, which ended the process with SIGBUS on ZFS.
+    ///
+    /// parity: SRCH-025
+    #[test]
+    fn the_wal_outlives_an_operation() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf")]);
+
+        let wal = share.directory.path().join("search.sqlite3-wal");
+        let shm = share.directory.path().join("search.sqlite3-shm");
+        assert!(wal.exists(), "the write-ahead log is still there");
+        assert!(shm.exists(), "its shared-memory index is still there");
     }
 
     /// Monitoring errors are cut to 500 characters before they are stored.
