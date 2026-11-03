@@ -241,6 +241,20 @@ impl ProgressWindow {
         }
     }
 
+    /// Shows the window now, without taking the focus, for an action
+    /// that already waited its moment before it started, so it does not
+    /// wait [`SHOW_DELAY`] a second time.
+    pub(crate) fn show_now(&self) {
+        if let Some(timer) = self.imp().showing.take() {
+            timer.remove();
+        }
+        if self.is_visible() || self.actions().is_empty() {
+            return;
+        }
+        self.set_visible(true);
+        self.forget_focus();
+    }
+
     /// Shows the window once [`SHOW_DELAY`] has passed with an action
     /// still running, without taking the focus.
     fn show_soon(&self) {
@@ -256,10 +270,7 @@ impl ProgressWindow {
                 self,
                 move || {
                     window.imp().showing.take();
-                    if !window.actions().is_empty() {
-                        window.set_visible(true);
-                        window.forget_focus();
-                    }
+                    window.show_now();
                 }
             ),
         );

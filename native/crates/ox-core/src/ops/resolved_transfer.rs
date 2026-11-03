@@ -35,6 +35,7 @@
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use super::conflicts::{ConflictScan, NameConflict, PlannedItem, PlannedKind};
 use super::context::{on_worker, OperationContext};
@@ -81,6 +82,8 @@ pub struct FreeItemsDone {
     landed: Vec<Landed>,
     /// When the transfer started, in seconds since the Unix epoch.
     started: u64,
+    /// How many planned items the steps so far handled.
+    before: u64,
 }
 
 impl FreeItemsDone {
@@ -210,6 +213,11 @@ struct Run<'a> {
     kept: Vec<PathBuf>,
     /// Where incoming files overwrote files that are gone.
     overwritten: HashSet<String>,
+    /// The planned items before the running step, and the step's own,
+    /// which place a step's progress in the whole transfer.
+    place: Arc<Mutex<(u64, u64)>>,
+    /// How many planned items the steps so far handled.
+    before: u64,
 }
 
 impl<'a> Run<'a> {
@@ -222,6 +230,11 @@ impl<'a> Run<'a> {
         mut progress: impl FnMut(Progress) + Send + 'static,
         earlier: Option<FreeItemsDone>,
     ) -> Self {
+        let all_items = u64::try_from(scan.items.len()).unwrap_or(u64::MAX).max(1);
+        // One step's item counts are the transfer's; several steps' are not.
+        let several_steps = planned_steps(scan) > 1;
+        let place = Arc::new(Mutex::new((0_u64, 0_u64)));
+        let step_place = Arc::clone(&place);
         let mut previous_steps = 0_u64;
         let mut current_step = 0_u64;
         let engine = gio_transfer_engine(context, move |mut report: Progress| {
@@ -233,6 +246,21 @@ impl<'a> Run<'a> {
             } else if report.scope == ProgressScope::Batch && report.fraction >= 1.0 {
                 previous_steps = previous_steps.saturating_add(current_step);
                 current_step = 0;
+            }
+            // A step's fraction is its own: the transfer is done only when
+            // its last step is, so a step's share of the items places it.
+            if report.scope == ProgressScope::Batch {
+                let (before, items) = *step_place.lock().unwrap_or_else(PoisonError::into_inner);
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "a progress bar needs far less precision than f64 keeps"
+                )]
+                let fraction =
+                    (before as f64 + report.fraction.clamp(0.0, 1.0) * items as f64) / all_items as f64;
+                report.fraction = fraction.min(1.0);
+            }
+            if several_steps {
+                report.items = None;
             }
             progress(report);
         });
@@ -250,7 +278,16 @@ impl<'a> Run<'a> {
             landed: earlier.landed,
             kept: Vec::new(),
             overwritten: HashSet::new(),
+            place,
+            before: earlier.before,
         }
+    }
+
+    /// The next step handles `items` planned items.
+    fn start_step(&mut self, items: usize) {
+        let items = u64::try_from(items).unwrap_or(u64::MAX);
+        *self.place.lock().unwrap_or_else(PoisonError::into_inner) = (self.before, items);
+        self.before = self.before.saturating_add(items);
     }
 
     /// What the items without a conflict did, to go on with later.
@@ -259,6 +296,7 @@ impl<'a> Run<'a> {
             total: self.total,
             landed: self.landed,
             started: self.started,
+            before: self.before,
         }
     }
 
@@ -279,6 +317,7 @@ impl<'a> Run<'a> {
                         destination_folder: Some(folder.clone()),
                         policy,
                     };
+                    self.start_step(chunk.len());
                     let part = run_on_engine(&mut self.engine, &request, self.context)?;
                     if self.add(part) {
                         return Ok(true);
@@ -306,9 +345,11 @@ impl<'a> Run<'a> {
             .filter(|(_, _, answer)| *answer == Resolution::Skip)
         {
             self.total.result.skipped.push(conflict.incoming_uri.clone());
+            self.before = self.before.saturating_add(1);
         }
         for resolution in [Resolution::KeepBoth, Resolution::Replace] {
             for (item, conflict, _) in answered.iter().filter(|(_, _, answer)| *answer == resolution) {
+                self.start_step(1);
                 let part = match resolution {
                     Resolution::KeepBoth => self.keep_both(item, conflict)?,
                     _ => self.replace(item, conflict)?,
@@ -514,6 +555,21 @@ impl<'a> Run<'a> {
             replaced_since: self.started,
         })
     }
+}
+
+/// How many engine runs `scan` plans at most: each folder's items without
+/// a conflict, each folder's copies into their own folder, and each
+/// conflict.
+fn planned_steps(scan: &ConflictScan) -> usize {
+    let free = grouped(&scan.items, |item| item.kind == PlannedKind::Free);
+    let own = grouped(&scan.items, |item| item.kind == PlannedKind::OwnFolderCopy);
+    let chunks = |groups: &[(String, Vec<String>)]| {
+        groups
+            .iter()
+            .map(|(_, uris)| uris.len().div_ceil(MAX_ITEMS))
+            .sum::<usize>()
+    };
+    chunks(&free) + chunks(&own) + scan.conflicts.len()
 }
 
 /// The items `keep` selects, grouped by the folder they go into.

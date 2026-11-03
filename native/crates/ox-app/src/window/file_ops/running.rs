@@ -166,7 +166,8 @@ impl BrowserWindow {
     /// stops it, and closing or Quit asks or waits as for any running
     /// operation (OPS-024, TAB-049). As in Windows, its panel, reading
     /// `label` with its Cancel button, shows only once it has run for
-    /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant, and
+    /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant, its
+    /// progress window then showing at once rather than waiting again, and
     /// once no other write holds the panel: it looks again each
     /// [`QUICK_WRITE_PANEL_DELAY`] while it runs, so it shows again after
     /// an archive operation took the panel and finished. `None`, as
@@ -197,7 +198,9 @@ impl BrowserWindow {
                     // write again once it is free.
                     let panel = window.transfer_panel();
                     if !panel.is_busy() && !cancel.is_cancelled() {
-                        panel.start(TransferKind::Create, label, cancel.clone());
+                        // It waited its moment already: the window shows
+                        // at once.
+                        panel.start_after_waiting(TransferKind::Create, label, cancel.clone());
                     }
                     glib::ControlFlow::Continue
                 }

@@ -65,10 +65,22 @@ impl fmt::Debug for TransferEngine {
     }
 }
 
+/// The accounting of a run, shared between the engine, its copies and
+/// the progress closure.
+pub(crate) type SharedAccounting = Arc<Mutex<Accounting>>;
+
+/// What a run had written and started when an attempt began, so a
+/// discarded attempt can be taken back.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Checkpoint {
+    written: u64,
+    files: u64,
+}
+
 /// What a run has written and counted, for its progress reports
 /// (OPS-021).
 #[derive(Debug, Default)]
-struct Accounting {
+pub(crate) struct Accounting {
     /// The bytes of the current file written so far.
     file_written: u64,
     /// The bytes written across the run.
@@ -82,6 +94,29 @@ struct Accounting {
 }
 
 impl Accounting {
+    /// Where the run is now, before an attempt that may be discarded.
+    pub(crate) fn checkpoint(accounting: &SharedAccounting) -> Checkpoint {
+        let counts = accounting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Checkpoint {
+            written: counts.batch_written,
+            files: counts.files_started,
+        }
+    }
+
+    /// Takes back what an attempt wrote and started since `checkpoint`,
+    /// once its copy was discarded to be tried again: the retry writes
+    /// those bytes again, and they must count once (OPS-021, OPS-047).
+    pub(crate) fn roll_back(accounting: &SharedAccounting, checkpoint: Checkpoint) {
+        let mut counts = accounting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        counts.batch_written = counts.batch_written.min(checkpoint.written);
+        counts.files_started = counts.files_started.min(checkpoint.files);
+        counts.file_written = 0;
+    }
+
     /// Fills in `progress` what the run has written and counted: the
     /// bytes, and the items, counted in files once the free-space check
     /// counted them. An item report says how many files are done; the
@@ -411,6 +446,7 @@ impl TransferEngine {
     /// the run after recording it.
     fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
         let mut staging = ItemStaging::default();
+        let checkpoint = Accounting::checkpoint(&self.byte_counts);
         self.failures.start_item(batch.mode(), self.display_name(uri));
         let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
         // Whether the user saw the error of `outcome` in the question.
@@ -428,6 +464,7 @@ impl TransferEngine {
             match self.failures.answer(&failed) {
                 Some(FailureAnswer::Retry) => {
                     self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    Accounting::roll_back(&self.byte_counts, checkpoint);
                     self.failures.start_item(batch.mode(), self.display_name(uri));
                     outcome = self.process_item(batch, index, uri, state, &mut staging);
                 }
@@ -706,6 +743,7 @@ impl TransferEngine {
             unstorable: &mut self.unstorable,
             failures: &mut self.failures,
             emit: &mut *self.emit,
+            accounting: &self.byte_counts,
             copied,
         };
         copy.run(staging)

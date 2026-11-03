@@ -32,6 +32,7 @@ use std::ffi::{OsStr, OsString};
 use super::cancellation::Cancellation;
 use super::commit::{commit_replace, publish_staged, verify_installation};
 use super::copy::Copier;
+use super::engine::SharedAccounting;
 use super::error::TransferError;
 use super::item_failure::ItemFailures;
 use super::modes::{secure_local_staging, DirectoryModes};
@@ -143,6 +144,9 @@ pub(crate) struct StagedCopy<'a> {
     pub(crate) failures: &'a mut ItemFailures,
     /// Receives byte progress.
     pub(crate) emit: &'a mut dyn FnMut(Progress),
+    /// The run's accounting, which a retried entry takes its bytes back
+    /// from.
+    pub(crate) accounting: &'a SharedAccounting,
     /// Receives every copied source item below `source` when the copy
     /// finishes a move (XFER-013); `None` for a plain copy.
     pub(crate) copied: Option<&'a mut Vec<CopiedItem>>,
@@ -245,6 +249,7 @@ impl StagedCopy<'_> {
             )));
         }
         let mut copier = Copier::new(self.cancel, name, modes, &mut *self.unstorable, &mut *self.emit)
+            .accounting(self.accounting)
             .recording(self.copied.as_deref_mut())
             .asking(&mut *self.failures);
         if self.source_kind == NodeKind::Directory {
@@ -292,6 +297,7 @@ impl StagedCopy<'_> {
         // may empty.
         staging.created = secure_local_staging(stage.root())?;
         let mut copier = Copier::new(self.cancel, name, modes, &mut *self.unstorable, &mut *self.emit)
+            .accounting(self.accounting)
             .recording(self.copied.as_deref_mut())
             .asking(&mut *self.failures);
         copier.copy(self.source, stage.item(), 0)?;
