@@ -519,8 +519,8 @@ mod tests {
         assert!(!tab_ids(&test.window).contains(&moved));
     }
 
-    /// A tab moved on again before its new window listed it, as a tab torn
-    /// out as a window and dropped on another row before that window drew
+    /// A tab moved on again before its new window listed it, as a tab moved
+    /// to a new window and straight on to another before that window drew
     /// its folder, keeps its selection and scroll position: its window has
     /// not shown them yet, so they come from the tab, not from its view.
     ///
@@ -533,10 +533,9 @@ mod tests {
         let moved = active_tab(&test.window);
         let other = test.open_beside(&first.uri());
 
-        // A new window has the tab, shown as a torn-out tab's window is, its
-        // folder not listed yet.
+        // A new window has the tab, shown, its folder not listed yet.
         let window = test.window.detach_tab(moved).expect("a new window");
-        window.present_as_torn_out();
+        window.present_as_new_window();
         let tab = active_tab(&window);
         window
             .hand_over_tab(tab, &other.window, None)

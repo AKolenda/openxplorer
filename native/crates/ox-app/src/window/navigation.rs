@@ -395,8 +395,7 @@ impl BrowserWindow {
     /// Closes a tab; closing the last one closes the window, after asking
     /// as its Close button does (`closeTab` calls `askClose`). A tab that
     /// is being dragged stays (TAB-003), and so does every other tab while
-    /// one is dragged along the row or a window drag holds this window
-    /// ([`Self::refuse_while_tabs_move`]).
+    /// one is dragged along the row ([`Self::refuse_while_tabs_move`]).
     pub(super) fn close_tab(&self, id: TabId) {
         if self.refuse_while_moving(id) || self.refuse_while_tabs_move() {
             return;

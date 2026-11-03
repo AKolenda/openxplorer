@@ -355,7 +355,8 @@ impl TabStrip {
         })
     }
 
-    /// The border box of tab `id`, in `target`'s coordinates.
+    /// The border box of tab `id`, in `target`'s coordinates, for tests.
+    #[cfg(test)]
     pub(in crate::window) fn tab_bounds_in(
         &self,
         id: TabId,

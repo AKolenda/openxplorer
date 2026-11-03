@@ -25,10 +25,9 @@ Version:        2.0.11
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
-# Apache-2.0 or both, or ISC (libloading, with which the Wayland crates load
-# libwayland), and their licences are installed beside it
+# Apache-2.0 or both, and their licences are installed beside it
 # (rust-crates/INDEX.txt).
-License:        AGPL-3.0-only AND MIT AND Apache-2.0 AND ISC
+License:        AGPL-3.0-only AND MIT AND Apache-2.0
 URL:            https://openxplorer.app
 Source0:        openxplorer-%{version}.tar.gz
 Source1:        openxplorer-%{version}-vendor.tar.gz
@@ -36,7 +35,6 @@ Source1:        openxplorer-%{version}-vendor.tar.gz
 BuildRequires:  cargo >= 1.92
 BuildRequires:  rust >= 1.92
 BuildRequires:  pkgconfig(gtk4) >= 4.14
-BuildRequires:  pkgconfig(wayland-client)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(libsoup-3.0)
 BuildRequires:  /usr/bin/glib-compile-resources

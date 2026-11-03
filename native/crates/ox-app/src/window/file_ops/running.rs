@@ -75,9 +75,8 @@ impl BrowserWindow {
     }
 
     /// True, after saying why, once an application update installed files
-    /// and waits for its restart (UPD-006), while a drive is formatted
-    /// (DEV-012), or while a window drag holds the mouse with this window
-    /// (TAB-035). Every writer asks before it starts: file operations,
+    /// and waits for its restart (UPD-006), or while a drive is formatted
+    /// (DEV-012). Every writer asks before it starts: file operations,
     /// extraction, compression, a restored version, rename and new items,
     /// as the Python app refused every file request during an update.
     pub(in crate::window) fn refuses_writes(&self) -> bool {
@@ -93,9 +92,6 @@ impl BrowserWindow {
     pub(in crate::window) fn write_refusal(&self) -> Option<String> {
         if self.context().formats_a_drive() {
             return Some(ox_core::i18n::gettext_static(FORMATTING_A_DRIVE).to_owned());
-        }
-        if let Some(refusal) = self.window_drag_refusal() {
-            return Some(refusal);
         }
         self.context().updates().file_refusal()
     }

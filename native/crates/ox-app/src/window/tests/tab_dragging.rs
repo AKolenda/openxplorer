@@ -921,6 +921,61 @@ fn escape_on_a_tab_dragged_again_while_it_slides_into_place_keeps_its_release() 
     assert!(!drags_and_drops(&test.window));
 }
 
+/// A tab let go past another, dragged again while it still slides into
+/// its new place and carried out of its row: calling the drag off keeps
+/// the release, as Escape along the row does, though the session had not
+/// taken its order when the tab left the row.
+///
+/// parity: TAB-032, TAB-035
+#[gtk::test]
+fn a_tab_dragged_again_while_it_slides_into_place_and_carried_out_keeps_its_release() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let first_tab = tab_widget(&test.window, 0);
+    let width = f64::from(first_tab.width());
+    let from = on_screen(&mut pointer, &first_tab, (20.0, 10.0));
+    // Past the other tab's middle, still over its place.
+    #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
+    let released = (from.0 + (width * 0.7) as i32, from.1);
+    let away = (released.0 + 20, released.1 + 90);
+
+    press_and_glide(&mut pointer, from, released, Pace::Held);
+    pointer.release(Button::Primary);
+    // Pressed again on the tab as drawn and pulled out of the row at once,
+    // well within its 200 ms slide.
+    pointer.press_and_flick(Button::Primary, &[(released.0 + 20, released.1), away]);
+    let order_while_dragged_again = tab_ids(&test.window);
+    pointer.glide(away, (away.0 + 10, away.1 + 10), 4);
+    wait_until("the tab to be carried", || drags_and_drops(&test.window));
+    // Over its own window, as the drop target sees once the drag caught up.
+    pointer.glide((away.0 + 10, away.1 + 10), (away.0 + 20, away.1 + 20), 4);
+    wait_for(HOLD);
+    tab_drag_source(&test.window).drag_cancel();
+    wait_until("the drag to end", || !drags_and_drops(&test.window));
+    pointer.release(Button::Primary);
+    wait_until("the strip to be still", || {
+        test.window.tab_strip().live_tab().is_none()
+    });
+    wait_for(HOLD);
+
+    assert_eq!(
+        order_while_dragged_again,
+        [first, second],
+        "the session had not taken the release's order yet"
+    );
+    assert_eq!(
+        tab_ids(&test.window),
+        [second, first],
+        "calling the drag off kept the first release"
+    );
+    assert_eq!(active_tab(&test.window), Some(first), "in front again");
+    assert!(windows_besides(&[&test.window]).is_empty(), "no window opens");
+}
+
 /// A tab let go past another and pressed again while it still slides
 /// into its new place, the press held until it is there and the other tab
 /// slid under the point pressed: the press drags the tab it met, not the

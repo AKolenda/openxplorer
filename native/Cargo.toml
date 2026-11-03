@@ -20,16 +20,7 @@ publish = false
 gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 # The Wayland side of GDK: a file dialog attaches to the window of the
 # application that opened it (xdg-foreign); its version follows gtk.
-# "wayland_crate" hands GTK's own Wayland connection to wayland-client, where
-# a torn-out tab's window is dragged with xdg-toplevel-drag-v1 (TAB-034).
-gdk-wayland = { package = "gdk4-wayland", version = "0.11", features = ["wayland_crate"] }
-# The protocol objects of that drag, on GTK's connection. The versions are the
-# ones gdk4-wayland's "wayland_crate" uses; "client_system" talks through the
-# system libwayland-client GTK already links, and "staging" has
-# xdg-toplevel-drag-v1.
-wayland-client = "0.31.10"
-wayland-backend = { version = "0.3", features = ["client_system"] }
-wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+gdk-wayland = { package = "gdk4-wayland", version = "0.11" }
 gio = "0.22"
 # GTK 4.14 needs GLib 2.76, so its APIs (GBookmarkFile among them) are safe.
 glib = { version = "0.22", features = ["v2_76"] }

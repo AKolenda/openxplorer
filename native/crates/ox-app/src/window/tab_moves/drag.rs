@@ -9,11 +9,9 @@
 //! tab never moves the window ([`source`] says why it must sit there).
 //! Along the strip the tab itself follows the pointer and the other tabs
 //! slide aside (`tab_strip::live_drag`), with no drag and drop at all.
-//! Once the pointer leaves the strip by more than Chrome's 15 pixels, the tab
-//! becomes its own window that the desktop moves with the pointer where the
-//! desktop and GTK allow it ([`window_drag`], as Chrome on Wayland);
-//! elsewhere GTK's drag and drop takes over, carrying the tab itself, drawn
-//! as in its strip, and the tab beside it comes to the front, as in Chrome. Every window
+//! Once the pointer leaves the strip by more than Chrome's 15 pixels, GTK's
+//! drag and drop takes over, carrying the tab itself, drawn as in its
+//! strip, and the tab beside it comes to the front, as in Chrome. Every window
 //! takes tab drops with one target over the whole window, which finds the
 //! spot itself: the title bar from the first tab to the open-windows button
 //! places the tab where the tabs made room for it, and anywhere else in a
@@ -41,7 +39,6 @@ mod source;
 mod target;
 #[cfg(test)]
 mod tests;
-mod window_drag;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -166,13 +163,12 @@ impl BrowserWindow {
     pub(in crate::window) fn connect_tab_drag_and_drop(&self) {
         self.attach_tab_drag_source();
         self.attach_tab_drop_target();
-        self.connect_window_drags();
     }
 
     /// True, after saying so, while tab `id` is being dragged: it cannot
     /// close or change location until the drag has settled where it goes
-    /// (TAB-003), whether GTK's drag and drop carries it, it moves along the
-    /// strip, or its window is dragged.
+    /// (TAB-003), whether GTK's drag and drop carries it or it moves along
+    /// the strip.
     pub(in crate::window) fn refuse_while_moving(&self, id: TabId) -> bool {
         let is_moving = self
             .imp()
@@ -180,21 +176,11 @@ impl BrowserWindow {
             .borrow()
             .as_ref()
             .is_some_and(|outgoing| outgoing.tab == id)
-            || self.tab_strip().live_tab() == Some(id)
-            || self.window_drag_holds(id);
+            || self.tab_strip().live_tab() == Some(id);
         if is_moving {
             self.show_message(ox_core::i18n::gettext_static(TAB_IS_MOVING));
         }
         is_moving
-    }
-
-    /// Why no file operation may start in this window now: a window drag
-    /// holds the mouse with it, as no keyboard command starts work during
-    /// a mouse drag in Windows Explorer, and Escape can still put the tab
-    /// back (TAB-035).
-    pub(in crate::window) fn window_drag_refusal(&self) -> Option<String> {
-        self.is_in_window_drag()
-            .then(|| ox_core::i18n::gettext_static(TAB_IS_MOVING).to_owned())
     }
 
     /// [`Self::refuse_while_moving`] for the tab in front.
@@ -206,15 +192,14 @@ impl BrowserWindow {
     /// [`Self::refuse_while_active_tab_moves`] for what gives a tab of the
     /// strip another id, as splitting it, closing one of its panes or
     /// switching between them does, or closes it: refused for any tab while
-    /// one follows the pointer along the row or a window drag holds this
-    /// window, as where the dragged tab lands or goes back is kept as the
-    /// ids of the tabs after it, and the strip shows which tab is in front
-    /// only among the tabs it had when the drag began. A tab let go a
-    /// moment ago lands at once first.
+    /// one follows the pointer along the row, as where the dragged tab
+    /// lands or goes back is kept as the ids of the tabs after it, and the
+    /// strip shows which tab is in front only among the tabs it had when
+    /// the drag began. A tab let go a moment ago lands at once first.
     pub(in crate::window) fn refuse_while_tabs_move(&self) -> bool {
         let strip = self.tab_strip();
         strip.land_settling_tab();
-        if strip.is_following() || self.is_in_window_drag() {
+        if strip.is_following() {
             self.show_message(ox_core::i18n::gettext_static(TAB_IS_MOVING));
             return true;
         }

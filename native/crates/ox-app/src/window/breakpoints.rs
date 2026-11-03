@@ -32,12 +32,6 @@ const NARROW_PANE_WIDTH: i32 = 235;
 const NARROW_TAB_WIDTH: i32 = 180;
 /// A tab's width from 680 pixels down (`.tab{width:150px}`).
 const COMPACT_TAB_WIDTH: i32 = 150;
-/// Where the title bar's tab row starts (`.ox-titlebar{padding-left:9px}`
-/// in `resources/skin/title-bar.css`).
-const TITLE_BAR_START: i32 = 9;
-/// Where it starts from 680 pixels down (`padding-left:5px` in
-/// `resources/skin/breakpoints.css`).
-const COMPACT_TITLE_BAR_START: i32 = 5;
 
 /// The band of widths the window is in, narrowest last.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -151,16 +145,6 @@ impl WindowWidth {
             WindowWidth::Wide | WindowWidth::Medium | WindowWidth::Reduced => TAB_WIDTH,
             WindowWidth::Narrow => NARROW_TAB_WIDTH,
             WindowWidth::Compact => COMPACT_TAB_WIDTH,
-        }
-    }
-
-    /// How far from the window's left edge the title bar's tab row
-    /// starts: [`TITLE_BAR_START`], less from 680 pixels down.
-    pub(super) fn title_bar_start(self) -> i32 {
-        if self.is_compact() {
-            COMPACT_TITLE_BAR_START
-        } else {
-            TITLE_BAR_START
         }
     }
 }

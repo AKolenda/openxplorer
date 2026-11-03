@@ -11,7 +11,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use super::window_drag::MousePress;
 use super::{
     tab_drag_content, Carried, CarriedLook, DraggedTab, Hover, OutgoingTabDrag, TabDragOutcome, TabDropSpot,
 };
@@ -49,8 +48,8 @@ enum Press {
     /// The tab left its strip: GTK's drag and drop starts with the next
     /// motion it allows.
     Leaving(TabId),
-    /// The tab left its strip as a window of its own, which the desktop
-    /// now moves with the press.
+    /// The tab, its window's only one, left its strip with its window,
+    /// which the desktop now moves with the press.
     Handed,
     /// Escape, or a busy window: the rest of the press does nothing.
     Ignored,
@@ -68,8 +67,7 @@ impl BrowserWindow {
         source.set_actions(gdk::DragAction::MOVE);
         source.set_propagation_phase(gtk::PropagationPhase::Capture);
         let press = Rc::new(Cell::new(Press::Idle));
-        let pressed_with = Rc::new(Cell::new(None));
-        self.follow_tab_presses(&source, &press, &pressed_with);
+        self.follow_tab_presses(&source, &press);
         source.connect_prepare(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -119,23 +117,14 @@ impl BrowserWindow {
     /// Follows each primary press on the title bar through `source`: past
     /// the drag threshold on a tab it becomes the tab's live drag, which
     /// [`take_tab_presses_from_the_window_handle`] explains, and a release
-    /// leaves the tab where it was shown. `pressed_with` is the press when
-    /// it is one of the mouse, which may drag the tab out as a window.
-    fn follow_tab_presses(
-        &self,
-        source: &gtk::DragSource,
-        press: &Rc<Cell<Press>>,
-        pressed_with: &Rc<Cell<Option<MousePress>>>,
-    ) {
+    /// leaves the tab where it was shown.
+    fn follow_tab_presses(&self, source: &gtk::DragSource, press: &Rc<Cell<Press>>) {
         source.connect_begin(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[strong]
             press,
-            #[strong]
-            pressed_with,
             move |source, sequence| {
-                pressed_with.set(MousePress::of(source));
                 if let Some(point) = source.point(sequence) {
                     press.set(Press::Pending(point, window.grab_pressed_tab(source, point)));
                 }
@@ -146,11 +135,9 @@ impl BrowserWindow {
             self,
             #[strong]
             press,
-            #[strong]
-            pressed_with,
             move |source, sequence| {
                 if let Some(point) = source.point(sequence) {
-                    window.move_tab_press(source, &press, pressed_with.get(), point);
+                    window.move_tab_press(source, &press, point);
                 }
             }
         ));
@@ -184,15 +171,8 @@ impl BrowserWindow {
         ));
     }
 
-    /// The pointer of a primary press, `pressed_with` when it is the
-    /// mouse's, moved to `point` of the title bar.
-    fn move_tab_press(
-        &self,
-        source: &gtk::DragSource,
-        press: &Cell<Press>,
-        pressed_with: Option<MousePress>,
-        point: (f64, f64),
-    ) {
+    /// The pointer of a primary press moved to `point` of the title bar.
+    fn move_tab_press(&self, source: &gtk::DragSource, press: &Cell<Press>, point: (f64, f64)) {
         let Some((x, y)) = self.title_bar_point_in_strip(source, point.0, point.1) else {
             return;
         };
@@ -207,22 +187,16 @@ impl BrowserWindow {
                     press.set(Press::Ignored);
                     return;
                 }
-                // A tab on its way back after Escape is not dragged again.
-                if self.window_drag_holds(tab) {
-                    self.show_message(ox_core::i18n::gettext_static(super::TAB_IS_MOVING));
-                    press.set(Press::Ignored);
-                    return;
-                }
                 press.set(Press::Live(tab));
                 self.tab_strip().follow_pointer(tab, x);
                 // GDK merges motions that wait together, so a quick flick's
                 // first may already be off the strip.
                 if self.is_off_the_strip((x, y)) {
-                    self.leave_strip_with_press(source, press, pressed_with, tab);
+                    self.leave_strip_with_press(source, press, tab);
                 }
             }
             Press::Live(tab) if self.is_off_the_strip((x, y)) => {
-                self.leave_strip_with_press(source, press, pressed_with, tab);
+                self.leave_strip_with_press(source, press, tab);
             }
             Press::Live(tab) => self.tab_strip().follow_pointer(tab, x),
             Press::Leaving(tab) if !self.is_off_the_strip((x, y)) => {
@@ -244,23 +218,12 @@ impl BrowserWindow {
         Some(tab)
     }
 
-    /// Tab `tab`, following the pointer of a press (`pressed_with` when
-    /// the mouse's), left its strip: its window is dragged out with it, the
+    /// Tab `tab`, following the pointer of a press, left its strip: the
     /// window itself moves for a window's only tab, or GTK's drag and drop
     /// carries it.
-    fn leave_strip_with_press(
-        &self,
-        source: &gtk::DragSource,
-        press: &Cell<Press>,
-        pressed_with: Option<MousePress>,
-        tab: TabId,
-    ) {
+    fn leave_strip_with_press(&self, source: &gtk::DragSource, press: &Cell<Press>, tab: TabId) {
         self.tab_strip().stop_edge_scroll();
-        let grab = self.tab_strip().grab_offset(tab);
-        if grab.is_some_and(|grab| self.drag_tab_out_as_window(tab, grab, pressed_with)) {
-            // The desktop has the pointer now, and moves the window.
-            press.set(Press::Handed);
-        } else if self.tab_count() <= 1 && !self.has_other_windows() {
+        if self.tab_count() <= 1 && !self.has_other_windows() {
             press.set(Press::Handed);
             self.move_window_by_its_tab(source, tab);
         } else {
