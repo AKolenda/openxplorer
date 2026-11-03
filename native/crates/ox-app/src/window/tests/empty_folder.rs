@@ -264,6 +264,9 @@ fn each_pane_of_a_split_tab_has_its_own_empty_page_menu() {
     let fixture = Fixture::standard();
     let empty = make_empty_folder(&fixture);
     let test = TestWindow::open(&fixture.uri());
+    // The classic empty page menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     test.activate("split-view", None);
     let page = go_to_empty_folder(&test, &empty);
     let shown_in = test.window.side_holding(&page).expect("the page is in a pane");

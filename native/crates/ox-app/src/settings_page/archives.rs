@@ -34,11 +34,11 @@ const ZIP_OPENING: RowText = RowText {
 const ZIP_OPENINGS: [Choice<ZipOpening>; 2] = [
     Choice {
         value: ZipOpening::Folder,
-        label: crate::i18n::message_id("Like a folder (Windows)"),
+        label: crate::i18n::message_id("Like a folder (default)"),
     },
     Choice {
         value: ZipOpening::Window,
-        label: crate::i18n::message_id("In a pop-up window (default)"),
+        label: crate::i18n::message_id("In a pop-up window"),
     },
 ];
 

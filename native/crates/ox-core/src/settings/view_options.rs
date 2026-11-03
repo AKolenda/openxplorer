@@ -46,7 +46,8 @@ pub struct ViewOptions {
     /// Documents and every other type a thumbnailer supports get previews.
     pub preview_documents: bool,
     /// A folder's Size in the Details view says how many items it holds,
-    /// counted for folders on this computer only.
+    /// counted for folders on this computer only (Dolphin's). Off by
+    /// default: Windows Explorer leaves a folder's Size empty.
     pub count_folder_items: bool,
     /// The keys of the details columns shown after Name, in their order.
     pub details_columns: Vec<String>,
@@ -61,7 +62,7 @@ impl Default for ViewOptions {
             preview_pictures: true,
             preview_videos: true,
             preview_documents: true,
-            count_folder_items: true,
+            count_folder_items: false,
             details_columns: DEFAULT_DETAILS_COLUMNS.map(str::to_owned).to_vec(),
         }
     }
