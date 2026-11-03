@@ -47,6 +47,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
+use crate::window::folder_search::KeptSearch;
 use crate::window::session::TabId;
 use crate::window::BrowserWindow;
 
@@ -107,6 +108,8 @@ pub(in crate::window) struct OutgoingTabDrag {
     /// The tab was in front when it left the strip, and the tab beside it
     /// came to the front meanwhile.
     stepped_back: bool,
+    /// The search the window showed then, which comes back with the tab.
+    stepped_back_search: Option<KeptSearch>,
 }
 
 /// What follows the pointer while GTK's drag and drop carries a tab: the

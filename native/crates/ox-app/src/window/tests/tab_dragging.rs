@@ -966,6 +966,45 @@ fn a_carried_tab_whose_drag_is_called_off_is_in_front_again() {
     assert!(windows_besides(&[&test.window]).is_empty(), "no window opens");
 }
 
+/// A carried tab whose drag is called off comes back with the search its
+/// window showed: the tab beside it, in front meanwhile, emptied the search
+/// box, which the tabs share.
+///
+/// parity: TAB-034, SRCH-001
+#[gtk::test]
+fn a_carried_tab_whose_drag_is_called_off_keeps_its_search() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    test.window.switch_tab(first);
+    test.start_search_cache();
+    test.search_for("notes");
+    let from = middle_on_screen(&mut pointer, &tab_widget(&test.window, 0));
+    let away = (from.0 + 40, from.1 + 90);
+
+    press_and_glide(&mut pointer, from, away, Pace::Held);
+    let front_while_away = active_tab(&test.window);
+    let box_while_away = test.window.search_box().entry().text();
+    tab_drag_source(&test.window).drag_cancel();
+    wait_until("the drag to end", || !drags_and_drops(&test.window));
+    pointer.release(Button::Primary);
+    wait_until("the search to run again", || {
+        !test.status_count().starts_with("Searching") && test.names() == ["Notes 2.txt", "Notes 10.txt"]
+    });
+
+    assert_eq!(front_while_away, Some(second));
+    assert_eq!(box_while_away, "", "the tab beside it emptied the search box");
+    assert_eq!(active_tab(&test.window), Some(first), "in front again");
+    assert_eq!(
+        test.window.search_box().entry().text(),
+        "notes",
+        "with its search"
+    );
+}
+
 /// The drag source of `window`'s tabs, on its title bar.
 fn tab_drag_source(window: &BrowserWindow) -> gtk::DragSource {
     let bar = window.titlebar().expect("a title bar");

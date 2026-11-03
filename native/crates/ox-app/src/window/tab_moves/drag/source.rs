@@ -368,24 +368,31 @@ impl BrowserWindow {
         let Some(successor) = successor else {
             return;
         };
+        let search = self.kept_search();
         if let Some(outgoing) = self.imp().outgoing_tab.borrow_mut().as_mut() {
             outgoing.stepped_back = true;
+            outgoing.stepped_back_search = search;
         }
         self.switch_tab(successor);
     }
 
     /// Tab `tab`, carried out of this window's strip, is back over it or
-    /// stays: it comes to the front again when it was there.
+    /// stays: it comes to the front again when it was there, with the
+    /// search it showed.
     pub(super) fn bring_carried_tab_forward(&self, tab: TabId) {
         let stepped_back = self
             .imp()
             .outgoing_tab
             .borrow_mut()
             .as_mut()
-            .filter(|outgoing| outgoing.tab == tab)
-            .is_some_and(|outgoing| std::mem::take(&mut outgoing.stepped_back));
-        if stepped_back {
+            .filter(|outgoing| outgoing.tab == tab && outgoing.stepped_back)
+            .map(|outgoing| {
+                outgoing.stepped_back = false;
+                outgoing.stepped_back_search.take()
+            });
+        if let Some(search) = stepped_back {
             self.switch_tab(tab);
+            self.restore_search(search);
         }
     }
 
@@ -449,6 +456,7 @@ impl BrowserWindow {
             carried: None,
             over_own_strip: false,
             stepped_back: false,
+            stepped_back_search: None,
         }));
         let dragged = DraggedTab {
             source: self.downgrade(),
@@ -592,9 +600,11 @@ impl BrowserWindow {
             TabDragOutcome::Pending | TabDragOutcome::TornOut => BrowserWindow::move_tab_to_new_window,
             TabDragOutcome::MovedAway => BrowserWindow::release_moved_tab,
             TabDragOutcome::Reordered | TabDragOutcome::Cancelled => {
-                // The tab stays, in front again when it was.
+                // The tab stays, in front again when it was, with the
+                // search it showed.
                 if outgoing.stepped_back {
                     self.switch_tab(tab);
+                    self.restore_search(outgoing.stepped_back_search);
                 }
                 return;
             }
