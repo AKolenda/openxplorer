@@ -296,11 +296,14 @@ impl SearchIndex {
     }
 }
 
-/// Roots and their counts through the caller's connection or snapshot.
+/// Roots and their counts through the caller's connection or snapshot. The
+/// counts come from `root_counts`, which the triggers keep exact, so this
+/// reads one row per root instead of every entry of every root.
 fn read_roots(connection: &Connection) -> rusqlite::Result<Vec<IndexRoot>> {
     let mut statement = connection.prepare(
-        "SELECT r.*, (SELECT count(*) FROM entries e WHERE e.root=r.uri) AS entry_count
-         FROM roots r ORDER BY r.label COLLATE NOCASE",
+        "SELECT r.*, COALESCE(c.entries, 0) AS entry_count
+         FROM roots r LEFT JOIN root_counts c ON c.root=r.uri
+         ORDER BY r.label COLLATE NOCASE",
     )?;
     let roots = statement.query_map((), IndexRoot::from_row)?;
     roots.collect()
@@ -461,6 +464,22 @@ mod tests {
 
         assert!(found_names(&share.index, "bank").is_empty());
         assert!(share.index.roots().unwrap().is_empty());
+    }
+
+    /// The count a root reports is the row the triggers keep, so it follows
+    /// what a scan stores and what a clear deletes without counting the
+    /// entries of the root again.
+    ///
+    /// parity: SRCH-022
+    #[test]
+    fn a_roots_entry_count_follows_its_entries() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf"), listed_file(SHARE, "b.pdf")]);
+        assert_eq!(root_state(&share.index, SHARE).entry_count, 2);
+
+        share.index.clear(SHARE).unwrap();
+
+        assert_eq!(root_state(&share.index, SHARE).entry_count, 0);
     }
 
     /// Monitoring errors are cut to 500 characters before they are stored.
