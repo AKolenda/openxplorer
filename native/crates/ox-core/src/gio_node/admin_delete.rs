@@ -41,6 +41,11 @@
 //!   their own drives and disk images, whose owners say whatever their
 //!   maker wrote. Inside a Flatpak, whose mount table is not the host's,
 //!   every folder is refused.
+//! - any folder on its path, or the folder, is on a drive an ordinary user
+//!   could have mounted wherever it is mounted: one `/etc/fstab` lets users
+//!   mount, one libmount records as mounted by a user, or a removable,
+//!   hot-pluggable or image device ([`user_mounts`]). It is refused too
+//!   when a user may mount a drive on its path or inside it.
 //!
 //! While it deletes, the walk asks about each folder again before entering
 //! it, and stops at one that fails the owner and mode test or is on
@@ -67,6 +72,10 @@ use super::remote_delete::{self, FolderCheck};
 use crate::integration::Sandbox;
 use crate::sizes::mounts::{self, Mount};
 use crate::transfer::{nesting_error, Cancellation, NodeKind, TransferError, WriteGuard, MAX_DEPTH};
+
+mod user_mounts;
+
+use user_mounts::UserMounts;
 
 /// The most symbolic links followed on the way to a folder, as the kernel
 /// allows (`MAXSYMLINKS`); a loop of links is refused instead of followed.
@@ -180,6 +189,9 @@ struct Seams {
     judged_from: Option<PathBuf>,
     /// The device reported for a folder instead of its own.
     device: Option<Box<DeviceSeen>>,
+    /// The folder read in place of `/` for `/etc/fstab`, libmount's
+    /// `utab`, `/sys` and `/dev`.
+    system: Option<PathBuf>,
 }
 
 /// What a test reports as the device of the folder at a path, given the
@@ -223,6 +235,16 @@ impl Rules {
         mounts::read_mounts().ok()
     }
 
+    /// Where `/etc/fstab`, libmount's `utab`, `/sys` and `/dev` are.
+    #[cfg_attr(not(test), allow(clippy::unused_self))]
+    fn system(&self) -> PathBuf {
+        #[cfg(test)]
+        if let Some(system) = &self.seams.system {
+            return system.clone();
+        }
+        PathBuf::from("/")
+    }
+
     /// The device of the folder at `path`, which GIO reported as `device`.
     #[cfg_attr(not(test), allow(clippy::unused_self))]
     fn device(&self, path: &Path, device: u32) -> u32 {
@@ -253,9 +275,11 @@ impl Checks<'_> {
             )));
         };
         let mounts = self.rules.mounts().ok_or_else(|| others_can_change(&shown))?;
+        let users = UserMounts::read(&self.rules.system());
         let resolver = Resolver {
             checks: self,
             mounts: &mounts,
+            users: &users,
         };
         let (folder, folder_path) = resolver.resolve(&top, names)?;
         let item = folder.child(&name);
@@ -267,6 +291,10 @@ impl Checks<'_> {
         }
         resolver.require_trusted(&item_path, &shown, &info)?;
         refuse_mounts(&item_path, &shown, &mounts)?;
+        if let Some(point) = users.point_inside(&item_path) {
+            let inside = point.strip_prefix(&item_path).unwrap_or(point);
+            return Err(users_can_mount(&shown.join(inside)));
+        }
         let device = self
             .device(&item, &info)
             .ok_or_else(|| others_can_change(&shown))?;
@@ -342,6 +370,7 @@ impl Checks<'_> {
 struct Resolver<'a> {
     checks: &'a Checks<'a>,
     mounts: &'a [Mount],
+    users: &'a UserMounts,
 }
 
 impl Resolver<'_> {
@@ -401,15 +430,20 @@ impl Resolver<'_> {
 
     /// Refuses the folder at `path`, shown as `shown` and described by
     /// `info`, unless only root can change it and it is on a filesystem
-    /// whose owners and modes can be believed.
+    /// whose owners and modes can be believed, on a drive no ordinary user
+    /// could have mounted there or could mount above it.
     fn require_trusted(&self, path: &Path, shown: &Path, info: &gio::FileInfo) -> Result<(), TransferError> {
         self.checks
             .require_closed(path, info)
             .map_err(|_| others_can_change(shown))?;
-        match mount_of(path, self.mounts) {
-            Some(mount) if is_trusted_filesystem(mount) => Ok(()),
-            _ => Err(others_can_change(shown)),
+        let mount = match mount_of(path, self.mounts) {
+            Some(mount) if is_trusted_filesystem(mount) => mount,
+            _ => return Err(others_can_change(shown)),
+        };
+        if self.users.could_be_users(mount) || self.users.point_over(path).is_some() {
+            return Err(users_can_mount(shown));
         }
+        Ok(())
     }
 }
 
@@ -456,6 +490,16 @@ fn is_trusted_filesystem(mount: &Mount) -> bool {
 fn others_can_change(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "Other users can change {path}, or it is on a drive whose permissions can't be checked, \
+         so this folder can't be safely deleted as administrator.",
+        &[("path", &path.display().to_string())],
+    ))
+}
+
+/// The refusal to delete a folder because `path` is on a drive an
+/// ordinary user could have mounted, or is where one could mount a drive.
+fn users_can_mount(path: &Path) -> TransferError {
+    TransferError::failed(crate::i18n::format_message(
+        "{path} is on a removable drive or in a place where other users can mount drives, \
          so this folder can't be safely deleted as administrator.",
         &[("path", &path.display().to_string())],
     ))

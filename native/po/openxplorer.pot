@@ -6590,6 +6590,11 @@ msgid "Other users can change {path}, or it is on a drive whose permissions can'
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/admin_delete.rs
+msgid "{path} is on a removable drive or in a place where other users can mount drives, so this folder can't be safely deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/gio_node/local_delete.rs
 msgid "A drive or share is mounted at {path}, inside the item being deleted. Nothing was deleted. Unmount it first."
 msgstr ""

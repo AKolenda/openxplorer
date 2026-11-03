@@ -1,3 +1,8 @@
+# Unreleased
+
+## Security
+* Deleting a folder permanently while using **Open as administrator** is now also refused, before anything is deleted, when the folder or a folder on the way to it is on a removable drive or on a drive that other users are allowed to mount, wherever that drive is mounted, or when other users may mount a drive on the way to the folder or inside it. This closes the limit of the check added in 2.0.12 for drives mounted outside `/media` and `/run/media`.
+
 # 2.0.12 — 2026-11-03
 
 ## Security
