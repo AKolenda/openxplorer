@@ -83,7 +83,8 @@ mod imp {
     impl WindowImpl for FileConflictWindow {
         /// Closing the window is Cancel.
         fn close_request(&self) -> glib::Propagation {
-            self.obj().respond(None);
+            // GTK destroys the window once this returns.
+            self.obj().send(None);
             glib::Propagation::Proceed
         }
     }
@@ -191,13 +192,22 @@ impl FileConflictWindow {
 
     /// Sends `answers` once, and closes the window.
     fn respond(&self, answers: Option<Vec<Resolution>>) {
-        if let Some(sender) = self.imp().answer.take() {
-            let _ = sender.try_send(answers);
-            if let Some(progress) = self.transient_for().and_downcast::<ProgressWindow>() {
-                progress.set_conflict_window(None);
-            }
-            self.destroy();
+        if self.send(answers) {
+            self.close();
         }
+    }
+
+    /// Sends `answers` once, and forgets the window in the progress
+    /// window; false when it was already answered.
+    fn send(&self, answers: Option<Vec<Resolution>>) -> bool {
+        let Some(sender) = self.imp().answer.take() else {
+            return false;
+        };
+        let _ = sender.try_send(answers);
+        if let Some(progress) = self.transient_for().and_downcast::<ProgressWindow>() {
+            progress.set_conflict_window(None);
+        }
+        true
     }
 
     /// Lays out the window's content and connects its controls.
