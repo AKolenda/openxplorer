@@ -17,8 +17,10 @@ use super::SettingsTest;
 use crate::test_support::harness::{descendants, wait_until};
 
 /// Every setting row before the settings were rearranged, by its title
-/// then, and the row that offers it now.
-const MOVED_ROWS: [(&str, &str); 64] = [
+/// then, and the row that offers it now, then the rows of the commands
+/// that came from the command bar's "…" menu (CMD-007), by their menu
+/// labels.
+const MOVED_ROWS: [(&str, &str); 67] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -131,6 +133,9 @@ const MOVED_ROWS: [(&str, &str); 64] = [
     ),
     ("Check for updates", "Check for updates"),
     ("OpenXplorer · License & source", "OpenXplorer · License & source"),
+    ("Cache this folder for search", "Cache this folder for search"),
+    ("Keyboard shortcuts", "Keyboard shortcuts"),
+    ("Help", "Help"),
 ];
 
 /// Every row of every page.
@@ -163,7 +168,8 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 
 /// The pages are the mockup's, and every setting row of the earlier
 /// layout is on one of them, found by its earlier name too: none was
-/// added or left out.
+/// left out, and the only rows added are those of the commands that left
+/// the "…" menu.
 ///
 /// parity: SET-019
 #[gtk::test]

@@ -16207,7 +16207,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/about.rs: Settings > About's 'Read license & source information' (More options > License & source until 2026-11-03, CMD-007) opens 'OpenXplorer · License & source' with the copyright, 'AGPL-3.0-only. No warranty.', where the corresponding source is published (the release source archive on GitHub Releases; the native build installs no editable source), and, in a scrolled monospace box, the full AGPL-3.0 text and the original 'Copyright (c) 2026 Winspace contributors' MIT notice, compiled in from LICENSE and licenses/Winspace-MIT.txt. Tests: the_license_dialog_holds_every_notice, the_license_menu_item_is_enabled."
+native_note = "native/crates/ox-app/src/window/about.rs: Settings > About's 'Read license & source information' (More options > License & source until 2026-11-03, CMD-007) opens 'OpenXplorer · License & source' with the copyright, 'AGPL-3.0-only. No warranty.', where the corresponding source is published (the release source archive on GitHub Releases; the native build installs no editable source), and, in a scrolled monospace box, the full AGPL-3.0 text and the original 'Copyright (c) 2026 Winspace contributors' MIT notice, compiled in from LICENSE and licenses/Winspace-MIT.txt. Tests: the_license_dialog_holds_every_notice; native/crates/ox-app/src/settings_page/tests/moved_from_more.rs (about_offers_the_shortcuts_the_manual_the_licence_and_the_build). The More menu's own test is native/crates/ox-app/src/window/tests/chrome.rs (the_more_menu_items_work_and_their_tooltips_are_their_labels)."
 
 [[feature]]
 id = "UPD-017"
