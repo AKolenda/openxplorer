@@ -81,6 +81,7 @@ impl BrowserWindow {
             self.folder_input(details.upcast_ref());
             self.folder_input(grid.upcast_ref());
             self.empty_folder_input(pane);
+            self.follow_item_counts(pane);
         }
         self.install_selection_keys();
         self.install_slow_click_rename();

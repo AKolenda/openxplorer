@@ -691,7 +691,7 @@ fn appearance_offers_the_python_choices() {
     );
     assert_eq!(
         choices_of(&settings.row("Right-click menu")).options(),
-        ["Windows 10 · Classic (default)", "Windows 11 · Compact actions"]
+        ["Windows 10 · Classic", "Windows 11 · Compact actions (default)"]
     );
     let controls = settings.row("Sidebar and column widths").controls();
     let reset = controls
@@ -769,7 +769,7 @@ fn the_compact_view_switch_saves_the_choice() {
 #[gtk::test]
 fn the_menu_watch_and_interval_rows_save_the_python_keys() {
     let settings = SettingsTest::open();
-    choices_of(&settings.row("Right-click menu")).choose_labelled("Windows 11 · Compact actions");
+    choices_of(&settings.row("Right-click menu")).choose_labelled("Windows 11 · Compact actions (default)");
     switch_of(&settings.row("Watch folders for changes")).set_active(false);
     choices_of(&settings.row("Check network and unwatched folders every")).choose_labelled("5 minutes");
 
@@ -818,7 +818,7 @@ fn the_rows_show_what_the_python_app_saved() {
     wait_until("the rows to show the Python app's values", || !watch.is_active());
     assert_eq!(
         choices_of(&settings.row("Right-click menu")).chosen_label(),
-        "Windows 11 · Compact actions"
+        "Windows 11 · Compact actions (default)"
     );
     assert_eq!(
         choices_of(&settings.row("Check network and unwatched folders every")).chosen_label(),

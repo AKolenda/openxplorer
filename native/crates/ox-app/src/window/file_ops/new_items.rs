@@ -9,17 +9,37 @@
 //! (OPS-010): Enter keeps the typed name, Escape keeps "New folder". Undo
 //! moves it to the Trash (OPS-029). This replaces the port of `newItem` in
 //! `v2.0.0:desktop/ui/app.js`, which asked for the name in a dialog first.
-//! Every file of the New menu opens the template dialog
-//! ([`super::template_dialog`]) with its template chosen.
+//! New ▸ Text document works the same way with the Text document starter:
+//! "New Text Document.txt", or "New Text Document (2).txt" and so on,
+//! published without overwriting, then renamed in place with the name
+//! before ".txt" selected. Every other file of the New menu opens the
+//! template dialog ([`super::template_dialog`]) with its template chosen.
 
+use gtk::glib;
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::ops::{create_numbered_folder, BuiltinTemplate, CreatedItem, TemplateId};
+use ox_core::location::same_location;
+use ox_core::ops::{
+    create_numbered_folder, create_numbered_starter, BuiltinTemplate, CreatedItem, OpsError, TemplateId,
+};
 
 use super::FileCommand;
+use crate::search::changed_folders;
+use crate::window::session::TabId;
 use crate::window::BrowserWindow;
 
 /// The name a new folder starts with, as Windows names it.
 const NEW_FOLDER_NAME: &str = crate::i18n::message_id("New folder");
+
+/// What the panel of a slow New ▸ Text document says.
+const CREATING_TEXT_DOCUMENT: &str = crate::i18n::message_id("Creating a text document…");
+
+/// The name of the controllers that count the window's input.
+const INPUT_WATCH: &str = "input-generation";
+
+/// The name, before ".txt", a new text document starts with, as Windows
+/// names it.
+const NEW_TEXT_DOCUMENT_NAME: &str = crate::i18n::message_id("New Text Document");
 
 /// The template a New menu item starts its dialog with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,10 +77,182 @@ impl BrowserWindow {
             }
         };
         let name = ox_core::i18n::gettext_static(NEW_FOLDER_NAME);
-        match create_numbered_folder(&folder, name, &context).await {
+        self.rename_created(create_numbered_folder(&folder, name, &context).await);
+    }
+
+    /// New ▸ Text document: makes "New Text Document.txt" (or the next
+    /// free numbered name) from the Text document starter at once, then
+    /// selects it and renames it in place, as Windows Explorer does.
+    /// Does nothing where New is disabled, as New folder; a file that
+    /// cannot be made says why in the toast. While the file is made, on a
+    /// slow share or phone, it is the window's running operation, with no
+    /// panel; a cancelled one says nothing. When it ends after the user
+    /// went to another tab or folder, the file stays and what is shown
+    /// is left alone, as in Windows.
+    pub(crate) async fn create_text_document(&self) {
+        if !self.allows(FileCommand::New) {
+            return;
+        }
+        let Some(origin) = self.imp().session.borrow().active_id() else {
+            return;
+        };
+        let Some(folder) = self.current_uri() else {
+            return;
+        };
+        let generation = self.imp().input_generation.get();
+        let (context, _writing) = match self.admit_write() {
+            Ok(admitted) => admitted,
+            Err(refusal) => {
+                self.show_message(&refusal);
+                return;
+            }
+        };
+        let label = ox_core::i18n::gettext_static(CREATING_TEXT_DOCUMENT);
+        let Some(write) = self.begin_quick_write(label, &context.cancel) else {
+            return;
+        };
+        #[cfg(test)]
+        self.wait_at_text_document_gate().await;
+        let name = format!("{}.txt", ox_core::i18n::gettext_static(NEW_TEXT_DOCUMENT_NAME));
+        let created = create_numbered_starter(&folder, &name, BuiltinTemplate::Text, &context).await;
+        self.end_quick_write(write, &context.cancel);
+        match created {
+            Err(error) if error.is_cancelled() => {}
+            Ok(created) if !self.is_undisturbed_since(generation, origin, &folder) => {
+                self.context().record_operation(created.undo_record());
+                let changed = changed_folders([folder.as_str()], [created.uri.as_str()]);
+                self.context().search_cache().folders_written(changed);
+                self.mark_changed(&folder);
+            }
+            created => self.rename_created(created),
+        }
+    }
+
+    /// Whether renaming the new item in place would disturb nothing the
+    /// user did since the create started at input `generation` in tab
+    /// `id` on `folder`: no key, mouse button or wheel was used in the
+    /// window, it is still the active window, no dialog is in front, and
+    /// that tab is still in front on the same folder, without a search.
+    fn is_undisturbed_since(&self, generation: u64, id: TabId, folder: &str) -> bool {
+        self.imp().input_generation.get() == generation
+            && self.is_active()
+            && !self.dialog_in_front()
+            && !self.is_searching()
+            && self.shows_in_front(id, folder)
+    }
+
+    /// Whether tab `id` is in front and still shows `folder`.
+    fn shows_in_front(&self, id: TabId, folder: &str) -> bool {
+        let session = self.imp().session.borrow();
+        session.is_active(id) && session.tab(id).is_some_and(|tab| tab.uri() == folder)
+    }
+
+    /// Counts every key press, mouse button press and scroll in the
+    /// window, before any widget handles it, for
+    /// [`Self::is_undisturbed_since`]. Nothing is stopped.
+    pub(super) fn watch_input(&self) {
+        let keys = gtk::EventControllerKey::new();
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _, _, _| {
+                window.note_input();
+                glib::Propagation::Proceed
+            }
+        ));
+        let press = gtk::GestureClick::builder().button(0).build();
+        press.connect_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_, _, _, _| window.note_input()
+        ));
+        let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
+        wheel.connect_scroll(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _, _| {
+                window.note_input();
+                glib::Propagation::Proceed
+            }
+        ));
+        for controller in [
+            keys.upcast::<gtk::EventController>(),
+            press.upcast(),
+            wheel.upcast(),
+        ] {
+            controller.set_name(Some(INPUT_WATCH));
+            controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+            self.add_controller(controller);
+        }
+    }
+
+    /// One more input for [`Self::watch_input`]. A rename in place that
+    /// waits for its folder to be listed again is dropped: the user moved
+    /// on before its editor showed.
+    fn note_input(&self) {
+        let generation = &self.imp().input_generation;
+        generation.set(generation.get().wrapping_add(1));
+        if let Ok(mut session) = self.imp().session.try_borrow_mut() {
+            session.change_panes(|tab| tab.renames_selection = false);
+        }
+    }
+
+    /// Tells every pane still showing `folder` that it changed, as a
+    /// change notice would: one on screen is listed again at once,
+    /// keeping its selection and search; one in the background is listed
+    /// again too, or, on a share, when it is shown again, so a share that
+    /// sends no change notices shows the new item too. Nothing is
+    /// selected or renamed.
+    fn mark_changed(&self, folder: &str) {
+        let showing: Vec<TabId> = {
+            let session = self.imp().session.borrow();
+            let panes = session.panes().filter(|tab| same_location(tab.uri(), folder));
+            panes.map(|tab| tab.id).collect()
+        };
+        for id in showing {
+            self.folder_changed(id);
+        }
+    }
+
+    /// Holds New ▸ Text document before it creates the file until the
+    /// gate's sender sends or is dropped, as a slow location would.
+    /// Returns the sender that releases it.
+    #[cfg(test)]
+    pub(crate) fn hold_text_documents(&self) -> async_channel::Sender<()> {
+        let (release, gate) = async_channel::bounded(1);
+        self.imp().text_document_gate.replace(Some(gate));
+        release
+    }
+
+    /// Whether New ▸ Text document has reached the gate of
+    /// [`Self::hold_text_documents`].
+    #[cfg(test)]
+    pub(crate) fn reached_text_document_gate(&self) -> bool {
+        self.imp().text_document_gate.borrow().is_none()
+    }
+
+    /// Waits at the gate of [`Self::hold_text_documents`], if one is set.
+    #[cfg(test)]
+    async fn wait_at_text_document_gate(&self) {
+        let gate = self.imp().text_document_gate.take();
+        if let Some(gate) = gate {
+            // A dropped sender releases it too.
+            let _ = gate.recv().await;
+        }
+    }
+
+    /// Remembers the item New folder or New ▸ Text document made for
+    /// Undo, then lists the folder with it selected and renamed in place;
+    /// a failure says why in the toast.
+    fn rename_created(&self, created: Result<CreatedItem, OpsError>) {
+        match created {
             Ok(created) => {
                 self.context().record_operation(created.undo_record());
-                // Listed again, the new folder is selected, scrolled to and
+                // Listed again, the new item is selected, scrolled to and
                 // renamed in place, as Tab moves a rename on (OPS-012).
                 if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
                     tab.renames_selection = true;

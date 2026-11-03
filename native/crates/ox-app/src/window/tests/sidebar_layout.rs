@@ -9,6 +9,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
+use super::icons::{assert_same_colour, painted_colour};
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 
 /// The sidebar row named `label`.
@@ -84,9 +85,13 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     assert_eq!(this_pc.x, 7);
 }
 
+/// The open place is marked by its row's fill alone, as in Windows 11
+/// Explorer's navigation pane: the accent bar keeps its room at the
+/// row's edge but paints nothing there.
+///
 /// parity: LOOK-014
 #[gtk::test]
-fn the_selected_row_shows_the_accent_bar_at_its_edge() {
+fn the_selected_row_is_marked_by_its_fill_without_an_accent_bar() {
     let fixture = Fixture::standard();
     let test = with_two_pins(&fixture);
     let documents = row_named(&test, "Documents");
@@ -96,8 +101,13 @@ fn the_selected_row_shows_the_accent_bar_at_its_edge() {
         .find(|part| part.has_css_class("pill"))
         .expect("every row has the accent bar");
     let row = bounds(&test, &documents);
-    // 3 x 16 with 2px corners (ui-spec.md §4.4; the web's is 3 x 15).
+    // 3 x 16 (ui-spec.md §4.4; the web's is 3 x 15), kept for the layout.
     assert_eq!(bounds(&test, &bar), Bounds::new(row.x, row.y + 10, 3, 16));
+    assert_same_colour(
+        painted_colour(&documents, 1, 18),
+        painted_colour(&documents, 6, 18),
+        "the bar's place shows the row's fill",
+    );
 }
 
 /// parity: SIDE-023

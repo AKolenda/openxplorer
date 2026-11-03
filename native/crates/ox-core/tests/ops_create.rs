@@ -18,8 +18,9 @@ use std::path::Path;
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    create_from_template, create_item, list_templates, BuiltinTemplate, NewFromTemplate, OperationContext,
-    OpsError, Template, TemplateId, UndoRecord, MAX_TEMPLATE_BYTES, MAX_USER_TEMPLATES,
+    create_from_template, create_item, create_numbered_starter, list_templates, BuiltinTemplate,
+    NewFromTemplate, OperationContext, OpsError, Template, TemplateId, UndoRecord, MAX_TEMPLATE_BYTES,
+    MAX_USER_TEMPLATES,
 };
 
 use fifo::make_fifo;
@@ -366,6 +367,114 @@ fn a_template_never_overwrites_and_never_goes_to_a_server_listing() {
         Err(OpsError::Failed(open_share.into()))
     );
     assert_eq!(names_in(temp.path()), ["New document.txt"]);
+}
+
+/// New ▸ Text document names the file as Windows does: "New Text
+/// Document.txt", then "New Text Document (2).txt", "(3)" and so on, each
+/// with the Text document starter's content, never overwriting a taken
+/// name.
+///
+/// parity: OPS-002, OPS-008
+#[test]
+fn a_numbered_starter_takes_the_next_free_name_before_the_extension() {
+    let temp = tempfile::tempdir().unwrap();
+    let folder = file_uri(temp.path());
+    let context = OperationContext::default();
+    let new_text_document = || {
+        block_on(create_numbered_starter(
+            &folder,
+            "New Text Document.txt",
+            BuiltinTemplate::Text,
+            &context,
+        ))
+    };
+
+    let first = new_text_document().expect("a free name");
+    fs::write(temp.path().join("New Text Document (3).txt"), b"kept").unwrap();
+    let second = new_text_document().expect("a free name");
+    let fourth = new_text_document().expect("a free name");
+
+    assert_eq!(first.uri, file_uri(&temp.path().join("New Text Document.txt")));
+    assert_eq!(first.kind, ItemKind::File);
+    assert_eq!(
+        second.uri,
+        file_uri(&temp.path().join("New Text Document (2).txt"))
+    );
+    assert_eq!(
+        fourth.uri,
+        file_uri(&temp.path().join("New Text Document (4).txt"))
+    );
+    assert_eq!(
+        fs::read(temp.path().join("New Text Document (3).txt")).unwrap(),
+        b"kept",
+        "a taken name is left alone"
+    );
+    for name in [
+        "New Text Document.txt",
+        "New Text Document (2).txt",
+        "New Text Document (4).txt",
+    ] {
+        assert_eq!(
+            fs::read(temp.path().join(name)).unwrap(),
+            BuiltinTemplate::Text.contents(),
+            "{name}"
+        );
+    }
+    assert_eq!(
+        names_in(temp.path()),
+        [
+            "New Text Document (2).txt",
+            "New Text Document (3).txt",
+            "New Text Document (4).txt",
+            "New Text Document.txt",
+        ],
+        "no stage file is left"
+    );
+    assert_eq!(
+        first.undo_record(),
+        UndoRecord::Create {
+            uri: first.uri.clone(),
+            kind: ItemKind::File,
+        }
+    );
+}
+
+/// A cancelled numbered starter stops before anything is written: no
+/// file and no stage file is left.
+///
+/// parity: OPS-002, OPS-022
+#[test]
+fn a_cancelled_numbered_starter_leaves_nothing() {
+    let temp = tempfile::tempdir().unwrap();
+    let context = OperationContext::default();
+    context.cancel.cancel();
+
+    let created = block_on(create_numbered_starter(
+        &file_uri(temp.path()),
+        "New Text Document.txt",
+        BuiltinTemplate::Text,
+        &context,
+    ));
+
+    assert_eq!(created.map(|created| created.uri), Err(OpsError::Cancelled));
+    assert!(names_in(temp.path()).is_empty());
+}
+
+/// A numbered starter is refused where any New file is: in a server
+/// listing, with the template's own message, and nothing is created.
+#[test]
+fn a_numbered_starter_never_goes_to_a_server_listing() {
+    let created = block_on(create_numbered_starter(
+        "smb://nas/",
+        "New Text Document.txt",
+        BuiltinTemplate::Text,
+        &OperationContext::default(),
+    ));
+
+    assert_eq!(
+        created.map(|created| created.uri),
+        Err(OpsError::Failed("Open a share before creating a file.".into()))
+    );
 }
 
 /// Templates in subfolders of Templates are listed by their path, and New
