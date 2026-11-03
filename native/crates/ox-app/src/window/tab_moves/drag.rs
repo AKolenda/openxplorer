@@ -205,10 +205,12 @@ impl BrowserWindow {
 
     /// [`Self::refuse_while_active_tab_moves`] for what gives a tab of the
     /// strip another id, as splitting it, closing one of its panes or
-    /// switching between them does: refused for any tab while one follows
-    /// the pointer along the row or a window drag holds this window, as
-    /// where the dragged tab lands or goes back is kept as the ids of the
-    /// tabs after it. A tab let go a moment ago lands at once first.
+    /// switching between them does, or closes it: refused for any tab while
+    /// one follows the pointer along the row or a window drag holds this
+    /// window, as where the dragged tab lands or goes back is kept as the
+    /// ids of the tabs after it, and the strip shows which tab is in front
+    /// only among the tabs it had when the drag began. A tab let go a
+    /// moment ago lands at once first.
     pub(in crate::window) fn refuse_while_tabs_move(&self) -> bool {
         let strip = self.tab_strip();
         strip.land_settling_tab();

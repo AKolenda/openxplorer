@@ -1776,6 +1776,54 @@ mod tests {
         );
     }
 
+    /// Escape after the origin let a torn-out Settings tab go puts it back
+    /// where it was, before the tab that followed it, not at the end of
+    /// the row as opening Settings there would.
+    ///
+    /// parity: TAB-035, SET-001
+    #[gtk::test]
+    fn escape_puts_a_torn_out_settings_tab_back_where_it_was() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window.open_settings(None);
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("a folder");
+        test.wait_for_listing("the third tab");
+        let moved = test.window.imp().session.borrow().tabs()[1].id;
+        let later = test.window.tabs_after(moved);
+        let dragged = test.window.window_for_tab(moved).expect("a window for the tab");
+        let _opened = OpenedWindows::only(&[&test.window]);
+        test.window.release_moved_tab(moved);
+        let tab = dragged.imp().session.borrow().active_id().expect("the tab");
+
+        put_tab_back(
+            &dragged,
+            Some(&test.window),
+            (tab, Some(later), LeftView::default()),
+            true,
+            false,
+        );
+
+        let order: Vec<String> = test
+            .window
+            .imp()
+            .session
+            .borrow()
+            .tabs()
+            .iter()
+            .map(|tab| tab.uri().to_owned())
+            .collect();
+        assert_eq!(
+            order,
+            [
+                fixture.uri(),
+                crate::locations::Page::Settings.uri().to_owned(),
+                fixture.uri_of("Documents")
+            ]
+        );
+    }
+
     /// Escape after the window the tab left went away, with the dragged
     /// window hidden over another row, shows that window again: the tab has
     /// nowhere to go back to, and stays in a window that can be seen.

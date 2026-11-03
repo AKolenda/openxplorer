@@ -449,9 +449,9 @@ fn a_tab_that_changed_folder_while_a_release_settled_follows_once_grabbed() {
     assert!(strip.is_following(), "the tab follows the pointer");
 }
 
-/// A tab let go before a tab that closes while it slides into place lands
-/// before the next tab still open, where the strip showed it, not at the
-/// end of the row.
+/// A tab let go before a tab that is closed while it slides into place
+/// lands there at once, before the tab closes, so it stays where the strip
+/// showed it, not at the end of the row.
 ///
 /// parity: TAB-032
 #[gtk::test]
@@ -486,7 +486,12 @@ fn a_tab_whose_landing_neighbour_closes_while_it_settles_lands_before_the_next()
     test.window.close_tab(third);
     crate::test_support::harness::wait_until("the tab settled", || moved.get().is_some());
 
-    assert_eq!(moved.get(), Some(Some((first, Some(fourth)))));
+    assert_eq!(moved.get(), Some(Some((first, Some(third)))), "it landed first");
+    assert_eq!(
+        tab_ids(&test.window),
+        [first, second, fourth],
+        "then the tab closed"
+    );
 }
 
 /// F3 while a tab is dragged along its row splits no tab, not even the
@@ -537,6 +542,48 @@ fn no_tab_splits_while_another_is_dragged_along_its_row() {
         Some(Some((third, Some(second)))),
         "the dragged tab lands before it"
     );
+}
+
+/// Ctrl+Tab and then Ctrl+W while a tab is dragged along its row closes
+/// no tab: the strip shows which tab is in front only among the tabs it
+/// had when the drag began, so the closed tab's place would stay in front
+/// while the tab after it was shown.
+///
+/// parity: TAB-003, TAB-032
+#[gtk::test]
+fn no_tab_closes_while_another_is_dragged_along_its_row() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    for folder in ["Music", "Pictures"] {
+        test.window.add_tab(&fixture.uri_of(folder)).expect("a folder");
+        test.wait_for_listing("another tab");
+    }
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [first, second, third, fourth] = tab_ids(&test.window)[..] else {
+        panic!("four tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let moved = Rc::new(Cell::new(None));
+
+    strip.grab_tab(first, (grab_point(&test.window, first), 10.0));
+    strip.follow_pointer(first, grab_point(&test.window, first) + 20.0);
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    test.window.switch_tab(first);
+    test.activate("next-tab", None);
+    test.activate("close-tab", None);
+    let open = tab_ids(&test.window);
+    strip.let_go(
+        true,
+        glib::clone!(
+            #[strong]
+            moved,
+            move |went| moved.set(Some(went))
+        ),
+    );
+    wait_until("the tab settled", || moved.get().is_some());
+
+    assert_eq!(active_tab(&test.window), Some(second), "Ctrl+Tab went on");
+    assert_eq!(open, [first, second, third, fourth], "no tab closed");
 }
 
 /// With "Tab key switches between split panes" on, Tab while a split tab
@@ -661,13 +708,13 @@ fn a_pane_clicked_while_its_split_tab_settles_becomes_active_once_it_landed() {
     assert_eq!(strip.live_tab(), None);
 }
 
-/// A tab of another window dropped before a tab of this row that closed
-/// while it was dragged over the row lands before the next tab still
-/// open, where its stand-in showed it, not at the end of the row.
+/// No tab of this row closes while a tab of another window is dragged
+/// over it: the tab dragged in lands where its stand-in showed it, before
+/// that tab, not at the end of the row.
 ///
-/// parity: TAB-032
+/// parity: TAB-003, TAB-032
 #[gtk::test]
-fn a_tab_dragged_in_before_a_tab_closed_meanwhile_lands_before_the_next() {
+fn no_tab_closes_while_a_tab_of_another_window_is_dragged_over_the_row() {
     let fixture = Fixture::standard();
     let test = two_tabs(&fixture);
     for folder in ["Music", "Pictures"] {
@@ -675,7 +722,7 @@ fn a_tab_dragged_in_before_a_tab_closed_meanwhile_lands_before_the_next() {
         test.wait_for_listing("another tab");
     }
     crate::test_support::harness::wait_for_frames(&test.window, 3);
-    let [first, _, third, fourth] = tab_ids(&test.window)[..] else {
+    let [first, _, third, _] = tab_ids(&test.window)[..] else {
         panic!("four tabs are open");
     };
     let strip = test.window.tab_strip();
@@ -684,11 +731,13 @@ fn a_tab_dragged_in_before_a_tab_closed_meanwhile_lands_before_the_next() {
     // Over the third tab's first half: the stand-in goes before it.
     strip.host_guest(&view, grab_point(&test.window, third), 0.0);
     test.window.close_tab(third);
+    let open = tab_ids(&test.window).len();
     let landing = strip.land_guest();
 
+    assert_eq!(open, 4, "no tab closed");
     assert_eq!(
         landing,
-        Some(crate::window::tab_strip::Landing { before: Some(fourth) })
+        Some(crate::window::tab_strip::Landing { before: Some(third) })
     );
 }
 

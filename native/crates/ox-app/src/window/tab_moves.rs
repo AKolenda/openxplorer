@@ -201,7 +201,7 @@ impl BrowserWindow {
             return Err(TabMoveRefusal::DestinationBusy);
         }
         if let Some(view) = tab.settings_view {
-            self.open_settings(Some(view));
+            self.receive_settings_tab(view, before);
             return Ok(());
         }
         self.save_tab_view();

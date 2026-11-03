@@ -113,6 +113,20 @@ impl BrowserWindow {
         self.show_index_candidates();
     }
 
+    /// Opens Settings at `view` for a Settings tab moved here: before tab
+    /// `before`, or at the end, when this window had none, as a moved tab
+    /// goes, so Escape puts it back where it was; an open one stays where
+    /// it is.
+    pub(super) fn receive_settings_tab(&self, view: SettingsView, before: Option<TabId>) {
+        let is_new = self.settings_tab().is_none();
+        self.open_settings(Some(view));
+        let Some(id) = self.settings_tab().filter(|_| is_new) else {
+            return;
+        };
+        self.imp().session.borrow_mut().move_before(id, before);
+        self.render_tabs();
+    }
+
     /// Brings the Settings tab to the front, opening it when there is none.
     fn show_settings_tab(&self) {
         if let Some(id) = self.settings_tab() {
