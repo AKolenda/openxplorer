@@ -15,6 +15,7 @@ use std::path::Path;
 
 use serde_json::{Map, Value};
 
+use super::choices::ContextMenu;
 use super::labels::bookmark_fallback_label;
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_HIDDEN, MAX_ORDER, MAX_RECENT};
 use super::preferences::{Preferences, PreferencesUpdate};
@@ -109,11 +110,35 @@ fn read_sections(source: &Value, settings: &mut SettingsData) -> Result<(), Sett
     let order = location_section(sections, "quickOrder", MAX_ORDER)?;
     settings.quick_order = normalised_without_duplicates(&order);
     if let Some(preferences) = sections.get("preferences") {
-        let update = PreferencesUpdate::from_json(preferences)?;
+        let mut update = PreferencesUpdate::from_json(preferences)?;
+        forget_the_old_default_menu(preferences, &mut update);
+        forget_the_old_default_item_counts(preferences, &mut update);
         settings.preferences.apply(&update);
         keep_shared_previews_off(preferences, &mut settings.preferences);
     }
     Ok(())
+}
+
+/// A stored classic menu (`"win10"`) the user never chose in this app,
+/// which the Python app and older releases wrote as their default, gives
+/// way to the compact Windows 11 menu, now the default. A classic menu
+/// chosen since carries `classicMenuChosen` and stays (SET-016).
+fn forget_the_old_default_menu(values: &Value, update: &mut PreferencesUpdate) {
+    let chosen = values.get("classicMenuChosen").and_then(Value::as_bool) == Some(true);
+    if update.context_menu == Some(ContextMenu::Win10) && !chosen {
+        update.context_menu = None;
+    }
+}
+
+/// Folder item counts stored on (`viewOptions.countFolderItems`), which
+/// older releases wrote as their default with any other view option, give
+/// way to Explorer's empty folder Size, now the default, unless they were
+/// turned on since (`itemCountsChosen`, VIEW-037).
+fn forget_the_old_default_item_counts(values: &Value, update: &mut PreferencesUpdate) {
+    let chosen = values.get("itemCountsChosen").and_then(Value::as_bool) == Some(true);
+    if let (false, Some(options)) = (chosen, update.view_options.as_mut()) {
+        options.count_folder_items = false;
+    }
 }
 
 /// Thumbnails are one setting for every folder (VIEW-058), but the display

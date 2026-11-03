@@ -29,9 +29,11 @@ use rustix::fs::{Mode, OFlags};
 use rustix::io::Errno;
 
 use super::context::{on_worker, unless_cancelled, OperationContext};
-use super::create::CreatedItem;
+use super::create::{CreatedItem, MAX_NUMBERED_NAMES};
 use super::error::OpsError;
-use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES, TEMPLATE_PATH_SEPARATOR};
+use super::templates::{
+    list_templates_blocking, BuiltinTemplate, TemplateId, MAX_TEMPLATE_BYTES, TEMPLATE_PATH_SEPARATOR,
+};
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
 use crate::random::{random_hex, NAME_BYTES};
@@ -80,6 +82,75 @@ pub async fn create_from_template(
     let request = request.clone();
     let context = context.clone();
     on_worker(move || create_from_template_blocking(&request, &context)).await
+}
+
+/// Creates a file from the built-in `starter` in the folder at
+/// `folder_uri` under the first free name of `base_name`,
+/// `base_name (2)`, `base_name (3)`, ..., the number going before the
+/// extension, as Windows names a new text document ("New Text
+/// Document (2).txt"). It is the first half of Explorer's New ▸ Text
+/// document, which then renames the file in place. Each attempt is a
+/// [`create_from_template`], whose publication never overwrites, so an
+/// item that takes a name meanwhile is kept and only moves the new file
+/// to the next number.
+///
+/// # Errors
+///
+/// As [`create_from_template`], except that a taken name tries the next
+/// number; after [`MAX_NUMBERED_NAMES`] taken names the refusal says to
+/// rename some of them.
+pub async fn create_numbered_starter(
+    folder_uri: &str,
+    base_name: &str,
+    starter: BuiltinTemplate,
+    context: &OperationContext,
+) -> Result<CreatedItem, OpsError> {
+    let folder_uri = folder_uri.to_owned();
+    let base_name = base_name.to_owned();
+    let context = context.clone();
+    on_worker(move || {
+        first_free_name(&base_name, |name| {
+            let request = NewFromTemplate {
+                folder_uri: folder_uri.clone(),
+                name: name.to_owned(),
+                template: TemplateId::Builtin(starter),
+                // A starter's content is built in; nothing is read there.
+                templates_folder: PathBuf::new(),
+            };
+            create_from_template_blocking(&request, &context)
+        })
+    })
+    .await
+}
+
+/// What `create` makes of the first of `base_name`'s numbered names
+/// ([`numbered_file_name`]) it does not find taken.
+fn first_free_name<Created>(
+    base_name: &str,
+    mut create: impl FnMut(&str) -> Result<Created, OpsError>,
+) -> Result<Created, OpsError> {
+    for number in 1..=MAX_NUMBERED_NAMES {
+        match create(&numbered_file_name(base_name, number)) {
+            Err(OpsError::Exists(_)) => {}
+            outcome => return outcome,
+        }
+    }
+    Err(OpsError::failed(crate::i18n::format_message(
+        "Too many files are called “{base_name}”. Rename some of them, then try again.",
+        &[("base_name", base_name)],
+    )))
+}
+
+/// `name` for the first attempt, then with ` (number)` before its
+/// extension, after the last dot that does not start the name.
+fn numbered_file_name(name: &str, number: u32) -> String {
+    if number == 1 {
+        return name.to_owned();
+    }
+    match name.rfind('.') {
+        Some(dot) if dot > 0 => format!("{} ({number}){}", &name[..dot], &name[dot..]),
+        _ => format!("{name} ({number})"),
+    }
 }
 
 /// [`create_from_template`] on the calling thread.
@@ -369,6 +440,81 @@ mod tests {
             .map(|entry| entry.expect("a folder entry").file_name())
             .collect();
         assert_eq!(names, ["New document.txt"], "no {STAGE_PREFIX} file is left");
+    }
+
+    #[test]
+    fn numbered_file_names_go_before_the_extension() {
+        assert_eq!(
+            numbered_file_name("New Text Document.txt", 1),
+            "New Text Document.txt"
+        );
+        assert_eq!(
+            numbered_file_name("New Text Document.txt", 2),
+            "New Text Document (2).txt"
+        );
+        assert_eq!(numbered_file_name("archive.tar.gz", 3), "archive.tar (3).gz");
+        assert_eq!(numbered_file_name("New file", 2), "New file (2)");
+        assert_eq!(numbered_file_name(".profile", 2), ".profile (2)");
+    }
+
+    /// An item that takes the free name after it was checked, while the new
+    /// file is published, is kept, and the new file takes the next number.
+    ///
+    /// parity: OPS-008
+    #[test]
+    fn a_name_taken_at_the_last_moment_moves_to_the_next_number() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let folder = gio::File::for_path(temp.path());
+        let context = OperationContext::default();
+        let mut tried = Vec::new();
+
+        let created = first_free_name("New Text Document.txt", |name| {
+            tried.push(name.to_owned());
+            let target = GioNode::from_file(folder.child(name));
+            if tried.len() == 1 {
+                // Appears after the check that the name is free.
+                fs::write(temp.path().join(name), b"late").expect("a late item");
+            }
+            publish_new_file(&folder, &target, b"", &context)?;
+            Ok(target.uri())
+        });
+
+        assert_eq!(tried, ["New Text Document.txt", "New Text Document (2).txt"]);
+        let created = created.expect("the next number is free");
+        assert_eq!(
+            created,
+            folder.child("New Text Document (2).txt").uri().to_string()
+        );
+        assert_eq!(
+            fs::read(temp.path().join("New Text Document.txt")).expect("the late item"),
+            b"late"
+        );
+        let mut names: Vec<_> = fs::read_dir(temp.path())
+            .expect("a readable folder")
+            .map(|entry| entry.expect("a folder entry").file_name())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            ["New Text Document (2).txt", "New Text Document.txt"],
+            "no {STAGE_PREFIX} file is left"
+        );
+    }
+
+    /// Any failure but a taken name ends the search at once.
+    #[test]
+    fn only_a_taken_name_tries_the_next_number() {
+        let mut tried = 0;
+        let refused: Result<(), _> = first_free_name("New Text Document.txt", |_| {
+            tried += 1;
+            Err(OpsError::PermissionDenied("Permission denied".into()))
+        });
+
+        assert_eq!(
+            refused,
+            Err(OpsError::PermissionDenied("Permission denied".into()))
+        );
+        assert_eq!(tried, 1);
     }
 
     /// A stage file that cannot be deleted after a failure is reported at

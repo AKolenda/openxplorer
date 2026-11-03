@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use gtk::glib;
 use gtk::prelude::*;
 
-use super::context_menu::CONTEXT_MENU_KEYS;
+use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::file_ops::file_key_bindings;
 use super::focus_regions::region_key_bindings;
 use super::navigation_buttons::navigation_key_bindings;
@@ -132,7 +132,12 @@ fn describe(name: &str) -> Option<(Group, String)> {
             Group::Selection,
             ox_core::i18n::gettext_static("Clear the selection"),
         ),
-        "win.context-menu" => (Group::Selection, ox_core::i18n::gettext_static("Context menu")),
+        // The Menu key, which runs no action of its own.
+        "menu-key" => (Group::Selection, ox_core::i18n::gettext_static("Context menu")),
+        "win.context-menu" => (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Show more options"),
+        ),
         "win.cut" => (Group::Files, ox_core::i18n::gettext_static("Cut")),
         "win.copy" => (Group::Files, ox_core::i18n::gettext_static("Copy")),
         "win.paste" => (Group::Files, ox_core::i18n::gettext_static("Paste")),
@@ -185,7 +190,10 @@ fn bindings(app: &gtk::Application) -> Vec<(String, String)> {
         .chain(selection_key_bindings())
         .chain(navigation_key_bindings())
         .chain(region_key_bindings())
-        .chain([("win.context-menu".to_owned(), CONTEXT_MENU_KEYS)]);
+        .chain([
+            ("menu-key".to_owned(), MENU_KEY),
+            ("win.context-menu".to_owned(), CLASSIC_MENU_KEY),
+        ]);
     bindings.extend(tables.map(|(name, keys)| (name, keys.to_owned())));
     bindings
 }
