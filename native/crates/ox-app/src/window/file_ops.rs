@@ -36,7 +36,8 @@
 //! | `template_menu` | The user's templates in the New menu, subfolders as submenus |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
-//! | `batch_rename` | Renaming several items to one numbered name |
+//! | `batch_rename` | Rename items…: the dialog's `#` template for several items |
+//! | `numbered_rename` | F2 on several items: one name with (1), (2), as in Windows Explorer |
 //! | `hide_confirm` | Asking before a rename hides an item |
 //! | `delete` | Move to Trash and permanent delete, with their confirmations |
 //! | `recycle_bin` | Restore, Delete permanently and Empty in the Recycle Bin |
@@ -73,6 +74,7 @@ mod move_by_copying_dialog;
 mod name_dialog;
 mod names;
 mod new_items;
+mod numbered_rename;
 mod progress;
 mod recycle_bin;
 mod rename;

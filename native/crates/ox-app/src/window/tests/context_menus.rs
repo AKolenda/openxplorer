@@ -11,7 +11,7 @@ use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
 use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
-    select_names, wait_for_no_dialog,
+    select_names, text_field, wait_for_no_dialog,
 };
 use crate::test_support::harness::{settle, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
@@ -123,7 +123,7 @@ fn the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files() {
     );
 }
 
-/// parity: CMD-009, OPS-014, SEL-003
+/// parity: CMD-009, OPS-014, OPS-050, SEL-003
 #[gtk::test]
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
     let fixture = Fixture::standard();
@@ -145,13 +145,15 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         tooltip,
         "Previous versions\nSelect only one item for this command."
     );
-    // Open opens each of them (OPEN-003); Rename renames them together
-    // (OPS-014); Properties describe them together (PROP-002).
+    // Open opens each of them (OPEN-003); Rename gives them one numbered
+    // name (OPS-050) and Rename items… opens the batch rename (OPS-014);
+    // Properties describe them together (PROP-002).
     for enabled in [
         "Open",
         "Cut",
         "Copy",
         "Rename",
+        "Rename items…",
         "Delete",
         "Duplicate",
         "Copy as path",
@@ -159,6 +161,64 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
     ] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }
+}
+
+/// The classic menu ("Show more options") lists Rename items… under
+/// Rename while several items are selected, and not for one item. The row
+/// is named for assistive technology and takes the keyboard like the
+/// others; it opens the "Rename items" dialog, whose `#` template numbers
+/// the items, and one Undo renames them back.
+///
+/// parity: OPS-014, CMD-009, OPS-029
+#[gtk::test]
+fn rename_items_in_the_classic_menu_opens_the_numbering_dialog_for_several_items() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    assert_eq!(menu.style(), MenuStyle::Classic);
+    assert!(
+        !menu.row_labels().contains(&"Rename items…".to_owned()),
+        "not for one item"
+    );
+    menu.popdown();
+
+    select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    let rows = menu.row_labels();
+    let rename = rows
+        .iter()
+        .position(|label| label == "Rename")
+        .expect("Rename is listed");
+    assert_eq!(rows[rename + 1], "Rename items…");
+    let row = menu.row("Rename items…");
+    assert!(row.is_sensitive());
+    assert!(
+        row.is_activatable() && row.is_focusable(),
+        "the keyboard reaches it"
+    );
+    assert!(gtk::test_accessible_has_property(
+        &row,
+        gtk::AccessibleProperty::Label
+    ));
+    // Enter on the focused row activates it.
+    row.emit_activate();
+
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Rename items");
+    assert_eq!(dialog.message_text(), "Rename the 2 selected items to:");
+    text_field(&dialog).set_text("Plan #");
+    dialog.press("Rename");
+    wait_until("the renamed files to be selected", || {
+        test.selected_names() == ["Plan 1.txt", "Plan 2.txt"]
+    });
+    assert!(!fixture.path("Notes 2.txt").exists());
+    test.activate("undo", None);
+    wait_until("the batch to be renamed back", || {
+        fixture.path("Notes 2.txt").is_file() && fixture.path("Notes 10.txt").is_file()
+    });
 }
 
 /// parity: CMD-008, CMD-010

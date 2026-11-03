@@ -1,82 +1,106 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Renaming several selected items at once (OPS-014), as Windows
-//! Explorer does.
+//! Batch rename: F2 with several items selected (OPS-014).
 //!
-//! F2 or Rename with several items selected edits one name in place: the
-//! focused item's, or the first selected item's when focus is on none of
-//! them ([`super::inline_rename`]). Enter gives every selected item that
-//! name with a number in brackets, from (1) in the order shown; each file
-//! keeps its own extension ([`ox_core::ops::BatchRename`]), so no
-//! extension question is asked. Escape renames nothing. When the edited
-//! item's cell is not on screen, the Rename dialog asks for the name
-//! instead, as it does for one item. The renames run as the window's one
-//! operation; the renamed items are selected afterwards without a
-//! message, an item that could not be renamed is named in the operation's
-//! result, and Undo renames the whole batch back (OPS-029).
+//! New in the native app, from Dolphin's Rename Items dialog: "Rename the
+//! <n> selected items to:", a name that starts as "New name #", and the
+//! number `#` starts at. Each item keeps its extension, and a name
+//! without `#` is accepted only when the items' types differ
+//! ([`BatchRename::new_names`]); a refused name stays in the dialog. A
+//! name with a dot gives an extension to a file that had none (README
+//! becomes Plan.md), which asks first (OPS-049). The
+//! renames run as the window's one operation, the renamed items are
+//! selected afterwards, and Undo renames the whole batch back (OPS-029).
 
+use gtk::prelude::*;
 use ox_core::entry::Entry;
-use ox_core::location::parent_location;
-use ox_core::ops::{rename_batch, summarize_batch_rename, BatchItem, BatchRename};
+use ox_core::ops::{
+    rename_batch, summarize_batch_rename, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER,
+};
 
-use super::name_dialog::{ask_for_name, NameRequest, NameSelection};
+use super::extension_confirm::changes_extension;
 use super::running::FinishedOperation;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
+
+/// The dialog's title (Dolphin's "Rename Items").
+const TITLE: &str = crate::i18n::message_id("Rename items");
+
+/// The label of the first number's field.
+const FIRST_NUMBER_LABEL: &str = crate::i18n::message_id("# becomes ascending numbers starting at");
 
 /// The panel's label while the items are renamed.
 const RENAMING: &str = crate::i18n::message_id("Renaming items…");
 
-/// The batch that gives `entries`, in the order shown, the name typed for
-/// `edited`.
-pub(super) fn batch_for(entries: &[Entry], edited: &Entry, typed: &str) -> BatchRename {
-    BatchRename {
-        items: entries
+/// The highest first number the field takes.
+const MAX_FIRST_NUMBER: f64 = 999_999.0;
+
+impl BrowserWindow {
+    /// Asks for the batch's name and first number, then renames `entries`
+    /// in the order they are shown.
+    pub(super) async fn rename_several(&self, entries: &[Entry]) {
+        let items: Vec<BatchItem> = entries
             .iter()
             .map(|entry| BatchItem {
                 uri: entry.uri.clone(),
                 name: entry.name.clone(),
                 is_dir: entry.is_dir,
             })
-            .collect(),
-        name: typed.to_owned(),
-        edited_name: edited.name.clone(),
-    }
-}
-
-impl BrowserWindow {
-    /// Asks for the name of `entries` in the Rename dialog, starting with
-    /// `edited`'s name, then renames them all: the edited item's cell is
-    /// not on screen.
-    pub(super) async fn rename_several_with_dialog(&self, entries: &[Entry], edited: &Entry) {
-        let selection = if edited.is_dir {
-            NameSelection::Whole
-        } else {
-            NameSelection::Stem
-        };
-        let folder = parent_location(&edited.uri).unwrap_or_default();
-        let request = NameRequest {
-            title: "Rename",
-            initial_name: &edited.name,
-            selection,
-            folder: &folder,
-        };
-        let batch = ask_for_name(self, request, |name, _cancel| {
-            let batch = batch_for(entries, edited, &name);
-            async move {
-                batch
-                    .base_name()
-                    .map(|_| batch)
-                    .map_err(|error| error.to_string())
+            .collect();
+        let message = ox_core::i18n::format_message(
+            "Rename the {len} selected items to:",
+            &[("len", &items.len().to_string())],
+        );
+        let dialog = Dialog::new(self, ox_core::i18n::gettext_static(TITLE), &message);
+        let name = dialog.add_text_field(ox_core::i18n::gettext_static("Name"), DEFAULT_BATCH_NAME);
+        let first_number = gtk::SpinButton::with_range(0.0, MAX_FIRST_NUMBER, 1.0);
+        first_number.set_value(1.0);
+        first_number.set_activates_default(true);
+        dialog.add_labelled(ox_core::i18n::gettext_static(FIRST_NUMBER_LABEL), &first_number);
+        dialog.add_cancel_button();
+        dialog.add_button(ox_core::i18n::gettext_static("Rename"), ButtonStyle::Accent);
+        dialog.open();
+        select_before_number(&name);
+        let batch = loop {
+            if dialog.next_response().await.is_none() {
+                return;
             }
-        })
-        .await;
-        if let Some(batch) = batch {
-            self.run_batch_rename(&batch).await;
-        }
+            let batch = BatchRename {
+                items: items.clone(),
+                pattern: name.text().to_string(),
+                first_number: u32::try_from(first_number.value_as_int()).unwrap_or(0),
+            };
+            let names = match batch.new_names() {
+                Ok(names) => {
+                    // The reason an earlier name was refused no longer
+                    // holds, whatever is asked next.
+                    dialog.hide_error();
+                    names
+                }
+                Err(refusal) => {
+                    dialog.show_error(&refusal.to_string());
+                    continue;
+                }
+            };
+            // Cancel keeps the dialog open with the typed name.
+            let changed = batch
+                .items
+                .iter()
+                .zip(&names)
+                .find(|(item, name)| changes_extension(&item.name, name, item.is_dir));
+            if let Some((item, name)) = changed {
+                if !self.confirm_extension_change(&item.name, name, item.is_dir).await {
+                    continue;
+                }
+            }
+            break batch;
+        };
+        dialog.finish();
+        self.run_batch_rename(&batch).await;
     }
 
-    /// Renames `batch` as the window's one operation and reports what
-    /// failed; the renamed items are selected.
-    pub(super) async fn run_batch_rename(&self, batch: &BatchRename) {
+    /// Renames `batch` as the window's one operation and reports it.
+    async fn run_batch_rename(&self, batch: &BatchRename) {
         let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RENAMING)) else {
             return;
         };
@@ -89,4 +113,14 @@ impl BrowserWindow {
         });
         self.conclude_operation(finished).await;
     }
+}
+
+/// Selects the name before its number, "New name " at first, so typing
+/// replaces it and keeps the number.
+fn select_before_number(field: &gtk::Entry) {
+    let text = field.text();
+    let end = text
+        .find(NUMBER_PLACEHOLDER)
+        .map_or_else(|| text.chars().count(), |index| text[..index].chars().count());
+    field.select_region(0, i32::try_from(end).unwrap_or(-1));
 }

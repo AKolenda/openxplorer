@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Renaming several selected items at once in a real window, as Windows
-//! Explorer does (OPS-014): F2 edits the focused item's name in place,
+//! Explorer does (OPS-050): F2 edits the focused item's name in place,
 //! and the one name typed there goes to every selected item with
 //! "(1)", "(2)" and so on, in the order shown, each keeping its own
 //! extension.
@@ -11,7 +11,8 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{
-    assert_ended_without_a_message, is_renaming_in_place, name_editor, open_dialog, select_names, text_field,
+    assert_ended_without_a_message, dialog_over, is_renaming_in_place, name_editor, open_dialog,
+    select_names, text_field,
 };
 use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
 
@@ -67,7 +68,7 @@ fn content(fixture: &Fixture, name: &str) -> String {
 /// own extension. The renamed items are selected without a message, and
 /// one Undo renames them all back; Redo renames them again.
 ///
-/// parity: OPS-014, OPS-029
+/// parity: OPS-050, OPS-029
 #[gtk::test]
 fn several_selected_items_get_the_typed_name_numbered_in_view_order() {
     let fixture = Fixture::standard();
@@ -95,6 +96,7 @@ fn several_selected_items_get_the_typed_name_numbered_in_view_order() {
         "the extension stays unselected"
     );
     assert_eq!(name_editor_count(&test), 1);
+    assert!(dialog_over(&test).is_none(), "no Rename items dialog");
     field.set_text("Plan.txt");
     field.emit_activate();
     let renamed = [
@@ -132,7 +134,7 @@ fn several_selected_items_get_the_typed_name_numbered_in_view_order() {
 /// A number whose name is taken by an item that is not selected is
 /// skipped: nothing is overwritten and no message shows.
 ///
-/// parity: OPS-014
+/// parity: OPS-050
 #[gtk::test]
 fn a_taken_numbered_name_is_skipped() {
     let fixture = Fixture::standard();
@@ -154,7 +156,7 @@ fn a_taken_numbered_name_is_skipped() {
 
 /// Escape ends the rename: no item changes and the selection stays.
 ///
-/// parity: OPS-014
+/// parity: OPS-050
 #[gtk::test]
 fn escape_renames_none_of_the_selected_items() {
     let fixture = Fixture::standard();
@@ -179,7 +181,7 @@ fn escape_renames_none_of_the_selected_items() {
 /// name was typed, is left out and named in the result; the others are
 /// renamed and stay selected, and Undo renames them back.
 ///
-/// parity: OPS-014, OPS-023
+/// parity: OPS-050, OPS-023
 #[gtk::test]
 fn an_item_that_cannot_be_renamed_is_reported_and_the_rest_are_renamed() {
     let fixture = Fixture::standard();
@@ -215,7 +217,7 @@ fn an_item_that_cannot_be_renamed_is_reported_and_the_rest_are_renamed() {
 /// With one item selected, the name typed is its whole new name, as
 /// before: no number is added.
 ///
-/// parity: OPS-009, OPS-014
+/// parity: OPS-009, OPS-050
 #[gtk::test]
 fn one_selected_item_gets_exactly_the_typed_name() {
     let fixture = Fixture::standard();
@@ -239,7 +241,7 @@ fn one_selected_item_gets_exactly_the_typed_name() {
 /// edited; when that item is not on screen, the Rename dialog asks for
 /// the name instead, and the name still goes to every selected item.
 ///
-/// parity: OPS-014
+/// parity: OPS-050
 #[gtk::test]
 fn several_items_off_screen_are_named_in_the_rename_dialog() {
     let fixture = Fixture::with_files(400);

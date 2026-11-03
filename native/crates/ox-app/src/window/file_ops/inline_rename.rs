@@ -14,7 +14,7 @@
 //! and Shift+Tab, and Down and Up in the details view, commit and go on
 //! to rename the next or previous item (OPS-012). With several items
 //! selected, the field edits one of them and Enter gives the typed name to
-//! all of them with a number (OPS-014, [`super::batch_rename`]); Tab and
+//! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab and
 //! the arrows are then the field's own keys.
 
 use std::rc::Rc;
@@ -25,8 +25,8 @@ use gtk::{gdk, glib};
 use ox_core::entry::Entry;
 use ox_core::ops::rename_item;
 
-use super::batch_rename::batch_for;
 use super::names::check_typed_name;
+use super::numbered_rename::numbered_batch_for;
 use super::rename::selected_name_length;
 use crate::folder_view::cells::FileCell;
 use crate::window::folder_pane::FolderView;
@@ -365,7 +365,7 @@ impl BrowserWindow {
             self.close_name_editor(cell);
             return;
         };
-        let batch = batch_for(several, edited, name);
+        let batch = numbered_batch_for(several, edited, name);
         let base = match batch.base_name() {
             Ok(base) => base,
             Err(error) => {
@@ -382,7 +382,7 @@ impl BrowserWindow {
         }
         // Before the folder is listed again, which rebinds the cell.
         self.close_name_editor(cell);
-        self.run_batch_rename(&batch).await;
+        self.run_numbered_rename(&batch).await;
     }
 
     /// Ends the rename from one of the field's own signals, once it has

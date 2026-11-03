@@ -319,6 +319,119 @@ fn the_rename_dialog_refuses_a_name_too_long_before_the_extension_question() {
     wait_for_no_dialog(&test);
 }
 
+/// parity: OPS-014, OPS-029
+#[gtk::test]
+fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+
+    test.activate("rename-items", None);
+    let dialog = open_dialog(&test);
+    let field = text_field(&dialog);
+
+    assert_eq!(dialog.title_text(), "Rename items");
+    assert_eq!(dialog.message_text(), "Rename the 2 selected items to:");
+    assert_eq!(field.text(), "New name #");
+    assert_eq!(field.selection_bounds(), Some((0, 9)), "the number stays");
+    field.set_text("Notes");
+    dialog.press("Rename");
+    wait_until("the refusal", || dialog.error_text().is_some());
+    field.set_text("Plan #");
+    dialog.press("Rename");
+    wait_for_no_dialog(&test);
+    wait_until("the renamed files to be selected", || {
+        test.selected_names() == ["Plan 1.txt", "Plan 2.txt"]
+    });
+    let first = fs::read_to_string(fixture.path("Plan 1.txt")).expect("renamed in view order");
+    assert_ended_without_a_message(&test);
+
+    test.activate("undo", None);
+    wait_until("the batch to be renamed back", || {
+        fixture.path("Notes 2.txt").is_file() && fixture.path("Notes 10.txt").is_file()
+    });
+    assert_eq!(first, "Synthetic test data\n");
+    assert!(!fixture.path("Plan 1.txt").exists());
+}
+
+/// An error shown for an earlier name goes once a name is accepted, also
+/// when the extension question that follows is cancelled: the dialog then
+/// shows the typed name without a stale reason.
+///
+/// parity: OPS-014, OPS-049
+#[gtk::test]
+fn a_batch_error_goes_once_a_name_is_accepted() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("README"), "read me").expect("the file is written");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["README", "Notes 2.txt"]);
+    test.activate("rename-items", None);
+    let dialog = open_dialog(&test);
+    let field = text_field(&dialog);
+    field.set_text("");
+    dialog.press("Rename");
+    wait_until("the refusal", || dialog.error_text().is_some());
+
+    field.set_text("Plan.md");
+    dialog.press("Rename");
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .find(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+    };
+    wait_until("the extension question", || question().is_some());
+    question().expect("it shows").press("Cancel");
+    wait_until("the question to close", || question().is_none());
+
+    assert_eq!(dialog.error_text(), None, "no stale error");
+    dialog.press("Cancel");
+}
+
+/// A batch name with a dot gives an extension to a file that had none
+/// (README becomes Plan.md): that asks first, as renaming one file does.
+/// Cancel keeps the dialog open with the typed name; the other files keep
+/// their extensions.
+///
+/// parity: OPS-014, OPS-049
+#[gtk::test]
+fn a_batch_name_that_adds_an_extension_asks_first() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("README"), "read me").expect("the file is written");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["README", "Notes 2.txt"]);
+    test.activate("rename-items", None);
+    let dialog = open_dialog(&test);
+    let field = text_field(&dialog);
+    field.set_text("Plan.md");
+
+    dialog.press("Rename");
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .find(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+    };
+    wait_until("the extension question", || question().is_some());
+    question().expect("it shows").press("Cancel");
+    wait_until("the question to close", || question().is_none());
+    assert!(dialog.is_visible(), "the batch dialog stays");
+    assert_eq!(field.text(), "Plan.md");
+    assert!(fixture.path("README").is_file());
+
+    dialog.press("Rename");
+    wait_until("the extension question", || question().is_some());
+    question().expect("it shows").press("Change extension");
+
+    wait_until("the batch", || {
+        fixture.path("Plan.md").is_file() && fixture.path("Plan.md.txt").is_file()
+    });
+    assert_eq!(
+        fs::read_to_string(fixture.path("Plan.md")).expect("renamed"),
+        "read me"
+    );
+}
+
 /// Windows Explorer says nothing once the items are in the Recycle Bin;
 /// Ctrl+Z brings them back.
 ///

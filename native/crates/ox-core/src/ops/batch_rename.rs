@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Renaming several items at once (OPS-014), as Windows Explorer does.
+//! Batch rename: F2 with several items selected (OPS-014).
 //!
-//! With several items selected, Windows Explorer's F2 edits one name in
-//! place; the name typed there goes to every selected item with a number
-//! in brackets: "Holiday (1).jpg", "Holiday (2).jpg" and so on, from (1),
-//! in the order the items are shown. Each file keeps its own extension, a
-//! folder or a file without one gets none, and a number whose name is
-//! taken is skipped, so nothing is overwritten.
+//! New in the native app, from Dolphin's Rename Items dialog
+//! (`KIO::RenameFileDialog` and `KIO::BatchRenameJob`). Every item gets
+//! the typed name with its first run of `#` replaced by an ascending
+//! number, as wide as the run (`###` gives `001`), and keeps its own
+//! extension. Without `#` the name is allowed only when the items' types
+//! differ, so each keeps a name of its own ("Holiday.jpg", "Holiday.png").
 //!
 //! Each item is renamed with the rules of a single rename (OPS-008): the
-//! write protection and a same-folder move that never overwrites, through
-//! the item's own location (a share, a phone). An item that fails for
-//! another reason is reported and left as it is; the others go on. Undo
-//! renames the whole batch back as one step (OPS-029).
+//! write protection, a same-folder move that never overwrites. An item
+//! whose new name is taken is reported and left as it is; the others go
+//! on. Undo renames the whole batch back as one step (OPS-029).
 
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
@@ -22,10 +21,17 @@ use super::run_transfer::TransferOutcome;
 use super::undo::{RenamedPair, UndoRecord};
 use crate::location::validate_name;
 
-/// How many taken numbers are skipped for one item before it is reported
-/// instead: a folder full of "Holiday (n)" items must not keep the rename
-/// looking for a free number for ever.
-const MAX_SKIPPED_NUMBERS: u32 = 10_000;
+/// The character the number replaces.
+pub const NUMBER_PLACEHOLDER: char = '#';
+
+/// The name the batch rename dialog starts with (Dolphin's "New name #").
+pub const DEFAULT_BATCH_NAME: &str = crate::i18n::message_id("New name #");
+
+/// Extensions of two parts, kept whole: "backup.tar.gz" keeps ".tar.gz".
+const COMPOUND_EXTENSIONS: [&str; 5] = [".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar.lz"];
+
+/// Why the typed name would give two items the same name.
+const NEEDS_NUMBER: &str = crate::i18n::message_id("Add # to the name, so each item gets its own number.");
 
 /// One item of a batch rename.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,67 +44,85 @@ pub struct BatchItem {
     pub is_dir: bool,
 }
 
-/// A batch rename: one typed name for several items.
+/// A batch rename.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BatchRename {
     /// The items, in the order they are numbered.
     pub items: Vec<BatchItem>,
-    /// The name typed for the item that was edited.
-    pub name: String,
-    /// The edited item's name before the rename, whose extension a typed
-    /// name may keep.
-    pub edited_name: String,
+    /// The name, with `#` where each item's number goes.
+    pub pattern: String,
+    /// The first item's number.
+    pub first_number: u32,
 }
 
 impl BatchRename {
-    /// The name the numbers follow: the typed name without the edited
-    /// item's extension when it still ends with it, so "Holiday.jpg"
-    /// typed for "Photo.jpg" numbers "Holiday", and each item adds its
-    /// own extension back.
+    /// Every item's new name, in order.
     ///
     /// # Errors
     ///
-    /// An empty name, or one that is not valid (such as one with a slash).
-    pub fn base_name(&self) -> Result<String, OpsError> {
-        let typed = self.name.trim_end();
-        let base = match extension(&self.edited_name) {
-            Some(kept) if typed.len() > kept.len() && ends_with_ignoring_case(typed, kept) => {
-                &typed[..typed.len() - kept.len()]
-            }
-            _ => typed,
-        };
-        if base.trim().is_empty() {
+    /// An empty name, a name without `#` when two items would get the same
+    /// name, or a new name that is not valid (such as one with a slash).
+    pub fn new_names(&self) -> Result<Vec<String>, OpsError> {
+        let pattern = self.pattern.trim();
+        if pattern.is_empty() {
             return Err(OpsError::failed(crate::i18n::gettext(
                 "Enter a name for the items.",
             )));
         }
-        validate_name(base)?;
-        Ok(base.to_owned())
+        let names: Vec<String> = self
+            .items
+            .iter()
+            .zip(self.first_number..)
+            .map(|(item, number)| {
+                let stem = numbered(pattern, number);
+                format!("{stem}{}", extension_of(item))
+            })
+            .collect();
+        for name in &names {
+            validate_name(name)?;
+        }
+        let mut sorted = names.clone();
+        sorted.sort();
+        sorted.dedup();
+        if sorted.len() != names.len() {
+            return Err(OpsError::failed(crate::i18n::gettext(NEEDS_NUMBER)));
+        }
+        Ok(names)
     }
 }
 
-/// `item`'s new name with `number`: "Holiday (2).jpg".
-fn numbered_name(base: &str, number: u32, item: &BatchItem) -> String {
-    let extension = if item.is_dir {
-        ""
-    } else {
-        extension(&item.name).unwrap_or_default()
+/// `pattern` with its first run of `#` replaced by `number`, padded with
+/// zeros to the run's length, as Dolphin does.
+fn numbered(pattern: &str, number: u32) -> String {
+    let Some(start) = pattern.find(NUMBER_PLACEHOLDER) else {
+        return pattern.to_owned();
     };
-    format!("{base} ({number}){extension}")
+    let run = pattern[start..]
+        .chars()
+        .take_while(|character| *character == NUMBER_PLACEHOLDER)
+        .count();
+    let end = start + run * NUMBER_PLACEHOLDER.len_utf8();
+    format!("{}{number:0run$}{}", &pattern[..start], &pattern[end..])
 }
 
-/// The extension of the file name `name`, with its dot, as Windows reads
-/// it: from the last dot, unless that dot starts the name (".bashrc" has
-/// none) or ends it.
-fn extension(name: &str) -> Option<&str> {
-    let dot = name.rfind('.')?;
-    (dot > 0 && dot + 1 < name.len()).then(|| &name[dot..])
-}
-
-/// True when `text` ends with `suffix`, whatever their case.
-fn ends_with_ignoring_case(text: &str, suffix: &str) -> bool {
-    text.get(text.len() - suffix.len()..)
-        .is_some_and(|end| end.to_lowercase() == suffix.to_lowercase())
+/// The extension `item` keeps, with its dot: none for a folder, a name
+/// that starts with its only dot (".bashrc"), or a name without one.
+fn extension_of(item: &BatchItem) -> &str {
+    if item.is_dir {
+        return "";
+    }
+    let name = item.name.as_str();
+    let lower = name.to_lowercase();
+    if let Some(compound) = COMPOUND_EXTENSIONS
+        .iter()
+        .find(|extension| lower.ends_with(*extension) && lower.len() > extension.len())
+    {
+        return &name[name.len() - compound.len()..];
+    }
+    match name.rfind('.') {
+        Some(dot) if dot > 0 => &name[dot..],
+        _ => "",
+    }
 }
 
 /// Renames every item of `batch` on a worker thread. The outcome lists
@@ -107,7 +131,7 @@ fn ends_with_ignoring_case(text: &str, suffix: &str) -> bool {
 ///
 /// # Errors
 ///
-/// As [`BatchRename::base_name`], before anything is renamed. Items that
+/// As [`BatchRename::new_names`], before anything is renamed. Items that
 /// cannot be renamed, and the user's cancellation, are reported in
 /// [`TransferOutcome::result`].
 pub async fn rename_batch(
@@ -124,16 +148,15 @@ fn rename_batch_blocking(
     batch: &BatchRename,
     context: &OperationContext,
 ) -> Result<TransferOutcome, OpsError> {
-    let base = batch.base_name()?;
+    let names = batch.new_names()?;
     let mut outcome = TransferOutcome::default();
     let mut renamed = Vec::new();
-    let mut number = 1;
-    for item in &batch.items {
+    for (item, name) in batch.items.iter().zip(&names) {
         if context.cancel.is_cancelled() {
             outcome.result.cancelled = true;
             break;
         }
-        match rename_numbered(item, &base, &mut number, context) {
+        match rename_item_blocking(&item.uri, name, context) {
             Ok(done) => {
                 outcome.result.done.push(item.uri.clone());
                 outcome.created.push(done.uri.clone());
@@ -153,35 +176,6 @@ fn rename_batch_blocking(
     Ok(outcome)
 }
 
-/// Renames `item` to `base` with the first free number from `number` on,
-/// and moves `number` past the one it took. A taken number is skipped; an
-/// item that fails for another reason keeps its number for the next item.
-fn rename_numbered(
-    item: &BatchItem,
-    base: &str,
-    number: &mut u32,
-    context: &OperationContext,
-) -> Result<super::RenamedItem, OpsError> {
-    let mut skipped = 0;
-    loop {
-        let name = numbered_name(base, *number, item);
-        match rename_item_blocking(&item.uri, &name, context) {
-            Ok(done) => {
-                *number += 1;
-                return Ok(done);
-            }
-            Err(OpsError::Exists(message)) => {
-                skipped += 1;
-                if skipped > MAX_SKIPPED_NUMBERS {
-                    return Err(OpsError::Exists(message));
-                }
-                *number += 1;
-            }
-            Err(error) => return Err(error),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,183 +191,72 @@ mod tests {
         }
     }
 
-    fn batch(items: Vec<BatchItem>, name: &str, edited_name: &str) -> BatchRename {
+    fn batch(items: Vec<BatchItem>, pattern: &str, first_number: u32) -> BatchRename {
         BatchRename {
             items,
-            name: name.to_owned(),
-            edited_name: edited_name.to_owned(),
+            pattern: pattern.to_owned(),
+            first_number,
         }
     }
 
     /// parity: OPS-014
     #[test]
-    fn each_item_keeps_its_own_extension_and_folders_get_none() {
-        let numbered = [
+    fn items_are_numbered_from_the_first_number_and_keep_their_extensions() {
+        let items = vec![
             item("IMG_2031.JPG", false),
             item("backup.tar.gz", false),
             item("Trip", true),
             item(".bashrc", false),
-            item("README", false),
-            item("draft.", false),
-        ]
-        .iter()
-        .zip(1..)
-        .map(|(item, number)| numbered_name("Holiday", number, item))
-        .collect::<Vec<_>>();
+        ];
+
+        let numbered = batch(items.clone(), "Holiday ###", 9).new_names();
+        let without_number = batch(items[..2].to_vec(), "Holiday", 1).new_names();
+        let same_type = batch(vec![item("a.txt", false), item("b.txt", false)], "Notes", 1).new_names();
+        let slash = batch(items, "a/# b", 1).new_names();
 
         assert_eq!(
-            numbered,
+            numbered.expect("valid names"),
             [
-                "Holiday (1).JPG",
-                "Holiday (2).gz",
-                "Holiday (3)",
-                "Holiday (4)",
-                "Holiday (5)",
-                "Holiday (6)",
+                "Holiday 009.JPG",
+                "Holiday 010.tar.gz",
+                "Holiday 011",
+                "Holiday 012"
             ]
         );
-    }
-
-    /// The edited item's extension at the end of the typed name is not
-    /// part of the name the numbers follow; any other ending is.
-    ///
-    /// parity: OPS-014
-    #[test]
-    fn a_typed_extension_of_the_edited_item_is_not_numbered() {
-        let base = |typed: &str, edited: &str| batch(Vec::new(), typed, edited).base_name();
-
-        assert_eq!(base("Holiday.jpg", "IMG_2031.jpg").expect("valid"), "Holiday");
-        assert_eq!(base("Holiday.JPG", "IMG_2031.jpg").expect("valid"), "Holiday");
-        assert_eq!(base("Holiday", "IMG_2031.jpg").expect("valid"), "Holiday");
-        assert_eq!(base("Holiday.png", "IMG_2031.jpg").expect("valid"), "Holiday.png");
-        assert_eq!(base("Plan v1.2", "Trip").expect("valid"), "Plan v1.2");
-        assert!(base(".jpg", "IMG_2031.jpg").is_ok_and(|name| name == ".jpg"));
-        assert!(base("   ", "IMG_2031.jpg").is_err());
-        assert!(base("a/b", "IMG_2031.jpg").is_err());
-    }
-
-    /// parity: OPS-014
-    #[test]
-    fn a_taken_number_is_skipped_and_nothing_is_overwritten() {
-        let folder = temporary_folder();
-        for name in ["one.txt", "two.txt", "three.txt", "Photo (2).txt"] {
-            std::fs::write(folder.path().join(name), name).expect("fixture file");
-        }
-        let items = ["one.txt", "two.txt", "three.txt"]
-            .map(|name| BatchItem {
-                uri: file_uri(&folder.path().join(name)),
-                name: name.to_owned(),
-                is_dir: false,
-            })
-            .to_vec();
-        let context = OperationContext::new(WriteProtection::unrestricted());
-
-        let outcome =
-            rename_batch_blocking(&batch(items, "Photo", "one.txt"), &context).expect("a valid name");
-
-        let read = |name: &str| std::fs::read_to_string(folder.path().join(name)).expect(name);
-        assert_eq!(read("Photo (1).txt"), "one.txt");
-        assert_eq!(read("Photo (2).txt"), "Photo (2).txt", "kept as it was");
-        assert_eq!(read("Photo (3).txt"), "two.txt");
-        assert_eq!(read("Photo (4).txt"), "three.txt");
-        assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
-        assert_eq!(outcome.result.done.len(), 3);
-        assert!(matches!(outcome.undo, Some(UndoRecord::BatchRename { items }) if items.len() == 3));
-    }
-
-    /// An item that already has its numbered name stays as it is and
-    /// takes its number.
-    ///
-    /// parity: OPS-014
-    #[test]
-    fn an_item_that_has_its_numbered_name_already_keeps_it() {
-        let folder = temporary_folder();
-        for name in ["Photo (1).txt", "two.txt"] {
-            std::fs::write(folder.path().join(name), name).expect("fixture file");
-        }
-        let items = ["Photo (1).txt", "two.txt"]
-            .map(|name| BatchItem {
-                uri: file_uri(&folder.path().join(name)),
-                name: name.to_owned(),
-                is_dir: false,
-            })
-            .to_vec();
-        let context = OperationContext::new(WriteProtection::unrestricted());
-
-        let outcome =
-            rename_batch_blocking(&batch(items, "Photo", "two.txt"), &context).expect("a valid name");
-
-        assert!(folder.path().join("Photo (1).txt").is_file());
         assert_eq!(
-            std::fs::read_to_string(folder.path().join("Photo (2).txt")).expect("renamed"),
-            "two.txt"
+            without_number.expect("the extensions differ"),
+            ["Holiday.JPG", "Holiday.tar.gz"]
         );
-        assert!(matches!(outcome.undo, Some(UndoRecord::BatchRename { items }) if items.len() == 1));
+        assert!(matches!(same_type, Err(OpsError::Failed(message)) if message == NEEDS_NUMBER));
+        assert!(slash.is_err());
     }
 
-    /// An item that cannot be renamed, here in a folder the user may not
-    /// change, is reported by name and left as it is; the items before and
-    /// after it are renamed, and the failed one's number goes to the next.
-    ///
     /// parity: OPS-014
     #[test]
-    fn an_item_that_cannot_be_renamed_is_reported_and_the_rest_go_on() {
-        use std::os::unix::fs::PermissionsExt;
-
+    fn a_taken_name_is_reported_and_the_rest_are_renamed() {
         let folder = temporary_folder();
-        let locked = folder.path().join("Locked");
-        std::fs::create_dir(&locked).expect("fixture folder");
-        for path in [
-            folder.path().join("a.txt"),
-            locked.join("b.txt"),
-            folder.path().join("c.txt"),
-        ] {
-            std::fs::write(&path, "data").expect("fixture file");
+        for name in ["one.txt", "two.txt", "Photo 2.txt"] {
+            std::fs::write(folder.path().join(name), name).expect("fixture file");
         }
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).expect("read-only");
-        let probe = locked.join("probe");
-        if std::fs::write(&probe, "").is_ok() {
-            // Running as root, which a read-only folder does not stop.
-            std::fs::remove_file(probe).ok();
-            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).ok();
-            return;
-        }
-        let items = vec![
-            BatchItem {
-                uri: file_uri(&folder.path().join("a.txt")),
-                name: "a.txt".to_owned(),
+        let items = ["one.txt", "two.txt"]
+            .map(|name| BatchItem {
+                uri: file_uri(&folder.path().join(name)),
+                name: name.to_owned(),
                 is_dir: false,
-            },
-            BatchItem {
-                uri: file_uri(&locked.join("b.txt")),
-                name: "b.txt".to_owned(),
-                is_dir: false,
-            },
-            BatchItem {
-                uri: file_uri(&folder.path().join("c.txt")),
-                name: "c.txt".to_owned(),
-                is_dir: false,
-            },
-        ];
+            })
+            .to_vec();
         let context = OperationContext::new(WriteProtection::unrestricted());
 
-        let outcome = rename_batch_blocking(&batch(items, "Plan", "a.txt"), &context);
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).expect("writable again");
-        let outcome = outcome.expect("a valid name");
+        let outcome = rename_batch_blocking(&batch(items, "Photo #", 1), &context).expect("valid names");
 
-        assert!(folder.path().join("Plan (1).txt").is_file());
-        assert!(
-            folder.path().join("Plan (2).txt").is_file(),
-            "c.txt took the number"
+        assert!(folder.path().join("Photo 1.txt").is_file());
+        assert_eq!(
+            std::fs::read(folder.path().join("Photo 2.txt")).expect("kept"),
+            b"Photo 2.txt"
         );
-        assert!(locked.join("b.txt").is_file(), "left as it was");
-        assert_eq!(outcome.result.done.len(), 2);
+        assert!(folder.path().join("two.txt").is_file(), "its new name was taken");
+        assert_eq!(outcome.result.done.len(), 1);
         assert_eq!(outcome.result.errors.len(), 1, "{:?}", outcome.result.errors);
-        assert!(
-            outcome.result.errors[0].starts_with("b.txt: "),
-            "{:?}",
-            outcome.result.errors
-        );
-        assert!(matches!(outcome.undo, Some(UndoRecord::BatchRename { items }) if items.len() == 2));
+        assert!(matches!(outcome.undo, Some(UndoRecord::BatchRename { items }) if items.len() == 1));
     }
 }

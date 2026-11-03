@@ -6,7 +6,7 @@
 //! is selected, no operation runs, and the item can be changed: not a
 //! share root, a virtual entry or a previous version. With several items
 //! selected, the name typed for one of them goes to all of them with a
-//! number, as in Windows Explorer ([`super::batch_rename`]), where the
+//! number, as in Windows Explorer ([`super::numbered_rename`]), where the
 //! Python app did nothing. As in
 //! Explorer and Dolphin, the name is edited in place in its row or tile
 //! ([`super::inline_rename`]); when the item's cell is not on screen, the
@@ -61,7 +61,7 @@ fn moved_location(shown: &str, old: &str, new: &str) -> Option<String> {
 impl BrowserWindow {
     /// F2: renames the selected item in place, or with the dialog when its
     /// cell is not on screen; several selected items get one numbered name
-    /// (OPS-014).
+    /// (OPS-050).
     pub(crate) async fn rename_selection(&self) {
         if !self.allows(FileCommand::Rename) || self.refuses_writes() {
             return;
@@ -85,9 +85,24 @@ impl BrowserWindow {
         }
     }
 
+    /// Rename items…: renames the several selected items with the "Rename
+    /// items" dialog and its `#` template (OPS-014); nothing with one item
+    /// or none selected.
+    pub(crate) async fn rename_items_selection(&self) {
+        if !self.allows(FileCommand::Rename) || self.refuses_writes() {
+            return;
+        }
+        let selected = self.folder_pane().model().selected_items();
+        if selected.len() < 2 {
+            return;
+        }
+        let entries: Vec<Entry> = selected.iter().map(|item| item.entry().clone()).collect();
+        self.rename_several(&entries).await;
+    }
+
     /// Several items selected at `positions`, ascending: edits the name of
     /// the focused one, or of the first when focus is on none of them, and
-    /// gives the typed name to all of them (OPS-014).
+    /// gives the typed name to all of them (OPS-050).
     async fn rename_several_selected(&self, positions: &[u32]) {
         let pane = self.folder_pane();
         let model = pane.model();
@@ -106,7 +121,7 @@ impl BrowserWindow {
         let view = pane.view_widget();
         match pane.owners().file_cell_at(position, &view) {
             Some(cell) => self.rename_in_place(&cell, item.entry(), Some(entries)),
-            None => self.rename_several_with_dialog(&entries, item.entry()).await,
+            None => self.rename_numbered_with_dialog(&entries, item.entry()).await,
         }
     }
 

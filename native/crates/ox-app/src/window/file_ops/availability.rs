@@ -12,8 +12,9 @@
 //!   and no operation runs.
 //! - Cut and Delete: as Copy, and nothing selected is read-only.
 //! - Rename: as Cut, with exactly one item selected. The native app also
-//!   takes several, which get one numbered name as in Windows Explorer
-//!   (OPS-014).
+//!   takes several: F2 gives them one numbered name, as Windows Explorer
+//!   does (OPS-050), and Rename items… (the same command) opens the batch
+//!   rename (OPS-014).
 //! - Paste: a file clipboard, no search, no operation, every selected item
 //!   operable, and a writable folder.
 //! - New: no search, no operation, and a writable folder.
@@ -104,7 +105,7 @@ impl FileCommand {
             FileCommand::Copy => &[WindowAction::Copy],
             FileCommand::Paste => &[WindowAction::Paste],
             FileCommand::PasteInto => &[WindowAction::PasteInto],
-            FileCommand::Rename => &[WindowAction::Rename],
+            FileCommand::Rename => &[WindowAction::Rename, WindowAction::RenameItems],
             FileCommand::Delete => &[WindowAction::Trash],
             FileCommand::DeletePermanently => &[WindowAction::DeletePermanently],
             FileCommand::Duplicate => &[WindowAction::Duplicate],
@@ -417,7 +418,7 @@ mod tests {
         searching.folder.is_searching = true;
 
         assert_eq!(none.refusal(FileCommand::Copy), Some("Select an item first."));
-        // Several items are renamed together (OPS-014).
+        // Several items are renamed together (OPS-014, OPS-050).
         assert_eq!(selected(2).refusal(FileCommand::Rename), None);
         assert_eq!(selected(1).refusal(FileCommand::Rename), None);
         assert_eq!(
@@ -439,7 +440,7 @@ mod tests {
         }
     }
 
-    /// parity: CMD-002, OPS-014
+    /// parity: CMD-002, OPS-014, OPS-050
     #[test]
     fn several_items_are_renamed_together_and_nothing_needs_none() {
         let two = selected(2);
