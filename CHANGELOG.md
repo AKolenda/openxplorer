@@ -1,8 +1,47 @@
-# Unreleased
+# 2.0.12 — 2026-11-03
 
 ## Security
-* Deleting a folder permanently while using **Open as administrator** is now refused, before anything is deleted, when other user accounts can change that folder, a folder inside it or a folder on the way to it, when it is on a drive whose permissions can't be checked, or when a drive is mounted at or inside it. Single files and links are deleted as before.
+* Deleting a folder permanently while using **Open as administrator** is now refused, before anything is deleted, when other user accounts can change that folder, a folder inside it or a folder on the way to it, when it is on a drive whose permissions can't be checked, or when a drive is mounted at or inside it. Single files and links are deleted as before. This means some folders can no longer be deleted this way, such as folders in a user's home, `/tmp` and other shared or group-writable system folders, and folders on removable drives; in the Flatpak, every folder delete under **Open as administrator** is refused.
 * A network share that another application asks OpenXplorer to show (Show in folder) is no longer connected to on its own: its tab says the share is not mounted until you choose **Try again**.
+
+## What's Changed
+* feat(look): fix the selection band, open ZIPs like folders and match Windows 11 Explorer's menus and defaults by @AKolenda in https://github.com/AKolenda/openxplorer/pull/183
+* fix(ops): Claim the transfer panel in one place that refuses a busy window by @addition-official in https://github.com/AKolenda/openxplorer/pull/176
+* fix(details): Hide folders' item counts as soon as the setting is turned off by @addition-official in https://github.com/AKolenda/openxplorer/pull/175
+* fix(clipboard): Quote each path in Copy as path, as Windows does by @addition-official in https://github.com/AKolenda/openxplorer/pull/168
+* chore(deps): bump next from 16.4.2 to 16.4.3 by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/171
+* feat(new): Create a text document at once and rename it in place by @addition-official in https://github.com/AKolenda/openxplorer/pull/174
+* fix(search): Reuse SQLite connections so the WAL stays in place by @clansty in https://github.com/AKolenda/openxplorer/pull/187
+* fix(dialogs): Save to network folders and remember each app's last folder by @addition-official in https://github.com/AKolenda/openxplorer/pull/178
+* fix(integration): Open Show in folder by the setting, at the share's address by @addition-official in https://github.com/AKolenda/openxplorer/pull/180
+* chore(deps): bump crc32fast from 1.5.2 to 1.5.3 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/159
+* chore(deps): bump rustix from 1.1.5 to 1.1.6 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/170
+* chore(deps): bump lzma-rust2 from 0.22.0 to 0.24.0 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/172
+* perf(search): Keep each root's entry count instead of counting it by @clansty in https://github.com/AKolenda/openxplorer/pull/186
+* perf(search): Skip build output and installed dependencies when indexing by @clansty in https://github.com/AKolenda/openxplorer/pull/188
+* feat(rename): Rename several selected items at once, as Windows Explorer does by @addition-official in https://github.com/AKolenda/openxplorer/pull/184
+* fix(view): Show at once that a slow location is being opened, as Explorer does by @addition-official in https://github.com/AKolenda/openxplorer/pull/185
+* chore(deps-dev): bump wrangler from 4.151.0 to 4.154.0 by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/173
+* fix(tabs): Drag tabs as Chrome does on Wayland, keeping the window still by @addition-official in https://github.com/AKolenda/openxplorer/pull/177
+* feat(properties): Redo Properties as Windows 11's Properties windows by @addition-official in https://github.com/AKolenda/openxplorer/pull/179
+* feat(transfers): Show running operations in a Windows-style progress window by @addition-official in https://github.com/AKolenda/openxplorer/pull/190
+* fix(ops): Refuse administrator deletes of folders other users can change by @AKolenda in https://github.com/AKolenda/openxplorer/pull/192
+* fix(integration): Don't connect to a share opened over D-Bus until asked by @AKolenda in https://github.com/AKolenda/openxplorer/pull/191
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.12_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.12-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.12-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.12-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.12-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.11...v2.0.12
 
 # 2.0.11 — 2026-11-02
 
