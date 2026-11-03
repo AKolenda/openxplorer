@@ -45,7 +45,12 @@ impl Probe {
 
 /// What is at `path`, asked on GIO's worker threads.
 pub(super) async fn probe(path: &Path) -> Probe {
-    match query(path, gio::FILE_ATTRIBUTE_STANDARD_TYPE).await {
+    probe_within(path, PROBE_TIMEOUT).await
+}
+
+/// [`probe`], waiting at most `timeout`.
+pub(super) async fn probe_within(path: &Path, timeout: Duration) -> Probe {
+    match query_within(path, gio::FILE_ATTRIBUTE_STANDARD_TYPE, timeout).await {
         Answer::Info(info) if info.file_type() == gio::FileType::Directory => Probe::Folder,
         Answer::Info(_) => Probe::File,
         Answer::Failed => Probe::Missing,
@@ -73,6 +78,288 @@ pub(super) async fn all_writable(locations: &[PathBuf]) -> bool {
     true
 }
 
+/// Whether a Save dialog's caller can write its file, found out as
+/// Windows' dialog does before it closes: by creating the file, then
+/// removing it again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WriteTest {
+    /// The file can be created there.
+    Writable,
+    /// A file of that name appeared while the test ran, created by
+    /// another program: the dialog must look again and ask before
+    /// replacing it, never take it for room to save.
+    Appeared,
+    /// The folder refuses new files: no permission, or a read-only share
+    /// or drive.
+    Denied,
+    /// The file to replace is read-only.
+    ReadOnlyFile,
+    /// The drive or share is full.
+    NoSpace,
+    /// The folder cannot be reached through its local path: a `GVfs`
+    /// FUSE export that went away, or a share that disconnected.
+    Unavailable,
+    /// No answer within [`PROBE_TIMEOUT`].
+    NoAnswer,
+}
+
+/// Whether `name` can be saved in `folder`, through the local path the
+/// caller gets, tested as Windows' Save dialog does unless the caller
+/// asks it not to (`OFN_NOTESTFILECREATE`) by creating a file there and
+/// removing it again. Unlike Windows, that file is never `name` itself
+/// but one of the dialog's own with an ordinary, unique name ([`test_folder`]): a sync client
+/// or another program watching the folder could open and fill a file of
+/// the real name in the moment before the test removed it, and the test
+/// would then delete their data. A file of that name found after the
+/// test, created meanwhile by another program, is reported
+/// ([`WriteTest::Appeared`]) and left alone. A file that already exists
+/// (`replacing`) is never opened for writing, which on some FUSE
+/// filesystems would change it: it is checked with [`test_replace`].
+///
+/// It runs on a worker thread and waits at most [`PROBE_TIMEOUT`]. The
+/// permission bits alone do not tell: `GVfs`'s FUSE export reports every
+/// share writable, also one the server shares read-only.
+pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing: bool) -> WriteTest {
+    let target = folder.join(name);
+    if replacing {
+        match test_replace(&target).await {
+            WriteTest::Writable => test_folder(folder).await,
+            refused => refused,
+        }
+    } else {
+        let inside = folder.to_path_buf();
+        on_a_worker(folder, move || match folder_takes_files(&inside) {
+            // Only a missing file is a new one: any other answer, such as
+            // a share that disconnected meanwhile, is not a place to save.
+            WriteTest::Writable => match std::fs::symlink_metadata(&target) {
+                Ok(_) => WriteTest::Appeared,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => WriteTest::Writable,
+                Err(_) => WriteTest::Unavailable,
+            },
+            test => test,
+        })
+        .await
+    }
+}
+
+/// Whether `folder` takes new files: a file of the dialog's own is
+/// created there and removed again.
+pub(super) async fn test_folder(folder: &Path) -> WriteTest {
+    let inside = folder.to_path_buf();
+    on_a_worker(folder, move || folder_takes_files(&inside)).await
+}
+
+/// [`test_folder`] on the worker: creates and removes a file with a
+/// name no other program uses.
+fn folder_takes_files(folder: &Path) -> WriteTest {
+    #[cfg(test)]
+    if let Ok(paths) = APPEARING.lock() {
+        // Another program, such as a sync client, creates files meanwhile.
+        for path in paths.iter().filter(|path| path.parent() == Some(folder)) {
+            let _ = std::fs::write(path, "written by another program");
+        }
+    }
+    #[cfg(test)]
+    if let (Ok(mut after), Ok(mut quiet)) = (QUIET_AFTER_TEST.lock(), QUIET.lock()) {
+        // The share stops answering once the folder test is done.
+        let (now, later): (Vec<PathBuf>, Vec<PathBuf>) =
+            after.drain(..).partition(|path| path.parent() == Some(folder));
+        quiet.extend(now);
+        after.extend(later);
+    }
+    // A name that is taken already is another program's file: try another.
+    for _ in 0..3 {
+        // An ordinary name, not a hidden one: a share may refuse hidden
+        // names (Samba's `veto files = /.*/`) while it takes the caller's
+        // file, and the test must never block a save the caller could make.
+        let unique = glib::uuid_string_random().replace('-', "");
+        match create_and_remove(&folder.join(format!("openxplorer-save-test-{unique}"))) {
+            WriteTest::Appeared => {}
+            test => return test,
+        }
+    }
+    WriteTest::Unavailable
+}
+
+/// Whether `info` lets the file be written: its `access::can-write`, or
+/// yes where the backend leaves that out (some `GVfs` backends do), as
+/// only an answer of no is a refusal; the permission bits still count.
+fn answers_writable(info: &gio::FileInfo) -> bool {
+    !info.has_attribute(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
+        || info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
+}
+
+/// Whether the existing file `target` may be replaced: it is not
+/// read-only, by its permission bits or as the system answers for this
+/// user (`access::can-write`, which also follows ACLs).
+pub(super) async fn test_replace(target: &Path) -> WriteTest {
+    let file = target.to_path_buf();
+    let folder = target.parent().unwrap_or(target);
+    on_a_worker(folder, move || {
+        let read_only = std::fs::metadata(&file).is_ok_and(|metadata| metadata.permissions().readonly());
+        let can_write = match gio::File::for_path(&file).query_info(
+            gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
+            gio::FileQueryInfoFlags::NONE,
+            gio::Cancellable::NONE,
+        ) {
+            Ok(info) => answers_writable(&info),
+            // Gone since it was found: the caller creates it anew.
+            Err(error) if error.matches(gio::IOErrorEnum::NotFound) => true,
+            // A share that disconnected, or a path that cannot be read.
+            Err(_) => return WriteTest::Unavailable,
+        };
+        if read_only || !can_write {
+            WriteTest::ReadOnlyFile
+        } else {
+            WriteTest::Writable
+        }
+    })
+    .await
+}
+
+/// Runs `test` on a worker thread, waiting at most [`PROBE_TIMEOUT`]; a
+/// test of a path in `folder` that never answers, in tests, does not run.
+async fn on_a_worker(folder: &Path, test: impl FnOnce() -> WriteTest + Send + 'static) -> WriteTest {
+    #[cfg(test)]
+    if never_answers(folder) {
+        glib::timeout_future(PROBE_TIMEOUT).await;
+        return WriteTest::NoAnswer;
+    }
+    #[cfg(not(test))]
+    let _ = folder;
+    match glib::future_with_timeout(PROBE_TIMEOUT, gio::spawn_blocking(test)).await {
+        Ok(Ok(test)) => test,
+        Ok(Err(_)) => WriteTest::Unavailable,
+        Err(_) => WriteTest::NoAnswer,
+    }
+}
+
+/// Creates the new file `path` and removes it again. A file that is
+/// there when it is created is another program's and is left alone
+/// ([`WriteTest::Appeared`]). Where the file cannot be removed again, the
+/// caller could not replace or rename its own file there either, so that
+/// is a refusal, not room to save; the removal is tried twice first, so a
+/// passing hiccup does not leave the file behind.
+fn create_and_remove(path: &Path) -> WriteTest {
+    use std::io::ErrorKind;
+    #[cfg(test)]
+    let vetoed = is_listed(&VETOES_HIDDEN, path)
+        && path
+            .file_name()
+            .is_some_and(|name| name.as_encoded_bytes().starts_with(b"."));
+    #[cfg(test)]
+    if vetoed {
+        // Samba's `veto files = /.*/` answers a hidden name as not found.
+        return WriteTest::Unavailable;
+    }
+    let refusal = |error: &std::io::Error| match error.kind() {
+        ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => WriteTest::Denied,
+        ErrorKind::StorageFull | ErrorKind::QuotaExceeded => WriteTest::NoSpace,
+        _ => WriteTest::Unavailable,
+    };
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(mut file) => {
+            // One byte: an empty file needs no room, so a drive or quota
+            // with no space left but a free inode would take it.
+            let written = write_one_byte(&mut file, path);
+            drop(file);
+            // The file is the dialog's own; the caller creates its own
+            // when it saves.
+            match (written, remove(path).or_else(|_| remove(path))) {
+                (Err(error), _) | (Ok(()), Err(error)) => refusal(&error),
+                (Ok(()), Ok(())) => WriteTest::Writable,
+            }
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => WriteTest::Appeared,
+        Err(error) => refusal(&error),
+    }
+}
+
+/// Writes one byte to the write test's file `path`.
+fn write_one_byte(file: &mut std::fs::File, path: &Path) -> std::io::Result<()> {
+    use std::io::Write;
+    #[cfg(test)]
+    if is_listed(&FULL, path) {
+        // A drive or quota with no space left, which still takes an empty file.
+        return Err(std::io::ErrorKind::StorageFull.into());
+    }
+    #[cfg(not(test))]
+    let _ = path;
+    file.write_all(b"0")
+}
+
+/// Removes the write test's file `path`.
+fn remove(path: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if is_listed(&UNREMOVABLE, path) {
+        // A share that lets files be created but not deleted.
+        return Err(std::io::ErrorKind::PermissionDenied.into());
+    }
+    std::fs::remove_file(path)
+}
+
+/// Paths another program creates while the write test runs, for tests. Shared by every thread, as the test runs on GIO's workers.
+#[cfg(test)]
+static APPEARING: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Folders that refuse hidden names, as a Samba share with
+/// `veto files = /.*/` does, for tests.
+#[cfg(test)]
+static VETOES_HIDDEN: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Makes `folder` refuse hidden names, as a Samba share that vetoes
+/// dotfiles does.
+#[cfg(test)]
+pub(super) fn veto_hidden_names_in(folder: &Path) {
+    if let Ok(mut paths) = VETOES_HIDDEN.lock() {
+        paths.push(folder.to_path_buf());
+    }
+}
+
+/// Folders with no space left for data, for tests.
+#[cfg(test)]
+static FULL: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Makes writing data in `folder` fail for want of space, as on a full
+/// drive or quota that still has room for an empty file.
+#[cfg(test)]
+pub(super) fn fill_up(folder: &Path) {
+    if let Ok(mut paths) = FULL.lock() {
+        paths.push(folder.to_path_buf());
+    }
+}
+
+/// Paths whose removal fails, for tests.
+#[cfg(test)]
+static UNREMOVABLE: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+fn is_listed(list: &std::sync::Mutex<Vec<PathBuf>>, path: &Path) -> bool {
+    list.lock()
+        .is_ok_and(|paths| paths.iter().any(|listed| path.starts_with(listed)))
+}
+
+/// Makes another program create `path` while the write test runs.
+#[cfg(test)]
+pub(super) fn appear_when_tested(path: &Path) {
+    if let Ok(mut paths) = APPEARING.lock() {
+        paths.push(path.to_path_buf());
+    }
+}
+
+/// Makes removing anything in `folder` fail, as on a share that lets
+/// files be created but not deleted.
+#[cfg(test)]
+pub(super) fn fail_removal_in(folder: &Path) {
+    if let Ok(mut paths) = UNREMOVABLE.lock() {
+        paths.push(folder.to_path_buf());
+    }
+}
+
 /// GIO's answer about one path.
 enum Answer {
     Info(gio::FileInfo),
@@ -84,14 +371,19 @@ enum Answer {
 /// Giving up cancels the query; a worker stuck in the kernel finishes on
 /// its own.
 async fn query(path: &Path, attributes: &str) -> Answer {
+    query_within(path, attributes, PROBE_TIMEOUT).await
+}
+
+/// [`query`], waiting at most `timeout`.
+async fn query_within(path: &Path, attributes: &str, timeout: Duration) -> Answer {
     #[cfg(test)]
     if never_answers(path) {
-        glib::timeout_future(PROBE_TIMEOUT).await;
+        glib::timeout_future(timeout).await;
         return Answer::TimedOut;
     }
     let file = gio::File::for_path(path);
     let asking = file.query_info_future(attributes, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT);
-    match glib::future_with_timeout(PROBE_TIMEOUT, asking).await {
+    match glib::future_with_timeout(timeout, asking).await {
         Ok(Ok(info)) => Answer::Info(info),
         Ok(Err(_)) => Answer::Failed,
         Err(_) => Answer::TimedOut,
@@ -114,6 +406,25 @@ pub(super) fn stop_answering(folder: &Path) {
 #[cfg(test)]
 fn never_answers(path: &Path) -> bool {
     NOT_ANSWERING.with(|folders| folders.borrow().iter().any(|folder| path.starts_with(folder)))
+        || is_listed(&QUIET, path)
+}
+
+/// Paths that stop answering once the folder they are in was tested, for
+/// tests; shared by every thread, as that test runs on GIO's workers.
+#[cfg(test)]
+static QUIET_AFTER_TEST: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Paths that stopped answering that way.
+#[cfg(test)]
+static QUIET: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Makes `path` stop answering once the write test of its folder ran, as
+/// a share that goes quiet halfway through the dialog's checks.
+#[cfg(test)]
+pub(super) fn stop_answering_after_test(path: &Path) {
+    if let Ok(mut paths) = QUIET_AFTER_TEST.lock() {
+        paths.push(path.to_path_buf());
+    }
 }
 
 #[cfg(test)]
@@ -124,6 +435,143 @@ mod tests {
 
     fn run<T>(future: impl std::future::Future<Output = T>) -> T {
         glib::MainContext::default().block_on(future)
+    }
+
+    /// The write test of a new file never creates the file's own name,
+    /// which a sync client or another program watching the folder could
+    /// open and fill before the test removed it again: it tests the
+    /// folder with a file of its own, and leaves nothing behind.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn the_write_test_of_a_new_file_never_creates_that_file() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let monitor = gio::File::for_path(folder.path())
+            .monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+            .expect("a folder monitor");
+        monitor.set_rate_limit(0);
+        let created = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let seen = std::rc::Rc::clone(&created);
+        monitor.connect_changed(move |_, file, _, event| {
+            if event == gio::FileMonitorEvent::Created {
+                let name = file.basename().map(|name| name.to_string_lossy().into_owned());
+                seen.borrow_mut().extend(name);
+            }
+        });
+
+        let test = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+        run(glib::timeout_future(Duration::from_millis(300)));
+
+        assert_eq!(test, WriteTest::Writable);
+        let created = created.borrow();
+        assert!(!created.iter().any(|name| name == "report.txt"), "{created:?}");
+        assert!(
+            created
+                .iter()
+                .any(|name| name.starts_with("openxplorer-save-test-")),
+            "the folder was tested: {created:?}"
+        );
+        let left: Vec<_> = fs::read_dir(folder.path()).expect("the folder").collect();
+        assert!(left.is_empty(), "nothing is left behind");
+    }
+
+    /// A folder that refuses hidden names, as a Samba share that vetoes
+    /// dotfiles, still takes the file: the test's own file has an
+    /// ordinary name, so the test never blocks a save the caller could make.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_folder_that_refuses_hidden_names_still_takes_files() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        fs::write(folder.path().join("old.txt"), "x").expect("a file");
+        veto_hidden_names_in(folder.path());
+
+        let new_file = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+        let replaced = run(test_write(folder.path(), std::ffi::OsStr::new("old.txt"), true));
+
+        assert_eq!(new_file, WriteTest::Writable);
+        assert_eq!(replaced, WriteTest::Writable);
+        let left: Vec<String> = fs::read_dir(folder.path())
+            .expect("the folder")
+            .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+            .collect();
+        assert_eq!(left, ["old.txt"], "nothing is left behind");
+    }
+
+    /// A file another program creates while the Save dialog tests the
+    /// folder is not taken for room to save: it is left as it is, and the
+    /// dialog is told it appeared, so it asks before replacing it.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_file_that_appears_during_the_write_test_is_not_called_writable() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let target = folder.path().join("report.txt");
+        appear_when_tested(&target);
+
+        let test = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+
+        assert_ne!(test, WriteTest::Writable);
+        assert_eq!(
+            fs::read_to_string(&target).expect("the other program's file"),
+            "written by another program"
+        );
+    }
+
+    /// Where the test file can be created but not removed again, as on a
+    /// share that lets files be created but not deleted, the caller could
+    /// not replace or rename its file either: the test says so rather than
+    /// calling the folder writable.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_test_file_that_cannot_be_removed_is_a_refusal() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        fs::write(folder.path().join("old.txt"), "x").expect("a file");
+        fail_removal_in(folder.path());
+
+        let new_file = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+        let replaced = run(test_write(folder.path(), std::ffi::OsStr::new("old.txt"), true));
+
+        assert_eq!(new_file, WriteTest::Denied);
+        assert_eq!(replaced, WriteTest::Denied);
+    }
+
+    /// A drive or quota with no space left for data, which would still
+    /// take an empty file, is reported as full, and the test's file is
+    /// not left behind.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_full_drive_is_reported_as_full() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        fill_up(folder.path());
+
+        let test = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+
+        assert_eq!(test, WriteTest::NoSpace);
+        let left: Vec<_> = fs::read_dir(folder.path()).expect("the folder").collect();
+        assert!(left.is_empty(), "nothing is left behind");
     }
 
     /// parity: INT-032
@@ -140,6 +588,38 @@ mod tests {
         assert_eq!(run(probe(&file)), Probe::File);
         assert_eq!(run(probe(&folder.path().join("missing"))), Probe::Missing);
         assert_eq!(run(probe(&dead.join("report.odt"))), Probe::NoAnswer);
+    }
+
+    /// A file that cannot be asked whether it may be replaced, as on a
+    /// share that disconnected, is not called writable; one that is gone
+    /// since it was found may be created anew.
+    ///
+    /// parity: INT-032, INT-035
+    #[gtk::test]
+    fn a_file_that_cannot_be_asked_about_is_not_replaced() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let file = folder.path().join("notes.txt");
+        fs::write(&file, "x").expect("a file");
+
+        // Any error but a missing file: here, a path through a file.
+        assert_eq!(
+            run(test_replace(&file.join("report.txt"))),
+            WriteTest::Unavailable
+        );
+        assert_eq!(
+            run(test_replace(&folder.path().join("gone.txt"))),
+            WriteTest::Writable
+        );
+        // A backend that leaves `access::can-write` out has not refused.
+        let silent = gio::FileInfo::new();
+        assert!(answers_writable(&silent));
+        silent.set_attribute_boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE, false);
+        assert!(!answers_writable(&silent));
+        // A new file the system cannot answer about: here, a name too long.
+        assert_eq!(
+            run(test_write(folder.path(), "n".repeat(300).as_ref(), false)),
+            WriteTest::Unavailable
+        );
     }
 
     /// An Open reply says whether the user may write what was chosen;

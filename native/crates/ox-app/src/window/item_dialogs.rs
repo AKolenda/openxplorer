@@ -63,7 +63,7 @@ impl BrowserWindow {
     }
 
     /// The layer the window's dialogs are shown on.
-    pub(super) fn dialog_layer(&self) -> &DialogLayer {
+    pub(crate) fn dialog_layer(&self) -> &DialogLayer {
         self.item_dialogs()
             .layer
             .get()
