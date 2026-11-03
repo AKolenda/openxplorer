@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.11
+Version:        2.0.12
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -122,6 +122,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Tue Nov 03 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.12-1
+- OpenXplorer 2.0.12: a Windows-style progress window, Windows 11's
+  Properties windows, renaming several items at once, faster search, and
+  administrator folder deletes refused when other accounts can change them.
+
 * Mon Nov 02 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.11-1
 - OpenXplorer 2.0.11: shown search results no longer refresh while the
   search cache changes, so a selected result stays selected.
