@@ -26,7 +26,6 @@
 //! Wayland requires, and closing a browsing window still asks first
 //! while that window's operations run (TAB-049).
 
-use std::cell::{Cell, RefCell};
 use std::time::Duration;
 
 use gtk::glib;
@@ -47,7 +46,15 @@ pub(crate) const SHOW_DELAY: Duration = Duration::from_secs(1);
 const CHEVRON_SIZE: i32 = 16;
 
 mod imp {
-    use super::*;
+    use std::cell::{Cell, RefCell};
+    use std::time::Duration;
+
+    use gtk::glib;
+    use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
+
+    use super::SHOW_DELAY;
+    use crate::app_context::AppContext;
 
     /// Private state of [`super::ProgressWindow`].
     #[derive(Debug, Default, gtk::CompositeTemplate)]

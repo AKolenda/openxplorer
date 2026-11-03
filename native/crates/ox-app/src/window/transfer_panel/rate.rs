@@ -150,7 +150,7 @@ fn about(seconds: u64) -> String {
         0..60 => (seconds_text(seconds), None),
         60..3600 => (
             minutes(seconds / 60),
-            (seconds % 60 > 0).then(|| seconds_text(seconds % 60)),
+            (!seconds.is_multiple_of(60)).then(|| seconds_text(seconds % 60)),
         ),
         _ => (
             hours(seconds / 3600),

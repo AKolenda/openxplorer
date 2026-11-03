@@ -339,7 +339,7 @@ impl<'a> Copier<'a> {
         // throttled after accounting.
         report(0, 0, true);
         source.copy_file(target, cancel, &mut |current, total| {
-            report(current, total, false)
+            report(current, total, false);
         })
     }
 }

@@ -267,7 +267,7 @@ impl TransferPanel {
         self.show_percent();
         let owner = imp.owner.upgrade();
         if let Some(owner) = &owner {
-            ProgressWindow::of(&owner.context()).add(self);
+            ProgressWindow::of(owner.context()).add(self);
         }
         let session = match &owner {
             Some(owner) => OperationSession::start(owner),

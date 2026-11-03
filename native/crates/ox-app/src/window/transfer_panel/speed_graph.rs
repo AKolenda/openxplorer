@@ -16,8 +16,6 @@
 //! while the details show (the plain bar hides then), named "Operation
 //! progress", with the speed as its description.
 
-use std::cell::{Cell, RefCell};
-
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -30,7 +28,10 @@ const HEIGHT: i32 = 72;
 const HEADROOM: f64 = 1.3;
 
 mod imp {
-    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    use gtk::glib;
+    use gtk::subclass::prelude::*;
 
     /// Private state of [`super::SpeedGraph`].
     #[derive(Debug, Default)]
@@ -183,7 +184,7 @@ impl SpeedGraph {
         if let Some(label) = imp.label.borrow().as_ref() {
             label.set_text(&text);
             label.set_visible(true);
-            label.set_margin_bottom((target + 2).min(HEIGHT - 18).max(0));
+            label.set_margin_bottom((target + 2).clamp(0, HEIGHT - 18));
         }
         self.update_property(&[gtk::accessible::Property::Description(&text)]);
         self.move_line(target);
@@ -237,7 +238,7 @@ impl SpeedGraph {
     #[cfg(test)]
     pub(crate) fn line_offsets(&self) -> (i32, i32) {
         let imp = self.imp();
-        let shown = imp.line.borrow().as_ref().map_or(0, |line| line.margin_bottom());
+        let shown = imp.line.borrow().as_ref().map_or(0, WidgetExt::margin_bottom);
         (shown, imp.line_target.get())
     }
 

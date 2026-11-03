@@ -253,6 +253,7 @@ impl Icon {
     /// The icon's name in the app's icon theme: its file name under
     /// `resources/icons/hicolor/scalable/`, without `.svg`. An exhaustive
     /// table, hence its length.
+    #[expect(clippy::too_many_lines, reason = "one arm per bundled icon")]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             Icon::Add => "ox-add-20-symbolic",
