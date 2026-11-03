@@ -40,6 +40,7 @@ use wayland_client::{
 };
 use wayland_protocols::xdg::toplevel_drag::v1::client::{xdg_toplevel_drag_manager_v1, xdg_toplevel_drag_v1};
 
+use crate::window::breakpoints::WindowWidth;
 use crate::window::session::{Tab, TabId};
 use crate::window::tab_strip::LaterTabs;
 use crate::window::BrowserWindow;
@@ -787,8 +788,16 @@ impl BrowserWindow {
             .surface()
             .and_downcast::<gdk_wayland::WaylandSurface>()
             .and_then(|surface| surface.wl_surface());
+        let single = self.tab_count() <= 1;
+        // The window the tab is held in: this one, or a new one at the
+        // size it gets, maybe in another width band, with other tabs.
+        let held_in = if single {
+            self.window_width()
+        } else {
+            WindowWidth::for_width(self.torn_out_size().0)
+        };
         let (Some(origin_surface), Some(offset)) =
-            (origin_surface, self.window_offset_of_first_tab(id, grab))
+            (origin_surface, self.window_offset_of_first_tab(id, grab, held_in))
         else {
             return false;
         };
@@ -802,7 +811,6 @@ impl BrowserWindow {
             stale.on_source_events();
             stale.end();
         }
-        let single = self.tab_count() <= 1;
         let back = (!single).then(|| self.tabs_after(id));
         let dragged = if single {
             self.clone()
@@ -947,32 +955,47 @@ impl BrowserWindow {
     /// but not drawn yet; this window keeps the tab for now.
     fn window_for_tab(&self, id: TabId) -> Option<BrowserWindow> {
         let window = self.detach_tab(id).ok()?;
-        let (width, height) = if self.is_maximized() {
-            self.default_size()
-        } else {
-            (self.width(), self.height())
-        };
+        let (width, height) = self.torn_out_size();
         window.set_default_size(width, height);
         window.present_as_torn_out();
         Some(window)
     }
 
-    /// Where tab `id`, grabbed at `grab` on itself, is held in a window like
-    /// this one where it is the first tab, from the window's top left
-    /// corner, where the desktop measures a window from. The row starts
-    /// where it does unscrolled, as in the new window.
-    fn window_offset_of_first_tab(&self, id: TabId, (along, down): (f64, f64)) -> Option<(i32, i32)> {
+    /// The size a window torn out of this one opens at: this window's,
+    /// or the size it has when not maximized.
+    fn torn_out_size(&self) -> (i32, i32) {
+        if self.is_maximized() {
+            self.default_size()
+        } else {
+            (self.width(), self.height())
+        }
+    }
+
+    /// Where tab `id`, grabbed at `grab` on itself, is held in a window of
+    /// width band `held_in` where it is the first tab, from the window's
+    /// top left corner, where the desktop measures a window from. The row
+    /// starts where it does unscrolled, as in the new window.
+    fn window_offset_of_first_tab(
+        &self,
+        id: TabId,
+        (along, down): (f64, f64),
+        held_in: WindowWidth,
+    ) -> Option<(i32, i32)> {
         let strip = self.tab_strip();
         let row = strip
             .tab_list()
             .parent()?
             .compute_point(self, &graphene::Point::zero())?;
         let tab = strip.tab_bounds_in(id, self)?;
-        #[expect(clippy::cast_possible_truncation, reason = "a point of a window")]
-        let offset = (
-            (f64::from(row.x()) + along).round() as i32,
-            (f64::from(tab.y()) + down).round() as i32,
+        let along = held_along(
+            f64::from(row.x()),
+            along,
+            strip.tab_width(id),
+            self.window_width(),
+            held_in,
         );
+        #[expect(clippy::cast_possible_truncation, reason = "a point of a window")]
+        let offset = (along.round() as i32, (f64::from(tab.y()) + down).round() as i32);
         Some(offset)
     }
 
@@ -1221,6 +1244,22 @@ delegate_noop!(Events: wl_data_device_manager::WlDataDeviceManager);
 delegate_noop!(Events: xdg_toplevel_drag_manager_v1::XdgToplevelDragManagerV1);
 delegate_noop!(Events: xdg_toplevel_drag_v1::XdgToplevelDragV1);
 
+/// How far from the left edge of a window of width band `to` a tab is
+/// held as its first tab, grabbed `along` pixels into it where it is
+/// `width` pixels wide, in a window of band `from` whose row starts at
+/// `row`. In the same band the row and a lone tab are where they are
+/// here, and that tab is at least as wide, so the grab stays. In another
+/// band the row starts elsewhere and the tab has that band's width: it is
+/// held at the same share of it, inside it.
+fn held_along(row: f64, along: f64, width: Option<f64>, from: WindowWidth, to: WindowWidth) -> f64 {
+    if from == to {
+        return row + along;
+    }
+    let row = row - f64::from(from.title_bar_start()) + f64::from(to.title_bar_start());
+    let share = crate::window::tab_layout::grab_share(along, width);
+    row + share * f64::from(to.tab_width())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1284,7 +1323,11 @@ mod tests {
         );
 
         for id in &ids {
-            assert_eq!(test.window.window_offset_of_first_tab(*id, grab), Some(held));
+            assert_eq!(
+                test.window
+                    .window_offset_of_first_tab(*id, grab, test.window.window_width()),
+                Some(held)
+            );
         }
         assert_eq!(test.window.tabs_after(ids[0]), LaterTabs::new([ids[1]]));
         assert_eq!(test.window.tabs_after(ids[1]), LaterTabs::default());
@@ -1319,13 +1362,47 @@ mod tests {
         let grab = (40.0, 10.0);
         scroll.set_value(0.0);
         wait_for_frames(&test.window, 2);
-        let unscrolled = test.window.window_offset_of_first_tab(id, grab);
+        let unscrolled = test
+            .window
+            .window_offset_of_first_tab(id, grab, test.window.window_width());
 
         scroll.set_value(scroll.upper() - scroll.page_size());
         wait_for_frames(&test.window, 2);
 
         assert!(scroll.value() > 50.0, "the row is scrolled");
-        assert_eq!(test.window.window_offset_of_first_tab(id, grab), unscrolled);
+        assert_eq!(
+            test.window
+                .window_offset_of_first_tab(id, grab, test.window.window_width()),
+            unscrolled
+        );
+    }
+
+    /// A tab grabbed 160 pixels into its 215 pixel tab in a maximized
+    /// window whose restored size is compact is held inside its new
+    /// window's 150 pixel tab, at the same share of it, from where that
+    /// window's narrower title bar padding starts its row. In the same band
+    /// the grab is kept as it is.
+    ///
+    /// parity: TAB-034
+    #[test]
+    fn a_tab_torn_out_into_a_narrower_window_is_held_inside_its_tab() {
+        let row = 9.0;
+        let held = held_along(row, 160.0, Some(215.0), WindowWidth::Wide, WindowWidth::Compact);
+
+        let new_row = 5.0;
+        let expected = new_row + 160.0 / 215.0 * 150.0;
+        assert!(
+            (held - expected).abs() < 1e-6,
+            "at the same share of the tab: {held}"
+        );
+        assert!(
+            held > new_row && held < new_row + 150.0,
+            "inside the new tab: {held}"
+        );
+        assert!(
+            (held_along(row, 160.0, Some(215.0), WindowWidth::Wide, WindowWidth::Wide) - 169.0).abs() < 1e-6,
+            "the same band keeps the grab"
+        );
     }
 
     /// A window drag starts only with the press GTK began the tab's drag
