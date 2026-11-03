@@ -391,6 +391,28 @@ fn a_folder_on_a_filesystem_users_can_supply_is_refused() {
     }
 }
 
+/// The kernel leaves a carriage return in a mount point unescaped: it is
+/// part of the mount point, which must not be cut short at it.
+///
+/// parity: XFER-015, OPS-039
+#[test]
+fn a_mount_point_with_a_carriage_return_in_its_name_is_still_found() {
+    let (_folder, root) = workspace();
+    let drive = folder(&root.join("disk\rcrafted"), 0o755);
+    let (selected, files) = closed_tree(&drive);
+    let table = format!(
+        "22 1 8:2 / / rw shared:1 - ext4 /dev/sda2 rw\n\
+         70 22 0:60 / {} rw - fuse.demo demo rw\n",
+        drive.to_str().expect("a UTF-8 path")
+    );
+    let rules = rules(&root, mounts::parse_mounts(table.as_bytes()));
+
+    let result = delete(&selected, &rules);
+
+    assert_eq!(result, Err(others_can_change(&drive)));
+    assert_kept(&files);
+}
+
 /// parity: XFER-015, OPS-039
 #[test]
 fn only_local_kernel_filesystems_mounted_by_the_administrator_are_trusted() {

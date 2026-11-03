@@ -97,10 +97,11 @@ fn mount_of_line(line: &[u8]) -> Option<Mount> {
     })
 }
 
-/// The whitespace-separated fields of `text`.
+/// The space-separated fields of `text`. The kernel escapes only a space,
+/// a tab, a newline and a backslash in a path, so any other character,
+/// a carriage return included, is part of the field it is in.
 fn fields(text: &[u8]) -> impl Iterator<Item = &[u8]> {
-    text.split(u8::is_ascii_whitespace)
-        .filter(|field| !field.is_empty())
+    text.split(|&byte| byte == b' ').filter(|field| !field.is_empty())
 }
 
 /// Decodes the kernel's `\ooo` octal escapes; anything else stays as it is.
@@ -170,6 +171,15 @@ not a mount line
                 options: "rw,vers=3.1.1".into(),
             }
         );
+    }
+
+    #[test]
+    fn a_carriage_return_in_a_mount_point_stays_in_it() {
+        let mounts = parse_mounts(b"70 22 0:60 / /srv/disk\rcrafted rw - fuse.demo demo rw\n");
+
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(mounts[0].point, PathBuf::from("/srv/disk\rcrafted"));
+        assert_eq!(mounts[0].filesystem, "fuse.demo");
     }
 
     #[test]
