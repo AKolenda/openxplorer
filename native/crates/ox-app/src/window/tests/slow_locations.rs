@@ -684,3 +684,72 @@ fn a_tab_moved_while_a_slow_address_opens_goes_on_to_it() {
     });
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
+
+/// A typed address answered after the user moved to the other pane of a
+/// split tab still opens in its own pane, which is listed at once since
+/// it stays on screen.
+///
+/// parity: VIEW-059, VIEW-068
+#[gtk::test]
+fn a_slow_address_answered_after_moving_to_the_other_pane_lists_its_pane() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("split-view", None);
+    test.wait_for_listing("the right pane");
+    let slow_side = test.window.active_side();
+    let documents = fixture.uri_of("Documents");
+    std::fs::write(fixture.path("Documents/Agenda.txt"), "agenda").expect("a file");
+    let hold = held::hold(&held::lookup_key(&documents));
+    enter_address(&test, &fixture.path("Documents").display().to_string());
+    wait_until("the lookup to wait", || {
+        held::waits(&held::lookup_key(&documents)) == 1
+    });
+
+    test.window.activate_pane(slow_side.other());
+    settle();
+    drop(hold);
+
+    let pane = test.window.pane_on(slow_side);
+    wait_until("the typed folder listed in its pane", || {
+        pane.model().n_items() == 1
+    });
+    assert_eq!(
+        test.window.current_uri(),
+        Some(fixture.uri()),
+        "the active pane stays"
+    );
+}
+
+/// An address on a share that is not mounted, answered after the user
+/// looked at another tab, opens nothing there: it is not known to be a
+/// folder, and mounting it may find a file, which must not be launched.
+///
+/// parity: SAFE-013, VIEW-068
+#[gtk::test]
+fn an_unmounted_address_answered_after_leaving_the_tab_opens_nothing() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let slow_tab = test.active_tab().expect("a tab");
+    test.window
+        .network()
+        .answer_mounts_with(|| Err(NetworkError::NotAFolder));
+    let address = "smb://example.invalid/share/Report.pdf";
+    let hold = held::hold(&held::lookup_key(address));
+    enter_address(&test, address);
+    wait_until("the lookup to wait", || {
+        held::waits(&held::lookup_key(address)) == 1
+    });
+
+    test.window
+        .open_tab(&fixture.uri(), TabPlacement::Foreground)
+        .expect("another tab");
+    test.wait_for_listing("the other tab");
+    test.activate_tab(slow_tab);
+    settle();
+    drop(hold);
+    wait_until("the lookup to answer", || !test.window.is_tab_busy(slow_tab));
+    settle();
+
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "nothing opened");
+}

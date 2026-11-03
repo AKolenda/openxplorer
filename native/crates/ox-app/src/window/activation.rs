@@ -584,7 +584,9 @@ impl BrowserWindow {
                 Activation::Folder(folder) => folder,
                 _ => return,
             },
-            Err(EntryError::NotMounted(_)) => request.uri.to_owned(),
+            // A location on a share not mounted yet is not known to be a
+            // folder: mounting it may find a file, which must not be
+            // launched here (SAFE-013).
             Err(_) => return,
         };
         if self.imp().session.borrow().is_active(id) {
