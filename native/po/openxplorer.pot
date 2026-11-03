@@ -5135,12 +5135,31 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
+msgid "There is not enough space in “{folder}” to save the file."
+msgstr ""
+
+#: crates/ox-app/src/window/picker.rs
+msgid "You don't have permission to save in this location. Contact the administrator to obtain permission."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{folder}” is not available. If it is on a network, make sure the share is still connected."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
 msgid "“{name}” is a folder, not a file."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "“{name}” is not a valid file name."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{name}” is set to read-only. Try again with a different file name."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
