@@ -17,7 +17,9 @@
 //!   the file itself when the user asked for it.
 //! - A share that is not mounted is mounted once, asking for credentials
 //!   if needed, and listed again from empty rows (`retry_list` in
-//!   winspace.py, NET-004). A server being signed out is not listed
+//!   winspace.py, NET-004), unless another application asked to show it:
+//!   that tab says it is not mounted until the user asks to connect. A
+//!   server being signed out is not listed
 //!   (NET-023), and a listed SMB location joins the session's Network
 //!   list (NET-016).
 //! - A folder that disappears while shown gives way to the nearest
@@ -108,6 +110,11 @@ impl BrowserWindow {
             }
         }
         if mode == LoadMode::Navigate {
+            // The user took the tab elsewhere: what an application asked
+            // to show no longer holds back a mount.
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.waits_to_mount = false;
+            }
             self.supersede_activations(id);
             // The tab goes elsewhere: a location it was still going to is
             // cancelled, and nothing of it lands here (VIEW-068).
@@ -337,6 +344,13 @@ impl BrowserWindow {
             return;
         }
         let is_listed = result.is_ok();
+        let waits_to_mount = self
+            .imp()
+            .session
+            .borrow()
+            .tab(id)
+            .is_some_and(|tab| tab.waits_to_mount);
+        let may_mount = run.mount_retry == MountRetry::Allowed && !waits_to_mount;
         match result {
             Ok(()) if run.mode == LoadMode::Reload => self.merge_rows(id, run.held_rows.take()),
             Ok(()) | Err(EntryError::Cancelled) => {}
@@ -348,7 +362,7 @@ impl BrowserWindow {
                 self.leave_removed_folder(run, error);
                 return;
             }
-            Err(error) if error.needs_mount() && run.mount_retry == MountRetry::Allowed => {
+            Err(error) if error.needs_mount() && may_mount => {
                 self.mount_and_list_again(run);
                 return;
             }
@@ -439,6 +453,11 @@ impl BrowserWindow {
         let (selected, reveals, renames) = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else { return };
+            // A share left unmounted for another application has no rows:
+            // what it asked to select waits for the listing after Try again.
+            if tab.waits_to_mount && tab.error.is_some() {
+                return;
+            }
             (
                 tab.selected.clone(),
                 std::mem::take(&mut tab.reveals_selection),
