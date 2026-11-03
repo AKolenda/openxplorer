@@ -373,7 +373,10 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         ),
         count => (
             Art::TintedGlyph(Icon::Delete, Tint::Home),
-            ox_core::i18n::format_message("{count} items", &[("count", &count.to_string())]),
+            ox_core::i18n::format_message(
+                "{count} items",
+                &[("count", &ox_core::format::group_digits(u64::from(count)))],
+            ),
         ),
     };
     let bin = SidebarEntry {

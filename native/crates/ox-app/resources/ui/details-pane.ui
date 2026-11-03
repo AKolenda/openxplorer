@@ -201,7 +201,7 @@
               </object>
             </child>
             <child>
-              <object class="GtkBox">
+              <object class="GtkBox" id="note_row">
                 <property name="spacing">5</property>
                 <style>
                   <class name="detail-note"/>

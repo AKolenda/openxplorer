@@ -351,7 +351,9 @@ fn the_menu_key_opens_the_context_menu_with_or_without_a_selection() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let details = test.window.folder_pane().details().column_view();
-    assert!(view_shortcuts(details).contains(&"Menu|<Shift>F10".to_owned()));
+    let shortcuts = view_shortcuts(details);
+    assert!(shortcuts.contains(&"Menu".to_owned()), "{shortcuts:?}");
+    assert!(shortcuts.contains(&"<Shift>F10".to_owned()), "{shortcuts:?}");
     let menus = descendants::<MenuPopover>(details);
     let [menu] = menus.as_slice() else {
         panic!("one context menu per view");

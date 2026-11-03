@@ -11,6 +11,7 @@ use gtk::subclass::prelude::*;
 use ox_core::location::{file_uri, same_location};
 use ox_core::settings::{PreferencesUpdate, Settings};
 
+use super::panes_layout::save_expandable_folders;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 
 /// Saves `hidden` as Settings or another window would, and lets the
@@ -45,6 +46,8 @@ fn window_with_every_arrow(fixture: &Fixture) -> TestWindow {
     fs::create_dir(&reports).expect("fixture subfolder");
     fs::create_dir(reports.join("2026")).expect("a folder to expand");
     let test = TestWindow::open(&file_uri(&reports));
+    // The file list's folder arrows, which are off by default.
+    save_expandable_folders(&test, true);
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
     let reports = file_uri(&reports);
