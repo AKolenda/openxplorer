@@ -462,6 +462,46 @@ fn edit_after_general_changes_the_item_as_it_is_now() {
     assert_eq!(mode_of(&path), 0o600, "the unrelated file is untouched");
 }
 
+/// Tabs taller than the screen, as at a large text size, scroll inside
+/// the window, which stays within the screen's height, so OK, Cancel and
+/// Apply stay on the screen; shorter ones show whole.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn tabs_taller_than_the_screen_scroll_inside_the_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let filled = test.wait_for_properties("Notes 2.txt Properties");
+    general(&filled);
+    assert!(
+        filled.scroller().parent().is_none(),
+        "tabs that fit do not scroll"
+    );
+    filled.close();
+
+    let window = PropertiesWindow::new("Tall Properties", None, Some(&test.window));
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    for line in 0..60 {
+        page.append(&gtk::Label::new(Some(&format!("Line {line}"))));
+    }
+    window.add_tab("general", "General", &page);
+
+    // As if the screen were 300 high: after the window found the real
+    // one's height as it is realized.
+    window.connect_realize(|window| window.fit_to_height(300));
+    window.present();
+    wait_until("the window to fit", || {
+        window.height() > 0 && window.height() <= 300
+    });
+
+    let scrolling = window.scroller().vadjustment();
+    wait_until("the tabs to scroll", || scrolling.upper() > scrolling.page_size());
+    assert!(window.ok_button().is_drawable(), "OK stays in the window");
+    window.close();
+}
+
 /// Read-only on General follows a change Edit... made: taking the
 /// owner's Write ticks it, and clearing it then gives Write back.
 ///

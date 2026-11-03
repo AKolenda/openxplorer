@@ -37,14 +37,16 @@ impl Pending for EditedBits {
                 return Ok(());
             };
             let facts = self.facts.borrow().clone();
+            // A box changed while the change is made stays to apply.
+            let submitted = self.mode.get();
             let request = PermissionRequest {
-                mode: changed_bits(facts.mode.unwrap_or_default(), self.mode.get()),
+                mode: changed_bits(facts.mode.unwrap_or_default(), submitted),
                 owner: None,
                 group: None,
                 recursive: false,
             };
             apply_request(&window, &facts, &self.context, request).await?;
-            self.facts.borrow_mut().mode = Some(self.mode.get());
+            self.facts.borrow_mut().mode = Some(submitted);
             Ok(())
         })
     }

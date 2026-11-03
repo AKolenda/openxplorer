@@ -38,6 +38,9 @@ const WINDOW_WIDTH: i32 = 400;
 const PAGE_MARGIN: i32 = 11;
 /// The size of the item's picture in the title bar.
 const TITLE_ART: i32 = 16;
+/// The room kept above and below a window as tall as its screen, for the
+/// desktop's panels.
+const SCREEN_MARGIN: i32 = 48;
 /// The close glyph of the title bar.
 const CLOSE_GLYPH: i32 = 12;
 
@@ -77,6 +80,10 @@ mod imp {
         pub(super) art: gtk::Box,
         /// The tabs.
         pub(super) notebook: gtk::Notebook,
+        /// Scrolls the tabs when they are taller than the screen.
+        pub(super) scroller: gtk::ScrolledWindow,
+        /// How tall the window may be, once it is realized on a screen.
+        pub(super) tallest: Cell<Option<i32>>,
         /// OK, Cancel and Apply.
         pub(super) ok: gtk::Button,
         pub(super) cancel: gtk::Button,
@@ -128,6 +135,26 @@ mod imp {
     }
 
     impl WidgetImpl for PropertiesWindow {
+        /// Finds how tall the window may be on its screen.
+        fn realize(&self) {
+            self.obj().fit_to_screen();
+            self.parent_realize();
+        }
+
+        /// Tabs that outgrew the screen scroll from the next frame on.
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.parent_size_allocate(width, height, baseline);
+            let outgrown = self.tallest.get().is_some_and(|tallest| height > tallest);
+            if outgrown && self.scroller.parent().is_none() {
+                let window = self.obj().downgrade();
+                glib::idle_add_local_once(move || {
+                    if let Some(window) = window.upgrade() {
+                        window.scroll_tabs();
+                    }
+                });
+            }
+        }
+
         /// Starts with the tab row focused, as Windows does, so no
         /// selectable value starts selected.
         fn map(&self) {
@@ -211,6 +238,12 @@ impl PropertiesWindow {
         imp.notebook.add_css_class("properties-notebook");
         imp.notebook.set_scrollable(false);
         imp.notebook.set_vexpand(true);
+        // The tabs move into the scroller only once they outgrow the screen
+        // (Self::scroll_tabs): a window that holds a scroller no longer
+        // grows to the rows a tab reads after it shows.
+        imp.scroller.set_hscrollbar_policy(gtk::PolicyType::Never);
+        imp.scroller.set_propagate_natural_height(true);
+        imp.scroller.set_vexpand(true);
         column.append(&imp.notebook);
         column.append(&self.footer());
         self.set_child(Some(&column));
@@ -365,6 +398,47 @@ impl PropertiesWindow {
         notebook.append_page(page, Some(&tab));
         notebook.set_show_tabs(notebook.n_pages() > 1);
         notebook.set_show_border(true);
+    }
+
+    /// Keeps the window on the screen beside its parent or opener: tabs
+    /// taller than that screen, as at a large text size, scroll instead of
+    /// pushing OK, Cancel and Apply off it.
+    fn fit_to_screen(&self) {
+        let beside = self.transient_for().or_else(|| self.opener().map(Cast::upcast));
+        let monitor = beside
+            .and_then(|window| window.surface())
+            .and_then(|surface| surface.display().monitor_at_surface(&surface));
+        if let Some(monitor) = monitor {
+            self.fit_to_height(monitor.geometry().height() - 2 * SCREEN_MARGIN);
+        }
+    }
+
+    /// Lets the window be at most `height` tall: taller tabs scroll.
+    pub(crate) fn fit_to_height(&self, height: i32) {
+        self.imp().tallest.set(Some(height));
+    }
+
+    /// Holds the window at its tallest, its tabs scrolling inside it.
+    fn scroll_tabs(&self) {
+        let imp = self.imp();
+        let Some(tallest) = imp.tallest.get() else {
+            return;
+        };
+        let Some(column) = imp.notebook.parent().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        column.remove(&imp.notebook);
+        imp.scroller.set_child(Some(&imp.notebook));
+        column.prepend(&imp.scroller);
+        crate::modal::cap_body(self.upcast_ref(), &imp.scroller, tallest);
+        imp.scroller
+            .set_min_content_height(imp.scroller.max_content_height());
+    }
+
+    /// The scrolling around the tabs.
+    #[cfg(test)]
+    pub(crate) fn scroller(&self) -> gtk::ScrolledWindow {
+        self.imp().scroller.clone()
     }
 
     /// Shows the tab row although there is one tab, as Windows' Edit...
