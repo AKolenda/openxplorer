@@ -340,9 +340,9 @@ struct Session {
     origin_tab: TabId,
     /// The origin let the tab go, or keeps it for good.
     released: Cell<bool>,
-    /// The search the origin showed when it let the tab go from the front,
-    /// which Escape brings back with the tab.
-    origin_search: RefCell<Option<KeptSearch>>,
+    /// What the origin showed of the tab when it let it go, which Escape
+    /// brings back with the tab.
+    origin_view: RefCell<LeftView>,
     /// Where Escape puts the tab back in the origin: before the first of
     /// the tabs after it there still open; `None` when the dragged window
     /// is the origin.
@@ -428,7 +428,7 @@ impl Session {
             tab,
             origin_tab,
             released: Cell::new(back.is_none()),
-            origin_search: RefCell::new(None),
+            origin_view: RefCell::default(),
             back,
             offset,
             grab_share,
@@ -555,7 +555,7 @@ impl Session {
         }
         let origin = self.origin.borrow().upgrade();
         if let Some(origin) = origin {
-            self.origin_search
+            self.origin_view
                 .replace(origin.let_dragged_out_tab_go(self.origin_tab));
         }
     }
@@ -672,7 +672,7 @@ impl Session {
         put_tab_back(
             &dragged,
             origin.as_ref(),
-            (self.tab, self.back.clone(), self.origin_search.take()),
+            (self.tab, self.back.clone(), self.origin_view.take()),
             released,
             self.hidden.get(),
         );
@@ -704,16 +704,26 @@ fn show_dragged_again(dragged: &BrowserWindow, tab: TabId, left: bool, hidden: b
     }
 }
 
+/// What the window a tab was dragged out of as a window showed of it when
+/// it let it go, which Escape brings back with it.
+#[derive(Debug, Clone, Default)]
+pub(super) struct LeftView {
+    /// The search, when the tab was in front.
+    search: Option<KeptSearch>,
+    /// The URI of its item with keyboard focus (TAB-057).
+    focused: Option<String>,
+}
+
 /// Escape, the drag over: tab `tabs.0` of `dragged` goes back to `origin`,
-/// before the first of `tabs.1` still open there, with the search `tabs.2`
-/// `origin` showed when it let the tab go, or only its copy in `dragged` goes while `origin` has
+/// before the first of `tabs.1` still open there, with what `tabs.2` says
+/// `origin` showed of it when it let it go, or only its copy in `dragged` goes while `origin` has
 /// not `released` the tab yet, with `dragged` unless a tab opened there
 /// meanwhile. A `hidden` window that keeps a tab then shows again
 /// ([`show_dragged_again`]), as when `origin` went away during the drag.
 fn put_tab_back(
     dragged: &BrowserWindow,
     origin: Option<&BrowserWindow>,
-    (tab, back, search): (TabId, Option<LaterTabs>, Option<KeptSearch>),
+    (tab, back, view): (TabId, Option<LaterTabs>, LeftView),
     released: bool,
     hidden: bool,
 ) {
@@ -728,7 +738,7 @@ fn put_tab_back(
         true
     } else {
         origin.zip(back).is_some_and(|(origin, later)| {
-            dragged.take_tab_back(origin, tab, (later, search)) == GiveBack::Done
+            dragged.take_tab_back(origin, tab, (later, view)) == GiveBack::Done
         })
     };
     show_dragged_again(dragged, tab, left, hidden);
@@ -901,8 +911,8 @@ impl BrowserWindow {
 
     /// Escape takes tab `tab` of this window, the window it was dragged
     /// out as, back into `origin`, before the first of `back.0` still open
-    /// there when it goes, with the search `back.1` `origin` showed when it
-    /// let the tab go: at once, true, or
+    /// there when it goes, with what `back.1` says `origin` showed of it
+    /// when it let it go: at once, true, or
     /// once neither window is busy (a file operation, a dialog, the tab's
     /// Properties), the tab held meanwhile, so whatever opened during the
     /// drag, Escape puts the tab back where it was (TAB-035). How it went
@@ -911,7 +921,7 @@ impl BrowserWindow {
         &self,
         origin: &BrowserWindow,
         tab: TabId,
-        back: (LaterTabs, Option<KeptSearch>),
+        back: (LaterTabs, LeftView),
     ) -> GiveBack {
         let gave = self.give_tab_back(origin, tab, &back);
         if gave != GiveBack::Waits {
@@ -937,13 +947,13 @@ impl BrowserWindow {
     }
 
     /// Gives tab `tab` back to `origin` when neither window is busy, before
-    /// the first of `later` still open there, with the search `search`
-    /// `origin` showed when it let the tab go.
+    /// the first of `later` still open there, with the search and the
+    /// current item `view` says `origin` showed of it when it let it go.
     fn give_tab_back(
         &self,
         origin: &BrowserWindow,
         tab: TabId,
-        (later, search): &(LaterTabs, Option<KeptSearch>),
+        (later, view): &(LaterTabs, LeftView),
     ) -> GiveBack {
         if self.imp().session.borrow().tab(tab).is_none() {
             return GiveBack::Gone;
@@ -963,7 +973,11 @@ impl BrowserWindow {
         match self.hand_over_tab(tab, origin, before) {
             Ok(()) => {
                 self.release_moved_tab(tab);
-                origin.restore_search(search.clone());
+                if let Some(back) = origin.imp().session.borrow_mut().active_mut() {
+                    // Its first listing gives it keyboard focus.
+                    back.focused.clone_from(&view.focused);
+                }
+                origin.restore_search(view.search.clone());
                 GiveBack::Done
             }
             Err(_) => GiveBack::Gone,
@@ -971,14 +985,19 @@ impl BrowserWindow {
     }
 
     /// Lets tab `id`, dragged out as a window, go from this one. Returns
-    /// the search shown when the tab was in front, which the tab beside it
-    /// takes, emptying the search box.
-    fn let_dragged_out_tab_go(&self, id: TabId) -> Option<KeptSearch> {
+    /// what it showed of the tab: the search shown when the tab was in
+    /// front, which the tab beside it takes, emptying the search box, and
+    /// its current item, which the window it moves to does not get.
+    fn let_dragged_out_tab_go(&self, id: TabId) -> LeftView {
         self.tab_strip().end_drag_now();
-        let was_in_front = self.imp().session.borrow().is_active(id);
+        let (was_in_front, focused) = {
+            let session = self.imp().session.borrow();
+            let focused = session.tab(id).and_then(|tab| tab.focused.clone());
+            (session.is_active(id), focused)
+        };
         let search = self.kept_search().filter(|_| was_in_front);
         self.release_moved_tab(id);
-        search
+        LeftView { search, focused }
     }
 
     /// A new window with tab `id` of this one, at this window's size, shown
@@ -1582,7 +1601,7 @@ mod tests {
         let tab = dragged.imp().session.borrow().active_id().expect("the tab");
         assert!(test.window.begin_test_write(), "the window it left is busy");
 
-        dragged.take_tab_back(&test.window, tab, (later, None));
+        dragged.take_tab_back(&test.window, tab, (later, LeftView::default()));
         wait_for(Duration::from_millis(300));
         let waited = (test.window.tab_count(), dragged.window_drag_holds(tab));
         dragged.close_tab(tab);
@@ -1646,6 +1665,58 @@ mod tests {
         );
     }
 
+    /// Escape takes a torn-out tab back with the item that had keyboard
+    /// focus as its current one, not the selected item: the window it was
+    /// dragged out as never had it.
+    ///
+    /// parity: TAB-035, TAB-057
+    #[gtk::test]
+    fn escape_takes_the_tab_back_with_its_current_item() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("a folder");
+        test.wait_for_listing("the second tab");
+        let moved = test.window.imp().session.borrow().tabs()[0].id;
+        test.window.switch_tab(moved);
+        // Its saved current item gets keyboard focus first.
+        crate::test_support::harness::wait_for_frames(&test.window, 3);
+        let pane = test.window.folder_pane();
+        pane.focus_view();
+        test.window.folder_model().select_only(0);
+        pane.reveal(2);
+        wait_until("the current item", || pane.focused_position() == Some(2));
+        let current = test.window.folder_model().name_at(2);
+        let selected = test.selected_names();
+        let later = test.window.tabs_after(moved);
+        // Not shown, so the window it left keeps keyboard focus in its
+        // list, as when Escape brings that window to the front again.
+        let dragged = test.window.detach_tab(moved).expect("a window for the tab");
+        let _opened = OpenedWindows::only(&[&test.window]);
+        let view = test.window.let_dragged_out_tab_go(moved);
+        let tab = dragged.imp().session.borrow().active_id().expect("the tab");
+
+        put_tab_back(
+            &dragged,
+            Some(&test.window),
+            (tab, Some(later), view),
+            true,
+            false,
+        );
+        // Never shown, so closing it would not take it away.
+        dragged.destroy();
+        let current_name = || {
+            let pane = test.window.folder_pane();
+            pane.focused_position()
+                .and_then(|position| pane.model().name_at(position))
+        };
+        wait_until("its current item", || current_name() == current);
+
+        assert_eq!(test.window.current_uri(), Some(fixture.uri()), "back in front");
+        assert_eq!(test.selected_names(), selected, "with its selection");
+    }
+
     /// Escape after the tab that followed the torn-out tab closed puts it
     /// back before the next tab still open there, where it was, not at the
     /// end of the row.
@@ -1681,7 +1752,7 @@ mod tests {
         put_tab_back(
             &dragged,
             Some(&test.window),
-            (tab, Some(later), None),
+            (tab, Some(later), LeftView::default()),
             true,
             false,
         );
@@ -1726,7 +1797,13 @@ mod tests {
         let tab = dragged.imp().session.borrow().active_id().expect("the tab");
         dragged.set_visible(false);
 
-        put_tab_back(&dragged, None, (tab, Some(later), None), true, true);
+        put_tab_back(
+            &dragged,
+            None,
+            (tab, Some(later), LeftView::default()),
+            true,
+            true,
+        );
 
         assert!(dragged.is_visible(), "the dragged window shows again");
         assert_eq!(dragged.tab_count(), 1, "with its tab");
@@ -1776,7 +1853,13 @@ mod tests {
         dragged.add_tab(&fixture.uri()).expect("a folder");
         dragged.set_visible(false);
 
-        put_tab_back(&dragged, Some(&test.window), (tab, Some(later), None), true, true);
+        put_tab_back(
+            &dragged,
+            Some(&test.window),
+            (tab, Some(later), LeftView::default()),
+            true,
+            true,
+        );
 
         assert_eq!(test.window.tab_count(), 2, "the tab went back");
         assert!(dragged.is_visible(), "the dragged window shows again");
@@ -1807,7 +1890,7 @@ mod tests {
         put_tab_back(
             &dragged,
             Some(&test.window),
-            (tab, Some(later), None),
+            (tab, Some(later), LeftView::default()),
             false,
             true,
         );

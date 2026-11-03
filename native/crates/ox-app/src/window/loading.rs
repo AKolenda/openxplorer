@@ -459,18 +459,21 @@ impl BrowserWindow {
 
     /// Puts the view back where a moved tab (TAB-039) or Back and Forward
     /// (NAV-008) left it, now that its items are listed: the scroll
-    /// position, and, while the list has keyboard focus, the first
-    /// selected item as the current one.
+    /// position, and, while the list has keyboard focus, the item it had
+    /// as the current one, or else the first selected item.
     fn restore_scroll_after_listing(&self, id: TabId) {
-        let scroll = {
+        let (scroll, focused) = {
             let mut session = self.imp().session.borrow_mut();
-            session
-                .tab_mut(id)
-                .and_then(|tab| tab.scroll_after_listing.take())
+            let Some(tab) = session.tab_mut(id) else { return };
+            (tab.scroll_after_listing.take(), tab.focused.clone())
         };
         let Some(scroll) = scroll else { return };
         let pane = self.folder_pane();
-        if let (true, Some(current)) = (pane.view_has_focus(), pane.model().first_selected()) {
+        let model = pane.model();
+        let current = focused
+            .and_then(|uri| model.position_of_uri(&uri))
+            .or_else(|| model.first_selected());
+        if let (true, Some(current)) = (pane.view_has_focus(), current) {
             pane.focus_item(current);
         }
         pane.restore_scroll_position(scroll);
