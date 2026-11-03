@@ -52,11 +52,15 @@ impl BusyClock {
         self.handing_over = false;
     }
 
-    /// Keeps the clock in step with whether the tab is `busy`: a tab made
-    /// busy without [`Self::start`] counts from now.
+    /// Keeps the clock in step with whether the tab is `busy`: a tab seen
+    /// idle forgets its time, unless a lookup is handing over to its
+    /// listing, and a tab made busy without [`Self::start`] counts from
+    /// now.
     pub(crate) fn follow(&mut self, busy: bool, now: Instant) {
-        if busy && self.since.is_none() {
-            self.since = Some(now);
+        if busy {
+            self.since.get_or_insert(now);
+        } else if !self.handing_over {
+            self.since = None;
         }
     }
 
@@ -121,12 +125,24 @@ mod tests {
     }
 
     #[test]
-    fn a_tab_made_busy_without_a_start_counts_from_then() {
+    fn a_tab_seen_busy_or_idle_without_a_start_follows_it() {
         let start = Instant::now();
         let mut clock = BusyClock::default();
         clock.follow(false, start);
         assert!(!clock.is_slow(true, start + APPEARANCE_DELAY));
         clock.follow(true, start);
         assert!(clock.is_slow(true, start + APPEARANCE_DELAY));
+
+        // Seen idle, it forgets that time.
+        clock.follow(false, start + APPEARANCE_DELAY);
+        let again = start + APPEARANCE_DELAY * 2;
+        clock.follow(true, again);
+        assert!(!clock.is_slow(true, again), "busy again counts anew");
+
+        // Not while a lookup hands over to its listing.
+        clock.hand_over();
+        clock.follow(false, again + APPEARANCE_DELAY);
+        clock.start(false, again + APPEARANCE_DELAY);
+        assert!(clock.is_slow(true, again + APPEARANCE_DELAY));
     }
 }
