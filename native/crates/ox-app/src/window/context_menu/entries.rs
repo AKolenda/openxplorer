@@ -131,7 +131,7 @@ fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> Menu
 /// in new window (TAB-028) and Pin to Quick access, and for a search
 /// result Open file location (SRCH-015), also in a new tab or window
 /// (SRCH-016).
-fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
+fn open_group(facts: &ItemFacts, style: MenuStyle) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
     let open = item(
         ox_core::i18n::gettext_static("Open"),
@@ -147,7 +147,10 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     if facts.shape == ItemShape::ZipArchive {
         entries.extend(extraction_items(facts));
     }
-    entries.extend(application_items(facts));
+    match style {
+        MenuStyle::Classic => entries.extend(application_items(facts)),
+        MenuStyle::Compact => entries.extend(compact_application_items(facts)),
+    }
     if facts.disk_tool == Some(DiskTool::MountImage) {
         let mount = MenuItem::with_text_target(
             &ox_core::i18n::gettext("Mount disk image"),
@@ -276,6 +279,52 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     entries
 }
 
+/// The compact menu's applications, as Windows 11 Explorer's: one "Open
+/// with" submenu holding the item's applications and editors and "Choose
+/// another app" (Open with…), or "Open with…" alone when there are none.
+/// A folder's "Open in Terminal" sits above "Show more options"
+/// ([`compact_item_menu`]); a file's "Open containing folder in Terminal"
+/// is in the classic menu.
+fn compact_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let is_folder = facts.shape == ItemShape::Folder;
+    let mut entries = Vec::new();
+    let mut choices: Vec<MenuEntry> = facts
+        .applications
+        .iter()
+        .map(|application| for_one_item(open_with_application(application), facts, true).into())
+        .collect();
+    for editor in &facts.editors {
+        let label = ox_core::i18n::format_message("Open in {name}", &[("name", &editor.name)]);
+        let open_in_editor =
+            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
+                .with_application_icon(editor.icon.as_deref());
+        choices.push(for_one_item(open_in_editor, facts, true).into());
+    }
+    if choices.is_empty() {
+        let label = if is_folder {
+            ox_core::i18n::gettext_static("Open folder with…")
+        } else {
+            ox_core::i18n::gettext_static("Open with…")
+        };
+        entries.push(for_one_item(item(label, Icon::Apps, WindowAction::OpenWith), facts, true).into());
+    } else {
+        let another = item(
+            ox_core::i18n::gettext_static("Choose another app"),
+            Icon::Apps,
+            WindowAction::OpenWith,
+        );
+        choices.extend([MenuEntry::Divider, for_one_item(another, facts, true).into()]);
+        let open_with = MenuItem::submenu(
+            ox_core::i18n::gettext_static("Open with"),
+            Icon::Apps,
+            WindowAction::OpenWith,
+            choices,
+        );
+        entries.push(for_one_item(open_with, facts, true).into());
+    }
+    entries
+}
+
 /// Cut, Copy, Paste, Rename and Delete, with their shortcuts; their
 /// actions decide when they are enabled. On one folder, Paste pastes into
 /// it, as Explorer's does and Dolphin's "Paste into folder" (CMD-019).
@@ -374,16 +423,120 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         Icon::History,
         WindowAction::PreviousVersions,
     );
-    let properties = item(
+    entries.push(for_one_item(versions, facts, false).into());
+    // Properties describe several items together (PROP-002).
+    entries.push(properties_item());
+    entries
+}
+
+/// Properties, of the selection or of the folder.
+fn properties_item() -> MenuEntry {
+    item(
         ox_core::i18n::gettext_static("Properties"),
         Icon::Info,
         WindowAction::Properties,
     )
-    .with_shortcut("Alt+Enter");
-    entries.push(for_one_item(versions, facts, false).into());
-    // Properties describe several items together (PROP-002).
-    entries.push(properties.into());
-    entries
+    .with_shortcut("Alt+Enter")
+    .into()
+}
+
+/// "Show more options", the compact menu's last item, which opens the
+/// classic menu in its place (Shift+F10).
+fn show_more_options_item() -> MenuEntry {
+    item(
+        ox_core::i18n::gettext_static("Show more options"),
+        Icon::MoreHorizontal,
+        WindowAction::ShowMoreOptions,
+    )
+    .with_shortcut("Shift+F10")
+    .into()
+}
+
+/// The submenus of the folder's compact menu: the command bar's View,
+/// Sort and New menus and Sort's Group by.
+pub(crate) struct BackgroundSubmenus {
+    /// View.
+    pub view: Vec<MenuEntry>,
+    /// Sort by.
+    pub sort: Vec<MenuEntry>,
+    /// Group by.
+    pub group: Vec<MenuEntry>,
+    /// New.
+    pub new: Vec<MenuEntry>,
+}
+
+/// The Windows 11 style of the folder's own menu, in the order of
+/// Explorer's compact menu on blank space: View, Sort by, Group by and
+/// Refresh; Paste and Undo; New; Properties; Open in Terminal; then "Show
+/// more options" for the rest (CMD-011, CMD-012). View, Sort by, Group by
+/// and New open `submenus` in place.
+pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+    let BackgroundSubmenus {
+        view,
+        sort,
+        group,
+        new,
+    } = submenus;
+    vec![
+        MenuItem::submenu(
+            ox_core::i18n::gettext_static("View"),
+            Icon::Grid,
+            WindowAction::ShowViewMenu,
+            view,
+        )
+        .into(),
+        MenuItem::submenu(
+            ox_core::i18n::gettext_static("Sort by"),
+            Icon::ArrowSort,
+            WindowAction::ShowSortMenu,
+            sort,
+        )
+        .into(),
+        MenuItem::submenu(
+            ox_core::i18n::gettext_static("Group by"),
+            Icon::TextBulletList,
+            WindowAction::GroupBy,
+            group,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Refresh"),
+            Icon::ArrowClockwise,
+            WindowAction::Refresh,
+        )
+        .with_shortcut("F5")
+        .into(),
+        MenuEntry::Divider,
+        item(
+            ox_core::i18n::gettext_static("Paste"),
+            Icon::ClipboardPaste,
+            WindowAction::Paste,
+        )
+        .with_shortcut("Ctrl+V")
+        .into(),
+        item(undo_label, Icon::ArrowUndo, WindowAction::Undo)
+            .with_shortcut("Ctrl+Z")
+            .into(),
+        MenuEntry::Divider,
+        MenuItem::submenu(
+            ox_core::i18n::gettext_static("New"),
+            Icon::Add,
+            WindowAction::ShowNewMenu,
+            new,
+        )
+        .into(),
+        MenuEntry::Divider,
+        properties_item(),
+        MenuEntry::Divider,
+        item(
+            ox_core::i18n::gettext_static("Open in Terminal"),
+            Icon::WindowConsole,
+            WindowAction::OpenInTerminal,
+        )
+        .into(),
+        MenuEntry::Divider,
+        show_more_options_item(),
+    ]
 }
 
 /// The menu of a file or folder, in `style` (`entryMenu`).
@@ -395,21 +548,29 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
 }
 
 /// The Windows 11 style: the edit commands in the strip, the Open group,
-/// Copy as path, the details and "Show more options" (CMD-010).
+/// Compress, Copy as path, Properties and "Show more options" (CMD-010),
+/// as Explorer's compact menu lists them. Duplicate, Calculate folder
+/// size, Analyse disk usage and Previous versions are in the classic menu
+/// behind it.
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
-    let mut entries = open_group(facts);
-    entries.push(duplicate_item());
-    entries.push(copy_path_item());
+    let mut entries = open_group(facts, MenuStyle::Compact);
     entries.push(compress_item());
+    entries.push(copy_path_item());
     entries.push(MenuEntry::Divider);
-    entries.extend(details_group(facts));
+    // Properties describe several items together (PROP-002).
+    entries.push(properties_item());
     entries.push(MenuEntry::Divider);
-    let more = item(
-        ox_core::i18n::gettext_static("Show more options"),
-        Icon::MoreHorizontal,
-        WindowAction::ShowMoreOptions,
-    );
-    entries.push(more.with_shortcut("Shift+F10").into());
+    // A folder's Terminal sits where the folder's own compact menu has it.
+    if facts.shape == ItemShape::Folder {
+        let terminal = item(
+            ox_core::i18n::gettext_static("Open in Terminal"),
+            Icon::WindowConsole,
+            WindowAction::OpenInTerminal,
+        );
+        entries.push(for_one_item(terminal, facts, true).into());
+        entries.push(MenuEntry::Divider);
+    }
+    entries.push(show_more_options_item());
     ContextMenu {
         entries,
         strip: edit_items(facts).to_vec(),
@@ -420,7 +581,7 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
 /// entry and an SMB item's Sign out (CMD-009).
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
-    let mut entries = open_group(facts);
+    let mut entries = open_group(facts, MenuStyle::Classic);
     entries.push(MenuEntry::Divider);
     entries.extend([cut.into(), copy.into(), paste.into(), MenuEntry::Divider]);
     entries.extend([
@@ -904,6 +1065,35 @@ mod tests {
         assert!(disabled_for_several.contains(&"Open in Visual Studio Code".to_owned()));
     }
 
+    /// In the compact menu the applications and editors go into one "Open
+    /// with" submenu ending with "Choose another app", as Windows 11
+    /// Explorer's, and a file's Terminal entry stays in the classic menu.
+    ///
+    /// parity: CMD-010, OPEN-013
+    #[test]
+    fn the_compact_menu_keeps_the_applications_in_open_with() {
+        let code = EditorShortcut {
+            id: "code.desktop".to_owned(),
+            name: "Visual Studio Code".to_owned(),
+            icon: None,
+        };
+        let facts = ItemFacts {
+            editors: vec![code],
+            ..file()
+        };
+        let entries = item_menu(&facts, MenuStyle::Compact).entries;
+        let names = labels(&entries);
+        assert_eq!(names[..2], ["Open", "Open with"], "{names:?}");
+        assert!(!names.iter().any(|name| name.contains("Terminal")), "{names:?}");
+        let MenuEntry::Item(open_with) = &entries[1] else {
+            panic!("Open with is an item");
+        };
+        assert_eq!(
+            labels(&open_with.submenu),
+            ["Open in Visual Studio Code", "-", "Choose another app"]
+        );
+    }
+
     /// An editor's item carries the editor's desktop ID for its icon, and
     /// every item a menu disables says why.
     ///
@@ -1026,18 +1216,57 @@ mod tests {
             labels(&menu.entries),
             [
                 "Open",
-                "Open in Terminal",
                 "Open folder with…",
                 "Open in new tab",
                 "Open in new window",
                 "Pin to Quick access",
-                "Duplicate",
-                "Copy as path",
                 "Compress to ZIP file",
+                "Copy as path",
                 "-",
-                "Calculate folder size",
-                "Previous versions",
                 "Properties",
+                "-",
+                "Open in Terminal",
+                "-",
+                "Show more options",
+            ]
+        );
+    }
+
+    /// The folder's compact menu lists what Explorer's does on blank
+    /// space and ends with "Show more options", which opens the classic
+    /// one with everything else; View, Sort by and New are submenus.
+    ///
+    /// parity: CMD-010, CMD-011
+    #[test]
+    fn the_compact_background_menu_ends_with_show_more_options() {
+        let sort = vec![item("Name", Icon::ArrowSort, WindowAction::Sort).into()];
+        let submenus = BackgroundSubmenus {
+            view: Vec::new(),
+            sort: sort.clone(),
+            group: Vec::new(),
+            new: Vec::new(),
+        };
+        let menu = compact_background_menu("Undo", submenus);
+        let MenuEntry::Item(sort_by) = &menu[1] else {
+            panic!("Sort by is an item");
+        };
+        assert_eq!(sort_by.submenu, sort, "Sort by opens the sort menu in place");
+        assert_eq!(
+            labels(&menu),
+            [
+                "View",
+                "Sort by",
+                "Group by",
+                "Refresh",
+                "-",
+                "Paste",
+                "Undo",
+                "-",
+                "New",
+                "-",
+                "Properties",
+                "-",
+                "Open in Terminal",
                 "-",
                 "Show more options",
             ]

@@ -11,7 +11,9 @@ use std::os::unix::net::UnixListener;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, URI_LIST};
+use ox_core::settings::ContextMenu;
 
+use super::context_menus::choose_menu_style;
 use super::file_ops_support::{is_enabled, open_dialog, press_shortcut, select_names, wait_for_no_dialog};
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
 
@@ -95,6 +97,9 @@ fn copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy() {
 fn paste_into_folder_pastes_into_the_selected_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
     select_names(&test, &["Documents"]);

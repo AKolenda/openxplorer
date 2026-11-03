@@ -61,11 +61,14 @@ pub(crate) fn progress_text(
     let counted = ox_core::i18n::format_message(
         "{value1}/{total} · {name} · {value3} · {group_thousands} files",
         &[
-            ("value1", &(position.index + 1).to_string()),
-            ("total", &position.total.to_string()),
+            (
+                "value1",
+                &ox_core::format::group_digits((position.index + 1) as u64),
+            ),
+            ("total", &ox_core::format::group_digits(position.total as u64)),
             ("name", name),
             ("value3", &format::pretty_bytes(size.bytes)),
-            ("group_thousands", &group_thousands(size.files)),
+            ("group_thousands", &ox_core::format::group_digits(size.files)),
         ],
     );
     format!("{lead}{counted}")
@@ -78,13 +81,13 @@ pub(crate) fn end_text(end: RunEnd) -> String {
         RunEnd::Cancelled => ox_core::i18n::gettext_static("Size scan cancelled").to_owned(),
         RunEnd::Finished { complete, partial: 0 } => ox_core::i18n::format_message(
             "Size scan finished · {complete} complete",
-            &[("complete", &complete.to_string())],
+            &[("complete", &ox_core::format::group_digits(complete as u64))],
         ),
         RunEnd::Finished { complete, partial } => ox_core::i18n::format_message(
             "Size scan finished · {complete} complete · {partial} partial/unavailable",
             &[
-                ("complete", &complete.to_string()),
-                ("partial", &partial.to_string()),
+                ("complete", &ox_core::format::group_digits(complete as u64)),
+                ("partial", &ox_core::format::group_digits(partial as u64)),
             ],
         ),
     };
@@ -92,20 +95,6 @@ pub(crate) fn end_text(end: RunEnd) -> String {
         "{hint} · Logical bytes; recalculate after changes",
         &[("hint", &hint)],
     )
-}
-
-/// `1234567` as `1,234,567`, as `toLocaleString` writes it in English.
-fn group_thousands(value: u64) -> String {
-    let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.chars().enumerate() {
-        let remaining = digits.len() - index;
-        if index > 0 && remaining.is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
 }
 
 mod imp {
@@ -237,13 +226,15 @@ mod tests {
         };
         let position = RunPosition { index: 0, total: 3 };
 
+        // The count is grouped as the numeric locale groups it.
+        let files = ox_core::format::group_digits(1_024);
         assert_eq!(
             progress_text(position, "Projects", &size, false),
-            "Scanning folder size · 1/3 · Projects · 1.0 MB · 1,024 files"
+            format!("Scanning folder size · 1/3 · Projects · 1.0 MB · {files} files")
         );
         assert_eq!(
             progress_text(position, "Projects", &size, true),
-            "Cancelling… 1/3 · Projects · 1.0 MB · 1,024 files"
+            format!("Cancelling… 1/3 · Projects · 1.0 MB · {files} files")
         );
     }
 

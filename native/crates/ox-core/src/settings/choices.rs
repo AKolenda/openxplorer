@@ -101,9 +101,10 @@ impl View {
 #[serde(rename_all = "lowercase")]
 pub enum ContextMenu {
     /// The classic, full Windows 10 menu.
-    #[default]
     Win10,
-    /// The compact Windows 11 menu.
+    /// The compact Windows 11 menu, as Windows 11 Explorer opens it, with
+    /// the classic one behind "Show more options".
+    #[default]
     Win11,
 }
 
@@ -131,9 +132,9 @@ impl ContextMenu {
 #[serde(rename_all = "lowercase")]
 pub enum ZipOpening {
     /// In the tab, like a folder, as Windows Explorer opens it.
-    Folder,
-    /// In the "Compressed folder" window over the tab, as before.
     #[default]
+    Folder,
+    /// In the "Compressed folder" window over the tab.
     Window,
 }
 
@@ -154,13 +155,13 @@ impl ZipOpening {
         Self::ALL.into_iter().find(|choice| choice.as_str() == key)
     }
 
-    /// True for the window, which is not stored.
+    /// True for the folder, the default, which is not stored.
     #[expect(
         clippy::trivially_copy_pass_by_ref,
         reason = "serde passes the field by reference"
     )]
-    pub(super) fn is_window(&self) -> bool {
-        *self == ZipOpening::Window
+    pub(super) fn is_folder(&self) -> bool {
+        *self == ZipOpening::Folder
     }
 }
 
