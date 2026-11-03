@@ -90,6 +90,17 @@ impl NumberedRename {
     }
 }
 
+impl NumberedRename {
+    /// Each item with its new name for `base`, numbered from (1) as when
+    /// no number is taken: what the extension question looks at.
+    pub fn numbered_names<'a>(&'a self, base: &'a str) -> impl Iterator<Item = (&'a BatchItem, String)> + 'a {
+        self.items
+            .iter()
+            .zip(1..)
+            .map(move |(item, number)| (item, numbered_name(base, number, item)))
+    }
+}
+
 /// `item`'s new name with `number`: "Holiday (2).jpg".
 fn numbered_name(base: &str, number: u32, item: &BatchItem) -> String {
     let extension = if item.is_dir {

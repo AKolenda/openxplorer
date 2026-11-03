@@ -375,7 +375,9 @@ impl BrowserWindow {
                 return;
             }
         };
-        if !self.confirm_hiding_rename(&target.name, &base).await {
+        if !self.confirm_numbered_extension(&batch, &base).await
+            || !self.confirm_hiding_rename(&target.name, &base).await
+        {
             editor.set_sensitive(true);
             editor.grab_focus();
             return;

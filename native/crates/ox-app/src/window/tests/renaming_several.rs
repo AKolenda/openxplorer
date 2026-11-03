@@ -12,7 +12,7 @@ use gtk::{gdk, glib};
 
 use super::file_ops_support::{
     assert_ended_without_a_message, dialog_over, is_renaming_in_place, name_editor, open_dialog,
-    select_names, text_field,
+    select_names, text_field, wait_for_no_dialog,
 };
 use crate::dialog::Dialog;
 use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
@@ -130,6 +130,38 @@ fn several_selected_items_get_the_typed_name_numbered_in_view_order() {
     });
     assert_ended_without_a_message(&test);
     assert_eq!(content(&fixture, "Plan (4).txt"), "ten");
+}
+
+/// A dotted name gives a file without an extension one ("README" becomes
+/// "Plan.v1 (2)"), so the extension question asks first, as for one item.
+/// Cancel keeps the field with the typed name and renames nothing.
+///
+/// parity: OPS-050, OPS-049
+#[gtk::test]
+fn a_file_without_an_extension_gaining_one_asks_first() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("README"), "read me").expect("the file is written");
+    let test = TestWindow::open(&fixture.uri());
+    select_with_focus(&test, &["Notes 2.txt", "README"], "Notes 2.txt");
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Plan.v1.txt");
+    field.emit_activate();
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Change the extension?");
+    question.press("Cancel");
+    wait_for_no_dialog(&test);
+    wait_until("the field to come back", || field.is_sensitive());
+    assert!(is_renaming_in_place(&test), "editing goes on");
+    assert_eq!(field.text(), "Plan.v1.txt", "the typed name is kept");
+    assert!(fixture.path("README").is_file());
+    assert!(fixture.path("Notes 2.txt").is_file());
+
+    field.emit_activate();
+    open_dialog(&test).press("Change extension");
+    wait_until("the rename", || fixture.path("Plan.v1 (2)").is_file());
+    assert!(fixture.path("Plan.v1 (1).txt").is_file());
 }
 
 /// A number whose name is taken by an item that is not selected is
