@@ -14,7 +14,8 @@ use crate::window::file_drop::{scroll_step, SCROLL_TICK};
 
 impl TabStrip {
     /// Follows the pointer again whenever the strip scrolls under a tab
-    /// that follows it, by a dwell near an edge or the wheel.
+    /// that follows it, or a stand-in for a tab of another window, by a
+    /// dwell near an edge or the wheel.
     pub(super) fn follow_the_pointer_as_it_scrolls(&self) {
         let strip = self.downgrade();
         self.imp().scroller.hadjustment().connect_value_changed(move |_| {
@@ -26,6 +27,7 @@ impl TabStrip {
                     strip.follow_pointer(id, x);
                 }
             }
+            strip.follow_guest_again();
         });
     }
 

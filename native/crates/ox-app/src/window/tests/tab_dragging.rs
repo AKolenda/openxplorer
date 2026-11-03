@@ -1049,6 +1049,95 @@ fn the_tab_that_comes_to_the_front_during_a_drag_takes_the_focus() {
     assert!(widget_of(first).has_focus(), "the tab now in front has focus");
 }
 
+/// A tab that changed folder while another follows the pointer along the
+/// row keeps its old look until the drag ends, but which tab is in front
+/// still shows: a tab brought to the front by the keyboard afterwards
+/// takes the selected state and the focus, so the arrow keys go on from
+/// it.
+///
+/// parity: ACC-008, TAB-032
+#[gtk::test]
+fn a_tab_shown_by_the_keyboard_during_a_drag_takes_the_focus_after_another_changed_folder() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    test.window.add_tab(&fixture.uri_of("Music")).expect("a folder");
+    test.wait_for_listing("a third tab");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [first, second, third] = tab_ids(&test.window)[..] else {
+        panic!("three tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let widget_of = |id| strip.tab_widget_of(id).expect("a shown tab");
+    test.window.switch_tab(first);
+    widget_of(first).grab_focus();
+    let x = grab_point(&test.window, first);
+
+    strip.grab_tab(first, (x, 10.0));
+    strip.follow_pointer(first, x + 4.0);
+    test.window.switch_tab(second);
+    test.window
+        .navigate(&fixture.uri_of("Pictures"))
+        .expect("the second tab changes folder");
+    test.window.switch_tab(third);
+
+    assert_eq!(strip.live_tab(), Some(first), "the tabs are still laid out live");
+    assert!(
+        widget_of(third).has_css_class("active"),
+        "the third tab shows in front"
+    );
+    assert!(!widget_of(second).has_css_class("active"));
+    assert!(widget_of(third).has_focus(), "the tab now in front has focus");
+}
+
+/// A tab of another window held over a row that does not fit, as the row
+/// scrolls under the pointer: its stand-in follows the pointer to where
+/// the row now is, and lands there.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_stand_in_follows_the_pointer_as_its_row_scrolls() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let strip = test.window.tab_strip();
+    let scroll = strip
+        .tab_list()
+        .parent()
+        .and_downcast::<gtk::Viewport>()
+        .and_then(|viewport| viewport.hadjustment())
+        .expect("the row scrolls sideways");
+    for _ in 0..60 {
+        if scroll.upper() > scroll.page_size() + 300.0 {
+            break;
+        }
+        test.window.add_tab(&fixture.uri()).expect("a folder");
+        test.wait_for_listing("another tab");
+        crate::test_support::harness::wait_for_frames(&test.window, 2);
+    }
+    scroll.set_value(0.0);
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    let ids = tab_ids(&test.window);
+    let view = strip.tab_view(ids[0]).expect("a shown tab");
+    let x = grab_point(&test.window, ids[1]);
+    let place = |landing: Option<crate::window::tab_strip::Landing>| {
+        let before = landing.expect("the stand-in landed").before;
+        before.map_or(ids.len(), |before| {
+            ids.iter().position(|id| *id == before).expect("an open tab")
+        })
+    };
+
+    strip.host_guest(&view, x, 0.0);
+    let unscrolled = place(strip.land_guest());
+    strip.host_guest(&view, x, 0.0);
+    scroll.set_value(scroll.upper() - scroll.page_size());
+    let scrolled = place(strip.land_guest());
+
+    assert!(scroll.value() > 250.0, "the row scrolled");
+    assert!(
+        scrolled > unscrolled + 1,
+        "it lands where the pointer is in the scrolled row: {unscrolled} then {scrolled}"
+    );
+}
+
 /// A point 20 pixels into tab `id`, along the strip.
 fn grab_point(window: &BrowserWindow, id: TabId) -> f64 {
     let strip = window.tab_strip();

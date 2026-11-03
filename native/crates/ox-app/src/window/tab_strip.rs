@@ -117,6 +117,10 @@ mod imp {
         pub(super) waiting_tabs: RefCell<Option<Vec<TabView>>>,
         /// A stand-in for a tab dragged here from another window.
         pub(super) guest: RefCell<Option<gtk::Widget>>,
+        /// Where the pointer holding that stand-in is along the strip, and
+        /// the share of its width it holds, which it follows again as the
+        /// strip scrolls.
+        pub(super) guest_pointer: Cell<Option<(f64, f64)>>,
         /// The tab following the pointer and where the pointer is, along
         /// the strip, which it follows again as the strip scrolls.
         pub(super) pointer: Cell<Option<(TabId, f64)>>,
@@ -208,14 +212,15 @@ impl TabStrip {
         // is in front shows at once.
         if imp.layout.is_live() {
             let had_focus = imp.tab_list.focus_child().is_some();
-            let is_front_only = self.show_front_only(tabs);
+            let shown_front = self.show_front(tabs);
+            let is_front_only = shown_front == Some(true);
             imp.waiting_tabs.replace((!is_front_only).then(|| tabs.to_vec()));
             // A stand-in for a tab dragged in stays the one in front.
-            if is_front_only && imp.guest.borrow().is_some() {
+            if shown_front.is_some() && imp.guest.borrow().is_some() {
                 self.show_own_front(false);
             }
             // The focus goes with the front, as when the strip is drawn anew.
-            if is_front_only && had_focus {
+            if shown_front.is_some() && had_focus {
                 if let Some(front) = self.front_widget() {
                     front.grab_focus();
                 }
@@ -283,23 +288,30 @@ impl TabStrip {
             .map(|(_, widget)| widget.clone())
     }
 
-    /// Shows which of `tabs` is in front, when that is all that changed
-    /// from the tabs shown; true when it was.
-    fn show_front_only(&self, tabs: &[TabView]) -> bool {
+    /// Shows which of `tabs` is in front, when they are the tabs shown, in
+    /// the same order: `Some(true)` when that is all that changed,
+    /// `Some(false)` when a tab's location or title changed too, which
+    /// waits for the drag to end; `None` when other tabs are given.
+    fn show_front(&self, tabs: &[TabView]) -> Option<bool> {
         let mut shown = self.imp().shown.borrow_mut();
-        let is_front_only = shown.len() == tabs.len()
-            && shown
-                .iter()
-                .zip(tabs)
-                .all(|((view, _), tab)| is_same_but_for_front(view, tab));
-        if !is_front_only {
-            return false;
+        let is_same_tabs =
+            shown.len() == tabs.len() && shown.iter().zip(tabs).all(|((view, _), tab)| view.id == tab.id);
+        if !is_same_tabs {
+            return None;
         }
+        let is_front_only = shown
+            .iter()
+            .zip(tabs)
+            .all(|((view, _), tab)| is_same_but_for_front(view, tab));
         for ((view, widget), tab) in shown.iter_mut().zip(tabs) {
             show_in_front(widget, tab.active);
-            *view = tab.clone();
+            if is_front_only {
+                *view = tab.clone();
+            } else {
+                view.active = tab.active;
+            }
         }
-        true
+        Some(is_front_only)
     }
 
     /// The tab at (`x`, `y`) in the strip, if any: where a file drop

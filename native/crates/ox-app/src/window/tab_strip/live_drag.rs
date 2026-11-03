@@ -273,6 +273,7 @@ impl TabStrip {
     /// the strip it is dragged over.
     pub(in crate::window) fn host_guest(&self, view: &super::TabView, x: f64, share: f64) {
         let layout = self.layout();
+        self.imp().guest_pointer.set(Some((x, share)));
         let pointer = self.in_row(x);
         let guest = self.imp().guest.borrow().clone();
         if let Some(guest) = guest {
@@ -305,6 +306,18 @@ impl TabStrip {
         layout.follow_held(pointer, share);
     }
 
+    /// The stand-in for a tab of another window follows the pointer again,
+    /// as the strip scrolled under it.
+    pub(super) fn follow_guest_again(&self) {
+        let guest = self.imp().guest.borrow().clone();
+        let layout = self.layout();
+        if let (Some(guest), Some((x, share))) = (guest, self.imp().guest_pointer.get()) {
+            if layout.dragged().as_ref() == Some(&guest) {
+                layout.follow_held(self.in_row(x), share);
+            }
+        }
+    }
+
     /// Shows this strip's tab in front as in front, or with `shown` false
     /// as any other while a stand-in is.
     pub(super) fn show_own_front(&self, shown: bool) {
@@ -316,6 +329,7 @@ impl TabStrip {
     /// The tab of another window left this strip: its stand-in goes and the
     /// tabs close up.
     pub(in crate::window) fn dismiss_guest(&self) {
+        self.imp().guest_pointer.set(None);
         let Some(guest) = self.imp().guest.take() else {
             return;
         };
@@ -338,6 +352,7 @@ impl TabStrip {
     /// still open, as one may close during the drag; `None` without a
     /// stand-in.
     pub(in crate::window) fn land_guest(&self) -> Option<Landing> {
+        self.imp().guest_pointer.set(None);
         let guest = self.imp().guest.take()?;
         let layout = self.layout();
         let order = layout.live_order().unwrap_or_default();
