@@ -22,6 +22,7 @@ use gio::prelude::*;
 use crate::entry::EntryError;
 use crate::location::normalise;
 use crate::transfer::Cancellation;
+use crate::versions::ProtectedLocations;
 
 /// The permission bits of `unix::mode`.
 const PERMISSION_BITS: u32 = 0o7777;
@@ -305,6 +306,31 @@ impl PermissionRequest {
 /// [`EntryError::Cancelled`]; for Read-only, every item that could not be
 /// changed, by name.
 pub fn apply(uri: &str, request: &PermissionRequest, cancel: &Cancellation) -> Result<(), EntryError> {
+    apply_within(uri, request, cancel, None)
+}
+
+/// [`apply`], except that a recursive Read-only change also skips the
+/// folders `protected` holds: configured and discovered snapshot and backup
+/// collections, which are never changed in place (PROP-024).
+///
+/// # Errors
+///
+/// As [`apply`].
+pub fn apply_outside(
+    uri: &str,
+    request: &PermissionRequest,
+    cancel: &Cancellation,
+    protected: &ProtectedLocations,
+) -> Result<(), EntryError> {
+    apply_within(uri, request, cancel, Some(protected))
+}
+
+fn apply_within(
+    uri: &str,
+    request: &PermissionRequest,
+    cancel: &Cancellation,
+    protected: Option<&ProtectedLocations>,
+) -> Result<(), EntryError> {
     let file = gio::File::for_uri(&normalise(uri)?);
     let info = file.query_info(
         MODE_ATTRIBUTES,
@@ -323,6 +349,7 @@ pub fn apply(uri: &str, request: &PermissionRequest, cancel: &Cancellation) -> R
         top: &file,
         device: optional_device(&info),
         keep_going: matches!(request.mode, ModeChange::ReadOnlyFiles(_)),
+        protected,
         failures: Vec::new(),
     };
     walk.apply_to_item(&file, &info, true)?;
@@ -339,6 +366,8 @@ struct Walk<'a> {
     device: Option<u32>,
     /// Go on past items that cannot be changed (Read-only).
     keep_going: bool,
+    /// The snapshot and backup collections Read-only leaves alone.
+    protected: Option<&'a ProtectedLocations>,
     /// The items that could not be changed, by their path from `top`.
     failures: Vec<String>,
 }
@@ -369,9 +398,10 @@ impl Walk<'_> {
         )))
     }
 
-    /// Whether the folder `info` lies outside what a Read-only change
-    /// reaches: a snapshot collection, or another file system.
-    fn is_excluded(&self, info: &gio::FileInfo) -> bool {
+    /// Whether the folder `child`, described by `info`, lies outside what a
+    /// Read-only change reaches: a snapshot or backup collection, or
+    /// another file system.
+    fn is_excluded(&self, child: &gio::File, info: &gio::FileInfo) -> bool {
         if !self.keep_going || info.file_type() != gio::FileType::Directory {
             return false;
         }
@@ -381,7 +411,10 @@ impl Walk<'_> {
             .is_some_and(|name| crate::sizes::SNAPSHOT_COLLECTION_NAMES.contains(&name));
         let is_mount = info.boolean("unix::is-mountpoint");
         let other_device = self.device.is_some() && optional_device(info) != self.device;
-        is_collection || is_mount || other_device
+        let is_protected = self
+            .protected
+            .is_some_and(|protected| protected.is_protected(child.uri().as_str()));
+        is_collection || is_mount || other_device || is_protected
     }
 
     /// Records that `file` could not be changed.
@@ -456,10 +489,10 @@ impl Walk<'_> {
                 }
                 Err(error) => return Err(error.into()),
             };
-            if self.is_excluded(&child_info) {
+            let child = file.child(child_info.name());
+            if self.is_excluded(&child, &child_info) {
                 continue;
             }
-            let child = file.child(child_info.name());
             match self.apply_to_item(&child, &child_info, false) {
                 Err(EntryError::Cancelled) => return Err(EntryError::Cancelled),
                 Err(_) if self.keep_going => self.record(&child),
@@ -512,6 +545,23 @@ pub async fn apply_in_background(
     match gio::spawn_blocking(move || apply(&uri, &request, &cancel)).await {
         Ok(result) => result,
         // A panicking change is a bug; it surfaces where it is awaited.
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+/// [`apply_outside`] on a GIO worker thread, for the main loop to await.
+///
+/// # Errors
+///
+/// As [`apply`].
+pub async fn apply_outside_in_background(
+    uri: String,
+    request: PermissionRequest,
+    cancel: Cancellation,
+    protected: ProtectedLocations,
+) -> Result<(), EntryError> {
+    match gio::spawn_blocking(move || apply_outside(&uri, &request, &cancel, &protected)).await {
+        Ok(result) => result,
         Err(panic) => std::panic::resume_unwind(panic),
     }
 }
@@ -683,6 +733,53 @@ mod tests {
             "{refusal:?}"
         );
     }
+
+    /// Read-only on a folder leaves a backup collection inside it alone,
+    /// whatever its name, as every other change does (PROP-024).
+    ///
+    /// parity: PROP-003, PROP-024
+    #[test]
+    fn read_only_leaves_a_backup_collection_inside_the_folder_alone() {
+        let root = tempfile::tempdir().expect("a folder");
+        let folder = root.path().join("Projects");
+        fs::create_dir_all(folder.join("history/Monday")).expect("folders");
+        fs::create_dir_all(root.path().join("Live")).expect("the live folder");
+        for file in ["plan.txt", "history/Monday/plan.txt"] {
+            fs::write(folder.join(file), b"p").expect("file");
+            fs::set_permissions(folder.join(file), fs::Permissions::from_mode(0o644)).expect("mode");
+        }
+        let settings = tempfile::tempdir().expect("settings");
+        let versions = crate::versions::PreviousVersions::new(settings.path());
+        versions
+            .configure(
+                &file_uri(&root.path().join("Live")),
+                &file_uri(&folder.join("history")),
+                crate::versions::SnapshotLayout::Direct,
+            )
+            .expect("a backup collection");
+        let request = PermissionRequest {
+            mode: ModeChange::ReadOnlyFiles(true),
+            owner: None,
+            group: None,
+            recursive: true,
+        };
+
+        apply_outside(
+            &file_uri(&folder),
+            &request,
+            &Cancellation::new(),
+            &versions.protected_locations(),
+        )
+        .expect("applies");
+
+        assert_eq!(mode_of(&folder.join("plan.txt")), 0o444);
+        assert_eq!(
+            mode_of(&folder.join("history/Monday/plan.txt")),
+            0o644,
+            "the backup is unchanged"
+        );
+    }
+
     /// Read-only takes every write bit from a file, and from every file
     /// inside a folder while the folders keep theirs; clearing it gives
     /// the owner write again.

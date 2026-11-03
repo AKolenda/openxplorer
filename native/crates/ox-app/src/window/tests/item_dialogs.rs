@@ -845,6 +845,34 @@ fn a_folders_read_only_changed_during_apply_stays_to_apply() {
     );
 }
 
+/// The name and Hidden wait while Apply renames the item, so an edit is
+/// never lost behind the rename, and come back once it is made.
+///
+/// parity: PROP-005
+#[gtk::test]
+fn the_name_waits_while_apply_renames() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let name = name_field(&window);
+    let hidden = check(&general(&window), "Hidden");
+
+    name.set_text("Notes 3.txt");
+    press(&window, "Apply");
+    while window.ok_button().is_sensitive() {
+        glib::MainContext::default().iteration(true);
+    }
+    let waiting = (!name.is_editable(), !hidden.is_sensitive());
+
+    wait_until("the rename", || window.ok_button().is_sensitive());
+    assert_eq!(waiting, (true, true), "the name and Hidden wait");
+    assert!(fixture.path("Notes 3.txt").exists());
+    assert!(name.is_editable() && hidden.is_sensitive(), "they come back");
+    assert_eq!(name.text(), "Notes 3.txt");
+}
+
 /// Read-only is refused on a location registered as a previous version
 /// after the window opened, as Security and renaming refuse it.
 ///

@@ -30,7 +30,7 @@ use gtk::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::location::LocationContext;
-use ox_core::permissions::{apply_in_background, ModeChange, PermissionRequest};
+use ox_core::permissions::{apply_outside_in_background, ModeChange, PermissionRequest};
 use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
@@ -483,7 +483,9 @@ impl GeneralEdits {
                 recursive: self.is_folder,
             };
             let submitted = self.folder_read_only.get();
-            apply_in_background(uri, request, Cancellation::new())
+            // Backups inside a folder are left alone too.
+            let protected = self.versions.protected_locations();
+            apply_outside_in_background(uri, request, Cancellation::new(), protected)
                 .await
                 .map_err(|error| error.to_string())?;
             if self.is_folder {
@@ -509,9 +511,17 @@ impl GeneralEdits {
                 || opener.clone().upcast::<gtk::Window>(),
                 |window| window.clone().upcast(),
             );
-            opener
+            // The name and Hidden wait while the rename runs, so they show
+            // what it made rather than losing an edit made meanwhile.
+            let (editable, can_hide) = (self.name.is_editable(), self.hidden.is_sensitive());
+            self.name.set_editable(false);
+            self.hidden.set_sensitive(false);
+            let renaming = opener
                 .rename_item_at(&parent, &uri, &original, &wanted, is_folder)
-                .await?;
+                .await;
+            self.name.set_editable(editable);
+            self.hidden.set_sensitive(can_hide);
+            renaming?;
             let renamed = gtk::gio::File::for_uri(&uri)
                 .parent()
                 .map(|parent| parent.child(&wanted).uri().to_string());
