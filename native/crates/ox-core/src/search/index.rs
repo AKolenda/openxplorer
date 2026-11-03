@@ -296,8 +296,8 @@ impl SearchIndex {
     /// `search_index.py`): the directory must still be an owned 0700
     /// directory, and the database and its sidecars owned regular files
     /// with one link, so a symlink planted after start-up is refused
-    /// before SQLite follows it. The check runs where SQLite opens a path,
-    /// which reusing a connection does not do again.
+    /// before SQLite follows it. Reusing a connection does not skip that
+    /// check.
     ///
     /// # Errors
     ///
@@ -308,11 +308,14 @@ impl SearchIndex {
             let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
             idle.pop()
         };
+        // Every use re-checks private storage, also one that reuses a
+        // connection: a symlink or a hard link planted after start-up must
+        // be refused before the next read or write, not only at open.
+        private_directory(&self.directory)?;
+        validate_sqlite_files(&self.database)?;
         let connection = if let Some(connection) = idle {
             connection
         } else {
-            private_directory(&self.directory)?;
-            validate_sqlite_files(&self.database)?;
             let connection = Connection::open(&self.database)?;
             connection.busy_timeout(BUSY_TIMEOUT)?;
             connection
