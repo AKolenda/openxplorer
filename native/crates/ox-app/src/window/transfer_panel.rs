@@ -22,10 +22,11 @@
 //! else the items, and never goes back.
 //!
 //! "More details" (the window's toggle) replaces the bar with the speed
-//! graph ([`speed_graph`]) and adds the name of the item handled, with a
-//! thin bar of the file being copied, so a full file bar is never read
-//! as the batch finishing (OPS-020), the time remaining and the items
-//! remaining ([`rate`]). Without a name, the line shows the worker's own
+//! graph ([`speed_graph`]) and adds the name of the item handled, the
+//! time remaining and the items remaining ([`rate`]). As in Windows there
+//! is no bar of the file being copied: a file's own progress never moves
+//! the action's, so a full file is never read as the batch finishing
+//! (OPS-020). Without a name, the line shows the worker's own
 //! report ("Checking free space…", "Extracting a.txt").
 //!
 //! Pause turns the bar and graph the caution colour and becomes Resume,
@@ -126,9 +127,6 @@ mod imp {
         /// "Name: a.txt", or the worker's report.
         #[template_child]
         pub(super) name_label: TemplateChild<gtk::Label>,
-        /// How far the file being copied is; hidden between files.
-        #[template_child]
-        pub(super) file_bar: TemplateChild<gtk::ProgressBar>,
         /// "Time remaining: About 25 seconds".
         #[template_child]
         pub(super) time_label: TemplateChild<gtk::Label>,
@@ -292,7 +290,7 @@ impl TransferPanel {
     }
 
     /// Shows the worker's report: its label, and its fraction, clamped to
-    /// 0–1 as `updateTransfer` does, on the batch bar or the file bar.
+    /// 0–1 as `updateTransfer` does, on the action's bar, never a file's.
     /// The label is the details' line, unless the report names its item,
     /// and the bar's value text. Byte reports give the speed, the time
     /// and the items remaining. After Cancel the action keeps saying
@@ -313,17 +311,12 @@ impl TransferPanel {
             imp.items.set(Some(items));
             self.count_items(items.total);
         }
-        match progress.scope {
-            ProgressScope::Batch => {
-                if !imp.by_bytes.get() || progress.fraction >= 1.0 {
-                    self.advance(progress.fraction.clamp(0.0, 1.0));
-                }
-            }
-            ProgressScope::File => imp.file_bar.set_fraction(progress.fraction.clamp(0.0, 1.0)),
+        // A file's own fraction moves nothing: a full file is never shown
+        // as the action finishing (OPS-020).
+        let batch = progress.scope == ProgressScope::Batch;
+        if batch && (!imp.by_bytes.get() || progress.fraction >= 1.0) {
+            self.advance(progress.fraction.clamp(0.0, 1.0));
         }
-        imp.file_bar.set_visible(progress.scope == ProgressScope::File);
-        imp.file_bar
-            .update_property(&[gtk::accessible::Property::ValueText(label)]);
         imp.progress_bar
             .update_property(&[gtk::accessible::Property::ValueText(label)]);
         let name = progress.name.as_deref().map_or_else(
@@ -571,13 +564,10 @@ impl TransferPanel {
         self.imp().header_label.text().to_string()
     }
 
-    /// The action's progress, and the file bar's while it shows, for
-    /// tests.
+    /// The action's progress, for tests.
     #[cfg(test)]
-    pub(crate) fn fractions(&self) -> (f64, Option<f64>) {
-        let imp = self.imp();
-        let file = imp.file_bar.get_visible().then(|| imp.file_bar.fraction());
-        (imp.fraction.get(), file)
+    pub(crate) fn fraction(&self) -> f64 {
+        self.imp().fraction.get()
     }
 
     /// Presses Cancel, for tests.
@@ -795,18 +785,39 @@ mod tests {
         for (animations, written) in [(false, 400), (true, 700)] {
             settings.set_gtk_enable_animations(animations);
             panel.show_progress(&bytes("a.txt", written, 1000, 0, 2));
-            let (line, target) = imp.graph.line_offsets();
-            seen.push((
-                imp.progress_bar.fraction(),
-                imp.graph.reached_columns(),
-                line == target,
-            ));
+            seen.push((imp.progress_bar.fraction(), imp.graph.shown().0));
         }
         settings.set_gtk_enable_animations(before);
         panel.finish();
         window.destroy();
 
-        assert_eq!(seen, [(0.4, 40, true), (0.7, 70, true)]);
+        assert_eq!(seen, [(0.4, 0.4), (0.7, 0.7)]);
+    }
+
+    /// The details have no bar of the file being copied, as Windows has
+    /// none: the graph is the action's only bar there, and the action's
+    /// only other bar is the plain one of Fewer details.
+    ///
+    /// parity: OPS-020
+    #[gtk::test]
+    fn the_details_have_no_current_file_bar() {
+        fn bars(widget: &gtk::Widget) -> usize {
+            let own = usize::from(widget.is::<gtk::ProgressBar>());
+            let mut count = own;
+            let mut child = widget.first_child();
+            while let Some(next) = child {
+                count += bars(&next);
+                child = next.next_sibling();
+            }
+            count
+        }
+        let panel: TransferPanel = glib::Object::new();
+        panel.start(TransferKind::Files, "Preparing copy…", Cancellation::new());
+        panel.show_details(true);
+        panel.show_progress(&bytes("a.txt", 5, 10, 0, 1));
+
+        assert_eq!(bars(panel.upcast_ref()), 1, "only the action's own bar");
+        panel.finish();
     }
 
     /// Pause becomes Resume, for the eye and for assistive technologies,

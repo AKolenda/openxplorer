@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[gtk::test]
-    fn queued_reports_preserve_both_bars_and_do_not_replace_a_new_job() {
+    fn queued_reports_keep_the_latest_of_each_and_do_not_replace_a_new_job() {
         let panel: TransferPanel = glib::Object::new();
         let cancel = Cancellation::new();
         panel.start(TransferKind::Files, "Copying", cancel.clone());
@@ -176,7 +176,10 @@ mod tests {
         report(batch("Batch", 0.25));
         report(file(1));
         wait_until("the latest file report", || panel.status_text() == file(1).label);
-        assert_eq!(panel.fractions(), (0.25, Some(0.5)));
+        assert!(
+            (panel.fraction() - 0.25).abs() < f64::EPSILON,
+            "the batch report arrived too"
+        );
 
         report(file(2));
         panel.finish();

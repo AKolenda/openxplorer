@@ -273,10 +273,6 @@ msgstr ""
 msgid "Folder tabs"
 msgstr ""
 
-#: crates/ox-app/resources/ui/transfer-panel.ui
-msgid "Current file progress"
-msgstr ""
-
 #: crates/ox-app/resources/ui/update-dialog.ui
 msgid "Check again"
 msgstr ""

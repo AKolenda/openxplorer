@@ -247,11 +247,20 @@ impl ProgressWindow {
                     window.imp().showing.take();
                     if !window.actions().is_empty() {
                         window.set_visible(true);
+                        window.forget_focus();
                     }
                 }
             ),
         );
         imp.showing.replace(Some(timer));
+    }
+
+    /// Leaves no widget focused and no focus ring showing, as the Windows
+    /// window opens: GTK focuses the first link when a window shows. Tab
+    /// still moves into the window, and the keyboard brings the ring back.
+    fn forget_focus(&self) {
+        GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
+        self.set_focus_visible(false);
     }
 
     /// "More details" or "Fewer details": every action shows or hides
@@ -264,7 +273,7 @@ impl ProgressWindow {
                 progress_details: Some(shown),
                 ..PreferencesUpdate::default()
             };
-            context.update_preferences(update, |_| {});
+            context.remember_preferences(update);
         }
     }
 

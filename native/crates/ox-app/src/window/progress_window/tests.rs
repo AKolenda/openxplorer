@@ -232,3 +232,101 @@ fn a_running_operation_is_an_action_of_the_progress_window() {
     assert_eq!(shown_in, window);
     assert!(test.context.progress_window().is_none());
 }
+
+/// The window cannot be resized, as the Windows one cannot: it takes its
+/// natural height whenever More details opens or closes and whenever an
+/// action comes or goes, so the graph is never squashed.
+///
+/// parity: OPS-021
+#[gtk::test]
+fn the_window_takes_its_natural_height_for_its_details_and_actions() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (first, _) = start_copy(&test, &fixture, 1);
+    wait_until("the window to show", || window.is_mapped());
+    let settled = || {
+        crate::test_support::harness::wait_for_frames(&window, 6);
+        window.height()
+    };
+    let collapsed = settled();
+
+    window.press_details();
+    wait_until("the window to grow for the details", || {
+        window.height() > collapsed + 60
+    });
+    let expanded = settled();
+    window.press_details();
+    wait_until("the window to shrink back", || window.height() == collapsed);
+    let (second, _) = start_copy(&test, &fixture, 2);
+    wait_until("the window to grow for a second action", || {
+        window.height() > collapsed + 20
+    });
+    second.finish();
+    wait_until("the window to shrink to one action", || {
+        window.height() == collapsed
+    });
+
+    assert!(!window.is_resizable(), "the window keeps its own size");
+    assert!(expanded > collapsed + 60, "{expanded} after {collapsed}");
+    first.finish();
+}
+
+/// The window opens with no focus ring and takes no widget's focus, as
+/// Windows shows none; Tab still reaches the folder links, whose ring the
+/// keyboard shows.
+///
+/// parity: OPS-019
+#[gtk::test]
+fn the_window_opens_without_a_focus_ring_and_tab_reaches_the_links() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (action, _) = start_copy(&test, &fixture, 1);
+    wait_until("the window to show", || window.is_mapped());
+    crate::test_support::harness::wait_for_frames(&window, 4);
+
+    let opened = (
+        GtkWindowExt::focus(&window),
+        window.property::<bool>("focus-visible"),
+    );
+    window.child_focus(gtk::DirectionType::TabForward);
+    let tabbed = GtkWindowExt::focus(&window).and_downcast::<gtk::Label>();
+
+    assert_eq!(opened, (None, false), "nothing has focus, no ring shows");
+    let links = tabbed.expect("Tab reaches the description's links");
+    assert!(links.label().contains("<a href="));
+    action.finish();
+}
+
+/// More details and Fewer details are remembered without telling the
+/// browsing windows that their places or settings changed, which made
+/// every one of them redraw its sidebar and folder, so they flashed.
+///
+/// parity: OPS-021
+#[gtk::test]
+fn toggling_the_details_leaves_the_browsing_windows_alone() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (action, _) = start_copy(&test, &fixture, 1);
+    let announced = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counter = std::rc::Rc::clone(&announced);
+    let handler = test
+        .context
+        .connect_places_changed(move || counter.set(counter.get() + 1));
+
+    window.press_details();
+    wait_until("the choice to be saved", || {
+        ox_core::settings::Settings::open(&test.context.settings_directory())
+            .data()
+            .preferences
+            .progress_details
+    });
+    wait_for(Duration::from_millis(200));
+
+    assert_eq!(announced.get(), 0, "no window hears that its settings changed");
+    assert!(test.context.settings_data().preferences.progress_details);
+    test.context.disconnect(handler);
+    action.finish();
+}

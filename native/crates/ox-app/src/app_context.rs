@@ -376,6 +376,17 @@ impl AppContext {
         self.change_settings(change, reply);
     }
 
+    /// Saves every valid value of `update` off the main thread without
+    /// telling the windows that the settings changed, for a preference
+    /// only the window that changed it reads, such as the progress
+    /// window's details: the browsing windows do not redraw their places
+    /// and folders for it.
+    pub(crate) fn remember_preferences(&self, update: PreferencesUpdate) {
+        let change: Change =
+            Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
+        self.settings().change(change, Box::new(|_| {}));
+    }
+
     /// Saves `properties` as the display style of `uri` with `scope` off
     /// the main thread (VIEW-020); `reply` hears the outcome.
     pub(crate) fn remember_view(

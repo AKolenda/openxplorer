@@ -12,8 +12,7 @@
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxProgressWindow" parent="GtkWindow">
-    <property name="default-width">460</property>
-    <property name="resizable">true</property>
+    <property name="resizable">false</property>
     <style>
       <class name="ox"/>
       <class name="progress-window"/>
@@ -21,12 +20,12 @@
     <property name="child">
       <object class="GtkBox">
         <property name="orientation">vertical</property>
+        <property name="width-request">460</property>
         <child>
           <object class="GtkScrolledWindow" id="scroller">
             <property name="hscrollbar-policy">never</property>
             <property name="propagate-natural-height">true</property>
             <property name="max-content-height">560</property>
-            <property name="vexpand">true</property>
             <property name="child">
               <object class="GtkBox" id="actions">
                 <property name="orientation">vertical</property>

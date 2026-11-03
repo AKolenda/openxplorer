@@ -777,8 +777,8 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     assert!(!is_enabled(&test, "cancel-operation"));
 }
 
-/// A copied file's bytes fill a bar of their own: a full file bar leaves
-/// the batch bar where the batch is.
+/// A copied file's own progress never moves the action's bar: a full
+/// file leaves the bar where the batch is.
 ///
 /// parity: OPS-020
 #[gtk::test]
@@ -798,13 +798,16 @@ fn a_full_file_bar_is_never_shown_as_the_batch_finishing() {
 
     panel.show_progress(&report("Copy: a.txt (1/2)", 0.0, ProgressScope::Batch));
     panel.show_progress(&report("Copying a.txt · 10 / 10 bytes", 1.0, ProgressScope::File));
-    let file_done = panel.fractions();
+    let file_done = panel.fraction();
     panel.show_progress(&report("Copy: b.txt (2/2)", 0.5, ProgressScope::Batch));
-    let next_item = panel.fractions();
+    let next_item = panel.fraction();
     test.window.end_operation();
 
-    assert_eq!(file_done, (0.0, Some(1.0)));
-    assert_eq!(next_item, (0.5, None));
+    assert!(
+        file_done.abs() < f64::EPSILON,
+        "a full file is not the batch: {file_done}"
+    );
+    assert!((next_item - 0.5).abs() < f64::EPSILON, "{next_item}");
 }
 
 /// parity: TAB-049

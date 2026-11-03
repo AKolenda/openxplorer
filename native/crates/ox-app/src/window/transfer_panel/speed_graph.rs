@@ -1,62 +1,254 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The speed graph of "More details" (OPS-021): how fast the action went
-//! as it progressed, the part done shaded, a line at the current speed
-//! and "Speed: 32.8 MB/s" above it, as in the Windows progress window,
-//! whose detailed view has "a real-time throughput graph" (Building
-//! Windows 8, "Improving our file management basics", 2011).
+//! as it progressed, as the Windows progress window draws it: the speed
+//! as a filled area up to the current percentage over faint gridlines,
+//! the part done shaded, a line across at the current speed and "Speed:
+//! 32.8 MB/s" at its top right. Windows' detailed view has "a real-time
+//! throughput graph" (Building Windows 8, "Improving our file management
+//! basics", 2011).
 //!
-//! The graph is made of widgets, not drawn: a row of one hundred
-//! columns, one per percent of the action, each holding a bar as high as
-//! the speed was there, styled in `dialogs.css`. The line and its label
-//! lie over them. Nothing moves frame by frame: the graph changes only
-//! when the action reports, so reduced motion has nothing to stop
-//! (ACC-010).
+//! [`render`] computes the picture's pixels at the device's scale, with
+//! an anti-aliased top edge that runs straight from one report's speed to
+//! the next; the widget shows them as a texture in a `gtk::Picture`,
+//! drawn again only when the action reports, the size or the scale
+//! changes, or the theme changes the colours. The colours come from the
+//! skin (`dialogs.css`) through three hidden helper widgets. The label is
+//! a real label over the picture, so it is text for the screen reader
+//! and sharp at any scale. Nothing moves frame by frame, so reduced
+//! motion has nothing to stop (ACC-010).
 //!
 //! For assistive technologies the graph is the action's progress bar
 //! while the details show (the plain bar hides then), named "Operation
 //! progress", with the speed as its description.
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, glib, graphene, gsk};
 
-/// Columns of the graph: one per percent of the action.
-const COLUMNS: usize = 100;
 /// The graph's height, in logical pixels.
 const HEIGHT: i32 = 72;
 /// Room above the highest speed, so the line and its label stay inside.
 const HEADROOM: f64 = 1.3;
+/// The gridlines: columns and rows of the grid.
+const GRID_COLUMNS: usize = 10;
+const GRID_ROWS: usize = 4;
+/// Reports closer than this share one point of the graph.
+const SAMPLE_STEP: f64 = 0.002;
+
+/// An RGBA colour, not premultiplied.
+type Rgba = [u8; 4];
+
+/// The colours of the graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Palette {
+    /// The area under the speed.
+    pub(super) area: Rgba,
+    /// The part done, behind the area.
+    pub(super) reached: Rgba,
+    /// The gridlines.
+    pub(super) grid: Rgba,
+    /// The line at the current speed.
+    pub(super) line: Rgba,
+}
+
+/// What the graph shows.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Plot<'a> {
+    /// The speed (bytes per second) at each progress (0–1) reported,
+    /// in order.
+    pub(super) samples: &'a [(f64, u64)],
+    /// How far the action is (0–1).
+    pub(super) progress: f64,
+    /// The current speed, when known.
+    pub(super) speed: Option<u64>,
+}
+
+impl Plot<'_> {
+    /// The speed the top of the graph stands for.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a pixel height needs far less precision"
+    )]
+    fn ceiling(&self) -> f64 {
+        let highest = self
+            .samples
+            .iter()
+            .map(|(_, speed)| *speed)
+            .chain(self.speed)
+            .max();
+        highest.unwrap_or(0) as f64 * HEADROOM
+    }
+
+    /// The speed at `fraction`, running straight from one report to the
+    /// next; the first report's speed before it.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a pixel height needs far less precision"
+    )]
+    fn speed_at(&self, fraction: f64) -> Option<f64> {
+        let first = self.samples.first()?;
+        if fraction <= first.0 {
+            return Some(first.1 as f64);
+        }
+        let next = self.samples.iter().position(|(at, _)| *at >= fraction);
+        let Some(next) = next else {
+            return self.samples.last().map(|(_, speed)| *speed as f64);
+        };
+        let (from, to) = (self.samples[next - 1], self.samples[next]);
+        let share = if to.0 > from.0 {
+            (fraction - from.0) / (to.0 - from.0)
+        } else {
+            1.0
+        };
+        Some(from.1 as f64 + (to.1 as f64 - from.1 as f64) * share)
+    }
+}
+
+/// The row of the line at the current speed in a picture `height` pixels
+/// high, when the speed is known.
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a row inside a picture far smaller than f64's precision"
+)]
+pub(super) fn line_row(plot: &Plot, height: usize) -> Option<usize> {
+    let ceiling = plot.ceiling();
+    let speed = plot.speed? as f64;
+    if ceiling <= 0.0 || height == 0 {
+        return None;
+    }
+    let top = height as f64 - speed / ceiling * height as f64;
+    Some((top.round().max(0.0) as usize).min(height - 1))
+}
+
+/// The pixels of `plot`, `width` × `height`, as premultiplied RGBA rows.
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "pixel coordinates far inside f64's precision"
+)]
+pub(super) fn render(plot: &Plot, width: usize, height: usize, palette: &Palette) -> Vec<u8> {
+    let mut image = vec![0_u8; width * height * 4];
+    if width == 0 || height == 0 {
+        return image;
+    }
+    let (w, h) = (width as f64, height as f64);
+    let reach = plot.progress.clamp(0.0, 1.0) * w;
+    let ceiling = plot.ceiling();
+    let thickness = (height / HEIGHT as usize).max(1);
+    let grid_x: Vec<usize> = (1..GRID_COLUMNS)
+        .map(|i| (i as f64 * w / GRID_COLUMNS as f64).round() as usize)
+        .collect();
+    let grid_y: Vec<usize> = (1..GRID_ROWS)
+        .map(|i| (i as f64 * h / GRID_ROWS as f64).round() as usize)
+        .collect();
+    for x in 0..width {
+        let inside = (reach - x as f64).clamp(0.0, 1.0);
+        let top = (ceiling > 0.0 && inside > 0.0)
+            .then(|| plot.speed_at((x as f64 + 0.5) / w))
+            .flatten()
+            .map(|speed| h - speed / ceiling * h);
+        for y in 0..height {
+            let at = (y * width + x) * 4;
+            let pixel = &mut image[at..at + 4];
+            blend(pixel, palette.reached, inside);
+            if grid_x.contains(&x) || grid_y.contains(&y) {
+                blend(pixel, palette.grid, 1.0);
+            }
+            if let Some(top) = top {
+                let covered = (y as f64 + 1.0 - top).clamp(0.0, 1.0);
+                blend(pixel, palette.area, covered * inside);
+            }
+        }
+    }
+    if let Some(row) = line_row(plot, height) {
+        for y in row..(row + thickness).min(height) {
+            for x in 0..width {
+                let at = (y * width + x) * 4;
+                blend(&mut image[at..at + 4], palette.line, 1.0);
+            }
+        }
+    }
+    image
+}
+
+/// Paints `color` over the premultiplied `pixel`, covering `coverage` of
+/// it.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "channels stay between 0 and 255"
+)]
+fn blend(pixel: &mut [u8], color: Rgba, coverage: f64) {
+    let alpha = f64::from(color[3]) / 255.0 * coverage;
+    if alpha <= 0.0 {
+        return;
+    }
+    for channel in 0..3 {
+        let source = f64::from(color[channel]) * alpha;
+        let below = f64::from(pixel[channel]) * (1.0 - alpha);
+        pixel[channel] = (source + below).round().clamp(0.0, 255.0) as u8;
+    }
+    let below = f64::from(pixel[3]) * (1.0 - alpha);
+    pixel[3] = (alpha * 255.0 + below).round().clamp(0.0, 255.0) as u8;
+}
+
+/// `color` as RGBA bytes.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "channels between 0 and 1"
+)]
+fn bytes_of(color: &gdk::RGBA) -> Rgba {
+    let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+    [
+        byte(color.red()),
+        byte(color.green()),
+        byte(color.blue()),
+        byte(color.alpha()),
+    ]
+}
 
 mod imp {
     use std::cell::{Cell, RefCell};
 
     use gtk::glib;
+    use gtk::prelude::*;
     use gtk::subclass::prelude::*;
+
+    use super::Palette;
 
     /// Private state of [`super::SpeedGraph`].
     #[derive(Debug, Default)]
     pub(crate) struct SpeedGraph {
-        /// The columns, one per percent.
-        pub(super) columns: RefCell<Vec<gtk::Box>>,
-        /// The bar in each column.
-        pub(super) bars: RefCell<Vec<gtk::Box>>,
-        /// The speed at each percent, once reached.
-        pub(super) speeds: RefCell<Vec<Option<u64>>>,
-        /// The columns reached so far.
-        pub(super) reached: Cell<usize>,
-        /// The line at the current speed.
-        pub(super) line: RefCell<Option<gtk::Box>>,
+        /// Shows the rendered pixels.
+        pub(super) picture: RefCell<Option<gtk::Picture>>,
         /// "Speed: 32.8 MB/s".
         pub(super) label: RefCell<Option<gtk::Label>>,
-        /// Where the line is, in pixels from the bottom.
-        pub(super) line_target: Cell<i32>,
+        /// Hidden widgets whose CSS colour is the area's, the part done's
+        /// and the gridlines'.
+        pub(super) swatches: RefCell<Vec<gtk::Widget>>,
+        /// The speed at each progress reported.
+        pub(super) samples: RefCell<Vec<(f64, u64)>>,
+        /// How far the action is.
+        pub(super) progress: Cell<f64>,
+        /// The current speed.
+        pub(super) speed: Cell<Option<u64>>,
+        /// What the texture was drawn for: its size in pixels and colours.
+        pub(super) drawn: Cell<Option<(i32, i32, Palette)>>,
+        /// Whether the data changed since the texture was drawn.
+        pub(super) stale: Cell<bool>,
+        /// The redraw after a theme change, when one is due.
+        pub(super) recolour: RefCell<Option<glib::SourceId>>,
     }
 
     #[glib::object_subclass]
     impl ObjectSubclass for SpeedGraph {
         const NAME: &'static str = "OxSpeedGraph";
         type Type = super::SpeedGraph;
-        type ParentType = gtk::Box;
+        type ParentType = gtk::Widget;
 
         fn class_init(klass: &mut Self::Class) {
             klass.set_css_name("speedgraph");
@@ -69,61 +261,67 @@ mod imp {
             self.parent_constructed();
             self.obj().build();
         }
+
+        fn dispose(&self) {
+            if let Some(source) = self.recolour.take() {
+                source.remove();
+            }
+            while let Some(child) = self.obj().first_child() {
+                child.unparent();
+            }
+        }
     }
-    impl WidgetImpl for SpeedGraph {}
-    impl BoxImpl for SpeedGraph {}
+
+    impl WidgetImpl for SpeedGraph {
+        fn measure(&self, orientation: gtk::Orientation, _for_size: i32) -> (i32, i32, i32, i32) {
+            match orientation {
+                gtk::Orientation::Horizontal => (0, 0, -1, -1),
+                _ => (super::HEIGHT, super::HEIGHT, -1, -1),
+            }
+        }
+
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.parent_size_allocate(width, height, baseline);
+            self.obj().lay_out(width, height);
+        }
+
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            self.obj().follow_theme();
+            self.parent_snapshot(snapshot);
+        }
+    }
 }
 
 glib::wrapper! {
     /// The speed graph of an action's details.
     pub(crate) struct SpeedGraph(ObjectSubclass<imp::SpeedGraph>)
-        @extends gtk::Box, gtk::Widget,
-        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
+        @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl SpeedGraph {
     fn build(&self) {
         let imp = self.imp();
-        self.set_height_request(HEIGHT);
+        self.set_hexpand(true);
         self.set_overflow(gtk::Overflow::Hidden);
-        let overlay = gtk::Overlay::new();
-        overlay.set_hexpand(true);
-        let row = gtk::Box::builder().homogeneous(true).hexpand(true).build();
-        let mut columns = Vec::with_capacity(COLUMNS);
-        let mut bars = Vec::with_capacity(COLUMNS);
-        for _ in 0..COLUMNS {
-            let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
-            column.add_css_class("speed-column");
-            let bar = gtk::Box::builder().valign(gtk::Align::End).vexpand(true).build();
-            bar.add_css_class("speed-bar");
-            bar.set_height_request(0);
-            column.append(&bar);
-            row.append(&column);
-            columns.push(column);
-            bars.push(bar);
-        }
-        overlay.set_child(Some(&row));
-        let line = gtk::Box::builder()
-            .valign(gtk::Align::End)
-            .hexpand(true)
-            .height_request(1)
-            .visible(false)
+        let picture = gtk::Picture::builder()
+            .content_fit(gtk::ContentFit::Fill)
+            .can_shrink(true)
+            .accessible_role(gtk::AccessibleRole::Presentation)
             .build();
-        line.add_css_class("speed-line");
-        overlay.add_overlay(&line);
-        let label = gtk::Label::builder()
-            .halign(gtk::Align::End)
-            .valign(gtk::Align::End)
-            .visible(false)
-            .build();
+        picture.set_parent(self);
+        let label = gtk::Label::builder().visible(false).build();
         label.add_css_class("speed-label");
-        overlay.add_overlay(&label);
-        self.append(&overlay);
-        imp.columns.replace(columns);
-        imp.bars.replace(bars);
-        imp.speeds.replace(vec![None; COLUMNS]);
-        imp.line.replace(Some(line));
+        label.set_parent(self);
+        let swatches = ["speed-area", "speed-reached", "speed-grid"].map(|class| {
+            let swatch = gtk::Box::builder().visible(false).build();
+            swatch.add_css_class(class);
+            swatch.set_parent(self);
+            swatch.upcast::<gtk::Widget>()
+        });
+        imp.picture.replace(Some(picture));
         imp.label.replace(Some(label));
+        imp.swatches.replace(swatches.to_vec());
         self.update_property(&[
             gtk::accessible::Property::Label(&ox_core::i18n::gettext("Operation progress")),
             gtk::accessible::Property::ValueMin(0.0),
@@ -135,117 +333,160 @@ impl SpeedGraph {
     /// Empties the graph for a new action.
     pub(crate) fn reset(&self) {
         let imp = self.imp();
-        imp.speeds.replace(vec![None; COLUMNS]);
-        imp.reached.set(0);
-        for column in imp.columns.borrow().iter() {
-            column.remove_css_class("reached");
-        }
-        for bar in imp.bars.borrow().iter() {
-            bar.set_height_request(0);
-        }
-        imp.line_target.set(0);
-        if let Some(line) = imp.line.borrow().as_ref() {
-            line.set_visible(false);
-            line.set_margin_bottom(0);
-        }
+        imp.samples.borrow_mut().clear();
+        imp.progress.set(0.0);
+        imp.speed.set(None);
         if let Some(label) = imp.label.borrow().as_ref() {
             label.set_visible(false);
         }
         self.update_property(&[gtk::accessible::Property::ValueNow(0.0)]);
+        self.changed();
     }
 
     /// Shows the action at `fraction` (0–1), going at `speed` bytes per
-    /// second when known, which `speed_text` says.
+    /// second when known, which the text says.
     pub(crate) fn show(&self, fraction: f64, speed: Option<(u64, String)>) {
         let imp = self.imp();
-        let percent = (fraction.clamp(0.0, 1.0) * 100.0).round();
-        let reached = percent_index(percent);
-        let before = imp.reached.get();
-        if reached > before {
-            let columns = imp.columns.borrow();
-            for column in &columns[before..reached] {
-                column.add_css_class("reached");
+        let progress = fraction.clamp(0.0, 1.0).max(imp.progress.get());
+        imp.progress.set(progress);
+        self.update_property(&[gtk::accessible::Property::ValueNow((progress * 100.0).round())]);
+        if let Some((speed, text)) = speed {
+            imp.speed.set(Some(speed));
+            let mut samples = imp.samples.borrow_mut();
+            match samples.last_mut() {
+                Some(last) if progress - last.0 < SAMPLE_STEP => last.1 = speed,
+                _ => samples.push((progress, speed)),
             }
-            imp.reached.set(reached);
-        }
-        self.update_property(&[gtk::accessible::Property::ValueNow(percent)]);
-        let Some((speed, text)) = speed else {
-            return;
-        };
-        {
-            let mut speeds = imp.speeds.borrow_mut();
-            let first = before.min(reached.saturating_sub(1));
-            for slot in speeds.iter_mut().take(reached.max(1)).skip(first) {
-                *slot = Some(speed);
+            drop(samples);
+            if let Some(label) = imp.label.borrow().as_ref() {
+                label.set_text(&text);
+                label.set_visible(true);
             }
+            self.update_property(&[gtk::accessible::Property::Description(&text)]);
         }
-        self.scale_bars();
-        let target = self.height_of(speed);
-        if let Some(label) = imp.label.borrow().as_ref() {
-            label.set_text(&text);
-            label.set_visible(true);
-            label.set_margin_bottom((target + 2).clamp(0, HEIGHT - 18));
-        }
-        self.update_property(&[gtk::accessible::Property::Description(&text)]);
-        self.move_line(target);
+        self.changed();
     }
 
-    /// Sets each bar's height for the highest speed so far.
-    fn scale_bars(&self) {
-        let imp = self.imp();
-        let speeds = imp.speeds.borrow();
-        for (bar, speed) in imp.bars.borrow().iter().zip(speeds.iter()) {
-            bar.set_height_request(speed.map_or(0, |speed| self.height_of(speed)));
-        }
+    /// The data changed: draw again and place the label.
+    fn changed(&self) {
+        self.imp().stale.set(true);
+        self.queue_allocate();
     }
 
-    /// The height of `speed` in the graph, the highest speed so far
-    /// leaving some room above it.
+    /// Places the picture and the label in `width` × `height`, and draws
+    /// the picture again when anything it shows changed.
     #[expect(
-        clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
-        reason = "a pixel height needs far less precision than f64 keeps"
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap,
+        clippy::cast_precision_loss,
+        reason = "pixel sizes far inside every type's range"
     )]
-    fn height_of(&self, speed: u64) -> i32 {
-        let highest = self
-            .imp()
-            .speeds
-            .borrow()
-            .iter()
-            .flatten()
-            .copied()
-            .max()
-            .unwrap_or(0);
-        if highest == 0 {
-            return 0;
-        }
-        let share = speed as f64 / (highest as f64 * HEADROOM);
-        (share * f64::from(HEIGHT)).round() as i32
-    }
-
-    /// Moves the speed line to `target` pixels from the bottom.
-    fn move_line(&self, target: i32) {
+    fn lay_out(&self, width: i32, height: i32) {
         let imp = self.imp();
-        imp.line_target.set(target);
-        if let Some(line) = imp.line.borrow().as_ref() {
-            line.set_visible(true);
-            line.set_margin_bottom(target);
+        if let Some(picture) = imp.picture.borrow().as_ref() {
+            picture.allocate(width, height, -1, None);
+        }
+        let samples = imp.samples.borrow().clone();
+        let plot = Plot {
+            samples: &samples,
+            progress: imp.progress.get(),
+            speed: imp.speed.get(),
+        };
+        if let Some(label) = imp.label.borrow().as_ref().filter(|label| label.is_visible()) {
+            let (_, natural) = label.preferred_size();
+            let (label_width, label_height) = (natural.width().min(width), natural.height());
+            let line = line_row(&plot, height.max(0) as usize).map_or(height, |row| row as i32);
+            let x = width - label_width - 6;
+            let y = (line - label_height - 1).clamp(0, (height - label_height).max(0));
+            let at = gsk::Transform::new().translate(&graphene::Point::new(x.max(0) as f32, y as f32));
+            label.allocate(label_width, label_height, -1, Some(at));
+        }
+        let scale = self.device_scale();
+        let size = (
+            (f64::from(width) * scale).ceil() as i32,
+            (f64::from(height) * scale).ceil() as i32,
+        );
+        let palette = self.palette();
+        let drawn = imp.drawn.get();
+        if !imp.stale.get() && drawn == Some((size.0, size.1, palette)) {
+            return;
+        }
+        imp.stale.set(false);
+        imp.drawn.set(Some((size.0, size.1, palette)));
+        if size.0 <= 0 || size.1 <= 0 {
+            return;
+        }
+        let (columns, rows) = (size.0 as usize, size.1 as usize);
+        let pixels = render(&plot, columns, rows, &palette);
+        let texture = gdk::MemoryTexture::new(
+            size.0,
+            size.1,
+            gdk::MemoryFormat::R8g8b8a8Premultiplied,
+            &glib::Bytes::from_owned(pixels),
+            columns * 4,
+        );
+        if let Some(picture) = imp.picture.borrow().as_ref() {
+            picture.set_paintable(Some(&texture));
         }
     }
 
-    /// Where the speed line is now and where it goes, in pixels from the
-    /// bottom, for tests.
-    #[cfg(test)]
-    pub(crate) fn line_offsets(&self) -> (i32, i32) {
-        let imp = self.imp();
-        let shown = imp.line.borrow().as_ref().map_or(0, WidgetExt::margin_bottom);
-        (shown, imp.line_target.get())
+    /// The colours of the skin, as last styled.
+    fn palette(&self) -> Palette {
+        let swatches = self.imp().swatches.borrow();
+        let colour = |index: usize| {
+            swatches
+                .get(index)
+                .map_or([0; 4], |swatch| bytes_of(&swatch.color()))
+        };
+        Palette {
+            area: colour(0),
+            reached: colour(1),
+            grid: colour(2),
+            line: bytes_of(&self.color()),
+        }
     }
 
-    /// How many columns are shaded as done, for tests.
+    /// Draws the graph again soon after the theme changed its colours.
+    fn follow_theme(&self) {
+        let imp = self.imp();
+        let changed = imp
+            .drawn
+            .get()
+            .is_some_and(|(_, _, palette)| palette != self.palette());
+        if !changed || imp.recolour.borrow().is_some() {
+            return;
+        }
+        let source = glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = graph)]
+            self,
+            move || {
+                graph.imp().recolour.take();
+                graph.changed();
+            }
+        ));
+        imp.recolour.replace(Some(source));
+    }
+
+    /// The pixels per logical pixel of the surface the graph shows on.
+    fn device_scale(&self) -> f64 {
+        self.native()
+            .and_then(|native| native.surface())
+            .map_or_else(|| f64::from(self.scale_factor()), |surface| surface.scale())
+    }
+
+    /// The size of the drawn texture in pixels, for tests.
     #[cfg(test)]
-    pub(crate) fn reached_columns(&self) -> usize {
-        self.imp().reached.get()
+    pub(crate) fn texture_size(&self) -> Option<(i32, i32)> {
+        let picture = self.imp().picture.borrow().clone()?;
+        let texture = picture.paintable().and_downcast::<gdk::Texture>()?;
+        Some((texture.width(), texture.height()))
+    }
+
+    /// How far the graph shows the action, and its speed, for tests.
+    #[cfg(test)]
+    pub(crate) fn shown(&self) -> (f64, Option<u64>) {
+        (self.imp().progress.get(), self.imp().speed.get())
     }
 
     /// The speed label's text, for tests.
@@ -256,40 +497,157 @@ impl SpeedGraph {
     }
 }
 
-/// The number of columns `percent` (0–100) reaches.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a rounded percentage between 0 and 100"
-)]
-fn percent_index(percent: f64) -> usize {
-    (percent.clamp(0.0, 100.0) as usize).min(COLUMNS)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The graph shades the part done, draws a bar per percent at the
-    /// speed it went, and says the current speed.
+    /// The graph says the current speed and is the action's progress bar
+    /// for assistive technologies; a new action empties it.
     ///
     /// parity: OPS-021
     #[gtk::test]
-    fn the_graph_shades_the_part_done_and_says_the_speed() {
+    fn the_graph_says_the_speed_and_is_a_progress_bar() {
         let graph: SpeedGraph = glib::Object::new();
 
         graph.show(0.2, Some((10, "Speed: 10 bytes/s".to_owned())));
         graph.show(0.44, Some((20, "Speed: 20 bytes/s".to_owned())));
 
-        assert_eq!(graph.reached_columns(), 44);
+        assert_eq!(graph.shown(), (0.44, Some(20)));
         assert_eq!(graph.speed_text().as_deref(), Some("Speed: 20 bytes/s"));
-        let bars = graph.imp().bars.borrow();
-        assert!(bars[10].height_request() > 0 && bars[10].height_request() < bars[30].height_request());
-        assert_eq!(bars[60].height_request(), 0, "nothing beyond the progress");
         assert_eq!(graph.accessible_role(), gtk::AccessibleRole::ProgressBar);
-        drop(bars);
-
         graph.reset();
-        assert_eq!((graph.reached_columns(), graph.speed_text()), (0, None));
+        assert_eq!((graph.shown(), graph.speed_text()), ((0.0, None), None));
+    }
+}
+
+#[cfg(test)]
+mod pixel_tests {
+    use super::*;
+
+    const AREA: [u8; 4] = [0, 0, 255, 255];
+    const REACHED: [u8; 4] = [200, 200, 255, 255];
+    const GRID: [u8; 4] = [10, 10, 10, 40];
+    const LINE: [u8; 4] = [255, 255, 255, 255];
+    const PALETTE: Palette = Palette {
+        area: AREA,
+        reached: REACHED,
+        grid: GRID,
+        line: LINE,
+    };
+
+    fn pixel(buffer: &[u8], width: usize, x: usize, y: usize) -> [u8; 4] {
+        let at = (y * width + x) * 4;
+        buffer[at..at + 4].try_into().unwrap()
+    }
+
+    /// The area under the speed is filled up to the progress, the part
+    /// done is shaded behind it, and nothing is drawn beyond it but the
+    /// grid.
+    ///
+    /// parity: OPS-021
+    #[test]
+    fn the_area_fills_the_speed_up_to_the_progress_and_no_further() {
+        let samples = [(0.1, 100), (0.4, 100)];
+        let plot = Plot {
+            samples: &samples,
+            progress: 0.4,
+            speed: Some(100),
+        };
+        let image = render(&plot, 200, 100, &PALETTE);
+
+        assert_eq!(image.len(), 200 * 100 * 4);
+        assert_eq!(pixel(&image, 200, 41, 98), AREA, "under the speed");
+        assert_eq!(
+            pixel(&image, 200, 41, 3),
+            REACHED,
+            "above the speed, inside the part done"
+        );
+        assert_ne!(pixel(&image, 200, 121, 98), AREA, "nothing beyond the progress");
+        assert_ne!(pixel(&image, 200, 121, 98), REACHED);
+    }
+
+    /// The area's top edge follows the speed smoothly from one report to
+    /// the next, with no columns or steps.
+    ///
+    /// parity: OPS-021
+    #[test]
+    fn the_area_rises_smoothly_with_the_speed() {
+        let samples = [(0.0, 50), (0.5, 100)];
+        let plot = Plot {
+            samples: &samples,
+            progress: 0.5,
+            speed: Some(100),
+        };
+        let image = render(&plot, 200, 100, &PALETTE);
+        let top = |x| (0..100).find(|&y| pixel(&image, 200, x, y) == AREA).unwrap();
+        let tops: Vec<usize> = (2..98).map(top).collect();
+
+        assert!(
+            tops.windows(2).all(|pair| pair[1] <= pair[0]),
+            "it only rises: {tops:?}"
+        );
+        assert!(
+            tops.windows(2).all(|pair| pair[0] - pair[1] <= 1),
+            "no steps: {tops:?}"
+        );
+        assert!(
+            tops[0] > tops[95] + 20,
+            "half the speed is clearly lower: {tops:?}"
+        );
+    }
+
+    /// The line at the current speed crosses the whole graph.
+    ///
+    /// parity: OPS-021
+    #[test]
+    fn the_line_crosses_the_graph_at_the_current_speed() {
+        let samples = [(0.2, 80)];
+        let plot = Plot {
+            samples: &samples,
+            progress: 0.2,
+            speed: Some(80),
+        };
+        let image = render(&plot, 200, 100, &PALETTE);
+        let row = line_row(&plot, 100).expect("a speed is known");
+
+        for x in [0, 100, 199] {
+            assert_eq!(pixel(&image, 200, x, row), LINE, "at x {x}");
+        }
+        assert!(row > 10 && row < 90, "inside the graph: {row}");
+    }
+
+    /// A first report that is slower or faster than the rest makes no
+    /// full-height column at the left edge.
+    #[test]
+    fn the_left_edge_has_no_full_height_column() {
+        let samples = [(0.02, 30), (0.3, 100), (0.6, 100)];
+        let plot = Plot {
+            samples: &samples,
+            progress: 0.6,
+            speed: Some(100),
+        };
+        let image = render(&plot, 200, 100, &PALETTE);
+
+        for y in 0..20 {
+            assert_ne!(pixel(&image, 200, 0, y), AREA, "row {y} of the left edge");
+        }
+    }
+
+    /// The graph is drawn at the device's pixels, so it stays sharp at a
+    /// scale of 2.
+    #[gtk::test]
+    fn the_graph_is_drawn_at_the_devices_pixels() {
+        let graph: SpeedGraph = glib::Object::new();
+        let window = gtk::Window::builder().child(&graph).default_width(300).build();
+        window.set_visible(true);
+        graph.show(0.5, Some((100, "Speed: 100 bytes/s".to_owned())));
+        crate::test_support::harness::wait_until("the graph to be drawn", || graph.texture_size().is_some());
+
+        let scale = graph.scale_factor();
+        assert_eq!(
+            graph.texture_size(),
+            Some((graph.width() * scale, graph.height() * scale))
+        );
+        window.destroy();
     }
 }

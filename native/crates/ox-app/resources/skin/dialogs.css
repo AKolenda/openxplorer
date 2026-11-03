@@ -111,18 +111,16 @@ window.ox button.progress-control { min-width: 28px; min-height: 28px; padding: 
 /* A paused action turns the caution colour (Windows UX guidance:
    "Turn the progress bar yellow to indicate that the user has paused"). */
 .progress-action.paused progressbar > trough > progress { background-color: @ox_caution; }
-/* The current file's thin bar in the details (OPS-020): muted, so the
-   action's own progress stays the one that says how far it is. */
-.progress-action progressbar.progress-file > trough,
-.progress-action progressbar.progress-file > trough > progress { min-height: 2px; border: none; }
-.progress-action progressbar.progress-file > trough > progress { background-color: @ox_muted; }
-speedgraph { border: 1px solid @ox_border; background-color: @ox_bg; }
-speedgraph .speed-column.reached { background-color: alpha(@ox_accent, .14); transition: background-color 200ms ease-out; }
-speedgraph .speed-bar { background-color: alpha(@ox_accent, .55); }
-.progress-action.paused speedgraph .speed-column.reached { background-color: alpha(@ox_caution, .18); }
-.progress-action.paused speedgraph .speed-bar { background-color: alpha(@ox_caution, .6); }
-speedgraph .speed-line { min-height: 1px; background-color: @ox_text; }
-speedgraph .speed-label { font-size: 11px; margin-right: 6px; }
+/* The speed graph of More details (src/window/transfer_panel/speed_graph.rs):
+   drawn into a picture at the device's scale in these colours, which it
+   reads from hidden swatches. `color` on the graph is its speed line. */
+speedgraph { border: 1px solid @ox_border; background-color: @ox_bg; color: @ox_text; }
+speedgraph .speed-area { color: alpha(@ox_accent, .6); }
+speedgraph .speed-reached { color: alpha(@ox_accent, .12); }
+speedgraph .speed-grid { color: alpha(@ox_text, .07); }
+.progress-action.paused speedgraph .speed-area { color: alpha(@ox_caution, .65); }
+.progress-action.paused speedgraph .speed-reached { color: alpha(@ox_caution, .14); }
+speedgraph .speed-label { font-size: 11px; }
 .progress-footer { padding: 6px 12px 10px 12px; border-top: 1px solid @ox_border; }
 
 /* ---- Windows 11 style context menu (§4.9, CMD-008) ---- */

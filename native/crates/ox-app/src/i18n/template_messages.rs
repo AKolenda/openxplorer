@@ -94,7 +94,6 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("tab-strip.ui", "tab_list", "label", true, "Folder tabs"),
     ("transfer-panel.ui", "cancel_button", "label", true, "Cancel"),
     ("transfer-panel.ui", "cancel_button", "tooltip-text", false, "Cancel"),
-    ("transfer-panel.ui", "file_bar", "label", true, "Current file progress"),
     ("transfer-panel.ui", "pause_button", "label", true, "Pause"),
     ("transfer-panel.ui", "pause_button", "tooltip-text", false, "Pause"),
     ("transfer-panel.ui", "progress_bar", "label", true, "Operation progress"),
