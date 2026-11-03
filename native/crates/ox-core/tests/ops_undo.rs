@@ -384,11 +384,13 @@ fn undoing_links_moves_only_the_links_to_the_trash() {
 
     let outcome = block_on(create_links(&request, &OperationContext::default())).expect("a local folder");
     let record = outcome.undo.expect("undoable links");
+    let made = links.join("a.txt - Shortcut").symlink_metadata().is_ok();
     undo_fully(&record);
 
     assert_eq!(record.undo_label(), "Undo Link");
+    assert!(made, "the link is named as a shortcut");
     assert!(
-        links.join("a.txt").symlink_metadata().is_err(),
+        links.join("a.txt - Shortcut").symlink_metadata().is_err(),
         "the link is gone"
     );
     assert_eq!(fs::read(items.join("a.txt")).unwrap(), b"a", "its item stays");

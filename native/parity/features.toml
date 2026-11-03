@@ -9081,7 +9081,7 @@ python_tests = [
 ]
 bridge = ["beginFileDrag"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drag/payload.rs (local_files_never_consult_the_mount_resolver). A plain drag offers Copy and Ask only; Shift or Ctrl+Shift held as it starts adds Move or Link. The window never deletes what it offered, whatever the receiver answers; a plain drag dropped in one of its own windows on the same drive is moved by the window's own transfer engine (DND-017)."
+native_note = "native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drag/payload.rs (local_files_never_consult_the_mount_resolver). A plain drag offers Copy and Ask only; Shift or Ctrl+Shift held as it starts adds Move or Link. A right-button drag offers Copy and Ask whatever keys are held (DND-027, a_right_button_drag_offers_copy_and_ask_whatever_the_keys). The window never deletes what it offered, whatever the receiver answers; a plain drag dropped in one of its own windows on the same drive is moved by the window's own transfer engine (DND-017)."
 
 [[feature]]
 id = "DND-009"
@@ -9413,7 +9413,7 @@ bridge = ["operate", "transferConflicts"]
 dolphin = "KIO::DropJob / DropMenu; Dolphin drop popup (Move Here / Copy Here / Link Here) and modifier keys"
 gnome = "GdkDragAction negotiation (COPY|MOVE|LINK|ASK) in GtkDropTarget; Nautilus moves within a filesystem and copies across"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer); native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder). Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel; drops from the Recycle Bin are always moves and drops on it go to the Trash. Differs: a plain drop does what Windows Explorer does instead of asking: this app's own items move within a drive and copy across drives, and items from other apps copy; GNOME has no stash, and the Recycle Bin has no sidebar place to drag as a link."
+native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_what_is_possible_with_the_plain_drops_action_in_bold); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer); native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder). Shift moves, Ctrl copies, Ctrl+Shift makes shortcuts and Alt opens the right-drag menu of DND-027 (Copy here, Move here, Create shortcuts here, Cancel, only what is possible, the plain drop's action in bold; a copy for another app's items); drops from the Recycle Bin are always moves and drops on it go to the Trash. Differs: a plain drop does what Windows Explorer does instead of asking: this app's own items move within a drive and copy across drives, and items from other apps copy; GNOME has no stash, and the Recycle Bin has no sidebar place to drag as a link."
 
 [[feature]]
 id = "DND-019"
@@ -9428,7 +9428,7 @@ python_tests = []
 bridge = ["create"]
 dolphin = "DropMenu 'Link Here' (Ctrl+Shift)"
 native = "done"
-native_note = "native/crates/ox-core/src/ops/links.rs (a_link_points_to_the_item_and_is_named_after_it, a_taken_name_is_reported_and_never_replaced, items_and_folders_that_are_not_local_get_no_links); native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_ctrl_shift_drop_creates_links_to_the_items)."
+native_note = "native/crates/ox-core/src/ops/links.rs (a_link_points_to_the_item_and_is_named_as_a_windows_shortcut, a_taken_name_is_numbered_and_never_replaced, items_and_folders_that_are_not_local_get_no_links); native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_ctrl_shift_drop_creates_links_to_the_items). Ctrl+Shift and the drop menu's Create shortcuts here make Windows-named shortcuts (ox_core::ops::create_shortcut, DND-027): 'Notes.txt - Shortcut', numbered '(2)' when taken, never replacing anything."
 
 [[feature]]
 id = "DND-020"
@@ -9565,6 +9565,26 @@ bridge = []
 gnome = "GtkDropTarget on file rows; g_file_query_info access::can-execute; GAppInfo from the executable (g_app_info_create_from_commandline) or the terminal via xdg-terminal-exec / the configured terminal"
 native = "done"
 native_note = "native/crates/ox-app/src/window/file_drop/program.rs (only_executable_regular_files_are_programs_and_scripts_are_text, a_binary_gets_each_path_as_one_argument_whatever_its_name, a_script_runs_in_the_terminal_through_the_fixed_hold_script, the_hold_script_passes_names_through_as_arguments, only_programs_on_this_computers_own_disks_run_without_asking, only_binary_types_themselves_are_binaries, windows_drives_and_kernel_shares_have_no_real_execute_bits); native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_program_are_given_to_it_as_arguments, a_file_that_is_not_executable_is_no_program, an_executable_json_or_javascript_file_is_no_program). Binary types are matched exactly (shared-mime-info derives JSON, JavaScript and .exe from application/x-executable), and a program on a filesystem without Unix permissions (NTFS, FAT, exFAT, fuseblk, CIFS) asks before it runs."
+
+[[feature]]
+id = "DND-027"
+area = "DND"
+title = "Right-button drag asks with Windows Explorer's menu"
+behaviour = "Items in the folder views and folders in the sidebar can be dragged with the secondary (right) mouse button. Pressing it selects the item; releasing it without dragging opens the context menu, as in Windows Explorer. When a right-button drag of this app's items is dropped on a folder, whatever keys are held, a menu opens at the pointer: 'Copy here', 'Move here', 'Create shortcuts here', a divider and 'Cancel'. What a plain (left-button) drop would do is in bold: 'Move here' within a drive, 'Copy here' across drives. Only what is possible is offered: no Move for items that cannot be deleted where they are (read-only folder) or for items inside a ZIP, no Create shortcuts for items or folders not on this computer or on file systems without symbolic links (FAT, exFAT, kernel SMB mounts), and only 'Move here' for Recycle Bin items. Escape and 'Cancel' do nothing. Copy and Move run through the transfer engine with its conflict check, progress and Undo. A shortcut is a symbolic link named as Windows names one: 'report.txt - Shortcut', 'Projects - Shortcut', then 'report.txt - Shortcut (2)' when the name is taken; it never replaces anything. The menu has no third-party entries. It is keyboard navigable once open (the first item has focus; Up, Down, Enter, Escape) and every entry has an accessible name. Windows has no keyboard right-drag, so none is added."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "owner request with a private Windows 11 screenshot of the right-drag menu (Copy here, Move here in bold, Create shortcuts here, Cancel; third-party TeraCopy/TeraMove entries left out)",
+  "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetnewlinkinfow (a new shortcut's name is made unique in the destination folder, repeated until a unique name is found)",
+  "https://winaero.com/change-or-disable-the-shortcut-text-for-shortcuts-in-windows-10 (the default ShortcutNameTemplate '%s - Shortcut.lnk', the target's name with its extension)",
+  "https://learn.microsoft.com/en-us/answers/a/7794792 (a drag between folders of one drive moves, to another drive copies)",
+]
+python_tests = []
+bridge = ["operate", "transferConflicts"]
+gnome = "GtkDragSource with gtk_gesture_single_set_button(0); GtkGestureClick released for the context menu; GDK_ACTION_ASK; g_file_query_info access::can-delete and filesystem::type"
+native = "done"
+native_note = "native/crates/ox-core/src/ops/shortcut.rs (a_shortcut_keeps_the_whole_name_and_says_shortcut, a_taken_name_is_numbered_and_never_replaced, a_folder_that_cannot_take_it_is_an_error); native/crates/ox-app/src/window/file_drop/action.rs (the_drop_menu_offers_what_is_possible_with_the_plain_drops_action_in_bold, a_right_button_drag_of_own_items_always_asks, the_drop_menu_reads_what_the_items_and_the_folder_allow); native/crates/ox-app/src/window/file_drag.rs (a_right_button_drag_offers_copy_and_ask_whatever_the_keys, items_and_sidebar_folders_can_be_dragged_with_either_button); native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_right_drag_drop_asks_and_creates_shortcuts_here); native/crates/ox-app/src/window/tests/context_menus.rs (a_right_press_selects_the_item_and_its_release_opens_the_menu). ox_core::ops::create_shortcut(source, folder) -> created path is the one shortcut maker; Ctrl+Shift drops use it too (DND-019). A right-button drag offers other apps Copy and Ask whatever keys are held (DND-008), and the window marks its own right-button drag so a drop in any of its windows asks. What the menu offers is read on a thread of its own for at most 2 s once the items are dropped; past that it offers Copy here only. Limits: the folder tree takes no drags with either button yet; a right-button drag from another app keeps that app's offer (Alt, or the middle button, still asks); real right-button drags were not tried on a Wayland or X11 desktop here, only what the drag source and drop target call, in a private headless X display."
 
 [[feature]]
 id = "SRCH-001"

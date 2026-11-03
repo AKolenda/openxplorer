@@ -437,8 +437,11 @@ fn the_drop_highlights_the_program_hint_and_the_drop_menu_are_captured() {
         test.window.leave_drop_zone(DropZone::FolderView);
         test.window
             .remember_drop_point(test.window.folder_pane().upcast_ref(), 300.0, 200.0);
-        test.window
-            .drop_files(&[source.uri_of("Notes 2.txt")], None, DropAction::Ask);
+        test.window.drop_files(
+            &[source.uri_of("Notes 2.txt")],
+            None,
+            DropAction::Ask(DragOrigin::ThisApp),
+        );
         let menu = test.window.drop_menu();
         wait_until("the drop menu", || menu.is_mapped());
         capture_popover(
@@ -676,6 +679,10 @@ impl OfferedDrop for FakeDrop {
 
     fn origin(&self) -> DragOrigin {
         self.origin
+    }
+
+    fn button(&self) -> crate::window::file_drag::DragButton {
+        crate::window::file_drag::DragButton::Primary
     }
 }
 

@@ -14,7 +14,7 @@ use gtk::subclass::prelude::*;
 use super::file_ops_support::{dialog_over, open_dialog, select_names};
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 use crate::window::file_drag::DraggedItems;
-use crate::window::file_drop::DropAction;
+use crate::window::file_drop::{DragOrigin, DropAction};
 
 /// The URIs a drag's content offers as a file list.
 fn offered_uris(content: &gdk::ContentProvider) -> Vec<String> {
@@ -337,18 +337,22 @@ fn a_ctrl_shift_drop_creates_links_to_the_items() {
         .drop_files(&[source.uri_of("Notes 2.txt")], None, DropAction::Link);
 
     assert!(taken);
-    let link = fixture.path("Documents/Notes 2.txt");
+    let link = fixture.path("Documents/Notes 2.txt - Shortcut");
     wait_until("the link", || link.symlink_metadata().is_ok());
     assert_eq!(
         std::fs::read_link(&link).expect("a symbolic link"),
         source.path("Notes 2.txt")
     );
     wait_until("the new link to be selected", || {
-        test.selected_names() == ["Notes 2.txt"]
+        test.selected_names() == ["Notes 2.txt - Shortcut"]
     });
     super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
+/// An Alt drop from another app asks with the drop menu, a copy in bold
+/// as a plain drop of another app's items copies; Cancel does nothing and
+/// Move here moves.
+///
 /// parity: DND-018
 #[gtk::test]
 fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
@@ -357,10 +361,12 @@ fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     let dropped = [source.uri_of("Notes 2.txt")];
 
-    test.window.drop_files(&dropped, None, DropAction::Ask);
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::OtherApp));
     let menu = test.window.drop_menu();
     wait_until("the drop menu", || menu.is_mapped());
     let labels = menu.row_labels();
+    let bold = menu.emphasised_labels();
     test.activate("drop-choice", Some("cancel"));
     // Choosing an entry closes the menu; the action alone does not, and
     // no drop is taken while a menu is open.
@@ -369,16 +375,64 @@ fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
     wait_for(Duration::from_millis(100));
     let cancelled_kept_source = source.path("Notes 2.txt").is_file();
     let cancelled_made_nothing = !fixture.path("Documents/Notes 2.txt").exists();
-    test.window.drop_files(&dropped, None, DropAction::Ask);
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::OtherApp));
+    wait_until("the drop menu", || menu.is_mapped());
     test.activate("drop-choice", Some("move"));
 
     assert_eq!(
         labels,
-        ["Copy here", "Move here", "Create links here", "-", "Cancel"]
+        ["Copy here", "Move here", "Create shortcuts here", "-", "Cancel"]
     );
+    assert_eq!(bold, ["Copy here"]);
     assert!(cancelled_kept_source && cancelled_made_nothing);
     wait_until("the move", || fixture.path("Documents/Notes 2.txt").is_file());
     wait_until("the original to go", || !source.path("Notes 2.txt").exists());
+}
+
+/// A right-button drag of this app's own items within their drive asks
+/// with Windows Explorer's menu, Move here in bold; closing it unanswered,
+/// as Escape does, does nothing, and Create shortcuts here makes `Notes 2.txt - Shortcut`.
+///
+/// parity: DND-027
+#[gtk::test]
+fn a_right_drag_drop_asks_and_creates_shortcuts_here() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let dropped = [fixture.uri_of("Notes 2.txt")];
+
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    let menu = test.window.drop_menu();
+    wait_until("the drop menu", || menu.is_mapped());
+    let labels = menu.row_labels();
+    let bold = menu.emphasised_labels();
+    // Escape closes a popover as this does: the menu closes unanswered.
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+    wait_for(Duration::from_millis(100));
+    let escape_made_nothing = std::fs::read_dir(fixture.path("Documents"))
+        .expect("the folder is read")
+        .filter_map(Result::ok)
+        .all(|entry| !entry.file_name().to_string_lossy().contains("Notes 2"));
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    wait_until("the drop menu", || menu.is_mapped());
+    menu.click_row("Create shortcuts here");
+
+    assert_eq!(
+        labels,
+        ["Copy here", "Move here", "Create shortcuts here", "-", "Cancel"]
+    );
+    assert_eq!(bold, ["Move here"]);
+    assert!(escape_made_nothing, "Escape does nothing");
+    let shortcut = fixture.path("Documents/Notes 2.txt - Shortcut");
+    wait_until("the shortcut", || shortcut.symlink_metadata().is_ok());
+    assert_eq!(
+        std::fs::read_link(&shortcut).expect("a symbolic link"),
+        fixture.path("Notes 2.txt")
+    );
+    assert!(fixture.path("Notes 2.txt").is_file(), "the item stays");
 }
 
 /// parity: DND-011

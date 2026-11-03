@@ -19,8 +19,14 @@
 //! offered, so a receiver can always finish the drop as a copy. The window
 //! never deletes what it offered, whatever the receiver answers, and
 //! nothing is mounted or downloaded during the gesture. No drag starts
-//! from blank space, with the secondary button, while a file operation
-//! runs or is being planned, or while a dialog or a menu is open.
+//! from blank space, with the middle button, while a file operation runs
+//! or is being planned, or while a dialog or a menu is open.
+//!
+//! A drag with the secondary button is Windows Explorer's right-button
+//! drag (DND-027): it offers Copy and Ask whatever keys are held, and its
+//! drop in any window of this app asks with the right-drag menu. Pressing
+//! the secondary button selects the item, and the context menu opens only
+//! when it is released without dragging.
 
 mod payload;
 
@@ -88,27 +94,78 @@ pub(crate) struct OutgoingDrag {
     art: Art,
 }
 
-/// The actions a file drag offers, from the modifiers held as it starts
-/// (see the module's safety rule). Copy and Ask are always offered, so a
-/// receiver can finish as a copy and the desktop's "ask" modifier opens
-/// the drop menu.
-fn offered_actions(modifiers: gdk::ModifierType) -> gdk::DragAction {
+/// The mouse button a drag of files is made with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DragButton {
+    /// The primary button: the drop does what the keys ask (DND-017).
+    Primary,
+    /// The secondary button: the drop asks with Windows Explorer's
+    /// right-drag menu (DND-027).
+    Secondary,
+}
+
+impl DragButton {
+    /// The drag button GDK numbers `button`; `None` for the middle and
+    /// other buttons, which drag nothing.
+    pub(crate) fn of(button: u32) -> Option<Self> {
+        match button {
+            gdk::BUTTON_PRIMARY => Some(Self::Primary),
+            gdk::BUTTON_SECONDARY => Some(Self::Secondary),
+            _ => None,
+        }
+    }
+}
+
+thread_local! {
+    /// The drag of this process made with the secondary button, while it
+    /// lasts. A drop in any window of the process reads it, so the drop
+    /// asks with the menu wherever it lands.
+    static SECONDARY_DRAG: std::cell::RefCell<glib::WeakRef<gdk::Drag>> =
+        std::cell::RefCell::new(glib::WeakRef::new());
+}
+
+/// The button `drag`, a drag of this process, was made with.
+pub(crate) fn drag_button(drag: &gdk::Drag) -> DragButton {
+    let is_secondary = SECONDARY_DRAG.with(|secondary| secondary.borrow().upgrade().as_ref() == Some(drag));
+    if is_secondary {
+        DragButton::Secondary
+    } else {
+        DragButton::Primary
+    }
+}
+
+/// The actions a file drag with `button` offers, from the modifiers held
+/// as it starts (see the module's safety rule). Copy and Ask are always
+/// offered, so a receiver can finish as a copy and the desktop's "ask"
+/// modifier opens the drop menu. A right-button drag offers only those
+/// two whatever the keys, as its drop asks.
+fn offered_actions(button: DragButton, modifiers: gdk::ModifierType) -> gdk::DragAction {
     let shift = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
     let control = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
-    let chosen = match (shift, control) {
-        (true, true) => gdk::DragAction::LINK,
-        (true, false) => gdk::DragAction::MOVE,
-        (false, _) => gdk::DragAction::empty(),
+    let chosen = match (button, shift, control) {
+        (DragButton::Secondary, _, _) | (DragButton::Primary, false, _) => gdk::DragAction::empty(),
+        (DragButton::Primary, true, true) => gdk::DragAction::LINK,
+        (DragButton::Primary, true, false) => gdk::DragAction::MOVE,
     };
     gdk::DragAction::COPY | gdk::DragAction::ASK | chosen
 }
 
-/// The actions a drag of `content` offers with `modifiers` held as it
-/// starts: [`offered_actions`], except that items inside a ZIP are only
-/// copied or moved. Their copies are removed after a day, so nothing may
-/// link to them, and asking would offer links (ARC-026).
-pub(super) fn drag_actions(content: &gdk::ContentProvider, modifiers: gdk::ModifierType) -> gdk::DragAction {
-    let offered = offered_actions(modifiers);
+/// The button `source`'s gesture is pressed with now; `None` for one that
+/// drags nothing.
+fn pressed_button(source: &gtk::DragSource) -> Option<DragButton> {
+    DragButton::of(source.current_button())
+}
+
+/// The actions a drag of `content` with `button` offers with `modifiers`
+/// held as it starts: [`offered_actions`], except that items inside a ZIP
+/// are only copied or moved. Their copies are removed after a day, so
+/// nothing may link to them, and asking would offer links (ARC-026).
+pub(super) fn drag_actions(
+    content: &gdk::ContentProvider,
+    button: DragButton,
+    modifiers: gdk::ModifierType,
+) -> gdk::DragAction {
+    let offered = offered_actions(button, modifiers);
     if content.is::<ZipDragContent>() {
         offered & (gdk::DragAction::COPY | gdk::DragAction::MOVE)
     } else {
@@ -132,6 +189,15 @@ fn drag_icon(art: Art, count: usize) -> gtk::Widget {
     icon.upcast()
 }
 
+/// A drag source for files, pressed with either button: the prepare
+/// handlers refuse the others ([`pressed_button`]), as the middle button
+/// opens items in a new tab.
+fn file_drag_source() -> gtk::DragSource {
+    let source = gtk::DragSource::new();
+    source.set_button(0);
+    source
+}
+
 /// True when a menu or other popover inside `widget` is open.
 pub(super) fn has_open_popover(widget: &gtk::Widget) -> bool {
     let mut child = widget.first_child();
@@ -148,7 +214,7 @@ pub(super) fn has_open_popover(widget: &gtk::Widget) -> bool {
 impl BrowserWindow {
     /// Lets items of `view` be dragged out to other windows and apps.
     pub(super) fn attach_file_drag(&self, view: &gtk::Widget) {
-        let source = gtk::DragSource::new();
+        let source = file_drag_source();
         // Before the gestures of the rows inside the view, which could
         // take the press first.
         source.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -160,9 +226,10 @@ impl BrowserWindow {
             #[upgrade_or]
             None,
             move |source, x, y| {
+                let button = pressed_button(source)?;
                 let position = window.folder_pane().owners().position_at(&view, x, y)?;
                 let content = window.drag_content_for(position)?;
-                source.set_actions(drag_actions(&content, source.current_event_state()));
+                source.set_actions(drag_actions(&content, button, source.current_event_state()));
                 Some(content)
             }
         ));
@@ -173,16 +240,17 @@ impl BrowserWindow {
     /// Lets the sidebar's folders be dragged out: to pin them, or to copy
     /// them into another folder or app.
     pub(super) fn attach_sidebar_file_drag(&self) {
-        let source = gtk::DragSource::new();
+        let source = file_drag_source();
         source.connect_prepare(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[upgrade_or]
             None,
             move |source, _, y| {
+                let button = pressed_button(source)?;
                 let uri = window.sidebar().location_at(y)?;
                 let content = window.sidebar_drag_content(uri)?;
-                source.set_actions(offered_actions(source.current_event_state()));
+                source.set_actions(offered_actions(button, source.current_event_state()));
                 Some(content)
             }
         ));
@@ -195,12 +263,20 @@ impl BrowserWindow {
         source.connect_drag_begin(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, drag| window.begin_file_drag(drag)
+            move |source, drag| {
+                if pressed_button(source) == Some(DragButton::Secondary) {
+                    SECONDARY_DRAG.with(|secondary| secondary.borrow().set(Some(drag)));
+                }
+                window.begin_file_drag(drag);
+            }
         ));
         source.connect_drag_end(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, _, _| window.end_file_drag()
+            move |_, _, _| {
+                SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
+                window.end_file_drag();
+            }
         ));
     }
 
@@ -378,8 +454,62 @@ mod tests {
         ];
 
         for case in cases {
-            assert_eq!(offered_actions(case.held), case.offered, "{:?}", case.held);
+            assert_eq!(
+                offered_actions(DragButton::Primary, case.held),
+                case.offered,
+                "{:?}",
+                case.held
+            );
         }
+    }
+
+    /// A right-button drag offers Copy and Ask whatever keys are held, as
+    /// its drop asks (DND-027); the middle button drags nothing.
+    ///
+    /// parity: DND-008, DND-027
+    #[test]
+    fn a_right_button_drag_offers_copy_and_ask_whatever_the_keys() {
+        let copy_or_ask = gdk::DragAction::COPY | gdk::DragAction::ASK;
+        for held in [
+            gdk::ModifierType::empty(),
+            gdk::ModifierType::SHIFT_MASK,
+            gdk::ModifierType::SHIFT_MASK | gdk::ModifierType::CONTROL_MASK,
+        ] {
+            assert_eq!(
+                offered_actions(DragButton::Secondary, held),
+                copy_or_ask,
+                "{held:?}"
+            );
+        }
+        assert_eq!(DragButton::of(gdk::BUTTON_PRIMARY), Some(DragButton::Primary));
+        assert_eq!(DragButton::of(gdk::BUTTON_SECONDARY), Some(DragButton::Secondary));
+        assert_eq!(DragButton::of(gdk::BUTTON_MIDDLE), None);
+    }
+
+    /// The folder views and the sidebar start drags with either button.
+    ///
+    /// parity: DND-027
+    #[gtk::test]
+    fn items_and_sidebar_folders_can_be_dragged_with_either_button() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let buttons = |widget: &gtk::Widget| -> Vec<u32> {
+            widget
+                .observe_controllers()
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|controller| controller.downcast::<gtk::DragSource>().ok())
+                .map(|source| source.button())
+                .collect()
+        };
+        let view = test.window.folder_pane().input_widget();
+
+        assert_eq!(
+            buttons(view.upcast_ref()),
+            [0],
+            "any button, the middle one refused as it starts"
+        );
+        assert_eq!(buttons(test.window.sidebar().list().upcast_ref()), [0]);
     }
 
     /// parity: DND-001, DND-003, SIDE-016

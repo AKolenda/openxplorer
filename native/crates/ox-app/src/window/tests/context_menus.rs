@@ -43,6 +43,31 @@ pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     });
 }
 
+/// As in Windows Explorer, pressing the right button selects the item and
+/// releasing it opens the menu, so a right-button drag can start from the
+/// press instead (DND-027).
+///
+/// parity: CMD-008, DND-027
+#[gtk::test]
+fn a_right_press_selects_the_item_and_its_release_opens_the_menu() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 10.txt"]);
+    let (right_button, x, y) = test
+        .window
+        .right_button_on_item(position_of(&test, "Notes 2.txt"));
+    let menu = test.window.context_menu();
+
+    right_button.emit_by_name::<()>("pressed", &[&1_i32, &x, &y]);
+    let selected_on_press = test.selected_names();
+    let open_on_press = menu.is_visible();
+    right_button.emit_by_name::<()>("released", &[&1_i32, &x, &y]);
+
+    assert_eq!(selected_on_press, ["Notes 2.txt"]);
+    assert!(!open_on_press, "no menu while the button is down");
+    assert!(menu.is_visible(), "the release opens the menu");
+}
+
 /// parity: CMD-008, CMD-009, CMD-015, SEL-003
 #[gtk::test]
 fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {

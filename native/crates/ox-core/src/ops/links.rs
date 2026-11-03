@@ -4,14 +4,15 @@
 //!
 //! New in the native app, from the Dolphin baseline ("Link Here" and
 //! Create New ▸ "Basic Link to File or Directory…") and Windows Explorer's
-//! "Create shortcuts here". A dropped item's link is named after it and
-//! points to its absolute path; New ▸ Link asks for the path, and the name
-//! defaults to the name of what it points to. Undo moves the links, never
-//! what they point to, to the Trash.
+//! "Create shortcuts here". A dropped item's link is a shortcut, named as
+//! Windows names one (`report.txt - Shortcut`, numbered when taken, see
+//! [`create_shortcut`]), and points to its absolute path; New ▸ Link asks
+//! for the path, and the name defaults to the name of what it points to.
+//! Undo moves the links, never what they point to, to the Trash.
 //!
-//! Safety rule "a link never replaces anything": a name that is taken in
-//! the folder, by anything including a broken link, is reported for that
-//! item and nothing is written there; the other items go on. The folder
+//! Safety rule "a link never replaces anything": a dropped item's
+//! shortcut takes the next free number instead of a taken name, a broken
+//! link included; New ▸ Link reports a taken name and writes nothing. The folder
 //! must pass the write protection, like the destination of a copy
 //! (XFER-020). Only local items can be linked into a local folder: GIO's
 //! other backends make no symbolic links, and a link to an `smb://`
@@ -27,6 +28,7 @@ use super::context::{on_worker, OperationContext};
 use super::create::name_taken_or;
 use super::error::OpsError;
 use super::run_transfer::TransferOutcome;
+use super::shortcut::create_shortcut;
 use super::undo::UndoRecord;
 use crate::location::{file_uri, normalise, typed_local_path, validate_name};
 use crate::transfer::{TransferResult, MAX_ITEMS};
@@ -194,23 +196,16 @@ fn create_links_blocking(
     Ok(outcome)
 }
 
-/// Makes the link to the item at `uri` in `folder`; the link's path, or
-/// why there is none.
+/// Makes the shortcut to the item at `uri` in `folder`, named as Windows
+/// names one ([`create_shortcut`]); the link's path, or why there is none.
 fn link_item(uri: &str, folder: &Path) -> Result<PathBuf, String> {
     let target = gio::File::for_uri(uri)
         .path()
         .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))?;
-    let name = target
-        .file_name()
-        .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))?;
-    let link = folder.join(name);
-    // `symlink` itself refuses a taken name, so a name that appears after
-    // this check is never replaced either.
-    if link.symlink_metadata().is_ok() {
-        return Err(crate::i18n::gettext(NAME_TAKEN));
+    if target.file_name().is_none() {
+        return Err(crate::i18n::gettext(NOT_LOCAL_ITEM));
     }
-    symlink(&target, &link).map_err(|error| describe(&error))?;
-    Ok(link)
+    create_shortcut(&target, folder).map_err(|error| describe(&error))
 }
 
 /// The message for a failed link.
@@ -242,7 +237,7 @@ mod tests {
 
     /// parity: DND-019
     #[test]
-    fn a_link_points_to_the_item_and_is_named_after_it() {
+    fn a_link_points_to_the_item_and_is_named_as_a_windows_shortcut() {
         let folder = temporary_folder();
         let item = folder.path().join("Report (final).txt");
         std::fs::write(&item, b"report").expect("fixture file");
@@ -255,7 +250,7 @@ mod tests {
 
         let outcome = create_links_blocking(&request, &context()).expect("the folder is local");
 
-        let link = links.join("Report (final).txt");
+        let link = links.join("Report (final).txt - Shortcut");
         assert_eq!(std::fs::read_link(&link).expect("a symbolic link"), item);
         assert_eq!(outcome.result.done, [file_uri(&item)]);
         assert_eq!(outcome.created, [file_uri(&link)]);
@@ -289,15 +284,15 @@ mod tests {
         assert!(matches!(missing, Err(OpsError::NotFound(_))), "{missing:?}");
     }
 
-    /// parity: DND-019
+    /// parity: DND-019, DND-027
     #[test]
-    fn a_taken_name_is_reported_and_never_replaced() {
+    fn a_taken_name_is_numbered_and_never_replaced() {
         let folder = temporary_folder();
         let item = folder.path().join("notes.txt");
         std::fs::write(&item, b"notes").expect("fixture file");
         let links = folder.path().join("Links");
         std::fs::create_dir(&links).expect("fixture folder");
-        std::fs::write(links.join("notes.txt"), b"keep me").expect("fixture file");
+        std::fs::write(links.join("notes.txt - Shortcut"), b"keep me").expect("fixture file");
         let request = LinkRequest {
             uris: vec![file_uri(&item)],
             destination_folder: file_uri(&links),
@@ -305,9 +300,14 @@ mod tests {
 
         let outcome = create_links_blocking(&request, &context()).expect("the folder is local");
 
-        assert!(outcome.result.done.is_empty());
-        assert_eq!(outcome.result.errors, [format!("notes.txt: {NAME_TAKEN}")]);
-        assert_eq!(std::fs::read(links.join("notes.txt")).expect("kept"), b"keep me");
+        let numbered = links.join("notes.txt - Shortcut (2)");
+        assert_eq!(outcome.result.done, [file_uri(&item)]);
+        assert_eq!(outcome.created, [file_uri(&numbered)]);
+        assert_eq!(std::fs::read_link(&numbered).expect("a symbolic link"), item);
+        assert_eq!(
+            std::fs::read(links.join("notes.txt - Shortcut")).expect("kept"),
+            b"keep me"
+        );
     }
 
     /// parity: DND-019

@@ -51,6 +51,8 @@ use super::zip_copies::{is_zip_copy, CopiesFailure, ZipDragContent};
 use super::BrowserWindow;
 
 use action::drop_run_action;
+#[cfg(test)]
+pub(crate) use action::DragOrigin;
 pub(in crate::window) use action::DropRun;
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
@@ -529,8 +531,8 @@ impl BrowserWindow {
                 });
                 return Ok(());
             }
-            DropAction::Ask => {
-                self.ask_drop_action(uris, folder);
+            DropAction::Ask(origin) => {
+                self.ask_drop_action(uris, folder, origin);
                 return Ok(());
             }
         };

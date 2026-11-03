@@ -4470,7 +4470,7 @@ msgid "Copy here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
-msgid "Create links here"
+msgid "Create shortcuts here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
