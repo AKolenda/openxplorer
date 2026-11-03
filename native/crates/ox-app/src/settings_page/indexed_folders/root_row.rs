@@ -64,7 +64,7 @@ impl ChipTone {
 /// What the row says next to the chip: "8,420 names · Live local events"
 /// (`${count} names · ${update_mode}` in `renderSettingsCache`).
 pub(crate) fn names_and_updates(root: &IndexRoot) -> String {
-    let names = grouped_number(root.entry_count);
+    let names = ox_core::format::group_digits(root.entry_count);
     ox_core::i18n::format_message(
         "{names} names · {as_str}",
         &[("names", &names), ("as_str", root.update_mode.as_str())],
@@ -84,21 +84,6 @@ pub(crate) fn status_tooltip(root: &IndexRoot) -> String {
         ),
         None => ox_core::i18n::gettext_static("Not yet scanned").to_owned(),
     }
-}
-
-/// `count` with commas between thousands, as `toLocaleString` writes it
-/// in English.
-pub(crate) fn grouped_number(count: u64) -> String {
-    let digits = count.to_string();
-    let mut grouped = String::new();
-    for (position, digit) in digits.chars().enumerate() {
-        let remaining = digits.len() - position;
-        if position > 0 && remaining.is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
 }
 
 /// The row of the indexed folder `root`, shown at `path`, whose buttons
@@ -247,21 +232,19 @@ mod tests {
         let mut root = enabled_root("file:///home/demo/Work");
         root.entry_count = 8420;
 
-        assert_eq!(names_and_updates(&root), "8,420 names · Live local events");
+        assert_eq!(
+            names_and_updates(&root),
+            format!(
+                "{} names · Live local events",
+                ox_core::format::group_digits(8_420)
+            )
+        );
         assert!(status_tooltip(&root).starts_with("Last full refresh: "));
         root.error = Some("Some folders could not be read.".to_owned());
         assert_eq!(status_tooltip(&root), "Some folders could not be read.");
         root.error = None;
         root.updated = None;
         assert_eq!(status_tooltip(&root), "Not yet scanned");
-    }
-
-    #[test]
-    fn numbers_are_grouped_by_thousands() {
-        assert_eq!(grouped_number(0), "0");
-        assert_eq!(grouped_number(999), "999");
-        assert_eq!(grouped_number(1000), "1,000");
-        assert_eq!(grouped_number(1_234_567), "1,234,567");
     }
 
     #[test]

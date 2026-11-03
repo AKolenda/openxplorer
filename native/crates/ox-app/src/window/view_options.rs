@@ -133,9 +133,12 @@ impl BrowserWindow {
             let is_remote = self.is_remote_folder(&uri);
             pane.owners()
                 .set_previews(PreviewPolicy::for_folder(&options, is_remote));
-            pane.owners()
+            pane.details()
                 .set_counts_items(options.count_folder_items && !is_remote);
         }
+        // The status bar describes a folder by its count only while counted.
+        self.update_status();
+        self.describe_hovered();
     }
 
     /// Whether `uri` is reached over a network or a device link: a

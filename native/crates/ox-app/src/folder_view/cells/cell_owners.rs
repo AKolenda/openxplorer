@@ -103,6 +103,19 @@ fn item_widget(cell: &gtk::Widget) -> Option<gtk::Widget> {
         .find(|widget| ITEM_WIDGET_NAMES.contains(&widget.css_name().as_str()))
 }
 
+/// A callback told of a folder once its items are counted.
+type CountedCallback = Rc<dyn Fn(&FileItem)>;
+
+/// What is told of a folder once its items are counted.
+#[derive(Default)]
+struct ItemCounted(RefCell<Option<CountedCallback>>);
+
+impl std::fmt::Debug for ItemCounted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ItemCounted")
+    }
+}
+
 /// Maps cell widgets back to their list items, so a click position can be
 /// turned into a row, and styles rows by the state of their item.
 #[derive(Debug, Default)]
@@ -122,6 +135,8 @@ pub(crate) struct CellOwners {
     previews: Cell<PreviewPolicy>,
     /// Folders in the Size column say how many items they hold.
     counts_items: Cell<bool>,
+    /// Told of each folder once its items are counted.
+    item_counted: ItemCounted,
     /// Item check boxes are off (SEL-014); on by default, as in Windows 11.
     hides_item_checks: Cell<bool>,
     /// Item check boxes let clicks through to their rows: they wait for
@@ -194,6 +209,21 @@ impl CellOwners {
     /// Makes folders in the Size column count their items, or not.
     pub(crate) fn set_counts_items(&self, counts: bool) {
         self.counts_items.set(counts);
+    }
+
+    /// Calls `counted` with each folder once its items are counted, so
+    /// what describes it can say so.
+    pub(crate) fn connect_item_counted(&self, counted: impl Fn(&FileItem) + 'static) {
+        self.item_counted.0.replace(Some(Rc::new(counted)));
+    }
+
+    /// Tells the [`Self::connect_item_counted`] callback that `item` was
+    /// counted.
+    pub(crate) fn item_counted(&self, item: &FileItem) {
+        let counted = self.item_counted.0.borrow().clone();
+        if let Some(counted) = counted {
+            counted(item);
+        }
     }
 
     /// Which items show previews now.

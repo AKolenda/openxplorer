@@ -48,7 +48,10 @@ fn conflict_message(count: usize, destination: &str) -> String {
 
 /// The label of "Apply to all" for `count` conflicts.
 fn apply_to_all_label(count: usize) -> String {
-    ox_core::i18n::format_message("Apply to all {count} items", &[("count", &count.to_string())])
+    ox_core::i18n::format_message(
+        "Apply to all {count} items",
+        &[("count", &ox_core::format::group_digits(count as u64))],
+    )
 }
 
 /// The name an item's URI ends in, as the dialog shows it.

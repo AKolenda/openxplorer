@@ -7,13 +7,70 @@
 use super::*;
 use crate::grouping::GroupBy;
 
-/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`,
+/// whose classic default became Windows 11's compact menu, as Windows 11
+/// Explorer opens it.
 /// parity: SET-016
 #[test]
-fn the_default_context_menu_is_the_classic_one() {
+fn the_default_context_menu_is_the_compact_one() {
     let root = temporary_folder();
     let preferences = Settings::open(root.path()).snapshot().preferences;
-    assert_eq!(preferences.context_menu, ContextMenu::Win10);
+    assert_eq!(preferences.context_menu, ContextMenu::Win11);
+}
+
+/// A classic menu an older release or the Python app stored as its
+/// default gives way to the compact one once; a classic menu chosen in
+/// this app is marked and stays after a restart.
+/// parity: SET-016
+#[test]
+fn a_stored_old_default_menu_becomes_the_compact_one_unless_chosen() {
+    let root = temporary_folder();
+    let older = json!({"version": 2, "preferences": {"contextMenu": "win10", "theme": "dark"}});
+    std::fs::write(root.path().join("settings.json"), older.to_string()).unwrap();
+    let mut store = Settings::open(root.path());
+    let preferences = store.snapshot().preferences;
+    assert_eq!(preferences.context_menu, ContextMenu::Win11);
+    assert_eq!(preferences.theme, Theme::Dark, "the rest is read as before");
+
+    save_preferences(&mut store, &json!({"contextMenu": "win10"}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(file.contains("\"classicMenuChosen\": true"), "{file}");
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(
+        reread.context_menu,
+        ContextMenu::Win10,
+        "a chosen classic menu stays"
+    );
+
+    save_preferences(&mut store, &json!({"contextMenu": "win11"}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(!file.contains("classicMenuChosen"), "{file}");
+}
+
+/// Folder item counts an older release stored as its default, with
+/// another view option, give way to Explorer's empty folder Size once;
+/// counts turned on in this app are marked and stay after a restart.
+/// parity: VIEW-037
+#[test]
+fn stored_old_default_item_counts_turn_off_unless_chosen() {
+    let root = temporary_folder();
+    let older = json!({"version": 2, "preferences": {
+        "viewOptions": {"previewVideos": false, "countFolderItems": true}
+    }});
+    std::fs::write(root.path().join("settings.json"), older.to_string()).unwrap();
+    let mut store = Settings::open(root.path());
+    let options = store.snapshot().preferences.view_options;
+    assert!(!options.count_folder_items, "the old default gives way");
+    assert!(!options.preview_videos, "the other options are read as before");
+
+    save_preferences(
+        &mut store,
+        &json!({"viewOptions": {"previewVideos": false, "countFolderItems": true}}),
+    );
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(file.contains("\"itemCountsChosen\": true"), "{file}");
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert!(reread.view_options.count_folder_items, "counts turned on stay");
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`
@@ -244,22 +301,22 @@ fn sections_and_places_hidden_from_two_windows_merge() {
     assert_eq!(merged.hidden_sidebar_places, ["recent:///"]);
 }
 
-/// ZIPs open in their window until the user chooses the folder, which is
-/// then stored; an unknown value changes nothing.
+/// ZIPs open like folders, as in Windows Explorer, until the user chooses
+/// the window, which is then stored; an unknown value changes nothing.
 ///
 /// parity: ARC-026
 #[test]
-fn zip_opening_is_the_window_until_the_folder_is_chosen() {
+fn zip_opening_is_the_folder_until_the_window_is_chosen() {
     let root = temporary_folder();
     let mut store = Settings::open(root.path());
-    assert_eq!(store.snapshot().preferences.zip_opening, ZipOpening::Window);
-    save_preferences(&mut store, &json!({"zipOpening": "folder"}));
+    assert_eq!(store.snapshot().preferences.zip_opening, ZipOpening::Folder);
+    save_preferences(&mut store, &json!({"zipOpening": "window"}));
     save_preferences(&mut store, &json!({"zipOpening": "popup"}));
     let reopened = Settings::open(root.path()).snapshot().preferences;
-    assert_eq!(reopened.zip_opening, ZipOpening::Folder);
-    save_preferences(&mut store, &json!({"zipOpening": "window"}));
+    assert_eq!(reopened.zip_opening, ZipOpening::Window);
+    save_preferences(&mut store, &json!({"zipOpening": "folder"}));
     let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
-    assert!(!file.contains("zipOpening"), "the window is not stored");
+    assert!(!file.contains("zipOpening"), "the folder is not stored");
 }
 
 /// Apply to all folders gives Downloads the applied Group by too: the
