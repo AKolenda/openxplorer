@@ -309,6 +309,10 @@ impl BrowserWindow {
                     Some(&chosen.destination_folder),
                 )?;
                 let progress = self.progress_reporter(&context.cancel);
+                let verb = crate::window::transfer_panel::Verb::of_mode(chosen.mode);
+                let destination = Some(chosen.destination_folder.as_str());
+                let action = crate::window::transfer_panel::Action::of(verb, &uris, destination);
+                self.describe_operation(&context.cancel, action);
                 let mark = mark_unfinished(Some(&chosen.destination_folder));
                 let outcome = run_chosen_transfer(chosen, &context, progress).await;
                 drop(mark);

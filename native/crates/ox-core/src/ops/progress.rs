@@ -74,6 +74,8 @@ mod tests {
             fraction,
             scope: ProgressScope::File,
             bytes: None,
+            items: None,
+            name: None,
         }
     }
 
@@ -104,6 +106,8 @@ mod tests {
             fraction: 0.34,
             scope: ProgressScope::Batch,
             bytes: None,
+            items: None,
+            name: None,
         };
 
         let file_done = throttle.admits(&progress(1.0), start);

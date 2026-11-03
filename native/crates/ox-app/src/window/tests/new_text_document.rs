@@ -915,3 +915,26 @@ fn input_before_the_new_items_listing_ends_drops_its_rename() {
     assert!(!is_renaming_in_place(&test), "nothing is renamed");
     assert_eq!(test.selected_names(), ["Résumé.txt"]);
 }
+
+/// A slow create's action has already waited its moment, so its progress
+/// window shows as soon as the action starts, not a second later: a
+/// create taking between one and two seconds is seen too.
+///
+/// parity: OPS-002, OPS-019
+#[gtk::test]
+fn a_slow_creates_progress_window_shows_with_its_action() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.transfer_panel().clone();
+    let release = start_held_text_document(&test);
+
+    wait_until("the create's action to start", || panel.get_visible());
+    wait_for(Duration::from_millis(300));
+    let window = test.context.progress_window();
+    let shown = window.as_ref().is_some_and(gtk::prelude::WidgetExt::is_visible);
+    panel.press_cancel();
+    drop(release);
+    wait_until("the create to stop", || !test.window.has_running_write());
+
+    assert!(shown, "the window shows with the action, not a second after it");
+}

@@ -147,6 +147,9 @@ mod imp {
             RefCell<Option<std::sync::mpsc::Sender<Vec<ox_core::settings::Bookmark>>>>,
         /// The pins as last mirrored there.
         pub(super) exported_pins: RefCell<Option<Vec<ox_core::settings::Bookmark>>>,
+        /// The progress window of the running file operations, while one
+        /// is open.
+        pub(super) progress_window: RefCell<Option<crate::window::ProgressWindow>>,
         /// GNOME's privacy settings, which say what may be remembered of
         /// the files opened, when the desktop has them.
         pub(super) privacy: RefCell<Option<gtk::gio::Settings>>,
@@ -237,6 +240,17 @@ impl AppContext {
             .settings
             .get()
             .expect("AppContext::new is the only constructor and sets the settings")
+    }
+
+    /// The progress window of the running file operations, while one is
+    /// open.
+    pub(crate) fn progress_window(&self) -> Option<crate::window::ProgressWindow> {
+        self.imp().progress_window.borrow().clone()
+    }
+
+    /// Records the open progress window, or that none is open.
+    pub(crate) fn set_progress_window(&self, window: Option<&crate::window::ProgressWindow>) {
+        self.imp().progress_window.replace(window.cloned());
     }
 
     /// The settings as last read or changed.
@@ -360,6 +374,17 @@ impl AppContext {
         let change: Change =
             Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
         self.change_settings(change, reply);
+    }
+
+    /// Saves every valid value of `update` off the main thread without
+    /// telling the windows that the settings changed, for a preference
+    /// only the window that changed it reads, such as the progress
+    /// window's details: the browsing windows do not redraw their places
+    /// and folders for it.
+    pub(crate) fn remember_preferences(&self, update: PreferencesUpdate) {
+        let change: Change =
+            Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
+        self.settings().change(change, Box::new(|_| {}));
     }
 
     /// Saves `properties` as the display style of `uri` with `scope` off

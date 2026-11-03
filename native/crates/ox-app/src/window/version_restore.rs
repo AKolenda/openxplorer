@@ -70,6 +70,9 @@ impl BrowserWindow {
             return;
         }
         let progress = self.progress_reporter(&operation.cancel);
+        let verb = crate::window::transfer_panel::Verb::Copying;
+        let action = crate::window::transfer_panel::Action::of(verb, &request.uris, Some(&destination));
+        self.describe_operation(&operation.cancel, action);
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,

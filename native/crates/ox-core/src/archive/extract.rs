@@ -378,6 +378,8 @@ impl ZipExtractor {
             fraction,
             scope: ProgressScope::Batch,
             bytes: None,
+            items: None,
+            name: None,
         });
     }
 }

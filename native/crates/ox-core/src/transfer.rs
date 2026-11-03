@@ -105,6 +105,7 @@ pub use request::MAX_ITEMS;
 pub(crate) use staged_name::StagedName;
 pub(crate) use staging::{already_removed, clean_staging, STAGING_LEVELS};
 pub use types::{
-    ByteProgress, ConflictPolicy, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult,
+    ByteProgress, ConflictPolicy, ItemCount, Landed, Operation, Progress, ProgressScope, TransferMode,
+    TransferResult,
 };
 pub use unstorable::{UnstorableAnswer, UnstorableItem, UnstorableQuestion, UnstorableReason};
