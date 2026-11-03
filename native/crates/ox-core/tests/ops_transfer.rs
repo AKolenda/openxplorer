@@ -18,7 +18,9 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ox_core::ops::{find_conflicts, run_transfer, OperationContext, OpsError, TransferRequest, UndoRecord};
-use ox_core::transfer::{Cancellation, ConflictPolicy, Progress, ProgressScope, TransferMode, MAX_ITEMS};
+use ox_core::transfer::{
+    Cancellation, ConflictPolicy, ItemCount, Progress, ProgressScope, TransferMode, MAX_ITEMS,
+};
 
 use folders::Folders;
 use ops_support::{block_on, file_uri};
@@ -225,6 +227,103 @@ fn progress_is_reported_and_the_last_report_says_the_run_is_complete() {
     assert!(file_reports
         .iter()
         .all(|report| report.scope == ProgressScope::File));
+}
+
+/// Every report says how many items the run has finished out of how
+/// many, as the progress window's "Items remaining" needs: the files in
+/// the copied folders once the free-space check has counted them, and
+/// the name of the item being handled.
+///
+/// parity: OPS-021
+#[test]
+fn progress_counts_every_file_and_names_the_current_one() {
+    let folders = Folders::new();
+    let album = folders.source().join("Album");
+    fs::create_dir(&album).unwrap();
+    for name in ["one.jpg", "two.jpg", "three.jpg"] {
+        fs::write(album.join(name), name).unwrap();
+    }
+    fs::write(folders.source().join("notes.txt"), b"notes").unwrap();
+    let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
+    let sink = Arc::clone(&reports);
+
+    let copy = request(
+        TransferMode::Copy,
+        &[&album, &folders.source().join("notes.txt")],
+        &folders.destination(),
+        ConflictPolicy::Skip,
+    );
+    block_on(run_transfer(
+        &copy,
+        &OperationContext::default(),
+        move |progress| sink.lock().unwrap().push(progress),
+    ))
+    .unwrap();
+
+    let reports = reports.lock().unwrap();
+    let counted: Vec<ItemCount> = reports.iter().filter_map(|report| report.items).collect();
+    assert!(!counted.is_empty(), "the reports count the items");
+    assert!(counted.iter().all(|count| count.total == 4), "{counted:?}");
+    assert!(
+        counted.windows(2).all(|pair| pair[0].done <= pair[1].done),
+        "{counted:?}"
+    );
+    assert_eq!(
+        reports.last().unwrap().items,
+        Some(ItemCount { done: 4, total: 4 })
+    );
+    let names: Vec<&str> = reports
+        .iter()
+        .filter_map(|report| report.name.as_deref())
+        .collect();
+    for name in ["Album", "one.jpg", "two.jpg", "three.jpg", "notes.txt"] {
+        assert!(names.contains(&name), "{name} is named: {names:?}");
+    }
+}
+
+/// A deletion, which measures nothing first, counts the selected items.
+///
+/// parity: OPS-021
+#[test]
+fn a_deletion_counts_the_selected_items() {
+    let folders = Folders::new();
+    let names = ["a.txt", "b.txt"];
+    for name in names {
+        fs::write(folders.source().join(name), name).unwrap();
+    }
+    let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
+    let sink = Arc::clone(&reports);
+    let delete = TransferRequest {
+        mode: TransferMode::Delete,
+        uris: names
+            .iter()
+            .map(|name| file_uri(&folders.source().join(name)))
+            .collect(),
+        destination_folder: None,
+        policy: ConflictPolicy::Skip,
+    };
+
+    block_on(run_transfer(
+        &delete,
+        &OperationContext::default(),
+        move |progress| sink.lock().unwrap().push(progress),
+    ))
+    .unwrap();
+
+    let counted: Vec<ItemCount> = reports
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|report| report.items)
+        .collect();
+    assert_eq!(
+        counted,
+        [
+            ItemCount { done: 0, total: 2 },
+            ItemCount { done: 1, total: 2 },
+            ItemCount { done: 2, total: 2 },
+        ]
+    );
 }
 
 /// Each item's batch report reaches the panel, even right after the

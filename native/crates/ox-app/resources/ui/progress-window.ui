@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  The progress window (native/docs/ui-spec.md §4.17), as Windows Explorer
+  shows its file operations: a small window of its own, titled "44%
+  complete" for one action or "2 Running Actions" for several, listing
+  each action (transfer-panel.ui) under the one before, and "More
+  details" / "Fewer details" at the bottom. src/window/progress_window.rs
+  adds and removes the actions and handles the toggle. The window sets no
+  position or parent: the desktop places it, as Wayland requires.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxProgressWindow" parent="GtkWindow">
+    <property name="default-width">460</property>
+    <property name="resizable">true</property>
+    <style>
+      <class name="ox"/>
+      <class name="progress-window"/>
+    </style>
+    <property name="child">
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkScrolledWindow" id="scroller">
+            <property name="hscrollbar-policy">never</property>
+            <property name="propagate-natural-height">true</property>
+            <property name="max-content-height">560</property>
+            <property name="vexpand">true</property>
+            <property name="child">
+              <object class="GtkBox" id="actions">
+                <property name="orientation">vertical</property>
+                <property name="accessible-role">list</property>
+                <accessibility>
+                  <property name="label" translatable="yes">Running actions</property>
+                </accessibility>
+                <style>
+                  <class name="progress-actions"/>
+                </style>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <style>
+              <class name="progress-footer"/>
+            </style>
+            <child>
+              <object class="GtkButton" id="details_button">
+                <property name="halign">start</property>
+                <accessibility>
+                  <state name="expanded">false</state>
+                </accessibility>
+                <style>
+                  <class name="flat"/>
+                  <class name="progress-details-toggle"/>
+                </style>
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">8</property>
+                    <child>
+                      <object class="GtkImage" id="details_icon">
+                        <property name="accessible-role">presentation</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="details_label">
+                        <property name="label" translatable="yes">More details</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </property>
+  </template>
+</interface>

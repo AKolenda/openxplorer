@@ -7010,8 +7010,8 @@ native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_
 [[feature]]
 id = "OPS-019"
 area = "OPS"
-title = "Transfer progress panel with Cancel"
-behaviour = "While an operation runs, a floating panel above the status bar shows a copy icon, a label ('Moving to Trash…', 'Deleting items…', 'Moving items…', 'Preparing copy…', then backend progress text such as 'Copying <name>') and a progress bar filled to the reported fraction. 'Cancel' sends the operation's cancel token and changes the label to 'Cancelling…'. Progress events for other tokens are ignored."
+title = "Progress window with Cancel"
+behaviour = "While an operation runs it is an action of a separate progress window, as in Windows Explorer (the Python app floated a panel with a copy icon above the status bar). The action first reads the operation's starting text ('Moving to Trash…', 'Deleting items…', 'Moving items…', 'Preparing copy…'), then what it does with its verb ('Copying 1,718 items from Downloads to Backup', 'Moving …', 'Recycling … from Videos', 'Deleting …', 'Extracting <archive> to <folder>', 'Compressing … from <folder>'), each folder a link that opens it in a new window; under it '44% complete', Pause and Cancel, and a progress bar filled to the reported fraction. The window is titled '44% complete' for one action; it shows once an action has run for a second, never takes the focus, sets no position or parent (Wayland), and closes when its last action ends. 'Cancel' sends the operation's cancel token and the action reads 'Cancelling…'; closing the window cancels every action. Progress events for other tokens are ignored."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -7035,7 +7035,7 @@ python_tests = [
 ]
 bridge = ["operate", "cancel"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/transfer_panel.rs. Progress arrives per operation through a channel, so reports of another operation cannot reach the panel."
+native_note = "native/crates/ox-app/src/window/progress_window.rs and native/crates/ox-app/src/window/transfer_panel.rs (each action), action.rs (the description). Tests: native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/progress_window/tests.rs (actions_stack_in_one_window_titled_by_their_progress, the_window_shows_after_a_moment_and_closes_with_its_last_action, a_folder_of_an_action_opens_in_a_new_window, a_running_operation_is_an_action_of_the_progress_window, closing_the_window_cancels_every_action); native/crates/ox-app/src/window/transfer_panel/action.rs (each_action_says_its_verb_count_and_folders); native/crates/ox-app/src/window/transfer_panel.rs (an_action_says_what_it_does_and_how_far_it_is). Progress arrives per operation through a channel, so reports of another operation cannot reach its action. The count becomes the number of files once the free-space check counted them (native/crates/ox-core/tests/ops_transfer.rs: progress_counts_every_file_and_names_the_current_one); a deletion or a move within one drive counts the selected items, where Windows counts every file. Not from a Windows source: the one-second delay (the Windows UX guidance counts two seconds as lengthy), the window closing with its last action and the Extracting and Compressing wording."
 
 [[feature]]
 id = "OPS-020"
@@ -7053,13 +7053,13 @@ sources = [
 python_tests = []
 bridge = ["operate"]
 native = "done"
-native_note = "native/crates/ox-core/src/transfer/types.rs gives every progress report a scope: the batch (items started, then all done) or the current file's bytes. native/crates/ox-core/src/ops/progress.rs lets every batch report through and spaces only file reports, so each item's '(i/N)' step reaches the panel. native/crates/ox-app/src/window/transfer_panel.rs shows the batch on the 'Operation progress' bar and a copied file's bytes on a second, thinner 'Current file progress' bar, hidden between files, so a full file bar is never presented as the batch finishing. Both bars are named for assistive technologies and carry the label as their value text. Tests: native/crates/ox-core/tests/ops_transfer.rs (every_items_batch_report_arrives_in_a_quick_copy, progress_is_reported_and_the_last_report_says_the_run_is_complete), native/crates/ox-core/src/ops/progress.rs (a_full_file_bar_does_not_crowd_out_the_next_items_batch_report), native/crates/ox-app/src/window/tests/file_operations.rs (a_full_file_bar_is_never_shown_as_the_batch_finishing)."
+native_note = "native/crates/ox-core/src/transfer/types.rs gives every progress report a scope: the batch (items started, then all done) or the current file's bytes. native/crates/ox-core/src/ops/progress.rs lets every batch report through and spaces only file reports, so each item's '(i/N)' step reaches the panel. native/crates/ox-app/src/window/transfer_panel.rs shows the action's progress on the 'Operation progress' bar (the speed graph, named the same, takes its place under More details) and, under More details, a copied file's bytes on a thinner 'Current file progress' bar, hidden between files, so a full file bar is never presented as the batch finishing. Both bars are named for assistive technologies and carry the label as their value text. Tests: native/crates/ox-core/tests/ops_transfer.rs (every_items_batch_report_arrives_in_a_quick_copy, progress_is_reported_and_the_last_report_says_the_run_is_complete), native/crates/ox-core/src/ops/progress.rs (a_full_file_bar_does_not_crowd_out_the_next_items_batch_report), native/crates/ox-app/src/window/tests/file_operations.rs (a_full_file_bar_is_never_shown_as_the_batch_finishing)."
 
 [[feature]]
 id = "OPS-021"
 area = "OPS"
 title = "Progress with speed and time remaining"
-behaviour = "Copy and move jobs show progress with processed and total size, speed and time remaining, and can be paused, resumed or cancelled from the job tracker. Cancelling keeps the items already finished."
+behaviour = "Copy and move jobs show progress with processed and total size, speed and time remaining, and can be paused, resumed or cancelled from the job tracker. Cancelling keeps the items already finished. In the progress window, More details shows, for every action, a speed graph of the job so far with 'Speed: 32.8 MB/s' over a line at the current speed, 'Name: <item>', 'Time remaining: About 25 seconds' ('Calculating…' until it can be estimated) and 'Items remaining: 1,030 (313 MB)'; Fewer details hides them. The choice is remembered across sessions. A paused action turns the caution colour and Pause becomes Resume."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "partial"
@@ -7078,7 +7078,7 @@ python_tests = [
 bridge = ["operate", "cancel"]
 dolphin = "KJobTrackerInterface / KUiServer progress"
 native = "done"
-native_note = "Per-job Pause/Resume and Cancel control cooperative worker tokens, including cancellation while paused. File reports accumulate processed bytes across files before throttling; the panel shows speed excluding paused time and total/remaining only when the destination free-space measurement supplied a usable total. Grouped conflict-policy runs show processed bytes without inventing an overall total. Native moves that complete without copying keep item progress. Tests: native/crates/ox-app/src/window/transfer_panel/rate.rs (progress_reports_batch_bytes_speed_and_remaining_without_inventing_unknown_totals), native/crates/ox-core/src/transfer/cancellation.rs (paused_workers_resume_and_cancellation_wakes_them_without_resuming_other_jobs); transfer cancellation/staging integration tests remain in native/crates/ox-core/tests/transfer_cases/operations.rs."
+native_note = "Per-job Pause/Resume and Cancel control cooperative worker tokens, including cancellation while paused. File reports accumulate processed bytes across files before throttling; the panel shows speed excluding paused time and total/remaining only when the destination free-space measurement supplied a usable total. Grouped conflict-policy runs show processed bytes without inventing an overall total. Native moves that complete without copying keep item progress. The details show the recent speed (last three seconds) on the graph and the time left from the average speed. The More details choice is the progressDetails preference. Tests: native/crates/ox-app/src/window/transfer_panel/rate.rs (progress_reports_batch_bytes_speed_and_remaining_without_inventing_unknown_totals, time_remaining_reads_as_windows_says_it, items_remaining_carry_their_size), native/crates/ox-app/src/window/transfer_panel.rs (the_details_name_the_item_and_say_what_remains, pause_becomes_resume_and_marks_the_action_paused), native/crates/ox-app/src/window/transfer_panel/speed_graph.rs (the_graph_shades_the_part_done_and_says_the_speed), native/crates/ox-app/src/window/progress_window/tests.rs (more_details_applies_to_every_action_and_is_remembered), native/crates/ox-core/src/settings/preferences.rs (the_progress_windows_details_are_remembered_and_stored_only_when_open), native/crates/ox-core/tests/ops_transfer.rs (progress_counts_every_file_and_names_the_current_one, a_deletion_counts_the_selected_items), native/crates/ox-core/src/transfer/cancellation.rs (paused_workers_resume_and_cancellation_wakes_them_without_resuming_other_jobs); transfer cancellation/staging integration tests remain in native/crates/ox-core/tests/transfer_cases/operations.rs."
 
 [[feature]]
 id = "OPS-022"
@@ -7095,7 +7095,7 @@ python_tests = [
 ]
 bridge = ["cancel"]
 native = "done"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (cancellation_during_copy_removes_partial_stage_and_stops_the_batch); native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it)."
+native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (cancellation_during_copy_removes_partial_stage_and_stops_the_batch); native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/progress_window/tests.rs (closing_the_window_cancels_every_action)."
 
 [[feature]]
 id = "OPS-023"
@@ -7159,7 +7159,7 @@ native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_tra
 id = "OPS-025"
 area = "OPS"
 title = "Several operations at once without blocking browsing"
-behaviour = "Several copy, move or delete jobs can run concurrently in the background while the user keeps browsing and starting new operations."
+behaviour = "Several copy, move or delete jobs can run concurrently in the background while the user keeps browsing and starting new operations. They stack in one progress window titled '2 Running Actions', each with its own Pause and Cancel."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "partial"
@@ -7173,7 +7173,7 @@ python_tests = []
 bridge = ["operate", "cancel"]
 dolphin = "asynchronous KIO jobs"
 native = "done"
-native_note = "Up to four independent copy, move or delete jobs run with separate progress, pause and cancellation panels while browsing remains available. Overlapping source/destination URI trees refuse a new run with a message; slots release only when their own job finishes. Archive operations, restore, rename, Undo and update/restart remain exclusive, and closing cancels every job. Late progress cannot overwrite a reused panel; completion does not replace a selection in another folder. Test: native/crates/ox-app/src/window/file_ops/jobs.rs (separate_jobs_have_independent_cancel_and_release_their_slots)."
+native_note = "Up to four independent copy, move or delete jobs run with separate progress, pause and cancellation actions, stacked in the application's one progress window, while browsing remains available. Overlapping source/destination URI trees refuse a new run with a message; slots release only when their own job finishes. Archive operations, restore, rename, Undo and update/restart remain exclusive, and closing cancels every job. Late progress cannot overwrite a reused panel; completion does not replace a selection in another folder. Tests: native/crates/ox-app/src/window/file_ops/jobs.rs (separate_jobs_have_independent_cancel_and_release_their_slots), native/crates/ox-app/src/window/progress_window/tests.rs (actions_stack_in_one_window_titled_by_their_progress)."
 
 [[feature]]
 id = "OPS-026"
@@ -7347,7 +7347,7 @@ python_tests = []
 bridge = []
 dolphin = "KDE job tracker"
 native = "partial"
-native_note = "Up to four independent transfers have their own progress and cancellation panels; the panel and its slot are released when that job finishes. Test: native/crates/ox-app/src/window/file_ops/jobs.rs (separate_jobs_have_independent_cancel_and_release_their_slots), also cited by OPS-025. Missing: a retained list of completed/failed jobs and a queue for subsequent work; an overlapping or fifth job is refused rather than queued."
+native_note = "Up to four independent transfers have their own progress and cancellation actions in the progress window; the action and its slot are released when that job finishes. Test: native/crates/ox-app/src/window/file_ops/jobs.rs (separate_jobs_have_independent_cancel_and_release_their_slots), also cited by OPS-025. Missing: a retained list of completed/failed jobs and a queue for subsequent work; an overlapping or fifth job is refused rather than queued."
 
 [[feature]]
 id = "OPS-034"
@@ -12630,7 +12630,7 @@ python_tests = [
 ]
 bridge = ["archiveExtract", "cancel", "list", "archiveInspect", "normalise"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, extract_here_uses_the_next_free_name); native/crates/ox-app/src/archive_view/extraction.rs (a_failure_says_the_zip_and_existing_files_are_untouched); core rollback: native/crates/ox-core/tests/archive_extract_rollback.rs. The transfer panel (with the ZIP glyph) shows 'Preparing extraction…', progress and Cancel (native/crates/ox-app/src/window/transfer_panel.rs: an_archive_operation_shows_its_glyph_and_cancel_stops_it); failures open 'Extraction stopped', while Cancel just stops with no message, as in Windows Explorer (window/tests/archives.rs: cancelling_an_extractions_conflict_question_says_nothing); success shows the folder in the asking tab or a new tab, or lists the destination again, without a message (as in Windows Explorer). Earlier evidence: native/crates/ox-core/tests/archive_extract_rollback.rs (progress_labels_name_the_check_each_file_and_the_result, progress_ends_complete_and_only_the_new_folder_remains, cancelling_while_writing_removes_the_staging_folder); native/crates/ox-core/tests/archive_extract.rs (an_existing_folder_is_never_merged_into). Differs: Extract all… into an existing folder merges after the name-conflict question (ARC-012); when the move leaves items out, the move's own 'Operation result' lists them and nothing follows it (native/crates/ox-app/src/window/tests/archives.rs: extract_all_goes_straight_into_an_existing_folder_after_asking)."
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, extract_here_uses_the_next_free_name); native/crates/ox-app/src/archive_view/extraction.rs (a_failure_says_the_zip_and_existing_files_are_untouched); core rollback: native/crates/ox-core/tests/archive_extract_rollback.rs. The extraction's action of the progress window (the window has the ZIP glyph) shows 'Preparing extraction…', progress and Cancel (native/crates/ox-app/src/window/transfer_panel.rs: an_archive_operation_shows_its_glyph_and_cancel_stops_it); failures open 'Extraction stopped', while Cancel just stops with no message, as in Windows Explorer (window/tests/archives.rs: cancelling_an_extractions_conflict_question_says_nothing); success shows the folder in the asking tab or a new tab, or lists the destination again, without a message (as in Windows Explorer). Earlier evidence: native/crates/ox-core/tests/archive_extract_rollback.rs (progress_labels_name_the_check_each_file_and_the_result, progress_ends_complete_and_only_the_new_folder_remains, cancelling_while_writing_removes_the_staging_folder); native/crates/ox-core/tests/archive_extract.rs (an_existing_folder_is_never_merged_into). Differs: Extract all… into an existing folder merges after the name-conflict question (ARC-012); when the move leaves items out, the move's own 'Operation result' lists them and nothing follows it (native/crates/ox-app/src/window/tests/archives.rs: extract_all_goes_straight_into_an_existing_folder_after_asking)."
 
 [[feature]]
 id = "ARC-012"
@@ -15565,7 +15565,7 @@ bridge = ["operate"]
 dolphin = "Plasma task-manager job progress"
 gnome = "com.canonical.Unity.LauncherEntry Update signal (progress, progress-visible), supported by Dash-to-Dock/Dash-to-Panel-style taskbars; GNOME Shell core has no equivalent"
 native = "done"
-native_note = "native/crates/ox-app/src/launcher_progress.rs: while the transfer panel shows a running write (file operations, extraction, compression and restored copies), the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Tests: launcher_progress.rs (the_update_names_the_app_and_its_progress), native/crates/ox-app/src/window/tests/file_operations.rs (running_operations_show_their_progress_on_the_dock_icon: on the private test bus a file operation and an extraction in the transfer panel each send an Update with the bar shown at the start and hidden at the end). Not verified against a real dock."
+native_note = "native/crates/ox-app/src/launcher_progress.rs: while the progress window shows a running write (file operations, extraction, compression and restored copies), the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Tests: launcher_progress.rs (the_update_names_the_app_and_its_progress), native/crates/ox-app/src/window/tests/file_operations.rs (running_operations_show_their_progress_on_the_dock_icon: on the private test bus a file operation and an extraction in the transfer panel each send an Update with the bar shown at the start and hidden at the end). Not verified against a real dock."
 
 [[feature]]
 id = "INT-028"
@@ -15584,7 +15584,7 @@ bridge = ["operate", "archiveExtract", "updateInstall"]
 dolphin = "n/a in Dolphin by default"
 gnome = "gtk_application_inhibit(LOGOUT|SUSPEND) → org.gnome.SessionManager.Inhibit (gtk_application_inhibit is present in the Nautilus 46.4 binary)"
 native = "done"
-native_note = "native/crates/ox-app/src/write_inhibitor.rs: the transfer panel (copy, move, trash, delete, restore, extract, compress; native/crates/ox-app/src/window/transfer_panel.rs) and the Software updates dialog while APT runs (native/crates/ox-app/src/update/dialog.rs) hold gtk_application_inhibit(LOGOUT | SUSPEND, 'Copying files') from start to end, released on completion or cancellation. GTK passes it to org.gnome.SessionManager or the Inhibit portal. Test: native/crates/ox-app/src/window/tests/file_operations.rs (a_running_operation_inhibits_logout_and_a_focused_one_notifies_nothing). The session manager's dialogs themselves are not tested (no session manager on the test bus)."
+native_note = "native/crates/ox-app/src/write_inhibitor.rs: each action of the progress window, for the browsing window that runs it (copy, move, trash, delete, restore, extract, compress; native/crates/ox-app/src/window/transfer_panel.rs) and the Software updates dialog while APT runs (native/crates/ox-app/src/update/dialog.rs) hold gtk_application_inhibit(LOGOUT | SUSPEND, 'Copying files') from start to end, released on completion or cancellation. GTK passes it to org.gnome.SessionManager or the Inhibit portal. Test: native/crates/ox-app/src/window/tests/file_operations.rs (a_running_operation_inhibits_logout_and_a_focused_one_notifies_nothing). The session manager's dialogs themselves are not tested (no session manager on the test bus)."
 
 [[feature]]
 id = "INT-029"
@@ -16500,7 +16500,7 @@ bridge = []
 dolphin = "KDE animation speed set to instant"
 gnome = "org.gnome.desktop.interface enable-animations / gtk-enable-animations; gtk-enable-animations / AdwStyleManager high-contrast; org.gnome.desktop.interface enable-animations → gtk-enable-animations (GTK4 stops widget animations; custom animations must check it)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (animations_stay_off_when_the_desktop_turns_them_off). Every motion in the skin is a CSS transition or animation (resources/skin), which GTK skips while gtk-enable-animations is off; GTK follows the desktop's reduced-motion setting (org.gnome.desktop.interface enable-animations) and the app never turns animations back on. The test also checks that no source outside the snapshot hook and the test support moves anything frame by frame (tick callbacks or timed animations), which the setting would not stop."
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (animations_stay_off_when_the_desktop_turns_them_off). Every motion in the skin is a CSS transition or animation (resources/skin), which GTK skips while gtk-enable-animations is off; GTK follows the desktop's reduced-motion setting (org.gnome.desktop.interface enable-animations) and the app never turns animations back on. The test also checks that no source outside the snapshot hook and the test support moves anything frame by frame (tick callbacks or timed animations), which the setting would not stop. The progress window's bar and speed graph change only when the operation reports, at once with or without animations, and its paused colour fades by a CSS transition (native/crates/ox-app/src/window/transfer_panel.rs: the_bar_and_the_speed_line_never_move_on_their_own)."
 
 [[feature]]
 id = "ACC-011"

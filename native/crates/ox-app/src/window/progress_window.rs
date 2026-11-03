@@ -1,0 +1,309 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! The progress window: every running file operation of the application,
+//! each an action with its own Pause and Cancel ([`TransferPanel`]), in
+//! one small window of its own, as Windows Explorer shows them (OPS-019,
+//! OPS-025).
+//!
+//! Windows 8 and later "present all pending copy jobs in this single
+//! dialog", each with pause, resume and stop, and an optional detailed
+//! view with a throughput graph (Building Windows 8, "Improving our file
+//! management basics: copy, move, rename, and delete", 2011). The
+//! window's title puts what distinguishes it first, for the taskbar:
+//! "44% complete" for one action, as the Windows UX guidance gives as its
+//! example, and "2 Running Actions" for several, as Windows titles it.
+//!
+//! "More details" / "Fewer details" applies to every action and is
+//! remembered across sessions, as in Windows ("'More details' is sticky
+//! … across sessions", a Windows team reply under that post), in the
+//! `progressDetails` preference.
+//!
+//! The window shows once an action has run for [`SHOW_DELAY`], so a
+//! quick operation shows nothing, and it does not take the focus (the UX
+//! guidance: "Don't steal input focus to show a progress update"). It
+//! closes when its last action ends. Closing it cancels every action, as
+//! each action's Cancel does: finished work stays (OPS-022). It belongs
+//! to no browsing window and sets no position: the desktop places it, as
+//! Wayland requires, and closing a browsing window still asks first
+//! while that window's operations run (TAB-049).
+
+use std::cell::{Cell, RefCell};
+use std::time::Duration;
+
+use gtk::glib;
+use gtk::prelude::*;
+use gtk::subclass::prelude::*;
+use ox_core::settings::PreferencesUpdate;
+
+use crate::app_context::AppContext;
+use crate::icons::{self, Icon};
+use crate::window::transfer_panel::TransferPanel;
+
+/// How long an action runs before the window shows. Windows shows no
+/// progress for an operation that ends at once; the UX guidance counts
+/// "operations that take two seconds or longer" as needing it.
+pub(crate) const SHOW_DELAY: Duration = Duration::from_secs(1);
+
+/// The edge of the "More details" chevron.
+const CHEVRON_SIZE: i32 = 16;
+
+mod imp {
+    use super::*;
+
+    /// Private state of [`super::ProgressWindow`].
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(file = "../../resources/ui/progress-window.ui")]
+    pub(crate) struct ProgressWindow {
+        /// The actions, one under the other.
+        #[template_child]
+        pub(super) actions: TemplateChild<gtk::Box>,
+        /// "More details" / "Fewer details".
+        #[template_child]
+        pub(super) details_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub(super) details_icon: TemplateChild<gtk::Image>,
+        #[template_child]
+        pub(super) details_label: TemplateChild<gtk::Label>,
+        /// The application's state, whose preference keeps the details.
+        pub(super) context: glib::WeakRef<AppContext>,
+        /// Whether the details show.
+        pub(super) details: Cell<bool>,
+        /// How long an action runs before the window shows.
+        pub(super) show_delay: Cell<Duration>,
+        /// The timer that shows the window.
+        pub(super) showing: RefCell<Option<glib::SourceId>>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for ProgressWindow {
+        const NAME: &'static str = "OxProgressWindow";
+        type Type = super::ProgressWindow;
+        type ParentType = gtk::Window;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(window: &glib::subclass::InitializingObject<Self>) {
+            window.init_template();
+        }
+    }
+
+    impl ObjectImpl for ProgressWindow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "progress-window.ui");
+            self.show_delay.set(SHOW_DELAY);
+            let window = self.obj();
+            self.details_button.connect_clicked(glib::clone!(
+                #[weak]
+                window,
+                move |_| window.toggle_details()
+            ));
+        }
+
+        fn dispose(&self) {
+            if let Some(timer) = self.showing.take() {
+                timer.remove();
+            }
+        }
+    }
+
+    impl WidgetImpl for ProgressWindow {}
+
+    impl WindowImpl for ProgressWindow {
+        /// Closing cancels every action; the window closes with the last.
+        fn close_request(&self) -> glib::Propagation {
+            let window = self.obj();
+            let actions = window.actions();
+            if actions.is_empty() {
+                return glib::Propagation::Proceed;
+            }
+            for action in actions {
+                action.cancel();
+            }
+            glib::Propagation::Stop
+        }
+    }
+}
+
+glib::wrapper! {
+    /// The window of the running file operations.
+    pub(crate) struct ProgressWindow(ObjectSubclass<imp::ProgressWindow>)
+        @extends gtk::Window, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Native, gtk::Root,
+            gtk::ShortcutManager;
+}
+
+impl ProgressWindow {
+    /// The progress window of `context`'s application, made when none is
+    /// open.
+    pub(crate) fn of(context: &AppContext) -> Self {
+        if let Some(window) = context.progress_window() {
+            return window;
+        }
+        let window: Self = glib::Object::new();
+        window.imp().context.set(Some(context));
+        let details = context.settings_data().preferences.progress_details;
+        window.set_details(details);
+        context.set_progress_window(Some(&window));
+        window
+    }
+
+    /// Adds `action`, which has just started, under the others; the
+    /// window shows once it has run for a moment.
+    pub(crate) fn add(&self, action: &TransferPanel) {
+        let imp = self.imp();
+        if action.parent().as_ref() != Some(imp.actions.upcast_ref()) {
+            if let Some(parent) = action.parent().and_downcast::<gtk::Box>() {
+                parent.remove(action);
+            }
+            imp.actions.append(action);
+        }
+        action.show_in(Some(self));
+        action.show_details(imp.details.get());
+        self.refresh();
+        self.show_soon();
+    }
+
+    /// Takes `action`, which has ended, out; the window closes with its
+    /// last action.
+    pub(crate) fn remove(&self, action: &TransferPanel) {
+        let imp = self.imp();
+        action.show_in(None);
+        if action.parent().as_ref() == Some(imp.actions.upcast_ref()) {
+            imp.actions.remove(action);
+        }
+        if !self.actions().is_empty() {
+            self.refresh();
+            return;
+        }
+        if let Some(timer) = imp.showing.take() {
+            timer.remove();
+        }
+        if let Some(context) = imp.context.upgrade() {
+            if context.progress_window().as_ref() == Some(self) {
+                context.set_progress_window(None);
+            }
+        }
+        self.destroy();
+    }
+
+    /// The running actions, in the order they started.
+    pub(crate) fn actions(&self) -> Vec<TransferPanel> {
+        let mut actions = Vec::new();
+        let mut child = self.imp().actions.first_child();
+        while let Some(widget) = child {
+            child = widget.next_sibling();
+            if let Ok(action) = widget.downcast::<TransferPanel>() {
+                actions.push(action);
+            }
+        }
+        actions
+    }
+
+    /// Titles the window for its actions: "44% complete" for one, "2
+    /// Running Actions" for several; its icon is the first action's.
+    pub(crate) fn refresh(&self) {
+        let actions = self.actions();
+        let title = match actions.as_slice() {
+            [] => return,
+            [action] => action.percent_text(),
+            _ => {
+                let count = u64::try_from(actions.len()).unwrap_or(u64::MAX);
+                ox_core::i18n::ngettext("{count} Running Action", "{count} Running Actions", count)
+                    .replace("{count}", &count.to_string())
+            }
+        };
+        if self.title().as_deref() != Some(title.as_str()) {
+            self.set_title(Some(&title));
+        }
+        let icon = actions[0].glyph().name();
+        if self.icon_name().as_deref() != Some(icon) {
+            self.set_icon_name(Some(icon));
+        }
+    }
+
+    /// Shows the window once [`SHOW_DELAY`] has passed with an action
+    /// still running, without taking the focus.
+    fn show_soon(&self) {
+        let imp = self.imp();
+        if self.is_visible() || imp.showing.borrow().is_some() {
+            return;
+        }
+        let delay = imp.show_delay.get();
+        let timer = glib::timeout_add_local_once(
+            delay,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move || {
+                    window.imp().showing.take();
+                    if !window.actions().is_empty() {
+                        window.set_visible(true);
+                    }
+                }
+            ),
+        );
+        imp.showing.replace(Some(timer));
+    }
+
+    /// "More details" or "Fewer details": every action shows or hides
+    /// its details, and the choice is kept for next time.
+    fn toggle_details(&self) {
+        let shown = !self.imp().details.get();
+        self.set_details(shown);
+        if let Some(context) = self.imp().context.upgrade() {
+            let update = PreferencesUpdate {
+                progress_details: Some(shown),
+                ..PreferencesUpdate::default()
+            };
+            context.update_preferences(update, |_| {});
+        }
+    }
+
+    /// Shows or hides every action's details, and words the toggle.
+    fn set_details(&self, shown: bool) {
+        let imp = self.imp();
+        imp.details.set(shown);
+        let (icon, text) = if shown {
+            (Icon::ChevronUp16, ox_core::i18n::gettext_static("Fewer details"))
+        } else {
+            (Icon::ChevronDown16, ox_core::i18n::gettext_static("More details"))
+        };
+        icons::set_icon(&imp.details_icon, icon, CHEVRON_SIZE);
+        imp.details_label.set_text(text);
+        imp.details_button
+            .update_state(&[gtk::accessible::State::Expanded(Some(shown))]);
+        for action in self.actions() {
+            action.show_details(shown);
+        }
+    }
+
+    /// Whether the details show, for tests.
+    #[cfg(test)]
+    pub(crate) fn shows_details(&self) -> bool {
+        self.imp().details.get()
+    }
+
+    /// Presses "More details" or "Fewer details", for tests.
+    #[cfg(test)]
+    pub(crate) fn press_details(&self) {
+        self.imp().details_button.emit_clicked();
+    }
+
+    /// The toggle's text, for tests.
+    #[cfg(test)]
+    pub(crate) fn details_text(&self) -> String {
+        self.imp().details_label.text().to_string()
+    }
+
+    /// Shows the window after `delay` instead of [`SHOW_DELAY`], for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn set_show_delay(&self, delay: Duration) {
+        self.imp().show_delay.set(delay);
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -74,6 +74,8 @@ pub(crate) enum Icon {
     /// `chevron_right_16_regular`: a settings row that opens a page of its
     /// own.
     ChevronRight16,
+    /// `chevron_up_16_regular`: the progress window's "Fewer details".
+    ChevronUp16,
     /// `clipboard_paste_20_regular`: Paste.
     ClipboardPaste,
     /// `clock_20_regular`: Previous versions, and the banner of a tab that
@@ -186,8 +188,13 @@ pub(crate) enum Icon {
     PaintBrush,
     /// `panel_right_20_regular`: the details pane toggle.
     PanelRight,
+    /// `pause_16_regular`: pausing an action in the progress window.
+    Pause16,
     /// `phone_20_regular`: phones and other devices.
     Phone,
+    /// `play_16_regular`: resuming a paused action in the progress
+    /// window.
+    Play16,
     /// `pin_16_regular`: pins and the Quick access headings.
     Pin,
     /// `rename_20_regular`: Rename.
@@ -268,6 +275,7 @@ impl Icon {
             Icon::ChevronDown => "ox-chevron-down-20-symbolic",
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
             Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
+            Icon::ChevronUp16 => "ox-chevron-up-16-symbolic",
             Icon::ClipboardPaste => "ox-clipboard-paste-20-symbolic",
             Icon::Clock => "ox-clock-20-symbolic",
             Icon::Code => "ox-code-20-symbolic",
@@ -318,7 +326,9 @@ impl Icon {
             Icon::Organization => "ox-organization-20-symbolic",
             Icon::PaintBrush => "ox-paint-brush-20-symbolic",
             Icon::PanelRight => "ox-panel-right-20-symbolic",
+            Icon::Pause16 => "ox-pause-16-symbolic",
             Icon::Phone => "ox-phone-20-symbolic",
+            Icon::Play16 => "ox-play-16-symbolic",
             Icon::Pin => "ox-pin-16-symbolic",
             Icon::Rename => "ox-rename-20-symbolic",
             Icon::Search => "ox-search-20-symbolic",
@@ -366,7 +376,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 96] = [
+pub(crate) const ALL_ICONS: [Icon; 99] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowClockwise,
@@ -387,6 +397,7 @@ pub(crate) const ALL_ICONS: [Icon; 96] = [
     Icon::ChevronDown,
     Icon::ChevronDown16,
     Icon::ChevronRight16,
+    Icon::ChevronUp16,
     Icon::ClipboardPaste,
     Icon::Clock,
     Icon::Code,
@@ -437,7 +448,9 @@ pub(crate) const ALL_ICONS: [Icon; 96] = [
     Icon::Organization,
     Icon::PaintBrush,
     Icon::PanelRight,
+    Icon::Pause16,
     Icon::Phone,
+    Icon::Play16,
     Icon::Pin,
     Icon::Rename,
     Icon::Search,

@@ -1,54 +1,107 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  The transfer panel, `#transfer` of v2.0.0:desktop/ui/index.html: the glyph of
-  the kind of write, what the operation is doing above its progress bar,
-  the current file's bar while a file is copied, and Cancel.
-  It floats above the status bar between the sidebar and the details pane
-  (native/docs/ui-spec.md §4.15, "Transfer"). src/window/transfer_panel.rs
-  sets the glyph and handles Cancel.
+  One action of the progress window (native/docs/ui-spec.md §4.17,
+  "Progress window"), as the Windows progress window shows it: what it
+  does ("Copying 1,718 items from Downloads to Backup", each folder a
+  link), "44% complete" with Pause and Cancel beside it, and the bar. Its
+  "More details" are the speed graph, which takes the bar's place, the
+  name of the item handled with the current file's own thin bar, the time
+  remaining and the items remaining. src/window/transfer_panel.rs fills it
+  in and handles the buttons and links.
 -->
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxTransferPanel" parent="GtkBox">
     <property name="visible">false</property>
-    <property name="valign">end</property>
-    <property name="spacing">12</property>
+    <property name="orientation">vertical</property>
+    <property name="spacing">6</property>
+    <property name="accessible-role">group</property>
     <style>
-      <class name="transfer"/>
+      <class name="progress-action"/>
     </style>
     <child>
-      <object class="GtkImage" id="glyph">
-        <property name="accessible-role">presentation</property>
+      <object class="GtkLabel" id="header_label">
+        <property name="xalign">0</property>
+        <property name="wrap">true</property>
+        <property name="wrap-mode">word-char</property>
+        <style>
+          <class name="progress-header"/>
+        </style>
       </object>
     </child>
     <child>
       <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <property name="hexpand">true</property>
         <property name="spacing">8</property>
         <child>
-          <object class="GtkLabel" id="status_label">
+          <object class="GtkLabel" id="percent_label">
             <property name="xalign">0</property>
+            <property name="hexpand">true</property>
             <property name="ellipsize">end</property>
             <property name="accessible-role">status</property>
             <style>
-              <class name="transfer-label"/>
+              <class name="progress-percent"/>
             </style>
           </object>
         </child>
         <child>
-          <object class="GtkLabel" id="rate_label">
-            <property name="xalign">0</property>
-            <property name="visible">false</property>
-            <property name="ellipsize">end</property>
+          <object class="GtkButton" id="pause_button">
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Pause</property>
+            <accessibility>
+              <property name="label" translatable="yes">Pause</property>
+            </accessibility>
+            <style>
+              <class name="flat"/>
+              <class name="progress-control"/>
+            </style>
+            <child>
+              <object class="GtkImage" id="pause_icon">
+                <property name="accessible-role">presentation</property>
+              </object>
+            </child>
           </object>
         </child>
         <child>
-          <object class="GtkProgressBar" id="progress_bar">
+          <object class="GtkButton" id="cancel_button">
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Cancel</property>
             <accessibility>
-              <property name="label" translatable="yes">Operation progress</property>
+              <property name="label" translatable="yes">Cancel</property>
             </accessibility>
+            <style>
+              <class name="flat"/>
+              <class name="progress-control"/>
+            </style>
+            <child>
+              <object class="GtkImage" id="cancel_icon">
+                <property name="accessible-role">presentation</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkProgressBar" id="progress_bar">
+        <accessibility>
+          <property name="label" translatable="yes">Operation progress</property>
+        </accessibility>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="details">
+        <property name="orientation">vertical</property>
+        <property name="spacing">4</property>
+        <property name="visible">false</property>
+        <child>
+          <object class="OxSpeedGraph" id="graph"/>
+        </child>
+        <child>
+          <object class="GtkLabel" id="name_label">
+            <property name="xalign">0</property>
+            <property name="ellipsize">middle</property>
+            <property name="margin-top">4</property>
           </object>
         </child>
         <child>
@@ -58,26 +111,24 @@
               <property name="label" translatable="yes">Current file progress</property>
             </accessibility>
             <style>
-              <class name="transfer-file"/>
+              <class name="progress-file"/>
             </style>
           </object>
         </child>
-      </object>
-    </child>
-    <child>
-      <object class="GtkButton" id="pause_button">
-        <property name="label">Pause</property>
-        <property name="valign">center</property>
-        <style><class name="bordered"/></style>
-      </object>
-    </child>
-    <child>
-      <object class="GtkButton" id="cancel_button">
-        <property name="label" translatable="yes">Cancel</property>
-        <property name="valign">center</property>
-        <style>
-          <class name="bordered"/>
-        </style>
+        <child>
+          <object class="GtkLabel" id="time_label">
+            <property name="xalign">0</property>
+            <property name="ellipsize">end</property>
+            <property name="visible">false</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="items_label">
+            <property name="xalign">0</property>
+            <property name="ellipsize">end</property>
+            <property name="visible">false</property>
+          </object>
+        </child>
       </object>
     </child>
   </template>

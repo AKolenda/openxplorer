@@ -332,6 +332,7 @@ impl BrowserWindow {
                 folder_name: name,
             };
             let extractor = self.zip_extractor().with_progress(self.progress_reporter(cancel));
+            self.describe_extraction(cancel, &request);
             match extractor.extract_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::DestinationExists) => {}
                 Ok(extracted) => {
@@ -404,6 +405,7 @@ impl BrowserWindow {
             let compressor = ZipCompressor::new()
                 .with_write_guard(self.context().previous_versions().write_guard())
                 .with_progress(self.progress_reporter(cancel));
+            self.describe_compression(cancel, &request);
             match compressor.compress_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::ArchiveExists) => {}
                 Ok(created) => return Ok(compression_success_text(&created)),

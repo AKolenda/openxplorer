@@ -755,14 +755,14 @@ fn duplicate_copies_next_to_the_item_and_selects_the_copy() {
 fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let panel = test.window.imp().transfer_panel.get();
+    let panel = test.window.transfer_panel().clone();
 
     let context = test.window.begin_operation("Preparing copy…");
     let second = test.window.begin_operation("Moving items…");
 
     let context = context.expect("the first operation starts");
     assert!(second.is_none(), "one operation at a time");
-    assert!(panel.is_visible());
+    assert!(panel.get_visible(), "its action shows in the progress window");
     assert_eq!(panel.status_text(), "Preparing copy…");
     assert!(
         !is_enabled(&test, "trash"),
@@ -773,7 +773,7 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     assert!(context.cancel.is_cancelled());
     assert_eq!(panel.status_text(), "Cancelling…");
     test.window.end_operation();
-    assert!(!panel.is_visible());
+    assert!(!panel.get_visible());
     assert!(!is_enabled(&test, "cancel-operation"));
 }
 
@@ -785,12 +785,14 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
 fn a_full_file_bar_is_never_shown_as_the_batch_finishing() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let panel = test.window.imp().transfer_panel.get();
+    let panel = test.window.transfer_panel().clone();
     let report = |label: &str, fraction: f64, scope: ProgressScope| Progress {
         label: label.to_owned(),
         fraction,
         scope,
         bytes: None,
+        items: None,
+        name: None,
     };
     let _context = test.window.begin_operation("Preparing copy…");
 
@@ -844,7 +846,7 @@ fn closing_during_an_operation_asks_and_closes_only_once_it_stopped() {
 fn a_running_operation_inhibits_logout_and_a_focused_one_notifies_nothing() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let panel = test.window.imp().transfer_panel.get();
+    let panel = test.window.transfer_panel().clone();
 
     let context = test.window.begin_operation("Preparing copy…");
     assert!(context.is_some() && panel.inhibits_logout());

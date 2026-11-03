@@ -112,6 +112,8 @@ mod tests {
             fraction,
             scope: ProgressScope::Batch,
             bytes: None,
+            items: None,
+            name: None,
         }
     }
 
@@ -125,7 +127,10 @@ mod tests {
                 file_size: 10,
                 batch_written: number * 10 + 5,
                 batch_size: None,
+                file_started: false,
             }),
+            items: None,
+            name: None,
         }
     }
 

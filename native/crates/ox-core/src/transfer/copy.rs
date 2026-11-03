@@ -312,7 +312,7 @@ impl<'a> Copier<'a> {
         let name = source.display_name();
         let cancel = self.cancel;
         let emit = &mut *self.emit;
-        let mut progress = |current: u64, total: u64| {
+        let mut report = |current: u64, total: u64, file_started: bool| {
             cancel.wait_while_paused();
             // Nothing more is reported once the user cancelled.
             if cancel.is_cancelled() {
@@ -328,12 +328,18 @@ impl<'a> Copier<'a> {
                     // The engine fills in what the batch writes.
                     batch_size: None,
                     batch_written: 0,
+                    file_started,
                 }),
+                items: None,
+                name: Some(name.clone()),
             });
         };
         // An explicit boundary lets the engine accumulate bytes even when
-        // adjacent files have the same size. It is throttled after accounting.
-        progress(0, 0);
-        source.copy_file(target, cancel, &mut progress)
+        // adjacent files have the same size, and count the files. It is
+        // throttled after accounting.
+        report(0, 0, true);
+        source.copy_file(target, cancel, &mut |current, total| {
+            report(current, total, false)
+        })
     }
 }

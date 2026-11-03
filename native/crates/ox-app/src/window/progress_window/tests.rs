@@ -1,0 +1,234 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! The progress window with real browsing windows on simulated
+//! operations: no file is written.
+
+use std::time::Duration;
+
+use gtk::prelude::*;
+use ox_core::transfer::{Cancellation, Progress, ProgressScope};
+
+use super::ProgressWindow;
+use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
+use crate::window::transfer_panel::{Action, TransferKind, TransferPanel, Verb};
+use crate::window::BrowserWindow;
+
+/// A report of the whole batch at `fraction`.
+fn batch(fraction: f64) -> Progress {
+    Progress {
+        label: "Copy: Notes 2.txt (1/3)".to_owned(),
+        fraction,
+        scope: ProgressScope::Batch,
+        bytes: None,
+        items: None,
+        name: None,
+    }
+}
+
+/// A new action of `test`'s window, started and described as a copy of
+/// `count` items of the fixture into its Documents folder.
+fn start_copy(test: &TestWindow, fixture: &Fixture, count: usize) -> (TransferPanel, Cancellation) {
+    let action = TransferPanel::for_window(&test.window);
+    let cancel = Cancellation::new();
+    action.start(TransferKind::Files, "Preparing copy…", cancel.clone());
+    let uris: Vec<String> = (0..count)
+        .map(|index| format!("{}/Item {index}.txt", fixture.uri()))
+        .collect();
+    let documents = format!("{}/Documents", fixture.uri());
+    action.describe(Action::of(Verb::Copying, &uris, Some(&documents)).unwrap());
+    (action, cancel)
+}
+
+/// The progress window of `test`'s application, made now, showing as
+/// soon as an action starts.
+fn window_of(test: &TestWindow) -> ProgressWindow {
+    let window = ProgressWindow::of(&test.context);
+    window.set_show_delay(Duration::ZERO);
+    window
+}
+
+/// One action titles the window with its percentage; two stack in the
+/// same window, titled "2 Running Actions", each with its own Cancel.
+///
+/// parity: OPS-019, OPS-025
+#[gtk::test]
+fn actions_stack_in_one_window_titled_by_their_progress() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+
+    let (first, first_cancel) = start_copy(&test, &fixture, 1718);
+    first.show_progress(&batch(0.44));
+    let single = window.title().map(|title| title.to_string());
+    let (second, second_cancel) = start_copy(&test, &fixture, 10);
+    let several = window.title().map(|title| title.to_string());
+    let actions = window.actions();
+    first.press_cancel();
+
+    assert_eq!(single.as_deref(), Some("44% complete"));
+    assert_eq!(several.as_deref(), Some("2 Running Actions"));
+    assert_eq!(actions, [first.clone(), second.clone()]);
+    assert!(first_cancel.is_cancelled() && !second_cancel.is_cancelled());
+    assert_eq!(
+        first.header_text(),
+        "Copying 1,718 items from Example projects to Documents"
+    );
+    first.finish();
+    second.finish();
+}
+
+/// The window waits a moment before it shows, so a quick operation shows
+/// nothing; it stays while an action runs and closes with the last one.
+///
+/// parity: OPS-019
+#[gtk::test]
+fn the_window_shows_after_a_moment_and_closes_with_its_last_action() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = ProgressWindow::of(&test.context);
+    window.set_show_delay(Duration::from_millis(300));
+
+    let (quick, _) = start_copy(&test, &fixture, 1);
+    quick.finish();
+    wait_for(Duration::from_millis(500));
+    let quick_showed = window.is_visible();
+    let window = ProgressWindow::of(&test.context);
+    window.set_show_delay(Duration::from_millis(300));
+    let (first, _) = start_copy(&test, &fixture, 1);
+    let at_once = window.is_visible();
+    wait_until("the window to show", || window.is_visible());
+    let (second, _) = start_copy(&test, &fixture, 2);
+    first.finish();
+    let after_first = window.is_visible();
+    second.finish();
+
+    assert!(!quick_showed, "a quick operation shows nothing");
+    assert!(!at_once, "the window waits a moment");
+    assert!(after_first, "it stays while an action runs");
+    assert!(
+        test.context.progress_window().is_none(),
+        "it closes with its last action"
+    );
+    assert!(!gtk::Window::list_toplevels().contains(window.upcast_ref()));
+}
+
+/// "More details" shows every action's details, becomes "Fewer details",
+/// and is kept for the next window, across sessions in the settings.
+///
+/// parity: OPS-021
+#[gtk::test]
+fn more_details_applies_to_every_action_and_is_remembered() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (first, _) = start_copy(&test, &fixture, 1);
+    let (second, _) = start_copy(&test, &fixture, 2);
+    let before = (window.shows_details(), window.details_text());
+
+    window.press_details();
+    let after = (window.shows_details(), window.details_text());
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.progress_details
+    });
+    first.finish();
+    second.finish();
+    let next = ProgressWindow::of(&test.context);
+    let (third, _) = start_copy(&test, &fixture, 1);
+
+    assert_eq!(before, (false, "More details".to_owned()));
+    assert_eq!(after, (true, "Fewer details".to_owned()));
+    assert!(next.shows_details(), "the next window opens with its details");
+    third.finish();
+}
+
+/// Closing the window cancels every action, which then end and take the
+/// window with them.
+///
+/// parity: OPS-022
+#[gtk::test]
+fn closing_the_window_cancels_every_action() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (first, first_cancel) = start_copy(&test, &fixture, 1);
+    let (second, second_cancel) = start_copy(&test, &fixture, 2);
+    wait_until("the window to show", || window.is_mapped());
+
+    window.close();
+
+    assert!(first_cancel.is_cancelled() && second_cancel.is_cancelled());
+    assert_eq!(window.title().as_deref(), Some("2 Running Actions"));
+    first.finish();
+    second.finish();
+    assert!(test.context.progress_window().is_none());
+}
+
+/// The window belongs to no browsing window and is not modal: the
+/// desktop places it, as Wayland requires, and browsing goes on.
+#[gtk::test]
+fn the_window_has_no_parent_and_is_not_modal() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (action, _) = start_copy(&test, &fixture, 1);
+    wait_until("the window to show", || window.is_visible());
+
+    assert!(window.transient_for().is_none());
+    assert!(!window.is_modal());
+    assert!(
+        window.application().is_none(),
+        "Quit and the window list leave it out"
+    );
+    action.finish();
+}
+
+/// Clicking a folder of an action opens it in a new browsing window, as
+/// in Windows.
+///
+/// parity: OPS-019
+#[gtk::test]
+fn a_folder_of_an_action_opens_in_a_new_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let _window = window_of(&test);
+    let (action, _) = start_copy(&test, &fixture, 1);
+    let documents = format!("{}/Documents", fixture.uri());
+    let app = test
+        .window
+        .application()
+        .expect("the test window has its application");
+
+    action.follow_link(&documents);
+    let shows_documents = || {
+        app.windows()
+            .into_iter()
+            .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+            .find(|window| window != &test.window && window.current_uri().as_deref() == Some(&documents))
+    };
+    wait_until("a window on Documents", || shows_documents().is_some());
+
+    action.finish();
+    if let Some(opened) = shows_documents() {
+        opened.close();
+    }
+}
+
+/// A browsing window's operations are actions of the application's
+/// progress window, not panels over its folder pane.
+///
+/// parity: OPS-019
+#[gtk::test]
+fn a_running_operation_is_an_action_of_the_progress_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    let running = test.window.begin_operation("Preparing copy…");
+    let window = test.context.progress_window();
+    let panel = test.window.transfer_panel().clone();
+    let shown_in = panel.root().and_downcast::<ProgressWindow>();
+    test.window.end_operation();
+
+    assert!(running.is_some());
+    assert!(window.is_some());
+    assert_eq!(shown_in, window);
+    assert!(test.context.progress_window().is_none());
+}

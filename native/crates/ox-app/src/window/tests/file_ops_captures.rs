@@ -11,7 +11,6 @@
 use std::path::PathBuf;
 
 use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 use ox_core::transfer::{Progress, ProgressScope};
 
@@ -113,13 +112,17 @@ fn the_transfer_panel_and_the_compact_menu_are_captured_light_and_dark() {
     for theme in THEMES {
         test.activate("theme", Some(theme));
         test.window.begin_operation("Copy: Notes 2.txt (1/3)");
-        test.window.imp().transfer_panel.show_progress(&Progress {
+        test.window.transfer_panel().show_progress(&Progress {
             label: "Copy: Notes 2.txt (1/3)".to_owned(),
             fraction: 0.4,
             scope: ProgressScope::Batch,
             bytes: None,
+            items: None,
+            name: None,
         });
-        capture(&test.window, &format!("native-transfer-{theme}.png"));
+        let progress = test.context.progress_window().expect("the operation's window");
+        progress.set_visible(true);
+        crate::test_support::harness::capture_dialog(&progress, &format!("native-transfer-{theme}.png"));
         test.window.end_operation();
         test.window.folder_model().select_only(1);
         test.activate("rename", None);

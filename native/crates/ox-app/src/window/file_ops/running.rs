@@ -61,7 +61,10 @@ impl BrowserWindow {
     /// The primary panel, used by an exclusive operation or one transfer job.
     /// Concurrent jobs use additional panels managed by `jobs`.
     pub(in crate::window) fn transfer_panel(&self) -> &TransferPanel {
-        &self.imp().transfer_panel
+        self.imp()
+            .transfer_panel
+            .get()
+            .expect("the window makes its panel when constructed")
     }
 
     /// Whether this window writes files now: a file operation runs or is
@@ -190,6 +193,10 @@ impl BrowserWindow {
             request.destination_folder.as_deref(),
         )?;
         let progress = self.progress_reporter(&context.cancel);
+        let verb = crate::window::transfer_panel::Verb::of_mode(request.mode);
+        let destination = request.destination_folder.as_deref();
+        let action = crate::window::transfer_panel::Action::of(verb, &request.uris, destination);
+        self.describe_operation(&context.cancel, action);
         let mark = mark_unfinished(request.destination_folder.as_deref());
         let outcome = run_transfer(request, &context, progress).await;
         drop(mark);

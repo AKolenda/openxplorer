@@ -9,8 +9,9 @@
 //! [`caption_buttons`]), the navigation row ([`navigation_buttons`],
 //! [`address_bar`], [`search_box`]), the [`command_bar`], the [`sidebar`],
 //! the [`folder_pane`], the [`details_pane`], the [`status_bar`] and the
-//! [`toast`], and over the folder pane the [`transfer_panel`] of the
-//! running file operation. On the Settings tab the [`SettingsPage`] takes
+//! [`toast`]. The running file operations show in the application's
+//! separate [`progress_window`], each an action of its own
+//! ([`transfer_panel`]). On the Settings tab the [`SettingsPage`] takes
 //! the place of everything under the title bar ([`settings_tab`]).
 //!
 //! The controller lives in submodules, one job each: tab state
@@ -121,6 +122,7 @@ mod picker;
 mod place_editor;
 mod place_menus;
 mod preferences;
+mod progress_window;
 mod quick_access;
 mod quick_look;
 mod recycle_bin_place;
@@ -198,6 +200,7 @@ pub(crate) use button_style::ButtonStyle;
 pub(crate) use closing::{QUIT_WHILE_WRITING, WAIT_FOR_FORMAT};
 pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
+pub(crate) use progress_window::ProgressWindow;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
 pub(crate) use widget_tree::children;
