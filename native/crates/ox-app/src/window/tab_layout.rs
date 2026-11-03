@@ -77,6 +77,21 @@ pub(super) fn tab_width(available: i32, count: i32, widths: TabWidths) -> i32 {
     even_share.clamp(widths.narrowest_allowed(), widths.widest_allowed())
 }
 
+/// The left edge of a tab `width` pixels wide held `share` of its width
+/// from it by a pointer at `pointer`.
+pub(super) fn held_left(pointer: f64, share: f64, width: f64) -> f64 {
+    pointer - share * width
+}
+
+/// How far along a tab `width` pixels wide a point `along` pixels into it
+/// is, as a share of its width, so a tab of another width is held at the
+/// same point of itself: at its left edge when its width is unknown.
+pub(super) fn grab_share(along: f64, width: Option<f64>) -> f64 {
+    width
+        .filter(|width| *width > 0.0)
+        .map_or(0.0, |width| (along / width).clamp(0.0, 1.0))
+}
+
 /// The strip's width when each of `tabs` gets `shared` pixels, or what
 /// [`width_of`] gives a snapshot tab.
 fn strip_width(tabs: &[gtk::Widget], shared: i32) -> i32 {
@@ -106,6 +121,10 @@ mod imp {
         pub(super) live: RefCell<Option<LiveTabs>>,
         /// The width each tab got at the last allocation.
         pub(super) each: Cell<i32>,
+        /// Where the pointer is in the row and how far along the dragged
+        /// tab, as a share of its width, it holds it, while it follows a
+        /// pointer from another window.
+        pub(super) held: Cell<Option<(f64, f64)>>,
     }
 
     impl Default for TabLayout {
@@ -114,6 +133,7 @@ mod imp {
                 widest: Cell::new(TAB_WIDTH),
                 live: RefCell::new(None),
                 each: Cell::new(TAB_WIDTH),
+                held: Cell::new(None),
             }
         }
     }
@@ -166,7 +186,17 @@ mod imp {
             let tabs = laid_out_children(widget);
             let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
             let each = tab_width(width, count, self.widths(&tabs));
-            self.each.set(each);
+            if self.each.replace(each) != each && self.held.get().is_some() {
+                // The held tab got another width: it is held at the same
+                // share of it again, under the pointer, once this frame
+                // is laid out.
+                let layout = self.obj().downgrade();
+                glib::idle_add_local_once(move || {
+                    if let Some(layout) = layout.upgrade() {
+                        layout.follow_held_again();
+                    }
+                });
+            }
             if let Some(live) = self.live.borrow().as_ref() {
                 let now = super::frame_time(widget);
                 let width_of_tab = |tab: &gtk::Widget| f64::from(width_of(tab, each));
@@ -261,6 +291,22 @@ impl TabLayout {
         self.animate();
     }
 
+    /// The dragged tab follows the pointer at `pointer` in the row, held
+    /// `share` of its width from its left edge, also when it gets another
+    /// width: a tab dragged in from another window may be wider there.
+    pub(crate) fn follow_held(&self, pointer: f64, share: f64) {
+        self.imp().held.set(Some((pointer, share)));
+        let width = self.dragged().map_or(0.0, |tab| self.width_of(&tab));
+        self.follow(held_left(pointer, share, width));
+    }
+
+    /// The held tab follows the pointer again after its width changed.
+    fn follow_held_again(&self) {
+        if let (Some((pointer, share)), Some(_)) = (self.imp().held.get(), self.following()) {
+            self.follow_held(pointer, share);
+        }
+    }
+
     /// The dragged tab leaves the strip: the others close up.
     pub(crate) fn detach(&self) {
         let Some(row) = self.widget() else { return };
@@ -273,6 +319,7 @@ impl TabLayout {
 
     /// Slides every tab to its place in `order`, then runs `then`.
     pub(crate) fn settle(&self, order: Vec<gtk::Widget>, then: impl FnOnce() + 'static) {
+        self.imp().held.set(None);
         let Some(row) = self.widget() else {
             then();
             return;
@@ -290,6 +337,7 @@ impl TabLayout {
     /// Stops laying the tabs out live at once; they go back to their
     /// order as children.
     pub(crate) fn end(&self) {
+        self.imp().held.set(None);
         let Some(mut live) = self.imp().live.take() else {
             return;
         };
@@ -474,6 +522,24 @@ mod tests {
 
         assert!((at - 40.0).abs() < 1e-6, "on the nearest pixel: {at}");
         assert!((then - 42.0).abs() < 1e-6, "on the nearest pixel: {then}");
+    }
+
+    /// A tab grabbed 160 pixels into a 215 pixel tab, dragged over a
+    /// strip whose tabs are 100 pixels wide, is held at the same share of
+    /// its width there, so it stays under the pointer.
+    #[test]
+    fn a_tab_held_at_a_share_of_its_width_stays_under_the_pointer_at_another_width() {
+        let share = grab_share(160.0, Some(215.0));
+        let left = held_left(500.0, share, 100.0);
+
+        assert!((share - 160.0 / 215.0).abs() < 1e-9);
+        assert!(left < 500.0 && 500.0 < left + 100.0, "under the pointer: {left}");
+        assert!((left - (500.0 - 100.0 * 160.0 / 215.0)).abs() < 1e-9);
+        assert!(grab_share(160.0, None).abs() < 1e-9, "no width: its left edge");
+        assert!(
+            (grab_share(300.0, Some(215.0)) - 1.0).abs() < 1e-9,
+            "never past it"
+        );
     }
 
     #[test]

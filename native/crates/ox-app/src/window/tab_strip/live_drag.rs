@@ -15,7 +15,7 @@ use gtk::subclass::prelude::*;
 
 use super::TabStrip;
 use crate::window::session::TabId;
-use crate::window::tab_layout::{TabLayout, TAB_GAP};
+use crate::window::tab_layout::{grab_share, held_left, TabLayout, TAB_GAP};
 
 /// The class of the tab that follows the pointer, which lifts it.
 const DRAGGING_CLASS: &str = "tab-dragging";
@@ -135,6 +135,13 @@ impl TabStrip {
         (grabbed == id).then_some(offset)
     }
 
+    /// How far along itself tab `id` was grabbed, as a share of its width,
+    /// if it was the last one grabbed; its left edge otherwise.
+    pub(in crate::window) fn grab_share(&self, id: TabId) -> f64 {
+        self.grab_offset(id)
+            .map_or(0.0, |(along, _)| grab_share(along, self.tab_width(id)))
+    }
+
     /// Tab `id`, grabbed by [`Self::grab_tab`], follows the pointer at `x`
     /// of the strip; the other tabs make room.
     pub(in crate::window) fn follow_pointer(&self, id: TabId, x: f64) {
@@ -242,17 +249,18 @@ impl TabStrip {
         self.stop_live();
     }
 
-    /// A tab `view` of another window, grabbed `grab_x` along itself, is
-    /// over this strip at `x`: a stand-in for it follows the pointer here as
-    /// this strip's own tabs do, and the others make room, as Chrome takes a
-    /// tab into the strip it is dragged over.
-    pub(in crate::window) fn host_guest(&self, view: &super::TabView, x: f64, grab_x: f64) {
+    /// A tab `view` of another window, grabbed `share` of its width along
+    /// itself, is over this strip at `x`: a stand-in for it follows the
+    /// pointer here as this strip's own tabs do, held at the same share of
+    /// its width here, and the others make room, as Chrome takes a tab into
+    /// the strip it is dragged over.
+    pub(in crate::window) fn host_guest(&self, view: &super::TabView, x: f64, share: f64) {
         let layout = self.layout();
-        let left = self.in_row(x) - grab_x;
+        let pointer = self.in_row(x);
         let guest = self.imp().guest.borrow().clone();
         if let Some(guest) = guest {
             if layout.dragged().as_ref() == Some(&guest) {
-                layout.follow(left);
+                layout.follow_held(pointer, share);
                 return;
             }
         }
@@ -275,7 +283,9 @@ impl TabStrip {
         // The tab dragged in is the one shown in front, as in Chrome.
         self.show_own_front(false);
         self.imp().guest.replace(Some(guest.clone()));
+        let left = held_left(pointer, share, layout.width_of(&guest));
         layout.begin_drag(order, &guest, left);
+        layout.follow_held(pointer, share);
     }
 
     /// Shows this strip's tab in front as in front, or with `shown` false

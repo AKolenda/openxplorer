@@ -344,8 +344,9 @@ struct Session {
     back: Option<LaterTabs>,
     /// Where the dragged window is held, from its top left corner.
     offset: (i32, i32),
-    /// Where along itself the tab was grabbed, for stand-ins.
-    grab_x: f64,
+    /// How far along itself the tab was grabbed, as a share of its width,
+    /// for stand-ins, which may be narrower.
+    grab_share: f64,
     /// The dragged window is hidden: its tab is over a row.
     hidden: Cell<bool>,
     /// The dragged window hides once the row over it shows the stand-in.
@@ -398,7 +399,7 @@ impl Session {
         (origin_tab, tab): (TabId, TabId),
         back: Option<LaterTabs>,
         offset: (i32, i32),
-        grab_x: f64,
+        grab_share: f64,
     ) -> Rc<Self> {
         let handle = protocol.handle();
         let drag = protocol.next_drag();
@@ -424,7 +425,7 @@ impl Session {
             released: Cell::new(back.is_none()),
             back,
             offset,
-            grab_x,
+            grab_share,
             hidden: Cell::new(false),
             hide_pending: Cell::new(false),
             host: RefCell::new(glib::WeakRef::new()),
@@ -829,7 +830,8 @@ impl BrowserWindow {
             }
             return false;
         };
-        let session = Session::new(&protocol, self, &dragged, (id, tab), back, offset, grab.0);
+        let share = crate::window::tab_layout::grab_share(grab.0, self.tab_strip().tab_width(id));
+        let session = Session::new(&protocol, self, &dragged, (id, tab), back, offset, share);
         // Attached before it is drawn, then dragged with the press, as the
         // protocol and Chrome do.
         session.toplevel_drag.attach(&toplevel, offset.0, offset.1);
@@ -1043,7 +1045,7 @@ impl BrowserWindow {
             let in_strip = self
                 .compute_point(self.tab_strip(), &point)
                 .map_or(0.0, |point| f64::from(point.x()));
-            self.tab_strip().host_guest(&view, in_strip, session.grab_x);
+            self.tab_strip().host_guest(&view, in_strip, session.grab_share);
             let previous = session.host.replace(self.downgrade()).upgrade();
             if let Some(previous) = previous.filter(|previous| previous != self) {
                 previous.tab_strip().dismiss_guest();

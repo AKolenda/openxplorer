@@ -165,9 +165,9 @@ impl BrowserWindow {
                 source.show_carried(CarriedLook::Hidden);
             }
             Some(TabDropSpot::Strip { .. }) => {
-                let grab_x = source.tab_strip().grab_offset(tab).map_or(0.0, |(x, _)| x);
+                let share = source.tab_strip().grab_share(tab);
                 if let Some(view) = source.tab_strip().tab_view(tab) {
-                    strip.host_guest(&view, in_strip, grab_x);
+                    strip.host_guest(&view, in_strip, share);
                 }
                 source.show_carried(CarriedLook::Hidden);
             }

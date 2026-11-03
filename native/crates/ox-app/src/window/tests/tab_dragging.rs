@@ -666,6 +666,73 @@ fn a_tab_dragged_in_beside_a_windows_only_tab_lands_after_it() {
     assert_eq!(landing, Some(crate::window::tab_strip::Landing { before: None }));
 }
 
+/// Three tabs and the share of its width a tab dragged in from another
+/// window was grabbed at: 160 pixels into a 215 pixel tab.
+fn three_tabs_and_a_wide_tabs_grab(fixture: &Fixture) -> (TestWindow, [TabId; 3], f64) {
+    let test = two_tabs(fixture);
+    test.window.add_tab(&fixture.uri_of("Music")).expect("a folder");
+    test.wait_for_listing("a third tab");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [first, second, third] = tab_ids(&test.window)[..] else {
+        panic!("three tabs are open");
+    };
+    let share = crate::window::tab_layout::grab_share(160.0, Some(215.0));
+    (test, [first, second, third], share)
+}
+
+/// A tab grabbed 160 pixels into a 215 pixel tab, dragged over a row
+/// whose tabs are 100 pixels wide, near the right edge of its third tab:
+/// its stand-in is held at the same share of its width, under the pointer,
+/// so it takes the third tab's place, not the second's.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_wide_tab_dragged_into_a_row_of_narrow_tabs_stays_under_the_pointer() {
+    let fixture = Fixture::standard();
+    let (test, [first, _, third], share) = three_tabs_and_a_wide_tabs_grab(&fixture);
+    let strip = test.window.tab_strip();
+    strip.set_tab_width(100);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let width = strip.tab_width(third).expect("a shown tab");
+    assert!(width < 110.0, "narrow tabs: {width}");
+    let bounds = strip.tab_bounds_in(third, strip).expect("a shown tab");
+    let view = strip.tab_view(first).expect("a shown tab");
+
+    strip.host_guest(&view, f64::from(bounds.x()) + 0.9 * width, share);
+    let landing = strip.land_guest();
+
+    assert_eq!(
+        landing,
+        Some(crate::window::tab_strip::Landing { before: Some(third) })
+    );
+}
+
+/// A tab dragged in from another window, held over the right part of the
+/// row's third tab, when the row's tabs then narrow without the pointer
+/// moving, as the window does: the stand-in is held at the same share of
+/// its new width, under the pointer, now past the narrowed tabs, so it
+/// lands at the end.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_dragged_in_stays_under_the_pointer_when_the_rows_tabs_narrow() {
+    let fixture = Fixture::standard();
+    let (test, [first, _, third], share) = three_tabs_and_a_wide_tabs_grab(&fixture);
+    let strip = test.window.tab_strip();
+    let width = strip.tab_width(third).expect("a shown tab");
+    assert!(width >= 150.0, "wide tabs: {width}");
+    let bounds = strip.tab_bounds_in(third, strip).expect("a shown tab");
+    let view = strip.tab_view(first).expect("a shown tab");
+
+    strip.host_guest(&view, f64::from(bounds.x()) + 0.9 * width, share);
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    strip.set_tab_width(100);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let landing = strip.land_guest();
+
+    assert_eq!(landing, Some(crate::window::tab_strip::Landing { before: None }));
+}
+
 /// A tab let go past another and pressed again while it still slides into
 /// its new place, before the strip took the new order: it is held where
 /// the press met it as drawn, so the next motion moves it with the
