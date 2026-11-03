@@ -68,6 +68,7 @@ mod applications;
 mod background_portal;
 mod brave;
 mod default_apps;
+mod dialog_folders;
 mod disk_tools;
 mod drive_format;
 mod email_portal;
@@ -101,6 +102,10 @@ pub use brave::{
 pub use default_apps::{
     DefaultApps, DefaultAppsError, DefaultsStatus, DesktopId, MimeDefaults, RestoreScope, XdgMime,
     ZipAssociation, APP_ID, RESTORE_NOTE,
+};
+pub use dialog_folders::{
+    caller_bus_name, caller_key, folder_uri, program_of, remembered_location, start_folders, AppFolders,
+    DialogFolders, StartFolder, DIALOG_FOLDERS_FILE, MAX_APPS,
 };
 pub use disk_tools::{is_disk_image, DiskTool};
 pub use drive_format::{

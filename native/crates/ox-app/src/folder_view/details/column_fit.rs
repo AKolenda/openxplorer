@@ -16,7 +16,7 @@
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use super::{cell_text, DetailsView};
+use super::{shown_cell_text, DetailsView};
 use crate::folder_view::column_widths;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sorting::SortColumn;
@@ -188,7 +188,8 @@ impl DetailsView {
         let widths = (0..shown)
             .filter_map(|position| model.item(position).and_downcast::<FileItem>())
             .map(|item| {
-                let layout = view.create_pango_layout(Some(&cell_text(column, &item, self.date_style())));
+                let text = shown_cell_text(column, &item, self.date_style(), self.counts_items());
+                let layout = view.create_pango_layout(Some(&text));
                 layout.pixel_size().0
             });
         f64::from(widths.max().unwrap_or_default())

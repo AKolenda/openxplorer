@@ -85,8 +85,9 @@ impl BrowserWindow {
             return;
         }
         let cancel = Cancellation::new();
-        self.transfer_panel()
-            .start(TransferKind::Archive, "Preparing compression…", cancel.clone());
+        if !self.claim_transfer_panel(TransferKind::Archive, "Preparing compression…", &cancel) {
+            return;
+        }
         self.update_archive_actions();
         let compressor = ZipCompressor::new()
             .with_write_guard(self.context().previous_versions().write_guard())

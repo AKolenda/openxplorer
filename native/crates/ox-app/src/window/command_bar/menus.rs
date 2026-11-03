@@ -117,7 +117,7 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
             &gettext("Group by"),
             Icon::TextBulletList,
             WindowAction::GroupBy,
-            GroupBy::ALL.into_iter().map(group_item).collect(),
+            group_by_menu(),
         )
         .into(),
         MenuEntry::Divider,
@@ -129,6 +129,11 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
         .into(),
     ]);
     entries
+}
+
+/// The Group by submenu: every way of grouping, the current one checked.
+pub(in crate::window) fn group_by_menu() -> Vec<MenuEntry> {
+    GroupBy::ALL.into_iter().map(group_item).collect()
 }
 
 /// The Group by submenu's item for `group_by`.

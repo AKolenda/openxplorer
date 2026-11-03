@@ -428,7 +428,10 @@ pub(crate) fn listing_notice(listing: &ArchiveListing) -> String {
     if listing.hidden_unsafe_count > 0 {
         notices.push(ox_core::i18n::format_message(
             "{hidden_unsafe_count} unsafe names or links are hidden.",
-            &[("hidden_unsafe_count", &listing.hidden_unsafe_count.to_string())],
+            &[(
+                "hidden_unsafe_count",
+                &ox_core::format::group_digits(listing.hidden_unsafe_count as u64),
+            )],
         ));
     }
     if listing.is_truncated {
