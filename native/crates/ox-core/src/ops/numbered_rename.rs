@@ -18,12 +18,15 @@
 
 use super::batch_rename::BatchItem;
 use super::context::{on_worker, OperationContext};
+use super::create::name_taken_or;
 use super::error::OpsError;
 use super::rename::rename_item_blocking;
 use super::results::record_failure;
 use super::run_transfer::TransferOutcome;
 use super::undo::{RenamedPair, UndoRecord};
+use crate::gio_node::GioNode;
 use crate::location::validate_name;
+use crate::transfer::Node;
 
 /// How many taken numbers are skipped for one item before it is reported
 /// instead: a folder full of "Holiday (n)" items must not keep the rename
@@ -40,20 +43,29 @@ pub struct NumberedRename {
     /// The edited item's name before the rename, whose extension a typed
     /// name may keep.
     pub edited_name: String,
+    /// Whether the edited item is a folder, whose name has no extension:
+    /// what is typed for it is numbered whole.
+    pub edited_is_dir: bool,
 }
 
 impl NumberedRename {
     /// The name the numbers follow: the typed name without the edited
     /// item's extension when it still ends with it, so "Holiday.jpg"
     /// typed for "Photo.jpg" numbers "Holiday", and each item adds its
-    /// own extension back.
+    /// own extension back. A folder has no extension, so what is typed for
+    /// one is numbered whole ("Archive.v1" for "Project.v1").
     ///
     /// # Errors
     ///
     /// An empty name, or one that is not valid (such as one with a slash).
     pub fn base_name(&self) -> Result<String, OpsError> {
         let typed = self.name.trim_end();
-        let base = match extension(&self.edited_name) {
+        let kept = if self.edited_is_dir {
+            None
+        } else {
+            extension(&self.edited_name)
+        };
+        let base = match kept {
             Some(kept) if typed.len() > kept.len() && ends_with_ignoring_case(typed, kept) => {
                 &typed[..typed.len() - kept.len()]
             }
@@ -154,9 +166,39 @@ fn rename_numbered(
     number: &mut u32,
     context: &OperationContext,
 ) -> Result<super::RenamedItem, OpsError> {
+    let folder = GioNode::new(&item.uri).parent();
+    let is_taken = |name: &str| {
+        // The item's own name is not taken: renaming to it changes nothing.
+        name != item.name
+            && folder
+                .as_ref()
+                .is_some_and(|folder| folder.child(name.as_ref()).exists(Some(&context.cancel)))
+    };
+    rename_numbered_with(item, base, number, context, is_taken)
+}
+
+/// [`rename_numbered`], asking `is_taken` about each numbered name first:
+/// a taken one is skipped without trying the rename, whose write check
+/// walks the item's whole tree. A name taken after the question, by
+/// another program, is skipped when the rename finds it taken.
+fn rename_numbered_with(
+    item: &BatchItem,
+    base: &str,
+    number: &mut u32,
+    context: &OperationContext,
+    is_taken: impl Fn(&str) -> bool,
+) -> Result<super::RenamedItem, OpsError> {
     let mut skipped = 0;
     loop {
         let name = numbered_name(base, *number, item);
+        if is_taken(&name) {
+            skipped += 1;
+            if skipped > MAX_SKIPPED_NUMBERS {
+                return Err(name_taken_or(OpsError::Exists(String::new()), &name));
+            }
+            *number += 1;
+            continue;
+        }
         match rename_item_blocking(&item.uri, &name, context) {
             Ok(done) => {
                 *number += 1;
@@ -194,6 +236,7 @@ mod tests {
             items,
             name: name.to_owned(),
             edited_name: edited_name.to_owned(),
+            edited_is_dir: false,
         }
     }
 
@@ -271,6 +314,97 @@ mod tests {
         assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
         assert_eq!(outcome.result.done.len(), 3);
         assert!(matches!(outcome.undo, Some(UndoRecord::BatchRename { items }) if items.len() == 3));
+    }
+
+    /// Taken numbers are found by asking the item's location whether the
+    /// name exists, not by trying the rename: the write protection walks
+    /// the renamed item's whole tree once, not once per taken number.
+    ///
+    /// parity: OPS-050
+    #[test]
+    fn taken_numbers_do_not_walk_the_item_again() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let folder = temporary_folder();
+        let tree = folder.path().join("Trip");
+        std::fs::create_dir(&tree).expect("fixture folder");
+        for number in 0..20 {
+            std::fs::write(tree.join(format!("photo {number}.jpg")), "data").expect("fixture file");
+        }
+        for number in 1..=30 {
+            std::fs::create_dir(folder.path().join(format!("Plan ({number})"))).expect("fixture folder");
+        }
+        let checks = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&checks);
+        let protection = WriteProtection::new(move |_uri| {
+            counted.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        });
+        let items = vec![BatchItem {
+            uri: file_uri(&tree),
+            name: "Trip".to_owned(),
+            is_dir: true,
+        }];
+        let context = OperationContext::new(protection);
+
+        let outcome =
+            rename_numbered_blocking(&batch(items, "Plan", "Trip"), &context).expect("a valid name");
+
+        assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+        assert_eq!(
+            std::fs::read_dir(folder.path().join("Plan (31)"))
+                .expect("renamed")
+                .count(),
+            20
+        );
+        let walks = checks.load(Ordering::Relaxed);
+        assert!(walks < 3 * 21, "the tree was checked {walks} times");
+    }
+
+    /// A folder has no extension: a dotted name typed for one is numbered
+    /// whole, even when it ends like the folder's own name.
+    ///
+    /// parity: OPS-050
+    #[test]
+    fn a_dotted_name_typed_for_a_folder_is_not_split() {
+        let folder = NumberedRename {
+            edited_is_dir: true,
+            ..batch(Vec::new(), "Archive.v1", "Project.v1")
+        };
+        let file = batch(Vec::new(), "Archive.v1", "Project.v1");
+
+        assert_eq!(folder.base_name().expect("valid"), "Archive.v1");
+        assert_eq!(file.base_name().expect("valid"), "Archive");
+    }
+
+    /// A name taken after the question, as another program may take it,
+    /// is found by the rename itself, which never overwrites, and the
+    /// next number is used.
+    ///
+    /// parity: OPS-050
+    #[test]
+    fn a_name_taken_after_the_question_is_skipped_too() {
+        let folder = temporary_folder();
+        for name in ["one.txt", "Plan (1).txt"] {
+            std::fs::write(folder.path().join(name), name).expect("fixture file");
+        }
+        let item = BatchItem {
+            uri: file_uri(&folder.path().join("one.txt")),
+            name: "one.txt".to_owned(),
+            is_dir: false,
+        };
+        let context = OperationContext::new(WriteProtection::unrestricted());
+        let mut number = 1;
+
+        let done = rename_numbered_with(&item, "Plan", &mut number, &context, |_| false).expect("renamed");
+
+        assert_eq!(done.name, "Plan (2).txt");
+        assert_eq!(number, 3);
+        assert_eq!(
+            std::fs::read_to_string(folder.path().join("Plan (1).txt")).expect("kept"),
+            "Plan (1).txt"
+        );
     }
 
     /// An item that already has its numbered name stays as it is and

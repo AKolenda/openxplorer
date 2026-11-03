@@ -41,6 +41,7 @@ pub(super) fn numbered_batch_for(entries: &[Entry], edited: &Entry, typed: &str)
             .collect(),
         name: typed.to_owned(),
         edited_name: edited.name.clone(),
+        edited_is_dir: edited.is_dir,
     }
 }
 
@@ -62,16 +63,20 @@ impl BrowserWindow {
             folder: &folder,
         };
         let batch = ask_for_name(self, request, |name, _cancel| {
-            let batch = numbered_batch_for(entries, edited, &name);
+            // The unchanged name renames nothing, as Enter on it in place.
+            let batch = (name != edited.name).then(|| numbered_batch_for(entries, edited, &name));
             async move {
-                batch
-                    .base_name()
-                    .map(|_| batch)
-                    .map_err(|error| error.to_string())
+                match batch {
+                    Some(batch) => batch
+                        .base_name()
+                        .map(|_| Some(batch))
+                        .map_err(|error| error.to_string()),
+                    None => Ok(None),
+                }
             }
         })
         .await;
-        if let Some(batch) = batch {
+        if let Some(Some(batch)) = batch {
             self.run_numbered_rename(&batch).await;
         }
     }

@@ -347,6 +347,7 @@ fn a_numbered_rename_is_undone_and_redone_as_one_step() {
             .to_vec(),
         name: "Trip".to_owned(),
         edited_name: "b.txt".to_owned(),
+        edited_is_dir: false,
     };
     let context = OperationContext::default();
 

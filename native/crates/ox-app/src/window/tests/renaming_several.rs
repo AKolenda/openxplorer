@@ -262,3 +262,55 @@ fn several_items_off_screen_are_named_in_the_rename_dialog() {
     assert_ended_without_a_message(&test);
     assert!(!fixture.path("file 0398.txt").exists());
 }
+
+/// Save or Enter on the unchanged name in the Rename dialog, which asks
+/// when the edited item is not on screen, renames nothing, as Enter on the
+/// unchanged name in place does.
+///
+/// parity: OPS-050
+#[gtk::test]
+fn the_unchanged_name_in_the_rename_dialog_renames_nothing() {
+    let fixture = Fixture::with_files(400);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["file 0398.txt", "file 0399.txt"]);
+
+    test.activate("rename", None);
+    let dialog = open_dialog(&test);
+    assert_eq!(text_field(&dialog).text(), "file 0398.txt");
+    dialog.press("Save");
+    wait_until("the dialog to close", || !dialog.is_visible());
+    settle();
+
+    assert!(!test.window.is_writing_files());
+    assert!(fixture.path("file 0398.txt").is_file());
+    assert!(fixture.path("file 0399.txt").is_file());
+    assert!(!fixture.path("file 0398 (1).txt").exists());
+    assert!(!fixture.path("file 0398 (2).txt").exists());
+    assert_eq!(test.window.shown_message(), "");
+}
+
+/// A folder's name has no extension: a dot typed into it stays part of
+/// the name the numbers follow ("Archive.v1 (1)"), also when the edited
+/// folder's own name ends with the same dotted part.
+///
+/// parity: OPS-050
+#[gtk::test]
+fn a_dotted_name_typed_for_a_folder_is_numbered_whole() {
+    let fixture = Fixture::empty();
+    fs::create_dir(fixture.path("Project.v1")).expect("the folder is made");
+    fs::create_dir(fixture.path("Studio")).expect("the folder is made");
+    let test = TestWindow::open(&fixture.uri());
+    select_with_focus(&test, &["Project.v1", "Studio"], "Project.v1");
+
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    assert_eq!(field.selection_bounds(), Some((0, 10)), "a folder's whole name");
+    field.set_text("Archive.v1");
+    field.emit_activate();
+
+    wait_until("the renamed folders to be selected", || {
+        test.selected_names() == ["Archive.v1 (1)", "Archive.v1 (2)"]
+    });
+    assert!(fixture.path("Archive.v1 (1)").is_dir());
+    assert!(fixture.path("Archive.v1 (2)").is_dir());
+}
