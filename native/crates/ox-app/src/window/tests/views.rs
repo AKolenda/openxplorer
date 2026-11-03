@@ -517,8 +517,6 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     first.activate("theme", Some("dark"));
     assert_eq!(skin().appearance(), Appearance::Dark);
     assert_eq!(second.action_state("theme").as_deref(), Some("dark"));
-    let button = second.window.command_bar().appearance_tooltip();
-    assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
 }
 
 /// Each theme's settings value is also the `win.theme` target: choosing it

@@ -3,10 +3,11 @@
 //!
 //! Ports `footer.statusbar` in `v2.0.0:desktop/ui/index.html` and `updateStatus`
 //! in `v2.0.0:desktop/ui/app.js`: the item count, the selection, the
-//! type-to-select hint, then at the right the volume's free space, the
-//! build, "Check for updates"
-//! and the Details and Large icons view buttons, the current view's
-//! button highlighted. In the icon view a slider beside them zooms the
+//! type-to-select hint, then at the right the volume's free space,
+//! "Check for updates" while a check found a newer release or a restart
+//! to finish one (the build it names is hidden, as Windows 11 Explorer's
+//! status bar has none), and the Details and Large icons view buttons, the
+//! current view's button highlighted. In the icon view a slider beside them zooms the
 //! icons, as Dolphin's status bar does (VIEW-010). "Check for updates" takes the accent colour when a
 //! check in any window found a newer release (UPD-001).
 //!
@@ -92,8 +93,8 @@ pub(super) fn count_text(subject: StatusSubject) -> String {
             loading,
         } => (shown, bytes, loading),
     };
-    let mut items =
-        ngettext("{count} item", "{count} items", u64::from(shown)).replace("{count}", &shown.to_string());
+    let mut items = ngettext("{count} item", "{count} items", u64::from(shown))
+        .replace("{count}", &format::group_digits(u64::from(shown)));
     if bytes > 0 {
         items = format!("{items}  {}", format::pretty_bytes(bytes));
     }
@@ -111,7 +112,7 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
         return String::new();
     }
     let count = ngettext("{count} selected", "{count} selected", u64::from(selected.count))
-        .replace("{count}", &selected.count.to_string());
+        .replace("{count}", &format::group_digits(u64::from(selected.count)));
     if selected.has_files {
         format!("{count}  {}", format::pretty_bytes(selected.bytes))
     } else {
@@ -232,6 +233,9 @@ impl StatusBar {
     fn finish_template(&self) {
         let imp = self.imp();
         imp.build.set_text(BUILD_NAME);
+        // Windows 11 Explorer's status bar names no build; Settings ›
+        // About does.
+        imp.build.set_visible(false);
         self.finish_check_updates_button();
         let large_icons = FolderView::Icons(IconSize::LARGE);
         show_view_on(
@@ -270,6 +274,10 @@ impl StatusBar {
         check_updates.set_child(Some(&icons::image(Icon::ArrowClockwise, BUTTON_GLYPH)));
         check_updates.set_tooltip_text(Some(ox_core::i18n::gettext_static(CHECK_FOR_UPDATES)));
         WindowAction::CheckUpdates.assign_to(check_updates);
+        // Shown only while a check found something that needs the user
+        // ([`Self::show_update_notice`]); Settings › About checks at any
+        // time.
+        check_updates.set_visible(false);
     }
 
     /// Says on "Check for updates" what a check found that needs the
@@ -277,6 +285,7 @@ impl StatusBar {
     /// button then takes the accent colour, and its tooltip says why.
     pub(super) fn show_update_notice(&self, notice: Option<&str>) {
         let check_updates = &*self.imp().check_updates_button;
+        check_updates.set_visible(notice.is_some());
         let Some(notice) = notice else {
             check_updates.remove_css_class(UPDATE_CLASS);
             check_updates.set_tooltip_text(Some(ox_core::i18n::gettext_static(CHECK_FOR_UPDATES)));
@@ -286,17 +295,17 @@ impl StatusBar {
         check_updates.set_tooltip_text(Some(&format!("{CHECK_FOR_UPDATES}\n{notice}")));
     }
 
+    /// Whether "Check for updates" shows, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_check_updates(&self) -> bool {
+        self.imp().check_updates_button.is_visible()
+    }
+
     /// The tooltip of "Check for updates", for tests.
     #[cfg(test)]
     pub(super) fn check_updates_tooltip(&self) -> String {
         let check_updates = &*self.imp().check_updates_button;
         check_updates.tooltip_text().unwrap_or_default().to_string()
-    }
-
-    /// Shows or hides the build text, which a compact window has no room
-    /// for (`.status-mode{display:none}` at 680 pixels).
-    pub(super) fn set_build_visible(&self, visible: bool) {
-        self.imp().build.set_visible(visible);
     }
 
     /// Shows the item count and the selection; one selected item is

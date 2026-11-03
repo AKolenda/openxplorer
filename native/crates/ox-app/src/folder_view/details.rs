@@ -85,7 +85,12 @@ fn text_factory(
         let list_item = cells::as_list_item(object);
         list_item.set_child(Some(&label));
         setup_owners.register(&label, list_item);
-        cells::show_row_tooltip(&label, &setup_owners, column_text::cell_tooltip(column));
+        cells::show_row_tooltip(
+            &label,
+            &setup_owners,
+            column_text::cell_tooltip(column),
+            cells::TooltipCell::Column,
+        );
     });
     let bind_owners = Rc::clone(owners);
     let dates = Rc::clone(dates);
