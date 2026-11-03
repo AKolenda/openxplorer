@@ -50,6 +50,7 @@ mod narrow_windows;
 mod network;
 mod network_shares;
 mod new_folder;
+mod new_text_document;
 mod opening;
 mod panes_layout;
 mod recycle_bin;
