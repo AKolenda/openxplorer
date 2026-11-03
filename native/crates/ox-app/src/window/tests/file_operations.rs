@@ -101,6 +101,7 @@ fn new_is_disabled_where_nothing_can_be_created() {
 fn rename_edits_the_name_in_place_and_undo_and_redo_walk_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
 
     test.activate("rename", None);
@@ -204,6 +205,7 @@ fn rename_in_place(test: &TestWindow, from: &str, to: &str) {
 fn ctrl_z_undoes_from_the_tree_and_a_split_pane_but_not_in_a_text_field() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     let ctrl_z = || press_shortcut_where_focused(&test, gdk::Key::z, gdk::ModifierType::CONTROL_MASK);
     rename_in_place(&test, "Notes 2.txt", "Plans.txt");
 
@@ -244,6 +246,7 @@ fn ctrl_z_undoes_from_the_tree_and_a_split_pane_but_not_in_a_text_field() {
 fn a_refused_name_in_place_keeps_the_field_for_another_try() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("rename", None);
     let field = name_editor(&test);

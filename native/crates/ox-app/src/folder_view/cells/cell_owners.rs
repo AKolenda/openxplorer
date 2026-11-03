@@ -29,6 +29,7 @@ use gtk::prelude::*;
 use super::row_tooltip::RowTooltip;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
+use crate::folder_view::shown_name::{shown_name, Extensions};
 use crate::thumbnails::PreviewPolicy;
 use crate::window::widget_tree::toggle_class;
 
@@ -142,6 +143,8 @@ pub(crate) struct CellOwners {
     /// Item check boxes let clicks through to their rows: they wait for
     /// Ctrl and it is not held.
     item_checks_pass_clicks: Cell<bool>,
+    /// Whether names show the extensions of known types (VIEW-069).
+    extensions: Cell<Extensions>,
 }
 
 impl CellOwners {
@@ -413,6 +416,32 @@ impl CellOwners {
             }
         }
         shown
+    }
+
+    /// The name the cells show for `item`: its own, or without a known
+    /// type's extension while extensions are hidden.
+    pub(crate) fn shown_name(&self, item: &FileItem) -> String {
+        let entry = item.entry();
+        shown_name(&entry.name, entry.is_dir, self.extensions.get()).to_owned()
+    }
+
+    /// Shows names with or without the extensions of known types; a cell
+    /// bound later follows when it is bound.
+    pub(crate) fn set_extensions(&self, extensions: Extensions) {
+        if self.extensions.replace(extensions) == extensions {
+            return;
+        }
+        let bound: Vec<(gtk::Widget, FileItem)> = self
+            .owners
+            .borrow()
+            .iter()
+            .filter_map(CellOwner::bound_cell)
+            .collect();
+        for (cell, item) in bound {
+            if let Some(cell) = cell.downcast_ref::<FileCell>() {
+                cell.show_name(&self.shown_name(&item));
+            }
+        }
     }
 
     /// Whether items have check boxes.

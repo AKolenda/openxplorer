@@ -204,6 +204,8 @@ pub(crate) enum Icon {
     PanelLeft,
     /// `panel_right_20_regular`: the details pane toggle.
     PanelRight,
+    /// `panel_right_gallery_20_regular`: View > Preview pane.
+    PanelRightGallery,
     /// `pause_16_regular`: pausing an action in the progress window.
     Pause16,
     /// `phone_20_regular`: phones and other devices.
@@ -359,6 +361,7 @@ impl Icon {
             Icon::PaintBrush => "ox-paint-brush-20-symbolic",
             Icon::PanelLeft => "ox-panel-left-20-symbolic",
             Icon::PanelRight => "ox-panel-right-20-symbolic",
+            Icon::PanelRightGallery => "ox-panel-right-gallery-20-symbolic",
             Icon::Pause16 => "ox-pause-16-symbolic",
             Icon::Phone => "ox-phone-20-symbolic",
             Icon::Play16 => "ox-play-16-symbolic",
@@ -413,7 +416,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 108] = [
+pub(crate) const ALL_ICONS: [Icon; 109] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowAutofitHeight,
@@ -490,6 +493,7 @@ pub(crate) const ALL_ICONS: [Icon; 108] = [
     Icon::PaintBrush,
     Icon::PanelLeft,
     Icon::PanelRight,
+    Icon::PanelRightGallery,
     Icon::Pause16,
     Icon::Phone,
     Icon::Play16,

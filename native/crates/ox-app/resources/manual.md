@@ -37,7 +37,8 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 - Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
 - Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.
-- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P or Alt+P shows the details pane, F9 the navigation pane.
+- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.
+- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.
 - F11 shows the window full screen; press it again to get the window back as it was.
 - Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size.
 

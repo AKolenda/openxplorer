@@ -37,8 +37,12 @@ const HANDLE_REACH: f64 = 6.0;
 /// One preference the user changed in this window.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Preference {
-    /// Show the details pane.
+    /// Show the details pane; opening it closes the Preview pane.
     DetailsPane(bool),
+    /// Show the Preview pane; opening it closes the details pane (VIEW-070).
+    PreviewPane(bool),
+    /// Show the extensions of known file types (VIEW-069).
+    FileNameExtensions(bool),
     /// System, Light or Dark.
     Theme(Theme),
     /// Text size.
@@ -70,7 +74,17 @@ impl Preference {
     fn into_update(self) -> PreferencesUpdate {
         let mut update = PreferencesUpdate::default();
         match self {
-            Preference::DetailsPane(show) => update.show_details_pane = Some(show),
+            Preference::DetailsPane(show) => {
+                update.show_details_pane = Some(show);
+                if show {
+                    update.preview_pane = Some(false);
+                }
+            }
+            Preference::PreviewPane(show) => {
+                update.preview_pane = Some(show);
+                update.show_details_pane = Some(false);
+            }
+            Preference::FileNameExtensions(shown) => update.show_extensions = Some(shown),
             Preference::Theme(theme) => update.theme = Some(theme),
             Preference::TextSize(size) => update.text_size = Some(size.percent()),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),

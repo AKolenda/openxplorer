@@ -52,7 +52,7 @@ struct AdvancedSetting {
 }
 
 /// The advanced settings, in Windows' order.
-fn advanced_settings() -> [AdvancedSetting; 6] {
+fn advanced_settings() -> [AdvancedSetting; 7] {
     [
         // The opposite of Settings' "Show previews".
         AdvancedSetting {
@@ -68,6 +68,13 @@ fn advanced_settings() -> [AdvancedSetting; 6] {
             label: message_id("Display the full path in the title bar"),
             read: |preferences| preferences.full_path_in_title,
             write: |update, _, on| update.full_path_in_title = Some(on),
+        },
+        // The opposite of View > Show > File name extensions (VIEW-069),
+        // checked by default as in Windows.
+        AdvancedSetting {
+            label: message_id("Hide extensions for known file types"),
+            read: |preferences| !preferences.show_extensions,
+            write: |update, _, on| update.show_extensions = Some(!on),
         },
         AdvancedSetting {
             label: message_id("Remember each folder's view settings"),

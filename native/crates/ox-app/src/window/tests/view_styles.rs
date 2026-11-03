@@ -472,7 +472,11 @@ fn options_tab(options: &crate::dialog::Dialog, title: &str) -> gtk::Widget {
 }
 
 /// The check box labelled `label` on the tab `tab` of `options`.
-fn option_check(options: &crate::dialog::Dialog, tab: &str, label: &str) -> gtk::CheckButton {
+pub(in crate::window) fn option_check(
+    options: &crate::dialog::Dialog,
+    tab: &str,
+    label: &str,
+) -> gtk::CheckButton {
     descendants::<gtk::CheckButton>(&options_tab(options, tab))
         .into_iter()
         .find(|check| check.label().as_deref() == Some(label))
@@ -529,6 +533,7 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
         [
             ICONS_ONLY,
             "Display the full path in the title bar",
+            "Hide extensions for known file types",
             REMEMBER_VIEWS,
             "Restore previous folder windows at logon",
             SHOW_HIDDEN,

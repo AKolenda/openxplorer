@@ -11,7 +11,8 @@ owner's review: `wrench_20_regular` (Properties), `select_object_20_regular`
 (Invert selection), `rectangle_landscape_20_regular` (Extra large and Large
 icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
 (Navigation pane), `arrow_autofit_height_20_regular` (Compact view),
-`checkbox_checked_20_regular` (Item check boxes) and `circle_small_20_filled`
+`checkbox_checked_20_regular` (Item check boxes), `panel_right_gallery_20_regular` (Preview pane) and
+`circle_small_20_filled`
 (the dot that marks a chosen view, sort or the open Details pane). Redo
 shows `arrow_undo_20_regular` mirrored by the menu's CSS
 (`-gtk-icon-transform`), as Windows 11 draws it; the file is not changed.
@@ -89,6 +90,7 @@ it.
 | `actions/ox-paint-brush-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/paint_brush_20_regular.svg` | 208ec8628a886146383d3a520f1beff702d3b904cd9eabe2152570b6e8d172a0 |
 | `actions/ox-panel-left-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/panel_left_20_regular.svg` | f31a8664092ca1bfb4fdb6809c936ab3e4109063641f8548f013bbe869a65461 |
 | `actions/ox-panel-right-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/panel_right_20_regular.svg` | a4830810b33a540cc4e7d78a355b7bafbe43f1893e344efd3961589c91a59625 |
+| `actions/ox-panel-right-gallery-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/panel_right_gallery_20_regular.svg` | 97f8ee2e1e8ecc0be7cb7ee9293a4087213266b2ea5873e6a4d28527ea445ce5 |
 | `actions/ox-pause-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/pause_16_regular.svg` | f7dca0915417f45c18b04d0cef2f70138d8a3670117d9a651bd080d7359ca410 |
 | `actions/ox-play-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/play_16_regular.svg` | 14deab264d598f2942eb0c7df63f7fc5e51a9ee0f5347408e9b385344143c1db |
 | `actions/ox-rectangle-landscape-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/rectangle_landscape_20_regular.svg` | 0ff1b572b52110eebe5f13c6ee3fa7b0ad8b0edbba55f4bde353f221ac304f87 |

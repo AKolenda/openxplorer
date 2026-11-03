@@ -175,11 +175,12 @@ fn icon_size_glyph(size: IconSize) -> Icon {
 
 /// The View menu, as Windows 11 File Explorer's: the icon sizes from the
 /// largest, List and Details; the Details pane, with a dot while it is
-/// open; Show, with the navigation pane, Compact view, item check boxes
+/// open, and the Preview pane, which takes its place; Show, with the
+/// navigation pane, Compact view, item check boxes, File name extensions
 /// and Hidden items; then Dolphin's Split view, Folder tree and Terminal,
 /// at the top level where they were before Show existed; then the text
-/// size. Windows' Tiles and Content views, Preview pane and File name
-/// extensions are things the app does not have, so they are not listed.
+/// size. Windows' Tiles and Content views are views the app does not
+/// have, so they are not listed.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = IconSize::NAMED
         .into_iter()
@@ -200,6 +201,16 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             WindowAction::DetailsPane,
         )
         .with_shortcut("Alt+Shift+P")
+        .with_dot_mark()
+        .into(),
+        // The same pane showing only the preview; choosing one closes the
+        // other, as in Windows (VIEW-070).
+        MenuItem::toggle(
+            &gettext("Preview pane"),
+            Icon::PanelRightGallery,
+            WindowAction::PreviewPane,
+        )
+        .with_shortcut("Alt+P")
         .with_dot_mark()
         .into(),
         MenuItem::submenu(&gettext("Show"), Icon::Eye, WindowAction::Hidden, show_menu()).into(),
@@ -241,8 +252,8 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     entries
 }
 
-/// View > Show, as Windows 11 File Explorer's with the items the app has:
-/// the navigation pane, Compact view, item check boxes and Hidden items,
+/// View > Show, as Windows 11 File Explorer's: the navigation pane,
+/// Compact view, item check boxes, File name extensions and Hidden items,
 /// the hidden-files toggle that Ctrl+H and Folder Options change too
 /// (VIEW-023), each with a check mark while on.
 fn show_menu() -> Vec<MenuEntry> {
@@ -266,6 +277,13 @@ fn show_menu() -> Vec<MenuEntry> {
             &gettext("Item check boxes"),
             Icon::CheckboxChecked,
             WindowAction::ItemCheckBoxes,
+        )
+        .into(),
+        // Hidden for known file types by default, as in Windows (VIEW-069).
+        MenuItem::toggle(
+            &gettext("File name extensions"),
+            Icon::Document,
+            WindowAction::FileNameExtensions,
         )
         .into(),
         MenuItem::toggle(&gettext("Hidden items"), Icon::Eye, WindowAction::Hidden)

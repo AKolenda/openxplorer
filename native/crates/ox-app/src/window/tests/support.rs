@@ -132,3 +132,15 @@ pub(super) fn art_image_showing(widget: &impl IsA<gtk::Widget>, art: Art) -> Opt
         .into_iter()
         .find(|image| image.art() == Some(art))
 }
+
+/// Shows file name extensions in `test`'s window, for a test of renaming
+/// or of what the views draw that types or reads whole names; extensions
+/// of known types are hidden by default, as in Windows (VIEW-069).
+pub(super) fn show_file_name_extensions(test: &TestWindow) {
+    test.activate("file-name-extensions", None);
+    let shown = test
+        .window
+        .window_action_state(crate::window::WindowAction::FileNameExtensions)
+        .and_then(|state| state.get::<bool>());
+    assert_eq!(shown, Some(true), "extensions shown");
+}

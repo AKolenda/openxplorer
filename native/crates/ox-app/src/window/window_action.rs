@@ -132,6 +132,12 @@ pub(crate) enum WindowAction {
     Hidden,
     /// Shows or hides the details pane.
     DetailsPane,
+    /// Shows or hides the Preview pane, which shows the selection's
+    /// preview alone in the details pane's place (VIEW-070).
+    PreviewPane,
+    /// Shows or hides the extensions of known file types in names
+    /// (View > Show > File name extensions, VIEW-069).
+    FileNameExtensions,
     /// Switches the details pane option or field named by the string
     /// target (the pane's menu).
     DetailsPaneOption,
@@ -500,6 +506,8 @@ impl WindowAction {
             WindowAction::View => "view",
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
+            WindowAction::PreviewPane => "preview-pane",
+            WindowAction::FileNameExtensions => "file-name-extensions",
             WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::DetailsColumn => "details-column",
             WindowAction::Stop => "stop",

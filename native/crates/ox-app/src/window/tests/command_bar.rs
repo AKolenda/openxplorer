@@ -544,9 +544,8 @@ fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
 /// The View menu, as Windows 11 File Explorer's: the views from the
 /// largest icons to Details, the Details pane, Show, then Dolphin's split
 /// view, folder tree and terminal where they were before Show, and the
-/// text size. Windows' Tiles, Content and Preview pane are views and a
-/// pane the app does not have.
-const VIEW_MENU: [&str; 17] = [
+/// text size. Windows' Tiles and Content are views the app does not have.
+const VIEW_MENU: [&str; 18] = [
     "Extra large icons",
     "Large icons",
     "Medium icons",
@@ -555,6 +554,7 @@ const VIEW_MENU: [&str; 17] = [
     "Details",
     "-",
     "Details pane",
+    "Preview pane",
     "Show",
     "-",
     "Split view",
@@ -566,10 +566,9 @@ const VIEW_MENU: [&str; 17] = [
     "Reset text size",
 ];
 
-/// View > Show, as Windows 11's with the items the app has: the
-/// navigation pane, Compact view, item check boxes and Hidden items.
-/// Windows' File name extensions has no setting in the app.
-const SHOW_MENU: [&str; 8] = [
+/// View > Show, as Windows 11's: the navigation pane, Compact view, item
+/// check boxes, File name extensions and Hidden items.
+const SHOW_MENU: [&str; 9] = [
     "Show",
     "-",
     "Navigation pane",
@@ -577,6 +576,7 @@ const SHOW_MENU: [&str; 8] = [
     "Compact view",
     "-",
     "Item check boxes",
+    "File name extensions",
     "Hidden items",
 ];
 
@@ -713,6 +713,7 @@ fn the_more_and_view_menus_show_windows_glyphs() {
             ("Navigation pane".to_owned(), Icon::PanelLeft),
             ("Compact view".to_owned(), Icon::ArrowAutofitHeight),
             ("Item check boxes".to_owned(), Icon::CheckboxChecked),
+            ("File name extensions".to_owned(), Icon::Document),
             ("Hidden items".to_owned(), Icon::Eye),
         ]
     );

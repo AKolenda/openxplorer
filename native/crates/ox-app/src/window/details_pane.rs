@@ -28,6 +28,16 @@ use crate::icons::{self, Art, Icon};
 use super::window_action::WindowAction;
 
 pub(super) use content::{pane_content, PaneFacts};
+
+/// What the pane at the right shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum PaneMode {
+    /// The Details pane: the preview, name, type and properties.
+    #[default]
+    Details,
+    /// The Preview pane: the preview alone.
+    Preview,
+}
 use content::{PaneAction, PaneContent, Preview, Property};
 
 /// Width of the pane (`.details` in `v2.0.0:desktop/ui/style.css`).
@@ -131,6 +141,8 @@ mod imp {
         pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
         /// The pane's options, as saved (PROP-010).
         pub(super) options: RefCell<DetailsPaneOptions>,
+        /// Whether the pane shows the details or only the preview.
+        pub(super) mode: std::cell::Cell<super::PaneMode>,
         /// The item under the pointer, which the pane describes while it
         /// follows the pointer.
         pub(super) hovered: RefCell<Option<FileItem>>,
@@ -267,6 +279,74 @@ impl DetailsPane {
         following.then(|| self.imp().hovered.borrow().clone()).flatten()
     }
 
+    /// Shows the selection's details, or only its preview, as Windows 11's
+    /// Details pane and Preview pane do in the same place (VIEW-070).
+    pub(super) fn set_mode(&self, mode: PaneMode) {
+        let imp = self.imp();
+        imp.mode.set(mode);
+        let (title, toggle) = match mode {
+            PaneMode::Details => (ox_core::i18n::gettext("Details"), WindowAction::DetailsPane),
+            PaneMode::Preview => (ox_core::i18n::gettext("Preview"), WindowAction::PreviewPane),
+        };
+        if let Some(label) = self.title_label() {
+            label.set_text(&title);
+        }
+        // The close button closes the pane that is open.
+        toggle.assign_to(&*imp.close_button);
+        self.show_mode();
+    }
+
+    /// The header's title, before the close button.
+    fn title_label(&self) -> Option<gtk::Label> {
+        self.imp()
+            .close_button
+            .prev_sibling()
+            .and_downcast::<gtk::Label>()
+    }
+
+    /// Hides everything under the preview while only the preview shows;
+    /// shows the name, the type and the properties again otherwise. The
+    /// buttons and the note follow the content.
+    fn show_mode(&self) {
+        let imp = self.imp();
+        let preview_only = imp.mode.get() == PaneMode::Preview;
+        let conditional: [&gtk::Widget; 4] = [
+            imp.open_button.upcast_ref(),
+            imp.pin_item_button.upcast_ref(),
+            imp.pin_folder_button.upcast_ref(),
+            imp.note_row.upcast_ref(),
+        ];
+        let mut below = imp.preview_area.next_sibling();
+        while let Some(widget) = below {
+            below = widget.next_sibling();
+            if preview_only {
+                widget.set_visible(false);
+            } else if !conditional.contains(&&widget) {
+                widget.set_visible(true);
+            }
+        }
+    }
+
+    /// Whether the pane shows the properties list, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_properties(&self) -> bool {
+        self.imp().properties.is_visible()
+    }
+
+    /// Whether the pane shows the preview, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_preview(&self) -> bool {
+        self.imp().preview_area.is_visible()
+    }
+
+    /// The header's title, for tests.
+    #[cfg(test)]
+    pub(super) fn title_text(&self) -> String {
+        self.title_label()
+            .map(|label| label.text().to_string())
+            .unwrap_or_default()
+    }
+
     /// Shows `content`.
     pub(super) fn set_content(&self, content: &PaneContent) {
         let imp = self.imp();
@@ -281,6 +361,9 @@ impl DetailsPane {
         imp.note.set_text(content.note);
         imp.note_row.set_visible(!content.note.is_empty());
         self.show_media(content.media.as_ref());
+        if imp.mode.get() == PaneMode::Preview {
+            self.show_mode();
+        }
     }
 
     /// Shows the buttons `action` offers and hides the others.
