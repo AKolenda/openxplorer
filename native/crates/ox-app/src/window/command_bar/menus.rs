@@ -360,10 +360,10 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// Windows names them (the folder's own menu names the step); Pin to Quick access or Unpin from
 /// Quick access; Select all, Select none, Invert selection and the app's
 /// Select items matching…; then Properties, of the selection or the
-/// folder, and Options. In This PC and Network: Map network drive (the
-/// Map network location dialog), Add a network location (the same dialog
-/// at a web address, as Windows' wizard adds websites and FTP sites) and
-/// Disconnect network drive, in place of Pin. Windows' Connect to a media
+/// folder, and Options. In This PC and Network, in Windows' order: Add a
+/// network location (the Map network location dialog at a web address, as
+/// Windows' wizard adds websites and FTP sites), Map network drive (the
+/// same dialog) and Disconnect network drive, in place of Pin. Windows' Connect to a media
 /// server has no `GVfs` backend to run on Linux, so it is not offered.
 ///
 /// The rest of what "…" used to list moved where Windows has it (the
@@ -382,18 +382,19 @@ pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     entries.extend([
         MenuEntry::Divider,
         // No shortcut text, as Windows 11's "…" shows none; Ctrl+A still
-        // selects all. Windows draws the selection glyphs in blue.
-        MenuItem::new(&gettext("Select all"), Icon::GridFilled, WindowAction::SelectAll)
-            .with_accent_glyph()
-            .into(),
-        item(&gettext("Select none"), Icon::Grid, WindowAction::SelectNone),
-        MenuItem::new(
+        // selects all. The three glyphs are the contributor's, drawn to
+        // match Windows', blue squares included (no Fluent glyph does).
+        item(&gettext("Select all"), Icon::SelectAll24, WindowAction::SelectAll),
+        item(
+            &gettext("Select none"),
+            Icon::SelectNone24,
+            WindowAction::SelectNone,
+        ),
+        item(
             &gettext("Invert selection"),
-            Icon::LayoutCellFourFocusTopLeftFilled,
+            Icon::InvertSelection24,
             WindowAction::InvertSelection,
-        )
-        .with_accent_glyph()
-        .into(),
+        ),
         item(
             &gettext("Select items matching…"),
             Icon::Search,
@@ -413,14 +414,20 @@ fn folder_commands(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
     // Plainly "Undo" and "Redo", as Windows 11's "…" names them; the
     // folder's own menu names the step.
+    // Windows 11 draws Undo, Redo and Pin in blue.
     if state.can_undo {
-        entries.push(item(&gettext("Undo"), Icon::ArrowUndo, WindowAction::Undo));
+        entries.push(
+            MenuItem::new(&gettext("Undo"), Icon::ArrowUndo, WindowAction::Undo)
+                .with_accent_glyph()
+                .into(),
+        );
     }
     if state.can_redo {
         // Windows 11 draws Redo as Undo's arrow turned the other way.
         entries.push(
             MenuItem::new(&gettext("Redo"), Icon::ArrowUndo, WindowAction::Redo)
                 .mirrored()
+                .with_accent_glyph()
                 .into(),
         );
     }
@@ -428,7 +435,7 @@ fn folder_commands(state: &MoreMenuState) -> Vec<MenuEntry> {
         entries.push(MenuEntry::Divider);
     }
     let pin = match &state.pin {
-        FolderPin::Unpinned => item(
+        FolderPin::Unpinned => MenuItem::new(
             &gettext("Pin to Quick access"),
             Icon::Pin,
             WindowAction::PinFolder,
@@ -438,9 +445,9 @@ fn folder_commands(state: &MoreMenuState) -> Vec<MenuEntry> {
             Icon::Pin,
             WindowAction::Unpin,
             uri,
-        )
-        .into(),
+        ),
     };
+    let pin = pin.with_accent_glyph().into();
     entries.push(pin);
     entries
 }
@@ -452,7 +459,7 @@ fn network_drive_commands(drives: &[NetworkDrive]) -> Vec<MenuEntry> {
     let disconnect = if drives.is_empty() {
         MenuItem::new(
             &gettext("Disconnect network drive"),
-            Icon::ArrowEject,
+            Icon::DesktopOff,
             WindowAction::Disconnect,
         )
         .disabled_because(true, ox_core::i18n::gettext_static(NO_NETWORK_DRIVE))
@@ -466,21 +473,22 @@ fn network_drive_commands(drives: &[NetworkDrive]) -> Vec<MenuEntry> {
             .collect();
         MenuItem::submenu(
             &gettext("Disconnect network drive"),
-            Icon::ArrowEject,
+            Icon::DesktopOff,
             WindowAction::Disconnect,
             choices,
         )
     };
+    // In Windows 11's order, with the closest published glyphs to its own.
     vec![
         item(
-            &gettext("Map network drive"),
-            Icon::Organization,
-            WindowAction::MapNetworkLocation,
+            &gettext("Add a network location"),
+            Icon::Desktop,
+            WindowAction::AddNetworkLocation,
         ),
         item(
-            &gettext("Add a network location"),
-            Icon::Add,
-            WindowAction::AddNetworkLocation,
+            &gettext("Map network drive"),
+            Icon::Storage,
+            WindowAction::MapNetworkLocation,
         ),
         disconnect.into(),
     ]

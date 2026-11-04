@@ -39,6 +39,7 @@
     <file>scalable/actions/ox-cut-20-symbolic.svg</file>
     <file>scalable/actions/ox-delete-20-symbolic.svg</file>
     <file>scalable/actions/ox-delete-dismiss-20-symbolic.svg</file>
+    <file>scalable/actions/ox-desktop-off-20-symbolic.svg</file>
     <file>scalable/actions/ox-dismiss-16-symbolic.svg</file>
     <file>scalable/actions/ox-dismiss-20-symbolic.svg</file>
     <file>scalable/actions/ox-document-add-20-symbolic.svg</file>
@@ -46,10 +47,9 @@
     <file>scalable/actions/ox-document-text-20-symbolic.svg</file>
     <file>scalable/actions/ox-eye-20-symbolic.svg</file>
     <file>scalable/actions/ox-folder-add-20-symbolic.svg</file>
-    <file>scalable/actions/ox-grid-20-filled-symbolic.svg</file>
     <file>scalable/actions/ox-grid-20-symbolic.svg</file>
     <file>scalable/actions/ox-history-20-symbolic.svg</file>
-    <file>scalable/actions/ox-layout-cell-four-focus-top-left-20-filled-symbolic.svg</file>
+    <file>scalable/actions/ox-invert-selection-24-symbolic.svg</file>
     <file>scalable/actions/ox-link-20-symbolic.svg</file>
     <file>scalable/actions/ox-markdown-20-symbolic.svg</file>
     <file>scalable/actions/ox-maximize-20-symbolic.svg</file>
@@ -64,11 +64,14 @@
     <file>scalable/actions/ox-rectangle-landscape-20-symbolic.svg</file>
     <file>scalable/actions/ox-rename-20-symbolic.svg</file>
     <file>scalable/actions/ox-search-20-symbolic.svg</file>
+    <file>scalable/actions/ox-select-all-24-symbolic.svg</file>
     <file>scalable/actions/ox-select-all-off-20-symbolic.svg</file>
     <file>scalable/actions/ox-select-all-on-20-symbolic.svg</file>
+    <file>scalable/actions/ox-select-none-24-symbolic.svg</file>
     <file>scalable/actions/ox-settings-20-symbolic.svg</file>
     <file>scalable/actions/ox-share-20-symbolic.svg</file>
     <file>scalable/actions/ox-square-multiple-20-symbolic.svg</file>
+    <file>scalable/actions/ox-storage-20-symbolic.svg</file>
     <file>scalable/actions/ox-subtract-20-symbolic.svg</file>
     <file>scalable/actions/ox-table-20-symbolic.svg</file>
     <file>scalable/actions/ox-text-bullet-list-ltr-20-symbolic.svg</file>

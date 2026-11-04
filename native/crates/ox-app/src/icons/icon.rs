@@ -115,6 +115,9 @@ pub(crate) enum Icon {
     /// its windows, Use system appearance, Discovered servers and Settings'
     /// Open windows….
     Desktop,
+    /// `desktop_off_20_regular`: Disconnect network drive in This PC's "…",
+    /// the closest published shape to Windows 11's crossed-out drive.
+    DesktopOff,
     /// `dismiss_20_regular`: the window's close button and Quit
     /// `OpenXplorer`.
     Dismiss,
@@ -158,9 +161,6 @@ pub(crate) enum Icon {
     FolderZip,
     /// `grid_20_regular`: View and the icon views.
     Grid,
-    /// `grid_20_filled`: Select all in the "…" menu, in the accent blue, as
-    /// Windows 11 draws four filled squares.
-    GridFilled,
     /// `hard_drive_20_regular`: Local Disk, drives and mapped network drives.
     HardDrive,
     /// `headphones_20_color`: audio files at small sizes.
@@ -184,12 +184,11 @@ pub(crate) enum Icon {
     /// `info_20_regular`: About this build, the details pane's note, and the
     /// About settings and the notes of Settings.
     Info,
+    /// Invert selection in the "…" menu: an original icon contributed to the
+    /// project, drawn to match Windows 11's (`native/icon-sources`).
+    InvertSelection24,
     /// `laptop_20_regular`: This PC.
     Laptop,
-    /// `layout_cell_four_focus_top_left_20_filled`: Invert selection in the
-    /// "…" menu, in the accent blue: the closest published glyph to Windows
-    /// 11's partly filled squares.
-    LayoutCellFourFocusTopLeftFilled,
     /// `link_20_regular`: Copy as path in the context menus.
     Link,
     /// `markdown_20_regular`: New Markdown document.
@@ -230,6 +229,9 @@ pub(crate) enum Icon {
     /// Select items matching, the settings search and the Search &
     /// indexing settings.
     Search,
+    /// Select all in the "…" menu: an original icon contributed to the
+    /// project, drawn to match Windows 11's (`native/icon-sources`).
+    SelectAll24,
     /// `select_all_off_20_regular`: Select none until "…" took Windows 11's
     /// four squares for it (2026-11-03); still bundled with the approved
     /// set, for the owner to keep or remove.
@@ -240,6 +242,9 @@ pub(crate) enum Icon {
     /// set, for the owner to keep or remove.
     #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-04"))]
     SelectAllOn,
+    /// Select none in the "…" menu: an original icon contributed to the
+    /// project, drawn to match Windows 11's (`native/icon-sources`).
+    SelectNone24,
     /// `server_20_regular`: an SMB server on the network bar.
     Server,
     /// `settings_20_regular`: Settings.
@@ -250,6 +255,9 @@ pub(crate) enum Icon {
     ShieldLock,
     /// `square_multiple_20_regular`: the window's restore button.
     SquareMultiple,
+    /// `storage_20_regular`: Map network drive in This PC's "…", the closest
+    /// published shape to Windows 11's drive.
+    Storage,
     /// `subtract_20_regular`: the window's minimise button and Smaller text.
     Subtract,
     /// `table_20_regular`: New CSV file.
@@ -328,6 +336,7 @@ impl Icon {
             Icon::Delete => "ox-delete-20-symbolic",
             Icon::DeleteDismiss => "ox-delete-dismiss-20-symbolic",
             Icon::Desktop => "ox-desktop-20-symbolic",
+            Icon::DesktopOff => "ox-desktop-off-20-symbolic",
             Icon::Dismiss => "ox-dismiss-20-symbolic",
             Icon::Dismiss16 => "ox-dismiss-16-symbolic",
             Icon::DismissCircleFilled => "ox-dismiss-circle-16-filled-symbolic",
@@ -347,7 +356,6 @@ impl Icon {
             Icon::FolderAdd => "ox-folder-add-20-symbolic",
             Icon::FolderZip => "ox-folder-zip-20-symbolic",
             Icon::Grid => "ox-grid-20-symbolic",
-            Icon::GridFilled => "ox-grid-20-filled-symbolic",
             Icon::HardDrive => "ox-hard-drive-20-symbolic",
             Icon::HeadphonesColor20 => "ox-headphones-20-color",
             Icon::HeadphonesColor32 => "ox-headphones-32-color",
@@ -359,8 +367,8 @@ impl Icon {
             Icon::ImageColor32 => "ox-image-32-color",
             Icon::ImageColor48 => "ox-image-48-color",
             Icon::Info => "ox-info-20-symbolic",
+            Icon::InvertSelection24 => "ox-invert-selection-24-symbolic",
             Icon::Laptop => "ox-laptop-20-symbolic",
-            Icon::LayoutCellFourFocusTopLeftFilled => "ox-layout-cell-four-focus-top-left-20-filled-symbolic",
             Icon::Link => "ox-link-20-symbolic",
             Icon::Markdown => "ox-markdown-20-symbolic",
             Icon::Maximize => "ox-maximize-20-symbolic",
@@ -379,13 +387,16 @@ impl Icon {
             Icon::RectangleLandscape => "ox-rectangle-landscape-20-symbolic",
             Icon::Rename => "ox-rename-20-symbolic",
             Icon::Search => "ox-search-20-symbolic",
+            Icon::SelectAll24 => "ox-select-all-24-symbolic",
             Icon::SelectAllOff => "ox-select-all-off-20-symbolic",
             Icon::SelectAllOn => "ox-select-all-on-20-symbolic",
+            Icon::SelectNone24 => "ox-select-none-24-symbolic",
             Icon::Server => "ox-server-20-symbolic",
             Icon::Settings => "ox-settings-20-symbolic",
             Icon::Share => "ox-share-20-symbolic",
             Icon::ShieldLock => "ox-shield-lock-20-symbolic",
             Icon::SquareMultiple => "ox-square-multiple-20-symbolic",
+            Icon::Storage => "ox-storage-20-symbolic",
             Icon::Subtract => "ox-subtract-20-symbolic",
             Icon::Table => "ox-table-20-symbolic",
             Icon::TableColor20 => "ox-table-20-color",
@@ -425,7 +436,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 110] = [
+pub(crate) const ALL_ICONS: [Icon; 113] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowAutofitHeight,
@@ -461,6 +472,7 @@ pub(crate) const ALL_ICONS: [Icon; 110] = [
     Icon::Delete,
     Icon::DeleteDismiss,
     Icon::Desktop,
+    Icon::DesktopOff,
     Icon::Dismiss,
     Icon::Dismiss16,
     Icon::DismissCircleFilled,
@@ -480,7 +492,6 @@ pub(crate) const ALL_ICONS: [Icon; 110] = [
     Icon::FolderAdd,
     Icon::FolderZip,
     Icon::Grid,
-    Icon::GridFilled,
     Icon::HardDrive,
     Icon::HeadphonesColor20,
     Icon::HeadphonesColor32,
@@ -492,8 +503,8 @@ pub(crate) const ALL_ICONS: [Icon; 110] = [
     Icon::ImageColor32,
     Icon::ImageColor48,
     Icon::Info,
+    Icon::InvertSelection24,
     Icon::Laptop,
-    Icon::LayoutCellFourFocusTopLeftFilled,
     Icon::Link,
     Icon::Markdown,
     Icon::Maximize,
@@ -512,13 +523,16 @@ pub(crate) const ALL_ICONS: [Icon; 110] = [
     Icon::RectangleLandscape,
     Icon::Rename,
     Icon::Search,
+    Icon::SelectAll24,
     Icon::SelectAllOff,
     Icon::SelectAllOn,
+    Icon::SelectNone24,
     Icon::Server,
     Icon::Settings,
     Icon::Share,
     Icon::ShieldLock,
     Icon::SquareMultiple,
+    Icon::Storage,
     Icon::Subtract,
     Icon::Table,
     Icon::TableColor20,

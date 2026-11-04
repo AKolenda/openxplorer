@@ -8,20 +8,31 @@ owner approved the set and its mapping on 2026-09-27.
 Added on 2026-11-03 and 2026-11-04 to match Windows 11 File Explorer's
 "…" and View menus (CMD-006, CMD-007), from the same pinned package and
 awaiting the owner's review: `wrench_20_regular` (Properties),
-`grid_20_filled` (Select all) and `layout_cell_four_focus_top_left_20_filled`
-(Invert selection), both painted in the accent colour by the menu's CSS as
-Windows paints them blue, `rectangle_landscape_20_regular` (Extra large and
-Large icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
+`storage_20_regular` (Map network drive) and `desktop_off_20_regular`
+(Disconnect network drive), the closest published shapes to Windows'
+network glyphs, `rectangle_landscape_20_regular` (Extra large and Large
+icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
 (Navigation pane), `arrow_autofit_height_20_regular` (Compact view),
 `checkbox_checked_20_regular` (Item check boxes),
 `panel_right_gallery_20_regular` (Preview pane) and `circle_small_20_filled`
-(the dot that marks a chosen view, sort or open pane). Redo shows
-`arrow_undo_20_regular` mirrored by the menu's CSS (`-gtk-icon-transform`),
-as Windows 11 draws it; the file is not changed. Microsoft publishes no
-colour (`_color`) Fluent design for Select all, Select none, Invert
-selection, Undo or the panes, in 1.1.343 or in 1.1.345 (the newest on
-2026-11-04), and none of Windows' own dashed-frame selection glyphs; the
-ones above are the closest published shapes.
+(the dot that marks a chosen view, sort or open pane). Undo, Redo and Pin
+are drawn in Windows' blue by the menu's CSS, and Redo shows
+`arrow_undo_20_regular` mirrored by it (`-gtk-icon-transform`), as Windows
+11 draws them; the files are not changed. Microsoft publishes no colour
+(`_color`) Fluent design of these, in 1.1.343 or in 1.1.345 (the newest on
+2026-11-04).
+
+**Not Fluent:** `ox-select-all-24-symbolic.svg`,
+`ox-select-none-24-symbolic.svg` and `ox-invert-selection-24-symbolic.svg`
+(Select all, Select none and Invert selection in the "…" menu) are original
+icons contributed to the project by its contributor on 2026-11-04, drawn to
+match Windows 11's command-bar glyphs, with no third-party source, under
+the repository's licence (AGPL-3.0-only). Their drawings are in
+`native/icon-sources/` (see the README there), and each file here is
+`native/tools/expand_icon_strokes.py`'s output for its drawing: the same
+shapes with strokes written as fills, so GTK can recolour them. As
+CONTRIBUTING.md asks for Fluent icons only, they await the owner's
+acceptance.
 
 The files use the `hicolor/scalable/<context>/` layout of a GTK icon theme and
 are compiled into the application as a GResource (`icons.gresource.xml`, built
@@ -79,6 +90,7 @@ it.
 | `actions/ox-cut-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/cut_20_regular.svg` | 22e7e4781d227d384403a319309f10bfb5c73776bd1eb2804a4692689f44e753 |
 | `actions/ox-delete-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/delete_20_regular.svg` | 117dd937dfea155b95a157489089b658bb0611c736cbad4e5339c8470d5a3b93 |
 | `actions/ox-delete-dismiss-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/delete_dismiss_20_regular.svg` | 7b5d57fe5c168ce7cff9429e561043c0e4c4edc6806aeab9b408e45ce811bd56 |
+| `actions/ox-desktop-off-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/desktop_off_20_regular.svg` | 0c6c016f67b46ce6011084b8d4f9897da6e14d6f1d1f828738ed9bfd76433974 |
 | `actions/ox-dismiss-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/dismiss_16_regular.svg` | 16ad1ebc24e77252d69c5b2a8c036ce428621d4045cc3ac64599267c604dd0c6 |
 | `actions/ox-dismiss-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/dismiss_20_regular.svg` | 3d95fdce4bb3a29b983377648e5528d73d965ed90409bce5fa096ef790b75ccb |
 | `actions/ox-document-add-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/document_add_20_regular.svg` | 291dad1da68908c2a3eb190f2fb95be01281e82744a27c1b0f72a941ad1a1ca3 |
@@ -86,10 +98,9 @@ it.
 | `actions/ox-document-text-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/document_text_20_regular.svg` | 4c1e89ff1d85152da67997db13c68af58a9b930de199e9a91922aa7b6a8dc7cb |
 | `actions/ox-eye-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/eye_20_regular.svg` | 453fff6c012ee96342c6de537404ee2927f4b6f40515c26dca890eb2f3b36327 |
 | `actions/ox-folder-add-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/folder_add_20_regular.svg` | ce74be6268ef151cc9accc0452df91f8164c3f8389c14fa7473a66fd15389661 |
-| `actions/ox-grid-20-filled-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/grid_20_filled.svg` | 4ec460f8b7a8b5bcbca3747868d6c4272e819eef078352d2e9b74d1409a8137a |
 | `actions/ox-grid-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/grid_20_regular.svg` | e39560fcf33db8035a28269765f079779c6938dbc8a51bc80f00a7293878c825 |
 | `actions/ox-history-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/history_20_regular.svg` | 44499869f85aa37f46046e9652d5912a3f9a1ce2c4b835dd3c556d23cb664ef7 |
-| `actions/ox-layout-cell-four-focus-top-left-20-filled-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/layout_cell_four_focus_top_left_20_filled.svg` | af5d96a94ff0b12998e6c193afef06d1333c5b5d3877986f9207bc9ca6a2601a |
+| `actions/ox-invert-selection-24-symbolic.svg` | OpenXplorer, original (contributed) | `native/icon-sources/invert-selection.svg` | da9aa32ff3d024f44bd9ea1b1177889f331bc52c1717bbcd9acb2a5b79f11655 |
 | `actions/ox-link-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/link_20_regular.svg` | 0d7ca18928ccb48ddc7dc5eb69102c49e1a83cc4aa8d7a455bf600ecdc3b5b69 |
 | `actions/ox-markdown-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/markdown_20_regular.svg` | d403eefaecab68909090c42910f354cfeb7a63d9085437d8cbf9f7b333e149fe |
 | `actions/ox-maximize-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/maximize_20_regular.svg` | 7f3aec5319b7e66c5f088f26bb8b0c1135496757f999aa421b1860414ce0e84f |
@@ -104,11 +115,14 @@ it.
 | `actions/ox-rectangle-landscape-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/rectangle_landscape_20_regular.svg` | 0ff1b572b52110eebe5f13c6ee3fa7b0ad8b0edbba55f4bde353f221ac304f87 |
 | `actions/ox-rename-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/rename_20_regular.svg` | e4cd064a10bd0345430f78eccb012c966502bc6285ff70c9ee23962d52836f47 |
 | `actions/ox-search-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/search_20_regular.svg` | bdcaed7e5348ba774acf854b840ef8bcf30c024bf5d3bf50b1e08d3aac8aab17 |
+| `actions/ox-select-all-24-symbolic.svg` | OpenXplorer, original (contributed) | `native/icon-sources/select-all.svg` | db931e919e6ce6933dbed59895ad40b935869f17af47ce68d1270a98f7dbaad4 |
 | `actions/ox-select-all-off-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_all_off_20_regular.svg` | bb1a786c70234a30f5f26f92c3d885a7a91159d9b31c1a0c4fa6a9505b2b910f |
 | `actions/ox-select-all-on-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_all_on_20_regular.svg` | 199464932860850ba995faf317487f035e08707fd062dc682607deb69ec261f9 |
+| `actions/ox-select-none-24-symbolic.svg` | OpenXplorer, original (contributed) | `native/icon-sources/select-none.svg` | d5c479e248d083537d2c60fa4272956f7b33826bc39ae99d9853da2ad679552b |
 | `actions/ox-settings-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/settings_20_regular.svg` | 082803991d9af2fdb934957c5c8cddb04885665c7669d73d0c3d3dfee7ac7e6a |
 | `actions/ox-share-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/share_20_regular.svg` | c0f5d5c7dd6ea4bb52da116b5809256f349384b24339945891164b6854f98c5a |
 | `actions/ox-square-multiple-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/square_multiple_20_regular.svg` | de601d733420494510b8129cc413f76463435f7366a727faefde9b9e9a457a9f |
+| `actions/ox-storage-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/storage_20_regular.svg` | 77a323133fd2d436b9e31e1f0560677cd89347ec4a5eb4df90aa61c604b2f640 |
 | `actions/ox-subtract-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/subtract_20_regular.svg` | a724aae5ef54510875cf0b1dda4b49e6bb39dcb9f44dad450cdb1f64d5feb85b |
 | `actions/ox-table-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/table_20_regular.svg` | 01abb91aad998f162fd39dd5989844c43afd428597b9824dcb7ba1e2cd965572 |
 | `actions/ox-text-bullet-list-ltr-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/text_bullet_list_ltr_20_regular.svg` | e3e8e7fc40d3b9a39d731dc8c6886551d489329f792df8f20c80ffed78f3bcee |

@@ -32,7 +32,7 @@ use gtk::{gdk, glib};
 use crate::icons::{self, Icon};
 use crate::integration;
 
-pub(super) use items::{GlyphLook, ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
+pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
@@ -768,10 +768,11 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Bo
     }
     let glyph = application_icon.unwrap_or_else(|| {
         let image = icons::image(item.glyph, ROW_GLYPH);
-        match item.glyph_look {
-            GlyphLook::Plain => {}
-            GlyphLook::Mirrored => image.add_css_class("mirrored"),
-            GlyphLook::Accent => image.add_css_class("accent-glyph"),
+        if item.glyph_look.mirrored {
+            image.add_css_class("mirrored");
+        }
+        if item.glyph_look.accent {
+            image.add_css_class("accent-glyph");
         }
         image
     });

@@ -207,8 +207,8 @@ const MORE_MENU: [&str; 9] = [
 /// Options, and no Pin. Windows' Connect to a media server has no `GVfs`
 /// backend to run, so it is not listed.
 const MORE_MENU_ON_A_NETWORK_PAGE: [&str; 11] = [
-    "Map network drive",
     "Add a network location",
+    "Map network drive",
     "Disconnect network drive",
     "-",
     "Select all",
@@ -349,6 +349,12 @@ fn the_more_menu_shows_undo_and_redo_only_while_they_can_run() {
         .into_iter()
         .any(|image| image.has_css_class("mirrored"));
     assert!(mirrored, "Redo shows Undo's glyph mirrored");
+    for row in [menu.row("Undo"), redo_row.clone()] {
+        let blue = descendants::<gtk::Image>(&row)
+            .into_iter()
+            .any(|image| image.has_css_class("accent-glyph"));
+        assert!(blue, "Undo and Redo are drawn in Windows' blue");
+    }
     let properties = menu.row("Properties");
     assert!(properties.is_sensitive());
     assert_eq!(row_glyph(&properties).as_deref(), Some(Icon::Wrench.name()));
@@ -700,11 +706,11 @@ fn menu_marks_are_dots_for_choices_and_checks_for_toggles_beside_the_glyph() {
     view.popdown();
 }
 
-/// The glyphs of "…" and View are the bundled Fluent icons closest to
-/// Windows 11's: Undo's arrow, the pin, Select all's four filled squares
-/// and Invert's partly filled ones in the accent blue as Windows draws
-/// them, Select none's four outline squares, the wrench and gear, the view
-/// sizes, the panes and Show's items.
+/// The glyphs of "…" and View are Windows 11's: the contributor's own
+/// Select all, Select none and Invert selection, drawn to match Windows'
+/// (no Fluent glyph does), and the bundled Fluent icons closest to the
+/// rest: Undo's arrow and the pin in Windows' blue, the wrench and gear,
+/// This PC's network commands, the view sizes, the panes and Show's items.
 ///
 /// parity: CMD-007, CMD-006
 #[gtk::test]
@@ -720,29 +726,44 @@ fn the_more_and_view_menus_show_windows_glyphs() {
     let more = menu_of(&test, "More options");
     for (label, glyph) in [
         ("Pin to Quick access", Icon::Pin),
-        ("Select all", Icon::GridFilled),
-        ("Select none", Icon::Grid),
-        ("Invert selection", Icon::LayoutCellFourFocusTopLeftFilled),
+        ("Select all", Icon::SelectAll24),
+        ("Select none", Icon::SelectNone24),
+        ("Invert selection", Icon::InvertSelection24),
         ("Properties", Icon::Wrench),
         ("Options", Icon::Settings),
     ] {
         assert_eq!(glyph_of(&more, label), glyph, "{label}");
     }
-    // Windows draws the selection glyphs in blue, and the rest plain.
-    let accented: Vec<String> = more
-        .items()
-        .into_iter()
-        .filter(|item| item.glyph_look == crate::window::menu_popover::GlyphLook::Accent)
-        .map(|item| item.label)
-        .collect();
-    assert_eq!(accented, ["Select all", "Invert selection"]);
+    // Windows draws Undo, Redo and Pin in blue; the selection glyphs carry
+    // their own blue, and the rest are plain.
+    let accented = |menu: &MenuPopover| -> Vec<String> {
+        menu.items()
+            .into_iter()
+            .filter(|item| item.glyph_look.accent)
+            .map(|item| item.label)
+            .collect()
+    };
+    assert_eq!(accented(&more), ["Pin to Quick access"]);
     more.popup();
     wait_for_frames(&test.window, 2);
-    let blue = descendants::<gtk::Image>(&more.row("Select all"))
+    let blue = descendants::<gtk::Image>(&more.row("Pin to Quick access"))
         .into_iter()
         .any(|image| image.has_css_class("accent-glyph"));
-    assert!(blue, "Select all's glyph is drawn in the accent colour");
+    assert!(blue, "Pin's glyph is drawn in Windows' blue");
     more.popdown();
+    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+    let this_pc = menu_of(&test, "More options");
+    assert!(
+        accented(&this_pc).is_empty(),
+        "Windows colours none of This PC's glyphs"
+    );
+    for (label, glyph) in [
+        ("Add a network location", Icon::Desktop),
+        ("Map network drive", Icon::Storage),
+        ("Disconnect network drive", Icon::DesktopOff),
+    ] {
+        assert_eq!(glyph_of(&this_pc, label), glyph, "{label}");
+    }
     let view = menu_of(&test, "View");
     for (label, glyph) in [
         ("Extra large icons", Icon::RectangleLandscape),

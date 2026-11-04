@@ -125,17 +125,14 @@ pub(in crate::window) struct MenuItem {
     pub dot_mark: bool,
 }
 
-/// How a menu item's glyph is drawn.
+/// How a menu item's glyph is drawn: as the bundled file draws it, or
+/// mirrored, or in Windows' blue, or both, as Windows 11 draws Redo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(in crate::window) enum GlyphLook {
-    /// As the bundled file draws it, in the text colour.
-    #[default]
-    Plain,
+pub(in crate::window) struct GlyphLook {
     /// Mirrored left to right, as Windows 11 draws Redo with Undo's arrow.
-    Mirrored,
-    /// In the accent colour, as Windows 11 draws the selection commands of
-    /// its "…" menu in blue.
-    Accent,
+    pub mirrored: bool,
+    /// In Windows' blue, as Windows 11 draws Undo, Redo and Pin in its "…".
+    pub accent: bool,
 }
 
 impl MenuItem {
@@ -153,7 +150,7 @@ impl MenuItem {
             disabled_reason: None,
             application_icon: None,
             submenu: Vec::new(),
-            glyph_look: GlyphLook::Plain,
+            glyph_look: GlyphLook::default(),
             dot_mark: false,
         }
     }
@@ -217,7 +214,10 @@ impl MenuItem {
     /// The same item with its glyph mirrored left to right.
     pub(in crate::window) fn mirrored(self) -> Self {
         Self {
-            glyph_look: GlyphLook::Mirrored,
+            glyph_look: GlyphLook {
+                mirrored: true,
+                ..self.glyph_look
+            },
             ..self
         }
     }
@@ -225,7 +225,10 @@ impl MenuItem {
     /// The same item with its glyph in the accent colour.
     pub(in crate::window) fn with_accent_glyph(self) -> Self {
         Self {
-            glyph_look: GlyphLook::Accent,
+            glyph_look: GlyphLook {
+                accent: true,
+                ..self.glyph_look
+            },
             ..self
         }
     }
