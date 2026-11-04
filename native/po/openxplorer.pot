@@ -4169,7 +4169,7 @@ msgstr ""
 msgid "Pin this folder"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Pin to Quick access"
 msgstr ""
 

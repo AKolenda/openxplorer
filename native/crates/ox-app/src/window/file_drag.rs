@@ -117,11 +117,27 @@ impl DragButton {
 }
 
 thread_local! {
+    /// The button of the drag being prepared, kept for its start: GTK no
+    /// longer reports the pressed button once the drag begins.
+    static PREPARED_BUTTON: std::cell::Cell<Option<DragButton>> = const { std::cell::Cell::new(None) };
+
     /// The drag of this process made with the secondary button, while it
     /// lasts. A drop in any window of the process reads it, so the drop
     /// asks with the menu wherever it lands.
     static SECONDARY_DRAG: std::cell::RefCell<glib::WeakRef<gdk::Drag>> =
         std::cell::RefCell::new(glib::WeakRef::new());
+}
+
+thread_local! {
+    /// The items this process drags now, from any of its windows. They
+    /// take no drop while they are dragged, as in Windows Explorer: a drop
+    /// on one of them goes to the folder shown.
+    static DRAGGED: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+}
+
+/// True while the item at `uri` is being dragged by this process.
+pub(crate) fn is_being_dragged(uri: &str) -> bool {
+    DRAGGED.with(|dragged| dragged.borrow().contains(uri))
 }
 
 /// The button `drag`, a drag of this process, was made with.
@@ -150,10 +166,21 @@ fn offered_actions(button: DragButton, modifiers: gdk::ModifierType) -> gdk::Dra
     gdk::DragAction::COPY | gdk::DragAction::ASK | chosen
 }
 
-/// The button `source`'s gesture is pressed with now; `None` for one that
-/// drags nothing.
+/// The button `source`'s gesture is pressed with now, while its drag is
+/// prepared, remembered for the drag's start; `None` for one that drags
+/// nothing.
 fn pressed_button(source: &gtk::DragSource) -> Option<DragButton> {
-    DragButton::of(source.current_button())
+    let button = DragButton::of(source.current_button());
+    PREPARED_BUTTON.with(|prepared| prepared.set(button));
+    button
+}
+
+/// Marks `drag`, as it starts, as made with the secondary button when its
+/// preparation said so (see [`PREPARED_BUTTON`]).
+fn mark_drag_button(drag: &gdk::Drag) {
+    let button = PREPARED_BUTTON.with(std::cell::Cell::take);
+    let secondary = (button == Some(DragButton::Secondary)).then_some(drag);
+    SECONDARY_DRAG.with(|marked| marked.borrow().set(secondary));
 }
 
 /// The actions a drag of `content` with `button` offers with `modifiers`
@@ -263,10 +290,8 @@ impl BrowserWindow {
         source.connect_drag_begin(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |source, drag| {
-                if pressed_button(source) == Some(DragButton::Secondary) {
-                    SECONDARY_DRAG.with(|secondary| secondary.borrow().set(Some(drag)));
-                }
+            move |_, drag| {
+                mark_drag_button(drag);
                 window.begin_file_drag(drag);
             }
         ));
@@ -376,6 +401,7 @@ impl BrowserWindow {
         self.reset_typeahead();
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_START);
         let dragged: HashSet<String> = outgoing.payload.uris.iter().cloned().collect();
+        DRAGGED.with(|now| now.replace(dragged.clone()));
         self.folder_pane().owners().show_dragged_items(dragged);
         if outgoing.payload.remote_only > 0 {
             self.show_message(ox_core::i18n::gettext_static(REMOTE_ONLY_MESSAGE));
@@ -397,6 +423,7 @@ impl BrowserWindow {
                 gtk::AccessibleAnnouncementPriority::Medium,
             );
         }
+        DRAGGED.with(|now| now.borrow_mut().clear());
         for pane in self.folder_panes() {
             pane.owners().show_dragged_items(HashSet::new());
         }

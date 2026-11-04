@@ -39,7 +39,7 @@ use std::time::Duration;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{parent_location, require_item_uri, same_location, LocationError, TRASH_URI};
+use ox_core::location::{require_item_uri, same_location, LocationError, TRASH_URI};
 use ox_core::ops::{is_recycle_bin_item, LinkRequest};
 use ox_core::transfer::TransferMode;
 
@@ -50,10 +50,10 @@ use super::session::{TabPlacement, TabPosition};
 use super::zip_copies::{is_zip_copy, CopiesFailure, ZipDragContent};
 use super::BrowserWindow;
 
-use action::drop_run_action;
 #[cfg(test)]
 pub(crate) use action::DragOrigin;
 pub(in crate::window) use action::DropRun;
+use action::{drop_run_action, is_in_folder};
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
 pub(super) use targets::{scroll_step, DragScroll, DropZone, SCROLL_TICK};
@@ -218,7 +218,7 @@ fn is_file_location(uri: &str) -> bool {
 /// into the folder it is in has nothing to do.
 fn outside_folder(uris: Vec<String>, folder: &str) -> Vec<String> {
     uris.into_iter()
-        .filter(|uri| !parent_location(uri).is_some_and(|parent| same_location(&parent, folder)))
+        .filter(|uri| !is_in_folder(uri, folder))
         .collect()
 }
 
@@ -536,6 +536,16 @@ impl BrowserWindow {
                 return Ok(());
             }
         };
+        // A copy dropped back in the items' own folder makes copies beside
+        // them, `report - Copy.pdf`, as Windows Explorer does (DND-027).
+        if mode == TransferMode::Copy && uris.iter().all(|uri| is_in_folder(uri, &folder)) {
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                async move { window.duplicate_uris(&uris).await }
+            ));
+            return Ok(());
+        }
         let uris = if mode == TransferMode::Move {
             outside_folder(uris, &folder)
         } else {

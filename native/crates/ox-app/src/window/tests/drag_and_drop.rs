@@ -14,7 +14,7 @@ use gtk::subclass::prelude::*;
 use super::file_ops_support::{dialog_over, open_dialog, select_names};
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 use crate::window::file_drag::DraggedItems;
-use crate::window::file_drop::{DragOrigin, DropAction};
+use crate::window::file_drop::{DragOrigin, DropAction, DropDestination};
 
 /// The URIs a drag's content offers as a file list.
 fn offered_uris(content: &gdk::ContentProvider) -> Vec<String> {
@@ -433,6 +433,65 @@ fn a_right_drag_drop_asks_and_creates_shortcuts_here() {
         fixture.path("Notes 2.txt")
     );
     assert!(fixture.path("Notes 2.txt").is_file(), "the item stays");
+}
+
+/// A right-button drag dropped in the folder it comes from asks, as in
+/// Windows Explorer: Copy here and Create shortcuts here, but no Move
+/// here, which would do nothing, and nothing in bold, as a plain drop
+/// there does nothing. Copy here makes `Notes 2 - Copy.txt`.
+///
+/// parity: DND-027
+#[gtk::test]
+fn a_right_drop_in_its_own_folder_asks_and_copy_here_makes_a_copy() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let dropped = [fixture.uri_of("Notes 2.txt")];
+
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    let menu = test.window.drop_menu();
+    wait_until("the drop menu", || menu.is_mapped());
+    let labels = menu.row_labels();
+    let bold = menu.emphasised_labels();
+    menu.click_row("Copy here");
+
+    assert_eq!(labels, ["Copy here", "Create shortcuts here", "-", "Cancel"]);
+    assert!(bold.is_empty(), "{bold:?}");
+    let copy = fixture.path("Notes 2 - Copy.txt");
+    wait_until("the copy", || copy.is_file());
+    assert_eq!(
+        std::fs::read(&copy).expect("the copy"),
+        std::fs::read(fixture.path("Notes 2.txt")).expect("the item")
+    );
+    wait_until("the copy to be selected", || {
+        test.selected_names() == ["Notes 2 - Copy.txt"]
+    });
+}
+
+/// While items are dragged, the dragged items themselves take no drop: a
+/// dragged folder dropped onto itself is dropped on the folder shown, as
+/// in Windows Explorer, so a right-button drag asks there.
+///
+/// parity: DND-011, DND-027
+#[gtk::test]
+fn a_dragged_folder_is_no_drop_target_while_it_is_dragged() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let documents = test.position_of("Documents");
+
+    let before = test.window.folder_view_destination(Some(documents));
+    test.window
+        .drag_content_for(documents)
+        .expect("the folder can be dragged");
+    test.window.show_file_drag_feedback();
+    let while_dragged = test.window.folder_view_destination(Some(documents));
+    test.window.end_file_drag();
+    let after = test.window.folder_view_destination(Some(documents));
+
+    let into_documents = Some(DropDestination::Folder(fixture.uri_of("Documents")));
+    assert_eq!(before, into_documents);
+    assert_eq!(while_dragged, Some(DropDestination::Folder(fixture.uri())));
+    assert_eq!(after, into_documents);
 }
 
 /// parity: DND-011

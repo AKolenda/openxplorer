@@ -33,6 +33,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
+use ox_core::location::{parent_location, same_location};
 use ox_core::ops::is_recycle_bin_item;
 
 use gtk::gio;
@@ -334,8 +335,9 @@ pub(crate) struct DropMenuOffer {
     /// this computer whose file system takes symbolic links.
     pub(crate) shortcuts: bool,
     /// What a plain drop would do, shown in bold: [`DropAction::Move`] or
-    /// [`DropAction::Copy`].
-    pub(crate) default: DropAction,
+    /// [`DropAction::Copy`]; `None` in the items' own folder, where a plain
+    /// drop does nothing.
+    pub(crate) default: Option<DropAction>,
 }
 
 impl DropMenuOffer {
@@ -344,7 +346,7 @@ impl DropMenuOffer {
         copies: true,
         moves: false,
         shortcuts: false,
-        default: DropAction::Copy,
+        default: Some(DropAction::Copy),
     };
 }
 
@@ -365,7 +367,21 @@ pub(crate) fn drop_menu_offer(uris: &[String], folder: &str, origin: DragOrigin)
             copies: false,
             moves: true,
             shortcuts: false,
-            default: DropAction::Move,
+            default: Some(DropAction::Move),
+        };
+    }
+    // Dropped back in their own folder, as Windows Explorer does there:
+    // Copy here makes copies beside them, a move would do nothing and is
+    // not offered, and nothing is bold, as a plain drop does nothing.
+    if !uris.is_empty() && uris.iter().all(|uri| is_in_folder(uri, folder)) {
+        let shortcuts = !uris.iter().any(|uri| is_zip_copy(uri))
+            && takes_shortcuts(folder)
+            && uris.iter().all(|uri| gio::File::for_uri(uri).path().is_some());
+        return DropMenuOffer {
+            copies: true,
+            moves: false,
+            shortcuts,
+            default: None,
         };
     }
     let from_zip = uris.iter().any(|uri| is_zip_copy(uri));
@@ -375,9 +391,9 @@ pub(crate) fn drop_menu_offer(uris: &[String], folder: &str, origin: DragOrigin)
         && uris.iter().all(|uri| gio::File::for_uri(uri).path().is_some());
     let plain_drop_moves = origin == DragOrigin::ThisApp && !from_zip && on_same_drive(uris, folder);
     let default = if moves && plain_drop_moves {
-        DropAction::Move
+        Some(DropAction::Move)
     } else {
-        DropAction::Copy
+        Some(DropAction::Copy)
     };
     DropMenuOffer {
         copies: true,
@@ -385,6 +401,11 @@ pub(crate) fn drop_menu_offer(uris: &[String], folder: &str, origin: DragOrigin)
         shortcuts,
         default,
     }
+}
+
+/// True when the item at `uri` is directly in `folder`.
+pub(crate) fn is_in_folder(uri: &str, folder: &str) -> bool {
+    parent_location(uri).is_some_and(|parent| same_location(&parent, folder))
 }
 
 /// True when the item at `uri` may be deleted where it is, as a move
@@ -422,7 +443,7 @@ fn drop_menu_entries(offer: DropMenuOffer) -> Vec<MenuEntry> {
     let choice = |label: &str, glyph: Icon, action: Option<DropAction>| {
         let target = action.map_or(CANCEL_CHOICE, DropAction::name);
         let mut item = MenuItem::with_text_target(label, glyph, WindowAction::DropChoice, target);
-        item.emphasised = action.is_some_and(|action| action == offer.default);
+        item.emphasised = action.is_some() && action == offer.default;
         MenuEntry::from(item)
     };
     let mut entries = Vec::new();
@@ -792,15 +813,15 @@ mod tests {
             copies: true,
             moves: true,
             shortcuts: true,
-            default: DropAction::Move,
+            default: Some(DropAction::Move),
         };
         let across_drives = DropMenuOffer {
-            default: DropAction::Copy,
+            default: Some(DropAction::Copy),
             ..every
         };
         let read_only = DropMenuOffer {
             moves: false,
-            default: DropAction::Copy,
+            default: Some(DropAction::Copy),
             ..every
         };
         let onto_fat = DropMenuOffer {
@@ -821,6 +842,15 @@ mod tests {
             ["*Copy here", "Create shortcuts here", "-", "Cancel"]
         );
         assert_eq!(menu_labels(onto_fat), ["Copy here", "*Move here", "-", "Cancel"]);
+        let own_folder = DropMenuOffer {
+            moves: false,
+            default: None,
+            ..every
+        };
+        assert_eq!(
+            menu_labels(own_folder),
+            ["Copy here", "Create shortcuts here", "-", "Cancel"]
+        );
         assert_eq!(DropAction::from_name(CANCEL_CHOICE), None);
     }
 
@@ -901,6 +931,7 @@ mod tests {
 
         let own = drop_menu_offer(&[uri(&item)], &uri(&destination), DragOrigin::ThisApp);
         let foreign = drop_menu_offer(&[uri(&item)], &uri(&destination), DragOrigin::OtherApp);
+        let in_own_folder = drop_menu_offer(&[uri(&item)], &uri(folder.path()), DragOrigin::ThisApp);
         let read_only = drop_menu_offer(&[uri(&kept)], &uri(&destination), DragOrigin::ThisApp);
         let from_share = drop_menu_offer(
             &["smb://nas/share/plan.odt".to_owned()],
@@ -918,13 +949,13 @@ mod tests {
             copies: true,
             moves: true,
             shortcuts: true,
-            default: DropAction::Move,
+            default: Some(DropAction::Move),
         };
         assert_eq!(own, every);
         assert_eq!(
             foreign,
             DropMenuOffer {
-                default: DropAction::Copy,
+                default: Some(DropAction::Copy),
                 ..every
             }
         );
@@ -932,18 +963,28 @@ mod tests {
             read_only,
             DropMenuOffer {
                 moves: false,
-                default: DropAction::Copy,
+                default: Some(DropAction::Copy),
                 ..every
             }
         );
         assert!(!from_share.shortcuts, "a share's item gets no shortcut");
+        assert_eq!(
+            in_own_folder,
+            DropMenuOffer {
+                copies: true,
+                moves: false,
+                shortcuts: true,
+                default: None,
+            },
+            "back in its own folder: no move, nothing bold"
+        );
         assert_eq!(
             from_bin,
             DropMenuOffer {
                 copies: false,
                 moves: true,
                 shortcuts: false,
-                default: DropAction::Move,
+                default: Some(DropAction::Move),
             },
             "Recycle Bin items are only moved out"
         );
