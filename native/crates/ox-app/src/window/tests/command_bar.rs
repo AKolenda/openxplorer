@@ -60,7 +60,7 @@ pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
 }
 
 /// The menu of the command bar control named `name`.
-fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
+pub(super) fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
     let control = command_bar_controls(test)
         .into_iter()
         .find(|control| control_name(control).as_deref() == Some(name))

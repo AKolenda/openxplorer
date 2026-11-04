@@ -2891,7 +2891,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "Dolphin: Ctrl+1/2/3 switch Icons/Compact/Details.; icons: Ctrl+1; details: Ctrl+3"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (switching_views_keeps_the_selection_and_shows_the_active_view: View menu choices and the status-bar Details view / Large icons buttons, the active one highlighted; a_chosen_view_starts_at_the_top_and_has_explorers_keys: a chosen view starts at the top, clears type-to-select and is saved for every tab and new window). Explorer's keys Ctrl+Shift+1 to 4 and 6 choose the views (VIEW-009)."
+native_note = "native/crates/ox-app/src/window/tests/views.rs (switching_views_keeps_the_selection_and_shows_the_active_view: View menu choices and the status-bar Details view / Large icons buttons, the active one highlighted; a_chosen_view_starts_at_the_top_and_has_explorers_keys: a chosen view starts at the top, clears type-to-select and is saved for every tab and new window; tests/focus.rs switching_views_keeps_the_keyboard_in_the_list: the view that replaces the list takes the keyboard). Explorer's keys Ctrl+Shift+1 to 4 and 6 choose the views (VIEW-009)."
 
 [[feature]]
 id = "VIEW-007"
@@ -3332,7 +3332,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "F11 Information panel; Information panel (F11)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved."
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved. native/crates/ox-app/src/window/tests/focus.rs (closing_the_details_pane_puts_the_keyboard_in_the_folder): the folder takes the keyboard from a button of the pane that hides."
 
 [[feature]]
 id = "VIEW-028"
@@ -4685,7 +4685,7 @@ bridge = []
 dolphin = "Dolphin keyboard search (KItemListKeyboardSearchManager) jumps to the first matching item while typing in the view.; Type-ahead selection; KItemListKeyboardSearchManager (1000 ms timeout)"
 gnome = "GTK4 Gtk.ListView/GridView has no built-in type-ahead; implement with an EventControllerKey on the view (do not start Nautilus-style search).; GtkListView/GtkColumnView typeahead"
 native = "done"
-native_note = "native/crates/ox-app/src/window/type_to_select.rs and input.rs; the views' accessible name is 'Folder contents — type a filename prefix to select'. native/crates/ox-app/src/window/tests/input.rs (typing_selects_the_next_matching_name_and_names_it_in_the_hint); matching in native/crates/ox-app/src/typeahead.rs. Porting notes: Nautilus starts a search on typing by default; OpenXplorer deliberately selects instead (0.5.1 CHANGELOG)."
+native_note = "native/crates/ox-app/src/window/type_to_select.rs and input.rs; the views' accessible name is 'Folder contents — type a filename prefix to select'. native/crates/ox-app/src/window/tests/input.rs (typing_selects_the_next_matching_name_and_names_it_in_the_hint); matching in native/crates/ox-app/src/typeahead.rs. Deliberate gain: a printable key pressed while the keyboard is on the window's own chrome (a command, a crumb, a places row or the Details pane, where a click and a Tab leave it) also selects in the list, moving the keyboard there first, as Windows Explorer does; native/crates/ox-app/src/window/tests/focus.rs (typing_on_a_command_or_the_details_pane_selects_in_the_folder, clicking_a_place_puts_the_keyboard_in_the_folder, a_typed_address_leaves_the_keyboard_in_the_folder). Porting notes: Nautilus starts a search on typing by default; OpenXplorer deliberately selects instead (0.5.1 CHANGELOG)."
 
 [[feature]]
 id = "SEL-021"
@@ -4966,7 +4966,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "Type-to-select lives only on the two folder views (native/crates/ox-app/src/window/input.rs), which pages, dialogs and the Settings page replace or cover, and it passes keys on while a text field inside a view has focus. native/crates/ox-app/src/window/tests/input.rs (keys_typed_in_a_text_field_are_left_to_it)."
+native_note = "Type-to-select lives on the two folder views (native/crates/ox-app/src/window/input.rs), which pages, dialogs and the Settings page replace or cover, and it passes keys on while a text field inside a view has focus; a text field anywhere in the window, the Settings page, a dialog, an open menu and the tab strip keep their keys too. Deliberate gain: the window's own chrome (commands, crumbs, places rows, the Details pane) does not hold keys to itself, so typing there selects in the list as SEL-020 describes. native/crates/ox-app/src/window/tests/input.rs (keys_typed_in_a_text_field_are_left_to_it), tests/focus.rs (typing_on_a_command_or_the_details_pane_selects_in_the_folder, a_landing_page_never_keeps_the_keyboard_on_the_hidden_list, typing_in_a_menu_leaves_the_folder_alone, typing_on_a_tab_leaves_the_folder_alone, typing_while_a_location_opens_selects_nothing_hidden)."
 
 [[feature]]
 id = "SEL-031"
