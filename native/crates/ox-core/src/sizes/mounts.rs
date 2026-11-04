@@ -24,6 +24,10 @@ const FIELD_GROUP_SEPARATOR: &[u8] = b" - ";
 /// mount id, parent id, `major:minor`, root, mount point.
 const MOUNT_POINT_FIELD: usize = 4;
 
+/// The position of the filesystem's `major:minor` device number among the
+/// fields before the separator.
+const DEVICE_FIELD: usize = 2;
+
 /// The length of an octal escape: a backslash and three digits.
 const ESCAPE_LENGTH: usize = 4;
 
@@ -31,6 +35,12 @@ const ESCAPE_LENGTH: usize = 4;
 /// it is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Mount {
+    /// The kernel's mount ID, as libmount's `utab` names the mount.
+    pub(crate) id: u64,
+    /// The filesystem's device number, `(major, minor)`: the block device
+    /// for a filesystem on one, an anonymous number for others (Btrfs,
+    /// overlays, memory filesystems).
+    pub(crate) device: (u32, u32),
     /// Where it is mounted, with the kernel's escapes decoded.
     pub(crate) point: PathBuf,
     /// The filesystem type, such as `ext4` or `fuse.sshfs`.
@@ -88,8 +98,15 @@ fn mount_of_line(line: &[u8]) -> Option<Mount> {
     let filesystem = trailing.next()?;
     let source = trailing.next()?;
     let options = trailing.next().unwrap_or_default();
-    let escaped = fields(leading).nth(MOUNT_POINT_FIELD)?;
+    let leading: Vec<&[u8]> = fields(leading).collect();
+    let escaped = leading.get(MOUNT_POINT_FIELD)?;
+    let id = std::str::from_utf8(leading.first()?).ok()?.parse().ok()?;
+    let (major, minor) = std::str::from_utf8(leading.get(DEVICE_FIELD)?)
+        .ok()?
+        .split_once(':')?;
     Some(Mount {
+        id,
+        device: (major.parse().ok()?, minor.parse().ok()?),
         point: PathBuf::from(OsString::from_vec(unescape_octal(escaped))),
         filesystem: String::from_utf8_lossy(&unescape_octal(filesystem)).into_owned(),
         source: unescape_octal(source),
@@ -104,8 +121,9 @@ fn fields(text: &[u8]) -> impl Iterator<Item = &[u8]> {
     text.split(|&byte| byte == b' ').filter(|field| !field.is_empty())
 }
 
-/// Decodes the kernel's `\ooo` octal escapes; anything else stays as it is.
-fn unescape_octal(escaped: &[u8]) -> Vec<u8> {
+/// Decodes the kernel's `\ooo` octal escapes, which `/etc/fstab` and
+/// libmount's `utab` use too; anything else stays as it is.
+pub(crate) fn unescape_octal(escaped: &[u8]) -> Vec<u8> {
     let mut decoded = Vec::with_capacity(escaped.len());
     let mut position = 0;
     while position < escaped.len() {
@@ -165,6 +183,8 @@ not a mount line
         assert_eq!(
             mounts[1],
             Mount {
+                id: 61,
+                device: (0, 52),
                 point: PathBuf::from("/mnt/nas share"),
                 filesystem: "cifs".into(),
                 source: b"//nas/share".to_vec(),

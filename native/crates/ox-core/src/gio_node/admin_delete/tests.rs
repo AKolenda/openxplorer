@@ -4,7 +4,9 @@
 //! folder, mount a drive or see `admin://`, so the tests trust their own
 //! account in root's place, judge folders from their own temporary folder
 //! down (the machine's `/tmp` above it is world-writable) and supply the
-//! mount table, through [`Seams`].
+//! mount table, through [`Seams`]. `/etc/fstab`, libmount's `utab`, `/sys`
+//! and `/dev` are read from a stand-in folder with two internal SATA disks
+//! ([`fake_system`]).
 
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
@@ -30,9 +32,12 @@ fn me() -> u32 {
     rustix::process::getuid().as_raw()
 }
 
-/// A mount of `filesystem` at `mount_point`.
+/// A mount of `filesystem` at `mount_point`, from the internal disk's
+/// partition `sda2`.
 fn mount(mount_point: &Path, filesystem: &str) -> Mount {
     Mount {
+        id: 22,
+        device: (8, 2),
         point: mount_point.to_owned(),
         filesystem: filesystem.into(),
         source: b"/dev/sda2".to_vec(),
@@ -41,7 +46,8 @@ fn mount(mount_point: &Path, filesystem: &str) -> Mount {
 }
 
 /// Rules that trust this account in root's place, judge the folders from
-/// `root` down and read `mounts` as the mount table.
+/// `root` down, read `mounts` as the mount table and read the rest of the
+/// system from a [`fake_system`] in `root`.
 fn rules(root: &Path, mounts: Vec<Mount>) -> Rules {
     Rules {
         seams: Seams {
@@ -49,8 +55,56 @@ fn rules(root: &Path, mounts: Vec<Mount>) -> Rules {
             mounts: Some(mounts),
             judged_from: Some(root.to_owned()),
             device: None,
+            system: Some(fake_system(root)),
         },
     }
+}
+
+/// A stand-in in `root` for the folders that hold `/etc/fstab`, libmount's
+/// `utab`, `/sys` and `/dev`, with no `fstab` or `utab` and two internal
+/// SATA disks: the partitions `sda2` (8:2) and `sdb1` (8:17).
+fn fake_system(root: &Path) -> PathBuf {
+    let system = root.join("fake system");
+    let ata = "pci0000:00/0000:00:17.0/ata";
+    block_device(
+        &system,
+        (8, 2),
+        &format!("{ata}1/host0/target0:0:0/0:0:0:0/block/sda/sda2"),
+        false,
+    );
+    block_device(
+        &system,
+        (8, 17),
+        &format!("{ata}2/host1/target1:0:0/1:0:0:0/block/sdb/sdb1"),
+        false,
+    );
+    system
+}
+
+/// Adds to the [`fake_system`] `system` the partition at `device_path`
+/// under `/sys/devices`, numbered `number`, on a disk whose `removable`
+/// flag is `removable`, as the kernel lays it out, with its node in `/dev`.
+fn block_device(system: &Path, number: (u32, u32), device_path: &str, removable: bool) {
+    let sys = system.join("sys");
+    let partition = sys.join("devices").join(device_path);
+    fs::create_dir_all(&partition).expect("create the device");
+    fs::write(partition.join("partition"), "1\n").expect("write the partition number");
+    let disk = partition.parent().expect("a disk above the partition");
+    fs::write(disk.join("removable"), if removable { "1\n" } else { "0\n" }).expect("write the flag");
+    let name = partition.file_name().expect("a device name");
+    let target = format!("../../devices/{device_path}");
+    let (major, minor) = number;
+    for link in [
+        sys.join(format!("dev/block/{major}:{minor}")),
+        sys.join("class/block").join(name),
+    ] {
+        fs::create_dir_all(link.parent().expect("a folder")).expect("create the folder");
+        // A second fake system in the same folder lays out the same disks.
+        let _ = fs::remove_file(&link);
+        symlink(&target, link).expect("link the device");
+    }
+    fs::create_dir_all(system.join("dev")).expect("create /dev");
+    fs::write(system.join("dev").join(name), "").expect("create the device node");
 }
 
 /// [`rules`] with the whole machine on one ext4 drive.
@@ -417,6 +471,8 @@ fn a_mount_point_with_a_carriage_return_in_its_name_is_still_found() {
 #[test]
 fn only_local_kernel_filesystems_mounted_by_the_administrator_are_trusted() {
     let on = |mount_point: &str, filesystem: &str, source: &[u8], options: &str| Mount {
+        id: 22,
+        device: (8, 2),
         point: mount_point.into(),
         filesystem: filesystem.into(),
         source: source.to_vec(),
@@ -661,6 +717,7 @@ fn cancelling_stops_the_deletion_and_keeps_the_rest() {
 fn a_real_deletion_trusts_only_root_and_judges_every_folder() {
     let production = Rules::default();
     assert_eq!(production.owner(), ROOT);
+    assert_eq!(production.system(), Path::new("/"));
     assert!(production.judges(Path::new("/")));
     if rustix::process::getuid().is_root() {
         return;
@@ -676,3 +733,5 @@ fn a_real_deletion_trusts_only_root_and_judges_every_folder() {
     );
     assert_kept(&files);
 }
+
+mod user_mounts;
