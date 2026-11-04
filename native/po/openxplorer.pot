@@ -6141,6 +6141,117 @@ msgstr ""
 msgid "Copying files"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "Some items were not deleted:\n{items}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "Some items were not deleted:\n{items}\n… and {more} more."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "{uri} could not be identified, so it was not deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "{uri} is not an administrator location of this computer."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/command.rs
+msgid "This helper deletes exactly one item at a time."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/command.rs
+msgid "This helper needs the item’s device and inode, as --item <device>:<inode>."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/command.rs
+msgid "This helper takes one path and no options but --item."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/elevation.rs
+msgid "The administrator deletion did not run ({status}). Your desktop may have refused the authentication, or no administrator deletion helper is installed."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/elevation.rs
+msgid "The administrator deletion helper could not be started with pkexec. {reason}"
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/elevation.rs
+msgid "This build has no administrator deletion helper, so a whole folder cannot be deleted under admin://. Delete the items inside it one at a time, or install the distribution package of OpenXplorer."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "A drive, share or bind mount is here. Deleting never goes into another drive."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "An administrator deletion needs the item’s own absolute path."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs crates/ox-core/src/gio_node/local_delete.rs
+msgid "Filesystem roots cannot be deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "The folder {path} could not be opened for deletion. {reason}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "The path to {path} leads through more than {limit} shortcuts (symbolic links), so it may be a loop. Nothing was deleted."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "This is a snapshot or backup folder, which is never deleted."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "This system does not say which drive each folder is on (Linux 5.8 or later does), so a whole folder can't be safely deleted as administrator. Nothing was deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} ends with a slash, so it names a folder’s contents rather than the item itself. An administrator deletion is given the item’s own path, with nothing added or taken away."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is a shortcut (a symbolic link) inside {folder}, which other users can change. An administrator deletion does not follow a shortcut anyone could replace while it is being read. Open the folder it leads to and delete the item there."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is a shortcut (a symbolic link) on a drive, share or folder other than this computer’s own system drive, so what it says about itself cannot be relied on. An administrator deletion does not follow one. Open the folder it leads to and delete the item there. Deleting items on that drive still works."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is a shortcut (a symbolic link) that the administrator does not own. An administrator deletion follows one only when nobody else could have created it, because a shortcut someone else controls could point anywhere. Open the folder it leads to and delete the item there."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is no longer the folder you chose to delete: another folder has taken its name. Nothing was deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is not a folder, so the item said to be inside it cannot be deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs crates/ox-core/src/gio_node/local_delete.rs
+msgid "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first."
+msgstr ""
+
 #: crates/ox-core/src/archive/error.rs
 msgid "An item changed while it was compressed. Nothing was created."
 msgstr ""
@@ -6580,18 +6691,8 @@ msgstr ""
 msgid "Yesterday at {clock}"
 msgstr ""
 
-#: crates/ox-core/src/gio_node.rs crates/ox-core/src/gio_node/admin_delete.rs
+#: crates/ox-core/src/gio_node.rs
 msgid "Filesystem roots cannot be changed as items."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/gio_node/admin_delete.rs
-msgid "Other users can change {path}, or it is on a drive whose permissions can't be checked, so this folder can't be safely deleted as administrator."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/gio_node/admin_delete.rs
-msgid "{path} is on a removable drive or in a place where other users can mount drives, so this folder can't be safely deleted as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6613,20 +6714,7 @@ msgid "Choose a file or folder to delete."
 msgstr ""
 
 #: crates/ox-core/src/gio_node/local_delete.rs
-msgid "Filesystem roots cannot be deleted."
-msgstr ""
-
-#: crates/ox-core/src/gio_node/local_delete.rs
 msgid "Open the actual folder before deleting its contents."
-msgstr ""
-
-#: crates/ox-core/src/gio_node/local_delete.rs
-msgid "The folder changed during deletion. Remaining items were left in place."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/gio_node/local_delete.rs
-msgid "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first."
 msgstr ""
 
 #: crates/ox-core/src/gio_node/move_item.rs
@@ -7842,6 +7930,10 @@ msgstr ""
 
 #: crates/ox-core/src/private_storage.rs
 msgid "The settings file is not valid UTF-8 text."
+msgstr ""
+
+#: crates/ox-core/src/safe_walk.rs
+msgid "The folder changed during deletion. Remaining items were left in place."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs

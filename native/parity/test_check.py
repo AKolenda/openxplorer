@@ -454,8 +454,15 @@ class RepositoryTests(unittest.TestCase):
         so the test checks what the checks read, not what the checkout holds.
         """
         root = temporary_root(self)
+        # A test run that was killed can leave a fixture folder of the
+        # administrator-deletion tests in the crate it was built from
+        # (crates/ox-core/openxplorer-parent-path-*, see that module's
+        # trusted_base). Those hold symbolic links that point at each
+        # other, which copytree cannot copy, and the failure would read
+        # as a problem with the checks rather than as leftover debris.
         shutil.copytree(check.ROOT / 'native', root / 'native',
-                        ignore=shutil.ignore_patterns('target', '__pycache__'))
+                        ignore=shutil.ignore_patterns(
+                            'target', '__pycache__', 'openxplorer-parent-path-*'))
         copy = check.check_inventories(root)
         self.assertEqual(copy.errors, [])
         self.assertEqual(len(copy.features), len(check.check_inventories(check.ROOT).features))

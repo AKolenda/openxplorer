@@ -33,8 +33,9 @@ use std::path::{Component, Path, PathBuf};
 
 use gio::prelude::*;
 use rustix::fd::{AsFd, BorrowedFd, OwnedFd};
-use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat, StatxFlags};
+use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat};
 
+use crate::safe_walk::{identity_of, mount_of, require_same_item, require_still_named, Mount};
 use crate::transfer::{
     check_cancelled, nesting_error, Cancellation, ItemIdentity, NodeKind, TransferError, WriteGuard,
     MAX_DEPTH, PRIVATE_DIRECTORY_MODE, STAGING_LEVELS,
@@ -281,57 +282,6 @@ impl Deletion<'_> {
     }
 }
 
-/// The mount an item is on: the kernel's mount ID where `statx` reports it
-/// (Linux 5.8 and later), which also tells apart a bind mount of a folder
-/// on the same filesystem, and the filesystem's device number otherwise.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Mount {
-    /// The mount ID, when the kernel reports it.
-    id: Option<u64>,
-    /// The device number of the filesystem.
-    device: (u32, u32),
-}
-
-impl Mount {
-    /// Whether both describe the same mount. Mount IDs decide when both
-    /// have one: on one mount, a Btrfs subvolume has its own device number.
-    fn is_same_as(self, other: Mount) -> bool {
-        match (self.id, other.id) {
-            (Some(own), Some(theirs)) => own == theirs,
-            _ => self.device == other.device,
-        }
-    }
-}
-
-/// The mount of `name` in `dir` (with [`AtFlags::EMPTY_PATH`] and an empty
-/// name, of `dir` itself). Never triggers an automount. Where `statx` is
-/// unavailable (before Linux 4.11, or blocked by a container's seccomp
-/// filter), only the device number is known.
-fn mount_of<P: rustix::path::Arg + Copy>(
-    dir: BorrowedFd<'_>,
-    name: P,
-    flags: AtFlags,
-) -> Result<Mount, TransferError> {
-    let flags = flags | AtFlags::NO_AUTOMOUNT;
-    match fs::statx(dir, name, flags, StatxFlags::MNT_ID) {
-        Ok(status) => {
-            let has_id = status.stx_mask & StatxFlags::MNT_ID.bits() != 0;
-            Ok(Mount {
-                id: has_id.then_some(status.stx_mnt_id),
-                device: (status.stx_dev_major, status.stx_dev_minor),
-            })
-        }
-        Err(rustix::io::Errno::NOSYS | rustix::io::Errno::PERM) => {
-            let status = fs::statat(dir, name, flags)?;
-            Ok(Mount {
-                id: None,
-                device: (fs::major(status.st_dev), fs::minor(status.st_dev)),
-            })
-        }
-        Err(errno) => Err(errno.into()),
-    }
-}
-
 /// Refuses to delete the item at `path` when the mount table shows that it
 /// is a mount point or that something is mounted inside it. Nothing has
 /// been deleted yet. When the mount table cannot be read, the walk's own
@@ -375,7 +325,7 @@ fn first_mount_in<'m>(
 
 /// The refusal to delete an item because the mount table shows a mount
 /// at `path` inside it, before anything was deleted.
-pub(super) fn mount_inside_refusal(path: &Path) -> TransferError {
+fn mount_inside_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "A drive or share is mounted at {path}, inside the item being deleted. Nothing was \
          deleted. Unmount it first.",
@@ -384,7 +334,7 @@ pub(super) fn mount_inside_refusal(path: &Path) -> TransferError {
 }
 
 /// The refusal to delete a mount point.
-pub(super) fn mount_point_refusal(path: &Path) -> TransferError {
+fn mount_point_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first.",
         &[("path", &path.display().to_string())],
@@ -392,38 +342,12 @@ pub(super) fn mount_point_refusal(path: &Path) -> TransferError {
 }
 
 /// The refusal to enter the mount point at `path` inside the deleted item.
-pub(super) fn contained_mount_refusal(path: &Path) -> TransferError {
+fn contained_mount_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "A drive or share is mounted at {path}. Deleting never goes into another drive, so it \
          stopped there. Unmount it first.",
         &[("path", &path.display().to_string())],
     ))
-}
-
-/// The device and inode `stat` describes.
-fn identity_of(stat: &Stat) -> ItemIdentity {
-    ItemIdentity {
-        device: stat.st_dev,
-        inode: stat.st_ino,
-    }
-}
-
-/// Refuses to continue when `name` in `parent` no longer leads to the
-/// folder that was `opened`.
-fn require_still_named(parent: BorrowedFd<'_>, name: &OsStr, opened: &Stat) -> Result<(), TransferError> {
-    let current = fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?;
-    require_same_item(opened, &current)
-}
-
-/// Refuses to continue when a name no longer leads to the folder that was
-/// opened: the tree changed during the deletion.
-fn require_same_item(expected: &Stat, actual: &Stat) -> Result<(), TransferError> {
-    if identity_of(expected) != identity_of(actual) {
-        return Err(TransferError::failed(crate::i18n::gettext(
-            "The folder changed during deletion. Remaining items were left in place.",
-        )));
-    }
-    Ok(())
 }
 
 #[cfg(test)]

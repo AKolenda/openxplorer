@@ -53,6 +53,7 @@ mod source_file;
 pub use error::VersionsError;
 pub use lookup::{PreviousVersion, VersionList, MAX_VERSIONS, NO_VERSIONS_FOUND, PROVIDER_NAME};
 pub use paths::is_conventional_snapshot;
+pub(crate) use paths::{is_snapshot_folder_name, ZFS_SNAPSHOT_FOLDER};
 pub use provider::{CollectionListing, GioSnapshotProvider, SnapshotProvider};
 pub use service::{PreviousVersions, ProtectedLocations};
 pub use snapshot_date::{

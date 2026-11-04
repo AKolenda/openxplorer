@@ -6,8 +6,9 @@
 
 use gio::prelude::*;
 
-use super::{admin_delete, local_delete, remote_delete, GioNode};
-use crate::transfer::{Cancellation, NodeKind, TransferError, WriteGuard};
+use super::{local_delete, remote_delete, GioNode};
+use crate::admin_delete;
+use crate::transfer::{Cancellation, ItemIdentity, NodeKind, TransferError, WriteGuard};
 
 impl GioNode {
     /// Moves the item to the Trash. XFER-014: never falls back to a
@@ -26,13 +27,16 @@ impl GioNode {
     }
 
     /// XFER-015: permanently deletes the item and everything inside it.
-    /// Local items are deleted relative to pinned folder descriptors; every
-    /// other location is deleted by path, as the Python app does. A folder
-    /// under `admin://` is deleted by path only when no other account can
-    /// change anything that walk resolves (see `admin_delete`). `kind` is
-    /// what the caller found the item to be, as for
+    /// Local items are deleted relative to pinned folder descriptors, and
+    /// so is a whole folder under `admin://`, through the privileged
+    /// helper of [`crate::admin_delete`]. Every other location, a single
+    /// `admin://` file or link included, is deleted by path, as the Python
+    /// app does. `kind` is what the caller found the item to be, as for
     /// [`Node::delete_tree_of_kind`](crate::transfer::Node::delete_tree_of_kind):
     /// anything but a folder is deleted without looking inside it.
+    /// `selected` is the item's identity when the user's deletion started,
+    /// if known; a whole `admin://` folder that is no longer that object
+    /// is refused rather than deleted as root.
     ///
     /// # Errors
     ///
@@ -42,14 +46,22 @@ impl GioNode {
     pub(super) fn delete_item_tree(
         &self,
         kind: Option<NodeKind>,
+        selected: Option<ItemIdentity>,
         cancel: &Cancellation,
         guard: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
         self.require_item()?;
-        match self.local_path() {
-            Some(path) => local_delete::delete_tree(&path, kind, cancel, guard),
-            None if self.file.has_uri_scheme("admin") => {
-                admin_delete::delete_tree(&self.file, kind, cancel, guard)
+        if let Some(path) = self.local_path() {
+            return local_delete::delete_tree(&path, kind, cancel, guard);
+        }
+        match admin_delete::admin_item(&self.file, kind, cancel)? {
+            Some(admin_delete::AdminItem::Folder(now)) => {
+                let expected = admin_delete::bound_identity(selected, now)?;
+                admin_delete::delete_tree(&self.file, expected, cancel, guard)
+            }
+            // Never a folder: deleted as the one item it is now.
+            Some(admin_delete::AdminItem::Single(kind)) => {
+                remote_delete::delete_tree(&self.file, Some(kind), cancel, guard)
             }
             None => remote_delete::delete_tree(&self.file, kind, cancel, guard),
         }
