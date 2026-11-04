@@ -6654,6 +6654,11 @@ msgid "Other users can change {path}, or it is on a drive whose permissions can'
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/admin_delete.rs
+msgid "{path} is on a removable drive or in a place where other users can mount drives, so this folder can't be safely deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/gio_node/local_delete.rs
 msgid "A drive or share is mounted at {path}, inside the item being deleted. Nothing was deleted. Unmount it first."
 msgstr ""
@@ -8589,6 +8594,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Copies, drags and new folders work as in Windows Explorer: a copy is named “name - Copy”, a plain drag moves within a drive and copies to another, and New folder makes the folder at once to rename in place. Properties shows Size on disk, a rename that changes the extension asks first, and Super+E can open OpenXplorer on KDE Plasma. An empty folder looks as it does in Windows and takes right-click, paste and drops, New and Paste are off in a folder you cannot write to, Apply to all folders uses the choices in the dialog, and Show after moving items to the Recycle Bin opens it."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Deleting a folder permanently under Open as administrator is now also refused on drives an ordinary user can mount or plug in: drives that /etc/fstab lets users mount, drives a user mounted, and removable, USB, SD card, FireWire, Thunderbolt and loop devices."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
