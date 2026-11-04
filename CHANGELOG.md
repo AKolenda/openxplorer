@@ -1,3 +1,26 @@
+# 2.0.13 — 2026-11-03
+
+## Security
+* Deleting a folder permanently while using **Open as administrator** is now also refused, before anything is deleted, when the folder or a folder on the way to it is on a drive an ordinary user can mount or plug in, wherever that drive is mounted, or when such a drive can be mounted on the way to the folder or inside it. That covers drives with a `user`, `users`, `owner`, `group` or `x-udisks-auth` entry in `/etc/fstab`, drives a user mounted, and removable, USB, SD card, FireWire, Thunderbolt and loop devices. Internal drives mounted through `/etc/fstab`, the root filesystem and a separate `/home` partition are unaffected.
+
+## What's Changed
+* fix(ops): Refuse administrator folder deletes on drives a user can mount by @AKolenda in https://github.com/AKolenda/openxplorer/pull/194
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.13_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.13-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.13-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.13-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.13-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.12...v2.0.13
+
 # 2.0.12 — 2026-11-03
 
 ## Security
