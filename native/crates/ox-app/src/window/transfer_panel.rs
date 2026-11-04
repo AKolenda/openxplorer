@@ -640,6 +640,12 @@ impl TransferPanel {
         self.imp().cancel_button.emit_clicked();
     }
 
+    /// Whether Cancel shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn shows_cancel(&self) -> bool {
+        self.imp().cancel_button.get_visible()
+    }
+
     /// Presses Pause or Resume, for tests.
     #[cfg(test)]
     pub(crate) fn press_pause(&self) {

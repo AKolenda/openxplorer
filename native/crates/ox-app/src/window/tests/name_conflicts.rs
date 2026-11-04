@@ -138,6 +138,14 @@ fn one_taken_name_asks_replace_or_skip_in_the_progress_window() {
         "nothing is asked over the browsing window"
     );
     assert!(test.window.is_sensitive());
+    assert!(
+        GtkWindowExt::focus(&window).is_none() && !window.gets_focus_visible(),
+        "no focus ring until the keyboard is used, as in Windows"
+    );
+    assert!(
+        !window.actions()[0].shows_cancel(),
+        "alone, the question has no Cancel of its own: the window's close button cancels"
+    );
 
     button(&window, "Replace the file in the destination").emit_clicked();
     wait_until("the file to be replaced", || {
@@ -173,7 +181,8 @@ fn several_taken_names_ask_in_the_plural_and_skip_keeps_them() {
     }
 }
 
-/// The action's Cancel stops it while it asks: nothing changes.
+/// Closing the window stops the action while it asks, as in Windows:
+/// nothing changes.
 ///
 /// parity: OPS-026
 #[gtk::test]
@@ -184,7 +193,7 @@ fn cancelling_the_question_changes_nothing() {
 
     test.activate("paste", None);
     let window = question_window(&test);
-    window.actions()[0].press_cancel();
+    window.close();
 
     wait_until("the action to end", || test.context.progress_window().is_none());
     test.window.refresh();
@@ -215,6 +224,10 @@ fn the_file_conflict_window_keeps_both_with_a_number() {
     assert_eq!(conflicts.title().as_deref(), Some("1 File Conflict"));
     assert_eq!(conflicts.transient_for().as_ref(), Some(progress.upcast_ref()));
     assert!(conflicts.is_modal());
+    assert!(
+        GtkWindowExt::focus(&conflicts).is_none() && !conflicts.gets_focus_visible(),
+        "no focus ring until the keyboard is used, as in Windows"
+    );
     let group = conflicts.group().list_windows();
     assert!(group.contains(progress.upcast_ref()));
     assert!(

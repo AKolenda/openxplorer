@@ -167,7 +167,6 @@ impl TransferPanel {
         if let Some(window) = imp.window.upgrade() {
             window.show_question();
         }
-        imp.replace_button.grab_focus();
         receiver.recv().await.ok().flatten()
     }
 
@@ -179,9 +178,16 @@ impl TransferPanel {
         }
     }
 
+    /// While the action asks, its Cancel shows only beside other actions:
+    /// alone, as in Windows, the window's own close button cancels it.
+    pub(crate) fn show_cancel_beside_others(&self, others: bool) {
+        self.imp().cancel_button.set_visible(others || !self.is_asking());
+    }
+
     /// The question ends: the progress shows again.
     fn end_question(&self) {
         let imp = self.imp();
+        imp.cancel_button.set_visible(true);
         imp.question_answer.replace(None);
         imp.question.set_visible(false);
         self.remove_css_class("asking");

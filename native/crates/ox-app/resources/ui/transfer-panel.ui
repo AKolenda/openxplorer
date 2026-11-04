@@ -103,7 +103,7 @@
             </style>
             <child>
               <object class="GtkBox">
-                <property name="spacing">10</property>
+                <property name="spacing">8</property>
                 <child>
                   <object class="GtkImage" id="replace_icon">
                     <property name="accessible-role">presentation</property>
@@ -129,7 +129,7 @@
             </style>
             <child>
               <object class="GtkBox">
-                <property name="spacing">10</property>
+                <property name="spacing">8</property>
                 <child>
                   <object class="GtkImage" id="skip_icon">
                     <property name="accessible-role">presentation</property>
@@ -155,7 +155,7 @@
             </style>
             <child>
               <object class="GtkBox">
-                <property name="spacing">10</property>
+                <property name="spacing">8</property>
                 <child>
                   <object class="GtkImage" id="decide_icon">
                     <property name="accessible-role">presentation</property>

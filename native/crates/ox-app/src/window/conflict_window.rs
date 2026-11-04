@@ -25,7 +25,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::format::{date_time_text, pretty_bytes};
+use ox_core::format::{date_short_time_text, pretty_bytes};
 use ox_core::i18n::{format_message, gettext, ngettext};
 use ox_core::ops::{ConflictScan, ItemFacts, NameConflict, Resolution};
 
@@ -35,13 +35,15 @@ use crate::window::progress_window::ProgressWindow;
 use crate::window::transfer_panel::{location_name, TransferPanel};
 
 /// The edge of a side's thumbnail.
-const THUMBNAIL_SIZE: i32 = 48;
+const THUMBNAIL_SIZE: i32 = 64;
 
 /// The two check boxes of one file.
 #[derive(Debug, Clone)]
 struct RowChecks {
     incoming: gtk::CheckButton,
     existing: gtk::CheckButton,
+    /// The thumbnails of the two sides.
+    pictures: [gtk::Image; 2],
     /// Both files have the same date and size.
     same: bool,
 }
@@ -129,7 +131,7 @@ fn resolution(incoming: bool, existing: bool, skipped_as_same: bool) -> Resoluti
 
 /// A side's lines: the date modified, then the size (or "Folder").
 fn side_lines(facts: ItemFacts) -> (String, String) {
-    let date = date_time_text(facts.modified);
+    let date = date_short_time_text(facts.modified);
     let size = if facts.is_folder {
         gettext("Folder")
     } else {
@@ -175,8 +177,18 @@ impl FileConflictWindow {
         window.imp().receiver.replace(Some(receiver));
         window.build(panel, scan, source, destination);
         progress.set_conflict_window(Some(&window));
+        window.connect_map(Self::forget_focus);
         window.present();
+        window.forget_focus();
         window
+    }
+
+    /// Leaves no widget focused and no focus ring showing, as the Windows
+    /// window opens; Tab still moves into it and shows the ring, Escape
+    /// cancels and Enter presses Continue.
+    fn forget_focus(&self) {
+        GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
+        self.set_focus_visible(false);
     }
 
     /// Waits for Continue (an answer per conflict) or Cancel (`None`).
@@ -506,18 +518,22 @@ fn footer(same: usize) -> (gtk::Box, Option<gtk::CheckButton>, gtk::Button, gtk:
     start.set_hexpand(true);
     footer.append(&start);
     let continue_button = gtk::Button::with_label(&gettext("Continue"));
-    continue_button.add_css_class("suggested-action");
     continue_button.set_sensitive(false);
     let cancel_button = gtk::Button::with_label(&gettext("Cancel"));
+    for button in [&continue_button, &cancel_button] {
+        button.add_css_class("bordered");
+        button.add_css_class("file-conflicts-button");
+    }
     footer.append(&continue_button);
     footer.append(&cancel_button);
     (footer, skip_same, continue_button, cancel_button)
 }
 
-/// The row of one conflict: the name, then each side's check box with its
-/// picture, date and size.
+/// The row of one conflict: the name, then for each side a check box, its
+/// thumbnail, and its date modified over its size, all aligned at the
+/// top as in Windows. Clicking the thumbnail or the text toggles the box.
 fn conflict_row(conflict: &NameConflict, source: &str, destination: &str) -> (gtk::Box, RowChecks) {
-    let row = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let row = gtk::Box::new(gtk::Orientation::Vertical, 6);
     row.add_css_class("file-conflict");
     row.set_accessible_role(gtk::AccessibleRole::ListItem);
     let name = conflict.name();
@@ -530,39 +546,60 @@ fn conflict_row(conflict: &NameConflict, source: &str, destination: &str) -> (gt
     sides.set_column_homogeneous(true);
     let side = |facts: ItemFacts, label: String| {
         let check = gtk::CheckButton::new();
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        check.set_valign(gtk::Align::Start);
         let picture = gtk::Image::new();
         picture.set_pixel_size(THUMBNAIL_SIZE);
+        picture.set_valign(gtk::Align::Start);
         picture.set_accessible_role(gtk::AccessibleRole::Presentation);
         picture.add_css_class("file-conflict-picture");
         let (date, size) = side_lines(facts);
         let lines = gtk::Box::new(gtk::Orientation::Vertical, 2);
-        lines.set_valign(gtk::Align::Center);
+        lines.set_valign(gtk::Align::Start);
         for text in [&date, &size] {
             let line = gtk::Label::new(Some(text));
             line.set_xalign(0.0);
             lines.append(&line);
         }
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        content.add_css_class("file-conflict-side");
+        content.append(&check);
         content.append(&picture);
         content.append(&lines);
-        check.set_child(Some(&content));
+        let click = gtk::GestureClick::new();
+        click.connect_released(glib::clone!(
+            #[weak]
+            check,
+            move |gesture, _, x, y| {
+                // A click on the check box itself toggles it already.
+                let on_check = gesture
+                    .widget()
+                    .and_then(|content| content.pick(x, y, gtk::PickFlags::DEFAULT))
+                    .is_some_and(|picked| {
+                        picked == check.clone().upcast::<gtk::Widget>() || picked.is_ancestor(&check)
+                    });
+                if !on_check {
+                    check.set_active(!check.is_active());
+                }
+            }
+        ));
+        content.add_controller(click);
         let described = format!("{label}, {date}, {size}");
         check.update_property(&[gtk::accessible::Property::Label(&described)]);
-        check
+        (content, check, picture)
     };
-    let incoming = side(
+    let (incoming_side, incoming, incoming_picture) = side(
         conflict.incoming,
         format_message("{name} from {folder}", &[("name", &name), ("folder", source)]),
     );
-    let existing = side(
+    let (existing_side, existing, existing_picture) = side(
         conflict.existing,
         format_message(
             "{name} already in {folder}",
             &[("name", &name), ("folder", destination)],
         ),
     );
-    sides.attach(&incoming, 0, 0, 1, 1);
-    sides.attach(&existing, 1, 0, 1, 1);
+    sides.attach(&incoming_side, 0, 0, 1, 1);
+    sides.attach(&existing_side, 1, 0, 1, 1);
     row.append(&sides);
     let same = conflict.same_date_and_size();
     (
@@ -570,6 +607,7 @@ fn conflict_row(conflict: &NameConflict, source: &str, destination: &str) -> (gt
         RowChecks {
             incoming,
             existing,
+            pictures: [incoming_picture, existing_picture],
             same,
         },
     )
@@ -578,24 +616,18 @@ fn conflict_row(conflict: &NameConflict, source: &str, destination: &str) -> (gt
 /// Shows each side's thumbnail when the cache has or can make one, and
 /// the type's icon until then or without one.
 fn load_pictures(conflict: &NameConflict, row: &RowChecks) {
-    for (uri, facts, check) in [
-        (&conflict.incoming_uri, conflict.incoming, &row.incoming),
-        (&conflict.existing_uri, conflict.existing, &row.existing),
-    ] {
-        let Some(picture) = check
-            .child()
-            .and_then(|content| content.first_child())
-            .and_downcast::<gtk::Image>()
-        else {
-            continue;
-        };
+    let sides = [
+        (&conflict.incoming_uri, conflict.incoming),
+        (&conflict.existing_uri, conflict.existing),
+    ];
+    for ((uri, facts), picture) in sides.into_iter().zip(row.pictures.iter()) {
         let name = conflict.name();
         let icon = if facts.is_folder {
             Icon::FileFolder
         } else {
             FileType::of(&name, None).icon(THUMBNAIL_SIZE)
         };
-        icons::set_icon(&picture, icon, THUMBNAIL_SIZE);
+        icons::set_icon(picture, icon, THUMBNAIL_SIZE);
         if facts.is_folder || !uri.starts_with("file://") {
             continue;
         }

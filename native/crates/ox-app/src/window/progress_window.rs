@@ -222,6 +222,9 @@ impl ProgressWindow {
     /// first action's.
     pub(crate) fn refresh(&self) {
         let actions = self.actions();
+        for action in &actions {
+            action.show_cancel_beside_others(actions.len() > 1);
+        }
         let title = match actions.as_slice() {
             [] => return,
             [action] if action.is_asking() => ox_core::i18n::gettext("Replace or Skip Files"),
@@ -285,6 +288,9 @@ impl ProgressWindow {
         }
         self.refresh();
         self.present();
+        // As in Windows, nothing shows a focus ring until the keyboard
+        // is used; Tab reaches the rows.
+        self.forget_focus();
     }
 
     /// The window group the File Conflict windows join.
