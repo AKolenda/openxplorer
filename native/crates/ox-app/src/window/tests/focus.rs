@@ -363,3 +363,28 @@ fn typing_in_a_menu_leaves_the_folder_alone() {
     );
     view.popdown();
 }
+
+/// A letter typed on a tab stays with the tab strip.
+///
+/// parity: SEL-030
+#[gtk::test]
+fn typing_on_a_tab_leaves_the_folder_alone() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    test.window.folder_pane().model().select_none();
+    let tab = descendants::<gtk::Widget>(test.window.tab_strip())
+        .into_iter()
+        .find(|widget| widget.is_focusable() && widget.is_visible())
+        .expect("a tab takes the keyboard");
+    assert!(tab.grab_focus(), "the tab takes the keyboard");
+
+    assert!(
+        !press_after_focus(&test, gdk::Key::n),
+        "the window leaves the letter to the tab strip"
+    );
+    assert!(
+        test.selected_names().is_empty(),
+        "nothing was typed into the folder"
+    );
+}

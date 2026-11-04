@@ -172,8 +172,8 @@ impl BrowserWindow {
 
     /// Types `key` into the folder's type-to-select when the keyboard is on
     /// the window's chrome, moving it into the list first. A dialog, the
-    /// Settings page, a text field, an open menu and a page without a list
-    /// keep the key.
+    /// Settings page, a text field, an open menu, the tab strip and a page
+    /// without a list keep the key.
     fn type_to_select_from_elsewhere(
         &self,
         controller: &gtk::EventControllerKey,
@@ -190,11 +190,12 @@ impl BrowserWindow {
         if self.shows_settings() || self.dialog_in_front() || self.focus_is_in_text_field() {
             return glib::Propagation::Proceed;
         }
-        // A key no row of an open menu took stays with the menu, as it did
-        // before chrome typing: it neither closes the menu nor types.
-        let in_menu = GtkWindowExt::focus(self)
-            .is_some_and(|focus| focus.ancestor(gtk::Popover::static_type()).is_some());
-        if in_menu {
+        // A key no row of an open menu took stays with the menu, and one a
+        // tab did not take stays with the tab strip, as before chrome typing.
+        let kept = GtkWindowExt::focus(self).is_some_and(|focus| {
+            focus.ancestor(gtk::Popover::static_type()).is_some() || focus.is_ancestor(self.tab_strip())
+        });
+        if kept {
             return glib::Propagation::Proceed;
         }
         // A list that already has the keyboard typed the character itself,
