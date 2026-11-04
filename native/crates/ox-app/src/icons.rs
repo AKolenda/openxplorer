@@ -15,6 +15,17 @@
 //! an [`ArtImage`], which lays real icons and CSS-styled boxes over each
 //! other.
 //!
+//! Every bundled icon a [`gtk::Image`] shows stays loaded for the life of
+//! the process ([`keep_loaded`]). GTK 4.14's icon cache holds icons
+//! without a reference and forgets one only when it is finalized, while
+//! the thread that loads an icon's picture holds a reference of its own:
+//! when that thread drops the last one, the main thread can find the
+//! dying icon in the cache and take it again, which `GLib` reports as
+//! `object_ref` on a finalized object. Keeping one reference to each icon
+//! the app shows means its last reference is never dropped, on any
+//! thread. The bundle is about a hundred small files, at the few sizes
+//! the skin uses.
+//!
 //! Icons are hidden from assistive technology, as app.js marks every icon
 //! `aria-hidden`: the button, row, tab or card around an icon names it.
 
@@ -26,6 +37,8 @@ mod file_type;
 mod icon;
 mod tint;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Once;
 
 use gtk::gdk;
@@ -95,6 +108,51 @@ fn decorative_image() -> gtk::Image {
 pub(crate) fn set_icon(image: &gtk::Image, icon: Icon, size: i32) {
     image.set_icon_name(Some(icon.name()));
     image.set_pixel_size(size);
+    keep_loaded(image, icon, size);
+}
+
+/// What the icon theme caches an icon under, as a `gtk::Image` looks it
+/// up: its name, edge, scale and text direction, on one display.
+type CacheKey = (String, &'static str, i32, i32, bool);
+
+thread_local! {
+    /// One reference to every icon [`keep_loaded`] was asked for.
+    static KEPT: RefCell<HashMap<CacheKey, gtk::IconPaintable>> = RefCell::new(HashMap::new());
+}
+
+/// Keeps `icon` at `size` loaded for good, at every scale of `image`'s
+/// display, as `image` will look it up: a `gtk::Image` showing an icon
+/// name asks the theme with a themed icon of that name and
+/// [`gtk::IconLookupFlags::PRELOAD`]. So the icon theme's cached icon is
+/// never finalized (see the module documentation). Each call looks the
+/// icon up again, a hit in the theme's cache, so an icon kept before a
+/// change of icon theme is replaced by the new theme's. Only the main
+/// thread calls it, as GTK does.
+pub(crate) fn keep_loaded(image: &impl IsA<gtk::Widget>, icon: Icon, size: i32) {
+    let display = image.as_ref().display();
+    let direction = image.as_ref().direction();
+    let is_rtl = direction == gtk::TextDirection::Rtl;
+    let theme = gtk::IconTheme::for_display(&display);
+    let mut scales: Vec<i32> = display
+        .monitors()
+        .iter::<gdk::Monitor>()
+        .filter_map(Result::ok)
+        .map(|monitor| monitor.scale_factor())
+        .collect();
+    scales.push(1);
+    scales.sort_unstable();
+    scales.dedup();
+    let themed = gio::ThemedIcon::new(icon.name());
+    KEPT.with_borrow_mut(|kept| {
+        for scale in scales {
+            let key = (display.name().to_string(), icon.name(), size, scale, is_rtl);
+            // A hit in the theme's cache, which a change of icon theme
+            // empties: the icon kept before is then replaced.
+            let cached =
+                theme.lookup_by_gicon(&themed, size, scale, direction, gtk::IconLookupFlags::PRELOAD);
+            kept.insert(key, cached);
+        }
+    });
 }
 
 #[cfg(test)]
@@ -176,6 +234,44 @@ mod tests {
         let (pixels, _) = bytes.as_chunks::<4>();
         // GDK's default memory format keeps alpha in the fourth byte.
         pixels.iter().filter(|pixel| pixel[3] > 0).count()
+    }
+
+    /// An icon an image shows is never finalized, however many other
+    /// icons pass through the icon theme's cache of recent ones (100 in
+    /// GTK 4.14): its cached icon stays the one the theme hands out, so
+    /// GTK's loading thread can never drop its last reference.
+    #[gtk::test]
+    fn a_shown_icon_stays_loaded_after_many_others_pass_through_the_cache() {
+        let theme = registered_theme();
+        let image = image(Icon::FileFolder, 16);
+        let direction = image.direction();
+        let looked_up = || {
+            theme.lookup_by_gicon(
+                &gio::ThemedIcon::new(Icon::FileFolder.name()),
+                16,
+                1,
+                direction,
+                gtk::IconLookupFlags::PRELOAD,
+            )
+        };
+        let first = looked_up();
+        let cached = first.downgrade();
+        drop(first);
+        drop(image);
+
+        // Far more distinct lookups than the cache of recent icons holds,
+        // and time for GTK's loading threads to finish and let go.
+        for icon in ALL_ICONS {
+            for size in [10, 11, 12, 13] {
+                drop(look_up(&theme, icon, size));
+            }
+        }
+        for _ in 0..20 {
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(10));
+        }
+
+        let kept = cached.upgrade().expect("the icon is still loaded");
+        assert_eq!(looked_up(), kept, "the theme hands out the kept icon");
     }
 
     #[gtk::test]
