@@ -208,13 +208,12 @@ impl BrowserWindow {
         // The input method of the view that last had the keyboard composes
         // first, as it does in the view itself: a dead key or an IME commit
         // types its text through the commit handler.
-        let composed = controller.current_event().is_some_and(|event| {
-            self.imp()
-                .typeahead_input
-                .borrow()
-                .as_ref()
-                .is_some_and(|input| input.filter_keypress(&event))
-        });
+        // The context is taken out of its cell first: its commit can select
+        // and focus a row, whose focus handler replaces it.
+        let input = self.imp().typeahead_input.borrow().clone();
+        let composed = controller
+            .current_event()
+            .is_some_and(|event| input.is_some_and(|input| input.filter_keypress(&event)));
         if composed {
             pane.focus_view();
             return glib::Propagation::Stop;
