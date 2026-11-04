@@ -179,6 +179,9 @@ mod imp {
             if let Launch::Interactive = app.launch() {
                 app.report_unfinished_operations();
                 super::sweep_archive_copies_at_start();
+                if let Some(state) = self.state.get() {
+                    state.check_for_updates_soon();
+                }
             }
         }
 

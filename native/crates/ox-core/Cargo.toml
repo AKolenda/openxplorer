@@ -14,6 +14,12 @@ publish.workspace = true
 name = "openxplorer-mount-share"
 path = "src/bin/openxplorer-mount-share.rs"
 
+# The administrator's permanent-delete helper (admin_delete), which every
+# package installs beside the app for pkexec to start.
+[[bin]]
+name = "openxplorer-admin-delete"
+path = "src/bin/openxplorer-admin-delete.rs"
+
 [dependencies]
 gio.workspace = true
 glib.workspace = true

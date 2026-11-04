@@ -76,6 +76,23 @@ USER_DIRECTORIES = {
     'XDG_RUNTIME_DIR': 'runtime',
 }
 
+# Fixture requirements the driver turns on for every test run.
+#
+# The tests of which symbolic links an administrator deletion may follow
+# need a folder whose whole path from / is on the root mount and writable
+# by nobody but its owner; they say so and do nothing where there is
+# none. This driver gives each test executable a disposable HOME under
+# TMPDIR, and /tmp is world-writable, so that HOME is never such a
+# folder: the tests fall back to the crate's own folder in the checkout,
+# or to OX_TEST_TRUSTED_BASE. libtest hides what a passing test printed,
+# so a run where they all quietly did nothing would still be green. This
+# makes it a failure instead, and names the way out
+# (native/packaging/ci/run-checks.sh sets OX_TEST_TRUSTED_BASE where the
+# checkout is on a host mount).
+TEST_REQUIREMENTS = {
+    'OX_REQUIRE_TRUSTED_HOME': '1',
+}
+
 # Settings that keep GTK and GIO deterministic and away from user state.
 GTK_AND_GIO_SETTINGS = {
     # The private display is Xvfb, an X11 server.
@@ -248,9 +265,13 @@ def isolated_environment(root: Path) -> dict[str, str]:
     # TMPDIR, which the Recycle Bin tests require of XDG_DATA_HOME.
     environment['TMPDIR'] = str(root)
     environment.update(GTK_AND_GIO_SETTINGS)
+    environment.update(TEST_REQUIREMENTS)
     # Tests that start real processes run only when they see this: the
     # command runs inside xvfb-run and dbus-run-session (isolated_command).
     environment[ISOLATION_MARKER] = '1'
+    # Launched builds never run the daily update check, so no test asks
+    # GitHub for a release.
+    environment['OX_NO_UPDATE_CHECK'] = '1'
     return environment
 
 

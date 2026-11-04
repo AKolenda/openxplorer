@@ -258,11 +258,15 @@ impl BrowserWindow {
     /// keyboard focus in the folder view.
     pub(super) fn finish_address(&self) {
         self.forget_address_completions();
+        // The keyboard leaves the entry before the entry is hidden: hiding a
+        // focused widget makes GTK hand the keyboard to whatever control comes
+        // next in the focus chain, such as a crumb or the Details pane's close
+        // button, and typing then goes nowhere near the folder.
+        self.folder_pane().focus_view();
         if let Some(uri) = self.current_uri() {
             let address = self.imp().locations.borrow().display_location(&uri);
             self.address_bar().show_crumbs(&address);
         }
-        self.folder_pane().focus_view();
     }
 }
 

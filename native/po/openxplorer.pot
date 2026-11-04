@@ -18,7 +18,7 @@ msgid "- Choose Open as administrator on a local folder’s menu, confirm, then 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+, opens Settings, which has its own search box.\n- OpenXplorer uses the network only for locations you open, server discovery you start and the update check you ask for. It has no telemetry.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own search box.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -34,7 +34,7 @@ msgid "- New in the command bar creates a folder, a document from the built-in s
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location in More options saves a share in the navigation pane.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location at the bottom of the navigation pane saves a share there.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -74,7 +74,7 @@ msgid "Getting help"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nThe full list of keys is in More options > Keyboard shortcuts (Ctrl+?)."
+msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nPress Ctrl+? for the full list of keys."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -275,10 +275,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui
 msgid "Check again"
-msgstr ""
-
-#: crates/ox-app/resources/ui/update-dialog.ui
-msgid "Install update…"
 msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui
@@ -596,7 +592,7 @@ msgstr ""
 msgid "Connect"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
 msgid "Map network location"
 msgstr ""
 
@@ -1897,7 +1893,7 @@ msgstr ""
 msgid "Set custom permissions, create multiple shares, and set other advanced sharing options."
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/settings-page.ui crates/ox-app/src/properties/sharing_panel.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/location/virtual_place.rs packaging/data/io.winspace.Development.desktop
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/settings-page.ui crates/ox-app/src/properties/sharing_panel.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/location/virtual_place.rs packaging/data/io.winspace.Development.desktop
 msgid "Settings"
 msgstr ""
 
@@ -1942,7 +1938,7 @@ msgstr ""
 msgid "Cancelling… "
 msgstr ""
 
-#: crates/ox-app/src/properties/size_scan_strip.rs
+#: crates/ox-app/src/properties/size_scan_strip.rs crates/ox-app/src/window/update_notice.rs
 msgid "Dismiss"
 msgstr ""
 
@@ -2014,7 +2010,7 @@ msgstr ""
 msgid "A long time ago"
 msgstr ""
 
-#: crates/ox-app/src/properties/version_row.rs
+#: crates/ox-app/src/properties/version_row.rs crates/ox-app/src/window/update_notice.rs
 msgid "Later"
 msgstr ""
 
@@ -2177,7 +2173,7 @@ msgstr ""
 msgid "This folder + subfolders"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/settings_page/about.rs
 msgid "About this build"
 msgstr ""
 
@@ -2190,15 +2186,23 @@ msgid "Check for updates"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Check for updates automatically"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty."
 msgstr ""
 
-#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/settings_page/about.rs
 msgid "License & source"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "Look for a newer OpenXplorer release."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Once a day, when OpenXplorer starts, ask GitHub whether a newer release exists. Nothing installs without you."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/about.rs
@@ -2211,6 +2215,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "Updates"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "automatic update check daily launch startup notify notification network github privacy"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -2959,7 +2967,7 @@ msgstr ""
 msgid "New tabs open"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/general.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/title_bar.rs packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.desktop
+#: crates/ox-app/src/settings_page/general.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/title_bar.rs packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.desktop
 msgid "New window"
 msgstr ""
 
@@ -3559,6 +3567,14 @@ msgstr ""
 msgid "Could not restart. {reason}"
 msgstr ""
 
+#: crates/ox-app/src/update/state.rs
+msgid "Details…"
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/update/state.rs
+msgid "Install update…"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
 msgid "Installed: {current}"
@@ -3595,6 +3611,16 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is available. You have {current}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is ready to install. You have {current}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
 msgid "OpenXplorer {version} is installed. Restart to use the update."
 msgstr ""
 
@@ -3603,7 +3629,23 @@ msgid "Preparing update. Approve the administrator prompt to install."
 msgstr ""
 
 #: crates/ox-app/src/update/state.rs
+msgid "Restart"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
 msgid "Restart OpenXplorer to finish updating."
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
+msgid "Restart to finish updating"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
+msgid "Update"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs crates/ox-app/src/window/update_notice.rs
+msgid "Update available"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -3755,7 +3797,7 @@ msgstr ""
 msgid "Cache disabled; this root’s indexed names were removed."
 msgstr ""
 
-#: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
+#: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Cache this folder for search"
 msgstr ""
 
@@ -3924,10 +3966,6 @@ msgid "Dark appearance"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Default file explorer…"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Descending"
 msgstr ""
 
@@ -3959,20 +3997,12 @@ msgstr ""
 msgid "HTML document"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Help"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Invert selection"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "JSON file"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Keyboard shortcuts"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -5537,7 +5567,15 @@ msgid "Go to the last tab"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Help"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Home folder"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Keyboard shortcuts"
 msgstr ""
 
 #: crates/ox-app/resources/ui/window.ui crates/ox-app/src/window/shortcuts_window.rs
@@ -6157,6 +6195,117 @@ msgstr ""
 msgid "Copying files"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "Some items were not deleted:\n{items}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "Some items were not deleted:\n{items}\n… and {more} more."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "{uri} could not be identified, so it was not deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
+msgid "{uri} is not an administrator location of this computer."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/command.rs
+msgid "This helper deletes exactly one item at a time."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/command.rs
+msgid "This helper needs the item’s device and inode, as --item <device>:<inode>."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/command.rs
+msgid "This helper takes one path and no options but --item."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/elevation.rs
+msgid "The administrator deletion did not run ({status}). Your desktop may have refused the authentication, or no administrator deletion helper is installed."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/elevation.rs
+msgid "The administrator deletion helper could not be started with pkexec. {reason}"
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/elevation.rs
+msgid "This build has no administrator deletion helper, so a whole folder cannot be deleted under admin://. Delete the items inside it one at a time, or install the distribution package of OpenXplorer."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "A drive, share or bind mount is here. Deleting never goes into another drive."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "An administrator deletion needs the item’s own absolute path."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs crates/ox-core/src/gio_node/local_delete.rs
+msgid "Filesystem roots cannot be deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "The folder {path} could not be opened for deletion. {reason}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "The path to {path} leads through more than {limit} shortcuts (symbolic links), so it may be a loop. Nothing was deleted."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "This is a snapshot or backup folder, which is never deleted."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "This system does not say which drive each folder is on (Linux 5.8 or later does), so a whole folder can't be safely deleted as administrator. Nothing was deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} ends with a slash, so it names a folder’s contents rather than the item itself. An administrator deletion is given the item’s own path, with nothing added or taken away."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is a shortcut (a symbolic link) inside {folder}, which other users can change. An administrator deletion does not follow a shortcut anyone could replace while it is being read. Open the folder it leads to and delete the item there."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is a shortcut (a symbolic link) on a drive, share or folder other than this computer’s own system drive, so what it says about itself cannot be relied on. An administrator deletion does not follow one. Open the folder it leads to and delete the item there. Deleting items on that drive still works."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is a shortcut (a symbolic link) that the administrator does not own. An administrator deletion follows one only when nobody else could have created it, because a shortcut someone else controls could point anywhere. Open the folder it leads to and delete the item there."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is no longer the folder you chose to delete: another folder has taken its name. Nothing was deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is not a folder, so the item said to be inside it cannot be deleted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs crates/ox-core/src/gio_node/local_delete.rs
+msgid "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first."
+msgstr ""
+
 #: crates/ox-core/src/archive/error.rs
 msgid "An item changed while it was compressed. Nothing was created."
 msgstr ""
@@ -6600,18 +6749,8 @@ msgstr ""
 msgid "Yesterday at {clock}"
 msgstr ""
 
-#: crates/ox-core/src/gio_node.rs crates/ox-core/src/gio_node/admin_delete.rs
+#: crates/ox-core/src/gio_node.rs
 msgid "Filesystem roots cannot be changed as items."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/gio_node/admin_delete.rs
-msgid "Other users can change {path}, or it is on a drive whose permissions can't be checked, so this folder can't be safely deleted as administrator."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/gio_node/admin_delete.rs
-msgid "{path} is on a removable drive or in a place where other users can mount drives, so this folder can't be safely deleted as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6633,20 +6772,7 @@ msgid "Choose a file or folder to delete."
 msgstr ""
 
 #: crates/ox-core/src/gio_node/local_delete.rs
-msgid "Filesystem roots cannot be deleted."
-msgstr ""
-
-#: crates/ox-core/src/gio_node/local_delete.rs
 msgid "Open the actual folder before deleting its contents."
-msgstr ""
-
-#: crates/ox-core/src/gio_node/local_delete.rs
-msgid "The folder changed during deletion. Remaining items were left in place."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/gio_node/local_delete.rs
-msgid "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first."
 msgstr ""
 
 #: crates/ox-core/src/gio_node/move_item.rs
@@ -7879,6 +8005,10 @@ msgstr ""
 
 #: crates/ox-core/src/private_storage.rs
 msgid "The settings file is not valid UTF-8 text."
+msgstr ""
+
+#: crates/ox-core/src/safe_walk.rs
+msgid "The folder changed during deletion. Remaining items were left in place."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs

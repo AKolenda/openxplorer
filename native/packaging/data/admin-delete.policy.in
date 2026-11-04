@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<!--
+  The polkit action of openxplorer-admin-delete, the helper that
+  permanently deletes a whole folder under admin://. The app never runs as
+  root: it starts this one program through pkexec, after the user has
+  confirmed the deletion, and pkexec matches the program by the exec.path
+  annotation below. Each channel installs its own helper at its own path
+  under its own action ID, so the stable and preview packages never share
+  an authorisation.
+
+  allow_active is auth_admin_keep: an administrator authenticates once and
+  the answer is remembered for a few minutes, so deleting several folders
+  in a row does not mean a prompt for each. An inactive or remote session
+  authenticates every time.
+
+  There is no exec.allow_gui annotation: the helper opens no window, so
+  pkexec passes it neither DISPLAY nor XAUTHORITY.
+-->
+<policyconfig>
+  <vendor>OpenXplorer</vendor>
+  <vendor_url>https://openxplorer.app</vendor_url>
+  <action id="@ACTION_ID@">
+    <description>Permanently delete an item as administrator</description>
+    <message>Authentication is required to permanently delete this item, and everything inside it, with administrator rights.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@HELPER_PATH@</annotate>
+  </action>
+</policyconfig>

@@ -1,3 +1,8 @@
+# Unreleased
+
+## Security
+* Deleting a whole folder permanently while using **Open as administrator** no longer goes through GVfs, which deleted it by path as root. OpenXplorer now asks for administrator authentication and deletes it with its own small helper, which holds each folder open while it empties it, so another user who swaps a folder inside it for a shortcut cannot redirect the deletion, and nothing on another drive is entered. This replaces the refusals in 2.0.12 and 2.0.13: folders in a user's home, `/tmp`, `/var/tmp`, group-writable folders such as `/var/log`, and folders on removable drives, drives other users can mount and network shares can be deleted this way again. A drive mounted inside the folder is left in place and named. A shortcut on the way to the folder is followed only when it belongs to the administrator on the system drive and nobody else can change the folders above it. In the Flatpak, a whole folder still can't be deleted under **Open as administrator**. Single files and links are deleted as before.
+
 # 2.0.13 — 2026-11-03
 
 ## Security

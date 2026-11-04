@@ -11,7 +11,6 @@ use ox_core::grouping::GroupBy;
 use ox_core::i18n::gettext;
 use ox_core::settings::Theme;
 
-use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sort_roles::SortRole;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
@@ -254,36 +253,16 @@ pub(super) fn appearance_items() -> [MenuEntry; 3] {
     ]
 }
 
-/// The More options menu, plus the selection commands the native context
-/// menu used to hold.
+/// The More options menu, Windows 11 Explorer's "…": Pin current folder,
+/// the selection commands and Options. What the app adds lives elsewhere:
+/// New window in the title bar's window menu and Ctrl+N, Settings on the
+/// bar's gear, the appearance in Settings › Appearance, Show hidden files
+/// in View, caching in the search strip and the folder's menu, Map network
+/// location in the navigation pane, Keyboard shortcuts on Ctrl+?, Help on
+/// F1, and License & source and About this build in Settings › About.
 pub(super) fn more_menu() -> Vec<MenuEntry> {
-    let mut entries = vec![
-        MenuItem::new(&gettext("New window"), Icon::WindowNew, AppAction::NewWindow)
-            .with_shortcut("Ctrl+N")
-            .into(),
-        item(&gettext("Settings"), Icon::Settings, WindowAction::Settings),
-        item(
-            &gettext("Default file explorer…"),
-            Icon::Folder,
-            WindowAction::DefaultFileExplorer,
-        ),
-        MenuItem::toggle(
-            &gettext("Cache this folder for search"),
-            Icon::Search,
-            WindowAction::CacheFolder,
-        )
-        .into(),
-        item(
-            &gettext("Map network location"),
-            Icon::Organization,
-            WindowAction::MapNetworkLocation,
-        ),
+    vec![
         item(&gettext("Pin current folder"), Icon::Pin, WindowAction::PinFolder),
-        MenuEntry::Divider,
-    ];
-    entries.extend(appearance_items());
-    entries.push(MenuItem::toggle(&gettext("Show hidden files"), Icon::Eye, WindowAction::Hidden).into());
-    entries.extend([
         MenuEntry::Divider,
         MenuItem::new(&gettext("Select all"), Icon::SelectAllOn, WindowAction::SelectAll)
             .with_shortcut("Ctrl+A")
@@ -303,29 +282,10 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
             Icon::Search,
             WindowAction::SelectMatching,
         ),
-        // Last of the folder's commands, as in Windows 11's "…" menu.
-        item(&gettext("Options"), Icon::Settings, WindowAction::FolderOptions),
         MenuEntry::Divider,
-        // app.js asked for a `code` glyph it did not have and drew a
-        // document; the native app has the code glyph.
-        MenuItem::new(
-            &ox_core::i18n::gettext("Keyboard shortcuts"),
-            Icon::Table,
-            WindowAction::KeyboardShortcuts,
-        )
-        .with_shortcut("Ctrl+?")
-        .into(),
-        MenuItem::new(
-            &ox_core::i18n::gettext("Help"),
-            Icon::DocumentText,
-            WindowAction::Help,
-        )
-        .with_shortcut("F1")
-        .into(),
-        item(&gettext("License & source"), Icon::Code, WindowAction::License),
-        item(&gettext("About this build"), Icon::Info, WindowAction::About),
-    ]);
-    entries
+        // Last, as in Windows 11's "…" menu.
+        item(&gettext("Options"), Icon::Settings, WindowAction::FolderOptions),
+    ]
 }
 
 #[cfg(test)]

@@ -40,3 +40,29 @@ popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-
   margin-bottom: 48px;
   box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
 }
+
+/* ---- Update notice (UPD-001) ---- */
+/* The card the daily update check pops up at the top right, under the
+   command bar: a flyout surface with the toast's shadow. */
+.update-notice {
+  background-color: @ox_flyout;
+  color: @ox_text;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 8px;
+  padding: 16px 10px 16px 16px;
+  margin: 12px 16px 0 0;
+  min-width: 330px;
+  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+}
+.update-notice .update-notice-glyph { color: @ox_accent; margin-top: 1px; }
+.update-notice .update-notice-title { font-weight: 600; }
+.update-notice .update-notice-text { color: @ox_muted; }
+.update-notice .update-notice-buttons { margin-top: 10px; }
+.update-notice .update-notice-buttons button { min-height: 30px; padding: 0 14px; }
+window.ox .update-notice button.update-notice-close {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  margin-top: -8px;
+  color: @ox_muted;
+}

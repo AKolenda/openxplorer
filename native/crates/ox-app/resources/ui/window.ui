@@ -257,6 +257,11 @@
             <child type="overlay">
               <object class="OxToast" id="toast"/>
             </child>
+            <child type="overlay">
+              <!-- The update notice lies at the top right, under the
+                   command bar. -->
+              <object class="OxUpdateNotice" id="update_notice"/>
+            </child>
           </object>
         </child>
         <child>

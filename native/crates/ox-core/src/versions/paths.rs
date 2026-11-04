@@ -69,7 +69,7 @@ pub fn is_conventional_snapshot(uri: &str) -> bool {
 }
 
 /// `.snapshot`, `.snapshots`, `#snapshot` or a Windows `@GMT-…` version.
-fn is_snapshot_folder_name(name: &str) -> bool {
+pub(crate) fn is_snapshot_folder_name(name: &str) -> bool {
     SNAPSHOT_FOLDER_NAMES.contains(&name) || name.starts_with(SMB_VERSION_PREFIX)
 }
 

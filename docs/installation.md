@@ -23,7 +23,7 @@ openxplorer
 
 ## Update from inside the app
 
-Open Settings › About and click Check for updates; once a check finds a newer release, an accent Check for updates icon also shows at the bottom right, beside the view controls. In 2.0.10 and earlier the icon is always there, and in 1.1.0 and 1.1.1 this button is at the bottom of the sidebar. This contacts the public OpenXplorer GitHub Releases API only when requested. Review the installed and available versions, then choose Install update. Finish file operations and tab moves first.
+Once a day, a few seconds after OpenXplorer starts, it asks the public OpenXplorer GitHub Releases API whether a newer release exists. When one does, a notice pops up at the top right with Install update… and Later, an accent Update button shows in the command bar beside the Settings gear, and Update available shows at the bottom right, beside the view controls. Later only closes that release's notice; Update and Update available stay until you update. You can also check at any time with Settings › About › Check for updates, and turn the daily check off there with Check for updates automatically. In 2.0.13 and earlier the app checked only when you asked, and in 1.1.0 and 1.1.1 the button is at the bottom of the sidebar. Review the installed and available versions, then choose Install update. Finish file operations and tab moves first.
 
 The installed Debian app downloads the release installer, verifies its GitHub SHA-256 digest and package identity, then asks for system administrator approval through polkit. APT installs the update without removing packages. Choose Restart now when finished; restarting closes existing windows and tabs.
 

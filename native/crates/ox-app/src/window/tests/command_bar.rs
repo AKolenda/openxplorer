@@ -50,8 +50,8 @@ pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
         match group {
             // Extract all shows only inside a ZIP opened like a folder.
             Some(group) => controls.extend(children(&group).filter(WidgetExt::is_visible)),
-            // The appearance toggle and Settings are hidden, as Windows 11
-            // Explorer's bar has neither.
+            // The appearance toggle is hidden, as Settings › Appearance
+            // chooses the theme; Update shows only while a release waits.
             None if child.is_visible() => controls.push(child),
             None => {}
         }
@@ -60,7 +60,7 @@ pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
 }
 
 /// The menu of the command bar control named `name`.
-fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
+pub(super) fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
     let control = command_bar_controls(test)
         .into_iter()
         .find(|control| control_name(control).as_deref() == Some(name))
@@ -109,6 +109,7 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Sort",
             "View",
             "More options",
+            "Settings (Ctrl+,)",
             "Details",
         ]
     );
@@ -185,31 +186,20 @@ const SORT_MENU: [&str; 11] = [
     "Folders first",
 ];
 
-/// The appearances More options offers (`appearanceMenu`).
+/// The appearances Settings › Appearance offers, which More options no
+/// longer lists (`appearanceMenu`).
 const APPEARANCE_MENU: [&str; 3] = ["Light appearance", "Dark appearance", "Use system appearance"];
 
-/// How the More options menu starts.
-const MORE_MENU_START: [&str; 11] = [
-    "New window",
-    "Settings",
-    "Default file explorer…",
-    "Cache this folder for search",
-    "Map network location",
+/// The More options menu: Windows 11 Explorer's "…".
+const MORE_MENU: [&str; 8] = [
     "Pin current folder",
     "-",
-    "Light appearance",
-    "Dark appearance",
-    "Use system appearance",
-    "Show hidden files",
-];
-
-/// How the More options menu ends.
-const MORE_MENU_END: [&str; 5] = [
+    "Select all",
+    "Select none",
+    "Invert selection",
+    "Select items matching…",
     "-",
-    "Keyboard shortcuts",
-    "Help",
-    "License & source",
-    "About this build",
+    "Options",
 ];
 
 /// parity: VIEW-013
@@ -219,9 +209,7 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     let test = laid_out(&fixture.uri());
     assert_eq!(menu_of(&test, "New").row_labels(), NEW_MENU);
     assert_eq!(menu_of(&test, "Sort").row_labels(), SORT_MENU);
-    let more = menu_of(&test, "More options").row_labels();
-    assert_eq!(&more[..MORE_MENU_START.len()], MORE_MENU_START);
-    assert_eq!(&more[more.len() - MORE_MENU_END.len()..], MORE_MENU_END);
+    assert_eq!(menu_of(&test, "More options").row_labels(), MORE_MENU);
 }
 
 /// The command bar control named `name` as the menu button it is.
@@ -326,20 +314,18 @@ fn the_view_menu_and_ctrl_shift_f4_open_the_terminal_here() {
     assert!(keys.iter().any(|key| key == "<Shift><Control>F4"), "{keys:?}");
 }
 
-/// More options: "Pin current folder" and the cache toggle need a
-/// folder, so pages disable them and say why; "License & source" shows
-/// the code glyph app.js lacked.
+/// More options: "Pin current folder" needs a folder, so pages disable
+/// it and say why.
 ///
 /// parity: CMD-007, CMD-031
 #[gtk::test]
-fn more_options_needs_a_folder_for_pin_and_cache() {
+fn more_options_needs_a_folder_for_pin() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let more = menu_of(&test, "More options");
     more.popup();
     wait_for_frames(&test.window, 2);
     assert!(more.row("Pin current folder").is_sensitive());
-    assert!(more.row("Cache this folder for search").is_sensitive());
     more.popdown();
 
     for page in [Page::ThisPc, Page::Settings] {
@@ -348,38 +334,24 @@ fn more_options_needs_a_folder_for_pin_and_cache() {
         wait_for_frames(&test.window, 2);
         let pin = more.row("Pin current folder");
         assert!(!pin.is_sensitive(), "{page:?}");
-        let cache = more.row("Cache this folder for search");
-        assert!(!cache.is_sensitive(), "{page:?}");
-        // Each says why (CMD-031).
-        for (row, reason) in [
-            (pin, "Only a folder can be pinned to Quick access."),
-            (
-                cache,
-                "Only a folder on a drive or share can be cached for search.",
-            ),
-        ] {
-            let tooltip = row.tooltip_text().unwrap_or_default();
-            assert_eq!(tooltip.lines().nth(1), Some(reason), "{page:?}");
-        }
+        // It says why (CMD-031).
+        let tooltip = pin.tooltip_text().unwrap_or_default();
+        assert_eq!(
+            tooltip.lines().nth(1),
+            Some("Only a folder can be pinned to Quick access."),
+            "{page:?}"
+        );
         more.popdown();
     }
-
-    let license = more.row("License & source");
-    let glyph = license
-        .child()
-        .and_then(|content| content.first_child())
-        .and_downcast::<gtk::Image>()
-        .expect("a row starts with its glyph");
-    assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Code.name()));
 }
 
-/// More options offers the three appearances and checks the chosen one,
-/// as the appearance button's menu did (`applyTheme` in app.js); Windows
-/// 11 Explorer's bar has no appearance button, so it is hidden.
+/// Windows 11 Explorer's bar has no appearance button and its "…" menu
+/// no appearances: Settings › Appearance chooses the theme, through the
+/// same `win.theme` action, whose state follows the choice.
 ///
 /// parity: LOOK-005
 #[gtk::test]
-fn more_options_offers_the_appearances_and_checks_the_choice() {
+fn the_appearance_is_chosen_in_settings_not_the_command_bar() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
@@ -389,35 +361,13 @@ fn more_options_offers_the_appearances_and_checks_the_choice() {
             .any(|name| name == "Light" || name == "Dark"),
         "no appearance button in the bar"
     );
-    for (theme, checked) in [
-        ("light", "Light appearance"),
-        ("dark", "Dark appearance"),
-        ("system", "Use system appearance"),
-    ] {
+    let more = menu_of(&test, "More options").row_labels();
+    for appearance in APPEARANCE_MENU {
+        assert!(!more.iter().any(|label| label == appearance), "{more:?}");
+    }
+    for theme in ["light", "dark", "system"] {
         test.activate("theme", Some(theme));
-        let menu = menu_of(&test, "More options");
-        let labels = menu.row_labels();
-        assert!(
-            labels
-                .windows(APPEARANCE_MENU.len())
-                .any(|run| run == APPEARANCE_MENU),
-            "{labels:?}"
-        );
-        menu.popup();
-        wait_for_frames(&test.window, 2);
-        let checked_labels = menu.checked_labels();
-        menu.popdown();
-        assert!(
-            checked_labels.iter().any(|label| label == checked),
-            "{theme}: {checked_labels:?}"
-        );
-        let others = APPEARANCE_MENU.iter().filter(|label| **label != checked);
-        for other in others {
-            assert!(
-                !checked_labels.iter().any(|label| label == other),
-                "{theme}: {other}"
-            );
-        }
+        assert_eq!(test.action_state("theme").as_deref(), Some(theme));
     }
 }
 

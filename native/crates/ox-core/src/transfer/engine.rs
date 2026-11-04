@@ -588,7 +588,9 @@ impl TransferEngine {
             Removal::Trash => source.trash(cancel),
             // XFER-015: reached only after the user confirmed a permanent
             // delete. The backend re-checks every item with the write guard.
-            Removal::PermanentDelete => source.delete_tree_of_kind(selected.kind, cancel, self.guard()),
+            // The item is bound to what was selected, where the backend
+            // can tell (`delete_selected_tree`).
+            Removal::PermanentDelete => source.delete_selected_tree(&selected.info, cancel, self.guard()),
         }
     }
 

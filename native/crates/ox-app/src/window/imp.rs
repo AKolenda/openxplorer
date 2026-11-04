@@ -37,6 +37,7 @@ use super::tab_strip::TabStrip;
 use super::toast::Toast;
 use super::transfer_panel::TransferPanel;
 use super::type_to_select::Typeahead;
+use super::update_notice::UpdateNotice;
 use crate::app_context::AppContext;
 use crate::network::WindowNetwork;
 use crate::resizer_control::ResizerControl;
@@ -139,6 +140,9 @@ pub(crate) struct BrowserWindow {
     /// The message at the bottom of the workspace.
     #[template_child]
     pub(super) toast: TemplateChild<Toast>,
+    /// Pops up when the daily check finds a newer release.
+    #[template_child]
+    pub(super) update_notice: TemplateChild<UpdateNotice>,
     /// Counts, the type-to-select hint and the view buttons.
     #[template_child]
     pub(super) status_bar: TemplateChild<StatusBar>,
@@ -179,6 +183,10 @@ pub(crate) struct BrowserWindow {
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
+    /// The input method of the view that last had the keyboard, so a dead key
+    /// or an IME commit typed on the window's chrome composes as it does in
+    /// the view itself; see [`super::input`].
+    pub(super) typeahead_input: RefCell<Option<gtk::IMMulticontext>>,
     /// The column Up and Down keep to in the icon grid, across rows of
     /// different lengths; see [`super::grid_keys`].
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
@@ -306,6 +314,7 @@ impl ObjectSubclass for BrowserWindow {
         DetailsPane::ensure_type();
         TransferPanel::ensure_type();
         Toast::ensure_type();
+        UpdateNotice::ensure_type();
         StatusBar::ensure_type();
         SettingsPage::ensure_type();
         klass.bind_template();
