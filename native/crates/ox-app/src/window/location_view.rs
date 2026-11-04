@@ -231,9 +231,13 @@ impl BrowserWindow {
         };
         let page = Page::from_uri(&uri);
         let place = match page {
-            Some(Page::ThisPc | Page::Network) => MorePlace::NetworkPage,
+            Some(Page::ThisPc) => MorePlace::ThisPc,
+            Some(Page::Network) => MorePlace::Network,
             _ => MorePlace::Folder,
         };
+        // Only This PC asks GIO, which lists every application.
+        let system_information =
+            place == MorePlace::ThisPc && crate::integration::system_information().is_some();
         let pinned = sources
             .quick_access
             .iter()
@@ -246,6 +250,7 @@ impl BrowserWindow {
             can_undo: context.journal_label(JournalDirection::Undo).is_some(),
             can_redo: context.journal_label(JournalDirection::Redo).is_some(),
             network_drives: sources.network_drives.clone(),
+            system_information,
         };
         self.command_bar().show_more_menu(state);
     }

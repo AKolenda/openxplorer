@@ -378,6 +378,9 @@ pub(crate) enum WindowAction {
     Properties,
     /// Properties on its Previous versions tab.
     PreviousVersions,
+    /// Opens the desktop's system information app, from This PC's "…" >
+    /// Properties, as Windows opens the system's properties (CMD-007).
+    SystemProperties,
     /// Properties of the location in the string target, for the menus of
     /// the sidebar, drives and network places, and `ShowItemProperties`.
     PropertiesOf,
@@ -609,6 +612,7 @@ impl WindowAction {
             WindowAction::Properties => "properties",
             WindowAction::PreviousVersions => "previous-versions",
             WindowAction::PropertiesOf => "properties-of",
+            WindowAction::SystemProperties => "system-properties",
             WindowAction::PreviousVersionsOf => "previous-versions-of",
             WindowAction::CalculateFolderSize => "calculate-folder-size",
             WindowAction::CalculateFolderSizes => "calculate-folder-sizes",

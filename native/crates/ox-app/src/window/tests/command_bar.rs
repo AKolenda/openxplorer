@@ -202,10 +202,10 @@ const MORE_MENU: [&str; 9] = [
     "Options",
 ];
 
-/// The "…" menu in This PC and Network, as Windows 11's in This PC: the
-/// network drive commands, the selection commands, Properties and
-/// Options, and no Pin. Windows' Connect to a media server has no `GVfs`
-/// backend to run, so it is not listed.
+/// The "…" menu in Network, as Windows 11's in This PC: the network drive
+/// commands, the selection commands, Properties and Options, and no Pin.
+/// Windows' Connect to a media server has no `GVfs` backend to run, so it is
+/// not listed.
 const MORE_MENU_ON_A_NETWORK_PAGE: [&str; 11] = [
     "Add a network location",
     "Map network drive",
@@ -246,21 +246,47 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     assert_eq!(menu_of(&test, "More options").row_labels(), MORE_MENU);
 }
 
+/// The "…" menu in This PC where the desktop has no system information
+/// app: Properties, which would open it, is left out rather than greyed.
+const MORE_MENU_IN_THIS_PC_WITHOUT_SYSTEM_INFORMATION: [&str; 10] = [
+    "Add a network location",
+    "Map network drive",
+    "Disconnect network drive",
+    "-",
+    "Select all",
+    "Select none",
+    "Invert selection",
+    "Select items matching…",
+    "-",
+    "Options",
+];
+
 /// "…" in This PC and Network lists Windows 11's network drive commands
 /// in place of Pin: Map network drive and Add a network location open the
 /// connect dialog, and Disconnect network drive says why it cannot run
-/// while no share is connected. Properties says pages have none. The
-/// sidebar keeps its Map network location button.
+/// while no share is connected. Network's Properties says pages have
+/// none; This PC's opens the system information app, and is left out here,
+/// where the test session has none. The sidebar keeps its Map network
+/// location button.
 ///
 /// parity: CMD-007, NET-001, CMD-031
 #[gtk::test]
 fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    assert!(
+        crate::integration::system_information().is_none(),
+        "the test session has no system information app"
+    );
     for page in [Page::ThisPc, Page::Network] {
         test.window.navigate(page.uri()).expect("a page");
         let labels = menu_of(&test, "More options").row_labels();
-        assert_eq!(labels, MORE_MENU_ON_A_NETWORK_PAGE, "{page:?}");
+        let expected: &[&str] = if page == Page::ThisPc {
+            &MORE_MENU_IN_THIS_PC_WITHOUT_SYSTEM_INFORMATION
+        } else {
+            &MORE_MENU_ON_A_NETWORK_PAGE
+        };
+        assert_eq!(labels, expected, "{page:?}");
         let more = menu_of(&test, "More options");
         more.popup();
         wait_for_frames(&test.window, 2);
@@ -273,12 +299,14 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
             Some("No network drive is connected."),
             "{page:?}"
         );
-        let properties = more.row("Properties");
-        assert_eq!(
-            properties.tooltip_text().unwrap_or_default().lines().nth(1),
-            Some("Pages such as This PC have no properties."),
-            "{page:?}"
-        );
+        if page == Page::Network {
+            let properties = more.row("Properties");
+            assert_eq!(
+                properties.tooltip_text().unwrap_or_default().lines().nth(1),
+                Some("Pages such as This PC have no properties."),
+                "{page:?}"
+            );
+        }
         more.popdown();
     }
     test.window.navigate(&fixture.uri()).expect("the folder");
@@ -293,6 +321,42 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
             button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
         });
     assert!(sidebar_maps, "the sidebar keeps Map network location");
+}
+
+/// This PC's "…" > Properties opens the desktop's system information app,
+/// as Windows' opens the system's properties: here KDE's Info Center,
+/// found by its desktop file and launched as an application.
+///
+/// parity: CMD-007
+#[gtk::test]
+fn this_pc_properties_opens_the_system_information_app() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let info_center = super::support::install_test_application("org.kde.kinfocenter.desktop");
+    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+    wait_until("… to offer Properties", || {
+        menu_of(&test, "More options")
+            .row_labels()
+            .contains(&"Properties".to_owned())
+    });
+    let item = more_item(&test, "Properties");
+    assert_eq!(
+        item.action,
+        crate::window::menu_popover::MenuAction::Window(WindowAction::SystemProperties)
+    );
+    let more = menu_of(&test, "More options");
+    more.popup();
+    wait_for_frames(&test.window, 2);
+    assert!(more.row("Properties").is_sensitive());
+    more.popdown();
+
+    test.activate("system-properties", None);
+
+    assert_eq!(
+        test.context.recorded_launches(),
+        ["app:org.kde.kinfocenter.desktop"]
+    );
+    drop(info_center);
 }
 
 /// The glyph of `row`, a menu row: the image after its mark slot.

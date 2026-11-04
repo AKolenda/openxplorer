@@ -296,9 +296,13 @@ pub(in crate::window) enum MorePlace {
     /// A folder, or any location that is not a page: Undo and Redo, Pin
     /// or Unpin, then the selection commands.
     Folder,
-    /// This PC or Network: the network drive commands in place of Pin,
-    /// as Windows 11's "…" lists them in This PC.
-    NetworkPage,
+    /// This PC: the network drive commands in place of Pin, as Windows
+    /// 11's "…" lists them, and Properties opening the system information
+    /// app.
+    ThisPc,
+    /// Network: the same network drive commands; its Properties, as a
+    /// page's, has nothing to describe.
+    Network,
 }
 
 /// Whether the folder shown is pinned to Quick access, which decides
@@ -336,6 +340,9 @@ pub(in crate::window) struct MoreMenuState {
     pub can_redo: bool,
     /// The connected network shares.
     pub network_drives: Vec<NetworkDrive>,
+    /// Whether the desktop has a system information app for This PC's
+    /// Properties to open.
+    pub system_information: bool,
 }
 
 impl Default for MoreMenuState {
@@ -347,6 +354,7 @@ impl Default for MoreMenuState {
             can_undo: false,
             can_redo: false,
             network_drives: Vec::new(),
+            system_information: false,
         }
     }
 }
@@ -377,7 +385,7 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = match state.place {
         MorePlace::Folder => folder_commands(state),
-        MorePlace::NetworkPage => network_drive_commands(&state.network_drives),
+        MorePlace::ThisPc | MorePlace::Network => network_drive_commands(&state.network_drives),
     };
     entries.extend([
         MenuEntry::Divider,
@@ -401,10 +409,31 @@ pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
             WindowAction::SelectMatching,
         ),
         MenuEntry::Divider,
-        item(&gettext("Properties"), Icon::Wrench, WindowAction::Properties),
-        // Last, as in Windows 11's "…" menu.
-        item(&gettext("Options"), Icon::Settings, WindowAction::FolderOptions),
     ]);
+    // This PC's Properties opens the system information app, as Windows'
+    // opens the system's properties; without one it is left out, not
+    // greyed (the user's decision, 2026-11-04).
+    match (state.place, state.system_information) {
+        (MorePlace::ThisPc, true) => entries.push(item(
+            &gettext("Properties"),
+            Icon::Wrench,
+            WindowAction::SystemProperties,
+        )),
+        (MorePlace::ThisPc, false) => {}
+        (MorePlace::Folder | MorePlace::Network, _) => {
+            entries.push(item(
+                &gettext("Properties"),
+                Icon::Wrench,
+                WindowAction::Properties,
+            ));
+        }
+    }
+    // Last, as in Windows 11's "…" menu.
+    entries.push(item(
+        &gettext("Options"),
+        Icon::Settings,
+        WindowAction::FolderOptions,
+    ));
     entries
 }
 
@@ -548,7 +577,7 @@ mod tests {
             })
         };
         let state = MoreMenuState {
-            place: MorePlace::NetworkPage,
+            place: MorePlace::ThisPc,
             ..MoreMenuState::default()
         };
         let none = find(more_menu(&state)).expect("This PC has it");
