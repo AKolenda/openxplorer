@@ -324,6 +324,71 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
     assert!(sidebar_maps, "the sidebar keeps Map network location");
 }
 
+/// Disconnect network drive lists each network mount once, by the root
+/// the volume monitor mounted: a saved share inside a mount is not a drive
+/// of its own, since disconnecting it ends the whole mount, and the mount
+/// is not listed again for the share.
+///
+/// parity: CMD-007, DEV-006
+#[gtk::test]
+fn disconnect_network_drive_lists_each_mount_once_by_its_root() {
+    use crate::test_support::mounted_volume;
+    use crate::volumes::VolumeKind;
+    use crate::window::menu_popover::MenuEntry;
+
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.save_share("smb://fileserver/share/team", "Team");
+    wait_until("the window to read the saved share", || {
+        test.window
+            .places()
+            .network
+            .iter()
+            .any(|location| location.label == "Team")
+    });
+    test.window.imp().volumes.replace(vec![mounted_volume(
+        "share on fileserver",
+        "smb://fileserver/share/",
+        VolumeKind::Drive,
+    )]);
+    test.window.render_places();
+    let team_is_connected = test
+        .window
+        .places()
+        .network
+        .iter()
+        .any(|location| location.label == "Team" && location.is_connected);
+    assert!(
+        team_is_connected,
+        "the saved share inside the mount counts as connected"
+    );
+    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+    let more = menu_of(&test, "More options");
+    let disconnect = more
+        .items()
+        .into_iter()
+        .find(|item| item.label == "Disconnect network drive")
+        .expect("This PC lists Disconnect network drive");
+    let choices: Vec<(String, Option<String>)> = disconnect
+        .submenu
+        .iter()
+        .filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some((
+                item.label.clone(),
+                item.target.as_ref().and_then(glib::Variant::get::<String>),
+            )),
+            MenuEntry::Divider => None,
+        })
+        .collect();
+    assert_eq!(
+        choices,
+        [(
+            "share on fileserver".to_owned(),
+            Some("smb://fileserver/share/".to_owned())
+        )]
+    );
+}
+
 /// This PC's "…" > Properties opens the desktop's system information app,
 /// as Windows' opens the system's properties: here KDE's Info Center,
 /// found by its desktop file and launched as an application.

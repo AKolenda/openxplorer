@@ -189,20 +189,15 @@ impl BrowserWindow {
     }
 
     /// Keeps what "…" needs of `places`, which the sidebar has just been
-    /// drawn from: Quick access, for Pin or Unpin, and the connected
-    /// network shares, for Disconnect network drive.
+    /// drawn from: Quick access, for Pin or Unpin, and, for Disconnect
+    /// network drive, the network mounts themselves, one per mount, so
+    /// a saved share inside a mount is not listed as a drive of its own.
     pub(super) fn remember_more_menu_places(&self, places: &crate::places::Places) {
-        let network_drives = places
-            .network
-            .iter()
-            .filter(|share| {
-                share.is_connected
-                    && share.kind != ox_core::places::NetworkKind::Server
-                    && !location::is_smb_server(&share.uri)
-            })
-            .map(|share| NetworkDrive {
-                label: share.label.clone(),
-                uri: share.uri.clone(),
+        let network_drives = crate::places::network_drive_mounts(&self.imp().volumes.borrow())
+            .into_iter()
+            .map(|mount| NetworkDrive {
+                label: mount.label,
+                uri: mount.uri,
             })
             .collect();
         self.imp().more_menu_places.replace(Some(MoreMenuPlaces {
