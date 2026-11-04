@@ -106,6 +106,33 @@ fn known_extensions_are_hidden_by_default_and_view_show_shows_them() {
     });
 }
 
+/// File name extensions, toggled while the rows are bound, renames them
+/// for a screen reader too: each list item's accessible label follows the
+/// name it shows, not the name it had when it was bound.
+///
+/// parity: VIEW-069
+#[gtk::test]
+fn toggling_extensions_renames_the_rows_for_a_screen_reader() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.activate("view", Some("large"));
+    let labels = || {
+        wait_for_frames(&test.window, 2);
+        test.window.folder_pane().owners().bound_accessible_labels()
+    };
+    let before = labels();
+    assert!(before.contains(&"Notes 2".to_owned()), "{before:?}");
+
+    test.activate("file-name-extensions", None);
+
+    let after = labels();
+    assert!(after.contains(&"Notes 2.txt".to_owned()), "{after:?}");
+    assert!(!after.contains(&"Notes 2".to_owned()), "{after:?}");
+    test.activate("file-name-extensions", None);
+    let again = labels();
+    assert!(again.contains(&"Notes 2".to_owned()), "hidden again: {again:?}");
+}
+
 /// With extensions hidden, F2 edits the name without its extension and
 /// the rename keeps the extension, as in Windows; with them shown it edits
 /// the whole name.

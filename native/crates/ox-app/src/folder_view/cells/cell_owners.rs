@@ -431,17 +431,41 @@ impl CellOwners {
         if self.extensions.replace(extensions) == extensions {
             return;
         }
-        let bound: Vec<(gtk::Widget, FileItem)> = self
+        let bound: Vec<(gtk::ListItem, gtk::Widget, FileItem)> = self
             .owners
             .borrow()
             .iter()
-            .filter_map(CellOwner::bound_cell)
+            .filter_map(|owner| {
+                let (cell, item) = owner.bound_cell()?;
+                Some((owner.list_item.upgrade()?, cell, item))
+            })
             .collect();
-        for (cell, item) in bound {
+        for (list_item, cell, item) in bound {
             if let Some(cell) = cell.downcast_ref::<FileCell>() {
-                cell.show_name(&self.shown_name(&item));
+                // The name a screen reader reads follows the one shown,
+                // as binding set them together.
+                let name = self.shown_name(&item);
+                list_item.set_accessible_label(&name);
+                cell.show_name(&name);
             }
         }
+    }
+
+    /// The accessible labels of the list items bound now, each once and
+    /// sorted, as a screen reader reads them.
+    #[cfg(test)]
+    pub(crate) fn bound_accessible_labels(&self) -> Vec<String> {
+        let mut labels: Vec<String> = self
+            .owners
+            .borrow()
+            .iter()
+            .filter_map(|owner| owner.list_item.upgrade())
+            .filter(|list_item| list_item.item().is_some())
+            .map(|list_item| list_item.accessible_label().to_string())
+            .collect();
+        labels.sort();
+        labels.dedup();
+        labels
     }
 
     /// Whether items have check boxes.
