@@ -1212,15 +1212,11 @@ mod tests {
 
         assert_eq!(
             reasons(&with_folder),
-            [
-                ("Bluetooth device".to_owned(), Some(BLUETOOTH_FILES_ONLY)),
-            ]
+            [("Bluetooth device".to_owned(), Some(BLUETOOTH_FILES_ONLY)),]
         );
         assert_eq!(
             reasons(&in_version),
-            [
-                ("Desktop (create shortcut)".to_owned(), Some(READ_ONLY_VERSION)),
-            ]
+            [("Desktop (create shortcut)".to_owned(), Some(READ_ONLY_VERSION)),]
         );
     }
 

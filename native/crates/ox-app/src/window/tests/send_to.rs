@@ -6,8 +6,8 @@
 
 use std::cell::Cell;
 use std::fs;
-use std::rc::Rc;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
