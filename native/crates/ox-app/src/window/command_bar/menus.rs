@@ -146,20 +146,17 @@ fn group_item(group_by: GroupBy) -> MenuEntry {
     .into()
 }
 
-/// The View menu's item for `view`, showing its Explorer shortcut.
+/// The View menu's item for `view`. Windows 11's View menu shows no
+/// shortcut text, so neither does this one; Explorer's Ctrl+Shift+1 to 6
+/// still choose the views (VIEW-009).
 fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
-    let item = MenuItem::choice(label, glyph, WindowAction::View, view.as_str());
-    match view.shortcut() {
-        Some((_, shortcut)) => item.with_shortcut(shortcut).into(),
-        None => item.into(),
-    }
+    MenuItem::choice(label, glyph, WindowAction::View, view.as_str()).into()
 }
 
-/// The View menu's item for a text-size `step`, showing its `shortcut`.
-fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) -> MenuEntry {
-    MenuItem::new(label, glyph, WindowAction::TextSize(step))
-        .with_shortcut(shortcut)
-        .into()
+/// The View menu's item for a text-size `step`, whose keys (Ctrl++, Ctrl+−
+/// and Ctrl+0) work without being shown, as in the rest of the menu.
+fn text_size_item(label: &str, glyph: Icon, step: Step) -> MenuEntry {
+    MenuItem::new(label, glyph, WindowAction::TextSize(step)).into()
 }
 
 /// The glyph Windows 11's View menu draws for `size`.
@@ -200,7 +197,6 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             Icon::PanelRight,
             WindowAction::DetailsPane,
         )
-        .with_shortcut("Alt+Shift+P")
         .with_dot_mark()
         .into(),
         // The same pane showing only the preview; choosing one closes the
@@ -210,7 +206,6 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             Icon::PanelRightGallery,
             WindowAction::PreviewPane,
         )
-        .with_shortcut("Alt+P")
         .with_dot_mark()
         .into(),
         MenuItem::submenu(&gettext("Show"), Icon::Eye, WindowAction::Hidden, show_menu()).into(),
@@ -220,14 +215,12 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             Icon::PanelRight,
             WindowAction::SplitView,
         )
-        .with_shortcut("F3")
         .into(),
         MenuItem::toggle(
             &gettext("Folder tree"),
             Icon::Organization,
             WindowAction::FolderTree,
         )
-        .with_shortcut("F7")
         .into(),
         // Dolphin's Terminal panel embeds Konsole; VTE for GTK 4 is not
         // available everywhere the app ships, so this opens the desktop's
@@ -237,17 +230,11 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             Icon::WindowConsole,
             WindowAction::OpenTerminal,
         )
-        .with_shortcut("Ctrl+Shift+F4")
         .into(),
         MenuEntry::Divider,
-        text_size_item(&gettext("Larger text"), Icon::Add, Step::Increase, "Ctrl++"),
-        text_size_item(&gettext("Smaller text"), Icon::Subtract, Step::Decrease, "Ctrl+−"),
-        text_size_item(
-            &gettext("Reset text size"),
-            Icon::ArrowReset,
-            Step::Reset,
-            "Ctrl+0",
-        ),
+        text_size_item(&gettext("Larger text"), Icon::Add, Step::Increase),
+        text_size_item(&gettext("Smaller text"), Icon::Subtract, Step::Decrease),
+        text_size_item(&gettext("Reset text size"), Icon::ArrowReset, Step::Reset),
     ]);
     entries
 }
@@ -263,7 +250,6 @@ fn show_menu() -> Vec<MenuEntry> {
             Icon::PanelLeft,
             WindowAction::Sidebar,
         )
-        .with_shortcut("F9")
         .into(),
         MenuEntry::Divider,
         MenuItem::toggle(
@@ -286,9 +272,7 @@ fn show_menu() -> Vec<MenuEntry> {
             WindowAction::FileNameExtensions,
         )
         .into(),
-        MenuItem::toggle(&gettext("Hidden items"), Icon::Eye, WindowAction::Hidden)
-            .with_shortcut("Ctrl+H")
-            .into(),
+        MenuItem::toggle(&gettext("Hidden items"), Icon::Eye, WindowAction::Hidden).into(),
     ]
 }
 
@@ -346,11 +330,10 @@ pub(in crate::window) struct MoreMenuState {
     pub place: MorePlace,
     /// Whether the folder shown is pinned.
     pub pin: FolderPin,
-    /// Undo's label, naming the step ("Undo Rename"), while there is
-    /// something to undo.
-    pub undo: Option<String>,
-    /// Redo's label while there is something to redo.
-    pub redo: Option<String>,
+    /// Whether there is something to undo.
+    pub can_undo: bool,
+    /// Whether there is something to redo.
+    pub can_redo: bool,
     /// The connected network shares.
     pub network_drives: Vec<NetworkDrive>,
 }
@@ -361,8 +344,8 @@ impl Default for MoreMenuState {
         Self {
             place: MorePlace::Folder,
             pin: FolderPin::Unpinned,
-            undo: None,
-            redo: None,
+            can_undo: false,
+            can_redo: false,
             network_drives: Vec::new(),
         }
     }
@@ -373,8 +356,8 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 
 /// The More options ("…") menu, laid out as Windows 11 File Explorer's.
 ///
-/// In a folder: Undo and Redo while each can run, named for the step as
-/// the folder's own menu names it; Pin to Quick access or Unpin from
+/// In a folder: Undo and Redo while each can run, named plainly as
+/// Windows names them (the folder's own menu names the step); Pin to Quick access or Unpin from
 /// Quick access; Select all, Select none, Invert selection and the app's
 /// Select items matching…; then Properties, of the selection or the
 /// folder, and Options. In This PC and Network: Map network drive (the
@@ -398,15 +381,19 @@ pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     };
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::new(&gettext("Select all"), Icon::SelectAllOn, WindowAction::SelectAll)
-            .with_shortcut("Ctrl+A")
+        // No shortcut text, as Windows 11's "…" shows none; Ctrl+A still
+        // selects all. Windows draws the selection glyphs in blue.
+        MenuItem::new(&gettext("Select all"), Icon::GridFilled, WindowAction::SelectAll)
+            .with_accent_glyph()
             .into(),
         item(&gettext("Select none"), Icon::Grid, WindowAction::SelectNone),
-        item(
+        MenuItem::new(
             &gettext("Invert selection"),
-            Icon::SelectObject,
+            Icon::LayoutCellFourFocusTopLeftFilled,
             WindowAction::InvertSelection,
-        ),
+        )
+        .with_accent_glyph()
+        .into(),
         item(
             &gettext("Select items matching…"),
             Icon::Search,
@@ -424,18 +411,15 @@ pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
 /// or Unpin.
 fn folder_commands(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
-    if let Some(undo) = &state.undo {
-        entries.push(
-            MenuItem::new(undo, Icon::ArrowUndo, WindowAction::Undo)
-                .with_shortcut("Ctrl+Z")
-                .into(),
-        );
+    // Plainly "Undo" and "Redo", as Windows 11's "…" names them; the
+    // folder's own menu names the step.
+    if state.can_undo {
+        entries.push(item(&gettext("Undo"), Icon::ArrowUndo, WindowAction::Undo));
     }
-    if let Some(redo) = &state.redo {
+    if state.can_redo {
         // Windows 11 draws Redo as Undo's arrow turned the other way.
         entries.push(
-            MenuItem::new(redo, Icon::ArrowUndo, WindowAction::Redo)
-                .with_shortcut("Ctrl+Y")
+            MenuItem::new(&gettext("Redo"), Icon::ArrowUndo, WindowAction::Redo)
                 .mirrored()
                 .into(),
         );

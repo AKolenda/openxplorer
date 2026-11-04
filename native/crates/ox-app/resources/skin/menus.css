@@ -33,6 +33,10 @@ popover.ox-menu list > row:disabled .shortcut { color: @ox_text_disabled; }
    Undo's arrow (src/window/menu_popover.rs). The bundled file is not
    changed; GTK turns the icon when it paints it. */
 popover.ox-menu list > row image.mirrored { -gtk-icon-transform: scaleX(-1); }
+/* The selection commands of "…" draw their glyph in the accent blue, as
+   Windows 11 does; greyed out with their row when it is disabled. */
+popover.ox-menu list > row image.accent-glyph { color: @ox_accent; }
+popover.ox-menu list > row:disabled image.accent-glyph { color: @ox_text_disabled; }
 /* The mark column: a check mark for a toggle, a dot for a choice. */
 popover.ox-menu list > row image.menu-mark { color: @ox_text; }
 popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }

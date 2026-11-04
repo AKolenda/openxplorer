@@ -158,6 +158,9 @@ pub(crate) enum Icon {
     FolderZip,
     /// `grid_20_regular`: View and the icon views.
     Grid,
+    /// `grid_20_filled`: Select all in the "…" menu, in the accent blue, as
+    /// Windows 11 draws four filled squares.
+    GridFilled,
     /// `hard_drive_20_regular`: Local Disk, drives and mapped network drives.
     HardDrive,
     /// `headphones_20_color`: audio files at small sizes.
@@ -183,6 +186,10 @@ pub(crate) enum Icon {
     Info,
     /// `laptop_20_regular`: This PC.
     Laptop,
+    /// `layout_cell_four_focus_top_left_20_filled`: Invert selection in the
+    /// "…" menu, in the accent blue: the closest published glyph to Windows
+    /// 11's partly filled squares.
+    LayoutCellFourFocusTopLeftFilled,
     /// `link_20_regular`: Copy as path in the context menus.
     Link,
     /// `markdown_20_regular`: New Markdown document.
@@ -228,10 +235,11 @@ pub(crate) enum Icon {
     /// set, for the owner to keep or remove.
     #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-03"))]
     SelectAllOff,
-    /// `select_all_on_20_regular`: Select all.
+    /// `select_all_on_20_regular`: Select all until "…" took Windows 11's
+    /// blue squares for it (2026-11-04); still bundled with the approved
+    /// set, for the owner to keep or remove.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-04"))]
     SelectAllOn,
-    /// `select_object_20_regular`: Invert selection, as Windows 11 draws it.
-    SelectObject,
     /// `server_20_regular`: an SMB server on the network bar.
     Server,
     /// `settings_20_regular`: Settings.
@@ -339,6 +347,7 @@ impl Icon {
             Icon::FolderAdd => "ox-folder-add-20-symbolic",
             Icon::FolderZip => "ox-folder-zip-20-symbolic",
             Icon::Grid => "ox-grid-20-symbolic",
+            Icon::GridFilled => "ox-grid-20-filled-symbolic",
             Icon::HardDrive => "ox-hard-drive-20-symbolic",
             Icon::HeadphonesColor20 => "ox-headphones-20-color",
             Icon::HeadphonesColor32 => "ox-headphones-32-color",
@@ -351,6 +360,7 @@ impl Icon {
             Icon::ImageColor48 => "ox-image-48-color",
             Icon::Info => "ox-info-20-symbolic",
             Icon::Laptop => "ox-laptop-20-symbolic",
+            Icon::LayoutCellFourFocusTopLeftFilled => "ox-layout-cell-four-focus-top-left-20-filled-symbolic",
             Icon::Link => "ox-link-20-symbolic",
             Icon::Markdown => "ox-markdown-20-symbolic",
             Icon::Maximize => "ox-maximize-20-symbolic",
@@ -371,7 +381,6 @@ impl Icon {
             Icon::Search => "ox-search-20-symbolic",
             Icon::SelectAllOff => "ox-select-all-off-20-symbolic",
             Icon::SelectAllOn => "ox-select-all-on-20-symbolic",
-            Icon::SelectObject => "ox-select-object-20-symbolic",
             Icon::Server => "ox-server-20-symbolic",
             Icon::Settings => "ox-settings-20-symbolic",
             Icon::Share => "ox-share-20-symbolic",
@@ -416,7 +425,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 109] = [
+pub(crate) const ALL_ICONS: [Icon; 110] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowAutofitHeight,
@@ -471,6 +480,7 @@ pub(crate) const ALL_ICONS: [Icon; 109] = [
     Icon::FolderAdd,
     Icon::FolderZip,
     Icon::Grid,
+    Icon::GridFilled,
     Icon::HardDrive,
     Icon::HeadphonesColor20,
     Icon::HeadphonesColor32,
@@ -483,6 +493,7 @@ pub(crate) const ALL_ICONS: [Icon; 109] = [
     Icon::ImageColor48,
     Icon::Info,
     Icon::Laptop,
+    Icon::LayoutCellFourFocusTopLeftFilled,
     Icon::Link,
     Icon::Markdown,
     Icon::Maximize,
@@ -503,7 +514,6 @@ pub(crate) const ALL_ICONS: [Icon; 109] = [
     Icon::Search,
     Icon::SelectAllOff,
     Icon::SelectAllOn,
-    Icon::SelectObject,
     Icon::Server,
     Icon::Settings,
     Icon::Share,

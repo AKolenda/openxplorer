@@ -243,8 +243,8 @@ impl BrowserWindow {
         let state = MoreMenuState {
             place,
             pin,
-            undo: context.journal_label(JournalDirection::Undo),
-            redo: context.journal_label(JournalDirection::Redo),
+            can_undo: context.journal_label(JournalDirection::Undo).is_some(),
+            can_redo: context.journal_label(JournalDirection::Redo).is_some(),
             network_drives: sources.network_drives.clone(),
         };
         self.command_bar().show_more_menu(state);

@@ -4075,6 +4075,10 @@ msgstr ""
 msgid "Properties"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
+msgid "Redo"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Reset text size"
 msgstr ""
@@ -4105,6 +4109,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
 msgid "Text document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
+msgid "Undo"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -5665,10 +5673,6 @@ msgstr ""
 msgid "Previous tab"
 msgstr ""
 
-#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
-msgid "Redo"
-msgstr ""
-
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Reopen closed tab"
 msgstr ""
@@ -5695,10 +5699,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Type an address"
-msgstr ""
-
-#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
-msgid "Undo"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs

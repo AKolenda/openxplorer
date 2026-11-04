@@ -304,10 +304,11 @@ fn row_glyph(row: &gtk::ListBoxRow) -> Option<String> {
         .find_map(|image| image.icon_name().map(|name| name.to_string()))
 }
 
-/// "…" in a folder shows Undo and Redo only while each can run, naming the
-/// step as the folder's menu does, with Redo's glyph Undo's mirrored as
-/// Windows 11 draws it; and Properties, with Windows' wrench, opens the
-/// folder's Properties or the selection's.
+/// "…" in a folder shows Undo and Redo only while each can run, named
+/// plainly "Undo" and "Redo" as Windows 11's "…" names them (the folder's
+/// own menu names the step), with Redo's glyph Undo's mirrored as Windows
+/// draws it; and Properties, with Windows' wrench, opens the folder's
+/// Properties or the selection's.
 ///
 /// parity: CMD-007, OPS-029, CMD-011
 #[gtk::test]
@@ -331,19 +332,17 @@ fn the_more_menu_shows_undo_and_redo_only_while_they_can_run() {
             !super::file_ops_support::is_renaming_in_place(&test)
         });
     }
-    wait_until("… to offer Undo", || undo_redo() == ["Undo New"]);
+    wait_until("… to offer Undo", || undo_redo() == ["Undo"]);
     let labels = more().row_labels();
-    assert_eq!(&labels[..3], ["Undo New", "-", "Pin to Quick access"]);
+    assert_eq!(&labels[..3], ["Undo", "-", "Pin to Quick access"]);
 
     test.activate("undo", None);
-    wait_until("… to offer Undo and Redo", || {
-        undo_redo() == ["Undo New", "Redo New"]
-    });
+    wait_until("… to offer Undo and Redo", || undo_redo() == ["Undo", "Redo"]);
     let menu = more();
     menu.popup();
     wait_for_frames(&test.window, 2);
-    let undo = row_glyph(&menu.row("Undo New"));
-    let redo_row = menu.row("Redo New");
+    let undo = row_glyph(&menu.row("Undo"));
+    let redo_row = menu.row("Redo");
     assert_eq!(undo.as_deref(), Some(Icon::ArrowUndo.name()));
     assert_eq!(row_glyph(&redo_row).as_deref(), Some(Icon::ArrowUndo.name()));
     let mirrored = descendants::<gtk::Image>(&redo_row)
@@ -356,15 +355,60 @@ fn the_more_menu_shows_undo_and_redo_only_while_they_can_run() {
     menu.popdown();
 
     test.activate("undo", None);
-    wait_until("… to offer Redo only", || undo_redo() == ["Redo New"]);
+    wait_until("… to offer Redo only", || undo_redo() == ["Redo"]);
     assert_eq!(
         more()
             .items_labels()
             .iter()
             .find(|label| label.starts_with("Redo"))
             .map(String::as_str),
-        Some("Redo New")
+        Some("Redo")
     );
+}
+
+/// The shortcut texts `menu`'s rows show, opened now.
+fn shortcut_texts(menu: &MenuPopover) -> Vec<String> {
+    let labels = descendants::<gtk::Label>(&menu.row_list());
+    labels
+        .into_iter()
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// Windows 11's "…", View and View > Show show no shortcut text beside
+/// their items, so neither do the app's; the keys still work and the
+/// keyboard shortcuts window lists them (CMD-032).
+///
+/// parity: CMD-007, CMD-006, CMD-016
+#[gtk::test]
+fn the_more_view_and_show_menus_show_no_shortcut_text_as_in_windows() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.activate("new-folder", None);
+    super::file_ops_support::name_editor(&test).emit_activate();
+    wait_until("the name to be kept", || {
+        !super::file_ops_support::is_renaming_in_place(&test)
+    });
+    wait_until("… to offer Undo", || {
+        menu_of(&test, "More options")
+            .row_labels()
+            .contains(&"Undo".to_owned())
+    });
+    for page in [None, Some(Page::ThisPc)] {
+        if let Some(page) = page {
+            test.window.navigate(page.uri()).expect("a page");
+        }
+        let more = menu_of(&test, "More options");
+        assert_eq!(shortcut_texts(&more), Vec::<String>::new(), "{page:?}");
+    }
+    let view = menu_of(&test, "View");
+    view.popup();
+    wait_until("the View menu", || view.is_visible());
+    assert_eq!(shortcut_texts(&view), Vec::<String>::new());
+    view.click_row("Show");
+    assert_eq!(shortcut_texts(&view), Vec::<String>::new());
+    view.popdown();
 }
 
 /// "…" > Properties runs `win.properties`, which describes the selection
@@ -656,9 +700,11 @@ fn menu_marks_are_dots_for_choices_and_checks_for_toggles_beside_the_glyph() {
     view.popdown();
 }
 
-/// The glyphs of "…" and View are Windows 11's, from the bundled Fluent
-/// icons: Undo's arrow, the pin, select all and none, invert, the wrench
-/// and gear, the view sizes, the panes and Show's items.
+/// The glyphs of "…" and View are the bundled Fluent icons closest to
+/// Windows 11's: Undo's arrow, the pin, Select all's four filled squares
+/// and Invert's partly filled ones in the accent blue as Windows draws
+/// them, Select none's four outline squares, the wrench and gear, the view
+/// sizes, the panes and Show's items.
 ///
 /// parity: CMD-007, CMD-006
 #[gtk::test]
@@ -674,14 +720,29 @@ fn the_more_and_view_menus_show_windows_glyphs() {
     let more = menu_of(&test, "More options");
     for (label, glyph) in [
         ("Pin to Quick access", Icon::Pin),
-        ("Select all", Icon::SelectAllOn),
+        ("Select all", Icon::GridFilled),
         ("Select none", Icon::Grid),
-        ("Invert selection", Icon::SelectObject),
+        ("Invert selection", Icon::LayoutCellFourFocusTopLeftFilled),
         ("Properties", Icon::Wrench),
         ("Options", Icon::Settings),
     ] {
         assert_eq!(glyph_of(&more, label), glyph, "{label}");
     }
+    // Windows draws the selection glyphs in blue, and the rest plain.
+    let accented: Vec<String> = more
+        .items()
+        .into_iter()
+        .filter(|item| item.glyph_look == crate::window::menu_popover::GlyphLook::Accent)
+        .map(|item| item.label)
+        .collect();
+    assert_eq!(accented, ["Select all", "Invert selection"]);
+    more.popup();
+    wait_for_frames(&test.window, 2);
+    let blue = descendants::<gtk::Image>(&more.row("Select all"))
+        .into_iter()
+        .any(|image| image.has_css_class("accent-glyph"));
+    assert!(blue, "Select all's glyph is drawn in the accent colour");
+    more.popdown();
     let view = menu_of(&test, "View");
     for (label, glyph) in [
         ("Extra large icons", Icon::RectangleLandscape),
