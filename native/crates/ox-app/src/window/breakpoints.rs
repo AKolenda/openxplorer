@@ -211,7 +211,16 @@ impl BrowserWindow {
             (details, preview) => details.unwrap_or(false) || preview.unwrap_or(false),
         };
         let room = self.window_width().has_room_for_details();
-        self.details_pane().set_visible(switched_on && room);
+        let shown = switched_on && room;
+        // A button of the pane may hold the keyboard (its close button, say):
+        // the folder takes it before the pane hides, rather than leaving GTK
+        // to hand it to an unrelated control.
+        let on_details =
+            GtkWindowExt::focus(self).is_some_and(|focus| focus.is_ancestor(self.details_pane()));
+        if !shown && on_details {
+            self.folder_pane().focus_view();
+        }
+        self.details_pane().set_visible(shown);
     }
 
     /// Opens the pane at the right as `mode` says, closing the other kind,

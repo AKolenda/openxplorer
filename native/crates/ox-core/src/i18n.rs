@@ -153,6 +153,41 @@ pub fn install(domain: &str) -> bool {
     INSTALLED.set(catalog).is_ok()
 }
 
+/// [`install`] for a program that runs with more rights than the user
+/// whose environment chose `languages` (the administrator's deletion
+/// helper): the catalogue is read only from the system's own
+/// `/usr/share/locale`, never from a data folder the environment names,
+/// and a language name that could step out of that folder is skipped.
+/// Returns whether a catalogue was found.
+pub fn install_system(domain: &str, languages: &[String]) -> bool {
+    let languages: Vec<String> = languages
+        .iter()
+        .filter(|language| is_plain_name(language))
+        .cloned()
+        .collect();
+    if !is_plain_name(domain) {
+        return false;
+    }
+    let Some(catalog) = Catalog::find(domain, &[PathBuf::from(SYSTEM_LOCALE_DIR)], &languages) else {
+        return false;
+    };
+    INSTALLED.set(catalog).is_ok()
+}
+
+/// The locale folder every package installs its catalogues in.
+const SYSTEM_LOCALE_DIR: &str = "/usr/share/locale";
+
+/// Whether `name` is a language or domain name that names one folder or
+/// file and nothing else: letters, digits, `_`, `-`, `.` and `@`, not
+/// starting with a dot.
+pub(crate) fn is_plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('.')
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'@'))
+}
+
 /// The translation of `msgid` in the interface's language.
 pub fn gettext(msgid: &str) -> String {
     INSTALLED

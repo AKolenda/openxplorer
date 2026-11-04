@@ -182,6 +182,10 @@ pub(crate) struct BrowserWindow {
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
+    /// The input method of the view that last had the keyboard, so a dead key
+    /// or an IME commit typed on the window's chrome composes as it does in
+    /// the view itself; see [`super::input`].
+    pub(super) typeahead_input: RefCell<Option<gtk::IMMulticontext>>,
     /// The column Up and Down keep to in the icon grid, across rows of
     /// different lengths; see [`super::grid_keys`].
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,

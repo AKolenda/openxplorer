@@ -65,3 +65,13 @@ esac
 
 useradd --create-home builder
 chown -R builder: .
+
+# A folder for the fixtures of the tests about which symbolic links an
+# administrator deletion may follow. They need one whose whole path from
+# / is on the root mount and writable by nobody but its owner, and the
+# checkout cannot be it: GitHub mounts it from the host at /__w, so it
+# is on another device and rule 2 refuses every link in it. This one is
+# on the container's own filesystem. run-checks.sh points
+# OX_TEST_TRUSTED_BASE at it.
+chmod 0755 /home/builder
+install -d -m 0755 -o builder -g builder /home/builder/ox-fixtures
