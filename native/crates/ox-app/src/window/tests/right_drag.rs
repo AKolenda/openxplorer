@@ -7,6 +7,7 @@
 use std::time::Duration;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button, Pointer};
@@ -127,8 +128,12 @@ fn pin_new_folder(test: &TestWindow, fixture: &Fixture, name: &str) -> std::path
     fixture.path(name)
 }
 
-/// Shows the fixture's folder again, laid out.
+/// Shows the fixture's folder again, laid out, once any operation ended:
+/// no drop is taken while one runs.
 fn back_to(test: &TestWindow, fixture: &Fixture) {
+    wait_until("the operation to end", || {
+        test.window.imp().file_operations.borrow().is_idle()
+    });
     test.window.navigate(&fixture.uri()).expect("a folder");
     test.wait_for_listing("the fixture");
     crate::test_support::harness::wait_for_frames(&test.window, 3);

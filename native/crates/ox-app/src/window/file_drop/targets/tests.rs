@@ -197,6 +197,11 @@ fn a_drop_on_a_pinned_folder_goes_into_it_and_between_pins_pins() {
         .window
         .complete_drop(&[source.uri_of("Notes 2.txt")], on_pin, DropAction::Copy);
     wait_until("the copy", || fixture.path("Drop shelf/Notes 2.txt").is_file());
+    // A drop waits for the copy to end, as every drop does while an
+    // operation runs.
+    wait_until("the copy to end", || {
+        test.window.imp().file_operations.borrow().is_idle()
+    });
     std::fs::create_dir(fixture.path("Pinned between")).expect("fixture subfolder");
     let pinned = test.window.complete_drop(
         &[fixture.uri_of("Pinned between")],
