@@ -374,6 +374,13 @@ impl BrowserWindow {
         context_menu_of(&self.folder_pane().input_widget()).expect("every view has a context menu")
     }
 
+    /// Opens the submenu labelled `label` of the open context menu, for
+    /// the snapshot hook's `submenu=` step; false when there is none.
+    pub(crate) fn open_context_submenu(&self, label: &str) -> bool {
+        context_menu_of(&self.folder_pane().input_widget())
+            .is_some_and(|menu| menu.is_visible() && menu.open_submenu_labelled(label))
+    }
+
     /// Opens the context menu as a right-click at the item at `position`,
     /// or on blank space below the items without one, for tests: the
     /// selection changes as [`Self::select_for_context_menu`] decides.

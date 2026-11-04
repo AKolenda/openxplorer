@@ -13,6 +13,8 @@
 //!   `context-menu`, `properties` or `details-pane`;
 //! - `action=<name>:<target>`: runs it with a string target, such as
 //!   `open-tab-background:/home/demo/Documents`;
+//! - `submenu=<label>`: opens the submenu of the open context menu's
+//!   item `<label>`, such as `Send to`, as Right on its row does;
 //! - `wait=<milliseconds>`: lets work the app does in the background, such
 //!   as building the search cache, finish first (at most ten seconds).
 //!
@@ -42,6 +44,8 @@ pub(crate) enum SceneStep {
         /// Its string target, if it takes one.
         target: Option<String>,
     },
+    /// Open the submenu of the open context menu's item with this label.
+    Submenu(String),
     /// Wait this long before the next step.
     Wait(Duration),
 }
@@ -67,6 +71,7 @@ impl SceneStep {
         }
         match verb.trim() {
             "select" => Some(Self::Select(argument.to_owned())),
+            "submenu" => Some(Self::Submenu(argument.to_owned())),
             "action" => {
                 let (name, target) = match argument.split_once(':') {
                     Some((name, target)) => (name, Some(target.to_owned())),
@@ -99,6 +104,10 @@ impl SceneStep {
                     .map(|()| Duration::ZERO)
                     .map_err(|_| format!("the window has no action “{name}”"))
             }
+            Self::Submenu(label) => window
+                .open_context_submenu(label)
+                .then_some(Duration::ZERO)
+                .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
             Self::Wait(pause) => Ok(*pause),
         }
     }
@@ -111,7 +120,7 @@ mod tests {
     #[test]
     fn a_scene_lists_selections_and_actions_in_order() {
         let scene = SceneStep::parse_scene(
-            "select=Notes.md; action=context-menu;action=open-tab:/home/demo;wait=250",
+            "select=Notes.md; action=context-menu;submenu=Send to;action=open-tab:/home/demo;wait=250",
         )
         .expect("a valid scene");
         assert_eq!(
@@ -122,6 +131,7 @@ mod tests {
                     name: "context-menu".to_owned(),
                     target: None
                 },
+                SceneStep::Submenu("Send to".to_owned()),
                 SceneStep::Action {
                     name: "open-tab".to_owned(),
                     target: Some("/home/demo".to_owned())

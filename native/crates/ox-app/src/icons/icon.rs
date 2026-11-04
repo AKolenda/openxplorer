@@ -121,7 +121,7 @@ pub(crate) enum Icon {
     /// `document_add_20_regular`: New file.
     DocumentAdd,
     /// `document_20_color`: documents, PDFs, slides and unknown files at
-    /// small sizes.
+    /// small sizes, and Send to ▸ Documents.
     DocumentColor20,
     /// `document_32_color`: the same at medium sizes.
     DocumentColor32,
@@ -177,8 +177,8 @@ pub(crate) enum Icon {
     Laptop,
     /// `link_20_regular`: Copy as path in the context menus.
     Link,
-    /// `mail_20_regular`: Send to ▸ Mail recipient.
-    Mail,
+    /// `mail_20_color`: Send to ▸ Mail recipient, in colour as in Windows.
+    MailColor20,
     /// `markdown_20_regular`: New Markdown document.
     Markdown,
     /// `maximize_20_regular`: the window's maximise button.
@@ -329,7 +329,7 @@ impl Icon {
             Icon::Info => "ox-info-20-symbolic",
             Icon::Laptop => "ox-laptop-20-symbolic",
             Icon::Link => "ox-link-20-symbolic",
-            Icon::Mail => "ox-mail-20-symbolic",
+            Icon::MailColor20 => "ox-mail-20-color",
             Icon::Markdown => "ox-markdown-20-symbolic",
             Icon::Maximize => "ox-maximize-20-symbolic",
             Icon::MoreHorizontal => "ox-more-horizontal-20-symbolic",
@@ -454,7 +454,7 @@ pub(crate) const ALL_ICONS: [Icon; 102] = [
     Icon::Info,
     Icon::Laptop,
     Icon::Link,
-    Icon::Mail,
+    Icon::MailColor20,
     Icon::Markdown,
     Icon::Maximize,
     Icon::MoreHorizontal,

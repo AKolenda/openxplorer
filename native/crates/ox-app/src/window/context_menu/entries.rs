@@ -480,7 +480,9 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
 /// (create shortcut), Documents, Mail recipient, then each removable
 /// drive and saved network location as This PC names it. Bluetooth,
 /// Desktop, Documents and Mail recipient appear only where the computer
-/// has them; no other application adds entries.
+/// has them; no other application adds entries. Documents and Mail
+/// recipient show Fluent's colour art, as Windows shows colour glyphs;
+/// the others keep their glyphs, as Fluent has no colour art for them.
 fn send_to_item(facts: &ItemFacts) -> MenuEntry {
     let targets = &facts.send_to;
     let mut entries: Vec<MenuEntry> = Vec::new();
@@ -517,7 +519,9 @@ fn send_to_item(facts: &ItemFacts) -> MenuEntry {
         entries.push(desktop.into());
     }
     if let Some(documents) = &targets.documents {
-        let glyph = Icon::for_known_folder(ox_core::places::KnownFolder::Documents).unwrap_or(Icon::Folder);
+        // Windows draws Send to's destinations in colour; Fluent's colour
+        // document art stands for Documents.
+        let glyph = Icon::DocumentColor20;
         entries.push(
             MenuItem::with_text_target(
                 &ox_core::i18n::gettext("Documents"),
@@ -532,7 +536,7 @@ fn send_to_item(facts: &ItemFacts) -> MenuEntry {
         entries.push(
             item(
                 ox_core::i18n::gettext_static("Mail recipient"),
-                Icon::Mail,
+                Icon::MailColor20,
                 WindowAction::Share,
             )
             .into(),
@@ -1147,6 +1151,33 @@ mod tests {
         assert_eq!(disabled(&send_to.submenu), ["Media (M:)"]);
         let compact = labels(&item_menu(&facts, MenuStyle::Compact).entries);
         assert!(!compact.contains(&"Send to".to_owned()), "{compact:?}");
+    }
+
+    /// As in Windows, Documents and Mail recipient show colour glyphs:
+    /// Fluent's own colour art, which exists for these two; the others keep
+    /// their Fluent glyphs, as no colour art exists for them.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn send_to_shows_fluent_colour_art_where_it_exists() {
+        let facts = ItemFacts {
+            send_to: everything(),
+            ..file()
+        };
+        let glyphs: Vec<(String, Icon)> = items_of(&send_to_of(&facts).submenu)
+            .map(|item| (item.label.clone(), item.glyph))
+            .collect();
+
+        assert_eq!(
+            glyphs[..5],
+            [
+                ("Bluetooth device".to_owned(), Icon::Bluetooth),
+                ("Compressed (zipped) folder".to_owned(), Icon::FolderZip),
+                ("Desktop (create shortcut)".to_owned(), Icon::Desktop),
+                ("Documents".to_owned(), Icon::DocumentColor20),
+                ("Mail recipient".to_owned(), Icon::MailColor20),
+            ]
+        );
     }
 
     /// Only what the computer has is offered: without a Bluetooth sender,
