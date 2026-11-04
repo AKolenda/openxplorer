@@ -51,10 +51,11 @@ fn open_folder_action(modifiers: gdk::ModifierType) -> Option<WindowAction> {
 }
 
 /// Whether `key` starts or continues typed text: a printable character, or a
-/// dead key whose accent the input method composes with the next one.
+/// dead key or the Compose key, which the input method composes with the
+/// keys after it.
 fn is_text_key(key: gdk::Key) -> bool {
     let printable = key.to_unicode().is_some_and(|character| !character.is_control());
-    printable || key.name().is_some_and(|name| name.starts_with("dead_"))
+    printable || key == gdk::Key::Multi_key || key.name().is_some_and(|name| name.starts_with("dead_"))
 }
 
 /// Keys that only modify another key; pressing one keeps the prefix, so
@@ -205,23 +206,23 @@ impl BrowserWindow {
         if pane.page() != Some(PanePage::Listing) || pane.view_has_focus() || !is_text_key(key) {
             return glib::Propagation::Proceed;
         }
-        // The input method of the view that last had the keyboard composes
-        // first, as it does in the view itself: a dead key or an IME commit
-        // types its text through the commit handler.
-        // The context is taken out of its cell first: its commit can select
-        // and focus a row, whose focus handler replaces it.
+        // The keyboard moves into the list first, so the input method of the
+        // view shown, which its focus handler makes current, composes the
+        // key as it does in the view itself: a dead key, a Compose sequence
+        // or an IME commit types its text through the commit handler. The
+        // context is taken out of its cell, since its commit can focus a row,
+        // whose focus handler replaces it.
+        pane.focus_view();
         let input = self.imp().typeahead_input.borrow().clone();
         let composed = controller
             .current_event()
             .is_some_and(|event| input.is_some_and(|input| input.filter_keypress(&event)));
         if composed {
-            pane.focus_view();
             return glib::Propagation::Stop;
         }
         let Some(character) = key.to_unicode().filter(|character| !character.is_control()) else {
             return glib::Propagation::Proceed;
         };
-        pane.focus_view();
         self.type_text(&character.to_string());
         glib::Propagation::Stop
     }
@@ -649,7 +650,15 @@ mod tests {
     /// parity: SEL-021, SEL-029
     #[test]
     fn only_printable_and_dead_keys_become_text() {
-        for name in ["a", "A", "space", "eacute", "dead_acute", "dead_grave"] {
+        for name in [
+            "a",
+            "A",
+            "space",
+            "eacute",
+            "dead_acute",
+            "dead_grave",
+            "Multi_key",
+        ] {
             let key = gdk::Key::from_name(name).unwrap_or_else(|| panic!("{name} is a key"));
             assert!(is_text_key(key), "{name}");
         }
