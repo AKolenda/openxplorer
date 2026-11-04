@@ -37,6 +37,7 @@ class RpmMacros:
     def expand(self, line: str) -> str:
         """Return line with the macros replaced by their values."""
         values = {'%{_bindir}': '/usr/bin', '%{_datadir}': '/usr/share',
+                  '%{_libexecdir}': '/usr/libexec',
                   '%{name}': self.channel.package, '%{app_id}': self.channel.app_id}
         for macro, value in values.items():
             line = line.replace(macro, value)
@@ -118,11 +119,14 @@ class RpmFileListTests(unittest.TestCase):
         self.program.write_bytes(b'\x7fELF fake program')
         self.mount_helper = self.folder / 'openxplorer-mount-share'
         self.mount_helper.write_bytes(b'\x7fELF fake helper')
+        self.admin_delete = self.folder / 'openxplorer-admin-delete'
+        self.admin_delete.write_bytes(b'\x7fELF fake helper')
 
     def installed_files(self, channel: Channel) -> list[str]:
         """Install the channel's FHS layout and return its files as installed paths."""
         staging = self.folder / channel.name
-        request = InstallRequest(channel, Layout.FHS, self.program, staging, self.mount_helper)
+        request = InstallRequest(channel, Layout.FHS, self.program, staging, self.mount_helper,
+                                 self.admin_delete)
         package_data.install(request, [])
         return sorted('/' + path.relative_to(staging).as_posix()
                       for path in staging.rglob('*') if path.is_file() or path.is_symlink())
@@ -149,7 +153,7 @@ class RpmFileListTests(unittest.TestCase):
 
 
 class RecipeBuildTests(unittest.TestCase):
-    """Every recipe builds and installs the mount helper, and none needs Python to run."""
+    """Every recipe builds and installs both helpers, and none needs Python to run."""
 
     def test_the_recipes_build_the_mount_helper(self) -> None:
         for recipe in (SPEC, PKGBUILD):
@@ -158,6 +162,14 @@ class RecipeBuildTests(unittest.TestCase):
 
                 self.assertIn('--package ox-core --bin openxplorer-mount-share', text)
                 self.assertIn('--mount-helper', text)
+
+    def test_the_recipes_build_the_permanent_delete_helper(self) -> None:
+        for recipe in (SPEC, PKGBUILD):
+            with self.subTest(recipe=recipe.name):
+                text = recipe.read_text(encoding='utf-8')
+
+                self.assertIn('--package ox-core --bin openxplorer-admin-delete', text)
+                self.assertIn('--admin-delete', text)
 
     def test_python_is_only_a_build_tool(self) -> None:
         spec = SPEC.read_text(encoding='utf-8')

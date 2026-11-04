@@ -42,6 +42,10 @@ CARGO_PROGRAM = 'openxplorer-native'
 # The administrator's mount helper, a program of ox-core that only the stable
 # package installs.
 CARGO_MOUNT_HELPER = 'openxplorer-mount-share'
+# The administrator's permanent-delete helper, a program of ox-core that
+# both channels install in their own libexec folder, under their own polkit
+# action (native/packaging/data/admin-delete.policy.in).
+CARGO_ADMIN_DELETE = 'openxplorer-admin-delete'
 
 # The version form the 1.1.x updater accepts (version_tuple in
 # v2.0.0:desktop/updater.py): three numbers without leading zeros.
@@ -76,10 +80,11 @@ RECOMMENDS = (
     # The Email portal backend that Share uses on GNOME; KDE Plasma's own
     # portal backend has Email too.
     'xdg-desktop-portal-gtk',
+    # pkexec, which asks for the administrator before an in-app update and
+    # before the permanent-delete helper deletes a folder under admin://.
+    'pkexec',
 )
 STABLE_RECOMMENDS = (
-    # The administrator prompt of in-app updates.
-    'pkexec',
     # mount.cifs, which the persistent SMB mount helper's units run.
     'cifs-utils',
 )
@@ -122,6 +127,9 @@ class Programs:
     # The mount helper (openxplorer-mount-share), which only the stable
     # package installs.
     mount_helper: Path | None
+    # The permanent-delete helper (openxplorer-admin-delete), which both
+    # channels install.
+    admin_delete: Path | None
 
 
 @dataclass(frozen=True)
@@ -190,6 +198,7 @@ def build_programs(channel: Channel) -> Programs:
     command = ['cargo', 'build', '--release', '--locked', '--manifest-path', str(CARGO_MANIFEST),
                '--package', 'ox-app', '--bin', CARGO_PROGRAM,
                '--package', 'ox-core', '--bin', CARGO_MOUNT_HELPER,
+               '--package', 'ox-core', '--bin', CARGO_ADMIN_DELETE,
                '--message-format=json-render-diagnostics']
     environment = dict(os.environ, OX_APP_ID=channel.app_id)
     # Cargo's progress and errors go to the terminal; its JSON messages name
@@ -202,10 +211,11 @@ def build_programs(channel: Channel) -> Programs:
         message = json.loads(line)
         if message.get('reason') == 'compiler-artifact' and message.get('executable'):
             executables[message['target']['name']] = Path(message['executable'])
-    for name in (CARGO_PROGRAM, CARGO_MOUNT_HELPER):
+    for name in (CARGO_PROGRAM, CARGO_MOUNT_HELPER, CARGO_ADMIN_DELETE):
         if name not in executables:
             raise BuildError(f'cargo build did not report the {name} executable.')
-    return Programs(executables[CARGO_PROGRAM], executables[CARGO_MOUNT_HELPER])
+    return Programs(executables[CARGO_PROGRAM], executables[CARGO_MOUNT_HELPER],
+                    executables[CARGO_ADMIN_DELETE])
 
 
 def shared_library_depends(program: Path) -> list[str]:
@@ -360,7 +370,7 @@ def build(request: DebianBuild) -> Path:
     with tempfile.TemporaryDirectory(prefix='openxplorer-deb-') as temporary:
         stage = Path(temporary) / 'root'
         install_request = InstallRequest(request.channel, Layout.DEBIAN, programs.app, stage,
-                                         programs.mount_helper)
+                                         programs.mount_helper, programs.admin_delete)
         package_data.install(install_request, package_data.linked_crates())
         install_debian_files(stage, request.channel)
         stage_control(stage, request.channel, identity, architecture)
@@ -406,6 +416,9 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument('--mount-helper', type=Path,
                         help='with --program: the openxplorer-mount-share executable, which '
                              'the stable package installs')
+    parser.add_argument('--admin-delete', type=Path,
+                        help='with --program: the openxplorer-admin-delete executable, which '
+                             'both channels install')
     parser.add_argument('--output-directory', type=Path, default=OUTPUT_DIRECTORY,
                         help='where to write the .deb (default: dist/native)')
     return parser.parse_args(argv)
@@ -421,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     programs = None
     if arguments.program is not None:
-        programs = Programs(arguments.program, arguments.mount_helper)
+        programs = Programs(arguments.program, arguments.mount_helper, arguments.admin_delete)
     request = DebianBuild(Channel(arguments.app_id), programs, arguments.output_directory)
     try:
         print(build(request))

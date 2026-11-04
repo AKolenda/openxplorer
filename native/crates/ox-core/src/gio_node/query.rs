@@ -137,7 +137,7 @@ pub(super) fn enumerate_kinds(
 
 /// Every item in `folder` with `attributes`, without following links. The
 /// listing is closed on success, cancellation and error alike.
-pub(super) fn enumerate(
+fn enumerate(
     folder: &gio::File,
     attributes: &str,
     cancel: Option<&Cancellation>,

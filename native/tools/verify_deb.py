@@ -89,9 +89,10 @@ def check_dependencies(report: Report, fields: dict[str, str], channel: Channel)
     report.check("Share's Email portal backend is recommended",
                  'xdg-desktop-portal-gtk' in recommends
                  and 'xdg-desktop-portal-gtk' not in depends)
+    report.check('pkexec, which updates and admin:// deletions ask for, is recommended',
+                 'pkexec' in recommends)
     if channel is Channel.STABLE:
-        report.check('Updates and the mount helper have their programs recommended',
-                     all(name in recommends for name in ('pkexec', 'cifs-utils')))
+        report.check('The mount helper has its program recommended', 'cifs-utils' in recommends)
     report.check('Python is neither required nor recommended',
                  not any(name.strip().startswith('python')
                          for field in (depends, recommends)

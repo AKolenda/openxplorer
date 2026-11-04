@@ -59,6 +59,8 @@ never takes over the Python app's name. Every package build sets it.
 | Portal backend file | `/usr/share/xdg-desktop-portal/portals/<id>.portal` | same | none |
 | Licences | `/usr/share/doc/<command>/` | `/usr/share/licenses/<command>/` | `/app/share/licenses/<id>/` |
 | Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
+| Permanent-delete helper | `/opt/<command>/libexec/openxplorer-admin-delete` | `/usr/libexec/<command>/openxplorer-admin-delete` | none |
+| Its polkit action | `/usr/share/polkit-1/actions/<id>.policy` | same | none |
 | Translations | `/usr/share/locale/<lang>/LC_MESSAGES/<package>.mo` | same | under `/app/share` |
 
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
@@ -82,6 +84,21 @@ never takes over the Python app's name. Every package build sets it.
   commands. The mount assistant in a folder's Location tab prints
   `sudo /usr/bin/openxplorer-mount-share …` for the administrator to run; the
   app never runs it. No package ships Python.
+- **Permanent-delete helper.** `openxplorer-admin-delete`
+  (`crates/ox-core/src/bin/openxplorer-admin-delete.rs`) deletes one whole
+  folder under `admin://`, with the rights `pkexec` starts it with. Both
+  channels install it, each at its own path and under its own polkit action
+  ID (`<id>.admin-delete`), so authenticating for one of them never lets the
+  other's helper run. It is not a command: it lives in `libexec`, with no
+  link on `PATH`, because only the app starts it and the app finds it beside
+  itself (`helper_path` in `crates/ox-core/src/admin_delete/elevation.rs`).
+  The action's `allow_active` is `auth_admin_keep`, so an administrator
+  authenticates once and can then delete several folders without a prompt
+  for each; an inactive or remote session authenticates every time.
+  A Flatpak installs neither the helper nor the action: it has no host
+  `pkexec` to start one with, so the app refuses a whole-folder `admin://`
+  deletion there and says why, rather than falling back to the walk by path
+  that `crates/ox-core/src/admin_delete.rs` exists to replace.
 - **Translations.** One compiled catalogue for each `native/po/<lang>.po`,
   written by `tools/i18n.py` without GNU gettext; the app looks for it in the
   `locale` folder of every XDG data directory (`crates/ox-core/src/i18n.rs`).
@@ -168,7 +185,7 @@ explains a missing one when that feature is used:
 | Open in Terminal | `gnome-terminal \| x-terminal-emulator` | (every desktop has one) | (every desktop has one) | (every desktop has one) |
 | Open in archive manager | `file-roller` | `file-roller` | `file-roller` | `file-roller` |
 | Share on GNOME (the Email portal; KDE Plasma's portal has its own) | `xdg-desktop-portal-gtk` | `xdg-desktop-portal-gtk` | `xdg-desktop-portal-gtk` | `xdg-desktop-portal-gtk` |
-| In-app updates (stable `.deb` only) | `pkexec` | | | |
+| In-app updates, and deleting a whole folder as administrator | `pkexec` | `polkit` | `polkit` | `polkit` |
 | Persistent SMB mount helper (stable only) | `cifs-utils` | `cifs-utils` | `cifs-utils` | `cifs-utils` |
 
 **Not dependencies.** The Python package depended on Python, PyGObject,

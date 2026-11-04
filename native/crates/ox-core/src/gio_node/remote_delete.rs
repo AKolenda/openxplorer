@@ -46,47 +46,13 @@ pub(super) fn delete_tree(
     cancel: &Cancellation,
     guard: Option<&WriteGuard>,
 ) -> Result<(), TransferError> {
-    RemoteDeletion {
-        cancel,
-        guard,
-        folders: None,
-    }
-    .delete(file, kind, 0)
-}
-
-/// What a walk asks about each folder, after the guard and before it lists
-/// the folder's items: `attributes` are read along with `standard::type`,
-/// and `check` gets them with the folder's nesting depth.
-pub(super) struct FolderCheck<'a> {
-    pub(super) attributes: &'a str,
-    pub(super) check: &'a dyn Fn(&gio::File, &gio::FileInfo, usize) -> Result<(), TransferError>,
-}
-
-/// [`delete_tree`] for the folder `file`, with `folders` asked about it and
-/// about every folder inside it before it is entered.
-///
-/// # Errors
-///
-/// As [`delete_tree`], and the first refusal of `folders`.
-pub(super) fn delete_checked_tree(
-    file: &gio::File,
-    cancel: &Cancellation,
-    guard: Option<&WriteGuard>,
-    folders: &FolderCheck<'_>,
-) -> Result<(), TransferError> {
-    RemoteDeletion {
-        cancel,
-        guard,
-        folders: Some(folders),
-    }
-    .delete(file, Some(NodeKind::Directory), 0)
+    RemoteDeletion { cancel, guard }.delete(file, kind, 0)
 }
 
 /// One user-confirmed permanent deletion.
 struct RemoteDeletion<'a> {
     cancel: &'a Cancellation,
     guard: Option<&'a WriteGuard>,
-    folders: Option<&'a FolderCheck<'a>>,
 }
 
 impl RemoteDeletion<'_> {
@@ -107,7 +73,7 @@ impl RemoteDeletion<'_> {
             Some(kind) if kind != NodeKind::Directory => kind,
             // A folder is asked about again after the guard: a link that
             // took its place since it was listed is deleted as a link.
-            _ => self.kind(file, depth)?,
+            _ => self.kind(file)?,
         };
         // Only a real folder is entered: a link is deleted as a link.
         if kind == NodeKind::Directory {
@@ -120,23 +86,14 @@ impl RemoteDeletion<'_> {
         Ok(())
     }
 
-    /// What `file` is, never what a link to it points at. A folder is
-    /// also put to the walk's folder check, if it has one.
-    fn kind(&self, file: &gio::File, depth: usize) -> Result<NodeKind, TransferError> {
-        let attributes = match self.folders {
-            Some(folders) => format!("standard::type,{}", folders.attributes),
-            None => "standard::type".to_owned(),
-        };
+    /// What `file` is, never what a link to it points at.
+    fn kind(&self, file: &gio::File) -> Result<NodeKind, TransferError> {
         let info = file.query_info(
-            &attributes,
+            "standard::type",
             gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
             Some(self.cancel.cancellable()),
         )?;
-        let kind = node_kind(info.file_type());
-        if let (NodeKind::Directory, Some(folders)) = (kind, self.folders) {
-            (folders.check)(file, &info, depth)?;
-        }
-        Ok(kind)
+        Ok(node_kind(info.file_type()))
     }
 }
 
@@ -263,6 +220,47 @@ mod tests {
 
         assert_eq!(result, Err(TransferError::failed("Protected snapshot.")));
         assert_eq!(fs::read(protected.join("version")).expect("read"), b"backup");
+    }
+
+    /// The walk by path can be redirected: a folder it has already
+    /// inspected and swapped for a symbolic link before the walk reaches
+    /// the items inside it sends the next step through that link, and the
+    /// item deleted is the link target’s, not the one that was there.
+    ///
+    /// This is the limit the module header describes. It is accepted for a
+    /// remote backend, which resolves its own paths on the server, and it
+    /// is why `admin://` folders are not deleted this way:
+    /// `admin_delete::tests::a_folder_swapped_for_a_link_during_the_walk_is_not_followed`
+    /// is the same race against the walk that replaced it.
+    ///
+    /// parity: XFER-015
+    #[test]
+    fn a_folder_swapped_for_a_link_during_the_walk_is_followed() {
+        let root = temporary_folder();
+        let outside = root.path().join("outside");
+        fs::create_dir(&outside).expect("create the tree outside");
+        fs::write(outside.join("bait"), b"not yours").expect("write its item");
+        let selected = root.path().join("selected");
+        let inner = selected.join("inner");
+        fs::create_dir_all(&inner).expect("create the selected tree");
+        fs::write(inner.join("bait"), b"mine").expect("write its item");
+        let (swapped, target) = (inner.clone(), outside.clone());
+        let swap = move |uri: &str| {
+            if uri.ends_with("/inner/bait") {
+                fs::remove_dir_all(&swapped).expect("the folder is removed");
+                symlink(&target, &swapped).expect("the link replaces it");
+            }
+            Ok(())
+        };
+
+        let result = delete(&selected, &Cancellation::new(), Some(&swap));
+
+        assert_eq!(result, Ok(()));
+        assert!(
+            !outside.join("bait").exists(),
+            "the walk by path no longer follows the swap; the comparison with \
+             admin_delete needs rewriting"
+        );
     }
 
     /// parity: XFER-015
