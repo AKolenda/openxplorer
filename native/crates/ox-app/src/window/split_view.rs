@@ -193,6 +193,12 @@ impl BrowserWindow {
         let side = self.active_side();
         self.split_tab(None)?;
         self.activate_pane(side);
+        // The new pane shows the request's location too, so it leaves a
+        // share unmounted until the user asks, as the request's pane does.
+        let beside = self.imp().session.borrow().beside_active();
+        if let Some(id) = beside {
+            self.wait_to_mount(id);
+        }
         Ok(())
     }
 

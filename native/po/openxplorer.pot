@@ -6634,6 +6634,11 @@ msgid "Other users can change {path}, or it is on a drive whose permissions can'
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/admin_delete.rs
+msgid "{path} is on a removable drive or in a place where other users can mount drives, so this folder can't be safely deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/gio_node/local_delete.rs
 msgid "A drive or share is mounted at {path}, inside the item being deleted. Nothing was deleted. Unmount it first."
 msgstr ""
@@ -8590,6 +8595,10 @@ msgid "Copies, drags and new folders work as in Windows Explorer: a copy is name
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Deleting a folder permanently under Open as administrator is now also refused on drives an ordinary user can mount or plug in: drives that /etc/fstab lets users mount, drives a user mounted, and removable, USB, SD card, FireWire, Thunderbolt and loop devices."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "File Manager"
 msgstr ""
 
@@ -8623,6 +8632,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "Preview build of OpenXplorer 2.0.2 under its own application ID."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Running copies, moves and deletes show in a Windows-style progress window, and Properties is redone as Windows 11's Properties windows. Several selected items can be renamed at once, a new text document is created at once and renamed in place, tabs drag as in Chrome, and the menus and defaults match Windows 11 Explorer. A slow location shows at once that it is opening, search is faster and more reliable, and Copy as path quotes each path. Deleting a folder permanently under Open as administrator is refused when other accounts can change it, and a share another app asks OpenXplorer to show is connected to only when you choose Try again."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
