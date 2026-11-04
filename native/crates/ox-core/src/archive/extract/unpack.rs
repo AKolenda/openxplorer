@@ -10,14 +10,13 @@ use super::limits::WrittenBytes;
 use super::plan::{ExtractionPlan, ExtractionSummary, PathKind, PlannedMember};
 use super::staging::ExtractionStaging;
 use super::ZipExtractor;
+use crate::archive::progress::JobProgress;
 use crate::archive::source::OpenedArchive;
 use crate::archive::ArchiveError;
 use crate::transfer::{Cancellation, Node};
 
 /// The size of the blocks data is copied in (64 KiB).
 const BLOCK_BYTES: usize = 64 * 1024;
-/// The fraction the progress bar stops at until the folder is published.
-const LAST_FRACTION_BEFORE_PUBLISHING: f64 = 0.99;
 
 /// An archive being read for extraction.
 pub(super) type SourceArchive = OpenedArchive;
@@ -106,7 +105,7 @@ impl<'a> Unpacking<'a> {
             if accepted != count {
                 return Err(ArchiveError::IncompleteWrite);
             }
-            self.report_file(&name);
+            self.report_file(&name, (self.written.member, declared_size));
         }
         output.close()?;
         // ARC-017: a member that ends early is damaged or forged.
@@ -117,19 +116,26 @@ impl<'a> Unpacking<'a> {
         Ok(())
     }
 
-    /// Reports the file being extracted and the share of bytes written.
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "a progress bar needs far less precision than f64 keeps"
-    )]
-    fn report_file(&mut self, name: &str) {
+    /// Reports the file being extracted, `written` bytes into its
+    /// `size`, with the bytes and files of the whole extraction (OPS-021),
+    /// as a copy reports them.
+    fn report_file(&mut self, name: &str, (written, size): (u64, u64)) {
         let file_number = self.files_done + 1;
         let file_count = self.summary.file_count;
         let label = format!("Extracting {name} · {file_number}/{file_count} files");
-        let share = self.written.total as f64 / self.summary.unpacked_bytes.max(1) as f64;
-        self.extractor
-            .report(label, share.min(LAST_FRACTION_BEFORE_PUBLISHING));
+        let job = JobProgress {
+            bytes_done: self.written.total,
+            bytes_total: self.summary.unpacked_bytes,
+            files_done: count(self.files_done),
+            files_total: count(file_count),
+        };
+        self.extractor.emit(job.file_report(label, name, (written, size)));
     }
+}
+
+/// `files` as a progress count.
+pub(super) fn count(files: usize) -> u64 {
+    u64::try_from(files).unwrap_or(u64::MAX)
 }
 
 /// The folders created in the staging folder so far, by path.

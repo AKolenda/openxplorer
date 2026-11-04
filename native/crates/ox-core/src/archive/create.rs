@@ -6,12 +6,18 @@
 //! rules mirror the extractor's:
 //!
 //! - The new ZIP never replaces anything: a taken name stops before
-//!   anything is written, and the finished archive is published by a
-//!   rename that never replaces an item another program created meanwhile
-//!   ([`Node::publish`]).
-//! - It is written under a hidden, random staging name and removed on any
-//!   failure or cancellation, so no half-written ZIP is left under the
-//!   final name.
+//!   anything is written, and the file is created only where no item has
+//!   the name, so one another program created meanwhile keeps it.
+//! - In a local folder it is created under its final name at once and
+//!   grows there, as Explorer writes it; a failure or cancellation removes
+//!   it, but only while the name still leads to the file it created (its
+//!   device and inode), so another program's item is never removed.
+//! - On shares and devices, whose items have no identity to check, it is
+//!   written under a hidden, random staging name instead, removed on any
+//!   failure or cancellation and published by a rename that never
+//!   replaces anything ([`Node::publish`]).
+//! - Progress is reported in bytes, files and the file's name, as a copy
+//!   reports it, so the progress window moves through one large file.
 //! - Links are never followed and special files never opened; both are
 //!   left out and counted. Sources are only read.
 //! - The write guard is asked about the destination folder and the new
@@ -36,6 +42,7 @@ use std::io::Read;
 use gio::prelude::*;
 use rustix::fs::OFlags;
 
+use super::progress::JobProgress;
 use super::worker::on_worker;
 use super::ArchiveError;
 use crate::gio_node::GioNode;
@@ -43,8 +50,8 @@ use crate::location::{is_smb_server, normalise, validate_name};
 use crate::private_storage::KernelOpenFlags;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{
-    already_removed, Cancellation, Node, NodeKind, Progress, ProgressScope, StagedName, TransferError,
-    WriteGuard,
+    already_removed, Cancellation, ItemIdentity, Node, NodeKind, Progress, ProgressScope, StagedName,
+    TransferError, WriteGuard,
 };
 use tar_writer::TarXzWriter;
 use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
@@ -104,6 +111,15 @@ struct CompressionPlan {
     entries: Vec<PlannedEntry>,
     skipped_count: usize,
     total_bytes: u64,
+}
+
+impl CompressionPlan {
+    /// The files to compress, for the items remaining; folders are not
+    /// counted, as a copy counts only files.
+    fn file_count(&self) -> u64 {
+        let files = self.entries.iter().filter(|entry| entry.source.is_some()).count();
+        u64::try_from(files).unwrap_or(u64::MAX)
+    }
 }
 
 /// The checked destination of a compression.
@@ -187,11 +203,73 @@ impl ZipCompressor {
         let destination = self.prepare_destination(&destination_uri, &name, cancel)?;
         self.report(format!("Preparing {name}…"), 0.0);
         let plan = plan(&request.uris, cancel)?;
+        if is_local(destination.archive.as_ref()) {
+            self.compress_in_place(&plan, destination.archive.as_ref(), &name, cancel)?;
+        } else {
+            self.compress_staged(&plan, &destination, &name, cancel)?;
+        }
+        let finished = JobProgress {
+            files_total: plan.file_count(),
+            ..JobProgress::default()
+        };
+        (self.emit)(finished.finished_report(format!("Compressed {name}")));
+        Ok(CreatedArchive {
+            uri: destination.archive.uri(),
+            name,
+            item_count: plan.entries.len(),
+            skipped_count: plan.skipped_count,
+        })
+    }
+
+    /// Writes the new archive under its final name, as Explorer does: it
+    /// is created there at once, never over an existing item, and grows
+    /// until it is finished. A failure or cancellation removes it again,
+    /// unless another item has taken its name meanwhile, which is left
+    /// alone. Only for local folders, where the created file's identity
+    /// confirms that the name still leads to it before it is removed.
+    fn compress_in_place(
+        &mut self,
+        plan: &CompressionPlan,
+        archive: &dyn Node,
+        name: &str,
+        cancel: &Cancellation,
+    ) -> Result<(), ArchiveError> {
+        // Safety rule ARC-023: created new, so an item another program
+        // created under the name since the check keeps it.
+        let output = match gio::File::for_uri(&archive.uri())
+            .create(gio::FileCreateFlags::NONE, Some(cancel.cancellable()))
+        {
+            Ok(output) => output,
+            Err(error) if error.matches(gio::IOErrorEnum::Exists) => return Err(ArchiveError::ArchiveExists),
+            Err(error) => return Err(ArchiveError::from(error).unless_cancelled(cancel)),
+        };
+        let created = created_identity(&output);
+        if let Err(error) = self.write_archive(plan, &output, is_tar_xz(name), cancel) {
+            return Err(discard_created(archive, created, error.unless_cancelled(cancel)));
+        }
+        Ok(())
+    }
+
+    /// Writes the new archive under a hidden, random staging name and
+    /// publishes it by a rename that never replaces anything. For shares
+    /// and devices, whose items have no identity to check before a partial
+    /// archive under its final name is removed.
+    fn compress_staged(
+        &mut self,
+        plan: &CompressionPlan,
+        destination: &Destination,
+        name: &str,
+        cancel: &Cancellation,
+    ) -> Result<(), ArchiveError> {
         let stage_name = staging_name()?;
         // An error names the new archive, never its staging.
-        let staged = StagedName::new(&stage_name, &[], &name);
+        let staged = StagedName::new(&stage_name, &[], name);
         let staging = destination.folder.child(OsStr::new(&stage_name));
-        if let Err(error) = self.write_archive(&plan, staging.as_ref(), is_tar_xz(&name), cancel) {
+        let written = gio::File::for_uri(&staging.uri())
+            .create(gio::FileCreateFlags::NONE, Some(cancel.cancellable()))
+            .map_err(ArchiveError::from)
+            .and_then(|output| self.write_archive(plan, &output, is_tar_xz(name), cancel));
+        if let Err(error) = written {
             return Err(discard(
                 staging.as_ref(),
                 error.naming(&staged).unless_cancelled(cancel),
@@ -206,13 +284,7 @@ impl ZipCompressor {
             };
             return Err(discard(staging.as_ref(), cause));
         }
-        self.report(format!("Compressed {name}"), 1.0);
-        Ok(CreatedArchive {
-            uri: destination.archive.uri(),
-            name,
-            item_count: plan.entries.len(),
-            skipped_count: plan.skipped_count,
-        })
+        Ok(())
     }
 
     /// [`Self::compress`] on a GIO worker thread, for the main loop to
@@ -253,24 +325,26 @@ impl ZipCompressor {
         Ok(Destination { folder, archive })
     }
 
-    /// Writes every planned entry into a new file at `staging`: a
-    /// `.tar.xz` with `tar_xz`, else a ZIP.
+    /// Writes every planned entry into `output`, a new file: a `.tar.xz`
+    /// with `tar_xz`, else a ZIP.
     fn write_archive(
         &mut self,
         plan: &CompressionPlan,
-        staging: &dyn Node,
+        output: &gio::FileOutputStream,
         tar_xz: bool,
         cancel: &Cancellation,
     ) -> Result<(), ArchiveError> {
-        let output = gio::File::for_uri(&staging.uri())
-            .create(gio::FileCreateFlags::NONE, Some(cancel.cancellable()))?;
         let stream = output.clone().upcast::<gio::OutputStream>().into_write();
         let mut writer = if tar_xz {
             EntryWriter::TarXz(Box::new(TarXzWriter::new(stream)?))
         } else {
             EntryWriter::Zip(ZipWriter::new(stream))
         };
-        let mut done_bytes = 0u64;
+        let mut job = JobProgress {
+            bytes_total: plan.total_bytes,
+            files_total: plan.file_count(),
+            ..JobProgress::default()
+        };
         for (index, entry) in plan.entries.iter().enumerate() {
             cancel.check()?;
             let label = format!(
@@ -279,14 +353,29 @@ impl ZipCompressor {
                 index + 1,
                 plan.entries.len()
             );
-            self.report(label, fraction(done_bytes, plan.total_bytes));
             let Some(source) = &entry.source else {
+                self.report(label, fraction(job.bytes_done, plan.total_bytes));
                 writer.add_folder(entry)?;
                 continue;
             };
+            // OPS-021: bytes, items and the name, block by block, as a copy
+            // reports them, so even one large file moves the bar smoothly.
+            let start = job;
+            let emit = &mut self.emit;
+            let mut report = |written: u64| {
+                // A file that grew since it was measured counts as measured.
+                let written = written.min(entry.size);
+                let current = JobProgress {
+                    bytes_done: start.bytes_done + written,
+                    ..start
+                };
+                emit(current.file_report(label.clone(), &entry.name, (written, entry.size)));
+            };
+            report(0);
             let mut content = open_source(source, cancel)?;
-            writer.add_file(entry, &mut content, cancel)?;
-            done_bytes += entry.size;
+            writer.add_file(entry, &mut content, cancel, &mut report)?;
+            job.bytes_done += entry.size;
+            job.files_done += 1;
         }
         writer.finish()?;
         // Closed without the cancellable, so the file is flushed and
@@ -480,11 +569,12 @@ impl<W: std::io::Write> EntryWriter<W> {
         entry: &PlannedEntry,
         content: &mut dyn std::io::Read,
         cancel: &Cancellation,
+        progress: &mut dyn FnMut(u64),
     ) -> Result<(), ArchiveError> {
         match self {
             Self::Zip(writer) => {
                 let modified = DosTime::from_unix_seconds(entry.modified);
-                writer.add_file(&entry.name, modified, content, cancel, &mut |_| {})
+                writer.add_file(&entry.name, modified, content, cancel, progress)
             }
             Self::TarXz(writer) => writer.add_file(
                 &entry.name,
@@ -492,6 +582,7 @@ impl<W: std::io::Write> EntryWriter<W> {
                 entry.size,
                 content,
                 cancel,
+                progress,
             ),
         }
     }
@@ -544,6 +635,58 @@ fn discard(staging: &dyn Node, cause: ArchiveError) -> ArchiveError {
             staging_uri: staging.uri(),
             cleanup,
         },
+    }
+}
+
+/// Whether `archive` is in a local folder, where it is written in place.
+fn is_local(archive: &dyn Node) -> bool {
+    gio::File::for_uri(&archive.uri()).has_uri_scheme("file") && archive.path().is_some()
+}
+
+/// The device and inode of the file `output` writes, from the open file
+/// itself.
+fn created_identity(output: &gio::FileOutputStream) -> Option<ItemIdentity> {
+    let info = output
+        .query_info("unix::device,unix::inode", gio::Cancellable::NONE)
+        .ok()?;
+    (info.has_attribute("unix::device") && info.has_attribute("unix::inode")).then(|| ItemIdentity {
+        device: u64::from(info.attribute_uint32("unix::device")),
+        inode: info.attribute_uint64("unix::inode"),
+    })
+}
+
+/// Removes the partial archive this compression created under its final
+/// name after `cause` stopped it, and returns the error to report:
+/// `cause`, or [`ArchiveError::ArchiveLeftBehind`] with its location when
+/// it could not be removed. An item that has taken the name since, which
+/// is not the file `created` describes, is never removed.
+fn discard_created(archive: &dyn Node, created: Option<ItemIdentity>, cause: ArchiveError) -> ArchiveError {
+    let Some(created) = created else {
+        // Without the file's identity, nothing under the name is known to
+        // be ours; it is reported rather than removed.
+        let unknown = crate::i18n::gettext(
+            "The new archive could not be told apart from another item, so it was left in place.",
+        );
+        return left_behind(archive, cause, TransferError::failed(unknown));
+    };
+    match archive.info(None) {
+        Ok(info) if info.identity == Some(created) => {}
+        // Gone, or another program's item: nothing of ours to remove.
+        _ => return cause,
+    }
+    match archive.delete_staging(Some(created)) {
+        Ok(()) => cause,
+        Err(cleanup) if already_removed(archive, &cleanup) => cause,
+        Err(cleanup) => left_behind(archive, cause, cleanup),
+    }
+}
+
+/// `cause`, adding that the partial archive at `archive` remains.
+fn left_behind(archive: &dyn Node, cause: ArchiveError, cleanup: TransferError) -> ArchiveError {
+    ArchiveError::ArchiveLeftBehind {
+        cause: Box::new(cause),
+        staging_uri: archive.uri(),
+        cleanup,
     }
 }
 
