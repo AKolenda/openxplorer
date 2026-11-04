@@ -1,7 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  The OpenXplorer user manual that F1 and More options > Help open
-  (CMD-033). It is compiled into the program, so it is installed with
+  The OpenXplorer user manual that F1 opens (CMD-033). It is compiled into the program, so it is installed with
   every package and works offline. Each "## " heading starts a topic of
   the Help dialog; src/window/help.rs splits it there.
 -->
@@ -16,7 +15,7 @@ OpenXplorer shows your folders, drives, phones and network shares in one tabbed 
 - Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.
 - Type the start of a name to select it in the folder.
 
-The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
+Press Ctrl+? for the full list of keys.
 
 ## Files and folders
 
@@ -50,7 +49,7 @@ The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
 ## Network locations
 
 - Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.
-- Map network location in More options saves a share in the navigation pane.
+- Map network location at the bottom of the navigation pane saves a share there.
 - OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.
 - Right-click a share or server and choose Sign out of server to disconnect and forget a session.
 
@@ -84,8 +83,9 @@ The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
 
 ## Settings and privacy
 
-- Ctrl+, opens Settings, which has its own search box.
-- OpenXplorer uses the network only for locations you open, server discovery you start and the update check you ask for. It has no telemetry.
+- Ctrl+, or the gear in the command bar opens Settings, which has its own search box.
+- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.
+- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.
 - Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files.
 
 ## Getting help
