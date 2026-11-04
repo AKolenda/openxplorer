@@ -563,7 +563,12 @@ impl FolderPane {
                 self.parts().empty_area.grab_focus();
             }
             Some(PanePage::Landing) => {
-                if !self.parts().landing.child_focus(gtk::DirectionType::TabForward) {
+                // The Settings tab's page is empty, as Settings covers the
+                // pane: the keyboard stays in the pane, for Settings to take
+                // back what it had once it shows.
+                let landing = &self.parts().landing;
+                let focused = landing.child_focus(gtk::DirectionType::TabForward);
+                if !focused && landing.first_child().is_some() {
                     self.release_keyboard();
                 }
             }
