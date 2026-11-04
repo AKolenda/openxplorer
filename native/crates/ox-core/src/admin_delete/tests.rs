@@ -26,6 +26,7 @@
 //! `gio_node::remote_delete::tests::a_folder_swapped_for_a_link_during_the_walk_is_followed`.
 
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -382,6 +383,8 @@ fn a_snapshot_folder_inside_the_tree_is_left_in_place() {
         selected.join(".snapshot"),
         selected.join("deeper/@GMT-2026.09.05-18.00.00"),
         selected.join("pool/.zfs/snapshot"),
+        // Not UTF-8 after the prefix, which still marks a version.
+        selected.join(std::ffi::OsStr::from_bytes(b"@GMT-\xff")),
     ];
     for snapshot in &snapshots {
         fs::create_dir_all(snapshot).expect("the snapshot folder is created");
@@ -393,7 +396,7 @@ fn a_snapshot_folder_inside_the_tree_is_left_in_place() {
 
     let totals = result.expect("the walk runs");
     assert!(!totals.is_complete(), "{totals:?}");
-    assert_eq!(totals.skipped, 3);
+    assert_eq!(totals.skipped, 4);
     for snapshot in &snapshots {
         assert!(
             snapshot.join("backup.txt").exists(),

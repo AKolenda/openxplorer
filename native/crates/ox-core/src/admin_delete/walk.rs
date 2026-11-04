@@ -436,14 +436,20 @@ pub(super) fn is_the_item(expected: ItemIdentity, seen: &Stat) -> bool {
 
 /// Whether the item at `path` is a conventional snapshot folder
 /// ([`crate::versions::is_snapshot_folder_name`], or `snapshot` in a
-/// `.zfs` folder), which XFER-020 keeps from being written to.
+/// `.zfs` folder), which XFER-020 keeps from being written to. Names are
+/// decoded lossily, as the app's URI rule decodes them, so a name that is
+/// not UTF-8 still matches by its prefix.
 fn is_snapshot_folder(path: &Path) -> bool {
-    let name = path.file_name().and_then(OsStr::to_str);
-    let parent = path.parent().and_then(Path::file_name).and_then(OsStr::to_str);
-    name.is_some_and(|name| {
-        crate::versions::is_snapshot_folder_name(name)
-            || [parent.unwrap_or_default(), name] == crate::versions::ZFS_SNAPSHOT_FOLDER
-    })
+    let Some(name) = path.file_name().map(OsStr::to_string_lossy) else {
+        return false;
+    };
+    let parent = path
+        .parent()
+        .and_then(Path::file_name)
+        .map(OsStr::to_string_lossy)
+        .unwrap_or_default();
+    crate::versions::is_snapshot_folder_name(&name)
+        || [parent.as_ref(), name.as_ref()] == crate::versions::ZFS_SNAPSHOT_FOLDER
 }
 
 /// The refusal on a kernel that does not report mount IDs.
