@@ -27,6 +27,10 @@ pub(crate) enum Icon {
     /// `add_20_regular`: New, the new-tab "+", Map network location and
     /// Larger text.
     Add,
+    /// Add a network location in This PC's "…": an original icon
+    /// made for `OpenXplorer` to match Windows 11's command-bar glyph
+    /// (`native/icon-sources`).
+    AddNetworkLocation24,
     /// `apps_20_regular`: the Default apps settings.
     Apps,
     /// `arrow_autofit_height_20_regular`: View > Show > Compact view, as Windows 11 draws it.
@@ -115,9 +119,10 @@ pub(crate) enum Icon {
     /// its windows, Use system appearance, Discovered servers and Settings'
     /// Open windows….
     Desktop,
-    /// `desktop_off_20_regular`: Disconnect network drive in This PC's "…",
-    /// the closest published shape to Windows 11's crossed-out drive.
-    DesktopOff,
+    /// Disconnect network drive in This PC's "…": an original icon
+    /// made for `OpenXplorer` to match Windows 11's command-bar glyph
+    /// (`native/icon-sources`).
+    DisconnectNetworkDrive24,
     /// `dismiss_20_regular`: the window's close button and Quit
     /// `OpenXplorer`.
     Dismiss,
@@ -184,13 +189,18 @@ pub(crate) enum Icon {
     /// `info_20_regular`: About this build, the details pane's note, and the
     /// About settings and the notes of Settings.
     Info,
-    /// Invert selection in the "…" menu: an original icon contributed to the
-    /// project, drawn to match Windows 11's (`native/icon-sources`).
+    /// Invert selection in the "…" menu: an original icon
+    /// made for `OpenXplorer` to match Windows 11's command-bar glyph
+    /// (`native/icon-sources`).
     InvertSelection24,
     /// `laptop_20_regular`: This PC.
     Laptop,
     /// `link_20_regular`: Copy as path in the context menus.
     Link,
+    /// Map network drive in This PC's "…": an original icon
+    /// made for `OpenXplorer` to match Windows 11's command-bar glyph
+    /// (`native/icon-sources`).
+    MapNetworkDrive24,
     /// `markdown_20_regular`: New Markdown document.
     Markdown,
     /// `maximize_20_regular`: the window's maximise button.
@@ -201,6 +211,10 @@ pub(crate) enum Icon {
     MusicNote,
     /// `open_20_regular`: the details pane's Open and a link's Show target.
     Open,
+    /// Options in the "…" menu: an original icon
+    /// made for `OpenXplorer` to match Windows 11's command-bar glyph
+    /// (`native/icon-sources`).
+    Options24,
     /// `organization_20_regular`: Network, its page, SMB addresses, Map
     /// network location and a location that cannot be reached.
     Organization,
@@ -229,8 +243,9 @@ pub(crate) enum Icon {
     /// Select items matching, the settings search and the Search &
     /// indexing settings.
     Search,
-    /// Select all in the "…" menu: an original icon contributed to the
-    /// project, drawn to match Windows 11's (`native/icon-sources`).
+    /// Select all in the "…" menu: an original icon
+    /// made for `OpenXplorer` to match Windows 11's command-bar glyph
+    /// (`native/icon-sources`).
     SelectAll24,
     /// `select_all_off_20_regular`: Select none until "…" took Windows 11's
     /// four squares for it (2026-11-03); still bundled with the approved
@@ -242,8 +257,9 @@ pub(crate) enum Icon {
     /// set, for the owner to keep or remove.
     #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-04"))]
     SelectAllOn,
-    /// Select none in the "…" menu: an original icon contributed to the
-    /// project, drawn to match Windows 11's (`native/icon-sources`).
+    /// Select none in the "…" menu: an original icon
+    /// made for `OpenXplorer` to match Windows 11's command-bar glyph
+    /// (`native/icon-sources`).
     SelectNone24,
     /// `server_20_regular`: an SMB server on the network bar.
     Server,
@@ -255,9 +271,6 @@ pub(crate) enum Icon {
     ShieldLock,
     /// `square_multiple_20_regular`: the window's restore button.
     SquareMultiple,
-    /// `storage_20_regular`: Map network drive in This PC's "…", the closest
-    /// published shape to Windows 11's drive.
-    Storage,
     /// `subtract_20_regular`: the window's minimise button and Smaller text.
     Subtract,
     /// `table_20_regular`: New CSV file.
@@ -302,6 +315,7 @@ impl Icon {
     pub(crate) const fn name(self) -> &'static str {
         match self {
             Icon::Add => "ox-add-20-symbolic",
+            Icon::AddNetworkLocation24 => "ox-add-network-location-24-symbolic",
             Icon::Apps => "ox-apps-20-symbolic",
             Icon::ArrowAutofitHeight => "ox-arrow-autofit-height-20-symbolic",
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
@@ -336,7 +350,7 @@ impl Icon {
             Icon::Delete => "ox-delete-20-symbolic",
             Icon::DeleteDismiss => "ox-delete-dismiss-20-symbolic",
             Icon::Desktop => "ox-desktop-20-symbolic",
-            Icon::DesktopOff => "ox-desktop-off-20-symbolic",
+            Icon::DisconnectNetworkDrive24 => "ox-disconnect-network-drive-24-symbolic",
             Icon::Dismiss => "ox-dismiss-20-symbolic",
             Icon::Dismiss16 => "ox-dismiss-16-symbolic",
             Icon::DismissCircleFilled => "ox-dismiss-circle-16-filled-symbolic",
@@ -370,11 +384,13 @@ impl Icon {
             Icon::InvertSelection24 => "ox-invert-selection-24-symbolic",
             Icon::Laptop => "ox-laptop-20-symbolic",
             Icon::Link => "ox-link-20-symbolic",
+            Icon::MapNetworkDrive24 => "ox-map-network-drive-24-symbolic",
             Icon::Markdown => "ox-markdown-20-symbolic",
             Icon::Maximize => "ox-maximize-20-symbolic",
             Icon::MoreHorizontal => "ox-more-horizontal-20-symbolic",
             Icon::MusicNote => "ox-music-note-2-20-symbolic",
             Icon::Open => "ox-open-20-symbolic",
+            Icon::Options24 => "ox-options-24-symbolic",
             Icon::Organization => "ox-organization-20-symbolic",
             Icon::PaintBrush => "ox-paint-brush-20-symbolic",
             Icon::PanelLeft => "ox-panel-left-20-symbolic",
@@ -396,7 +412,6 @@ impl Icon {
             Icon::Share => "ox-share-20-symbolic",
             Icon::ShieldLock => "ox-shield-lock-20-symbolic",
             Icon::SquareMultiple => "ox-square-multiple-20-symbolic",
-            Icon::Storage => "ox-storage-20-symbolic",
             Icon::Subtract => "ox-subtract-20-symbolic",
             Icon::Table => "ox-table-20-symbolic",
             Icon::TableColor20 => "ox-table-20-color",
@@ -436,8 +451,9 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 113] = [
+pub(crate) const ALL_ICONS: [Icon; 115] = [
     Icon::Add,
+    Icon::AddNetworkLocation24,
     Icon::Apps,
     Icon::ArrowAutofitHeight,
     Icon::ArrowClockwise,
@@ -472,7 +488,7 @@ pub(crate) const ALL_ICONS: [Icon; 113] = [
     Icon::Delete,
     Icon::DeleteDismiss,
     Icon::Desktop,
-    Icon::DesktopOff,
+    Icon::DisconnectNetworkDrive24,
     Icon::Dismiss,
     Icon::Dismiss16,
     Icon::DismissCircleFilled,
@@ -506,11 +522,13 @@ pub(crate) const ALL_ICONS: [Icon; 113] = [
     Icon::InvertSelection24,
     Icon::Laptop,
     Icon::Link,
+    Icon::MapNetworkDrive24,
     Icon::Markdown,
     Icon::Maximize,
     Icon::MoreHorizontal,
     Icon::MusicNote,
     Icon::Open,
+    Icon::Options24,
     Icon::Organization,
     Icon::PaintBrush,
     Icon::PanelLeft,
@@ -532,7 +550,6 @@ pub(crate) const ALL_ICONS: [Icon; 113] = [
     Icon::Share,
     Icon::ShieldLock,
     Icon::SquareMultiple,
-    Icon::Storage,
     Icon::Subtract,
     Icon::Table,
     Icon::TableColor20,

@@ -794,7 +794,7 @@ fn the_more_and_view_menus_show_windows_glyphs() {
         ("Select none", Icon::SelectNone24),
         ("Invert selection", Icon::InvertSelection24),
         ("Properties", Icon::Wrench),
-        ("Options", Icon::Settings),
+        ("Options", Icon::Options24),
     ] {
         assert_eq!(glyph_of(&more, label), glyph, "{label}");
     }
@@ -819,12 +819,13 @@ fn the_more_and_view_menus_show_windows_glyphs() {
     let this_pc = menu_of(&test, "More options");
     assert!(
         accented(&this_pc).is_empty(),
-        "Windows colours none of This PC's glyphs"
+        "This PC's network icons carry their own blue; none is tinted"
     );
     for (label, glyph) in [
-        ("Add a network location", Icon::Desktop),
-        ("Map network drive", Icon::Storage),
-        ("Disconnect network drive", Icon::DesktopOff),
+        ("Add a network location", Icon::AddNetworkLocation24),
+        ("Map network drive", Icon::MapNetworkDrive24),
+        ("Disconnect network drive", Icon::DisconnectNetworkDrive24),
+        ("Options", Icon::Options24),
     ] {
         assert_eq!(glyph_of(&this_pc, label), glyph, "{label}");
     }

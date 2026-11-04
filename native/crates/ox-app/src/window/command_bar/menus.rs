@@ -431,7 +431,7 @@ pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     // Last, as in Windows 11's "…" menu.
     entries.push(item(
         &gettext("Options"),
-        Icon::Settings,
+        Icon::Options24,
         WindowAction::FolderOptions,
     ));
     entries
@@ -488,7 +488,7 @@ fn network_drive_commands(drives: &[NetworkDrive]) -> Vec<MenuEntry> {
     let disconnect = if drives.is_empty() {
         MenuItem::new(
             &gettext("Disconnect network drive"),
-            Icon::DesktopOff,
+            Icon::DisconnectNetworkDrive24,
             WindowAction::Disconnect,
         )
         .disabled_because(true, ox_core::i18n::gettext_static(NO_NETWORK_DRIVE))
@@ -502,21 +502,21 @@ fn network_drive_commands(drives: &[NetworkDrive]) -> Vec<MenuEntry> {
             .collect();
         MenuItem::submenu(
             &gettext("Disconnect network drive"),
-            Icon::DesktopOff,
+            Icon::DisconnectNetworkDrive24,
             WindowAction::Disconnect,
             choices,
         )
     };
-    // In Windows 11's order, with the closest published glyphs to its own.
+    // In Windows 11's order, with icons drawn to match its glyphs.
     vec![
         item(
             &gettext("Add a network location"),
-            Icon::Desktop,
+            Icon::AddNetworkLocation24,
             WindowAction::AddNetworkLocation,
         ),
         item(
             &gettext("Map network drive"),
-            Icon::Storage,
+            Icon::MapNetworkDrive24,
             WindowAction::MapNetworkLocation,
         ),
         disconnect.into(),
