@@ -21,8 +21,10 @@ These drawings are the form to edit. GTK 4.14 recolours a symbolic icon by
 its fills only, so `native/tools/expand_icon_strokes.py` writes each icon
 from its drawing with the strokes turned into the areas they paint, which
 keeps every shape and size; the grey outlines then follow the menu's text
-colour in both themes, and the Windows blue (#0078d4) stays through GTK's
-icon palette (`resources/skin/menus.css`). After changing a drawing, run
+colour in both themes, and their squares take Windows' blue through GTK's
+icon palette (`resources/skin/menus.css`): #0078d4 as drawn in the light
+theme, and Windows' lighter dark-theme accent, #60cdff, in the dark one.
+After changing a drawing, run
 
     python3 native/tools/expand_icon_strokes.py
 

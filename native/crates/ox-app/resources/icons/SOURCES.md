@@ -16,7 +16,7 @@ icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
 `checkbox_checked_20_regular` (Item check boxes),
 `panel_right_gallery_20_regular` (Preview pane) and `circle_small_20_filled`
 (the dot that marks a chosen view, sort or open pane). Undo, Redo and Pin
-are drawn in Windows' blue by the menu's CSS, and Redo shows
+are drawn in Windows' blue (#0078d4, or #60cdff in the dark theme) by the menu's CSS, and Redo shows
 `arrow_undo_20_regular` mirrored by it (`-gtk-icon-transform`), as Windows
 11 draws them; the files are not changed. Microsoft publishes no colour
 (`_color`) Fluent design of these, in 1.1.343 or in 1.1.345 (the newest on

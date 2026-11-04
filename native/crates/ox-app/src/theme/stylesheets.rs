@@ -132,6 +132,23 @@ mod tests {
         }
     }
 
+    /// The "…" menu's blue is Windows 11's: the accent blue #0078d4 in the
+    /// light theme and its dark-theme accent fill #60cdff in the dark one,
+    /// as Windows draws its command glyphs (CMD-007).
+    ///
+    /// parity: CMD-007
+    #[test]
+    fn the_command_blue_is_windows_in_each_theme() {
+        let defined = |appearance| {
+            palette(appearance)
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("@define-color ox_command_blue "))
+                .map(|value| value.trim_end_matches(';').trim().to_lowercase())
+        };
+        assert_eq!(defined(Appearance::Light).as_deref(), Some("#0078d4"));
+        assert_eq!(defined(Appearance::Dark).as_deref(), Some("#60cdff"));
+    }
+
     /// A colour written into a rule would not follow the appearance.
     #[test]
     fn the_rules_name_colours_only_by_token() {
