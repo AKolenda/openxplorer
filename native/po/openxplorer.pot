@@ -18,7 +18,7 @@ msgid "- Choose Open as administrator on a local folder’s menu, confirm, then 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+, opens Settings, which has its own search box.\n- OpenXplorer uses the network only for locations you open, server discovery you start and the update check you ask for. It has no telemetry.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own search box.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -34,7 +34,7 @@ msgid "- New in the command bar creates a folder, a document from the built-in s
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location in More options saves a share in the navigation pane.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location at the bottom of the navigation pane saves a share there.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -74,7 +74,7 @@ msgid "Getting help"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nThe full list of keys is in More options > Keyboard shortcuts (Ctrl+?)."
+msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nPress Ctrl+? for the full list of keys."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -275,10 +275,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui
 msgid "Check again"
-msgstr ""
-
-#: crates/ox-app/resources/ui/update-dialog.ui
-msgid "Install update…"
 msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui
@@ -596,7 +592,7 @@ msgstr ""
 msgid "Connect"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
 msgid "Map network location"
 msgstr ""
 
@@ -1897,7 +1893,7 @@ msgstr ""
 msgid "Set custom permissions, create multiple shares, and set other advanced sharing options."
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/settings-page.ui crates/ox-app/src/properties/sharing_panel.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/location/virtual_place.rs packaging/data/io.winspace.Development.desktop
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/settings-page.ui crates/ox-app/src/properties/sharing_panel.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/location/virtual_place.rs packaging/data/io.winspace.Development.desktop
 msgid "Settings"
 msgstr ""
 
@@ -1942,7 +1938,7 @@ msgstr ""
 msgid "Cancelling… "
 msgstr ""
 
-#: crates/ox-app/src/properties/size_scan_strip.rs
+#: crates/ox-app/src/properties/size_scan_strip.rs crates/ox-app/src/window/update_notice.rs
 msgid "Dismiss"
 msgstr ""
 
@@ -2014,7 +2010,7 @@ msgstr ""
 msgid "A long time ago"
 msgstr ""
 
-#: crates/ox-app/src/properties/version_row.rs
+#: crates/ox-app/src/properties/version_row.rs crates/ox-app/src/window/update_notice.rs
 msgid "Later"
 msgstr ""
 
@@ -2177,7 +2173,7 @@ msgstr ""
 msgid "This folder + subfolders"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/settings_page/about.rs
 msgid "About this build"
 msgstr ""
 
@@ -2190,15 +2186,23 @@ msgid "Check for updates"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Check for updates automatically"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty."
 msgstr ""
 
-#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/settings_page/about.rs
 msgid "License & source"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "Look for a newer OpenXplorer release."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Once a day, when OpenXplorer starts, ask GitHub whether a newer release exists. Nothing installs without you."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/about.rs
@@ -2211,6 +2215,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "Updates"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "automatic update check daily launch startup notify notification network github privacy"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -2959,7 +2967,7 @@ msgstr ""
 msgid "New tabs open"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/general.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/title_bar.rs packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.desktop
+#: crates/ox-app/src/settings_page/general.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/title_bar.rs packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.desktop
 msgid "New window"
 msgstr ""
 
@@ -3559,6 +3567,14 @@ msgstr ""
 msgid "Could not restart. {reason}"
 msgstr ""
 
+#: crates/ox-app/src/update/state.rs
+msgid "Details…"
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/update/state.rs
+msgid "Install update…"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
 msgid "Installed: {current}"
@@ -3595,6 +3611,16 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is available. You have {current}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is ready to install. You have {current}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
 msgid "OpenXplorer {version} is installed. Restart to use the update."
 msgstr ""
 
@@ -3603,7 +3629,23 @@ msgid "Preparing update. Approve the administrator prompt to install."
 msgstr ""
 
 #: crates/ox-app/src/update/state.rs
+msgid "Restart"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
 msgid "Restart OpenXplorer to finish updating."
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
+msgid "Restart to finish updating"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
+msgid "Update"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs crates/ox-app/src/window/update_notice.rs
+msgid "Update available"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -3755,7 +3797,7 @@ msgstr ""
 msgid "Cache disabled; this root’s indexed names were removed."
 msgstr ""
 
-#: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
+#: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Cache this folder for search"
 msgstr ""
 
@@ -3924,10 +3966,6 @@ msgid "Dark appearance"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Default file explorer…"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Descending"
 msgstr ""
 
@@ -3959,20 +3997,12 @@ msgstr ""
 msgid "HTML document"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Help"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Invert selection"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "JSON file"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Keyboard shortcuts"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -5562,7 +5592,15 @@ msgid "Go to the last tab"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Help"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Home folder"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Keyboard shortcuts"
 msgstr ""
 
 #: crates/ox-app/resources/ui/window.ui crates/ox-app/src/window/shortcuts_window.rs

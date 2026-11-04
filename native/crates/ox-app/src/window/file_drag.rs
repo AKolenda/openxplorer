@@ -298,7 +298,8 @@ impl BrowserWindow {
         source.connect_drag_end(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, _, _| {
+            move |_, drag, _| {
+                super::drag_surface::keep_finished_drag(drag);
                 SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
                 window.end_file_drag();
             }

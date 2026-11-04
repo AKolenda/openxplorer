@@ -183,26 +183,6 @@ fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
     second.window.close();
 }
 
-/// Every More menu command works now, License & source included, and a
-/// row's tooltip is its label.
-///
-/// parity: SET-009
-#[gtk::test]
-fn the_license_menu_item_works_and_its_tooltip_is_its_label() {
-    let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
-    let more_button = menu_button_with_class(&test, "more-command");
-    let more = app_menu(&more_button);
-    more_button.popup();
-    let license = more.row("License & source");
-    assert!(license.is_sensitive());
-    assert_eq!(
-        license.tooltip_text().unwrap_or_default().as_str(),
-        "License & source"
-    );
-    more_button.popdown();
-}
-
 /// A new window on a landing page has no file list to focus; GTK's first
 /// focusable widget was a crumb, which drew the address bar's editing
 /// line.

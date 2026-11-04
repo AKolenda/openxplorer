@@ -45,4 +45,7 @@ window.ox .statusbar scale.zoom-slider slider {
   box-shadow: 0 0 0 1px @ox_border;
 }
 /* A newer release, or a restart into an installed one, waits for the user. */
-window.ox .statusbar button.update-available { color: @ox_accent; }
+/* A newer release, or a restart into an installed one, waits for the user:
+   the glyph and "Update available" in the accent colour. */
+window.ox .statusbar button.update-available { color: @ox_accent; padding: 0 6px; }
+window.ox .statusbar button.update-available label { color: @ox_accent; }
