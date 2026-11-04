@@ -200,10 +200,11 @@ impl BrowserWindow {
             return glib::Propagation::Proceed;
         }
         // A list that already has the keyboard typed the character itself,
-        // a page without one has nothing to select, and named keys are not
-        // text.
+        // a page without one, or whose rows "Working on it..." hides, has
+        // nothing to select, and named keys are not text.
         let pane = self.folder_pane();
-        if pane.page() != Some(PanePage::Listing) || pane.view_has_focus() || !is_text_key(key) {
+        let selectable = pane.page() == Some(PanePage::Listing) && pane.shows_rows();
+        if !selectable || pane.view_has_focus() || !is_text_key(key) {
             return glib::Propagation::Proceed;
         }
         // The keyboard moves into the list first, so the input method of the

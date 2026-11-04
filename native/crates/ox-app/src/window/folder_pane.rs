@@ -216,6 +216,11 @@ impl FolderPane {
         self.parts().views.set_child_visible(!hide);
     }
 
+    /// False while "Working on it..." hides the previous folder's rows.
+    pub(super) fn shows_rows(&self) -> bool {
+        self.parts().views.is_child_visible()
+    }
+
     /// Shows or hides the note near the top of the list, saying `text`.
     fn show_note(&self, show: bool, text: &'static str) {
         let note = &self.parts().empty_note;

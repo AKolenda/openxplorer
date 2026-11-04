@@ -388,3 +388,24 @@ fn typing_on_a_tab_leaves_the_folder_alone() {
         "nothing was typed into the folder"
     );
 }
+
+/// While "Working on it..." hides the previous folder's rows, a letter typed
+/// on a command selects none of them.
+///
+/// parity: SEL-030
+#[gtk::test]
+fn typing_while_a_location_opens_selects_nothing_hidden() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    test.window.folder_pane().model().select_none();
+    test.window.folder_pane().show_working_note(true);
+    let refresh = refresh_button(&test);
+    assert!(refresh.grab_focus(), "the command takes the keyboard");
+
+    assert!(
+        !press_after_focus(&test, gdk::Key::n),
+        "the window leaves the letter alone"
+    );
+    assert!(test.selected_names().is_empty(), "no hidden row was selected");
+}
