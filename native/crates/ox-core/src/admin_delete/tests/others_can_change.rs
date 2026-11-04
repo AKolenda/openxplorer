@@ -33,7 +33,7 @@ use super::parent_path::make_untrusted;
 use super::{run, swap_fixture, walk, Options};
 use crate::safe_walk::{folder_changed, Mount};
 use crate::test_support::temporary_folder;
-use crate::transfer::Cancellation;
+use crate::transfer::{Cancellation, ItemIdentity};
 
 /// What a test reads back about a tree: every item below it, with the
 /// contents of each file, in a fixed order.
@@ -323,4 +323,77 @@ fn a_tree_on_a_drive_whose_permissions_cannot_be_checked_is_deleted_and_nothing_
         ..Options::default()
     };
     assert_the_race_stays_inside(&selected, &open, &outside, options, "on another drive");
+}
+
+/// The identity of `path` as the app learns it from GIO, whose
+/// `unix::device` holds the device number in 32 bits.
+fn identity_as_gio_reports(path: &Path) -> ItemIdentity {
+    use std::os::unix::fs::MetadataExt;
+    let status = fs::symlink_metadata(path).expect("the item is inspected");
+    ItemIdentity {
+        device: status.dev() & u64::from(u32::MAX),
+        inode: status.ino(),
+    }
+}
+
+/// A folder others can write to may have its selected folder renamed
+/// aside and a sibling renamed onto its name while the administrator
+/// prompt is open; in a parent that is not sticky, that needs no rights
+/// over either folder. 2.0.12 refused such a parent outright. The helper
+/// is told which folder the user chose, and deletes nothing when another
+/// one has taken its name, while the folder that is still the one chosen
+/// is deleted as before.
+///
+/// parity: XFER-015, OPS-039
+#[test]
+fn a_sibling_renamed_onto_the_selected_name_is_refused_and_nothing_is_deleted() {
+    let root = temporary_folder();
+    let parent = root.path().join("shared");
+    let selected = parent.join("old logs");
+    let sibling = parent.join("current");
+    fs::create_dir_all(selected.join("inner")).expect("create the selected folder");
+    fs::write(selected.join("inner").join("old"), b"to delete").expect("write its item");
+    fs::create_dir_all(sibling.join("inner")).expect("create the sibling");
+    fs::write(sibling.join("inner").join("keep"), b"not chosen").expect("write its item");
+    set_mode(&parent, 0o777);
+    let chosen = identity_as_gio_reports(&selected);
+    fs::rename(&selected, parent.join("aside")).expect("the chosen folder is moved aside");
+    fs::rename(&sibling, &selected).expect("the sibling takes its name");
+    let before = snapshot(&parent);
+
+    let result = walk::delete_tree(
+        &selected,
+        Some(chosen),
+        &Cancellation::new(),
+        &Options::default(),
+        &mut |record| {
+            panic!("the walk reported {record:?} for a folder it should not touch");
+        },
+    );
+
+    assert_eq!(result, Err(walk::not_the_item_refusal(&selected)));
+    assert_eq!(snapshot(&parent), before, "something in the parent changed");
+
+    let aside = parent.join("aside");
+    let original = identity_as_gio_reports(&aside);
+    fs::rename(&aside, parent.join("moved back")).expect("rename the chosen folder");
+    let chosen_again = parent.join("moved back");
+    let deleted = walk::delete_tree(
+        &chosen_again,
+        Some(original),
+        &Cancellation::new(),
+        &Options::default(),
+        &mut |_record| {},
+    );
+
+    let totals = deleted.expect("the chosen folder is deleted");
+    assert!(totals.is_complete(), "{totals:?}");
+    assert!(
+        fs::symlink_metadata(&chosen_again).is_err(),
+        "the chosen folder is still there"
+    );
+    assert_eq!(
+        fs::read(selected.join("inner").join("keep")).expect("the sibling's item is read"),
+        b"not chosen"
+    );
 }

@@ -6153,6 +6153,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_delete.rs
+msgid "{uri} could not be identified, so it was not deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete.rs
 msgid "{uri} is not an administrator location of this computer."
 msgstr ""
 
@@ -6161,7 +6166,11 @@ msgid "This helper deletes exactly one item at a time."
 msgstr ""
 
 #: crates/ox-core/src/admin_delete/command.rs
-msgid "This helper takes one path and no options."
+msgid "This helper needs the item’s device and inode, as --item <device>:<inode>."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/command.rs
+msgid "This helper takes one path and no options but --item."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6218,6 +6227,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_delete/walk.rs
 msgid "{path} is a shortcut (a symbolic link) that the administrator does not own. An administrator deletion follows one only when nobody else could have created it, because a shortcut someone else controls could point anywhere. Open the folder it leads to and delete the item there."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is no longer the folder you chose to delete: another folder has taken its name. Nothing was deleted."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

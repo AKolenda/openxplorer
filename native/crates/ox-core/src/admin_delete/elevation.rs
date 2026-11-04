@@ -23,21 +23,25 @@ use std::time::Duration;
 
 use super::report::{Line, Record, Totals};
 use crate::i18n::{format_message, gettext};
-use crate::transfer::{Cancellation, TransferError};
+use crate::transfer::{Cancellation, ItemIdentity, TransferError};
 
 /// The helper program's file name, as every package installs it.
 pub const HELPER_COMMAND: &str = "openxplorer-admin-delete";
 
-/// Where a build or a test says the helper is, instead of beside the app.
+/// Where a debug build is told the helper is, instead of beside the app.
 const HELPER_VARIABLE: &str = "OX_ADMIN_DELETE_HELPER";
 
 /// How often the watcher looks whether the user cancelled.
 const CANCEL_POLL: Duration = Duration::from_millis(100);
 
-/// Deletes `path` with administrator rights, reporting each item to
-/// `report`, and returns what the walk left behind.
-pub type Elevation =
-    Arc<dyn Fn(&Path, &Cancellation, &mut dyn FnMut(Record)) -> Result<Totals, TransferError> + Send + Sync>;
+/// Deletes `path`, which must still be the item the identity names, with
+/// administrator rights, reporting each item to `report`, and returns
+/// what the walk left behind.
+pub type Elevation = Arc<
+    dyn Fn(&Path, ItemIdentity, &Cancellation, &mut dyn FnMut(Record)) -> Result<Totals, TransferError>
+        + Send
+        + Sync,
+>;
 
 /// The replacement for `pkexec`, when one was installed.
 static ELEVATION: RwLock<Option<Elevation>> = RwLock::new(None);
@@ -59,6 +63,7 @@ pub fn set_elevation(elevation: Option<Elevation>) {
 /// Runs the deletion of `path` with administrator rights.
 pub(super) fn elevated_delete(
     path: &Path,
+    expected: ItemIdentity,
     cancel: &Cancellation,
     report: &mut dyn FnMut(Record),
 ) -> Result<Totals, TransferError> {
@@ -67,8 +72,8 @@ pub(super) fn elevated_delete(
         .expect("the elevation lock is not poisoned")
         .clone();
     match installed {
-        Some(elevation) => elevation(path, cancel, report),
-        None => through_pkexec(path, cancel, report),
+        Some(elevation) => elevation(path, expected, cancel, report),
+        None => through_pkexec(path, expected, cancel, report),
     }
 }
 
@@ -92,9 +97,21 @@ pub(super) fn elevated_delete(
 pub fn helper_path() -> Result<PathBuf, TransferError> {
     helper_path_in(
         crate::integration::Sandbox::detect(),
-        std::env::var_os(HELPER_VARIABLE),
+        configured_helper(),
         std::env::current_exe,
     )
+}
+
+/// The helper `OX_ADMIN_DELETE_HELPER` names, which only a debug build
+/// reads. A release build always starts the helper its package installed
+/// beside it, so nothing in the app's environment can choose which
+/// program the administrator prompt is for.
+fn configured_helper() -> Option<std::ffi::OsString> {
+    if cfg!(debug_assertions) {
+        std::env::var_os(HELPER_VARIABLE)
+    } else {
+        None
+    }
 }
 
 /// [`helper_path`] in `sandbox`, with `configured` read from
@@ -131,26 +148,36 @@ fn no_helper() -> TransferError {
 
 /// Where the helper may be, for an app installed at `program`, in the
 /// order the layouts of `native/tools/package_data.py` put it.
+///
+/// The paths are built without a `..`: pkexec looks the polkit action up
+/// by comparing the path it was given with the action's `exec.path`
+/// annotation, and before polkit 126 it compares them as they are
+/// written, so `/usr/bin/../libexec/…` would match no action and fall
+/// back to pkexec's generic one.
 fn helper_candidates(program: &Path) -> [PathBuf; 2] {
     let folder = program.parent().unwrap_or(Path::new("/"));
+    let prefix = folder.parent().unwrap_or(Path::new("/"));
     let name = program.file_name().unwrap_or_default();
     [
         // FHS (RPM, Arch): /usr/bin/<package> -> /usr/libexec/<package>/
-        folder.join("../libexec").join(name).join(HELPER_COMMAND),
+        prefix.join("libexec").join(name).join(HELPER_COMMAND),
         // Debian: /opt/<package>/bin/<package> -> /opt/<package>/libexec/
-        folder.join("../libexec").join(HELPER_COMMAND),
+        prefix.join("libexec").join(HELPER_COMMAND),
     ]
 }
 
 /// Runs the helper under `pkexec` and reads its records.
 fn through_pkexec(
     path: &Path,
+    expected: ItemIdentity,
     cancel: &Cancellation,
     report: &mut dyn FnMut(Record),
 ) -> Result<Totals, TransferError> {
     let helper = helper_path()?;
     let mut child = Command::new("pkexec")
         .arg(&helper)
+        .arg(super::command::ITEM_OPTION)
+        .arg(super::command::item_argument(expected))
         .arg("--")
         .arg(path)
         .stdin(Stdio::piped())
@@ -307,11 +334,13 @@ mod tests {
         let fhs = helper_candidates(Path::new("/usr/bin/openxplorer"));
         let debian = helper_candidates(Path::new("/opt/openxplorer/bin/openxplorer"));
 
+        // Exactly as the policy files name them, with no `..` for an
+        // older pkexec to compare unresolved.
         assert!(fhs.contains(&PathBuf::from(
-            "/usr/bin/../libexec/openxplorer/openxplorer-admin-delete"
+            "/usr/libexec/openxplorer/openxplorer-admin-delete"
         )));
         assert!(debian.contains(&PathBuf::from(
-            "/opt/openxplorer/bin/../libexec/openxplorer-admin-delete"
+            "/opt/openxplorer/libexec/openxplorer-admin-delete"
         )));
     }
 }

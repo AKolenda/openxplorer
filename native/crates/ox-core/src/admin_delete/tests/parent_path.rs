@@ -63,7 +63,7 @@ fn trusting(trusted: TrustedOwner) -> Options {
 
 /// Deletes `target`, reporting nothing, and returns how it ended.
 fn delete(target: &Path, options: &Options) -> Result<(), TransferError> {
-    walk::delete_tree(target, &Cancellation::new(), options, &mut |_record| {}).map(|_totals| ())
+    walk::delete_tree(target, None, &Cancellation::new(), options, &mut |_record| {}).map(|_totals| ())
 }
 
 /// Resolves the folder that holds an item, without deleting anything.

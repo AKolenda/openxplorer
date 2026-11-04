@@ -34,7 +34,7 @@ use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat};
 use super::report::{Record, Totals};
 use crate::i18n::{format_message, gettext};
 use crate::safe_walk::{mount_of, require_same_item, require_still_named, Mount};
-use crate::transfer::{nesting_error, Cancellation, TransferError, MAX_DEPTH};
+use crate::transfer::{nesting_error, Cancellation, ItemIdentity, TransferError, MAX_DEPTH};
 
 /// Reads the mount an item is on. The real walk always reports what the
 /// kernel says; a test replaces the answer for one path, so that the
@@ -177,11 +177,18 @@ impl Options {
 /// Permanently deletes `target` and everything inside it, reporting each
 /// item to `report` as it goes.
 ///
+/// `expected` is the device and inode the app saw for the folder when the
+/// user's deletion started, before the administrator prompt. The helper
+/// always passes one: a folder that another account renamed onto the
+/// name while the prompt was open is refused rather than deleted. Only
+/// the tests of the walk's other rules leave it out.
+///
 /// # Errors
 ///
 /// A refusal before anything is deleted (a relative path, a path through
-/// `..`, a filesystem root, a mount point, or a symbolic link in the path
-/// that holds the item that nobody can vouch for),
+/// `..`, a filesystem root, a mount point, an item that is no longer the
+/// one in `expected`, or a symbolic link in the path that holds the item
+/// that nobody can vouch for),
 /// [`TransferError::Cancelled`], the nesting limit,
 /// and the refusal that stops the walk when the tree is changed under it.
 /// Items that could not be removed, and subtrees on another mount, are
@@ -189,6 +196,7 @@ impl Options {
 /// is left.
 pub(crate) fn delete_tree(
     target: &Path,
+    expected: Option<ItemIdentity>,
     cancel: &Cancellation,
     options: &Options,
     report: &mut dyn FnMut(Record),
@@ -203,6 +211,7 @@ pub(crate) fn delete_tree(
         options,
         report,
         totals: Totals::default(),
+        expected,
         drive: Mount {
             id: None,
             device: (0, 0),
@@ -227,6 +236,9 @@ struct Walk<'a> {
     options: &'a Options,
     report: &'a mut dyn FnMut(Record),
     totals: Totals,
+    /// The item the app saw before the administrator prompt, which the
+    /// item reached now has to be.
+    expected: Option<ItemIdentity>,
     /// The mount the item is on; nothing on another mount is touched.
     drive: Mount,
 }
@@ -253,7 +265,13 @@ impl Walk<'_> {
                 return Ok(());
             }
         };
-        if depth > 0 {
+        if depth == 0 {
+            if let Some(expected) = self.expected {
+                if !is_the_item(expected, &seen) {
+                    return Err(not_the_item_refusal(path));
+                }
+            }
+        } else {
             // A drive, share or bind mount inside the tree, including a
             // bind mount of one file. The item itself was checked before
             // the walk started.
@@ -378,6 +396,14 @@ impl Walk<'_> {
         self.totals.count(&record);
         (self.report)(record);
     }
+}
+
+/// Whether `seen` is the item `expected` describes. GIO reports a device
+/// number in 32 bits (`unix::device`), so only the low 32 bits of each
+/// device number are compared; the inode is compared whole.
+pub(super) fn is_the_item(expected: ItemIdentity, seen: &Stat) -> bool {
+    let low = u64::from(u32::MAX);
+    expected.device & low == seen.st_dev & low && expected.inode == seen.st_ino
 }
 
 /// Checks the path the helper was asked to delete and returns its name.
@@ -766,6 +792,16 @@ fn opening_failed(path: &Path, errno: rustix::io::Errno) -> TransferError {
     ))
 }
 
+/// The refusal for an item that is no longer the one the app saw before
+/// the administrator prompt: another folder has taken its name.
+pub(super) fn not_the_item_refusal(path: &Path) -> TransferError {
+    refusal(format_message(
+        "{path} is no longer the folder you chose to delete: another folder has taken its \
+         name. Nothing was deleted.",
+        &[("path", &path.display().to_string())],
+    ))
+}
+
 /// The refusal to delete a mount point.
 pub(crate) fn mount_point_refusal(path: &Path) -> TransferError {
     refusal(format_message(
@@ -813,9 +849,14 @@ mod tests {
         }
         let mine = rustix::process::getuid().as_raw();
         let ask = |trusted: TrustedOwner, folder: &Path| {
+            // Every folder, `/` included, is reported on one mount, so the
+            // mount half agrees wherever the temporary folder is.
             let options = Options {
                 trusted,
-                mounts: Box::new(|_path, mount| mount),
+                mounts: Box::new(|_path, _mount| Mount {
+                    id: Some(1),
+                    device: (0, 1),
+                }),
                 ..Options::default()
             };
             ParentWalk::new(&options)

@@ -57,13 +57,14 @@ pub use elevation::{helper_path, set_elevation, Elevation, HELPER_COMMAND};
 pub use report::{Line, Record, Totals};
 
 use crate::i18n::format_message;
-use crate::transfer::{Cancellation, NodeKind, TransferError, WriteGuard};
+use crate::transfer::{Cancellation, ItemIdentity, NodeKind, TransferError, WriteGuard};
 
 /// How many items a refusal names before it stops listing them.
 const LISTED_ITEMS: usize = 5;
 
-/// True for an `admin://` folder, which is deleted through the privileged
-/// helper rather than by path through `gvfsd-admin`.
+/// The device and inode of an `admin://` folder, which is deleted through
+/// the privileged helper rather than by path through `gvfsd-admin`, or
+/// `None` for anything else.
 ///
 /// `kind` is what the caller found the item to be, without following
 /// links. Anything but a folder is one `unlink` of one name: there is no
@@ -74,38 +75,76 @@ const LISTED_ITEMS: usize = 5;
 ///
 /// # Errors
 ///
-/// The backend's error when the item cannot be inspected, and
-/// [`TransferError::Cancelled`].
-pub(crate) fn is_admin_folder(
+/// The backend's error when the item cannot be inspected, a refusal when
+/// it does not say which folder it is, and [`TransferError::Cancelled`].
+pub(crate) fn admin_folder(
     file: &gio::File,
     kind: Option<NodeKind>,
     cancel: &Cancellation,
-) -> Result<bool, TransferError> {
+) -> Result<Option<ItemIdentity>, TransferError> {
     if !file.has_uri_scheme("admin") {
-        return Ok(false);
+        return Ok(None);
     }
     if matches!(kind, Some(kind) if kind != NodeKind::Directory) {
-        return Ok(false);
+        return Ok(None);
     }
     let info = file.query_info(
-        "standard::type",
+        "standard::type,unix::device,unix::inode",
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         Some(cancel.cancellable()),
     )?;
-    Ok(info.file_type() == gio::FileType::Directory)
+    if info.file_type() != gio::FileType::Directory {
+        return Ok(None);
+    }
+    if !info.has_attribute("unix::device") || !info.has_attribute("unix::inode") {
+        return Err(TransferError::failed(format_message(
+            "{uri} could not be identified, so it was not deleted as administrator.",
+            &[("uri", file.uri().as_ref())],
+        )));
+    }
+    Ok(Some(ItemIdentity {
+        device: u64::from(info.attribute_uint32("unix::device")),
+        inode: info.attribute_uint64("unix::inode"),
+    }))
 }
 
-/// Permanently deletes the `admin://` folder `file` and everything inside
-/// it, through the privileged helper.
+/// The folder the helper is to delete: the one the engine `selected` when
+/// the deletion started, which the folder found `now` must still be.
+///
+/// The helper refuses a folder that is not this one, which closes the
+/// window while the administrator prompt is open; this check closes the
+/// one between the start of the deletion and that prompt, while the
+/// engine looked through the tree. Another account that can write to the
+/// folder's parent could otherwise rename a sibling onto its name in
+/// either window, and the sibling would be deleted as root.
+///
+/// # Errors
+///
+/// The refusal that the folder changed, when `now` is another folder.
+pub(crate) fn bound_identity(
+    selected: Option<ItemIdentity>,
+    now: ItemIdentity,
+) -> Result<ItemIdentity, TransferError> {
+    match selected {
+        Some(selected) if selected != now => Err(crate::safe_walk::folder_changed()),
+        _ => Ok(now),
+    }
+}
+
+/// Permanently deletes the `admin://` folder `file`, which is the folder
+/// `expected` names, and everything inside it, through the privileged
+/// helper.
 ///
 /// # Errors
 ///
 /// The guard's refusal for the folder itself, [`TransferError::Cancelled`],
-/// the helper's refusal when it will not touch the path at all, and a
+/// the helper's refusal when it will not touch the path at all (another
+/// folder in the place of `expected` included), and a
 /// summary of what is still there when the walk finished incomplete. What
 /// the walk deleted before that stays deleted, as it does everywhere else.
 pub(crate) fn delete_tree(
     file: &gio::File,
+    expected: ItemIdentity,
     cancel: &Cancellation,
     guard: Option<&WriteGuard>,
 ) -> Result<(), TransferError> {
@@ -123,20 +162,26 @@ pub(crate) fn delete_tree(
         guard(&file.uri())?;
         cancel.check()?;
     }
+    // Only what the message lists is kept: a wide tree on a read-only
+    // drive fails once per item, and the rest are only counted.
     let mut left_behind = Vec::new();
-    let totals = elevation::elevated_delete(&path, cancel, &mut |record| match record {
+    let mut unlisted = 0;
+    let mut leave = |line: String| {
+        if left_behind.len() < LISTED_ITEMS {
+            left_behind.push(line);
+        } else {
+            unlisted += 1;
+        }
+    };
+    let totals = elevation::elevated_delete(&path, expected, cancel, &mut |record| match record {
         Record::Deleted(_) => {}
-        Record::Skipped { path, reason } => {
-            left_behind.push(format!("{}: {reason}", path.display()));
-        }
-        Record::Failed { path, message } => {
-            left_behind.push(format!("{}: {message}", path.display()));
-        }
+        Record::Skipped { path, reason } => leave(format!("{}: {reason}", path.display())),
+        Record::Failed { path, message } => leave(format!("{}: {message}", path.display())),
     })?;
     if totals.is_complete() {
         return Ok(());
     }
-    Err(TransferError::failed(incomplete_message(&left_behind)))
+    Err(TransferError::failed(incomplete_message(&left_behind, unlisted)))
 }
 
 /// The path of an `admin://` location on this computer.
@@ -156,23 +201,16 @@ fn local_path(file: &gio::File) -> Option<PathBuf> {
     path.is_absolute().then_some(path)
 }
 
-/// The refusal that names what the deletion left behind.
-fn incomplete_message(left_behind: &[String]) -> String {
-    let listed = left_behind
-        .iter()
-        .take(LISTED_ITEMS)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join("\n");
-    if left_behind.len() <= LISTED_ITEMS {
+/// The refusal that names what the deletion left behind: the items
+/// `listed`, and how many more were left `unlisted`.
+fn incomplete_message(listed: &[String], unlisted: usize) -> String {
+    let listed = listed.join("\n");
+    if unlisted == 0 {
         return format_message("Some items were not deleted:\n{items}", &[("items", &listed)]);
     }
     format_message(
         "Some items were not deleted:\n{items}\n… and {more} more.",
-        &[
-            ("items", &listed),
-            ("more", &(left_behind.len() - LISTED_ITEMS).to_string()),
-        ],
+        &[("items", &listed), ("more", &unlisted.to_string())],
     )
 }
 

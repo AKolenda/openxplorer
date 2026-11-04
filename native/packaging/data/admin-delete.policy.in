@@ -16,6 +16,9 @@
   the answer is remembered for a few minutes, so deleting several folders
   in a row does not mean a prompt for each. An inactive or remote session
   authenticates every time.
+
+  There is no exec.allow_gui annotation: the helper opens no window, so
+  pkexec passes it neither DISPLAY nor XAUTHORITY.
 -->
 <policyconfig>
   <vendor>OpenXplorer</vendor>
@@ -29,6 +32,5 @@
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">@HELPER_PATH@</annotate>
-    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 </policyconfig>

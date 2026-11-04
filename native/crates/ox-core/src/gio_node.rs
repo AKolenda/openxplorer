@@ -204,7 +204,7 @@ impl Node for GioNode {
     }
 
     fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
-        self.delete_item_tree(None, cancel, guard)
+        self.delete_item_tree(None, None, cancel, guard)
     }
 
     fn delete_tree_of_kind(
@@ -213,7 +213,16 @@ impl Node for GioNode {
         cancel: &Cancellation,
         guard: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
-        self.delete_item_tree(Some(kind), cancel, guard)
+        self.delete_item_tree(Some(kind), None, cancel, guard)
+    }
+
+    fn delete_selected_tree(
+        &self,
+        selected: &NodeInfo,
+        cancel: &Cancellation,
+        guard: Option<&WriteGuard>,
+    ) -> Result<(), TransferError> {
+        self.delete_item_tree(Some(selected.kind), selected.identity, cancel, guard)
     }
 
     fn delete_staging(&self, created: Option<ItemIdentity>) -> Result<(), TransferError> {

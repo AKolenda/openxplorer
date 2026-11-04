@@ -58,7 +58,7 @@ impl Reported {
 /// Runs the helper's walk on `target` and returns its totals and records.
 fn run(target: &Path, cancel: &Cancellation, options: &Options) -> (Result<Totals, TransferError>, Reported) {
     let mut reported = Reported::default();
-    let result = walk::delete_tree(target, cancel, options, &mut |record| {
+    let result = walk::delete_tree(target, None, cancel, options, &mut |record| {
         reported.records.push(record);
     });
     (result, reported)

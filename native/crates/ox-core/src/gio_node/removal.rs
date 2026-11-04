@@ -8,7 +8,7 @@ use gio::prelude::*;
 
 use super::{local_delete, remote_delete, GioNode};
 use crate::admin_delete;
-use crate::transfer::{Cancellation, NodeKind, TransferError, WriteGuard};
+use crate::transfer::{Cancellation, ItemIdentity, NodeKind, TransferError, WriteGuard};
 
 impl GioNode {
     /// Moves the item to the Trash. XFER-014: never falls back to a
@@ -34,6 +34,9 @@ impl GioNode {
     /// app does. `kind` is what the caller found the item to be, as for
     /// [`Node::delete_tree_of_kind`](crate::transfer::Node::delete_tree_of_kind):
     /// anything but a folder is deleted without looking inside it.
+    /// `selected` is the item's identity when the user's deletion started,
+    /// if known; a whole `admin://` folder that is no longer that object
+    /// is refused rather than deleted as root.
     ///
     /// # Errors
     ///
@@ -43,6 +46,7 @@ impl GioNode {
     pub(super) fn delete_item_tree(
         &self,
         kind: Option<NodeKind>,
+        selected: Option<ItemIdentity>,
         cancel: &Cancellation,
         guard: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
@@ -50,8 +54,9 @@ impl GioNode {
         if let Some(path) = self.local_path() {
             return local_delete::delete_tree(&path, kind, cancel, guard);
         }
-        if admin_delete::is_admin_folder(&self.file, kind, cancel)? {
-            return admin_delete::delete_tree(&self.file, cancel, guard);
+        if let Some(now) = admin_delete::admin_folder(&self.file, kind, cancel)? {
+            let expected = admin_delete::bound_identity(selected, now)?;
+            return admin_delete::delete_tree(&self.file, expected, cancel, guard);
         }
         remote_delete::delete_tree(&self.file, kind, cancel, guard)
     }

@@ -304,6 +304,8 @@ def check_admin_delete(report: Report, tree: InstalledTree) -> None:
                  found.findtext('defaults/allow_any', '').startswith('auth_admin')
                  and found.findtext('defaults/allow_inactive', '').startswith('auth_admin')
                  and found.findtext('defaults/allow_active', '') == 'auth_admin_keep')
+    report.check('The polkit action gives the helper no display',
+                 'org.freedesktop.policykit.exec.allow_gui' not in annotations)
 
 
 def main(argv: list[str] | None = None) -> int:
