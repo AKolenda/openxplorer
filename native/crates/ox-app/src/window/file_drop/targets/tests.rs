@@ -174,38 +174,48 @@ fn sidebar_folders_take_drops_and_quick_access_pins_only_between_pins() {
 fn a_drop_on_a_pinned_folder_goes_into_it_and_between_pins_pins() {
     let source = Fixture::standard();
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
+    std::fs::create_dir(fixture.path("Drop shelf")).expect("fixture subfolder");
+    let test = TestWindow::open(&fixture.uri_of("Drop shelf"));
+    test.activate("pin-folder", None);
     let sidebar = test.window.sidebar();
-    let on_documents = test
+    wait_until("the pin", || sidebar.labels().contains(&"Drop shelf".to_owned()));
+    wait_for_frames(&test.window, 3);
+    let on_pin = test
         .window
-        .sidebar_spot(sidebar.middle_of("Documents"))
+        .sidebar_spot(sidebar.middle_of("Drop shelf"))
         .map(|spot| spot.destination());
     let between = test
         .window
-        .sidebar_spot(sidebar.top_edge_of("Documents"))
+        .sidebar_spot(sidebar.top_edge_of("Drop shelf"))
         .map(|spot| spot.destination());
 
-    let documents = match &on_documents {
-        Some(DropDestination::Folder(folder)) => gio::File::for_uri(folder).path(),
-        _ => None,
-    };
-    let documents = documents.expect("a drop on Documents goes into its folder");
-    std::fs::create_dir_all(&documents).expect("the Documents folder");
+    assert_eq!(
+        on_pin,
+        Some(DropDestination::Folder(fixture.uri_of("Drop shelf")))
+    );
     let copied = test
         .window
-        .complete_drop(&[source.uri_of("Notes 2.txt")], on_documents, DropAction::Copy);
-    wait_until("the copy", || documents.join("Notes 2.txt").is_file());
+        .complete_drop(&[source.uri_of("Notes 2.txt")], on_pin, DropAction::Copy);
+    wait_until("the copy", || fixture.path("Drop shelf/Notes 2.txt").is_file());
     std::fs::create_dir(fixture.path("Pinned between")).expect("fixture subfolder");
-    let pinned = test
-        .window
-        .complete_drop(&[fixture.uri_of("Pinned between")], between, DropAction::Copy);
-
-    assert!(copied && pinned);
-    wait_until("the pin", || {
+    let pinned = test.window.complete_drop(
+        &[fixture.uri_of("Pinned between")],
+        between.clone(),
+        DropAction::Copy,
+    );
+    wait_until("the second pin", || {
         sidebar.labels().contains(&"Pinned between".to_owned())
     });
+    test.window.unpin(&fixture.uri_of("Pinned between"));
+    test.window.unpin(&fixture.uri_of("Drop shelf"));
+
     assert!(
-        !documents.join("Pinned between").exists(),
+        matches!(&between, Some(DropDestination::QuickAccess { before: Some(before) }) if *before == fixture.uri_of("Drop shelf")),
+        "{between:?}"
+    );
+    assert!(copied && pinned);
+    assert!(
+        !fixture.path("Drop shelf/Pinned between").exists(),
         "pinning copies nothing"
     );
 }

@@ -113,6 +113,27 @@ fn sidebar_on_screen(pointer: &mut Pointer, test: &TestWindow, y: f64) -> (i32, 
     screen_point(pointer, list, (60.0, y), PROBE)
 }
 
+/// Pins the fixture's new folder `name` to Quick access and comes back to
+/// the fixture's folder; the folder's path.
+fn pin_new_folder(test: &TestWindow, fixture: &Fixture, name: &str) -> std::path::PathBuf {
+    std::fs::create_dir(fixture.path(name)).expect("fixture subfolder");
+    test.window.navigate(&fixture.uri_of(name)).expect("a folder");
+    test.wait_for_listing(name);
+    test.activate("pin-folder", None);
+    wait_until("the pin", || {
+        test.window.sidebar().labels().contains(&name.to_owned())
+    });
+    back_to(test, fixture);
+    fixture.path(name)
+}
+
+/// Shows the fixture's folder again, laid out.
+fn back_to(test: &TestWindow, fixture: &Fixture) {
+    test.window.navigate(&fixture.uri()).expect("a folder");
+    test.wait_for_listing("the fixture");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+}
+
 /// Real drags onto a pinned folder in the navigation pane go into it, as
 /// in Windows Explorer: the right button asks with its menu and the left
 /// one copies or moves; a drop between pins still pins.
@@ -123,47 +144,44 @@ fn real_drags_onto_a_sidebar_folder_go_into_it_and_between_pins_pin() {
     let fixture = Fixture::standard();
     let mut pointer = Pointer::connect();
     let test = TestWindow::open(&fixture.uri());
-    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let shelf = pin_new_folder(&test, &fixture, "Drop shelf");
     let sidebar = test.window.sidebar();
-    let documents = sidebar
-        .location_at(sidebar.middle_of("Documents"))
-        .and_then(|uri| gtk::gio::File::for_uri(&uri).path())
-        .expect("Documents is a local folder");
-    std::fs::create_dir_all(&documents).expect("the Documents folder");
 
     let from = item_on_screen(&mut pointer, &test, "Notes 2.txt");
-    let onto = sidebar_on_screen(&mut pointer, &test, sidebar.middle_of("Documents"));
+    let onto = sidebar_on_screen(&mut pointer, &test, sidebar.middle_of("Drop shelf"));
     drag_with(&mut pointer, Button::Secondary, from, onto);
     let menu = test.window.drop_menu();
     wait_until("the right-drag menu", || menu.is_mapped());
     let labels = menu.row_labels();
     menu.click_row("Copy here");
-    wait_until("the copy", || documents.join("Notes 2.txt").is_file());
-    wait_for(HOLD);
+    wait_until("the copy", || shelf.join("Notes 2.txt").is_file());
+    back_to(&test, &fixture);
 
     let from = item_on_screen(&mut pointer, &test, "Notes 10.txt");
-    let onto = sidebar_on_screen(&mut pointer, &test, sidebar.middle_of("Documents"));
+    let onto = sidebar_on_screen(&mut pointer, &test, sidebar.middle_of("Drop shelf"));
     drag_with(&mut pointer, Button::Primary, from, onto);
-    wait_until("the left drop", || documents.join("Notes 10.txt").is_file());
-    wait_for(HOLD);
+    wait_until("the left drop", || shelf.join("Notes 10.txt").is_file());
+    back_to(&test, &fixture);
 
     std::fs::create_dir(fixture.path("Pinned between")).expect("fixture subfolder");
-    test.wait_for_listing("the new folder");
     wait_until("the new folder", || {
         test.names().contains(&"Pinned between".to_owned())
     });
     crate::test_support::harness::wait_for_frames(&test.window, 3);
     let from = item_on_screen(&mut pointer, &test, "Pinned between");
-    let between = sidebar_on_screen(&mut pointer, &test, sidebar.top_edge_of("Documents"));
+    let between = sidebar_on_screen(&mut pointer, &test, sidebar.top_edge_of("Drop shelf"));
     drag_with(&mut pointer, Button::Primary, from, between);
+    wait_until("the pin", || {
+        sidebar.labels().contains(&"Pinned between".to_owned())
+    });
+    let pinned_moved_nothing =
+        fixture.path("Pinned between").is_dir() && !shelf.join("Pinned between").exists();
+    test.window.unpin(&fixture.uri_of("Pinned between"));
+    test.window.unpin(&fixture.uri_of("Drop shelf"));
 
     assert_eq!(
         labels,
         ["Copy here", "Move here", "Create shortcuts here", "-", "Cancel"]
     );
-    wait_until("the pin", || {
-        sidebar.labels().contains(&"Pinned between".to_owned())
-    });
-    assert!(fixture.path("Pinned between").is_dir(), "pinning moves nothing");
-    assert!(!documents.join("Pinned between").exists());
+    assert!(pinned_moved_nothing, "pinning moves nothing");
 }
