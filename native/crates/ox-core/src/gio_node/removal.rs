@@ -54,11 +54,17 @@ impl GioNode {
         if let Some(path) = self.local_path() {
             return local_delete::delete_tree(&path, kind, cancel, guard);
         }
-        if let Some(now) = admin_delete::admin_folder(&self.file, kind, cancel)? {
-            let expected = admin_delete::bound_identity(selected, now)?;
-            return admin_delete::delete_tree(&self.file, expected, cancel, guard);
+        match admin_delete::admin_item(&self.file, kind, cancel)? {
+            Some(admin_delete::AdminItem::Folder(now)) => {
+                let expected = admin_delete::bound_identity(selected, now)?;
+                admin_delete::delete_tree(&self.file, expected, cancel, guard)
+            }
+            // Never a folder: deleted as the one item it is now.
+            Some(admin_delete::AdminItem::Single(kind)) => {
+                remote_delete::delete_tree(&self.file, Some(kind), cancel, guard)
+            }
+            None => remote_delete::delete_tree(&self.file, kind, cancel, guard),
         }
-        remote_delete::delete_tree(&self.file, kind, cancel, guard)
     }
 }
 

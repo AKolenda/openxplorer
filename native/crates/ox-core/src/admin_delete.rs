@@ -62,9 +62,20 @@ use crate::transfer::{Cancellation, ItemIdentity, NodeKind, TransferError, Write
 /// How many items a refusal names before it stops listing them.
 const LISTED_ITEMS: usize = 5;
 
-/// The device and inode of an `admin://` folder, which is deleted through
-/// the privileged helper rather than by path through `gvfsd-admin`, or
-/// `None` for anything else.
+/// What an `admin://` item is, for its permanent deletion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AdminItem {
+    /// A folder, with its device and inode: deleted through the
+    /// privileged helper.
+    Folder(ItemIdentity),
+    /// Anything else, as it was found just now: deleted as one item by
+    /// `gvfsd-admin`, never walked, even if a folder takes its place.
+    Single(NodeKind),
+}
+
+/// What the `admin://` item `file` is, or `None` for a location that is
+/// not `admin://`. A folder is deleted through the privileged helper
+/// rather than by path through `gvfsd-admin`.
 ///
 /// `kind` is what the caller found the item to be, without following
 /// links. Anything but a folder is one `unlink` of one name: there is no
@@ -77,24 +88,40 @@ const LISTED_ITEMS: usize = 5;
 ///
 /// The backend's error when the item cannot be inspected, a refusal when
 /// it does not say which folder it is, and [`TransferError::Cancelled`].
-pub(crate) fn admin_folder(
+pub(crate) fn admin_item(
     file: &gio::File,
     kind: Option<NodeKind>,
     cancel: &Cancellation,
-) -> Result<Option<ItemIdentity>, TransferError> {
+) -> Result<Option<AdminItem>, TransferError> {
     if !file.has_uri_scheme("admin") {
         return Ok(None);
     }
-    if matches!(kind, Some(kind) if kind != NodeKind::Directory) {
-        return Ok(None);
+    if let Some(kind) = kind.filter(|kind| *kind != NodeKind::Directory) {
+        return Ok(Some(AdminItem::Single(kind)));
     }
     let info = file.query_info(
         "standard::type,unix::device,unix::inode",
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         Some(cancel.cancellable()),
     )?;
-    if info.file_type() != gio::FileType::Directory {
-        return Ok(None);
+    item_of(file, &info)
+}
+
+/// What `info`, queried without following links, says the `admin://`
+/// item `file` is.
+fn item_of(file: &gio::File, info: &gio::FileInfo) -> Result<Option<AdminItem>, TransferError> {
+    // A folder that is something else now, a link that briefly took its
+    // place for one, is deleted as what it is now. Handing it back as a
+    // folder would let the walk by path ask again, find a folder that was
+    // put back, and walk it as root.
+    let single = match info.file_type() {
+        gio::FileType::Directory => None,
+        gio::FileType::Regular => Some(NodeKind::File),
+        gio::FileType::SymbolicLink => Some(NodeKind::Symlink),
+        _ => Some(NodeKind::Special),
+    };
+    if let Some(kind) = single {
+        return Ok(Some(AdminItem::Single(kind)));
     }
     if !info.has_attribute("unix::device") || !info.has_attribute("unix::inode") {
         return Err(TransferError::failed(format_message(
@@ -102,10 +129,10 @@ pub(crate) fn admin_folder(
             &[("uri", file.uri().as_ref())],
         )));
     }
-    Ok(Some(ItemIdentity {
+    Ok(Some(AdminItem::Folder(ItemIdentity {
         device: u64::from(info.attribute_uint32("unix::device")),
         inode: info.attribute_uint64("unix::inode"),
-    }))
+    })))
 }
 
 /// The folder the helper is to delete: the one the engine `selected` when

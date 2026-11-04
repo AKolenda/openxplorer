@@ -9,7 +9,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use super::super::{admin_folder, bound_identity, delete_tree, local_path, set_elevation, Record, Totals};
+use super::super::{
+    admin_item, bound_identity, delete_tree, item_of, local_path, set_elevation, AdminItem, Record, Totals,
+};
 use crate::test_support::elevation_lock;
 use crate::transfer::{Cancellation, ItemIdentity, NodeKind, TransferError};
 
@@ -232,14 +234,14 @@ fn only_an_admin_folder_reaches_the_helper() {
     let cancel = Cancellation::new();
     let folder = Some(NodeKind::Directory);
 
-    let local = admin_folder(&gio::File::for_uri("file:///tmp"), folder, &cancel);
-    let share = admin_folder(&gio::File::for_uri("smb://server/share"), folder, &cancel);
-    let admin_file = admin_folder(
+    let local = admin_item(&gio::File::for_uri("file:///tmp"), folder, &cancel);
+    let share = admin_item(&gio::File::for_uri("smb://server/share"), folder, &cancel);
+    let admin_file = admin_item(
         &gio::File::for_uri("admin:///etc/hosts"),
         Some(NodeKind::File),
         &cancel,
     );
-    let admin_link = admin_folder(
+    let admin_link = admin_item(
         &gio::File::for_uri("admin:///etc/link"),
         Some(NodeKind::Symlink),
         &cancel,
@@ -247,6 +249,42 @@ fn only_an_admin_folder_reaches_the_helper() {
 
     assert_eq!(local, Ok(None));
     assert_eq!(share, Ok(None));
-    assert_eq!(admin_file, Ok(None));
-    assert_eq!(admin_link, Ok(None));
+    assert_eq!(admin_file, Ok(Some(AdminItem::Single(NodeKind::File))));
+    assert_eq!(admin_link, Ok(Some(AdminItem::Single(NodeKind::Symlink))));
+}
+
+/// A selected folder that a link has briefly replaced is deleted as the
+/// link it is now, never handed on as a folder: the walk by path would
+/// ask again, find a folder put back meanwhile, and walk it as root.
+///
+/// parity: XFER-015
+#[test]
+fn an_admin_folder_found_to_be_a_link_is_deleted_as_one_item() {
+    let file = gio::File::for_uri("admin:///etc/tree");
+    let found = |file_type: gio::FileType, identity: bool| {
+        let info = gio::FileInfo::new();
+        info.set_file_type(file_type);
+        if identity {
+            info.set_attribute_uint32("unix::device", 2049);
+            info.set_attribute_uint64("unix::inode", 131_074);
+        }
+        item_of(&file, &info)
+    };
+
+    assert_eq!(
+        found(gio::FileType::SymbolicLink, true),
+        Ok(Some(AdminItem::Single(NodeKind::Symlink)))
+    );
+    assert_eq!(
+        found(gio::FileType::Regular, true),
+        Ok(Some(AdminItem::Single(NodeKind::File)))
+    );
+    assert_eq!(
+        found(gio::FileType::Directory, true),
+        Ok(Some(AdminItem::Folder(SELECTED)))
+    );
+    assert!(
+        found(gio::FileType::Directory, false).is_err(),
+        "a folder without an identity was not refused"
+    );
 }
