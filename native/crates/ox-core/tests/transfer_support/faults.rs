@@ -3,6 +3,7 @@
 //! a reversible replacement, like the failing `LocalNode` subclasses in
 //! `v2.0.0:desktop/tests/test_operations.py`.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use ox_core::transfer::{Cancellation, Node, TransferError};
@@ -40,6 +41,9 @@ pub enum Fault {
     UnownedStage,
     /// Installing reports success without moving anything.
     NoOpInstall,
+    /// The first file copy writes 60 % of its bytes, reports them and
+    /// fails; every later copy works, as after a reconnected device.
+    InterruptedOnce,
 }
 
 impl Fault {
@@ -100,6 +104,8 @@ pub struct Faults {
     fault: Fault,
     /// The run's cancellation, which the `Cancel*` faults cancel.
     cancel: Cancellation,
+    /// Whether `InterruptedOnce` has interrupted its copy.
+    interrupted: AtomicBool,
 }
 
 impl Faults {
@@ -109,6 +115,7 @@ impl Faults {
         Arc::new(Self {
             fault,
             cancel: cancel.clone(),
+            interrupted: AtomicBool::new(false),
         })
     }
 
@@ -193,6 +200,15 @@ impl Provider for Faults {
         cancel: &Cancellation,
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<(), TransferError> {
+        if self.fault == Fault::InterruptedOnce {
+            if self.interrupted.swap(true, Ordering::SeqCst) {
+                return node.local_copy_file(target, cancel, progress);
+            }
+            let size = std::fs::metadata(local_path_of(node)).map_or(0, |metadata| metadata.len());
+            progress(size * 6 / 10, size);
+            write(&local_path_of(target), "incomplete");
+            return Err(TransferError::failed("Device disconnected."));
+        }
         let message = match self.fault {
             Fault::CopyInterrupted => "Device disconnected.",
             Fault::BackendCancelled => "Operation was cancelled by the backend.",

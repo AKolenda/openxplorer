@@ -12,14 +12,18 @@
 //! | `removal` | Trash (XFER-014) and permanent deletion (XFER-015) |
 //! | `local_delete` | Deletion relative to pinned folder descriptors |
 //! | `remote_delete` | Deletion by path on shares and phones |
+//! | `admin_delete` | The checks that let a folder under `admin://` be deleted by path |
 //!
 //! Permanent deletion of a local item, and cleanup of local staging, run
 //! relative to pinned folder descriptors, so a folder swapped for a
 //! symbolic link during the deletion cannot redirect it. Remote locations
 //! (SMB shares, phones) can only be deleted by path, exactly as the Python
-//! app, Nautilus and Dolphin do. MTP behaviour is regression-tested with
+//! app, Nautilus and Dolphin do. Under `admin://`, where `gvfsd-admin`
+//! deletes by path as root, a folder is deleted only when no other account
+//! can change anything that walk resolves. MTP behaviour is regression-tested with
 //! simulated devices, not hardware.
 
+mod admin_delete;
 mod local_delete;
 mod move_item;
 mod query;

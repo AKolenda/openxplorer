@@ -165,6 +165,23 @@ pub struct Progress {
     /// The bytes behind a file report, for the panel's size, speed and
     /// time left (OPS-021); `None` for the other reports.
     pub bytes: Option<ByteProgress>,
+    /// How many items the run has finished out of how many, for the
+    /// progress window's "Items remaining" (OPS-021): every file of the
+    /// copied folders once the free-space check counted them, otherwise
+    /// the selected items. `None` where the run does not count.
+    pub items: Option<ItemCount>,
+    /// The item being handled, for the progress window's "Name"; `None`
+    /// when the report names none.
+    pub name: Option<String>,
+}
+
+/// How many items a run has finished, and how many it handles in all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ItemCount {
+    /// The items finished so far, done, skipped or failed.
+    pub done: u64,
+    /// The items of the whole run.
+    pub total: u64,
 }
 
 /// How far a copy is in bytes (OPS-021).
@@ -178,6 +195,9 @@ pub struct ByteProgress {
     pub batch_written: u64,
     /// What the whole batch writes, when the free-space check measured it.
     pub batch_size: Option<u64>,
+    /// True on the report that starts a file, before any of its bytes,
+    /// so the engine can count the files copied.
+    pub file_started: bool,
 }
 
 /// `part / whole` as a [`Progress::fraction`], at most 1; 0 when `whole` is

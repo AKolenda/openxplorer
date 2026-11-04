@@ -20,7 +20,7 @@ use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
 use super::item_failure::{FailedItem, FailureAnswer, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
-use super::limits::{Incoming, StorageRules};
+use super::limits::{Incoming, StorageRules, TreeTotals};
 use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
 use super::node::{Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 use super::relisting::SourceFolders;
@@ -29,7 +29,7 @@ use super::source_removal::{remove_copied_source, CopiedItem};
 use super::staged_copy::{ItemStaging, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
 use super::types::{
-    ConflictPolicy, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult,
+    ConflictPolicy, ItemCount, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult,
 };
 use super::unstorable::{Fix, Unstorable, UnstorableAnswer, UnstorableItem};
 
@@ -45,7 +45,7 @@ pub struct TransferEngine {
     /// Named after `self.emit` of the Python engine.
     emit: ProgressCallback,
     /// Accounting is shared with the report closure and reset per engine run.
-    byte_counts: Arc<Mutex<(u64, u64, Option<u64>)>>,
+    byte_counts: Arc<Mutex<Accounting>>,
     write_guard: Option<Box<WriteGuard>>,
     sleep: SleepCallback,
     /// What the run's destination cannot store (XFER-028).
@@ -62,6 +62,93 @@ impl fmt::Debug for TransferEngine {
             .debug_struct("TransferEngine")
             .field("has_write_guard", &self.write_guard.is_some())
             .finish_non_exhaustive()
+    }
+}
+
+/// The accounting of a run, shared between the engine, its copies and
+/// the progress closure.
+pub(crate) type SharedAccounting = Arc<Mutex<Accounting>>;
+
+/// What a run had written and started when an attempt began, so a
+/// discarded attempt can be taken back.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Checkpoint {
+    written: u64,
+    files: u64,
+}
+
+/// What a run has written and counted, for its progress reports
+/// (OPS-021).
+#[derive(Debug, Default)]
+pub(crate) struct Accounting {
+    /// The bytes of the current file written so far.
+    file_written: u64,
+    /// The bytes written across the run.
+    batch_written: u64,
+    /// What the run writes, when the free-space check measured it.
+    batch_size: Option<u64>,
+    /// The files of the run, when the free-space check counted them.
+    files_total: Option<u64>,
+    /// The files started so far.
+    files_started: u64,
+}
+
+impl Accounting {
+    /// Where the run is now, before an attempt that may be discarded.
+    pub(crate) fn checkpoint(accounting: &SharedAccounting) -> Checkpoint {
+        let counts = accounting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Checkpoint {
+            written: counts.batch_written,
+            files: counts.files_started,
+        }
+    }
+
+    /// Takes back what an attempt wrote and started since `checkpoint`,
+    /// once its copy was discarded to be tried again: the retry writes
+    /// those bytes again, and they must count once (OPS-021, OPS-047).
+    pub(crate) fn roll_back(accounting: &SharedAccounting, checkpoint: Checkpoint) {
+        let mut counts = accounting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        counts.batch_written = counts.batch_written.min(checkpoint.written);
+        counts.files_started = counts.files_started.min(checkpoint.files);
+        counts.file_written = 0;
+    }
+
+    /// Fills in `progress` what the run has written and counted: the
+    /// bytes, and the items, counted in files once the free-space check
+    /// counted them. An item report says how many files are done; the
+    /// last report of the run, all of them.
+    fn account(&mut self, progress: &mut Progress) {
+        if let Some(bytes) = progress.bytes.as_mut() {
+            if bytes.file_written == 0 {
+                self.file_written = 0;
+            }
+            if bytes.file_started {
+                self.files_started += 1;
+            }
+            self.batch_written = self
+                .batch_written
+                .saturating_add(bytes.file_written.saturating_sub(self.file_written));
+            self.file_written = bytes.file_written;
+            bytes.batch_written = self.batch_written;
+            bytes.batch_size = self.batch_size;
+        }
+        let Some(total) = self.files_total else {
+            return;
+        };
+        let done = match (progress.items, progress.bytes) {
+            (Some(items), _) if items.done >= items.total => total,
+            (Some(_), _) => self.files_started,
+            (None, Some(_)) => self.files_started.saturating_sub(1),
+            (None, None) => return,
+        };
+        progress.items = Some(ItemCount {
+            done: done.min(total),
+            total,
+        });
     }
 }
 
@@ -112,18 +199,10 @@ impl TransferEngine {
     pub fn with_progress(mut self, mut emit: impl FnMut(Progress) + Send + 'static) -> Self {
         let counts = Arc::clone(&self.byte_counts);
         self.emit = Box::new(move |mut progress: Progress| {
-            if let Some(bytes) = progress.bytes.as_mut() {
-                let mut counts = counts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                if bytes.file_written == 0 {
-                    counts.0 = 0;
-                }
-                counts.1 = counts
-                    .1
-                    .saturating_add(bytes.file_written.saturating_sub(counts.0));
-                counts.0 = bytes.file_written;
-                bytes.batch_written = counts.1;
-                bytes.batch_size = counts.2;
-            }
+            counts
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .account(&mut progress);
             emit(progress);
         });
         self
@@ -294,11 +373,13 @@ impl TransferEngine {
                     fraction: 0.0,
                     scope: ProgressScope::Batch,
                     bytes: None,
+                    items: None,
+                    name: None,
                 });
             }
         };
-        let batch_size = incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
-        self.report_batch_size(batch_size);
+        let measured = incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
+        self.report_batch_size(measured);
         let placement = Placement {
             mode,
             policy,
@@ -309,13 +390,19 @@ impl TransferEngine {
     }
 
     /// Makes every byte report of this run say that the batch writes
-    /// `batch_size` bytes, for the panel's time left (OPS-021).
-    fn report_batch_size(&mut self, batch_size: Option<u64>) {
+    /// the `measured` bytes, for the time left, and every item report
+    /// count its files, for the items remaining (OPS-021). A run that
+    /// writes no file counts its selected items instead.
+    fn report_batch_size(&mut self, measured: Option<TreeTotals>) {
         let mut counts = self
             .byte_counts
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *counts = (0, 0, batch_size);
+        *counts = Accounting {
+            batch_size: measured.map(|totals| totals.bytes),
+            files_total: measured.map(|totals| totals.files).filter(|files| *files > 0),
+            ..Accounting::default()
+        };
     }
 
     /// Runs `action` over the distinct `uris` of an accepted request, then
@@ -341,6 +428,11 @@ impl TransferEngine {
             fraction: 1.0,
             scope: ProgressScope::Batch,
             bytes: None,
+            items: Some(ItemCount {
+                done: batch.total as u64,
+                total: batch.total as u64,
+            }),
+            name: None,
         });
         state.result
     }
@@ -354,6 +446,7 @@ impl TransferEngine {
     /// the run after recording it.
     fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
         let mut staging = ItemStaging::default();
+        let checkpoint = Accounting::checkpoint(&self.byte_counts);
         self.failures.start_item(batch.mode(), self.display_name(uri));
         let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
         // Whether the user saw the error of `outcome` in the question.
@@ -371,6 +464,7 @@ impl TransferEngine {
             match self.failures.answer(&failed) {
                 Some(FailureAnswer::Retry) => {
                     self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    Accounting::roll_back(&self.byte_counts, checkpoint);
                     self.failures.start_item(batch.mode(), self.display_name(uri));
                     outcome = self.process_item(batch, index, uri, state, &mut staging);
                 }
@@ -442,11 +536,17 @@ impl TransferEngine {
             )));
         }
         let info = node.info(Some(batch.cancel))?;
+        let name = node.display_name();
         (self.emit)(Progress {
-            label: item_label(batch.mode(), &node.display_name(), index + 1, batch.total),
+            label: item_label(batch.mode(), &name, index + 1, batch.total),
             fraction: batch.start_fraction(index),
             scope: ProgressScope::Batch,
             bytes: None,
+            items: Some(ItemCount {
+                done: index as u64,
+                total: batch.total as u64,
+            }),
+            name: Some(name),
         });
         Ok(SelectedItem {
             node,
@@ -643,6 +743,7 @@ impl TransferEngine {
             unstorable: &mut self.unstorable,
             failures: &mut self.failures,
             emit: &mut *self.emit,
+            accounting: &self.byte_counts,
             copied,
         };
         copy.run(staging)

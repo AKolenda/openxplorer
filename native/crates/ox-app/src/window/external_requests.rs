@@ -13,7 +13,13 @@
 //! item selected, and the item's Properties over it. When Settings opens
 //! folders from other apps in a new window, the application gives the
 //! request a window of its own, whose tabs are only the request's.
+//!
+//! Any program on the session bus can send a request, so a share it names
+//! is never mounted for it: the tab says the share is not mounted, and
+//! connects, signing in with a saved password if there is one, only when
+//! the user chooses Try again (NET-004).
 
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 use ox_core::location::{parent_location, same_location};
@@ -75,10 +81,30 @@ impl BrowserWindow {
 
     /// The Properties of a checked `ShowItemProperties` request's item,
     /// over the window once it is shown; nothing for the other methods.
+    /// Properties mount an unmounted share first, which a request never
+    /// does: an item on such a share gets no Properties, and its tab says
+    /// the share is not mounted.
     pub(crate) fn open_request_properties(&self, request: &FileManagerRequest) {
-        if request.method() == FileManagerMethod::ShowItemProperties {
-            self.open_properties_of(&request.uris()[0], PropertiesTab::General);
+        if request.method() != FileManagerMethod::ShowItemProperties {
+            return;
         }
+        let uri = request.uris()[0].clone();
+        gtk::glib::spawn_future_local(gtk::glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let probe = gtk::gio::File::for_uri(&uri)
+                    .query_info_future(
+                        "standard::type",
+                        gtk::gio::FileQueryInfoFlags::NONE,
+                        gtk::glib::Priority::DEFAULT,
+                    )
+                    .await;
+                if !matches!(&probe, Err(error) if error.matches(gtk::gio::IOErrorEnum::NotMounted)) {
+                    window.open_properties_of(&uri, PropertiesTab::General);
+                }
+            }
+        ));
     }
 
     /// Opens `folder` in a new tab in front, saying in the message line
@@ -86,6 +112,19 @@ impl BrowserWindow {
     fn open_folder_tab(&self, folder: &str) {
         if let Err(error) = self.add_tab(folder) {
             self.show_message(&error.to_string());
+            return;
+        }
+        let active = self.imp().session.borrow().active_id();
+        if let Some(id) = active {
+            self.wait_to_mount(id);
+        }
+    }
+
+    /// Makes tab `id`'s listings, the one running included, leave its
+    /// share unmounted until the user asks to connect.
+    pub(super) fn wait_to_mount(&self, id: TabId) {
+        if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+            tab.waits_to_mount = true;
         }
     }
 
@@ -99,6 +138,7 @@ impl BrowserWindow {
         };
         self.switch_tab(id);
         self.mark_selection_to_reveal(id, items);
+        self.wait_to_mount(id);
         self.load_tab(id, LoadMode::Reload);
     }
 
@@ -111,6 +151,7 @@ impl BrowserWindow {
         }
         let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
+            self.wait_to_mount(id);
             self.mark_selection_to_reveal(id, items);
         }
     }

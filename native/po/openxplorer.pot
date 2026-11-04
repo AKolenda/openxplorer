@@ -205,6 +205,10 @@ msgstr ""
 msgid "Such as gimp %f (%f is the file, %u its address)"
 msgstr ""
 
+#: crates/ox-app/resources/ui/progress-window.ui
+msgid "Running actions"
+msgstr ""
+
 #: crates/ox-app/resources/ui/search-box.ui
 msgid "Search cached filenames and paths. Enable folders in Settings → Search."
 msgstr ""
@@ -267,14 +271,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/tab-strip.ui
 msgid "Folder tabs"
-msgstr ""
-
-#: crates/ox-app/resources/ui/transfer-panel.ui
-msgid "Current file progress"
-msgstr ""
-
-#: crates/ox-app/resources/ui/transfer-panel.ui
-msgid "Operation progress"
 msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui
@@ -5411,6 +5407,21 @@ msgstr ""
 msgid "Text size changed for this window, but could not be saved: {error}"
 msgstr ""
 
+#: crates/ox-app/src/window/progress_window.rs
+msgid "Fewer details"
+msgstr ""
+
+#: crates/ox-app/resources/ui/progress-window.ui crates/ox-app/src/window/progress_window.rs
+msgid "More details"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/progress_window.rs
+msgid "{count} Running Action"
+msgid_plural "{count} Running Actions"
+msgstr[0] ""
+msgstr[1] ""
+
 #: crates/ox-app/src/window/quick_access.rs
 msgid "Could not pin: the folders could not be checked."
 msgstr ""
@@ -5852,11 +5863,159 @@ msgid "Reopen {value1}"
 msgstr ""
 
 #: crates/ox-app/src/window/transfer_panel.rs
+msgid "Cancelling…"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel.rs
+msgid "Name: {name}"
+msgstr ""
+
+#: crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/window/transfer_panel.rs
 msgid "Pause"
 msgstr ""
 
 #: crates/ox-app/src/window/transfer_panel.rs
 msgid "Resume"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel.rs
+msgid "{percent}% complete"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Compressing from {source}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Compressing {count} item from {source}"
+msgid_plural "Compressing {count} items from {source}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Copying from {source}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Copying {count} item from {source} to {destination}"
+msgid_plural "Copying {count} items from {source} to {destination}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Deleting from {source}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Deleting {count} item from {source}"
+msgid_plural "Deleting {count} items from {source}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Extracting {source}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Extracting {source} to {destination}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Moving from {source}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Moving {count} item from {source} to {destination}"
+msgid_plural "Moving {count} items from {source} to {destination}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Recycling from {source}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Recycling {count} item from {source}"
+msgid_plural "Recycling {count} items from {source}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "About {time}"
+msgstr ""
+
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "Calculating…"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "Items remaining: {count}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "Items remaining: {count} ({size})"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "Speed: {size}/s"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "Time remaining: {time}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "{count} hour"
+msgid_plural "{count} hours"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "{count} minute"
+msgid_plural "{count} minutes"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "{count} second"
+msgid_plural "{count} seconds"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "{larger} and {smaller}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/rate.rs
+msgid "{size} processed"
+msgstr ""
+
+#: crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/window/transfer_panel/speed_graph.rs
+msgid "Operation progress"
 msgstr ""
 
 #: crates/ox-app/src/window/type_applications.rs
@@ -6421,8 +6580,18 @@ msgstr ""
 msgid "Yesterday at {clock}"
 msgstr ""
 
-#: crates/ox-core/src/gio_node.rs
+#: crates/ox-core/src/gio_node.rs crates/ox-core/src/gio_node/admin_delete.rs
 msgid "Filesystem roots cannot be changed as items."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/admin_delete.rs
+msgid "Other users can change {path}, or it is on a drive whose permissions can't be checked, so this folder can't be safely deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/admin_delete.rs
+msgid "{path} is on a removable drive or in a place where other users can mount drives, so this folder can't be safely deleted as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8364,6 +8533,10 @@ msgid "Copies, drags and new folders work as in Windows Explorer: a copy is name
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Deleting a folder permanently under Open as administrator is now also refused on drives an ordinary user can mount or plug in: drives that /etc/fstab lets users mount, drives a user mounted, and removable, USB, SD card, FireWire, Thunderbolt and loop devices."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "File Manager"
 msgstr ""
 
@@ -8397,6 +8570,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "Preview build of OpenXplorer 2.0.2 under its own application ID."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Running copies, moves and deletes show in a Windows-style progress window, and Properties is redone as Windows 11's Properties windows. Several selected items can be renamed at once, a new text document is created at once and renamed in place, tabs drag as in Chrome, and the menus and defaults match Windows 11 Explorer. A slow location shows at once that it is opening, search is faster and more reliable, and Copy as path quotes each path. Deleting a folder permanently under Open as administrator is refused when other accounts can change it, and a share another app asks OpenXplorer to show is connected to only when you choose Try again."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

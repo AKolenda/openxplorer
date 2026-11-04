@@ -24,12 +24,32 @@ const FIELD_GROUP_SEPARATOR: &[u8] = b" - ";
 /// mount id, parent id, `major:minor`, root, mount point.
 const MOUNT_POINT_FIELD: usize = 4;
 
-/// The fields after the separator a line must have: filesystem type and
-/// source.
-const REQUIRED_TRAILING_FIELDS: usize = 2;
+/// The position of the filesystem's `major:minor` device number among the
+/// fields before the separator.
+const DEVICE_FIELD: usize = 2;
 
 /// The length of an octal escape: a backslash and three digits.
 const ESCAPE_LENGTH: usize = 4;
+
+/// One line of the mount table: where a filesystem is mounted and what
+/// it is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Mount {
+    /// The kernel's mount ID, as libmount's `utab` names the mount.
+    pub(crate) id: u64,
+    /// The filesystem's device number, `(major, minor)`: the block device
+    /// for a filesystem on one, an anonymous number for others (Btrfs,
+    /// overlays, memory filesystems).
+    pub(crate) device: (u32, u32),
+    /// Where it is mounted, with the kernel's escapes decoded.
+    pub(crate) point: PathBuf,
+    /// The filesystem type, such as `ext4` or `fuse.sshfs`.
+    pub(crate) filesystem: String,
+    /// What is mounted, such as `/dev/sda2`, with escapes decoded.
+    pub(crate) source: Vec<u8>,
+    /// The filesystem's own options, such as `rw,xattr,posixacl`.
+    pub(crate) options: String,
+}
 
 /// The mount points in `/proc/self/mountinfo`.
 ///
@@ -37,42 +57,73 @@ const ESCAPE_LENGTH: usize = 4;
 ///
 /// The error of reading the mount table.
 pub(crate) fn read_mount_points() -> io::Result<HashSet<PathBuf>> {
+    Ok(read_mounts()?.into_iter().map(|mount| mount.point).collect())
+}
+
+/// Every mount in `/proc/self/mountinfo`, in the table's order: a mount
+/// listed later on the same mount point is on top.
+///
+/// # Errors
+///
+/// The error of reading the mount table.
+pub(crate) fn read_mounts() -> io::Result<Vec<Mount>> {
     let table = fs::read(MOUNT_TABLE)?;
-    Ok(parse_mount_points(&table))
+    Ok(parse_mounts(&table))
 }
 
 /// The mount point of each well-formed line of a mount table. Malformed
 /// lines are skipped, as in Python.
+#[cfg(test)]
 fn parse_mount_points(table: &[u8]) -> HashSet<PathBuf> {
+    parse_mounts(table).into_iter().map(|mount| mount.point).collect()
+}
+
+/// Each well-formed line of a mount table. Malformed lines are skipped.
+pub(crate) fn parse_mounts(table: &[u8]) -> Vec<Mount> {
     table
         .split(|&byte| byte == b'\n')
-        .filter_map(mount_point_of_line)
+        .filter_map(mount_of_line)
         .collect()
 }
 
-/// The mount point of one mount table line, with its octal escapes
-/// (`\040` for a space) decoded.
-fn mount_point_of_line(line: &[u8]) -> Option<PathBuf> {
+/// One mount table line, with its octal escapes (`\040` for a space)
+/// decoded.
+fn mount_of_line(line: &[u8]) -> Option<Mount> {
     let separator = line
         .windows(FIELD_GROUP_SEPARATOR.len())
         .position(|window| window == FIELD_GROUP_SEPARATOR)?;
     let (leading, trailing) = line.split_at(separator);
     let trailing = &trailing[FIELD_GROUP_SEPARATOR.len()..];
-    if fields(trailing).count() < REQUIRED_TRAILING_FIELDS {
-        return None;
-    }
-    let escaped = fields(leading).nth(MOUNT_POINT_FIELD)?;
-    Some(PathBuf::from(OsString::from_vec(unescape_octal(escaped))))
+    let mut trailing = fields(trailing);
+    let filesystem = trailing.next()?;
+    let source = trailing.next()?;
+    let options = trailing.next().unwrap_or_default();
+    let leading: Vec<&[u8]> = fields(leading).collect();
+    let escaped = leading.get(MOUNT_POINT_FIELD)?;
+    let id = std::str::from_utf8(leading.first()?).ok()?.parse().ok()?;
+    let (major, minor) = std::str::from_utf8(leading.get(DEVICE_FIELD)?)
+        .ok()?
+        .split_once(':')?;
+    Some(Mount {
+        id,
+        device: (major.parse().ok()?, minor.parse().ok()?),
+        point: PathBuf::from(OsString::from_vec(unescape_octal(escaped))),
+        filesystem: String::from_utf8_lossy(&unescape_octal(filesystem)).into_owned(),
+        source: unescape_octal(source),
+        options: String::from_utf8_lossy(options).into_owned(),
+    })
 }
 
-/// The whitespace-separated fields of `text`.
+/// The space-separated fields of `text`. The kernel escapes only a space,
+/// a tab, a newline and a backslash in a path, so any other character,
+/// a carriage return included, is part of the field it is in.
 fn fields(text: &[u8]) -> impl Iterator<Item = &[u8]> {
-    text.split(u8::is_ascii_whitespace)
-        .filter(|field| !field.is_empty())
+    text.split(|&byte| byte == b' ').filter(|field| !field.is_empty())
 }
 
-/// Decodes the kernel's `\ooo` octal escapes; anything else stays as it is.
-fn unescape_octal(escaped: &[u8]) -> Vec<u8> {
+/// Decodes the kernel's `\ooo` octal escapes, which `/etc/fstab` and
+/// libmount's `utab` use too; anything else stays as it is.
+pub(crate) fn unescape_octal(escaped: &[u8]) -> Vec<u8> {
     let mut decoded = Vec::with_capacity(escaped.len());
     let mut position = 0;
     while position < escaped.len() {
@@ -122,6 +173,33 @@ not a mount line
             .map(PathBuf::from)
             .collect();
         assert_eq!(mount_points, expected);
+    }
+
+    #[test]
+    fn each_mount_keeps_its_filesystem_source_and_options() {
+        let mounts = parse_mounts(TABLE);
+
+        assert_eq!(mounts.len(), 3);
+        assert_eq!(
+            mounts[1],
+            Mount {
+                id: 61,
+                device: (0, 52),
+                point: PathBuf::from("/mnt/nas share"),
+                filesystem: "cifs".into(),
+                source: b"//nas/share".to_vec(),
+                options: "rw,vers=3.1.1".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_carriage_return_in_a_mount_point_stays_in_it() {
+        let mounts = parse_mounts(b"70 22 0:60 / /srv/disk\rcrafted rw - fuse.demo demo rw\n");
+
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(mounts[0].point, PathBuf::from("/srv/disk\rcrafted"));
+        assert_eq!(mounts[0].filesystem, "fuse.demo");
     }
 
     #[test]
