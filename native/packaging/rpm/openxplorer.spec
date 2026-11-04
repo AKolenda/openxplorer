@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.12
+Version:        2.0.13
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -131,6 +131,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Tue Nov 03 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.13-1
+- OpenXplorer 2.0.13: administrator folder deletes are also refused on
+  drives an ordinary user can mount or plug in.
+
 * Tue Nov 03 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.12-1
 - OpenXplorer 2.0.12: a Windows-style progress window, Windows 11's
   Properties windows, renaming several items at once, faster search, and

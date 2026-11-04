@@ -8603,6 +8603,10 @@ msgid "Copies, drags and new folders work as in Windows Explorer: a copy is name
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Deleting a folder permanently under Open as administrator is now also refused on drives an ordinary user can mount or plug in: drives that /etc/fstab lets users mount, drives a user mounted, and removable, USB, SD card, FireWire, Thunderbolt and loop devices."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "File Manager"
 msgstr ""
 
