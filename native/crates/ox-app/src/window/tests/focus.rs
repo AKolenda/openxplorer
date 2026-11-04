@@ -336,3 +336,30 @@ fn switching_views_on_the_unavailable_page_keeps_try_again() {
         "switching the hidden list leaves the page's own control alone"
     );
 }
+
+/// A letter no row of an open menu takes stays with the menu: typing on the
+/// window's chrome goes to the folder, typing in its menus does not.
+///
+/// parity: SEL-030
+#[gtk::test]
+fn typing_in_a_menu_leaves_the_folder_alone() {
+    let fixture = Fixture::standard();
+    let test = super::geometry::laid_out(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let view = super::command_bar::menu_of(&test, "View");
+    view.popup();
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    test.window.folder_pane().model().select_none();
+    assert!(view.row("Terminal").grab_focus(), "a menu row takes the keyboard");
+
+    assert!(
+        !press_after_focus(&test, gdk::Key::n),
+        "the window leaves the letter to the menu"
+    );
+    assert!(view.is_visible(), "the menu stays open");
+    assert!(
+        test.selected_names().is_empty(),
+        "nothing was typed into the folder"
+    );
+    view.popdown();
+}

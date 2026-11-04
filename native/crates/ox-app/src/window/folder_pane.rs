@@ -513,12 +513,16 @@ impl FolderPane {
     }
 
     /// True while the keyboard is somewhere in the pane: on its list, on
-    /// the empty page or on the landing page that shows.
+    /// the empty page or on the landing page that shows. A row the listing
+    /// just dropped keeps the window's focus while out of the pane, so the
+    /// view's own focus chain counts too.
     pub(super) fn has_keyboard_focus(&self) -> bool {
-        self.root()
-            .and_then(|root| root.downcast::<gtk::Window>().ok())
-            .and_then(|window| GtkWindowExt::focus(&window))
-            .is_some_and(|focus| focus.is_ancestor(self))
+        self.view_has_focus()
+            || self
+                .root()
+                .and_then(|root| root.downcast::<gtk::Window>().ok())
+                .and_then(|window| GtkWindowExt::focus(&window))
+                .is_some_and(|focus| focus.is_ancestor(self))
     }
 
     /// The position of the item with keyboard focus in the visible view:
