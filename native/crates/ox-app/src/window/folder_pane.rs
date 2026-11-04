@@ -397,10 +397,12 @@ impl FolderPane {
     pub(super) fn show_view(&self, view: FolderView) {
         // The view that had the keyboard is hidden by the switch: GTK would
         // hand the keyboard to whatever control comes next in the focus chain.
-        // It goes to the view that replaces it, on the item it had.
+        // It goes to the view that replaces it, which the window may start at
+        // the top. Only the listing page shows the views, so a switch made
+        // while the empty page (Try again) or a landing page has the keyboard
+        // changes nothing.
         let previous = self.view();
-        let had_focus = self.has_keyboard_focus();
-        let focused = self.focused_position();
+        let switching_the_listing = self.page() == Some(PanePage::Listing) && self.view_has_focus();
         let parts = self.parts();
         let selection = parts.model.selection();
         let column_view = parts.details.column_view();
@@ -418,12 +420,8 @@ impl FolderPane {
             }
         }
         parts.views.set_visible_child_name(view.stack_name());
-        if previous != view && had_focus {
+        if previous != view && switching_the_listing {
             self.focus_view();
-            let listed = focused.filter(|position| *position < self.model().n_items());
-            if let Some(position) = listed {
-                self.focus_item(position);
-            }
         }
     }
 

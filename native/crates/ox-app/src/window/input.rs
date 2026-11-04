@@ -50,6 +50,13 @@ fn open_folder_action(modifiers: gdk::ModifierType) -> Option<WindowAction> {
     }
 }
 
+/// Whether `key` starts or continues typed text: a printable character, or a
+/// dead key whose accent the input method composes with the next one.
+fn is_text_key(key: gdk::Key) -> bool {
+    let printable = key.to_unicode().is_some_and(|character| !character.is_control());
+    printable || key.name().is_some_and(|name| name.starts_with("dead_"))
+}
+
 /// Keys that only modify another key; pressing one keeps the prefix, so
 /// capitals and `AltGr` characters can be typed.
 fn is_modifier_key(key: gdk::Key) -> bool {
@@ -156,7 +163,9 @@ impl BrowserWindow {
             self,
             #[upgrade_or]
             glib::Propagation::Proceed,
-            move |_, key, _, modifiers| window.type_to_select_from_elsewhere(key, modifiers)
+            move |controller, key, _, modifiers| {
+                window.type_to_select_from_elsewhere(controller, key, modifiers)
+            }
         ));
         self.add_controller(keys);
     }
@@ -166,6 +175,7 @@ impl BrowserWindow {
     /// Settings page, a text field and a page without a list keep the key.
     fn type_to_select_from_elsewhere(
         &self,
+        controller: &gtk::EventControllerKey,
         key: gdk::Key,
         modifiers: gdk::ModifierType,
     ) -> glib::Propagation {
@@ -180,10 +190,25 @@ impl BrowserWindow {
             return glib::Propagation::Proceed;
         }
         // A list that already has the keyboard typed the character itself,
-        // and a page without one has nothing to select.
+        // a page without one has nothing to select, and named keys are not
+        // text.
         let pane = self.folder_pane();
-        if pane.page() != Some(PanePage::Listing) || pane.view_has_focus() {
+        if pane.page() != Some(PanePage::Listing) || pane.view_has_focus() || !is_text_key(key) {
             return glib::Propagation::Proceed;
+        }
+        // The input method of the view that last had the keyboard composes
+        // first, as it does in the view itself: a dead key or an IME commit
+        // types its text through the commit handler.
+        let composed = controller.current_event().is_some_and(|event| {
+            self.imp()
+                .typeahead_input
+                .borrow()
+                .as_ref()
+                .is_some_and(|input| input.filter_keypress(&event))
+        });
+        if composed {
+            pane.focus_view();
+            return glib::Propagation::Stop;
         }
         let Some(character) = key.to_unicode().filter(|character| !character.is_control()) else {
             return glib::Propagation::Proceed;
@@ -383,9 +408,15 @@ impl BrowserWindow {
     fn typing_focus(&self, input: &gtk::IMMulticontext) -> gtk::EventControllerFocus {
         let focus = gtk::EventControllerFocus::new();
         focus.connect_enter(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
             #[strong]
             input,
-            move |_| input.focus_in()
+            move |_| {
+                input.focus_in();
+                // Keys typed on the window's chrome compose here too.
+                window.imp().typeahead_input.replace(Some(input.clone()));
+            }
         ));
         focus.connect_leave(glib::clone!(
             #[weak(rename_to = window)]
@@ -604,6 +635,28 @@ mod tests {
         }
         for key in [gdk::Key::Down, gdk::Key::Home, gdk::Key::Return] {
             assert!(!is_modifier_key(key), "{key:?}");
+        }
+    }
+
+    /// parity: SEL-021, SEL-029
+    #[test]
+    fn only_printable_and_dead_keys_become_text() {
+        for name in ["a", "A", "space", "eacute", "dead_acute", "dead_grave"] {
+            let key = gdk::Key::from_name(name).unwrap_or_else(|| panic!("{name} is a key"));
+            assert!(is_text_key(key), "{name}");
+        }
+        for key in [
+            gdk::Key::Return,
+            gdk::Key::KP_Enter,
+            gdk::Key::Tab,
+            gdk::Key::Escape,
+            gdk::Key::BackSpace,
+            gdk::Key::Delete,
+            gdk::Key::Left,
+            gdk::Key::F2,
+            gdk::Key::Shift_L,
+        ] {
+            assert!(!is_text_key(key), "{key:?}");
         }
     }
 }

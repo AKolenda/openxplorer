@@ -19,6 +19,8 @@ use gtk::subclass::prelude::*;
 use ox_core::location::file_uri;
 use ox_core::places::FolderLocations;
 
+use crate::folder_view::grid::IconSize;
+
 use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
 
 /// A home with the standard folders the sidebar lists, so a row of it opens a
@@ -272,7 +274,7 @@ fn going_back_puts_the_keyboard_in_the_folder() {
 
 /// parity: SEL-020
 #[gtk::test]
-fn switching_views_keeps_the_keyboard_on_the_item() {
+fn switching_views_keeps_the_keyboard_in_the_list() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.wait_for_listing("the first folder");
@@ -289,11 +291,7 @@ fn switching_views_keeps_the_keyboard_on_the_item() {
         test.window.folder_pane().view_has_focus(),
         "the view that replaces the list takes the keyboard"
     );
-    assert_eq!(
-        test.window.folder_pane().focused_position(),
-        Some(notes),
-        "on the item the list had"
-    );
+    assert_eq!(test.selected_names(), ["Notes 2.txt"], "the selection stays");
 }
 
 /// parity: VIEW-027
@@ -311,5 +309,30 @@ fn closing_the_details_pane_puts_the_keyboard_in_the_folder() {
     assert!(
         test.window.folder_pane().view_has_focus(),
         "the folder takes the keyboard the hidden pane had"
+    );
+}
+
+/// parity: SEL-020
+#[gtk::test]
+fn switching_views_on_the_unavailable_page_keeps_try_again() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("go-to", Some(&fixture.uri_of("Gone")));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading()
+            && test.window.folder_pane().page() == Some(crate::window::folder_pane::PanePage::Empty)
+    });
+    let retry = descendants::<gtk::Button>(&test.window.folder_pane().empty_area())
+        .into_iter()
+        .find(WidgetExt::is_visible)
+        .expect("Try again shows");
+    retry.grab_focus();
+
+    test.window
+        .show_view(crate::window::FolderView::Icons(IconSize::LARGE));
+
+    assert!(
+        retry.has_focus(),
+        "switching the hidden list leaves the page's own control alone"
     );
 }
