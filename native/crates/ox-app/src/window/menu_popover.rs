@@ -731,7 +731,17 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
         .filter(|_| check != CheckMark::Checked)
         .and_then(|icon| integration::application_image(Some(icon), ROW_GLYPH));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
+    if item.text_only && check != CheckMark::Checked {
+        // The glyph's column stays, empty, so the text sits where the
+        // other menus' text does.
+        let column = gtk::Box::builder()
+            .width_request(ROW_GLYPH)
+            .height_request(ROW_GLYPH)
+            .build();
+        content.append(&column);
+    } else {
+        content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
+    }
     let label = gtk::Label::builder()
         .label(&item.label)
         .xalign(0.0)

@@ -124,6 +124,7 @@ mod preferences;
 mod progress_window;
 mod quick_access;
 mod quick_look;
+mod quiet_tooltips;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;

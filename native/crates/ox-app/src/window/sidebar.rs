@@ -92,6 +92,9 @@ mod imp {
         /// The sections collapsed with their chevron or the arrow keys
         /// (SIDE-033).
         pub(super) collapsed: RefCell<Vec<Section>>,
+        /// The collapsed section a drag is held over, and the wait before
+        /// it expands (DND-027).
+        pub(super) drag_expand: RefCell<Option<(Section, glib::SourceId)>>,
         /// The location last given to `select`, whose closest place is
         /// highlighted.
         pub(super) location: RefCell<Option<String>>,

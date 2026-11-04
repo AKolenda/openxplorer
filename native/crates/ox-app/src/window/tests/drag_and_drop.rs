@@ -435,6 +435,96 @@ fn a_right_drag_drop_asks_and_creates_shortcuts_here() {
     assert!(fixture.path("Notes 2.txt").is_file(), "the item stays");
 }
 
+/// The right-drag menu is text only, as in Windows Explorer: no glyph on
+/// any row, the text where the other menus' text is. No tooltip shows
+/// while it is open, and tooltips come back once it closes.
+///
+/// parity: DND-027
+#[gtk::test]
+fn the_right_drag_menu_is_text_only_and_hides_tooltips_while_open() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let dropped = [fixture.uri_of("Notes 2.txt")];
+    let sidebar_row = |label: &str| {
+        let index = test
+            .window
+            .sidebar()
+            .labels()
+            .iter()
+            .position(|shown| shown == label);
+        index
+            .and_then(|index| i32::try_from(index).ok())
+            .and_then(|index| test.window.sidebar().list().row_at_index(index))
+            .expect("the sidebar shows the row")
+    };
+    let tooltip_before = sidebar_row("Documents").has_tooltip();
+
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    let menu = test.window.drop_menu();
+    wait_until("the drop menu", || menu.is_mapped());
+    let glyphs: usize = menu
+        .rows()
+        .iter()
+        .map(|row| crate::test_support::harness::descendants::<gtk::Image>(row).len())
+        .sum();
+    let text_starts: Vec<f32> = menu
+        .rows()
+        .iter()
+        .filter_map(|row| {
+            crate::test_support::harness::descendants::<gtk::Label>(row)
+                .into_iter()
+                .next()
+                .map(|label| (row.clone(), label))
+        })
+        .filter_map(|(row, label)| label.compute_point(&row, &gtk::graphene::Point::zero()))
+        .map(|point| point.x())
+        .collect();
+    let tooltip_while_open = sidebar_row("Documents").has_tooltip();
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+    let tooltip_after = sidebar_row("Documents").has_tooltip();
+
+    assert_eq!(glyphs, 0, "no glyphs, as in Windows Explorer");
+    assert!(
+        text_starts.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 0.5)
+            && text_starts.first().is_some_and(|x| *x > 16.0),
+        "the text keeps the glyph column's indent: {text_starts:?}"
+    );
+    assert!(
+        tooltip_before && tooltip_after,
+        "tooltips are back once it closes"
+    );
+    assert!(!tooltip_while_open, "no tooltip while the menu is open");
+}
+
+/// The window shows no tooltip while its items are dragged, once the drag
+/// has started, and its tooltips come back once the drag ends.
+///
+/// parity: DND-027
+#[gtk::test]
+fn tooltips_are_off_while_items_are_dragged() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let row = test
+        .window
+        .sidebar()
+        .list()
+        .row_at_index(1)
+        .expect("the sidebar has rows");
+    let before = row.has_tooltip();
+
+    test.window
+        .drag_content_for(test.position_of("Notes 2.txt"))
+        .expect("the item can be dragged");
+    test.window.show_file_drag_feedback();
+    wait_until("the tooltips to go off", || !row.has_tooltip());
+    test.window.end_file_drag();
+
+    assert!(before, "the row has a tooltip");
+    assert!(row.has_tooltip(), "it is back once the drag ends");
+}
+
 /// A right-button drag dropped in the folder it comes from asks, as in
 /// Windows Explorer: Copy here and Create shortcuts here, but no Move
 /// here, which would do nothing, and nothing in bold, as a plain drop

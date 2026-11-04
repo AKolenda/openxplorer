@@ -108,6 +108,9 @@ pub(in crate::window) struct MenuItem {
     /// Shown in bold, as a crumb's subfolder menu shows the folder the
     /// address goes on to (NAV-020).
     pub emphasised: bool,
+    /// Drawn without its glyph, the label where the other rows' labels
+    /// are, as Windows Explorer's right-drag menu has text only (DND-027).
+    pub text_only: bool,
     /// Why it is disabled in this menu, which its tooltip says.
     pub disabled_reason: Option<&'static str>,
     /// The icon of the application it opens
@@ -132,6 +135,7 @@ impl MenuItem {
             check: ItemCheck::Plain,
             availability: ItemAvailability::FollowsAction,
             emphasised: false,
+            text_only: false,
             disabled_reason: None,
             application_icon: None,
             submenu: Vec::new(),
@@ -190,6 +194,14 @@ impl MenuItem {
         Self {
             check: ItemCheck::FollowsAction,
             ..Self::new(label, glyph, action)
+        }
+    }
+
+    /// The same item without its glyph (see [`MenuItem::text_only`]).
+    pub(in crate::window) fn text_only(self) -> Self {
+        Self {
+            text_only: true,
+            ..self
         }
     }
 

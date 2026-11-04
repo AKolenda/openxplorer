@@ -402,6 +402,7 @@ impl BrowserWindow {
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_START);
         let dragged: HashSet<String> = outgoing.payload.uris.iter().cloned().collect();
         DRAGGED.with(|now| now.replace(dragged.clone()));
+        self.quiet_tooltips_for_drag(true);
         self.folder_pane().owners().show_dragged_items(dragged);
         if outgoing.payload.remote_only > 0 {
             self.show_message(ox_core::i18n::gettext_static(REMOTE_ONLY_MESSAGE));
@@ -424,6 +425,7 @@ impl BrowserWindow {
             );
         }
         DRAGGED.with(|now| now.borrow_mut().clear());
+        self.quiet_tooltips_for_drag(false);
         for pane in self.folder_panes() {
             pane.owners().show_dragged_items(HashSet::new());
         }

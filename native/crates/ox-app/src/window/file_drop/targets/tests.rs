@@ -166,6 +166,50 @@ fn sidebar_folders_take_drops_and_quick_access_pins_only_between_pins() {
     assert_eq!(test.window.sidebar_spot(this_pc), None, "a page takes no drop");
 }
 
+/// As in Windows Explorer's navigation pane, a drag held over a sidebar
+/// folder never opens it in the folder view, and one held over a
+/// collapsed This PC expands it; a drag held over a folder in the folder
+/// view still opens it (DND-021).
+///
+/// parity: DND-021, DND-027, SIDE-033
+#[gtk::test]
+fn a_drag_held_over_the_sidebar_never_navigates_and_expands_a_collapsed_section() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    sidebar.toggle_section("thisPc");
+    wait_for_frames(&test.window, 2);
+    let collapsed = !sidebar.labels_shown().contains(&"Local Disk".to_owned());
+
+    let on_documents = test.window.sidebar_spot(sidebar.middle_of("Documents"));
+    test.window
+        .show_drop_spot(DropZone::Sidebar, on_documents.as_ref());
+    let this_pc = sidebar.middle_of("This PC");
+    test.window.hover_sidebar_during_drag(Some(this_pc));
+    wait_for(Duration::from_millis(1200));
+    let shown_after_hover = test.window.current_uri();
+    let expanded = sidebar.labels_shown().contains(&"Local Disk".to_owned());
+    test.window.leave_drop_zone(DropZone::Sidebar);
+    let on_item = test.window.folder_view_spot(Some(test.position_of("Documents")));
+
+    assert!(collapsed, "This PC starts collapsed");
+    assert_eq!(
+        shown_after_hover,
+        Some(fixture.uri()),
+        "the sidebar never navigates"
+    );
+    assert!(expanded, "a collapsed section held under the drag expands");
+    assert_eq!(
+        on_item.as_ref().and_then(super::spring::folder_to_open),
+        Some(fixture.uri_of("Documents").as_str()),
+        "a folder in the folder view still opens"
+    );
+    assert_eq!(
+        on_documents.as_ref().and_then(super::spring::folder_to_open),
+        None
+    );
+}
+
 /// A drop on a pinned folder copies or moves into it as on any folder,
 /// and a drop between pins still pins.
 ///

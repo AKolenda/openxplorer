@@ -438,11 +438,12 @@ fn takes_shortcuts(folder: &str) -> bool {
 
 /// The drop menu's items for `offer`: Copy here, Move here and Create
 /// shortcuts here where possible, what a plain drop would do in bold, then
-/// Cancel, as Windows Explorer's right-drag menu lists them.
+/// Cancel, as Windows Explorer's right-drag menu lists them: text only,
+/// with no glyphs.
 fn drop_menu_entries(offer: DropMenuOffer) -> Vec<MenuEntry> {
     let choice = |label: &str, glyph: Icon, action: Option<DropAction>| {
         let target = action.map_or(CANCEL_CHOICE, DropAction::name);
-        let mut item = MenuItem::with_text_target(label, glyph, WindowAction::DropChoice, target);
+        let mut item = MenuItem::with_text_target(label, glyph, WindowAction::DropChoice, target).text_only();
         item.emphasised = action.is_some() && action == offer.default;
         MenuEntry::from(item)
     };
@@ -541,6 +542,8 @@ impl BrowserWindow {
     pub(super) fn ask_drop_action(&self, uris: Vec<String>, folder: String, origin: DragOrigin) {
         let pending = PendingDrop { uris, folder };
         self.imp().pending_drop.replace(Some(pending.clone()));
+        // No tooltip of the row under the pointer covers the menu.
+        self.quiet_tooltips_for_drop_menu(true);
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -581,6 +584,11 @@ impl BrowserWindow {
         let menu = MenuPopover::new(Vec::new());
         menu.set_offset(0, 0);
         menu.set_parent(self.folder_pane());
+        menu.connect_closed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| window.quiet_tooltips_for_drop_menu(false)
+        ));
         self.imp()
             .drop_menu
             .set(menu.clone())
