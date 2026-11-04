@@ -35,6 +35,7 @@ use crate::folder_view::item::FileItem;
 use crate::folder_view::model::SelectionSummary;
 use crate::icons::{self, Icon};
 use crate::search::SearchCount;
+use crate::update::UpdateState;
 
 use super::folder_pane::FolderView;
 use super::landing::Capacity;
@@ -176,6 +177,12 @@ mod imp {
         /// "Check for updates" (`#check-updates`).
         #[template_child]
         pub(super) check_updates_button: TemplateChild<gtk::Button>,
+        /// The glyph of [`Self::check_updates_button`].
+        #[template_child]
+        pub(super) update_glyph: TemplateChild<gtk::Image>,
+        /// "Update available" or "Restart to finish updating".
+        #[template_child]
+        pub(super) update_label: TemplateChild<gtk::Label>,
         /// Zooms the icon view through its icon sizes.
         #[template_child]
         pub(super) zoom_slider: TemplateChild<gtk::Scale>,
@@ -270,8 +277,9 @@ impl StatusBar {
 
     /// "Check for updates" opens the Software updates dialog.
     fn finish_check_updates_button(&self) {
-        let check_updates = &*self.imp().check_updates_button;
-        check_updates.set_child(Some(&icons::image(Icon::ArrowClockwise, BUTTON_GLYPH)));
+        let imp = self.imp();
+        let check_updates = &*imp.check_updates_button;
+        icons::set_icon(&imp.update_glyph, Icon::ArrowDownload, BUTTON_GLYPH);
         check_updates.set_tooltip_text(Some(ox_core::i18n::gettext_static(CHECK_FOR_UPDATES)));
         WindowAction::CheckUpdates.assign_to(check_updates);
         // Shown only while a check found something that needs the user
@@ -281,18 +289,35 @@ impl StatusBar {
     }
 
     /// Says on "Check for updates" what a check found that needs the
-    /// user: a newer release, or a restart into an installed one. The
-    /// button then takes the accent colour, and its tooltip says why.
-    pub(super) fn show_update_notice(&self, notice: Option<&str>) {
-        let check_updates = &*self.imp().check_updates_button;
-        check_updates.set_visible(notice.is_some());
-        let Some(notice) = notice else {
+    /// user: "Update available" for a newer release, or "Restart to finish
+    /// updating" for an installed one, in the accent colour, with the
+    /// tooltip saying why. `state` needing nothing hides the button.
+    pub(super) fn show_update_notice(&self, state: &UpdateState) {
+        let imp = self.imp();
+        let check_updates = &*imp.check_updates_button;
+        let (Some(label), Some(notice)) = (state.status_bar_label(), state.status_bar_notice()) else {
+            check_updates.set_visible(false);
             check_updates.remove_css_class(UPDATE_CLASS);
             check_updates.set_tooltip_text(Some(ox_core::i18n::gettext_static(CHECK_FOR_UPDATES)));
             return;
         };
+        let glyph = if state.needs_restart() {
+            Icon::ArrowClockwise
+        } else {
+            Icon::ArrowDownload
+        };
+        icons::set_icon(&imp.update_glyph, glyph, BUTTON_GLYPH);
+        imp.update_label.set_text(label);
         check_updates.add_css_class(UPDATE_CLASS);
-        check_updates.set_tooltip_text(Some(&format!("{CHECK_FOR_UPDATES}\n{notice}")));
+        let title = ox_core::i18n::gettext_static(CHECK_FOR_UPDATES);
+        check_updates.set_tooltip_text(Some(&format!("{title}\n{notice}")));
+        check_updates.set_visible(true);
+    }
+
+    /// The text of "Check for updates", for tests.
+    #[cfg(test)]
+    pub(super) fn check_updates_label(&self) -> String {
+        self.imp().update_label.text().to_string()
     }
 
     /// Whether "Check for updates" shows, for tests.

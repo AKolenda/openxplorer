@@ -15,7 +15,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::TerminalError;
 use ox_core::location::{is_smb_server, parent_location};
-use ox_core::update::Activity;
+use ox_core::settings::PreferencesUpdate;
+use ox_core::update::{Activity, ReleaseVersion};
 
 use super::actions::{plain_action, text_action};
 use super::window_action::WindowAction;
@@ -24,7 +25,7 @@ use super::ButtonStyle;
 use crate::dialog::Dialog;
 use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
-use crate::update::{UpdateDialog, UpdateState};
+use crate::update::{UpdateDialog, Updates};
 
 /// Starts an application with a launch context: [`integration::launch`],
 /// or a recorder in tests, which must never start a real application.
@@ -438,25 +439,74 @@ impl BrowserWindow {
         });
     }
 
-    /// Shows the application's updates in this window: the status bar's
-    /// notice, and the lock while an update installs (UPD-005).
+    /// Shows the application's updates in this window: the command bar's
+    /// Update, the status bar's notice, the notice the daily check pops
+    /// up, and the lock while an update installs (UPD-005).
     fn follow_updates(&self) {
         let updates = self.context().updates();
         let handler = updates.connect_state_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |updates| window.show_update_state(&updates.state())
+            move |updates| window.show_update_state(updates)
         ));
         self.imp().handlers.borrow_mut().updates = Some(handler);
-        self.show_update_state(&updates.state());
+        self.imp().update_notice.connect_choices(
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_| {
+                    window.context().updates().hide_notice();
+                    window.check_for_updates();
+                }
+            ),
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |update| window.dismiss_update_notice(update.latest)
+            ),
+        );
+        self.show_update_state(updates);
     }
 
-    fn show_update_state(&self, state: &UpdateState) {
-        self.status_bar()
-            .show_update_notice(state.status_bar_notice().as_deref());
+    fn show_update_state(&self, updates: &Updates) {
+        let state = updates.state();
+        let notice = state.status_bar_notice();
+        self.command_bar()
+            .show_update(state.command_bar_label(), notice.as_deref());
+        self.status_bar().show_update_notice(&state);
+        self.imp().update_notice.show_update(updates.notice());
         // Nothing in any window works while the package manager runs;
         // the Software updates dialog stays usable.
         self.set_sensitive(!state.is_installing());
+    }
+
+    /// Later on the update notice: closes it in every window and keeps
+    /// `version`'s notice from popping up again.
+    fn dismiss_update_notice(&self, version: ReleaseVersion) {
+        let context = self.context();
+        context.updates().dismiss_notice(version);
+        context.remember_preferences(PreferencesUpdate {
+            update_notice_dismissed: Some(version.to_string()),
+            ..PreferencesUpdate::default()
+        });
+    }
+
+    /// The command bar's Update while it shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn shown_update_button(&self) -> Option<String> {
+        self.command_bar().shown_update()
+    }
+
+    /// The text of the status bar's "Check for updates", for tests.
+    #[cfg(test)]
+    pub(crate) fn status_bar_update_label(&self) -> String {
+        self.status_bar().check_updates_label()
+    }
+
+    /// The update notice, for tests.
+    #[cfg(test)]
+    pub(crate) fn update_notice(&self) -> &super::update_notice::UpdateNotice {
+        &self.imp().update_notice
     }
 
     /// The tooltip of the status bar's "Check for updates", for tests.

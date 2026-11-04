@@ -4,9 +4,9 @@
 //! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
 //! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
 //! New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾,
-//! View ▾, More options, then at the right the Details toggle, as Windows
-//! 11 Explorer's bar ends; the appearance toggle and Settings there are
-//! hidden, as both are in More options. Every control runs a window or application
+//! View ▾, More options, then at the right Update while a release waits,
+//! Settings and the Details toggle; the appearance toggle there is hidden,
+//! as Settings › Appearance chooses the theme. Every control runs a window or application
 //! action. New is disabled where nothing can be created, and Delete is named
 //! plainly "Delete", as in Windows Explorer, or "Delete permanently" in the
 //! Recycle Bin (CMD-003). Share, which was Copy path in the Python app, shows
@@ -136,6 +136,15 @@ mod imp {
         /// Opens the Settings page.
         #[template_child]
         pub(super) settings_button: TemplateChild<gtk::Button>,
+        /// Opens Software updates while a release waits.
+        #[template_child]
+        pub(super) update_button: TemplateChild<gtk::Button>,
+        /// The glyph of [`Self::update_button`].
+        #[template_child]
+        pub(super) update_glyph: TemplateChild<gtk::Image>,
+        /// "Update" or "Restart".
+        #[template_child]
+        pub(super) update_label: TemplateChild<gtk::Label>,
         /// Shows whether the details pane is open.
         #[template_child]
         pub(super) details_toggle: TemplateChild<gtk::ToggleButton>,
@@ -250,18 +259,50 @@ impl CommandBar {
         group.append(&more_button());
     }
 
-    /// Gives the appearance toggle, Settings and the Details toggle, which
-    /// the template places at the right, what it cannot express.
+    /// Gives Update, the appearance toggle, Settings and the Details
+    /// toggle, which the template places at the right, what it cannot
+    /// express.
     ///
-    /// Windows 11 Explorer's bar ends with Details alone; the appearance
-    /// and Settings are in its "…" menu, which already offers both
-    /// ([`more_menu`]), so their buttons stay built but hidden.
+    /// Settings › Appearance chooses the theme, so the appearance toggle
+    /// stays built but hidden; Update shows only while a release waits
+    /// ([`Self::show_update`]).
     fn finish_right_commands(&self) {
+        self.finish_update_button();
         self.finish_appearance_button();
         self.finish_settings_button();
         self.finish_details_toggle();
         self.imp().appearance_button.set_visible(false);
-        self.imp().settings_button.set_visible(false);
+    }
+
+    /// The download glyph and Software updates.
+    fn finish_update_button(&self) {
+        let imp = self.imp();
+        icons::set_icon(&imp.update_glyph, Icon::ArrowDownload, TEXT_COMMAND_GLYPH);
+        WindowAction::CheckUpdates.assign_to(&*imp.update_button);
+    }
+
+    /// Shows Update with `label`, "Update" or "Restart", and `tooltip`
+    /// saying why, or hides it for `None`.
+    pub(super) fn show_update(&self, label: Option<&str>, tooltip: Option<&str>) {
+        let imp = self.imp();
+        let Some(label) = label else {
+            imp.update_button.set_visible(false);
+            return;
+        };
+        imp.update_label.set_text(label);
+        imp.update_button.set_tooltip_text(tooltip);
+        imp.update_button
+            .update_property(&[gtk::accessible::Property::Label(label)]);
+        imp.update_button.set_visible(true);
+    }
+
+    /// The label of Update while it shows, for tests.
+    #[cfg(test)]
+    pub(super) fn shown_update(&self) -> Option<String> {
+        let imp = self.imp();
+        imp.update_button
+            .is_visible()
+            .then(|| imp.update_label.text().to_string())
     }
 
     /// The appearance menu, and the light appearance until the window
@@ -335,11 +376,12 @@ impl CommandBar {
     }
 
     /// Hides what the web layout hides in a window of `band`'s width: the
-    /// appearance label from 1050 pixels, and Cut, Rename, Share and
-    /// Details from 680.
+    /// appearance label from 1050 pixels, and Cut, Rename, Share,
+    /// Details and Update's label from 680.
     pub(super) fn fit_to_width(&self, band: WindowWidth) {
         let imp = self.imp();
         imp.appearance_label.set_visible(band.shows_appearance_label());
+        imp.update_label.set_visible(!band.is_compact());
         for control in imp.hidden_when_compact.borrow().iter() {
             control.set_visible(!band.is_compact());
         }

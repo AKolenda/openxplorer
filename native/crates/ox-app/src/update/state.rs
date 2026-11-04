@@ -25,6 +25,33 @@ pub(crate) struct AvailableUpdate {
     pub(crate) installation: Installation,
 }
 
+impl AvailableUpdate {
+    /// What the update notice says about the release.
+    pub(crate) fn notice_text(&self) -> String {
+        let latest = self.latest.to_string();
+        let current = self.current.to_string();
+        let values = [("latest", latest.as_str()), ("current", current.as_str())];
+        if self.installation.can_install() {
+            ox_core::i18n::format_message(
+                "OpenXplorer {latest} is ready to install. You have {current}.",
+                &values,
+            )
+        } else {
+            ox_core::i18n::format_message("OpenXplorer {latest} is available. You have {current}.", &values)
+        }
+    }
+
+    /// The update notice's button, which opens Software updates: it
+    /// installs the release there, or says what updates this build.
+    pub(crate) fn notice_button(&self) -> &'static str {
+        if self.installation.can_install() {
+            ox_core::i18n::gettext_static("Install update…")
+        } else {
+            ox_core::i18n::gettext_static("Details…")
+        }
+    }
+}
+
 /// What the app knows about updates, in every window.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum UpdateState {
@@ -223,6 +250,26 @@ impl UpdateState {
             _ if self.needs_restart() => {
                 Some(ox_core::i18n::gettext_static("Restart OpenXplorer to finish updating.").to_owned())
             }
+            _ => None,
+        }
+    }
+
+    /// The command bar's update button: "Update" while a newer release
+    /// is available, "Restart" while an installed one waits, else hidden.
+    pub(crate) fn command_bar_label(&self) -> Option<&'static str> {
+        match self {
+            Self::Available(_) => Some(ox_core::i18n::gettext_static("Update")),
+            _ if self.needs_restart() => Some(ox_core::i18n::gettext_static("Restart")),
+            _ => None,
+        }
+    }
+
+    /// The status bar's word on updates, beside its notice
+    /// ([`Self::status_bar_notice`]).
+    pub(crate) fn status_bar_label(&self) -> Option<&'static str> {
+        match self {
+            Self::Available(_) => Some(ox_core::i18n::gettext_static("Update available")),
+            _ if self.needs_restart() => Some(ox_core::i18n::gettext_static("Restart to finish updating")),
             _ => None,
         }
     }
