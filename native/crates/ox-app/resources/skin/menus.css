@@ -38,7 +38,6 @@ popover.ox-menu list > row image.mirrored { -gtk-icon-transform: scaleX(-1); }
    glyphs keep it for their squares, which their files mark "success" for
    GTK's icon palette; their outlines follow the text colour. A disabled
    row greys both out. */
-@define-color ox_command_blue #0078d4;
 popover.ox-menu list > row image { -gtk-icon-palette: success @ox_command_blue; }
 popover.ox-menu list > row image.accent-glyph { color: @ox_command_blue; }
 popover.ox-menu list > row:disabled image.accent-glyph { color: @ox_text_disabled; }
