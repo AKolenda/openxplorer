@@ -6209,6 +6209,14 @@ msgstr ""
 msgid "The path to {path} leads through more than {limit} shortcuts (symbolic links), so it may be a loop. Nothing was deleted."
 msgstr ""
 
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "This is a snapshot or backup folder, which is never deleted."
+msgstr ""
+
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "This system does not say which drive each folder is on (Linux 5.8 or later does), so a whole folder can't be safely deleted as administrator. Nothing was deleted."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_delete/walk.rs
 msgid "{path} ends with a slash, so it names a folder’s contents rather than the item itself. An administrator deletion is given the item’s own path, with nothing added or taken away."

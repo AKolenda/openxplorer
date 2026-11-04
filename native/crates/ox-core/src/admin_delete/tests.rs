@@ -345,6 +345,66 @@ fn a_folder_on_another_mount_is_not_entered_and_is_reported() {
     assert_eq!(reported.left_behind(), vec![&mounted, &selected]);
 }
 
+/// Without the kernel's mount IDs a bind mount of another folder on the
+/// same filesystem has the tree's own device number, so the walk could
+/// not tell it from the tree. The helper deletes nothing on such a
+/// kernel.
+///
+/// parity: XFER-015
+#[test]
+fn without_mount_ids_nothing_is_deleted() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    fs::create_dir_all(selected.join("inner")).expect("the tree is created");
+    fs::write(selected.join("inner/item.txt"), b"keep me").expect("the item is written");
+    let options = Options {
+        mounts: Box::new(|_path, mount| Mount { id: None, ..mount }),
+        ..Options::default()
+    };
+
+    let (result, reported) = run(&selected, &Cancellation::new(), &options);
+
+    assert_eq!(result, Err(walk::no_mount_ids_refusal()));
+    assert!(reported.records.is_empty(), "{:?}", reported.records);
+    assert!(selected.join("inner/item.txt").exists());
+}
+
+/// A conventional snapshot folder in the tree, which the engine's XFER-020
+/// check refuses before the helper starts, is still left alone when it
+/// appears only afterwards, and named among what was not deleted.
+///
+/// parity: XFER-015, XFER-020
+#[test]
+fn a_snapshot_folder_inside_the_tree_is_left_in_place() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    let snapshots = [
+        selected.join(".snapshot"),
+        selected.join("deeper/@GMT-2026.09.05-18.00.00"),
+        selected.join("pool/.zfs/snapshot"),
+    ];
+    for snapshot in &snapshots {
+        fs::create_dir_all(snapshot).expect("the snapshot folder is created");
+        fs::write(snapshot.join("backup.txt"), b"keep me").expect("its item is written");
+    }
+    fs::write(selected.join("mine.txt"), b"delete me").expect("the selected item is written");
+
+    let (result, reported) = run(&selected, &Cancellation::new(), &Options::default());
+
+    let totals = result.expect("the walk runs");
+    assert!(!totals.is_complete(), "{totals:?}");
+    assert_eq!(totals.skipped, 3);
+    for snapshot in &snapshots {
+        assert!(
+            snapshot.join("backup.txt").exists(),
+            "{} was deleted",
+            snapshot.display()
+        );
+        assert!(reported.left_behind().contains(&snapshot));
+    }
+    assert!(!selected.join("mine.txt").exists());
+}
+
 /// The item itself being on another mount means it is a mount point: the
 /// drive, not an item on it.
 ///

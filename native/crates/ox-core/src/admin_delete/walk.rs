@@ -218,12 +218,19 @@ pub(crate) fn delete_tree(
         },
     };
     walk.drive = walk.mount_of(parent.as_fd(), c"", AtFlags::EMPTY_PATH, parent_path)?;
+    // Without the kernel's mount IDs (`statx` before Linux 5.8, or a
+    // seccomp filter that refuses it) a bind mount of another folder of
+    // the same filesystem looks like part of the tree, and the walk would
+    // empty that folder as root. So the helper does not start.
+    if walk.drive.id.is_none() {
+        return Err(no_mount_ids_refusal());
+    }
     // A mount point is the drive itself, not an item on it: removing it
     // would empty whatever is mounted there. A bind mount of a single file
     // is a mount point too, so this is checked without following links and
     // before the item's kind is looked at.
     let target_mount = walk.mount_of(parent.as_fd(), name, AtFlags::SYMLINK_NOFOLLOW, target)?;
-    if !walk.drive.is_same_as(target_mount) {
+    if !walk.is_on_the_drive(target_mount) {
         return Err(mount_point_refusal(target));
     }
     walk.delete_at(parent.as_fd(), name, target, 0)?;
@@ -276,8 +283,15 @@ impl Walk<'_> {
             // bind mount of one file. The item itself was checked before
             // the walk started.
             let mount = self.mount_of(parent, name, AtFlags::SYMLINK_NOFOLLOW, path)?;
-            if !self.drive.is_same_as(mount) {
+            if !self.is_on_the_drive(mount) {
                 self.skipped(path);
+                return Ok(());
+            }
+            // A conventional snapshot folder that appeared since the
+            // engine's XFER-020 check of the tree is left alone, as that
+            // check would have refused it.
+            if is_snapshot_folder(path) {
+                self.protected(path);
                 return Ok(());
             }
         }
@@ -320,7 +334,7 @@ impl Walk<'_> {
         // walk was running: the descriptor is already on that drive, so
         // nothing inside it is read.
         let mount = self.mount_of(folder.as_fd(), c"", AtFlags::EMPTY_PATH, path)?;
-        if !self.drive.is_same_as(mount) {
+        if !self.is_on_the_drive(mount) {
             self.skipped(path);
             return Ok(());
         }
@@ -359,6 +373,12 @@ impl Walk<'_> {
         Ok(())
     }
 
+    /// Whether `mount` is the drive the item is on, by mount ID alone: a
+    /// mount without one is never taken for it.
+    fn is_on_the_drive(&self, mount: Mount) -> bool {
+        matches!((self.drive.id, mount.id), (Some(drive), Some(here)) if drive == here)
+    }
+
     /// The mount of `name` in `dir`, as the walk's probe reports it.
     fn mount_of<P: rustix::path::Arg + Copy>(
         &self,
@@ -383,6 +403,14 @@ impl Walk<'_> {
         });
     }
 
+    /// Records that `path` was left in place because it is a snapshot.
+    fn protected(&mut self, path: &Path) {
+        self.record(Record::Skipped {
+            path: path.to_path_buf(),
+            reason: gettext("This is a snapshot or backup folder, which is never deleted."),
+        });
+    }
+
     /// Records that `path` could not be removed, and goes on.
     fn failed(&mut self, path: &Path, errno: rustix::io::Errno) {
         self.record(Record::Failed {
@@ -404,6 +432,26 @@ impl Walk<'_> {
 pub(super) fn is_the_item(expected: ItemIdentity, seen: &Stat) -> bool {
     let low = u64::from(u32::MAX);
     expected.device & low == seen.st_dev & low && expected.inode == seen.st_ino
+}
+
+/// Whether the item at `path` is a conventional snapshot folder
+/// ([`crate::versions::is_snapshot_folder_name`], or `snapshot` in a
+/// `.zfs` folder), which XFER-020 keeps from being written to.
+fn is_snapshot_folder(path: &Path) -> bool {
+    let name = path.file_name().and_then(OsStr::to_str);
+    let parent = path.parent().and_then(Path::file_name).and_then(OsStr::to_str);
+    name.is_some_and(|name| {
+        crate::versions::is_snapshot_folder_name(name)
+            || [parent.unwrap_or_default(), name] == crate::versions::ZFS_SNAPSHOT_FOLDER
+    })
+}
+
+/// The refusal on a kernel that does not report mount IDs.
+pub(super) fn no_mount_ids_refusal() -> TransferError {
+    refusal(gettext(
+        "This system does not say which drive each folder is on (Linux 5.8 or later does), so \
+         a whole folder can't be safely deleted as administrator. Nothing was deleted.",
+    ))
 }
 
 /// Checks the path the helper was asked to delete and returns its name.

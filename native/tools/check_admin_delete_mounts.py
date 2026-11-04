@@ -74,8 +74,16 @@ def run_helper(helper: Path, target: Path) -> subprocess.CompletedProcess[str]:
     against is the English the message was written in.
     """
     environment = dict(os.environ, LANGUAGE='', LC_ALL='C', LC_MESSAGES='C', LANG='C')
-    return subprocess.run([str(helper), '--', str(target)], capture_output=True, text=True,
-                          stdin=subprocess.DEVNULL, check=False, env=environment)
+    # The device and inode the app would pass, as GIO reports them: the
+    # device number in 32 bits. A target the helper must refuse on its
+    # path may not be reachable here at all; any identity does for it.
+    try:
+        status = os.lstat(target)
+        item = f'{status.st_dev & 0xFFFFFFFF}:{status.st_ino}'
+    except OSError:
+        item = '0:0'
+    return subprocess.run([str(helper), '--item', item, '--', str(target)], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL, check=False, env=environment)
 
 
 def build_image(image: Path) -> None:

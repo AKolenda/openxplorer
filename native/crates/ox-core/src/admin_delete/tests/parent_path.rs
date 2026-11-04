@@ -34,8 +34,8 @@ use rustix::fs::{AtFlags, Mode, OFlags};
 use tempfile::TempDir;
 
 use super::super::walk::{
-    self, not_a_folder_refusal, other_mount_refusal, reachable_link_refusal, too_many_links_refusal,
-    untrusted_link_refusal, Options, TrustedOwner,
+    self, no_mount_ids_refusal, not_a_folder_refusal, other_mount_refusal, reachable_link_refusal,
+    too_many_links_refusal, untrusted_link_refusal, Options, TrustedOwner,
 };
 use crate::safe_walk::Mount;
 use crate::test_support::temporary_folder;
@@ -656,10 +656,12 @@ fn a_link_on_another_drive_is_refused_while_deleting_there_still_works() {
 }
 
 /// Where the kernel reports no mount ID (`statx` before Linux 5.8, or a
-/// container's seccomp filter), the walk compares device numbers
-/// instead of refusing every link: an attacker's filesystem always has
-/// a device of its own, so the rule still holds, and `/home` as a link
-/// keeps working on those systems.
+/// container's seccomp filter), the resolution of the path compares
+/// device numbers instead of refusing every link: an attacker's
+/// filesystem always has a device of its own, so the rule still holds.
+/// The deletion itself is refused there, before anything is deleted:
+/// without mount IDs a bind mount of another folder on the same
+/// filesystem looks like part of the tree, and the walk would empty it.
 ///
 /// parity: XFER-015
 #[test]
@@ -680,7 +682,8 @@ fn without_mount_ids_the_device_decides() {
         ..trusting(trusted_here())
     };
 
-    let on_the_system_drive = delete(&link.join("selected/inner"), &no_ids(None));
+    let on_the_system_drive = resolve(&link.join("selected"), &no_ids(None)).map(|_folder| ());
+    let deleted = delete(&link.join("selected/inner"), &no_ids(None));
     let on_another_device = delete(
         &link.join("selected"),
         &no_ids(Some((link.clone(), ANOTHER_DRIVE))),
@@ -691,8 +694,12 @@ fn without_mount_ids_the_device_decides() {
         Ok(()),
         "the device still says it is the system drive"
     );
+    assert_eq!(deleted, Err(no_mount_ids_refusal()));
     assert_eq!(on_another_device, Err(other_mount_refusal(&link)));
-    assert!(selected.exists(), "the refused deletion removed nothing");
+    assert!(
+        selected.join("inner").exists(),
+        "the refused deletion removed nothing"
+    );
 }
 
 /// A mount ID is reused once the mount that had it goes away, so the
