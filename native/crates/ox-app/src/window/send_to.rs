@@ -19,6 +19,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{BluetoothSender, ExecutableSearch, Sandbox};
+use ox_core::location::same_location;
 use ox_core::network::local_path;
 use ox_core::ops::LinkRequest;
 use ox_core::places::KnownFolder;
@@ -95,7 +96,6 @@ impl BrowserWindow {
                     label: row.label.clone(),
                     uri: uri.clone(),
                     is_network: false,
-                    is_connected: true,
                 })
             }
             _ => None,
@@ -104,7 +104,6 @@ impl BrowserWindow {
             label: share.bookmark.label.clone(),
             uri: share.bookmark.uri.clone(),
             is_network: true,
-            is_connected: share.is_connected,
         });
         let items = self.folder_pane().model().selected_items();
         SendToTargets {
@@ -123,13 +122,34 @@ impl BrowserWindow {
         items.iter().map(|item| item.entry().uri.clone()).collect()
     }
 
+    /// Whether `folder` is a saved network location that is not connected
+    /// now, as This PC shows it.
+    fn is_unconnected_share(&self, folder: &str) -> bool {
+        self.places()
+            .saved_shares
+            .iter()
+            .any(|share| !share.is_connected && same_location(&share.bookmark.uri, folder))
+    }
+
     /// Send to ▸ Documents, a drive or a network location: copies the
     /// selection into `folder` as a paste there does, conflicts, progress
-    /// and Undo included.
+    /// and Undo included. A saved network location that is not connected
+    /// is connected first, as Windows reconnects a mapped drive, through
+    /// the window's usual mount and its sign-in dialog; the copy starts
+    /// only once that succeeds, so no write is ever replayed after a mount
+    /// (NET-004).
     async fn send_to_folder(&self, folder: String) {
         let uris = self.selected_uris();
         if uris.is_empty() {
             return;
+        }
+        if self.is_unconnected_share(&folder) {
+            if let Err(error) = self.network().mount(&folder).await {
+                if !error.is_cancelled() {
+                    self.show_message(&error.to_string());
+                }
+                return;
+            }
         }
         if self.command_facts().selection.has_inoperable {
             self.show_message(ox_core::i18n::gettext_static(

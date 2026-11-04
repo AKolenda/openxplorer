@@ -4,18 +4,22 @@
 //! and Desktop (create shortcut). The home folder, its Desktop and
 //! Documents lie in a temporary directory.
 
+use std::cell::Cell;
 use std::fs;
+use std::rc::Rc;
 use std::path::PathBuf;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::file_uri;
+use ox_core::network::NetworkError;
 use ox_core::ops::JournalDirection;
 use ox_core::places::{FolderLocations, KnownFolder};
 use ox_core::settings::ContextMenu;
 
 use super::context_menus::{choose_menu_style, position_of};
 use super::file_ops_support::{require_private_trash, select_names};
+use super::network::message_box_texts;
 use crate::test_support::harness::{wait_until, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
@@ -177,4 +181,57 @@ fn desktop_create_shortcut_makes_windows_named_links() {
         fs::read(&original).expect("the file"),
         b"Synthetic quarterly figures"
     );
+}
+
+/// A saved network location that is not connected is enabled, as in
+/// Windows: choosing it connects through the window's usual mount, with
+/// its sign-in, and copies only once that succeeds. The share is fictional
+/// and on a host that does not exist, and the tests answer the mount.
+///
+/// parity: CMD-038, NET-004
+#[gtk::test]
+fn a_saved_share_that_is_not_connected_connects_first_then_copies() {
+    let folders = Folders::new();
+    let test = folders.open_menu_on_report();
+    test.window.context_menu().popdown();
+    test.save_share("smb://studio-nas.invalid/media", "Media (M:)");
+    wait_until("the saved share", || {
+        test.window
+            .places()
+            .saved_shares
+            .iter()
+            .any(|share| share.bookmark.label == "Media (M:)" && !share.is_connected)
+    });
+    let mounts = Rc::new(Cell::new(0));
+    let counted = Rc::clone(&mounts);
+    test.window.network().answer_mounts_with(move || {
+        counted.set(counted.get() + 1);
+        Err(NetworkError::NotAFolder)
+    });
+    let choose_share = || {
+        test.window.right_click(Some(position_of(&test, "report.txt")));
+        let menu = test.window.context_menu();
+        assert!(menu.open_submenu_labelled("Send to"));
+        let share = menu.row("Media (M:)");
+        assert!(share.is_sensitive(), "enabled although not connected");
+        share.emit_activate();
+    };
+
+    // A failed connection is reported, and nothing is copied.
+    choose_share();
+    wait_until("the failed connection", || {
+        mounts.get() == 1 && test.window.shown_message_text() == "This location is not a folder."
+    });
+
+    // Once connected, the copy starts: here the fictional host cannot be
+    // reached, which the copy's destination check reports.
+    let counted = Rc::clone(&mounts);
+    test.window.network().answer_mounts_with(move || {
+        counted.set(counted.get() + 1);
+        Ok(())
+    });
+    choose_share();
+    let texts = message_box_texts("Could not check destination");
+    assert_eq!(mounts.get(), 2, "connected once more, then copied");
+    assert!(!texts.is_empty());
 }

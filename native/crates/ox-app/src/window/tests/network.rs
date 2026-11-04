@@ -58,7 +58,7 @@ pub(super) fn open_form_dialog() -> Dialog {
 
 /// The message box headed `title`, once it is shown, and its texts. OK
 /// closes the box before this returns.
-fn message_box_texts(title: &str) -> Vec<String> {
+pub(super) fn message_box_texts(title: &str) -> Vec<String> {
     let find = || {
         let toplevels = gtk::Window::list_toplevels().into_iter();
         let windows = toplevels.filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok());

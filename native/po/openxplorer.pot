@@ -4233,10 +4233,6 @@ msgstr ""
 msgid "Sort by"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs
-msgid "This network location is not connected. Open it to connect, then try again."
-msgstr ""
-
 #: crates/ox-app/src/window/copy_path.rs
 msgid "Open a folder first."
 msgstr ""

@@ -102,10 +102,9 @@ pub(crate) struct SendToDrive {
     pub(crate) label: String,
     /// Its root.
     pub(crate) uri: String,
-    /// A saved network location rather than a removable drive.
+    /// A saved network location rather than a removable drive. One that
+    /// is not connected is offered too: choosing it connects it first.
     pub(crate) is_network: bool,
-    /// Mounted now; a saved location that is not is disabled, saying why.
-    pub(crate) is_connected: bool,
 }
 
 /// What Send to offers beside Compressed (zipped) folder, which is always
@@ -150,10 +149,6 @@ const READ_ONLY_VERSION: &str = crate::i18n::message_id("Items in a previous ver
 
 /// Why Send to ▸ Bluetooth device is disabled for a folder.
 const BLUETOOTH_FILES_ONLY: &str = crate::i18n::message_id("Only files can be sent to a Bluetooth device.");
-
-/// Why Send to disables a saved network location that is not mounted.
-const NOT_CONNECTED: &str =
-    crate::i18n::message_id("This network location is not connected. Open it to connect, then try again.");
 
 /// An item that runs `action`.
 fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
@@ -548,8 +543,7 @@ fn send_to_item(facts: &ItemFacts) -> MenuEntry {
         } else {
             Icon::HardDrive
         };
-        let copy = MenuItem::with_text_target(&drive.label, glyph, WindowAction::SendTo, &drive.uri)
-            .disabled_because(!drive.is_connected, ox_core::i18n::gettext_static(NOT_CONNECTED));
+        let copy = MenuItem::with_text_target(&drive.label, glyph, WindowAction::SendTo, &drive.uri);
         entries.push(copy.into());
     }
     MenuItem::submenu(
@@ -1069,19 +1063,16 @@ mod tests {
                     label: "Holiday stick".to_owned(),
                     uri: "file:///media/demo/HOLIDAY".to_owned(),
                     is_network: false,
-                    is_connected: true,
                 },
                 SendToDrive {
                     label: "Backup (\\\\fileserver) (S:)".to_owned(),
                     uri: "smb://fileserver/backup".to_owned(),
                     is_network: true,
-                    is_connected: true,
                 },
                 SendToDrive {
                     label: "Media (M:)".to_owned(),
                     uri: "smb://studio-nas/media".to_owned(),
                     is_network: true,
-                    is_connected: false,
                 },
             ],
             has_folder: false,
@@ -1148,7 +1139,9 @@ mod tests {
                 (WindowAction::SendTo.into(), text("smb://studio-nas/media")),
             ]
         );
-        assert_eq!(disabled(&send_to.submenu), ["Media (M:)"]);
+        // A saved location that is not connected stays enabled, as in
+        // Windows: choosing it connects first.
+        assert!(disabled(&send_to.submenu).is_empty());
         let compact = labels(&item_menu(&facts, MenuStyle::Compact).entries);
         assert!(!compact.contains(&"Send to".to_owned()), "{compact:?}");
     }
@@ -1221,14 +1214,12 @@ mod tests {
             reasons(&with_folder),
             [
                 ("Bluetooth device".to_owned(), Some(BLUETOOTH_FILES_ONLY)),
-                ("Media (M:)".to_owned(), Some(NOT_CONNECTED)),
             ]
         );
         assert_eq!(
             reasons(&in_version),
             [
                 ("Desktop (create shortcut)".to_owned(), Some(READ_ONLY_VERSION)),
-                ("Media (M:)".to_owned(), Some(NOT_CONNECTED)),
             ]
         );
     }
