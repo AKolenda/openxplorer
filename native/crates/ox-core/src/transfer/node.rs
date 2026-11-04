@@ -278,6 +278,25 @@ pub trait Node: Send + Sync {
         self.delete()
     }
 
+    /// [`Node::delete_tree_of_kind`] for an item the user selected, which
+    /// `selected` described when the operation started. A backend whose
+    /// deletion of a folder runs with more rights than the user's (a whole
+    /// folder under `admin://`) refuses one that is no longer the object
+    /// `selected.identity` names, so a folder another account renamed onto
+    /// the name meanwhile is not deleted in its place.
+    ///
+    /// # Errors
+    ///
+    /// As [`Node::delete_tree_of_kind`].
+    fn delete_selected_tree(
+        &self,
+        selected: &NodeInfo,
+        cancel: &Cancellation,
+        guard: Option<&WriteGuard>,
+    ) -> Result<(), TransferError> {
+        self.delete_tree_of_kind(selected.kind, cancel, guard)
+    }
+
     /// Removes this staging tree, which the engine created. `created` is
     /// the identity recorded right after the engine made it, when the
     /// backend has one.

@@ -12,18 +12,16 @@
 //! | `removal` | Trash (XFER-014) and permanent deletion (XFER-015) |
 //! | `local_delete` | Deletion relative to pinned folder descriptors |
 //! | `remote_delete` | Deletion by path on shares and phones |
-//! | `admin_delete` | The checks that let a folder under `admin://` be deleted by path |
 //!
 //! Permanent deletion of a local item, and cleanup of local staging, run
 //! relative to pinned folder descriptors, so a folder swapped for a
 //! symbolic link during the deletion cannot redirect it. Remote locations
 //! (SMB shares, phones) can only be deleted by path, exactly as the Python
-//! app, Nautilus and Dolphin do. Under `admin://`, where `gvfsd-admin`
-//! deletes by path as root, a folder is deleted only when no other account
-//! can change anything that walk resolves. MTP behaviour is regression-tested with
-//! simulated devices, not hardware.
+//! app, Nautilus and Dolphin do. A whole folder under `admin://`, where
+//! `gvfsd-admin` would delete by path as root, is not deleted here at all:
+//! it goes to the pinned walk of [`crate::admin_delete`]. MTP behaviour is
+//! regression-tested with simulated devices, not hardware.
 
-mod admin_delete;
 mod local_delete;
 mod move_item;
 mod query;
@@ -206,7 +204,7 @@ impl Node for GioNode {
     }
 
     fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
-        self.delete_item_tree(None, cancel, guard)
+        self.delete_item_tree(None, None, cancel, guard)
     }
 
     fn delete_tree_of_kind(
@@ -215,7 +213,16 @@ impl Node for GioNode {
         cancel: &Cancellation,
         guard: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
-        self.delete_item_tree(Some(kind), cancel, guard)
+        self.delete_item_tree(Some(kind), None, cancel, guard)
+    }
+
+    fn delete_selected_tree(
+        &self,
+        selected: &NodeInfo,
+        cancel: &Cancellation,
+        guard: Option<&WriteGuard>,
+    ) -> Result<(), TransferError> {
+        self.delete_item_tree(Some(selected.kind), selected.identity, cancel, guard)
     }
 
     fn delete_staging(&self, created: Option<ItemIdentity>) -> Result<(), TransferError> {

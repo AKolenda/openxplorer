@@ -26,28 +26,33 @@ METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.13', Channel.STABLE: '2.0.13'}
 
 @dataclass(frozen=True)
 class LayoutCase:
-    """Where one channel and layout put the program, its command and the mount helper."""
+    """Where one channel and layout put the program, its command and the helpers."""
 
     channel: Channel
     layout: Layout
     program: str
     command: str
     mount_helper: str | None
+    admin_delete: str | None
 
 
 LAYOUT_CASES = (
     LayoutCase(Channel.STABLE, Layout.DEBIAN, '/opt/openxplorer/bin/openxplorer',
-               '/usr/bin/openxplorer', '/opt/openxplorer/bin/openxplorer-mount-share'),
+               '/usr/bin/openxplorer', '/opt/openxplorer/bin/openxplorer-mount-share',
+               '/opt/openxplorer/libexec/openxplorer-admin-delete'),
     LayoutCase(Channel.PREVIEW, Layout.DEBIAN, '/opt/openxplorer-native/bin/openxplorer-native',
-               '/usr/bin/openxplorer-native', None),
+               '/usr/bin/openxplorer-native', None,
+               '/opt/openxplorer-native/libexec/openxplorer-admin-delete'),
     LayoutCase(Channel.STABLE, Layout.FHS, '/usr/bin/openxplorer', '/usr/bin/openxplorer',
-               '/usr/bin/openxplorer-mount-share'),
+               '/usr/bin/openxplorer-mount-share',
+               '/usr/libexec/openxplorer/openxplorer-admin-delete'),
     LayoutCase(Channel.PREVIEW, Layout.FHS, '/usr/bin/openxplorer-native',
-               '/usr/bin/openxplorer-native', None),
+               '/usr/bin/openxplorer-native', None,
+               '/usr/libexec/openxplorer-native/openxplorer-admin-delete'),
     LayoutCase(Channel.STABLE, Layout.FLATPAK, '/app/bin/openxplorer', '/app/bin/openxplorer',
-               None),
+               None, None),
     LayoutCase(Channel.PREVIEW, Layout.FLATPAK, '/app/bin/openxplorer-native',
-               '/app/bin/openxplorer-native', None),
+               '/app/bin/openxplorer-native', None, None),
 )
 
 
@@ -63,6 +68,8 @@ class StagingTestCase(unittest.TestCase):
         # A real compiled program that accepts --help stands for the helper.
         self.mount_helper = self.folder / 'openxplorer-mount-share'
         shutil.copyfile(shutil.which('true') or '/bin/true', self.mount_helper)
+        self.admin_delete = self.folder / 'openxplorer-admin-delete'
+        shutil.copyfile(shutil.which('true') or '/bin/true', self.admin_delete)
         crate_folder = self.folder / 'crates' / 'glib-0.22.0'
         crate_folder.mkdir(parents=True)
         (crate_folder / 'LICENSE-MIT').write_text('MIT licence text\n', encoding='utf-8')
@@ -72,7 +79,8 @@ class StagingTestCase(unittest.TestCase):
     def install(self, channel: Channel, layout: Layout) -> InstalledTree:
         """Install one package into a fresh staging folder and return it as a tree."""
         staging = self.folder / f'{channel.name}-{layout.name}'
-        request = InstallRequest(channel, layout, self.program, staging, self.mount_helper)
+        request = InstallRequest(channel, layout, self.program, staging, self.mount_helper,
+                                 self.admin_delete)
         package_data.install(request, self.crates)
         root = staging / 'app' if layout is Layout.FLATPAK else staging
         return InstalledTree(root, channel, layout, METAINFO_VERSIONS[channel])
@@ -90,6 +98,8 @@ class InstalledPathsTests(unittest.TestCase):
                 self.assertEqual(paths.command, PurePosixPath(case.command))
                 expected_helper = case.mount_helper and PurePosixPath(case.mount_helper)
                 self.assertEqual(paths.mount_helper, expected_helper)
+                expected_delete = case.admin_delete and PurePosixPath(case.admin_delete)
+                self.assertEqual(paths.admin_delete, expected_delete)
 
     def test_the_debian_program_is_where_the_updater_recognises_the_package(self) -> None:
         # Installation::detect in ox-core's update allows in-app updates only
@@ -143,10 +153,49 @@ class InstallTests(StagingTestCase):
                 self.assertIn('No Python module or script is installed', report.passed)
 
     def test_the_stable_host_packages_need_the_mount_helper(self) -> None:
-        request = InstallRequest(Channel.STABLE, Layout.FHS, self.program, self.folder / 'stage')
+        request = InstallRequest(Channel.STABLE, Layout.FHS, self.program, self.folder / 'stage',
+                                 admin_delete=self.admin_delete)
 
         with self.assertRaisesRegex(RuntimeError, 'openxplorer-mount-share'):
             package_data.install(request, self.crates)
+
+    def test_the_host_packages_need_the_permanent_delete_helper(self) -> None:
+        request = InstallRequest(Channel.PREVIEW, Layout.FHS, self.program, self.folder / 'stage')
+
+        with self.assertRaisesRegex(RuntimeError, 'openxplorer-admin-delete'):
+            package_data.install(request, self.crates)
+
+    def test_each_channel_installs_its_own_helper_under_its_own_polkit_action(self) -> None:
+        """Nothing is shared between the channels: a prompt answered for one
+        of them never lets the other's helper run."""
+        actions = set()
+        helpers = set()
+        for channel in (Channel.STABLE, Channel.PREVIEW):
+            for layout in (Layout.DEBIAN, Layout.FHS):
+                with self.subTest(channel=channel.name, layout=layout.name):
+                    tree = self.install(channel, layout)
+                    report = Report()
+
+                    verify_layout.check_admin_delete(report, tree)
+
+                    self.assertIn("The polkit action is the channel's own", report.passed)
+                    self.assertIn('The polkit action runs exactly the installed helper',
+                                  report.passed)
+                    self.assertIn('The polkit action asks an administrator every session',
+                                  report.passed)
+                    actions.add(package_data.admin_delete_action(channel))
+                    helpers.add(str(tree.paths.admin_delete))
+        self.assertEqual(len(actions), 2)
+        self.assertEqual(len(helpers), 4)
+
+    def test_a_flatpak_installs_no_privileged_helper(self) -> None:
+        """A Flatpak has no host pkexec to start one with, so it ships
+        neither the helper nor a polkit action."""
+        tree = self.install(Channel.PREVIEW, Layout.FLATPAK)
+
+        self.assertIsNone(tree.paths.admin_delete)
+        self.assertIsNone(tree.paths.admin_delete_policy)
+        self.assertEqual(list(tree.root.rglob('*polkit*')), [])
 
     def test_files_get_program_and_data_modes(self) -> None:
         tree = self.install(Channel.PREVIEW, Layout.FHS)

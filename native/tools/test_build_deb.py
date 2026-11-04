@@ -108,14 +108,12 @@ class ControlFieldTests(unittest.TestCase):
         self.assertEqual(fields['Conflicts'], 'winspace-explorer (<< 0.8.0)')
         self.assertEqual(fields['Provides'], 'winspace-explorer')
 
-    def test_only_the_stable_package_recommends_updates_and_the_mount_helper(self) -> None:
+    def test_only_the_stable_package_recommends_the_mount_helper(self) -> None:
         stable = control_of(Channel.STABLE)['Recommends']
         preview = control_of(Channel.PREVIEW)['Recommends']
 
-        for name in ('pkexec', 'cifs-utils'):
-            with self.subTest(name=name):
-                self.assertIn(name, stable)
-                self.assertNotIn(name, preview)
+        self.assertIn('cifs-utils', stable)
+        self.assertNotIn('cifs-utils', preview)
         self.assertNotIn('python', stable + preview)
 
     # parity: CMD-037
@@ -125,6 +123,13 @@ class ControlFieldTests(unittest.TestCase):
                 fields = control_of(channel)
                 self.assertIn('xdg-desktop-portal-gtk', fields['Recommends'])
                 self.assertNotIn('xdg-desktop-portal', fields['Depends'])
+
+    def test_both_channels_recommend_pkexec(self) -> None:
+        # In-app updates ask for it, and so does the permanent-delete
+        # helper of admin:// locations, which both channels install.
+        for channel in Channel:
+            with self.subTest(channel=channel.name):
+                self.assertIn('pkexec', control_of(channel)['Recommends'])
 
     def test_the_preview_installs_beside_the_python_package(self) -> None:
         fields = control_of(Channel.PREVIEW)

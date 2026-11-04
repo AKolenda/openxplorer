@@ -4,9 +4,9 @@
 
 The Debian package, the RPM, the Arch package and the Flatpak all install
 through this tool, so the program, the desktop entry, the AppStream
-metainfo, the icon, the D-Bus service file, the licences and the mount
-helper program land in the same places with the same modes whichever format builds
-them. It ports the file layout of v2.0.0:desktop/tools/build_deb.py;
+metainfo, the icon, the D-Bus service file, the licences, the mount helper
+program and the permanent-delete helper with its polkit action land in the
+same places with the same modes whichever format builds them. It ports the file layout of v2.0.0:desktop/tools/build_deb.py;
 native/packaging/README.md explains each decision.
 """
 from __future__ import annotations
@@ -45,6 +45,18 @@ PORTAL_TEMPLATE = PACKAGING_DATA / 'file-chooser.portal.in'
 # (crates/ox-core/src/bin/openxplorer-mount-share.rs). The mount assistant
 # prints "sudo /usr/bin/openxplorer-mount-share ..." for the user to run.
 MOUNT_HELPER_COMMAND = 'openxplorer-mount-share'
+
+# The administrator's permanent-delete helper, a third Rust program
+# (crates/ox-core/src/bin/openxplorer-admin-delete.rs). The app starts it
+# through pkexec for a whole folder under admin://. It is never on PATH: it
+# is not a command for the user, and the app finds it beside itself
+# (helper_path in crates/ox-core/src/admin_delete/elevation.rs).
+ADMIN_DELETE_COMMAND = 'openxplorer-admin-delete'
+# The polkit action pkexec checks before running it; build_policy_file
+# fills in its placeholders. Every channel has its own action ID and its
+# own helper path, so an authorisation of one never covers the other.
+ADMIN_DELETE_POLICY_TEMPLATE = PACKAGING_DATA / 'admin-delete.policy.in'
+ADMIN_DELETE_ACTION_SUFFIX = 'admin-delete'
 
 # The Python package's older command names, which the stable package keeps.
 # /usr/bin/winspace is also the Exec line of the opt-in "Show in folder"
@@ -129,6 +141,12 @@ class InstalledPaths:
     # the stable host packages do: the preview installs beside the Python
     # package, and a Flatpak cannot add commands to the host.
     mount_helper: PurePosixPath | None
+    # The permanent-delete helper, which both host channels install, and
+    # the polkit action file that lets pkexec run it. A Flatpak installs
+    # neither: it has no host pkexec to start a helper with, and the app
+    # says so instead (helper_path in admin_delete/elevation.rs).
+    admin_delete: PurePosixPath | None
+    admin_delete_policy: PurePosixPath | None
 
 
 def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
@@ -141,8 +159,11 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
             command=PurePosixPath('/app/bin', package),
             share=PurePosixPath('/app/share'),
             licences=PurePosixPath('/app/share/licenses', channel.app_id),
-            mount_helper=None)
+            mount_helper=None,
+            admin_delete=None,
+            admin_delete_policy=None)
     has_helper = channel.is_python_replacement
+    policy = PurePosixPath('/usr/share/polkit-1/actions', f'{channel.app_id}.policy')
     if layout is Layout.DEBIAN:
         home = PurePosixPath('/opt', package)
         return InstalledPaths(
@@ -151,14 +172,29 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
             command=PurePosixPath('/usr/bin', package),
             share=PurePosixPath('/usr/share'),
             licences=PurePosixPath('/usr/share/doc', package),
-            mount_helper=home / 'bin' / MOUNT_HELPER_COMMAND if has_helper else None)
+            mount_helper=home / 'bin' / MOUNT_HELPER_COMMAND if has_helper else None,
+            admin_delete=home / 'libexec' / ADMIN_DELETE_COMMAND,
+            admin_delete_policy=policy)
     return InstalledPaths(
         program=PurePosixPath('/usr/bin', package),
         commands=PurePosixPath('/usr/bin'),
         command=PurePosixPath('/usr/bin', package),
         share=PurePosixPath('/usr/share'),
         licences=PurePosixPath('/usr/share/licenses', package),
-        mount_helper=PurePosixPath('/usr/bin', MOUNT_HELPER_COMMAND) if has_helper else None)
+        mount_helper=PurePosixPath('/usr/bin', MOUNT_HELPER_COMMAND) if has_helper else None,
+        admin_delete=PurePosixPath('/usr/libexec', package, ADMIN_DELETE_COMMAND),
+        admin_delete_policy=policy)
+
+
+def admin_delete_action(channel: Channel) -> str:
+    """Return the polkit action ID pkexec checks before running the helper."""
+    return f'{channel.app_id}.{ADMIN_DELETE_ACTION_SUFFIX}'
+
+
+def build_policy_file(action: str, helper: PurePosixPath) -> str:
+    """Return the polkit action file that lets pkexec run helper."""
+    template = ADMIN_DELETE_POLICY_TEMPLATE.read_text(encoding='utf-8')
+    return template.replace('@ACTION_ID@', action).replace('@HELPER_PATH@', str(helper))
 
 
 @dataclass(frozen=True)
@@ -215,6 +251,10 @@ class InstallRequest:
     # The mount helper Cargo built (target/release/openxplorer-mount-share);
     # required where the layout installs it (InstalledPaths.mount_helper).
     mount_helper: Path | None = None
+    # The permanent-delete helper Cargo built
+    # (target/release/openxplorer-admin-delete); required where the layout
+    # installs it (InstalledPaths.admin_delete).
+    admin_delete: Path | None = None
 
 
 def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
@@ -223,7 +263,7 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     crates are the Rust crates linked into the program (see linked_crates),
     whose licences travel with it. Raises OSError when a source file is
     missing or the staging folder is not writable, and RuntimeError when the
-    layout installs the mount helper but none was given.
+    layout installs a helper but none was given.
     """
     paths = installed_paths(request.channel, request.layout)
     staging = Staging(request.staging)
@@ -232,11 +272,28 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     install_translations(staging, paths.share, request.channel.domain)
     install_licences(staging, paths.licences)
     install_crate_licences(staging, paths.licences / 'rust-crates', crates)
+    install_admin_delete(staging, request, paths)
     if paths.mount_helper is not None:
         if request.mount_helper is None:
             raise RuntimeError(f'This package installs {MOUNT_HELPER_COMMAND}; pass --mount-helper.')
         install_legacy_commands(staging, request.channel, paths.commands,
                                 (request.mount_helper, paths.mount_helper))
+
+
+def install_admin_delete(staging: Staging, request: InstallRequest,
+                         paths: InstalledPaths) -> None:
+    """Install the permanent-delete helper and its polkit action file.
+
+    The helper is not a command: it goes in libexec, with no link on PATH,
+    because only the app starts it and only through pkexec.
+    """
+    if paths.admin_delete is None or paths.admin_delete_policy is None:
+        return
+    if request.admin_delete is None:
+        raise RuntimeError(f'This package installs {ADMIN_DELETE_COMMAND}; pass --admin-delete.')
+    staging.copy(request.admin_delete, paths.admin_delete, PROGRAM_MODE)
+    policy = build_policy_file(admin_delete_action(request.channel), paths.admin_delete)
+    staging.write(policy, paths.admin_delete_policy, DATA_MODE)
 
 
 def install_program(staging: Staging, program: Path, paths: InstalledPaths) -> None:
@@ -438,6 +495,9 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument('--mount-helper', type=Path,
                         help='the openxplorer-mount-share executable Cargo built; required '
                              'for the stable debian and fhs layouts, which install it')
+    parser.add_argument('--admin-delete', type=Path,
+                        help='the openxplorer-admin-delete executable Cargo built; required '
+                             'for the debian and fhs layouts, which install it')
     parser.add_argument('--destdir', required=True, type=Path,
                         help='the staging folder that stands for / (use / inside Flatpak)')
     return parser.parse_args(argv)
@@ -448,7 +508,8 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parse_arguments(argv)
     request = InstallRequest(channel=Channel(arguments.app_id), layout=Layout(arguments.layout),
                              program=arguments.program, staging=arguments.destdir,
-                             mount_helper=arguments.mount_helper)
+                             mount_helper=arguments.mount_helper,
+                             admin_delete=arguments.admin_delete)
     try:
         install(request, linked_crates())
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
