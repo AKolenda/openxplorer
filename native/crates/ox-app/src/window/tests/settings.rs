@@ -212,6 +212,24 @@ fn a_closed_settings_tab_opens_again_with_an_empty_search() {
     assert_eq!(page.search_text(), "");
 }
 
+/// Switching to the Settings tab from the file list leaves the keyboard
+/// in Settings, not nowhere.
+#[gtk::test]
+fn switching_from_the_list_to_the_settings_tab_keeps_its_keyboard() {
+    let (_fixture, test) = window_with_settings_open();
+    test.activate("search", None);
+    test.activate("previous-tab", None);
+    test.window.folder_pane().focus_view();
+    assert!(test.window.folder_pane().view_has_focus());
+
+    test.activate("next-tab", None);
+
+    assert!(test.window.shows_settings());
+    let page = test.window.imp().settings_page.get();
+    let focus = GtkWindowExt::focus(&test.window).expect("something has focus");
+    assert!(focus.is_ancestor(&page), "the focus is in Settings");
+}
+
 #[gtk::test]
 fn ctrl_f_on_the_settings_tab_focuses_the_settings_search() {
     let (_fixture, test) = window_with_settings_open();

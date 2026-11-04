@@ -102,3 +102,7 @@ private-terms.json
 
 # Rust build output.
 native/target/
+
+# A fixture folder of the administrator-deletion tests, which a test run
+# that was killed can leave behind in the crate it was built from.
+openxplorer-parent-path-*/

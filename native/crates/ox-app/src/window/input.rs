@@ -2,7 +2,9 @@
 //! Keyboard and pointer input of the folder views and the address entry:
 //! a new window's first keyboard focus, the keys and clicks that feed or
 //! end type-to-select, a click on blank space, middle-click to open a
-//! folder in a tab, and activation. The typed prefix itself lives in
+//! folder in a tab, and activation. Typing reaches type-to-select from the
+//! views themselves and, after a click on the window's chrome, from the
+//! window's own key handling. The typed prefix itself lives in
 //! [`super::type_to_select`], the context menu in [`super::context_menu`].
 //!
 //! Ports `onKey` and the type-select glue in `v2.0.0:desktop/ui/app.js`
@@ -48,6 +50,14 @@ fn open_folder_action(modifiers: gdk::ModifierType) -> Option<WindowAction> {
     }
 }
 
+/// Whether `key` starts or continues typed text: a printable character, or a
+/// dead key or the Compose key, which the input method composes with the
+/// keys after it.
+fn is_text_key(key: gdk::Key) -> bool {
+    let printable = key.to_unicode().is_some_and(|character| !character.is_control());
+    printable || key == gdk::Key::Multi_key || key.name().is_some_and(|name| name.starts_with("dead_"))
+}
+
 /// Keys that only modify another key; pressing one keeps the prefix, so
 /// capitals and `AltGr` characters can be typed.
 fn is_modifier_key(key: gdk::Key) -> bool {
@@ -84,6 +94,7 @@ impl BrowserWindow {
             self.follow_item_counts(pane);
         }
         self.install_selection_keys();
+        self.install_typing_anywhere();
         self.install_slow_click_rename();
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
@@ -136,6 +147,85 @@ impl BrowserWindow {
         } else {
             GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
         }
+    }
+
+    /// Teaches the window that a printable key pressed while the keyboard is
+    /// anywhere in its chrome belongs to the folder, as Windows Explorer's
+    /// typing does: any click on a command, a crumb, a place or the Details
+    /// pane leaves the keyboard on that control, and typing there still
+    /// selects the next name in the list.
+    fn install_typing_anywhere(&self) {
+        let keys = gtk::EventControllerKey::new();
+        // After the focused widget: text fields, the views and menus take
+        // their own keys first.
+        keys.set_propagation_phase(gtk::PropagationPhase::Bubble);
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |controller, key, _, modifiers| {
+                window.type_to_select_from_elsewhere(controller, key, modifiers)
+            }
+        ));
+        self.add_controller(keys);
+    }
+
+    /// Types `key` into the folder's type-to-select when the keyboard is on
+    /// the window's chrome, moving it into the list first. A dialog, the
+    /// Settings page, a text field, an open menu, the tab strip and a page
+    /// without a list keep the key.
+    fn type_to_select_from_elsewhere(
+        &self,
+        controller: &gtk::EventControllerKey,
+        key: gdk::Key,
+        modifiers: gdk::ModifierType,
+    ) -> glib::Propagation {
+        let shortcut = gdk::ModifierType::CONTROL_MASK
+            | gdk::ModifierType::ALT_MASK
+            | gdk::ModifierType::SUPER_MASK
+            | gdk::ModifierType::META_MASK;
+        if modifiers.intersects(shortcut) {
+            return glib::Propagation::Proceed;
+        }
+        if self.shows_settings() || self.dialog_in_front() || self.focus_is_in_text_field() {
+            return glib::Propagation::Proceed;
+        }
+        // A key no row of an open menu took stays with the menu, and one a
+        // tab did not take stays with the tab strip, as before chrome typing.
+        let kept = GtkWindowExt::focus(self).is_some_and(|focus| {
+            focus.ancestor(gtk::Popover::static_type()).is_some() || focus.is_ancestor(self.tab_strip())
+        });
+        if kept {
+            return glib::Propagation::Proceed;
+        }
+        // A list that already has the keyboard typed the character itself,
+        // a page without one, or whose rows "Working on it..." hides, has
+        // nothing to select, and named keys are not text.
+        let pane = self.folder_pane();
+        let selectable = pane.page() == Some(PanePage::Listing) && pane.shows_rows();
+        if !selectable || pane.view_has_focus() || !is_text_key(key) {
+            return glib::Propagation::Proceed;
+        }
+        // The keyboard moves into the list first, so the input method of the
+        // view shown, which its focus handler makes current, composes the
+        // key as it does in the view itself: a dead key, a Compose sequence
+        // or an IME commit types its text through the commit handler. The
+        // context is taken out of its cell, since its commit can focus a row,
+        // whose focus handler replaces it.
+        pane.focus_view();
+        let input = self.imp().typeahead_input.borrow().clone();
+        let composed = controller
+            .current_event()
+            .is_some_and(|event| input.is_some_and(|input| input.filter_keypress(&event)));
+        if composed {
+            return glib::Propagation::Stop;
+        }
+        let Some(character) = key.to_unicode().filter(|character| !character.is_control()) else {
+            return glib::Propagation::Proceed;
+        };
+        self.type_text(&character.to_string());
+        glib::Propagation::Stop
     }
 
     /// Opens what was typed into the address bar when Enter is pressed.
@@ -328,9 +418,15 @@ impl BrowserWindow {
     fn typing_focus(&self, input: &gtk::IMMulticontext) -> gtk::EventControllerFocus {
         let focus = gtk::EventControllerFocus::new();
         focus.connect_enter(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
             #[strong]
             input,
-            move |_| input.focus_in()
+            move |_| {
+                input.focus_in();
+                // Keys typed on the window's chrome compose here too.
+                window.imp().typeahead_input.replace(Some(input.clone()));
+            }
         ));
         focus.connect_leave(glib::clone!(
             #[weak(rename_to = window)]
@@ -549,6 +645,36 @@ mod tests {
         }
         for key in [gdk::Key::Down, gdk::Key::Home, gdk::Key::Return] {
             assert!(!is_modifier_key(key), "{key:?}");
+        }
+    }
+
+    /// parity: SEL-021, SEL-029
+    #[test]
+    fn only_printable_and_dead_keys_become_text() {
+        for name in [
+            "a",
+            "A",
+            "space",
+            "eacute",
+            "dead_acute",
+            "dead_grave",
+            "Multi_key",
+        ] {
+            let key = gdk::Key::from_name(name).unwrap_or_else(|| panic!("{name} is a key"));
+            assert!(is_text_key(key), "{name}");
+        }
+        for key in [
+            gdk::Key::Return,
+            gdk::Key::KP_Enter,
+            gdk::Key::Tab,
+            gdk::Key::Escape,
+            gdk::Key::BackSpace,
+            gdk::Key::Delete,
+            gdk::Key::Left,
+            gdk::Key::F2,
+            gdk::Key::Shift_L,
+        ] {
+            assert!(!is_text_key(key), "{key:?}");
         }
     }
 }
