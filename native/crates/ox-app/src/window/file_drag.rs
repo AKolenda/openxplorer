@@ -200,7 +200,10 @@ impl BrowserWindow {
         source.connect_drag_end(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, _, _| window.end_file_drag()
+            move |_, drag, _| {
+                super::drag_surface::keep_finished_drag(drag);
+                window.end_file_drag();
+            }
         ));
     }
 

@@ -73,6 +73,7 @@ mod details_hover;
 mod details_pane;
 mod disabled_reasons;
 mod disk_tools;
+mod drag_surface;
 mod empty_page;
 mod environment;
 mod expand_arrows;
