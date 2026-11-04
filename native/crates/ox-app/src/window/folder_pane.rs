@@ -174,11 +174,15 @@ impl FolderPane {
 
     /// Shows `page`.
     pub(super) fn show_page(&self, page: PanePage) {
-        // Keyboard focus follows the folder from the list to the empty
-        // page and back, never staying on a page that is hidden.
-        let had_focus = self.view_has_focus();
+        if self.page() == Some(page) {
+            return;
+        }
+        // Keyboard focus follows the page shown, never staying on a page that
+        // is hidden: GTK would hand it to whatever control comes next in the
+        // focus chain, such as the Details pane's close button.
+        let had_focus = self.has_keyboard_focus();
         self.parts().stack.set_visible_child_name(page.name());
-        if had_focus && !self.view_has_focus() {
+        if had_focus {
             self.focus_view();
         }
     }
@@ -307,7 +311,7 @@ impl FolderPane {
         // Try again may have the keyboard, and the new state hides it, as
         // when trying again finds the folder empty: the keyboard then
         // goes to the page, never staying on a hidden button.
-        let had_focus = self.view_has_focus();
+        let had_focus = self.has_keyboard_focus();
         self.parts().empty.show(state);
         self.show_page(PanePage::Empty);
         if had_focus {
@@ -391,6 +395,12 @@ impl FolderPane {
 
     /// Switches views. Only the visible view holds the selection model.
     pub(super) fn show_view(&self, view: FolderView) {
+        // The view that had the keyboard is hidden by the switch: GTK would
+        // hand the keyboard to whatever control comes next in the focus chain.
+        // It goes to the view that replaces it, on the item it had.
+        let previous = self.view();
+        let had_focus = self.has_keyboard_focus();
+        let focused = self.focused_position();
         let parts = self.parts();
         let selection = parts.model.selection();
         let column_view = parts.details.column_view();
@@ -408,6 +418,13 @@ impl FolderPane {
             }
         }
         parts.views.set_visible_child_name(view.stack_name());
+        if previous != view && had_focus {
+            self.focus_view();
+            let listed = focused.filter(|position| *position < self.model().n_items());
+            if let Some(position) = listed {
+                self.focus_item(position);
+            }
+        }
     }
 
     /// The visible view's scroll adjustment: the compact list scrolls
@@ -497,6 +514,15 @@ impl FolderPane {
         view.has_focus() || view.focus_child().is_some()
     }
 
+    /// True while the keyboard is somewhere in the pane: on its list, on
+    /// the empty page or on the landing page that shows.
+    pub(super) fn has_keyboard_focus(&self) -> bool {
+        self.root()
+            .and_then(|root| root.downcast::<gtk::Window>().ok())
+            .and_then(|window| GtkWindowExt::focus(&window))
+            .is_some_and(|focus| focus.is_ancestor(self))
+    }
+
     /// The position of the item with keyboard focus in the visible view:
     /// the one it had last, when focus is elsewhere in the window.
     pub(super) fn focused_position(&self) -> Option<u32> {
@@ -520,15 +546,33 @@ impl FolderPane {
         ));
     }
 
-    /// Moves keyboard focus into the visible view, or onto the empty page
-    /// while it shows.
+    /// Moves keyboard focus into the page shown: the list, the empty page's
+    /// whole area, or the first card of a landing page. A page with nothing
+    /// to focus leaves the keyboard nowhere, rather than on a widget GTK
+    /// would hand it to when the page is replaced.
     pub(super) fn focus_view(&self) {
-        if self.page() == Some(PanePage::Empty) {
-            self.parts().empty_area.grab_focus();
-        } else if self.model().n_items() == 0 {
-            self.focus_empty_list();
-        } else {
-            self.view_widget().grab_focus();
+        match self.page() {
+            Some(PanePage::Empty) => {
+                self.parts().empty_area.grab_focus();
+            }
+            Some(PanePage::Landing) => {
+                if !self.parts().landing.child_focus(gtk::DirectionType::TabForward) {
+                    self.release_keyboard();
+                }
+            }
+            _ if self.model().n_items() == 0 => self.focus_empty_list(),
+            _ => {
+                self.view_widget().grab_focus();
+            }
+        }
+    }
+
+    /// Lets the window hold no keyboard focus, for a page that has nothing
+    /// to focus.
+    fn release_keyboard(&self) {
+        let window = self.root().and_then(|root| root.downcast::<gtk::Window>().ok());
+        if let Some(window) = window {
+            GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
         }
     }
 

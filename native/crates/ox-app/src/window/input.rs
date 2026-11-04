@@ -2,7 +2,9 @@
 //! Keyboard and pointer input of the folder views and the address entry:
 //! a new window's first keyboard focus, the keys and clicks that feed or
 //! end type-to-select, a click on blank space, middle-click to open a
-//! folder in a tab, and activation. The typed prefix itself lives in
+//! folder in a tab, and activation. Typing reaches type-to-select from the
+//! views themselves and, after a click on the window's chrome, from the
+//! window's own key handling. The typed prefix itself lives in
 //! [`super::type_to_select`], the context menu in [`super::context_menu`].
 //!
 //! Ports `onKey` and the type-select glue in `v2.0.0:desktop/ui/app.js`
@@ -84,6 +86,7 @@ impl BrowserWindow {
             self.follow_item_counts(pane);
         }
         self.install_selection_keys();
+        self.install_typing_anywhere();
         self.install_slow_click_rename();
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
@@ -136,6 +139,58 @@ impl BrowserWindow {
         } else {
             GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
         }
+    }
+
+    /// Teaches the window that a printable key pressed while the keyboard is
+    /// anywhere in its chrome belongs to the folder, as Windows Explorer's
+    /// typing does: any click on a command, a crumb, a place or the Details
+    /// pane leaves the keyboard on that control, and typing there still
+    /// selects the next name in the list.
+    fn install_typing_anywhere(&self) {
+        let keys = gtk::EventControllerKey::new();
+        // After the focused widget: text fields, the views and menus take
+        // their own keys first.
+        keys.set_propagation_phase(gtk::PropagationPhase::Bubble);
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, key, _, modifiers| window.type_to_select_from_elsewhere(key, modifiers)
+        ));
+        self.add_controller(keys);
+    }
+
+    /// Types `key` into the folder's type-to-select when the keyboard is on
+    /// the window's chrome, moving it into the list first. A dialog, the
+    /// Settings page, a text field and a page without a list keep the key.
+    fn type_to_select_from_elsewhere(
+        &self,
+        key: gdk::Key,
+        modifiers: gdk::ModifierType,
+    ) -> glib::Propagation {
+        let shortcut = gdk::ModifierType::CONTROL_MASK
+            | gdk::ModifierType::ALT_MASK
+            | gdk::ModifierType::SUPER_MASK
+            | gdk::ModifierType::META_MASK;
+        if modifiers.intersects(shortcut) {
+            return glib::Propagation::Proceed;
+        }
+        if self.shows_settings() || self.dialog_in_front() || self.focus_is_in_text_field() {
+            return glib::Propagation::Proceed;
+        }
+        // A list that already has the keyboard typed the character itself,
+        // and a page without one has nothing to select.
+        let pane = self.folder_pane();
+        if pane.page() != Some(PanePage::Listing) || pane.view_has_focus() {
+            return glib::Propagation::Proceed;
+        }
+        let Some(character) = key.to_unicode().filter(|character| !character.is_control()) else {
+            return glib::Propagation::Proceed;
+        };
+        pane.focus_view();
+        self.type_text(&character.to_string());
+        glib::Propagation::Stop
     }
 
     /// Opens what was typed into the address bar when Enter is pressed.

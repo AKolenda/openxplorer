@@ -220,6 +220,7 @@ impl BrowserWindow {
             self.reveal_when_listed(id, child);
         }
         self.load_tab(id, LoadMode::Navigate);
+        self.focus_files_after_navigation();
         Ok(())
     }
 
@@ -497,6 +498,25 @@ impl BrowserWindow {
         self.leave_location();
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
+        self.focus_files_after_navigation();
+    }
+
+    /// Puts the keyboard in the folder the tab went to, wherever the click or
+    /// key came from: the navigation pane, a crumb, a landing page, a command
+    /// or the address bar. Typing to select then works at once, instead of
+    /// going to a button or a row the navigation left behind. A text field
+    /// that keeps the keyboard, such as an Open dialog's file name, and the
+    /// tab strip, which the keyboard may be working in while another tab
+    /// changes folder, are left alone.
+    fn focus_files_after_navigation(&self) {
+        if self.focus_is_in_text_field() {
+            return;
+        }
+        let on_tabs = GtkWindowExt::focus(self).is_some_and(|focus| focus.is_ancestor(self.tab_strip()));
+        if on_tabs {
+            return;
+        }
+        self.folder_pane().focus_view();
     }
 
     /// The mouse's Back or Forward side button: one step through the

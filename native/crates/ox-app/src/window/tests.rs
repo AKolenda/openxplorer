@@ -32,6 +32,7 @@ mod explorer_keys;
 mod file_operations;
 mod file_ops_captures;
 pub(super) mod file_ops_support;
+mod focus;
 mod folder_location;
 mod folder_tree;
 mod geometry;
