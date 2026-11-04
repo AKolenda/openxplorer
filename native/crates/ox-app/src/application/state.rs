@@ -61,7 +61,33 @@ pub(super) struct AppState {
     _clock_setting: ClockSetting,
 }
 
+/// How long after startup the daily update check waits, so it never
+/// competes with opening the first window.
+const UPDATE_CHECK_DELAY: u32 = 10;
+
+/// Set to 1, the daily update check never runs: the test runner sets it,
+/// so launched builds never ask GitHub.
+const NO_UPDATE_CHECK: &str = "OX_NO_UPDATE_CHECK";
+
 impl AppState {
+    /// Looks for a newer release shortly after startup, at most once a
+    /// day ([`AppContext::check_for_updates_if_due`]).
+    pub(super) fn check_for_updates_soon(&self) {
+        if std::env::var(NO_UPDATE_CHECK).is_ok_and(|value| value == "1") {
+            return;
+        }
+        let context = self.context.downgrade();
+        glib::timeout_add_seconds_local_once(UPDATE_CHECK_DELAY, move || {
+            let Some(context) = context.upgrade() else {
+                return;
+            };
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |since| since.as_secs());
+            context.check_for_updates_if_due(now);
+        });
+    }
+
     /// Installs the skin on the default display and starts watching the
     /// desktop's colour scheme. `None` without a display.
     pub(super) fn new(app: &gtk::Application, settings: Settings) -> Option<Self> {

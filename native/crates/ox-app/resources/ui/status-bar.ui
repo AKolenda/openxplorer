@@ -79,12 +79,27 @@
       </object>
     </child>
     <child>
-      <!-- #check-updates: the Software updates dialog. -->
+      <!-- #check-updates: the Software updates dialog. It shows, with
+           "Update available" or "Restart to finish updating", only while
+           a check found something that needs the user. -->
       <object class="GtkButton" id="check_updates_button">
         <property name="valign">center</property>
         <accessibility>
           <property name="label" translatable="yes">Check for updates</property>
         </accessibility>
+        <property name="child">
+          <object class="GtkBox">
+            <property name="spacing">6</property>
+            <child>
+              <object class="GtkImage" id="update_glyph">
+                <property name="accessible-role">presentation</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="update_label"/>
+            </child>
+          </object>
+        </property>
       </object>
     </child>
     <child>

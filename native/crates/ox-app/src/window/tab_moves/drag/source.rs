@@ -110,7 +110,10 @@ impl BrowserWindow {
         source.connect_drag_end(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, _, _| window.end_tab_drag()
+            move |_, drag, _| {
+                crate::window::drag_surface::keep_finished_drag(drag);
+                window.end_tab_drag();
+            }
         ));
         handle.add_controller(source);
         self.add_controller(escape_puts_tabs_back(self, &press));

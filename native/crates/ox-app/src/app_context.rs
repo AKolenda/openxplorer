@@ -59,6 +59,10 @@ use crate::update::Updates;
 /// Emitted when the sidebar or the landing pages may list something else.
 const PLACES_CHANGED: &str = "places-changed";
 
+/// How long after one check at launch the next launch checks again: a
+/// day, in seconds.
+const UPDATE_CHECK_INTERVAL: u64 = 24 * 60 * 60;
+
 /// Emitted when every window returns its sidebar and columns to their
 /// default widths ("Reset sidebar and column widths" in Settings).
 const LAYOUT_RESET: &str = "layout-reset";
@@ -281,6 +285,29 @@ impl AppContext {
     #[cfg(test)]
     pub(crate) fn use_folder_relocation(&self, relocation: FolderRelocation) {
         self.imp().folder_relocation.replace(Some(Arc::new(relocation)));
+    }
+
+    /// Looks for a newer release once a day, from the launch, unless
+    /// Settings › About turned that off (UPD-001). `now` is the time in
+    /// seconds since the Unix epoch; a last check in the future, after
+    /// the clock was set back, does not hold the next one off.
+    pub(crate) fn check_for_updates_if_due(&self, now: u64) {
+        let preferences = self.settings_data().preferences;
+        if !preferences.update_checks {
+            return;
+        }
+        let checked_recently = preferences
+            .update_checked_at
+            .is_some_and(|last| last <= now && now - last < UPDATE_CHECK_INTERVAL);
+        if checked_recently {
+            return;
+        }
+        self.remember_preferences(PreferencesUpdate {
+            update_checked_at: Some(now),
+            ..PreferencesUpdate::default()
+        });
+        self.updates()
+            .check_automatically(preferences.update_notice_dismissed);
     }
 
     /// The application's updates, shared by every window.

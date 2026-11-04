@@ -6,7 +6,8 @@
 //! status bar's "Check for updates" (UPD-001). "About this build" runs the
 //! window's `win.about`; "Check for updates" runs
 //! `win.check-updates`, the Software updates dialog, and its row says what
-//! the last check in any window found. "Read license & source
+//! the last check in any window found. "Check for updates automatically"
+//! turns the daily check at launch on or off. "Read license & source
 //! information" runs `win.license`, the licence dialog. "Keyboard
 //! shortcuts" and "Help" run `win.keyboard-shortcuts` (Ctrl+?) and
 //! `win.help` (F1): they, the licence and the build left the command
@@ -15,7 +16,9 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::settings::PreferencesUpdate;
 
+use super::bindings::PreferenceBinding;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
@@ -50,6 +53,13 @@ const UPDATES: ActionGroup = ActionGroup {
     },
     button: crate::i18n::message_id("Check for updates"),
     action: WindowAction::CheckUpdates,
+};
+
+const AUTOMATIC_CHECKS: RowText = RowText {
+    title: "Check for updates automatically",
+    description: "Once a day, when OpenXplorer starts, ask GitHub whether a newer release exists. Nothing \
+                  installs without you.",
+    keywords: "automatic update check daily launch startup notify notification network github privacy",
 };
 
 const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
@@ -100,6 +110,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let about = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     about.append_card(&build_card());
     let (updates, updates_row) = action_group(&UPDATES);
+    updates.add_row(&automatic_checks_row(page));
     about.append_group(&updates);
     follow_updates(page, &updates_row);
     about.append_group(&help_group());
@@ -130,6 +141,20 @@ fn build_card() -> StatusCard {
         notice: None,
     };
     StatusCard::new(status, &[about_build.upcast()])
+}
+
+/// "Check for updates automatically": the daily check at launch.
+fn automatic_checks_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(AUTOMATIC_CHECKS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.update_checks,
+        write: |on| PreferencesUpdate {
+            update_checks: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    row
 }
 
 /// The group `spec` describes, and its row.

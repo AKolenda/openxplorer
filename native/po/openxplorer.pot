@@ -18,7 +18,7 @@ msgid "- Choose Open as administrator on a local folder’s menu, confirm, then 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+, opens Settings, which has its own search box; so does More settings… in Folder Options (… > Options). Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and the update check you ask for. It has no telemetry.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own search box; so does More settings… in Folder Options (… > Options). Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -275,10 +275,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui
 msgid "Check again"
-msgstr ""
-
-#: crates/ox-app/resources/ui/update-dialog.ui
-msgid "Install update…"
 msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui
@@ -1946,7 +1942,7 @@ msgstr ""
 msgid "Cancelling… "
 msgstr ""
 
-#: crates/ox-app/src/properties/size_scan_strip.rs
+#: crates/ox-app/src/properties/size_scan_strip.rs crates/ox-app/src/window/update_notice.rs
 msgid "Dismiss"
 msgstr ""
 
@@ -2018,7 +2014,7 @@ msgstr ""
 msgid "A long time ago"
 msgstr ""
 
-#: crates/ox-app/src/properties/version_row.rs
+#: crates/ox-app/src/properties/version_row.rs crates/ox-app/src/window/update_notice.rs
 msgid "Later"
 msgstr ""
 
@@ -2194,6 +2190,10 @@ msgid "Check for updates"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Check for updates automatically"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty."
 msgstr ""
 
@@ -2218,6 +2218,10 @@ msgid "Look for a newer OpenXplorer release."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Once a day, when OpenXplorer starts, ask GitHub whether a newer release exists. Nothing installs without you."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "Open the manual"
 msgstr ""
 
@@ -2239,6 +2243,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "Updates"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "automatic update check daily launch startup notify notification network github privacy"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -3611,6 +3619,14 @@ msgstr ""
 msgid "Could not restart. {reason}"
 msgstr ""
 
+#: crates/ox-app/src/update/state.rs
+msgid "Details…"
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/update/state.rs
+msgid "Install update…"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
 msgid "Installed: {current}"
@@ -3647,6 +3663,16 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is available. You have {current}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is ready to install. You have {current}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
 msgid "OpenXplorer {version} is installed. Restart to use the update."
 msgstr ""
 
@@ -3655,7 +3681,23 @@ msgid "Preparing update. Approve the administrator prompt to install."
 msgstr ""
 
 #: crates/ox-app/src/update/state.rs
+msgid "Restart"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
 msgid "Restart OpenXplorer to finish updating."
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
+msgid "Restart to finish updating"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs
+msgid "Update"
+msgstr ""
+
+#: crates/ox-app/src/update/state.rs crates/ox-app/src/window/update_notice.rs
+msgid "Update available"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

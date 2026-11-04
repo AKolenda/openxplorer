@@ -375,13 +375,15 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// server has no `GVfs` backend to run on Linux, so it is not offered.
 ///
 /// The rest of what "…" used to list moved where Windows has it (the
-/// user's request of 2026-11-03, CMD-007): New window to Ctrl+N and a
-/// folder's "Open in new window"; Settings to Folder Options' "More
-/// settings…" and Ctrl+,; Default file explorer to Settings > Default
-/// apps; Cache this folder for search to Settings > Search; the
+/// user's request of 2026-11-03, CMD-007): New window to the title bar's
+/// window menu, Ctrl+N and a folder's "Open in new window"; Settings to
+/// the bar's gear, Folder Options' "More settings…" and Ctrl+,; Default
+/// file explorer to Settings > Default apps; Cache this folder for search
+/// to Settings > Search, the search strip and the folder's menu; the
 /// appearances to Settings > Appearance; Show hidden files to View >
 /// Show > Hidden items; Keyboard shortcuts, Help, License & source and
 /// About this build to Settings > About, with F1 and Ctrl+? as before.
+/// Map network location also stays at the foot of the navigation pane.
 pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = match state.place {
         MorePlace::Folder => folder_commands(state),
@@ -390,8 +392,8 @@ pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     entries.extend([
         MenuEntry::Divider,
         // No shortcut text, as Windows 11's "…" shows none; Ctrl+A still
-        // selects all. The three glyphs are the contributor's, drawn to
-        // match Windows', blue squares included (no Fluent glyph does).
+        // selects all. The three glyphs are original icons made to match
+        // Windows', blue squares included (no Fluent glyph has them).
         item(&gettext("Select all"), Icon::SelectAll24, WindowAction::SelectAll),
         item(
             &gettext("Select none"),

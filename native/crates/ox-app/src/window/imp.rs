@@ -37,6 +37,7 @@ use super::tab_strip::TabStrip;
 use super::toast::Toast;
 use super::transfer_panel::TransferPanel;
 use super::type_to_select::Typeahead;
+use super::update_notice::UpdateNotice;
 use crate::app_context::AppContext;
 use crate::network::WindowNetwork;
 use crate::resizer_control::ResizerControl;
@@ -139,6 +140,9 @@ pub(crate) struct BrowserWindow {
     /// The message at the bottom of the workspace.
     #[template_child]
     pub(super) toast: TemplateChild<Toast>,
+    /// Pops up when the daily check finds a newer release.
+    #[template_child]
+    pub(super) update_notice: TemplateChild<UpdateNotice>,
     /// Counts, the type-to-select hint and the view buttons.
     #[template_child]
     pub(super) status_bar: TemplateChild<StatusBar>,
@@ -313,6 +317,7 @@ impl ObjectSubclass for BrowserWindow {
         DetailsPane::ensure_type();
         TransferPanel::ensure_type();
         Toast::ensure_type();
+        UpdateNotice::ensure_type();
         StatusBar::ensure_type();
         SettingsPage::ensure_type();
         klass.bind_template();

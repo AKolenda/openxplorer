@@ -453,6 +453,28 @@ pub struct Preferences {
     /// Windows Explorer. Stored only once chosen.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub downloads_group_by: Option<GroupBy>,
+    /// Look for a newer release once a day when the app starts (UPD-001).
+    /// On by default; stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub update_checks: bool,
+    /// When the app last looked for a release by itself, in seconds since
+    /// the Unix epoch. Stored once it has.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_checked_at: Option<u64>,
+    /// The release whose notice was dismissed with Later; its notice does
+    /// not pop up again. Stored once one was dismissed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_notice_dismissed: Option<String>,
+}
+
+/// The longest release version a dismissed update notice may name.
+const MAX_RELEASE_VERSION: usize = 32;
+
+/// Whether `version` looks like a release version, digits and dots.
+fn is_release_version(version: &str) -> bool {
+    !version.is_empty()
+        && version.len() <= MAX_RELEASE_VERSION
+        && version.chars().all(|c| c.is_ascii_digit() || c == '.')
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -530,6 +552,9 @@ impl Default for Preferences {
             view_defaults: None,
             folder_views: Vec::new(),
             downloads_group_by: None,
+            update_checks: true,
+            update_checked_at: None,
+            update_notice_dismissed: None,
         }
     }
 }
@@ -562,6 +587,47 @@ impl Preferences {
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+    }
+
+    /// The sidebar sections and places hidden: up to 16 short ASCII keys
+    /// and up to 64 locations, else ignored.
+    fn apply_hidden_sidebar_items(&mut self, update: &PreferencesUpdate) {
+        let sections = update.hidden_sidebar_sections.as_ref().filter(|sections| {
+            sections.len() <= MAX_HIDDEN_SECTIONS
+                && sections.iter().all(|key| {
+                    !key.is_empty()
+                        && key.len() <= MAX_SECTION_KEY
+                        && key.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+        });
+        if let Some(sections) = sections {
+            self.hidden_sidebar_sections.clone_from(sections);
+        }
+        let places = update.hidden_sidebar_places.as_ref().filter(|places| {
+            places.len() <= MAX_HIDDEN_PLACES
+                && places.iter().all(|uri| {
+                    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
+                })
+        });
+        if let Some(places) = places {
+            self.hidden_sidebar_places.clone_from(places);
+        }
+    }
+
+    /// The daily update check: whether it runs, when it last did, and the
+    /// release whose notice was dismissed (UPD-001).
+    fn apply_update_checks(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.update_checks, update.update_checks);
+        if let Some(checked_at) = update.update_checked_at {
+            self.update_checked_at = Some(checked_at);
+        }
+        if let Some(version) = update
+            .update_notice_dismissed
+            .as_deref()
+            .filter(|version| is_release_version(version))
+        {
+            self.update_notice_dismissed = Some(version.to_owned());
+        }
     }
 
     /// Applies every valid value in `update` and silently ignores the rest,
@@ -605,26 +671,7 @@ impl Preferences {
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
         replace_if_some(&mut self.sidebar_icon_size, icon_size);
-        let sections = update.hidden_sidebar_sections.as_ref().filter(|sections| {
-            sections.len() <= MAX_HIDDEN_SECTIONS
-                && sections.iter().all(|key| {
-                    !key.is_empty()
-                        && key.len() <= MAX_SECTION_KEY
-                        && key.chars().all(|c| c.is_ascii_alphanumeric())
-                })
-        });
-        if let Some(sections) = sections {
-            self.hidden_sidebar_sections.clone_from(sections);
-        }
-        let places = update.hidden_sidebar_places.as_ref().filter(|places| {
-            places.len() <= MAX_HIDDEN_PLACES
-                && places.iter().all(|uri| {
-                    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
-                })
-        });
-        if let Some(places) = places {
-            self.hidden_sidebar_places.clone_from(places);
-        }
+        self.apply_hidden_sidebar_items(update);
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -668,6 +715,7 @@ impl Preferences {
             self.folder_views.clone_from(folder_views);
         }
         self.downloads_group_by = update.downloads_group_by.or(self.downloads_group_by);
+        self.apply_update_checks(update);
         self.sync_style_defaults(update, columns_changed);
     }
 
@@ -850,6 +898,13 @@ pub struct PreferencesUpdate {
     pub folder_views: Option<Vec<FolderView>>,
     /// The Group by chosen in Downloads while folders share one style.
     pub downloads_group_by: Option<GroupBy>,
+    /// Look for a newer release once a day when the app starts.
+    pub update_checks: Option<bool>,
+    /// When the app last looked for a release by itself.
+    pub update_checked_at: Option<u64>,
+    /// The release whose update notice was dismissed; a value that is not
+    /// a release version is ignored.
+    pub update_notice_dismissed: Option<String>,
 }
 
 impl PreferencesUpdate {
@@ -927,6 +982,9 @@ impl PreferencesUpdate {
                 .get("downloadsGroupBy")
                 .and_then(Value::as_str)
                 .and_then(GroupBy::from_key),
+            update_checks: flag("updateChecks"),
+            update_checked_at: values.get("updateCheckedAt").and_then(Value::as_u64),
+            update_notice_dismissed: text("updateNoticeDismissed").map(str::to_owned),
         })
     }
 }

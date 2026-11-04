@@ -17,10 +17,10 @@ use super::SettingsTest;
 use crate::test_support::harness::{descendants, wait_until};
 
 /// Every setting row before the settings were rearranged, by its title
-/// then, and the row that offers it now, then the rows of the commands
-/// that came from the command bar's "…" menu (CMD-007), by their menu
-/// labels.
-const MOVED_ROWS: [(&str, &str); 67] = [
+/// then, and the row that offers it now, then the rows added since and the
+/// rows of the commands that came from the command bar's "…" menu
+/// (CMD-007), by their menu labels.
+const MOVED_ROWS: [(&str, &str); 68] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -132,6 +132,10 @@ const MOVED_ROWS: [(&str, &str); 67] = [
         "Brave saves to my Linux Downloads folder",
     ),
     ("Check for updates", "Check for updates"),
+    (
+        "Check for updates automatically",
+        "Check for updates automatically",
+    ),
     ("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ("Cache this folder for search", "Cache this folder for search"),
     ("Keyboard shortcuts", "Keyboard shortcuts"),

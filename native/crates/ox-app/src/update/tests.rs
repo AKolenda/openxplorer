@@ -206,8 +206,9 @@ fn open_dialog(test: &TestWindow, updates: &Updates) -> UpdateDialog {
 }
 
 /// "Check for updates" checks GitHub at once and offers the newer release
-/// the original repository publishes; the status bar and About say so in
-/// every window.
+/// the original repository publishes; the command bar's Update, the status
+/// bar and About say so in every window. A check the user asked for pops
+/// up no notice: the dialog says it already.
 ///
 /// parity: UPD-001, UPD-002
 #[gtk::test]
@@ -234,8 +235,43 @@ fn checking_offers_a_newer_release_and_the_status_bar_says_so() {
     let tooltip = test.window.status_bar_update_tooltip();
     assert_eq!(tooltip, "Check for updates\nOpenXplorer 1.0.1 is available.");
     assert!(test.window.shows_status_bar_update(), "a found update shows it");
+    assert_eq!(test.window.status_bar_update_label(), "Update available");
+    assert_eq!(test.window.shown_update_button().as_deref(), Some("Update"));
+    assert_eq!(test.window.update_notice().shown_update(), None);
     capture_dialog(&dialog, "native-update-available.png");
     dialog.close();
+}
+
+/// The daily check at launch pops up a notice for the release it finds;
+/// Later closes it and saves the release, whose notice then never pops up
+/// again, while the command bar's Update stays.
+///
+/// parity: UPD-001
+#[gtk::test]
+fn the_daily_check_pops_up_a_notice_that_later_dismisses() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    simulated.updates.check_automatically(None);
+    wait_until("the check", || !simulated.updates.state().is_busy());
+
+    let notice = test.window.update_notice();
+    assert_eq!(notice.shown_update().map(|update| update.latest), Some(NEXT));
+    assert_eq!(
+        notice.text(),
+        "OpenXplorer 1.0.1 is ready to install. You have 1.0.0."
+    );
+    notice.click_later();
+    assert_eq!(notice.shown_update(), None);
+    assert_eq!(test.window.shown_update_button().as_deref(), Some("Update"));
+    wait_until("the dismissal to be saved", || {
+        test.context
+            .settings_data()
+            .preferences
+            .update_notice_dismissed
+            .as_deref()
+            == Some("1.0.1")
+    });
 }
 
 /// Install update… downloads and verifies the installer, runs the fixed
@@ -272,6 +308,11 @@ fn installing_verifies_installs_and_offers_the_restart() {
             ("Check again".to_owned(), false),
             ("Restart now".to_owned(), true),
         ]
+    );
+    assert_eq!(test.window.shown_update_button().as_deref(), Some("Restart"));
+    assert_eq!(
+        test.window.status_bar_update_label(),
+        "Restart to finish updating"
     );
     assert_eq!(
         simulated.updates.new_window_refusal().as_deref(),

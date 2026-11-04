@@ -52,8 +52,8 @@ pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
         match group {
             // Extract all shows only inside a ZIP opened like a folder.
             Some(group) => controls.extend(children(&group).filter(WidgetExt::is_visible)),
-            // The appearance toggle and Settings are hidden, as Windows 11
-            // Explorer's bar has neither.
+            // The appearance toggle is hidden, as Settings › Appearance
+            // chooses the theme; Update shows only while a release waits.
             None if child.is_visible() => controls.push(child),
             None => {}
         }
@@ -111,6 +111,7 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Sort",
             "View",
             "More options",
+            "Settings (Ctrl+,)",
             "Details",
         ]
     );
@@ -770,11 +771,11 @@ fn menu_marks_are_dots_for_choices_and_checks_for_toggles_beside_the_glyph() {
     view.popdown();
 }
 
-/// The glyphs of "…" and View are Windows 11's: the contributor's own
-/// Select all, Select none and Invert selection, drawn to match Windows'
-/// (no Fluent glyph does), and the bundled Fluent icons closest to the
-/// rest: Undo's arrow and the pin in Windows' blue, the wrench and gear,
-/// This PC's network commands, the view sizes, the panes and Show's items.
+/// The glyphs of "…" and View are Windows 11's: original icons made to
+/// match Windows' for Select all, Select none, Invert selection, Options
+/// and the network commands (no Fluent glyph has them), and the bundled
+/// Fluent icons closest to the rest: Undo's arrow and the pin in Windows'
+/// blue, the wrench, the view sizes, the panes and Show's items.
 ///
 /// parity: CMD-007, CMD-006
 #[gtk::test]
