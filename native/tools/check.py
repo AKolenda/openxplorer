@@ -269,6 +269,9 @@ def isolated_environment(root: Path) -> dict[str, str]:
     # Tests that start real processes run only when they see this: the
     # command runs inside xvfb-run and dbus-run-session (isolated_command).
     environment[ISOLATION_MARKER] = '1'
+    # Launched builds never run the daily update check, so no test asks
+    # GitHub for a release.
+    environment['OX_NO_UPDATE_CHECK'] = '1'
     return environment
 
 

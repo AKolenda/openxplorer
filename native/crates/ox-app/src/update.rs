@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The app's own updater, as the windows use it: "Check for updates",
-//! the Software updates dialog, the update notice of the status bar and
-//! About, and the launch guard behind `--restart`.
+//! the Software updates dialog, the daily check at launch and the notices
+//! it raises in the command bar, the status bar and About, and the launch
+//! guard behind `--restart`.
 //!
 //! Ports `updatesDialog` in `v2.0.0:desktop/ui/app.js`, the update branches of
 //! `dispatch` and `main` in `v2.0.0:desktop/winspace.py`, and the launch checks of
@@ -46,13 +47,13 @@ use ox_core::update::{
 
 pub(crate) use dialog::UpdateDialog;
 pub(crate) use launch_guard::{LaunchCheck, RuntimeInfo, LAUNCHER_OPTIONS};
-pub(crate) use state::UpdateState;
+pub(crate) use state::{AvailableUpdate, UpdateState};
 
 /// Emitted whenever [`Updates::state`] changes.
 const STATE_CHANGED: &str = "state-changed";
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
     use std::path::PathBuf;
     use std::rc::Rc;
     use std::sync::OnceLock;
@@ -74,6 +75,12 @@ mod imp {
         pub(super) service: OnceCell<Rc<UpdateService>>,
         /// What the app knows about updates now.
         pub(super) state: RefCell<UpdateState>,
+        /// The last check was the daily one at launch, not one the user
+        /// asked for, so a release it finds pops up a notice.
+        pub(super) automatic: Cell<bool>,
+        /// The release whose notice was dismissed, as the settings keep
+        /// it; its notice does not pop up.
+        pub(super) dismissed: RefCell<Option<String>>,
     }
 
     #[glib::object_subclass]
@@ -153,12 +160,59 @@ impl Updates {
     }
 
     /// Asks GitHub for the latest release, unless a check or an
-    /// installation runs already. Only the user starts a check: browsing
-    /// and search never do (UPD-001).
+    /// installation runs already. Browsing and search never check; the
+    /// user does, or the daily check at launch (UPD-001).
     pub(crate) fn check(&self) {
         if self.state().is_busy() {
             return;
         }
+        self.imp().automatic.set(false);
+        self.start_check();
+    }
+
+    /// The daily check at launch: asks GitHub as [`Self::check`] does,
+    /// unless anything happened to updates since the app started. A
+    /// release it finds pops up a notice, unless it is `dismissed`, the
+    /// release whose notice was dismissed before.
+    pub(crate) fn check_automatically(&self, dismissed: Option<String>) {
+        if self.state() != UpdateState::NotChecked {
+            return;
+        }
+        let imp = self.imp();
+        imp.dismissed.replace(dismissed);
+        imp.automatic.set(true);
+        self.start_check();
+    }
+
+    /// The release the update notice pops up for: a newer release the
+    /// daily check found, unless its notice was dismissed.
+    pub(crate) fn notice(&self) -> Option<AvailableUpdate> {
+        let imp = self.imp();
+        if !imp.automatic.get() {
+            return None;
+        }
+        let update = self.state().available()?;
+        let dismissed = imp.dismissed.borrow();
+        (dismissed.as_deref() != Some(update.latest.to_string().as_str())).then_some(update)
+    }
+
+    /// Closes the update notice in every window; `version` stays dismissed
+    /// for this run, and the caller saves it for the next ones.
+    pub(crate) fn dismiss_notice(&self, version: ReleaseVersion) {
+        self.imp().dismissed.replace(Some(version.to_string()));
+        self.emit_by_name::<()>(STATE_CHANGED, &[]);
+    }
+
+    /// Closes the update notice in every window for this run only, as
+    /// when the user opens Software updates from it.
+    pub(crate) fn hide_notice(&self) {
+        if self.imp().automatic.replace(false) {
+            self.emit_by_name::<()>(STATE_CHANGED, &[]);
+        }
+    }
+
+    /// Asks GitHub, whoever started the check.
+    fn start_check(&self) {
         self.set_state(UpdateState::Checking);
         glib::spawn_future_local(glib::clone!(
             #[strong(rename_to = updates)]
