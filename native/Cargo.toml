@@ -57,6 +57,16 @@ ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 # The CRC-32 every extracted or previewed ZIP member is checked against.
 crc32fast = "1.5"
 tempfile = "3"
+# The Details tab of Properties reads a video's or audio file's streams and
+# tags with GStreamer's discoverer (gst-pbutils), as the GNOME file managers
+# do, in a child process (ox-app's `media_details`). Building needs
+# libgstreamer1.0-dev and libgstreamer-plugins-base1.0-dev; the app's GTK
+# already loads these libraries for video previews.
+gstreamer = "0.25"
+gstreamer-pbutils = "0.25"
+# A picture's EXIF for the same tab: pure Rust, reading only bytes already
+# in memory, so no C library parses the picture.
+kamadak-exif = "0.6.1"
 ox-core = { path = "crates/ox-core" }
 
 # Every crate inherits these lints with `[lints] workspace = true`, so editors,

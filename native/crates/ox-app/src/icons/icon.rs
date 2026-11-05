@@ -221,6 +221,10 @@ pub(crate) enum Icon {
     ShieldLock,
     /// `square_multiple_20_regular`: the window's restore button.
     SquareMultiple,
+    /// `star_20_regular`: an empty star of the Details tab's Rating.
+    Star,
+    /// `star_20_filled`: a star the Rating gives.
+    StarFilled,
     /// `subtract_20_regular`: the window's minimise button and Smaller text.
     Subtract,
     /// `table_20_regular`: New CSV file.
@@ -345,6 +349,8 @@ impl Icon {
             Icon::Share => "ox-share-20-symbolic",
             Icon::ShieldLock => "ox-shield-lock-20-symbolic",
             Icon::SquareMultiple => "ox-square-multiple-20-symbolic",
+            Icon::Star => "ox-star-20-symbolic",
+            Icon::StarFilled => "ox-star-20-filled-symbolic",
             Icon::Subtract => "ox-subtract-20-symbolic",
             Icon::Table => "ox-table-20-symbolic",
             Icon::TableColor20 => "ox-table-20-color",
@@ -382,7 +388,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 100] = [
+pub(crate) const ALL_ICONS: [Icon; 102] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowClockwise,
@@ -468,6 +474,8 @@ pub(crate) const ALL_ICONS: [Icon; 100] = [
     Icon::Share,
     Icon::ShieldLock,
     Icon::SquareMultiple,
+    Icon::Star,
+    Icon::StarFilled,
     Icon::Subtract,
     Icon::Table,
     Icon::TableColor20,
