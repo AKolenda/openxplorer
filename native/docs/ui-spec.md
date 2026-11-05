@@ -616,6 +616,7 @@ TT#L52, TT#L76–77). Tag: safe.
 | Text input | 35 high (keep), radius 4, background `@ox_chrome`, `border: 1px solid @ox_border; border-bottom-color: @ox_input_bottom`; focus: bottom 2 px `@ox_accent` | TextBox (§4.2) | safe |
 | Checkbox | 16 × 16, accent fill when checked | — | Keep. |
 | Auth caption bar | 43 high; close button 44 × 42 with a `@ox_critical_fill` hover ✓ | — | Keep. |
+| Properties: Details tab (files only, between Security and Previous Versions) | a sunken list (`.properties-list-frame`, 320 px high, scrolling) under a Property / Value header split by a 1 px `@ox_border` rule; headings `@ox_accent` text followed by a 1 px `alpha(@ox_accent, .35)` rule to the right edge; a 128 px name column and the value; Rating as five 14 px Fluent stars (`star_20_filled` / `star_20_regular`) in `@ox_muted`; the cursor's row `@ox_selected`; no animation; values selectable after Enter, F2 or a click, Ctrl+C copies the cursor's value; rows without a Linux source are left out; no "Remove Properties and Personal Information" link (PROP-035) | Windows 11 Properties > Details | safe |
 
 ### 4.12 Scrollbars
 

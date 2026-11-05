@@ -13910,6 +13910,35 @@ native = "done"
 native_note = "native/crates/ox-core/tests/sizes_scan.rs (the_space_files_take_on_disk_is_totalled_with_hard_links_once, the_space_on_disk_is_unknown_when_a_file_does_not_report_it); native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_a_files_properties_in_a_window_of_its_own, a_folders_size_and_contents_count_by_themselves, properties_of_several_items_total_them_and_change_them_together, size_on_disk_of_several_items_follows_links_as_size_does). Files read standard::allocated-size; the local scan adds st_blocks × 512 and the GIO scan standard::allocated-size. Sizes show every byte, as Explorer's ('316 KB (323,584 bytes)'). Closing the window stops reading the space of the selected files, as it stops the folder scans (native/crates/ox-app/src/properties/selection_view.rs: a_cancelled_dialog_stops_reading_the_space_on_disk)."
 
 [[feature]]
+id = "PROP-034"
+area = "PROP"
+title = "Details tab of a file"
+behaviour = "As in Windows 11, a file's Properties (never a folder's) has a Details tab between Security and Previous Versions: a list under a Property and Value header, with blue headings and a thin rule after each, in Windows' order and wording. A picture shows Description (Title, Subject, Rating, Tags, Comments), Origin (Authors, Date taken, Program name, Copyright), Image (Dimensions, Width, Height, Horizontal and Vertical resolution, Bit depth, Color representation), Camera (Camera maker, Camera model, F-stop, Exposure time, ISO speed, Exposure bias, Focal length, Metering mode, Flash mode, 35mm focal length) and Advanced photo (Lens maker, Lens model, Exposure program, White balance, EXIF version); a video Description, Video (Length, Frame width, Frame height, Data rate, Total bitrate, Frame rate), Audio (Bit rate, Channels, Audio sample rate), Media (Contributing artists, Year, Genre), Origin (Publisher, Encoded by, Copyright) and Content (Composers, Conductors); an audio file Description, Media (Contributing artists, Album artist, Album, Year, #, Genre, Length), Audio, Origin and Content. Every file ends with File (Name, Item type, Folder path, Date created, Date modified, Size, Attributes, Owner). Rows and headings Linux has no value for are left out, never shown empty; Rating is five stars wherever the format keeps one. The values are read only. The list moves with the keyboard, each row reads as 'Name: value', Ctrl+C copies the cursor's value and Enter, F2 or a click lets its text be selected. The file is read in a reader process that is stopped after 10 seconds or when the window closes, so a slow share, a huge file or a damaged one never holds Properties up."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Properties > Details", "GStreamer gst-pbutils GstDiscoverer", "EXIF 2.32 (CIPA DC-008); Windows XP tags 0x9C9B-0x9C9F and Rating 0x4746", "PNG 1.2: IHDR, pHYs, tEXt, iTXt"]
+python_tests = []
+bridge = []
+gnome = "GstDiscoverer for streams and tags, as Nautilus' audio and video properties, with parsebin when decoders are missing; GFileInfo for the File rows"
+native = "done"
+native_note = "native/crates/ox-app/src/properties/details_tab.rs (the list, keys and reader), details_rows.rs (headings, order, wording; a_photos_rows_follow_windows, an_unrated_picture_shows_empty_stars, video_and_audio_rows_follow_windows, other_files_have_only_their_file_rows), native/crates/ox-app/src/media_details.rs and media_details/tests.rs (a_photos_exif_is_read_from_its_start, camera_values_of_any_numeric_type_are_read, a_png_gives_its_header_and_text, damaged_pictures_are_read_safely, a_songs_tags_and_stream_are_discovered, a_videos_streams_are_discovered, a_video_is_read_without_decoding_it, an_unreadable_media_file_gives_nothing, a_slow_reader_is_stopped_after_its_time, stopping_ends_a_running_reader) over pictures, Ogg videos and songs made in the tests with fictional tags; native/crates/ox-app/src/window/tests/details_tab.rs (a_photos_details_tab_lists_its_exif, a_songs_details_and_a_documents_file_rows, a_folder_has_no_details_tab). The reader is the app started again with --ox-read-media-details: it limits its own processor time to 20 seconds, reads at most the first 4 MiB of a picture (EXIF parsed by kamadak-exif in pure Rust) or lets GStreamer's discoverer read a video or audio file (4 seconds at most), falling back to parsing it without decoding (urisourcebin ! parsebin) when no decoder is installed for any of its streams, so an MP4 still shows its frame size, frame rate and length; it writes JSON; a reader that crashes, hangs or writes nonsense leaves only the File rows. Not shown, for want of a Linux source: Image ID, Date acquired, Compression, Resolution unit, Max aperture, Subject distance, Flash energy, Subtitle, Parental rating, Directors, Producers, Writers, Content provider, Media created, Author URL, Promotion URL, Period, Mood, Part of set, Initial key, Beats-per-minute, Protected, Availability, Offline status, Shared with and Computer."
+
+[[feature]]
+id = "PROP-035"
+area = "PROP"
+title = "Remove Properties and Personal Information"
+behaviour = "Windows' Details tab ends with 'Remove Properties and Personal Information', which offers to create a copy with all possible properties removed or to remove chosen properties from the file itself."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Properties > Details > Remove Properties and Personal Information"]
+python_tests = []
+bridge = []
+native = "todo"
+native_note = "Left out on purpose: the Details tab shows no link. Windows' second choice removes chosen properties from the file in place, which needs a metadata writer for every format the tab shows on (EXIF and XMP inside JPEG, PNG, TIFF, WebP and HEIF; ID3, Vorbis comments and MP4 atoms for audio and video). The app has none it could vet, and a link that offers Windows' two choices but can honour them only for some formats, or rewrites a file without proving it cannot corrupt it, would not be safe. A future version could start with the first choice for JPEG and PNG only (a new copy written beside the original, never replacing it)."
+
+[[feature]]
 id = "SET-001"
 area = "SET"
 title = "Settings opens as its own tab"

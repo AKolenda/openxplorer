@@ -175,5 +175,7 @@ it.
 | `status/ox-clock-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/clock_20_regular.svg` | fd5202fb96544171c260e8541138dfb49c29a7db3c1801cdc5a15333f673e067 |
 | `status/ox-info-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/info_20_regular.svg` | b2171313057fcd3cffca9c20cf905a05977e63eebe5275bab4371b1f0d4a1ff8 |
 | `status/ox-shield-lock-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/shield_lock_20_regular.svg` | 1ee2491675efa4f0882313130035a5ae4bcf7b3a0634fe33f60ddf30390dbc2b |
+| `status/ox-star-20-filled-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/star_20_filled.svg` | cc9978158a2dc62250a2321e1ba54d6f96108e3ec739eef52ed48c628604cbac |
+| `status/ox-star-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/star_20_regular.svg` | ed9f5a8c58c4a2b0f240467fe5f63d5849425004971214bee6ba8afbced27e7d |
 | `status/ox-weather-moon-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/weather_moon_20_regular.svg` | b2d3062ea927710445bb892b35988e106978fc57fe37ede9cf37549eb0d58cd7 |
 | `status/ox-weather-sunny-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/weather_sunny_20_regular.svg` | 488eef0eb62101ae3350dc2ae0c8ca77f4caacdcd56946dd0b503e63940b9b02 |

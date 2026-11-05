@@ -878,7 +878,7 @@ msgstr ""
 msgid "Date accessed"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/grouping.rs
 msgid "Date created"
 msgstr ""
 
@@ -890,7 +890,7 @@ msgstr ""
 msgid "Link destination"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/permissions_editor.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/permissions_editor.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs
 msgid "Owner"
 msgstr ""
 
@@ -906,15 +906,15 @@ msgstr ""
 msgid "Date deleted"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-core/src/grouping.rs
 msgid "Date modified"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs
 msgid "Folder path"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
 msgid "Name"
 msgstr ""
 
@@ -922,7 +922,7 @@ msgstr ""
 msgid "Original location"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Size"
 msgstr ""
 
@@ -1346,6 +1346,453 @@ msgstr ""
 msgid "You can change the folder icon. If you change the icon, it will no longer show a preview of the folder's contents."
 msgstr ""
 
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "#"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/format/explorer_text.rs
+msgctxt "decimal separator"
+msgid "."
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "1 (mono)"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "2 (stereo)"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "35mm focal length"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Action program"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Advanced photo"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Album"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Album artist"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Aperture priority"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs
+msgid "Attributes"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Audio"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Audio sample rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Authors"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Auto"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Average"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Bit depth"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Bit rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Camera"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Camera maker"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Camera model"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Center Weighted Average"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Channels"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Color representation"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/sharing_panel.rs
+msgid "Comments"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Composers"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Conductors"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Content"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Contributing artists"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Copyright"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Creative program"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Data rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Date taken"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Description"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Dimensions"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "EXIF version"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Encoded by"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Exposure bias"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Exposure program"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Exposure time"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "F-stop"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/file_ops/conflict_compare.rs crates/ox-core/src/entry/type_label.rs
+msgid "File"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash, auto"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash, compulsory"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Focal length"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Frame height"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Frame rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Frame width"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Genre"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Height"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Horizontal resolution"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "ISO speed"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "ISO-{value}"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Image"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Item type"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Landscape mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Length"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Lens maker"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Lens model"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Manual"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Media"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Metering mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Multi Spot"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "No flash"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "No flash, auto"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "No flash, compulsory"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Normal"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Origin"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/grouping.rs
+msgid "Other"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Partial"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/select_matching.rs
+msgid "Pattern"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Portrait mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Program name"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Publisher"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Rating"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Shutter priority"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Spot"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Subject"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Tags"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Title"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Total bitrate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Uncalibrated"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Unrated"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Vertical resolution"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Video"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "White balance"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Width"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Year"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "f/{value}"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "sRGB"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{count} pixel"
+msgid_plural "{count} pixels"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{count} star"
+msgid_plural "{count} stars"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{flash}, red-eye reduction"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} dpi"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} frames/second"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} kHz"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} mm"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} sec."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} step"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value}kbps"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{width} x {height}"
+msgstr ""
+
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Details"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_tab.rs
+msgid "Property"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_tab.rs
+msgid "Value"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_tab.rs
+msgid "{name}: {value}"
+msgstr ""
+
 #: crates/ox-app/src/properties/folder_count.rs crates/ox-app/src/properties/folder_sizes.rs
 msgid "Unavailable"
 msgstr ""
@@ -1369,10 +1816,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
 msgid "Accessed"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_tab.rs
-msgid "Attributes"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
@@ -1859,10 +2302,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
 msgid "Checking whether this folder is shared…"
-msgstr ""
-
-#: crates/ox-app/src/properties/sharing_panel.rs
-msgid "Comments"
 msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
@@ -2765,10 +3204,6 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs
 msgid "Compact view"
-msgstr ""
-
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Details"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -4716,10 +5151,6 @@ msgstr ""
 msgid "Existing: {text}"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs crates/ox-core/src/entry/type_label.rs
-msgid "File"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/conflict_compare.rs
 msgid "Incoming: {text}"
@@ -5607,10 +6038,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/search_box.rs
 msgid "Search {title}"
-msgstr ""
-
-#: crates/ox-app/src/window/select_matching.rs
-msgid "Pattern"
 msgstr ""
 
 #: crates/ox-app/src/window/select_matching.rs
@@ -6761,11 +7188,6 @@ msgctxt "thousands separator"
 msgid ","
 msgstr ""
 
-#: crates/ox-core/src/format/explorer_text.rs
-msgctxt "decimal separator"
-msgid "."
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
 msgid "{bytes} bytes"
@@ -6881,10 +7303,6 @@ msgstr ""
 
 #: crates/ox-core/src/grouping.rs
 msgid "Next week"
-msgstr ""
-
-#: crates/ox-core/src/grouping.rs
-msgid "Other"
 msgstr ""
 
 #: crates/ox-core/src/grouping.rs

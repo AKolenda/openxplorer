@@ -20,17 +20,20 @@ pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://openxplorer.app'
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
-# Apache-2.0 or both, and their licences are installed beside it.
-license=('AGPL-3.0-only AND MIT AND Apache-2.0')
+# Apache-2.0 or both, and BSD-2-Clause for the EXIF reader (kamadak-exif
+# and mutate_once), and their licences are installed beside it.
+license=('AGPL-3.0-only AND MIT AND Apache-2.0 AND BSD-2-Clause')
 # Arch lists the libraries a program links by hand. SQLite and libsoup are
-# the search cache's and the updater's; the program links them as soon as
-# the interface uses those services.
+# the search cache's and the updater's, GStreamer's the Details tab's; the
+# program links them as soon as the interface uses those services.
 depends=('glibc' 'gcc-libs' 'glib2' 'gtk4' 'pango' 'graphene' 'sqlite' 'libsoup3'
-         'hicolor-icon-theme')
+         'gstreamer' 'gst-plugins-base-libs' 'hicolor-icon-theme')
 # glib-compile-resources, which build.rs runs, comes with glib2.
 makedepends=('cargo' 'python')
 checkdepends=('desktop-file-utils' 'appstream')
 optdepends=('polkit: deleting a whole folder as administrator under admin://'
+            'gst-plugins-base: reading videos and audio files for the Details tab'
+            'gst-plugins-good: reading MP4, MP3 and other common media for the Details tab'
             'gvfs: the Recycle Bin and the drive and phone list'
             'gvfs-smb: SMB shares'
             'gvfs-mtp: phones'

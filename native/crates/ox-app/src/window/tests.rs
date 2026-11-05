@@ -20,6 +20,7 @@ mod command_bar;
 mod compact_density;
 mod context_menus;
 mod details_preview;
+mod details_tab;
 mod devices;
 mod dialog_keys;
 mod disconnected;
