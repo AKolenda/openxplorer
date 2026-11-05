@@ -9,7 +9,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib::translate::IntoGlib};
 
 use super::item_dialogs::tab;
-use crate::media_details::tests::{camera_exif, jpeg_with_exif, write_song};
+use crate::media_details::tests::{camera_exif, gstreamer_lock, jpeg_with_exif, write_song};
 use crate::properties::PropertiesWindow;
 use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
 
@@ -188,6 +188,7 @@ fn a_photos_details_tab_lists_its_exif() {
 /// parity: PROP-034
 #[gtk::test]
 fn a_songs_details_and_a_documents_file_rows() {
+    let _gstreamer = gstreamer_lock();
     let fixture = Fixture::empty();
     write_song(&fixture.path("Lighthouse Waltz.ogg"));
     fixture.write("Notes.txt");

@@ -15,6 +15,13 @@ use gtk::glib;
 
 use super::*;
 
+/// Held by every test that runs `GStreamer`, so a parallel `cargo test`
+/// never runs two of its pipelines at once beside GTK's tests.
+pub(crate) fn gstreamer_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// A JPEG of `width` by `height` pixels, with `exif` (a TIFF structure)
 /// in an APP1 segment after its start, as cameras write it.
 pub(crate) fn jpeg_with_exif(width: i32, height: i32, exif: &[u8]) -> Vec<u8> {
@@ -306,6 +313,7 @@ fn damaged_pictures_are_read_safely() {
 /// parity: PROP-034
 #[test]
 fn a_songs_tags_and_stream_are_discovered() {
+    let _gstreamer = gstreamer_lock();
     let folder = tempfile::tempdir().expect("a folder");
     let song = folder.path().join("Lighthouse Waltz.ogg");
     write_song(&song);
@@ -335,6 +343,7 @@ fn a_songs_tags_and_stream_are_discovered() {
 /// parity: PROP-034
 #[test]
 fn a_videos_streams_are_discovered() {
+    let _gstreamer = gstreamer_lock();
     let folder = tempfile::tempdir().expect("a folder");
     let video = folder.path().join("Harbour walk.ogv");
     write_video(&video);
@@ -364,6 +373,7 @@ fn a_videos_streams_are_discovered() {
 /// parity: PROP-034
 #[test]
 fn a_video_is_read_without_decoding_it() {
+    let _gstreamer = gstreamer_lock();
     gst::init().expect("GStreamer");
     let folder = tempfile::tempdir().expect("a folder");
     let video = folder.path().join("Harbour walk.ogv");
@@ -384,6 +394,7 @@ fn a_video_is_read_without_decoding_it() {
 /// parity: PROP-034
 #[test]
 fn an_unreadable_media_file_gives_nothing() {
+    let _gstreamer = gstreamer_lock();
     let folder = tempfile::tempdir().expect("a folder");
     let broken = folder.path().join("broken.ogg");
     std::fs::write(&broken, b"OggS not really").expect("a file");
