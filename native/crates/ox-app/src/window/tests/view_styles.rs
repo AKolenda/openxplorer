@@ -421,7 +421,10 @@ fn folder_options_advanced_settings_apply_with_ok_or_apply() {
     let options = open_folder_options(&test);
     assert_eq!(options.button_labels(), ["OK", "Cancel", "Apply"]);
     assert!(!options.can_press("Apply"), "nothing changed yet");
-    assert!(!check(&options, CHECK_BOXES).is_active(), "off by default");
+    assert!(
+        check(&options, CHECK_BOXES).is_active(),
+        "on by default, as in Windows 11"
+    );
     check(&options, FULL_PATH).set_active(true);
     assert!(options.can_press("Apply"));
     close_folder_options(&test, &options, "Cancel");
@@ -438,10 +441,10 @@ fn folder_options_advanced_settings_apply_with_ok_or_apply() {
     });
     assert!(options.is_visible(), "Apply keeps Folder Options open");
     assert!(!options.can_press("Apply"));
-    check(&options, CHECK_BOXES).set_active(true);
+    check(&options, CHECK_BOXES).set_active(false);
     close_folder_options(&test, &options, "OK");
     wait_until("OK saves it", || {
-        test.context.settings_data().preferences.selection_marker
+        !test.context.settings_data().preferences.selection_marker
     });
 
     let options = open_folder_options(&test);
@@ -451,11 +454,11 @@ fn folder_options_advanced_settings_apply_with_ok_or_apply() {
     assert!(!check(&options, ICONS_ONLY).is_active());
     assert!(!check(&options, FULL_PATH).is_active());
     assert!(!check(&options, RESTORE).is_active());
-    assert!(!check(&options, CHECK_BOXES).is_active());
+    assert!(check(&options, CHECK_BOXES).is_active());
     close_folder_options(&test, &options, "OK");
     wait_until("the defaults saved", || {
         let saved = test.context.settings_data().preferences;
-        !saved.full_path_in_title && !saved.restore_session && !saved.selection_marker
+        !saved.full_path_in_title && !saved.restore_session && saved.selection_marker
     });
 }
 

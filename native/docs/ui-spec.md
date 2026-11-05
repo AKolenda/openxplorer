@@ -563,6 +563,7 @@ where it differs; ✓ means the target equals the current app.
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
+| Default | Closed for a new user; Details or Alt+P opens it, and the choice is saved | Windows 11 Explorer opens with the Details and Preview panes closed | Keep. |
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
 | Header | "Details" at 13 px; close button 24 × 24, glyph 12; 20 px below | — | Keep. |
 | Preview | min height 148; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); icon 83 with `drop-shadow(0 4px 4px alpha(black, .04))`; 18 px below; thumbnails when available (gain) | — | safe |
@@ -1020,7 +1021,7 @@ are built, use these rules:
 | Filter bar | A strip below the column header, styled as the search-info bar (§4.15), with a 34 px field. |
 | Zoom | Ctrl + wheel and Ctrl + +/−, already mapped to text size (80–200 %) and icon size. There is no status-bar slider, because Explorer has none. |
 | Free space | "N GB free" at 12 px in the status bar's left group, after the selection text. |
-| Selection checkboxes | Optional 16 × 16 checkbox before the row icon, shown on hover and for selected rows (Explorer "Item check boxes", observed, unverified). |
+| Selection checkboxes | 16 × 16 checkbox before the row icon, on by default, shown on hover without Ctrl and for selected rows (Explorer "Item check boxes", on in a new Windows 11 install). |
 | Hidden files | View ▾ > Show > Hidden items toggle, as Windows 11 has it (2026-11-03; it was also in More options). Hidden entries at `opacity: .6`, like the cut style. |
 | Terminal panel | Bottom pane with the status-bar treatment: 1 px `@ox_border` top, `@ox_bg`. |
 

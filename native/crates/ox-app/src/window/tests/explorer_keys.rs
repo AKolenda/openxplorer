@@ -154,8 +154,8 @@ fn alt_p_toggles_the_preview_pane_and_alt_shift_p_the_details_pane() {
     };
     test.window.folder_pane().focus_view();
     assert!(
-        state(WindowAction::DetailsPane),
-        "the Details pane is open by default"
+        !state(WindowAction::DetailsPane) && !state(WindowAction::PreviewPane),
+        "both panes are closed by default, as in Windows 11"
     );
 
     assert!(press_shortcut_where_focused(

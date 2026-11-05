@@ -242,7 +242,10 @@ pub struct Preferences {
     pub theme: Theme,
     /// Details list or icon grid.
     pub view: View,
-    /// Details pane visible. Stored as `details`, the Python app's key.
+    /// Details pane visible. Off by default, as Windows 11 Explorer opens
+    /// with its Details and Preview panes closed. Stored as `details`, the
+    /// Python app's key, whatever its value, so a file that has it keeps
+    /// the pane as it was.
     #[serde(rename = "details")]
     pub show_details_pane: bool,
     /// Hidden files shown.
@@ -409,16 +412,18 @@ pub struct Preferences {
     #[serde(skip_serializing_if = "is_true")]
     pub per_folder_views: bool,
     /// Each item has a check box that adds it to the selection or takes
-    /// it out (Windows' item check boxes). Off by default, so a selected
-    /// item is only highlighted; stored only when on. Before, it was on by
-    /// default and stored only when off, so a file without it gets the new
-    /// default.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// it out (Windows' item check boxes). On by default, as in Windows 11;
+    /// stored only when off. Before, it was off by default and stored only
+    /// when on, so a file without it gets the new default.
+    #[serde(skip_serializing_if = "is_true")]
     pub selection_marker: bool,
     /// The item check boxes show only while Ctrl is held, as a selection
-    /// aid for Ctrl+click, rather than on every hovered item. On by
-    /// default. Stored as `itemChecksOnCtrl`, only when off.
-    #[serde(rename = "itemChecksOnCtrl", skip_serializing_if = "is_true")]
+    /// aid for Ctrl+click, rather than on every hovered item. Off by
+    /// default, so a hovered item shows its box as in Windows 11. Stored
+    /// as `itemChecksOnCtrl`, only when on. Before, it was on by default
+    /// and stored only when off, so a file without it gets the new default
+    /// and one that stored it off keeps it off.
+    #[serde(rename = "itemChecksOnCtrl", skip_serializing_if = "std::ops::Not::not")]
     pub item_checks_on_ctrl: bool,
     /// Folders in the details view expand in place (Dolphin's
     /// `ExpandableFolders`). Off by default, as Windows Explorer's details
@@ -505,7 +510,7 @@ impl Default for Preferences {
         Self {
             theme: Theme::default(),
             view: View::default(),
-            show_details_pane: true,
+            show_details_pane: false,
             show_hidden: false,
             auto_index: true,
             context_menu: ContextMenu::default(),
@@ -545,8 +550,8 @@ impl Default for Preferences {
             folder_tree: FolderTreeOptions::default(),
             absolute_dates: true,
             per_folder_views: true,
-            selection_marker: false,
-            item_checks_on_ctrl: true,
+            selection_marker: true,
+            item_checks_on_ctrl: false,
             expandable_folders: false,
             compact_density: false,
             show_extensions: false,
@@ -1139,18 +1144,21 @@ mod tests {
         assert_eq!(preferences.network_interval, 60);
         assert_eq!(preferences.text_size, 100);
         assert!(preferences.auto_index);
-        assert!(preferences.show_details_pane);
+        // Closed, as Windows 11 Explorer opens, where the Python app had
+        // it open.
+        assert!(!preferences.show_details_pane);
         assert!(!preferences.show_hidden);
     }
 
     /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`,
-    /// with Windows 11's compact menu where the Python app stored "win10".
+    /// with Windows 11's compact menu where the Python app stored "win10"
+    /// and its closed details pane where the Python app had it open.
     /// parity: SET-016
     #[test]
     fn default_preferences_are_stored_like_the_python_app() {
         let stored = serde_json::to_value(Preferences::default()).unwrap();
         let python = json!({
-            "theme": "system", "view": "details", "details": true, "showHidden": false,
+            "theme": "system", "view": "details", "details": false, "showHidden": false,
             "autoIndex": true, "contextMenu": "win11", "networkInterval": 60, "textSize": 100
         });
         assert_eq!(stored, python);
@@ -1415,24 +1423,34 @@ mod tests {
         assert!(stored.get("showExtensions").is_none(), "hidden again, not stored");
     }
 
-    /// The item check boxes wait for Ctrl by default and the choice is not
-    /// stored then; showing them on hover is saved as `itemChecksOnCtrl`
-    /// off and read back.
+    /// Item check boxes are on by default and show on hover without Ctrl,
+    /// as in Windows 11, and neither choice is stored then; turning the
+    /// boxes off is saved as `selectionMarker` off, and making them wait
+    /// for Ctrl as `itemChecksOnCtrl` on, and both read back.
+    ///
+    /// parity: SEL-014
     #[test]
-    fn item_checks_wait_for_ctrl_by_default_and_are_stored_only_when_not() {
+    fn item_checks_show_on_hover_by_default_and_are_stored_only_when_not() {
         let mut preferences = Preferences::default();
-        assert!(preferences.item_checks_on_ctrl);
-        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert!(stored.get("itemChecksOnCtrl").is_none(), "not stored while on");
-
-        let off =
-            PreferencesUpdate::from_json(&json!({ "itemChecksOnCtrl": false })).expect("a valid preference");
-        preferences.apply(&off);
+        assert!(preferences.selection_marker);
         assert!(!preferences.item_checks_on_ctrl);
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert_eq!(stored["itemChecksOnCtrl"], json!(false));
+        assert!(stored.get("selectionMarker").is_none(), "not stored while on");
+        assert!(stored.get("itemChecksOnCtrl").is_none(), "not stored while off");
+
+        let changed = PreferencesUpdate::from_json(&json!({
+            "selectionMarker": false, "itemChecksOnCtrl": true
+        }))
+        .expect("valid preferences");
+        preferences.apply(&changed);
+        assert!(!preferences.selection_marker);
+        assert!(preferences.item_checks_on_ctrl);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["selectionMarker"], json!(false));
+        assert_eq!(stored["itemChecksOnCtrl"], json!(true));
         let read = PreferencesUpdate::from_json(&stored).expect("read back");
-        assert_eq!(read.item_checks_on_ctrl, Some(false));
+        assert_eq!(read.selection_marker, Some(false));
+        assert_eq!(read.item_checks_on_ctrl, Some(true));
     }
 
     /// The expand arrows are shown by default and the choice is not

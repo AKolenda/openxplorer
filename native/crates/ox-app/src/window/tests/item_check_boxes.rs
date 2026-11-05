@@ -4,7 +4,7 @@
 //! deselects it alone; it shows while its row or tile is hovered or
 //! selected; the Details header has one that selects all or none; and
 //! View > Item check boxes turns them all on or off, saved for every
-//! window. They are off by default, so the tests below turn them on.
+//! window. They are on by default, as in Windows 11.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -15,11 +15,10 @@ use super::icons::pixel_rows;
 use crate::folder_view::cells::FileCell;
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 
-/// `test` with item check boxes turned on through View > Item check
-/// boxes, once the window has laid them out.
+/// `test` with item check boxes on, as a new window has them, once the
+/// window has laid them out.
 fn with_check_boxes(test: TestWindow) -> TestWindow {
-    test.activate("item-check-boxes", None);
-    assert_eq!(toggle_is_on(&test), Some(true));
+    assert_eq!(toggle_is_on(&test), Some(true), "on by default");
     wait_for_frames(&test.window, 3);
     test
 }
@@ -144,15 +143,14 @@ fn an_item_check_box_selects_its_item_alone() {
 }
 
 /// The box keeps its room but shows only while its row is hovered,
-/// anywhere on it, with Ctrl held, or its item is selected; on a tile it
-/// sits on the icon's corner and shows the same way.
+/// anywhere on it, without Ctrl, or its item is selected, as in Windows
+/// 11; on a tile it sits on the icon's corner and shows the same way.
 ///
 /// parity: SEL-014
 #[gtk::test]
 fn an_item_check_box_shows_on_hover_and_while_selected() {
     let fixture = Fixture::standard();
     let test = with_check_boxes(laid_out(&fixture.uri()));
-    test.window.hold_ctrl(true);
     for view in ["details", "large"] {
         test.activate("view", Some(view));
         wait_for_frames(&test.window, 3);
@@ -228,21 +226,17 @@ fn the_header_check_box_selects_all_or_none() {
     assert!(selected(&test).is_empty());
 }
 
-/// Item check boxes are off by default, as the owner asked: a selected
-/// item is only highlighted. View > Item check boxes gives every item its
-/// box, and the header its select-all box, and saves the choice; turned
-/// off again, they take no room.
+/// Item check boxes are on by default, as in Windows 11: every item has
+/// its box and the header its select-all box. View > Item check boxes
+/// takes them away, so they take no room, and saves the choice; turned on
+/// again, they come back.
 ///
 /// parity: SEL-014
 #[gtk::test]
-fn view_item_check_boxes_are_off_by_default_and_turn_on_and_off() {
+fn view_item_check_boxes_are_on_by_default_and_turn_off_and_on() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    assert_eq!(
-        toggle_is_on(&test),
-        Some(false),
-        "off by default: a selected item is only highlighted"
-    );
+    assert_eq!(toggle_is_on(&test), Some(true), "on by default, as in Windows 11");
     let cell = cell_at(&test, 1);
     let header = test
         .window
@@ -250,19 +244,19 @@ fn view_item_check_boxes_are_off_by_default_and_turn_on_and_off() {
         .details()
         .select_all_check()
         .expect("a select-all box");
-    assert!(!cell.item_check().is_visible() && !header.is_visible());
-
-    test.activate("item-check-boxes", None);
-    assert_eq!(toggle_is_on(&test), Some(true));
     assert!(cell.item_check().is_visible() && header.is_visible());
-    wait_until("the choice to be saved", || {
-        test.context.settings_data().preferences.selection_marker
-    });
 
     test.activate("item-check-boxes", None);
+    assert_eq!(toggle_is_on(&test), Some(false));
     assert!(!cell.item_check().is_visible() && !header.is_visible());
     wait_until("the choice to be saved", || {
         !test.context.settings_data().preferences.selection_marker
+    });
+
+    test.activate("item-check-boxes", None);
+    assert!(cell.item_check().is_visible() && header.is_visible());
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.selection_marker
     });
 }
 
@@ -278,11 +272,12 @@ fn press_hits_check(cell: &FileCell) -> bool {
         .is_some_and(|picked| picked == check.clone().upcast::<gtk::Widget>() || picked.is_ancestor(&check))
 }
 
-/// By default a hovered item's box waits for Ctrl, as the user asked:
-/// without it the box stays transparent and a press there reaches the
-/// row; with Ctrl held it shows and takes the press; once Ctrl is let go,
-/// or the window loses focus, it goes again. A checked box shows either
-/// way. With the setting off, hovering shows the box as before.
+/// By default a hovered item's box shows and takes a press, as in
+/// Windows 11. With "Show check boxes only while Ctrl is held" on, it
+/// waits for Ctrl: without it the box stays transparent and a press there
+/// reaches the row; with Ctrl held it shows and takes the press; once
+/// Ctrl is let go, or the window loses focus, it goes again. A checked box
+/// shows either way.
 ///
 /// parity: SEL-014
 #[gtk::test]
@@ -290,12 +285,24 @@ fn a_hovered_item_check_box_waits_for_ctrl() {
     let fixture = Fixture::standard();
     let test = with_check_boxes(laid_out(&fixture.uri()));
     assert!(
-        test.context.settings_data().preferences.item_checks_on_ctrl,
-        "on by default"
+        !test.context.settings_data().preferences.item_checks_on_ctrl,
+        "off by default"
     );
     let cell = cell_at(&test, 2);
     let row = row_of(&cell);
     row.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    assert!(check_ink(&cell) > 0, "shown on hover alone by default");
+    assert!(press_hits_check(&cell), "and takes the press");
+
+    let on = PreferencesUpdate {
+        item_checks_on_ctrl: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&on)
+        .expect("the settings file takes the change");
+    test.context.reload_settings();
+    wait_until("the window to follow", || !press_hits_check(&cell));
     assert_eq!(check_ink(&cell), 0, "hidden while hovered without Ctrl");
     assert!(!press_hits_check(&cell), "a press reaches the row");
 
@@ -310,17 +317,6 @@ fn a_hovered_item_check_box_waits_for_ctrl() {
     assert!(press_hits_check(&cell), "and takes the press that unchecks it");
     test.window.folder_pane().model().select_none();
     assert!(!press_hits_check(&cell), "unchecked, it waits for Ctrl again");
-
-    let off = PreferencesUpdate {
-        item_checks_on_ctrl: Some(false),
-        ..PreferencesUpdate::default()
-    };
-    Settings::open(test.settings_directory())
-        .update_preferences(&off)
-        .expect("the settings file takes the change");
-    test.context.reload_settings();
-    wait_until("the window to follow", || press_hits_check(&cell));
-    assert!(check_ink(&cell) > 0, "shown on hover alone with the setting off");
     row.unset_state_flags(gtk::StateFlags::PRELIGHT);
 }
 
@@ -356,7 +352,6 @@ fn a_click_just_outside_the_box_still_hits_it() {
     const REACH: f32 = 4.0;
     let fixture = Fixture::standard();
     let test = with_check_boxes(laid_out(&fixture.uri()));
-    test.window.hold_ctrl(true);
     let cell = cell_at(&test, 2);
     let check = cell.item_check();
     let bounds = check.compute_bounds(&cell).expect("laid out");

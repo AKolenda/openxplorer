@@ -174,6 +174,7 @@ fn settle_layout(test: &TestWindow) {
 fn the_details_pane_lists_a_file_and_the_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.open_details_pane();
     let pane = test.window.details_pane();
     let folder = pane.shown_properties();
     // The Python backend lists hidden items only while they are shown
@@ -247,6 +248,7 @@ fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
+    test.open_details_pane();
     let pane = test.window.details_pane();
     for label in ["Show the item under the pointer", "Size"] {
         let menu = pane.show_options_menu(1.0, 1.0);

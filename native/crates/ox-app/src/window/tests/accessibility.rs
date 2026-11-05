@@ -152,6 +152,7 @@ fn the_file_list_is_one_tab_stop_that_focuses_the_item_itself() {
 fn f6_moves_focus_round_the_regions_and_back_to_the_same_item() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.open_details_pane();
     test.window.folder_pane().focus_view();
     let item = test.window.folder_pane().focused_position();
     let selected = test.window.folder_pane().model().selected_items().len();

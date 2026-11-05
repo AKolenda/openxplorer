@@ -3312,7 +3312,7 @@ native_note = "Hidden items shown with Show hidden files are drawn at 60% opacit
 id = "VIEW-027"
 area = "VIEW"
 title = "Details pane toggle"
-behaviour = "The command-bar 'Details' button (highlighted when on), View > 'Details pane' (checked when on) and the pane's own close button toggle the right-hand details pane. The state is saved as a preference."
+behaviour = "The command-bar 'Details' button (highlighted when on), View > 'Details pane' (checked when on) and the pane's own close button toggle the right-hand details pane. The state is saved as a preference. A new user's windows open with it closed, as Windows 11 Explorer opens with its Details and Preview panes closed."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -3332,7 +3332,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "F11 Information panel; Information panel (F11)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved. native/crates/ox-app/src/window/tests/focus.rs (closing_the_details_pane_puts_the_keyboard_in_the_folder): the folder takes the keyboard from a button of the pane that hides."
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved. native/crates/ox-app/src/window/tests/focus.rs (closing_the_details_pane_puts_the_keyboard_in_the_folder): the folder takes the keyboard from a button of the pane that hides. Closed by default, as in Windows 11, where the Python app had it open (native/crates/ox-core/src/settings/preferences.rs: defaults_match_the_python_app); details is stored whatever its value, so a settings file that has it keeps the pane as it was."
 
 [[feature]]
 id = "VIEW-028"
@@ -4538,7 +4538,7 @@ native_note = "Porting notes: Not done. Windows 11 has this as View > Show > Ite
 id = "SEL-014"
 area = "SEL"
 title = "Item check boxes"
-behaviour = "Each item has a check box that shows while it is hovered and stays checked while it is selected; clicking it toggles the item without affecting other selected items. The Details header has a box that selects all or none. View > Item check boxes turns them on or off; they are off by default, so a selected item is only highlighted."
+behaviour = "Each item has a check box that shows while it is hovered and stays checked while it is selected; clicking it toggles the item without affecting other selected items. The Details header has a box that selects all or none. View > Item check boxes turns them on or off; they are on by default, as in Windows 11, and a hovered item shows its box without Ctrl."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -4552,7 +4552,7 @@ python_tests = []
 bridge = []
 dolphin = "ShowSelectionToggle (default true)"
 native = "done"
-native_note = "Windows 11's item check boxes in place of Dolphin's plus and minus toggle: each item has a check box that shows while its row or tile is hovered (anywhere on a Details row) and stays checked while the item is selected, checked exactly when it is; clicking it toggles that item alone through the list's own Ctrl+click action. Before the icon in Details and List, keeping its room; in the tile's top left corner on tiles. A box before the Name title selects every item when clear and none when some or all are selected (mixed or checked). A checked box is filled solid with the accent (a_checked_box_is_filled_solid_with_the_accent); a click just beside a box hits it (a_click_just_outside_the_box_still_hits_it). View > Item check boxes and Settings > Item check boxes turn them on or off for every window; off by default, so a selected item is only highlighted (owner decision 2026-10-28; Windows 11 has them on); the saved key stays selectionMarker, stored only when on. Settings > Files and folders > \"Show check boxes only while Ctrl is held\" (itemChecksOnCtrl, on by default; owner decision 2026-10-12) keeps a hovered item's box transparent, and lets clicks through to its row, until Ctrl is held: the window follows both Ctrl keys in the capture phase and forgets Ctrl when it loses focus; a checked box still shows and the select-all box is unaffected (a_hovered_item_check_box_waits_for_ctrl). native/crates/ox-app/src/folder_view/cells/item_check.rs, folder_view/details/select_all.rs, window/item_check_boxes.rs; tests in window/tests/item_check_boxes.rs (an_item_check_box_selects_its_item_alone, an_item_check_box_shows_on_hover_and_while_selected, the_header_check_box_selects_all_or_none, view_item_check_boxes_are_off_by_default_and_turn_on_and_off, item_check_boxes_turned_off_elsewhere_go_at_once, a_hovered_item_check_box_waits_for_ctrl)."
+native_note = "Windows 11's item check boxes in place of Dolphin's plus and minus toggle: each item has a check box that shows while its row or tile is hovered (anywhere on a Details row) and stays checked while the item is selected, checked exactly when it is; clicking it toggles that item alone through the list's own Ctrl+click action. Before the icon in Details and List, keeping its room; in the tile's top left corner on tiles. A box before the Name title selects every item when clear and none when some or all are selected (mixed or checked). A checked box is filled solid with the accent (a_checked_box_is_filled_solid_with_the_accent); a click just beside a box hits it (a_click_just_outside_the_box_still_hits_it). View > Item check boxes and Settings > Item check boxes turn them on or off for every window; on by default, as in Windows 11 (owner decision 2026-11-05, replacing the off default of 2026-10-28); the saved key stays selectionMarker, stored only when off, so a file that never stored it, as releases since 2.0.9 left it while off, gets the new default (view_item_check_boxes_are_on_by_default_and_turn_off_and_on; item_checks_show_on_hover_by_default_and_are_stored_only_when_not in native/crates/ox-core/src/settings/preferences.rs). Settings > Files and folders > \"Show check boxes only while Ctrl is held\" (itemChecksOnCtrl, off by default as Windows has no such wait, stored only when on; owner decision 2026-11-05, replacing the on default of 2026-10-12) keeps a hovered item's box transparent, and lets clicks through to its row, until Ctrl is held: the window follows both Ctrl keys in the capture phase and forgets Ctrl when it loses focus; a checked box still shows and the select-all box is unaffected (a_hovered_item_check_box_waits_for_ctrl). native/crates/ox-app/src/folder_view/cells/item_check.rs, folder_view/details/select_all.rs, window/item_check_boxes.rs; tests in window/tests/item_check_boxes.rs (an_item_check_box_selects_its_item_alone, an_item_check_box_shows_on_hover_and_while_selected, the_header_check_box_selects_all_or_none, view_item_check_boxes_are_on_by_default_and_turn_off_and_on, item_check_boxes_turned_off_elsewhere_go_at_once, a_hovered_item_check_box_waits_for_ctrl)."
 
 [[feature]]
 id = "SEL-015"
@@ -14294,7 +14294,7 @@ native_note = "A preference change reaches every window through the shared AppCo
 id = "SET-016"
 area = "SET"
 title = "Preference defaults and allowed values"
-behaviour = "Defaults: theme 'system', view 'details', details pane on, showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away; a stored 'win10' that older releases and the Python app wrote as their default loads as 'win11' once, and choosing the classic menu stores 'classicMenuChosen': true so it stays), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
+behaviour = "Defaults: theme 'system', view 'details', details pane off (closed, as Windows 11 Explorer opens; the Python app had it on, and a stored value stays), showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away; a stored 'win10' that older releases and the Python app wrote as their default loads as 'win11' once, and choosing the classic menu stores 'classicMenuChosen': true so it stays), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14872,7 +14872,7 @@ native_note = "native/crates/ox-app/src/theme/desktop_text.rs: the skin reads th
 id = "LOOK-026"
 area = "LOOK"
 title = "Dates and times follow locale and the desktop clock format"
-behaviour = "Dates use the user's locale, as today. Times in Properties timestamps follow GNOME's 12/24-hour clock setting."
+behaviour = "Dates use the user's locale, as today; in en_US the month and day have no leading zero, as Windows' short date M/d/yyyy writes them (9/13/2026 3:05 PM). Times in Properties timestamps follow GNOME's 12/24-hour clock setting."
 origin = ["gnome"]
 priority = "could"
 openxplorer = "partial"
@@ -14882,7 +14882,7 @@ bridge = []
 dolphin = "KDE regional settings (QLocale)"
 gnome = "org.gnome.desktop.interface clock-format; GDateTime locale formatting"
 native = "done"
-native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it (properties_timestamps_follow_the_desktop_clock_format), live, through native/crates/ox-app/src/application/clock_format.rs (the_desktop_clock_format_is_followed_at_once: unset keeps the locale's clock although the schema default is 24h, 12h and 24h apply at once, a reset returns to the locale). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
+native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); en_US alone drops the leading zero of the month and day, as Windows' en-US short date does, and only when the C library really formats in en_US, so a process left in the C locale keeps 09/13/2026 (only_en_us_drops_the_leading_zero_of_the_month_and_day); other locales keep their two-digit fields, as Windows' en-GB, de-DE and fr-FR short dates have them; Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it (properties_timestamps_follow_the_desktop_clock_format), live, through native/crates/ox-app/src/application/clock_format.rs (the_desktop_clock_format_is_followed_at_once: unset keeps the locale's clock although the schema default is 24h, 12h and 24h apply at once, a reset returns to the locale). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
 
 [[feature]]
 id = "LOOK-027"
