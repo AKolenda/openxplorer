@@ -416,3 +416,35 @@ fn find_row(rows: &gtk::ListBox, name: &str) -> Option<gtk::ListBoxRow> {
     }
     None
 }
+
+/// Selects the Details row named `name` in `window` and puts the keyboard
+/// on it, scrolling it into view; false without such a row. The snapshot
+/// hook's `row=` step uses it.
+pub(crate) fn focus_detail_row(window: &PropertiesWindow, name: &str) -> bool {
+    let Some(page) = window.tab_page(super::PropertiesTab::Details.page_name()) else {
+        return false;
+    };
+    let Some(rows) = first_list(&page) else {
+        return false;
+    };
+    let Some(row) = find_row(&rows, name) else {
+        return false;
+    };
+    rows.select_row(Some(&row));
+    row.grab_focus()
+}
+
+/// The first list inside `widget`.
+fn first_list(widget: &gtk::Widget) -> Option<gtk::ListBox> {
+    if let Some(list) = widget.downcast_ref::<gtk::ListBox>() {
+        return Some(list.clone());
+    }
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        if let Some(list) = first_list(&current) {
+            return Some(list);
+        }
+        child = current.next_sibling();
+    }
+    None
+}
