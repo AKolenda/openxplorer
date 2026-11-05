@@ -21,7 +21,7 @@ pub(crate) const FOLDER_PICTURE: &str = "metadata::openxplorer-folder-picture";
 /// The smallest icon that shows a folder's picture: Medium icons.
 pub(crate) const SMALLEST_PICTURE_ICON: i32 = 40;
 
-/// The card on a folder icon of 32 units, centred across it: its top,
+/// The card on a folder icon of 32 units, centered across it: its top,
 /// width and height. It covers the top of the front panel (y 11 to 30 of
 /// the bundled folder art) and rises a little above it, as a picture
 /// tucked into the folder.
@@ -79,7 +79,7 @@ mod imp {
             (edge, edge, -1, -1)
         }
 
-        /// The picture scaled to cover the card, centred and cut to it,
+        /// The picture scaled to cover the card, centered and cut to it,
         /// as Windows crops a folder picture.
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             let Some(texture) = self.texture.borrow().clone() else {
@@ -127,7 +127,7 @@ impl Default for FolderPicture {
 
 impl FolderPicture {
     /// Places the card on a folder icon `icon_size` pixels square, drawn
-    /// centred at the top of the overlay that holds both.
+    /// centered at the top of the overlay that holds both.
     pub(crate) fn place_on_icon(&self, icon_size: i32) {
         let (top, width, height) = card_bounds(icon_size);
         self.imp().size.set((width, height));

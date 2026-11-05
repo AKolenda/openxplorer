@@ -33,7 +33,7 @@ struct PictureChoice {
 }
 
 impl PictureChoice {
-    /// Shows `picture` on the preview; Restore Default is greyed without
+    /// Shows `picture` on the preview; Restore Default is grayed out without
     /// one.
     fn show(self: &Rc<Self>, picture: Option<&str>) {
         self.restore.set_sensitive(picture.is_some());

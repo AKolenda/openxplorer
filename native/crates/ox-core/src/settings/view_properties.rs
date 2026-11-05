@@ -641,7 +641,7 @@ mod tests {
             Some(FolderTemplate::Videos)
         );
 
-        let stored = serde_json::to_value(&views).expect("serialises");
+        let stored = serde_json::to_value(&views).expect("serializes");
         assert_eq!(stored[0]["folderType"], json!("videos"));
         assert_eq!(stored[0]["subfolders"], json!(true));
         assert_eq!(read_folder_views(&stored), Some(views.clone()));
