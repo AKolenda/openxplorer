@@ -37,6 +37,7 @@ BuildRequires:  rust >= 1.92
 BuildRequires:  pkgconfig(gtk4) >= 4.14
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(libsoup-3.0)
+BuildRequires:  pkgconfig(gstreamer-pbutils-1.0)
 BuildRequires:  /usr/bin/glib-compile-resources
 BuildRequires:  python3
 BuildRequires:  /usr/bin/desktop-file-validate
@@ -54,6 +55,15 @@ Recommends:     gvfs-backend-samba
 %else
 Recommends:     gvfs-smb
 Recommends:     gvfs-mtp
+%endif
+# GStreamer's base plug-ins, which read videos and audio files for the
+# Details tab of Properties.
+%if 0%{?suse_version}
+Recommends:     gstreamer-plugins-base
+Recommends:     gstreamer-plugins-good
+%else
+Recommends:     gstreamer1-plugins-base
+Recommends:     gstreamer1-plugins-good
 %endif
 # The Secret Service that remembers SMB passwords.
 Recommends:     gnome-keyring
