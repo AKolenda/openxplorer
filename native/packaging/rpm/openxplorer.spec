@@ -25,9 +25,10 @@ Version:        2.0.14
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
-# Apache-2.0 or both, and their licences are installed beside it
+# Apache-2.0 or both, and BSD-2-Clause for the EXIF reader (kamadak-exif
+# and mutate_once), and their licences are installed beside it
 # (rust-crates/INDEX.txt).
-License:        AGPL-3.0-only AND MIT AND Apache-2.0
+License:        AGPL-3.0-only AND MIT AND Apache-2.0 AND BSD-2-Clause
 URL:            https://openxplorer.app
 Source0:        openxplorer-%{version}.tar.gz
 Source1:        openxplorer-%{version}-vendor.tar.gz

@@ -6,7 +6,11 @@ The desktop is based on the Winspace 0.7.0 source supplied in this conversation.
 
 ## Distribution runtime libraries
 
-GTK, GLib/GIO, WebKitGTK, GVfs, libsecret and other APT-provided libraries are not vendored or relicensed by this repository. Obtain their source/notices from the relevant distribution packages. The package declares the libraries it needs.
+GTK, GLib/GIO, GStreamer, WebKitGTK, GVfs, libsecret and other APT-provided libraries are not vendored or relicensed by this repository. Obtain their source/notices from the relevant distribution packages. The package declares the libraries it needs.
+
+## Rust crates of the native app
+
+The native app compiles in third-party Rust crates from crates.io, unmodified. Each package installs every crate's own licence files under `rust-crates/` beside the AGPL, with `rust-crates/INDEX.txt` naming each crate's licence. Most are MIT, Apache-2.0 or both; the EXIF reader of the Details tab, `kamadak-exif`, and its dependency `mutate_once` are BSD-2-Clause, whose notice they ship and the packages install.
 
 ## Website dependencies
 
