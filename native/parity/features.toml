@@ -13352,7 +13352,7 @@ bridge = []
 dolphin = "n/a (Information panel)"
 gnome = "org.gnome.NautilusPreviewer2 ShowFile (gnome-sushi 46 installed, org.gnome.NautilusPreviewer.service)"
 native = "n-a"
-native_note = "In Windows 11 File Explorer Space only selects the focused item and never opens a previewer, and the product goal is that it feels exactly like Explorer, so the native app no longer asks GNOME Sushi to preview on Space, and the Flatpak no longer talks to org.gnome.NautilusPreviewer. Space selects the current item (SEL-036); Explorer's preview of the selection is the details pane, Alt+P (VIEW-063)."
+native_note = "In Windows 11 File Explorer Space only selects the focused item and never opens a previewer, and the product goal is that it feels exactly like Explorer, so the native app no longer asks GNOME Sushi to preview on Space, and the Flatpak no longer talks to org.gnome.NautilusPreviewer. Space selects the current item (SEL-036); Explorer's preview of the selection is its Preview pane, Alt+P (VIEW-070)."
 
 [[feature]]
 id = "PROP-013"
