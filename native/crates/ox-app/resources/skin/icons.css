@@ -38,9 +38,9 @@ gridview.files > child:selected:hover art .emblem { background-color: @ox_select
 
 /* A folder's picture on its icon (PROP-037), in the larger icon views and
    the Customize tab's preview: a photo card with a white edge and a soft
-   shadow, tucked into the front of the folder. */
+   shadow, the same in both themes, tucked into the front of the folder. */
 folderpicture.folder-picture {
-  border: 1px solid white;
+  border: 1px solid @ox_folder_picture_edge;
   border-radius: 1px;
-  box-shadow: 0 1px 2px alpha(black, .3);
+  box-shadow: 0 1px 2px @ox_menu_shadow;
 }
