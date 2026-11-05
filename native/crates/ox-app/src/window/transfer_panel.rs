@@ -16,7 +16,7 @@
 //! Backup", each folder a link that opens it in a new window) once
 //! [`TransferPanel::describe`] is told; until then, and for writes that
 //! are never described, its first line is the operation's starting text
-//! ("Moving to Trash…", "Preparing extraction…"). Under it, "44%
+//! ("Recycling…", "Preparing extraction…"). Under it, "44%
 //! complete" in large type, Pause and Cancel, and the bar. The
 //! percentage follows the bytes when the free-space check measured them,
 //! else the items, and never goes back.
