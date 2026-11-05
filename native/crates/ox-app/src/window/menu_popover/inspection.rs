@@ -124,7 +124,7 @@ impl MenuPopover {
 
 /// The label of `row`, for tests: the first label after its mark and
 /// glyph.
-fn row_label(row: &gtk::ListBoxRow) -> Option<String> {
+pub(crate) fn row_label(row: &gtk::ListBoxRow) -> Option<String> {
     let content = row.child()?;
     let label = crate::window::widget_tree::children(&content)
         .find_map(|child| child.downcast::<gtk::Label>().ok())?;

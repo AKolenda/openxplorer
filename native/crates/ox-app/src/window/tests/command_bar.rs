@@ -188,6 +188,97 @@ const SORT_MENU: [&str; 11] = [
     "Folders first",
 ];
 
+/// The images of each row `menu` shows that are glyphs, not the marks, a
+/// submenu's arrow or the back arrow, by row label.
+fn row_glyphs(menu: &MenuPopover) -> Vec<(String, String)> {
+    let not_glyphs = [
+        Icon::CircleSmallFilled.name(),
+        Icon::Checkmark.name(),
+        Icon::ChevronRight16.name(),
+        Icon::ArrowLeft.name(),
+    ];
+    menu.rows()
+        .into_iter()
+        .flat_map(|row| {
+            let label = crate::window::menu_popover::row_label(&row).unwrap_or_default();
+            descendants::<gtk::Image>(&row)
+                .into_iter()
+                .filter_map(|image| image.icon_name().map(|name| name.to_string()))
+                .filter(|name| !not_glyphs.contains(&name.as_str()))
+                .map(move |name| (label.clone(), name))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// The marks `menu` shows, by row label: the mark's icon name.
+fn row_marks(menu: &MenuPopover) -> Vec<(String, String)> {
+    menu.rows()
+        .into_iter()
+        .flat_map(|row| {
+            let label = crate::window::menu_popover::row_label(&row).unwrap_or_default();
+            descendants::<gtk::Image>(&row)
+                .into_iter()
+                .filter(|image| image.has_css_class("menu-mark"))
+                .filter_map(|image| image.icon_name().map(|name| name.to_string()))
+                .map(move |name| (label.clone(), name))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// The Sort menu is Windows 11's: no row has a glyph, in its More and
+/// Group by submenus either; a dot marks the chosen column, direction and
+/// grouping. The app's own Folders first stays, after a divider, as a
+/// toggle with a check mark.
+///
+/// parity: VIEW-017, VIEW-022
+#[gtk::test]
+fn the_sort_menu_has_no_glyphs_and_dots_its_choices_as_windows_does() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.activate("sort", Some("modified"));
+    test.activate("direction", Some("descending"));
+    let sort = menu_of(&test, "Sort");
+    sort.popup();
+    wait_for_frames(&test.window, 2);
+    assert_eq!(sort.row_labels(), SORT_MENU);
+    assert_eq!(row_glyphs(&sort), Vec::<(String, String)>::new());
+    let dot = Icon::CircleSmallFilled.name().to_owned();
+    let marks = row_marks(&sort);
+    assert!(
+        marks.contains(&("Date modified".to_owned(), dot.clone())),
+        "{marks:?}"
+    );
+    assert!(
+        marks.contains(&("Descending".to_owned(), dot.clone())),
+        "{marks:?}"
+    );
+    if test.action_state("folders-first").as_deref() == Some("true") {
+        assert!(
+            marks.contains(&("Folders first".to_owned(), Icon::Checkmark.name().to_owned())),
+            "{marks:?}"
+        );
+    }
+    assert!(
+        marks
+            .iter()
+            .filter(|(label, _)| label != "Folders first")
+            .all(|(_, mark)| *mark == dot),
+        "the choices are dotted: {marks:?}"
+    );
+    for submenu in ["More", "Group by"] {
+        sort.row(submenu).emit_activate();
+        wait_for_frames(&test.window, 2);
+        assert_eq!(row_glyphs(&sort), Vec::<(String, String)>::new(), "{submenu}");
+        let marks = row_marks(&sort);
+        assert!(marks.iter().all(|(_, mark)| *mark == dot), "{submenu}: {marks:?}");
+        sort.rows()[0].emit_activate();
+        wait_for_frames(&test.window, 2);
+    }
+    sort.popdown();
+}
+
 /// The "…" menu in a folder with nothing to undo, as Windows 11 File
 /// Explorer's: Pin, the selection commands with the app's Select items
 /// matching…, then Properties and Options (CMD-007).

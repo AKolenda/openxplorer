@@ -183,12 +183,13 @@ fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
     second.window.close();
 }
 
-/// Every More menu command works in a folder, and a row's tooltip is its
-/// label. License & source is in Settings > About now (CMD-007).
+/// Every More menu command works in a folder, and a row shows no tooltip
+/// that would only repeat its name, as Windows 11's menus show none.
+/// License & source is in Settings > About now (CMD-007).
 ///
 /// parity: CMD-031
 #[gtk::test]
-fn the_more_menu_items_work_and_their_tooltips_are_their_labels() {
+fn the_more_menu_items_work_and_show_no_tooltip_repeating_their_name() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let more_button = menu_button_with_class(&test, "more-command");
@@ -197,7 +198,7 @@ fn the_more_menu_items_work_and_their_tooltips_are_their_labels() {
     for label in ["Pin to Quick access", "Select all", "Options"] {
         let row = more.row(label);
         assert!(row.is_sensitive(), "{label}");
-        assert_eq!(row.tooltip_text().unwrap_or_default().as_str(), label);
+        assert_eq!(row.tooltip_text(), None, "{label}");
     }
     more_button.popdown();
 }

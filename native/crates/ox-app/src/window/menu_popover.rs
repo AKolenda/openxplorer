@@ -23,6 +23,8 @@
 mod height;
 #[cfg(test)]
 mod inspection;
+#[cfg(test)]
+pub(crate) use inspection::row_label;
 mod items;
 
 use gtk::prelude::*;
@@ -766,17 +768,21 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Bo
     if marks == MarkColumn::Shown {
         content.append(&mark_slot(item, check));
     }
-    let glyph = application_icon.unwrap_or_else(|| {
-        let image = icons::image(item.glyph, ROW_GLYPH);
-        if item.glyph_look.mirrored {
-            image.add_css_class("mirrored");
-        }
-        if item.glyph_look.accent {
-            image.add_css_class("accent-glyph");
-        }
-        image
+    let glyph = application_icon.or_else(|| {
+        item.shows_glyph.then(|| {
+            let image = icons::image(item.glyph, ROW_GLYPH);
+            if item.glyph_look.mirrored {
+                image.add_css_class("mirrored");
+            }
+            if item.glyph_look.accent {
+                image.add_css_class("accent-glyph");
+            }
+            image
+        })
     });
-    content.append(&glyph);
+    if let Some(glyph) = glyph {
+        content.append(&glyph);
+    }
     let label = gtk::Label::builder()
         .label(&item.label)
         .xalign(0.0)
@@ -813,8 +819,9 @@ fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::ListBo
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // Every item's title is its label (`b.title=it.label` in app.js).
-    row.set_tooltip_text(Some(&item.label));
+    // No tooltip that would only repeat the label (`b.title=it.label` in
+    // app.js), as Windows 11's menus show none; a disabled row still says
+    // why ([`explain_availability`]).
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

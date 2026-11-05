@@ -123,6 +123,9 @@ pub(in crate::window) struct MenuItem {
     /// Marks it with a dot rather than a check mark while it is on, as
     /// Windows 11 marks a choice such as the view or the open pane.
     pub dot_mark: bool,
+    /// Draws its glyph; false for a row with only its mark and label, as
+    /// Windows 11's Sort menu draws every row.
+    pub shows_glyph: bool,
 }
 
 /// How a menu item's glyph is drawn: as the bundled file draws it, or
@@ -152,6 +155,7 @@ impl MenuItem {
             submenu: Vec::new(),
             glyph_look: GlyphLook::default(),
             dot_mark: false,
+            shows_glyph: true,
         }
     }
 
@@ -229,6 +233,14 @@ impl MenuItem {
                 accent: true,
                 ..self.glyph_look
             },
+            ..self
+        }
+    }
+
+    /// The same item without its glyph: its mark and label alone.
+    pub(in crate::window) fn without_glyph(self) -> Self {
+        Self {
+            shows_glyph: false,
             ..self
         }
     }

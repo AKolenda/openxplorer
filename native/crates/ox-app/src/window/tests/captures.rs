@@ -111,7 +111,7 @@ fn the_menus_are_captured_light_and_dark() {
 /// in This PC, and View with its Show submenu, in both themes, to compare
 /// with Windows 11's (CMD-006, CMD-007).
 #[gtk::test]
-fn the_more_and_view_menus_are_captured_light_and_dark() {
+fn the_more_view_and_sort_menus_are_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
@@ -131,6 +131,10 @@ fn the_more_and_view_menus_are_captured_light_and_dark() {
     });
     let view_button = menu_button_with_class(&test, "view-command");
     let view = app_menu(&view_button);
+    let sort_button = menu_button_with_class(&test, "sort-command");
+    let sort = app_menu(&sort_button);
+    test.activate("sort", Some("modified"));
+    test.activate("direction", Some("descending"));
     for theme in THEMES {
         test.activate("theme", Some(theme));
         test.window.navigate(&fixture.uri()).expect("the folder");
@@ -164,6 +168,20 @@ fn the_more_and_view_menus_are_captured_light_and_dark() {
         );
         view_button.popdown();
         wait_until("View to close", || !view.is_mapped());
+        // Sort, as Windows 11 draws it: no glyphs, dots on the choices,
+        // and Type under the pointer.
+        sort_button.popup();
+        let hovered = sort.row("Type");
+        hovered.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+        wait_for(TRANSITION_TIME);
+        capture_popover(
+            &test.window,
+            sort.upcast_ref(),
+            &format!("native-menu-sort-{theme}.png"),
+        );
+        hovered.unset_state_flags(gtk::StateFlags::PRELIGHT);
+        sort_button.popdown();
+        wait_until("Sort to close", || !sort.is_mapped());
     }
 }
 

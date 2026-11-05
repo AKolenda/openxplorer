@@ -74,7 +74,8 @@ pub(in crate::window) fn new_menu(templates: Vec<MenuEntry>) -> Vec<MenuEntry> {
     entries
 }
 
-/// The Sort menu's item for `column`.
+/// The Sort menu's item for `column`: no glyph, as Windows 11's Sort menu
+/// draws none, and a dot while it is the sort.
 fn column_item(column: SortColumn) -> MenuEntry {
     MenuItem::choice(
         column.label(),
@@ -82,23 +83,35 @@ fn column_item(column: SortColumn) -> MenuEntry {
         WindowAction::Sort,
         column.as_str(),
     )
+    .without_glyph()
     .into()
 }
 
 /// The Sort menu's item for `direction`.
-fn direction_item(label: &str, glyph: Icon, direction: SortDirection) -> MenuEntry {
-    MenuItem::choice(label, glyph, WindowAction::Direction, direction.as_str()).into()
+fn direction_item(label: &str, direction: SortDirection) -> MenuEntry {
+    MenuItem::choice(
+        label,
+        Icon::ArrowSort,
+        WindowAction::Direction,
+        direction.as_str(),
+    )
+    .without_glyph()
+    .into()
 }
 
 /// The Sort menu's item for a further key (VIEW-019).
 fn role_item(role: SortRole) -> MenuEntry {
-    MenuItem::choice(role.label(), Icon::ArrowSort, WindowAction::Sort, role.as_str()).into()
+    MenuItem::choice(role.label(), Icon::ArrowSort, WindowAction::Sort, role.as_str())
+        .without_glyph()
+        .into()
 }
 
 /// The Sort menu, laid out as Windows Explorer's: Name, Date modified and
 /// Type, then More with Size and Dolphin's further keys; the direction,
 /// with an item each where app.js had one that flips it; then Group by,
-/// whose choices group apart from the sort (VIEW-022), and folders first.
+/// whose choices group apart from the sort (VIEW-022), and the app's own
+/// Folders first. As in Windows 11, no row has a glyph: a dot marks the
+/// chosen column, direction and grouping, and a check mark Folders first.
 pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = [SortColumn::Name, SortColumn::Modified, SortColumn::Type]
         .into_iter()
@@ -107,10 +120,12 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
     let mut more = vec![column_item(SortColumn::Size)];
     more.extend(SortRole::ALL.into_iter().map(role_item));
     entries.extend([
-        MenuItem::submenu(&gettext("More"), Icon::ArrowSort, WindowAction::Sort, more).into(),
+        MenuItem::submenu(&gettext("More"), Icon::ArrowSort, WindowAction::Sort, more)
+            .without_glyph()
+            .into(),
         MenuEntry::Divider,
-        direction_item(&gettext("Ascending"), Icon::ArrowUp, SortDirection::Ascending),
-        direction_item(&gettext("Descending"), Icon::ArrowDown, SortDirection::Descending),
+        direction_item(&gettext("Ascending"), SortDirection::Ascending),
+        direction_item(&gettext("Descending"), SortDirection::Descending),
         MenuEntry::Divider,
         MenuItem::submenu(
             &gettext("Group by"),
@@ -118,6 +133,7 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
             WindowAction::GroupBy,
             group_by_menu(),
         )
+        .without_glyph()
         .into(),
         MenuEntry::Divider,
         MenuItem::toggle(
@@ -125,6 +141,7 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
             Icon::Folder,
             WindowAction::FoldersFirst,
         )
+        .without_glyph()
         .into(),
     ]);
     entries
@@ -143,6 +160,7 @@ fn group_item(group_by: GroupBy) -> MenuEntry {
         WindowAction::GroupBy,
         group_by.as_str(),
     )
+    .without_glyph()
     .into()
 }
 
