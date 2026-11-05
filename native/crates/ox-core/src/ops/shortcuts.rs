@@ -8,7 +8,9 @@
 //! Shortcut", "Reports - Shortcut"). When that name is taken the shell
 //! numbers it as `PathYetAnotherMakeUniqueName` does: "report.txt -
 //! Shortcut (2)", then (3) and so on. A link has no hidden `.lnk`
-//! extension, so the name is exactly what Explorer shows.
+//! extension, so the name is exactly what Explorer shows. A name too long
+//! for that within 255 bytes loses whole characters before its extension,
+//! as copies' names do, so the extension and the number are kept.
 //!
 //! Safety rule "a shortcut never replaces anything": each name is claimed
 //! by creating the link itself, which fails on any existing item, a broken
@@ -29,7 +31,7 @@ use super::error::OpsError;
 use super::links::LinkRequest;
 use super::run_transfer::TransferOutcome;
 use super::undo::UndoRecord;
-use crate::location::{file_uri, normalise, validate_name};
+use crate::location::{file_uri, fitted_name, normalise, ItemKind};
 use crate::network::local_path;
 use crate::transfer::MAX_ITEMS;
 
@@ -76,15 +78,21 @@ pub fn create_shortcut(target_uri: &str, folder_uri: &str) -> Result<String, Ops
     let folder = gio::File::for_uri(&normalise(folder_uri)?);
     let target = gio::File::for_uri(&target_uri);
     let info = target.query_info(
-        "standard::display-name",
+        "standard::display-name,standard::type",
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         gio::Cancellable::NONE,
     )?;
     let name = info.display_name().to_string();
+    let kind = if info.file_type() == gio::FileType::Directory {
+        ItemKind::Folder
+    } else {
+        ItemKind::File
+    };
     let path = target_path(&target, &target_uri)?;
     for number in 1..=MAX_NUMBER {
-        let candidate = shortcut_name(&name, number);
-        validate_name(&candidate)?;
+        // A long name loses whole characters before its extension, so the
+        // extension and " - Shortcut (2)" are kept within 255 bytes.
+        let candidate = fitted_name(&name, kind, |name| shortcut_name(name, number))?;
         let link = folder.child(&candidate);
         match link.make_symbolic_link(&path, gio::Cancellable::NONE) {
             Ok(()) => return Ok(link_uri(&link)),
@@ -234,6 +242,35 @@ mod tests {
         assert_eq!(first, PathBuf::from("/no/such/item"));
         let second = std::fs::read(desktop.join("report.txt - Shortcut (2)")).expect("kept");
         assert_eq!(second, b"keep me");
+    }
+
+    /// A long name that is valid still gets its shortcut, and the next
+    /// one its number: the part before the extension is shortened by whole
+    /// characters, never the extension or " - Shortcut (2)".
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn a_long_name_is_shortened_to_keep_the_suffix_and_number() {
+        let folder = temporary_folder();
+        let name = format!("{}.txt", "a".repeat(241));
+        assert_eq!(name.len(), 245);
+        let item = folder.path().join(&name);
+        std::fs::write(&item, b"Synthetic data").expect("fixture file");
+        let desktop = folder.path().join("Desktop");
+        std::fs::create_dir(&desktop).expect("fixture folder");
+
+        let first = create_shortcut(&file_uri(&item), &file_uri(&desktop));
+        let second = create_shortcut(&file_uri(&item), &file_uri(&desktop));
+
+        let first_name = format!("{}.txt - Shortcut", "a".repeat(240));
+        let second_name = format!("{}.txt - Shortcut (2)", "a".repeat(236));
+        assert_eq!(first, Ok(file_uri(&desktop.join(&first_name))));
+        assert_eq!(second, Ok(file_uri(&desktop.join(&second_name))));
+        assert_eq!(first_name.len(), 255);
+        assert_eq!(
+            std::fs::read_link(desktop.join(&second_name)).expect("a link"),
+            item
+        );
     }
 
     /// parity: CMD-038

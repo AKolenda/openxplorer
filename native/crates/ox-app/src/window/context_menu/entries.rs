@@ -128,6 +128,12 @@ pub(crate) struct SendToTargets {
     pub(crate) drives: Vec<SendToDrive>,
     /// The selection holds a folder, which only files can be sent as.
     pub(crate) has_folder: bool,
+    /// Why a copy cannot start now, when it cannot: Documents, the drives
+    /// and the network locations wait for a transfer slot.
+    pub(crate) copy_refusal: Option<&'static str>,
+    /// Why Desktop (create shortcut) cannot start now, when it cannot: it
+    /// runs as the window's one exclusive operation.
+    pub(crate) shortcut_refusal: Option<&'static str>,
 }
 
 /// A context menu: its rows, and the icon strip of the compact style.
@@ -511,6 +517,10 @@ fn send_to_item(facts: &ItemFacts) -> MenuEntry {
             facts.is_read_only,
             ox_core::i18n::gettext_static(READ_ONLY_VERSION),
         );
+        let desktop = match targets.shortcut_refusal {
+            Some(reason) => desktop.disabled_because(true, reason),
+            None => desktop,
+        };
         entries.push(desktop.into());
     }
     if let Some(documents) = &targets.documents {
@@ -518,11 +528,14 @@ fn send_to_item(facts: &ItemFacts) -> MenuEntry {
         // document art stands for Documents.
         let glyph = Icon::DocumentColor20;
         entries.push(
-            MenuItem::with_text_target(
-                &ox_core::i18n::gettext("Documents"),
-                glyph,
-                WindowAction::SendTo,
-                documents,
+            copy_item(
+                MenuItem::with_text_target(
+                    &ox_core::i18n::gettext("Documents"),
+                    glyph,
+                    WindowAction::SendTo,
+                    documents,
+                ),
+                targets,
             )
             .into(),
         );
@@ -544,7 +557,7 @@ fn send_to_item(facts: &ItemFacts) -> MenuEntry {
             Icon::HardDrive
         };
         let copy = MenuItem::with_text_target(&drive.label, glyph, WindowAction::SendTo, &drive.uri);
-        entries.push(copy.into());
+        entries.push(copy_item(copy, targets).into());
     }
     MenuItem::submenu(
         ox_core::i18n::gettext_static("Send to"),
@@ -553,6 +566,15 @@ fn send_to_item(facts: &ItemFacts) -> MenuEntry {
         entries,
     )
     .into()
+}
+
+/// `item`, a destination Send to copies to, disabled with the reason
+/// while no copy can start.
+fn copy_item(item: MenuItem, targets: &SendToTargets) -> MenuItem {
+    match targets.copy_refusal {
+        Some(reason) => item.disabled_because(true, reason),
+        None => item,
+    }
 }
 
 /// Properties, of the selection or of the folder.
@@ -1076,6 +1098,8 @@ mod tests {
                 },
             ],
             has_folder: false,
+            copy_refusal: None,
+            shortcut_refusal: None,
         }
     }
 
@@ -1217,6 +1241,41 @@ mod tests {
         assert_eq!(
             reasons(&in_version),
             [("Desktop (create shortcut)".to_owned(), Some(READ_ONLY_VERSION)),]
+        );
+    }
+
+    /// While the window's file operations leave no room, the entries
+    /// that would start one are disabled and say why; Bluetooth device,
+    /// Compressed (zipped) folder and Mail recipient, which use no
+    /// transfer slot, keep their own rules.
+    ///
+    /// parity: CMD-038, CMD-031
+    #[test]
+    fn send_to_disables_copies_and_shortcuts_without_room_and_says_why() {
+        let wait = "Wait for a running file operation to finish.";
+        let facts = ItemFacts {
+            send_to: SendToTargets {
+                copy_refusal: Some(wait),
+                shortcut_refusal: Some(wait),
+                ..everything()
+            },
+            ..file()
+        };
+        let reasons: Vec<(String, Option<&'static str>)> = items_of(&send_to_of(&facts).submenu)
+            .filter(|item| item.availability == ItemAvailability::Disabled)
+            .map(|item| (item.label.clone(), item.disabled_reason))
+            .collect();
+
+        let disabled = |label: &str| (label.to_owned(), Some(wait));
+        assert_eq!(
+            reasons,
+            [
+                disabled("Desktop (create shortcut)"),
+                disabled("Documents"),
+                disabled("Holiday stick"),
+                disabled("Backup (\\\\fileserver) (S:)"),
+                disabled("Media (M:)"),
+            ]
         );
     }
 

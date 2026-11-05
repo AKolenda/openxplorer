@@ -27,7 +27,7 @@ use ox_core::transfer::TransferMode;
 
 use super::actions::{plain_action, text_action};
 use super::context_menu::{SendToDrive, SendToTargets};
-use super::file_ops::IncomingItems;
+use super::file_ops::{IncomingItems, MAX_JOBS};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use crate::volumes::{VolumeKind, VolumeState};
@@ -37,8 +37,48 @@ use crate::volumes::{VolumeKind, VolumeState};
 const NOT_SENDABLE: &str =
     crate::i18n::message_id("Only files on this computer or on a mounted share can be sent by Bluetooth.");
 
+/// Why a copy or a shortcut waits: the window's operations leave no room.
+const WAIT_FOR_OPERATION: &str = crate::i18n::message_id("Wait for the running file operation to finish.");
+
+/// Why a copy waits while every transfer slot is taken.
+const TRANSFER_SLOTS_FULL: &str =
+    crate::i18n::message_id("Four file operations are already running. Wait for one to finish.");
+
 /// Why Bluetooth device could not start the sender.
 const SENDER_FAILED: &str = crate::i18n::message_id("The Bluetooth sender could not be started.");
+
+/// The address Send to sends for the row at `uri`: a Recent row stands
+/// for its file, `recent_target`, which Desktop (create shortcut) and
+/// Bluetooth device need a path for.
+fn send_source(uri: &str, recent_target: Option<&str>) -> String {
+    match recent_target {
+        Some(target) if uri.starts_with("recent:") => target.to_owned(),
+        _ => uri.to_owned(),
+    }
+}
+
+/// Why a copy, and why a shortcut, cannot start now: `(copy, shortcut)`,
+/// `None` where one can. `is_busy` is an exclusive operation running or
+/// being planned, `jobs` the transfers running, `panel_busy` another
+/// writer holding the transfer panel.
+fn capacity_refusals(
+    is_busy: bool,
+    jobs: usize,
+    panel_busy: bool,
+) -> (Option<&'static str>, Option<&'static str>) {
+    let wait = Some(WAIT_FOR_OPERATION);
+    // As `begin_transfer` admits a transfer.
+    let copy = if is_busy || (jobs == 0 && panel_busy) {
+        wait
+    } else if jobs >= MAX_JOBS {
+        Some(TRANSFER_SLOTS_FULL)
+    } else {
+        None
+    };
+    // As `begin_operation` admits the window's one exclusive operation.
+    let shortcut = (is_busy || jobs > 0 || panel_busy).then_some(WAIT_FOR_OPERATION);
+    (copy, shortcut)
+}
 
 /// The desktop's Bluetooth sender, where the computer has an adapter.
 fn bluetooth_sender() -> Option<(BluetoothSender, PathBuf)> {
@@ -106,6 +146,14 @@ impl BrowserWindow {
             is_network: true,
         });
         let items = self.folder_pane().model().selected_items();
+        let (copy_refusal, shortcut_refusal) = {
+            let operations = self.imp().file_operations.borrow();
+            capacity_refusals(
+                operations.is_busy(),
+                operations.job_count(),
+                self.transfer_panel().is_busy(),
+            )
+        };
         SendToTargets {
             bluetooth: bluetooth_sender().is_some(),
             desktop: known(KnownFolder::Desktop).is_some(),
@@ -113,13 +161,22 @@ impl BrowserWindow {
             mail: self.share_portal().is_some(),
             drives: removable.chain(network).collect(),
             has_folder: items.iter().any(|item| item.entry().is_dir),
+            copy_refusal,
+            shortcut_refusal,
         }
     }
 
-    /// The URIs of the selected items.
+    /// The addresses Send to sends for the selected items: a Recent row's
+    /// file instead of the row ([`send_source`]).
     fn selected_uris(&self) -> Vec<String> {
         let items = self.folder_pane().model().selected_items();
-        items.iter().map(|item| item.entry().uri.clone()).collect()
+        items
+            .iter()
+            .map(|item| {
+                let entry = item.entry();
+                send_source(&entry.uri, entry.meta.recent_target.as_deref())
+            })
+            .collect()
     }
 
     /// Whether `folder` is a saved network location that is not connected
@@ -225,5 +282,48 @@ impl BrowserWindow {
                 window.show_message(ox_core::i18n::gettext_static(refusal));
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A Recent row sends the file it stands for; any other row, and a
+    /// Recent row that names no file, send themselves.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn a_recent_row_sends_the_file_it_stands_for() {
+        let recent = "recent:///3f1c9a";
+        assert_eq!(
+            send_source(recent, Some("file:///home/demo/plan.txt")),
+            "file:///home/demo/plan.txt"
+        );
+        assert_eq!(send_source(recent, None), recent);
+        assert_eq!(
+            send_source("file:///home/demo/plan.txt", None),
+            "file:///home/demo/plan.txt"
+        );
+    }
+
+    /// A copy waits for an exclusive operation, a full set of transfer
+    /// slots, or another writer holding the panel; a shortcut, the window's
+    /// one exclusive operation, waits for any write. Each says why.
+    ///
+    /// parity: CMD-038, OPS-024
+    #[test]
+    fn copies_and_shortcuts_wait_for_room_and_say_why() {
+        let wait = Some(WAIT_FOR_OPERATION);
+        let full = Some(TRANSFER_SLOTS_FULL);
+        assert_eq!(capacity_refusals(false, 0, false), (None, None));
+        assert_eq!(
+            capacity_refusals(false, 2, false),
+            (None, wait),
+            "a copy runs beside others"
+        );
+        assert_eq!(capacity_refusals(false, MAX_JOBS, false), (full, wait));
+        assert_eq!(capacity_refusals(true, 0, false), (wait, wait));
+        assert_eq!(capacity_refusals(false, 0, true), (wait, wait));
     }
 }

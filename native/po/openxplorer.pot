@@ -4630,7 +4630,7 @@ msgstr ""
 msgid "This is not the Recycle Bin."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs
+#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/send_to.rs
 msgid "Wait for the running file operation to finish."
 msgstr ""
 
@@ -5559,6 +5559,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/select_matching.rs
 msgid "Use * for any characters and ? for one character, such as *.pdf."
+msgstr ""
+
+#: crates/ox-app/src/window/send_to.rs
+msgid "Four file operations are already running. Wait for one to finish."
 msgstr ""
 
 #: crates/ox-app/src/window/send_to.rs
