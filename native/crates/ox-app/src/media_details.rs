@@ -5,8 +5,8 @@
 //! A file is untrusted input, and reading it may be slow (a share) or
 //! large, so it is read in a child process: the app itself, started again
 //! with [`READER_FLAG`]. The child limits its own processor time, reads at
-//! most the start of a picture ([`picture`]) or lets GStreamer's
-//! discoverer read a video or audio file ([`streams`]), and writes what it
+//! most the start of a picture ([`picture`]) or lets `GStreamer` read a
+//! video or audio file ([`streams`]), and writes what it
 //! found as JSON. The app waits at most [`READ_TIMEOUT`] for it and stops
 //! it then, or when the Properties window closes; a child that crashed,
 //! hung or wrote nonsense only leaves the tab without its media rows.
@@ -135,7 +135,6 @@ impl NaiveDateTime {
 /// What the reader found in one file. Every field is optional: Windows'
 /// rows without a value here are left out.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[expect(clippy::struct_excessive_bools, reason = "never more than one flag")]
 pub(crate) struct MediaDetails {
     // Description
     pub title: Option<String>,
