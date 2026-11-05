@@ -2977,7 +2977,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
 native = "partial"
-native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the status-bar slider; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
+native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the View menu's icon sizes; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
 
 [[feature]]
 id = "VIEW-011"
@@ -3012,8 +3012,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "ShowZoomSlider"
-native = "partial"
-native_note = "The native status bar has an icon-size slider, visible in Icons mode, which steps through the 16-256 px levels and updates the view and saved size. Test: native/crates/ox-app/src/window/tests/views.rs (zooming_changes_and_saves_the_view). Missing: a Show zoom slider preference and a tooltip that reports the current pixel size; the tooltip currently says Icon size."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar has no zoom slider, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the slider shown in the icon view is gone. The icon size still zooms with Ctrl+wheel (VIEW-011) and the View menu's icon sizes (VIEW-005, VIEW-010)."
 
 [[feature]]
 id = "VIEW-013"
@@ -3547,7 +3547,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "DirectorySizeCount=true (Number of items)"
 native = "done"
-native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off. The status bar's description of a folder uses the count too."
+native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off."
 
 [[feature]]
 id = "VIEW-038"
@@ -3874,7 +3874,7 @@ python_tests = []
 bridge = []
 dolphin = "Dolphin status bar: 'N Folders, M Files (size)' and selection summary."
 native = "done"
-native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/window/tests/listing.rs (a_slow_listing_shows_the_line_and_says_loading); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Deliberate change (owner request): 'N items · Loading…' shows only once a location has taken 300 ms to look up and list (window/slow_delay.rs, VIEW-068), so fast listings never flash it. The selection also shows the selected files' total size, as Windows does."
+native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/window/tests/listing.rs (a_slow_listing_shows_the_line_and_says_loading); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Deliberate change (owner request): 'N items · Loading…' shows only once a location has taken 300 ms to look up and list (window/slow_delay.rs, VIEW-068), so fast listings never flash it. As in Windows 11 File Explorer, a thin divider follows the count while something is selected, and the selection reads '1 item selected' or 'N items selected', followed by the selected files' size as Explorer writes sizes ('1 item selected  19.0 KB', 'N items selected  1.23 MB') only while every selected item is a file (status_bar.rs the_selection_shows_its_count_and_file_size; window/tests/environment.rs the_status_bar_says_ready_on_a_page_and_counts_a_folder)."
 
 [[feature]]
 id = "VIEW-051"
@@ -3893,8 +3893,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::requestStatusBarText"
-native = "done"
-native_note = "The status bar adds the total size of the files shown to the item count ('12 items  4.2 MB', summed once per change of the items shown) and the selection keeps its count and files' size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_count_adds_the_files_size_and_one_item_is_described; folder_view/model.rs shown_file_bytes). Folder sizes are never measured by themselves: Calculate folder size(s) measures on request, with Cancel scan (PROP-026, PROP-029), so remote folders are only measured when the user asks."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar gives no total size for the folder, only the size of the selection, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the count is 'N items' alone. The selected files' size stays, as Windows shows it (VIEW-050). A folder's size is in its Properties and in Calculate folder size(s) (PROP-026, PROP-029)."
 
 [[feature]]
 id = "VIEW-052"
@@ -3911,8 +3911,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KFileItem::getStatusBarInfo"
-native = "done"
-native_note = "One selected item is described in the status bar by name, type and size (or item count, or measured size), and the item under the pointer is described the same way until the pointer leaves the items, then the selection again (native/crates/ox-app/src/window/status_bar.rs item_text and show_hovered, window/details_hover.rs; the_count_adds_the_files_size_and_one_item_is_described)."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar names neither the selected item nor the one under the pointer, only '1 item selected' and its size (VIEW-050), and OpenXplorer's status bar follows it (owner request, 2026-11-05). The details pane still describes the selected item, and the item under the pointer while it follows the pointer (PROP-010); the Details view's Type and Size columns give an item's type and size."
 
 [[feature]]
 id = "VIEW-053"
@@ -3933,8 +3933,8 @@ python_tests = []
 bridge = ["properties", "list"]
 dolphin = "ShowSpaceInfo (default true); Status bar space info (ShowSpaceInfo, on by default)"
 gnome = "g_file_query_filesystem_info_async(filesystem::free)"
-native = "done"
-native_note = "The status bar shows '<X> free' with a 3-pixel capacity bar (red from 90% used) and the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown, hidden on landing pages (native/crates/ox-app/src/window/free_space.rs the_status_bar_says_how_much_room_is_left, status_bar.rs). A click on it, or a secondary click on the status bar, offers Analyse disk usage when an analyser is installed (window/disk_tools.rs, the_status_bar_offers_the_analyser_for_a_local_folder)."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar shows no free space, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the '<X> free' text and its capacity bar are gone. Free space stays where Windows shows it: the drive cards of This PC, with their used-space bar and '<free> free of <total>' (HOME-004), and a drive's Properties. A secondary click on the status bar still offers Analyse disk usage when an analyser is installed (PROP-015)."
 
 [[feature]]
 id = "VIEW-054"

@@ -39,7 +39,7 @@ use std::sync::OnceLock;
 
 use glib::DateTime;
 
-pub use explorer_text::{contents_text, exact_size_text, grouped};
+pub use explorer_text::{contents_text, exact_size_text, grouped, short_size};
 pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
 pub use relative_date::DateStyle;
