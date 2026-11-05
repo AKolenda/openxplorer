@@ -371,6 +371,10 @@ fn a_move_merges_folders_and_undo_puts_everything_back() {
         b"incoming cover",
         "the skipped file stays where it was"
     );
+    assert!(
+        !outcome.result.done.contains(&scan.selection[0]),
+        "the folder holding the skipped file stays on the clipboard"
+    );
 
     let record = outcome.undo.expect("an undoable move");
     assert_eq!(record.undo_label(), "Undo Move");
@@ -538,6 +542,10 @@ fn undoing_a_kept_both_move_out_of_a_removed_folder_makes_the_folder_again() {
     let outcome = run(&scan, &[Resolution::KeepBoth]);
     assert_eq!(fs::read(dst.join("Music/cover (2).jpg")).unwrap(), b"incoming");
     assert!(!src.join("Music").exists(), "the emptied folder went");
+    assert!(
+        outcome.result.done.contains(&scan.selection[0]),
+        "the folder moved whole, so a cut paste takes it off the clipboard"
+    );
     let record = outcome.undo.expect("an undoable move");
     let undone = block_on(reverse(&record, &context, |_| {})).expect("an undo");
 

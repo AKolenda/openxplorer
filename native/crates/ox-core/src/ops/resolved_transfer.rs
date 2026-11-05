@@ -572,6 +572,14 @@ impl<'a> Run<'a> {
             }
         }
         self.total.created = created;
+        // A selected folder that a move merged and then removed has moved
+        // whole, so a cut paste takes it off the clipboard.
+        for uri in &self.scan.selection {
+            let removed = self.removed_folders.contains(&GioNode::new(uri).uri());
+            if removed && !self.total.result.done.contains(uri) {
+                self.total.result.done.push(uri.clone());
+            }
+        }
         self.total.undo = self.undo_record();
         self.total
     }
