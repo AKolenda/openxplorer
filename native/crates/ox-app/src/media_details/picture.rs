@@ -399,28 +399,70 @@ fn uint(exif: &exif::Exif, tag: Tag) -> Option<u32> {
     exif.get_field(tag, In::PRIMARY)?.value.get_uint(0)
 }
 
+/// A fraction field (an exposure time): as stored when it is one, else
+/// made from its number. Some writers store a camera's values as signed
+/// rationals or doubles.
 fn rational_parts(exif: &exif::Exif, tag: Tag) -> Option<(u32, u32)> {
-    match &exif.get_field(tag, In::PRIMARY)?.value {
+    let field = exif.get_field(tag, In::PRIMARY)?;
+    match &field.value {
         Value::Rational(values) => values
             .first()
             .map(|value| (value.num, value.denom))
             .filter(|(_, denom)| *denom > 0),
-        _ => None,
+        Value::SRational(values) => values.first().and_then(|value| {
+            Some((u32::try_from(value.num).ok()?, u32::try_from(value.denom).ok()?))
+                .filter(|(_, denom)| *denom > 0)
+        }),
+        _ => {
+            let value = number(exif, tag)?;
+            if !(value > 0.0 && value.is_finite()) {
+                None
+            } else if value < 1.0 {
+                Some((1, rounded(1.0 / value)?))
+            } else {
+                Some((rounded(value * 10.0)?, 10))
+            }
+        }
     }
 }
 
-fn rational(exif: &exif::Exif, tag: Tag) -> Option<f64> {
-    rational_parts(exif, tag).map(|(num, denom)| f64::from(num) / f64::from(denom))
-}
-
-fn signed_rational(exif: &exif::Exif, tag: Tag) -> Option<f64> {
-    match &exif.get_field(tag, In::PRIMARY)?.value {
+/// A number field, whichever numeric type it was written with.
+fn number(exif: &exif::Exif, tag: Tag) -> Option<f64> {
+    let value = match &exif.get_field(tag, In::PRIMARY)?.value {
+        Value::Rational(values) => values
+            .first()
+            .filter(|value| value.denom != 0)
+            .map(|value| f64::from(value.num) / f64::from(value.denom)),
         Value::SRational(values) => values
             .first()
             .filter(|value| value.denom != 0)
             .map(|value| f64::from(value.num) / f64::from(value.denom)),
+        Value::Double(values) => values.first().copied(),
+        Value::Float(values) => values.first().map(|value| f64::from(*value)),
+        Value::Short(values) => values.first().map(|value| f64::from(*value)),
+        Value::Long(values) => values.first().map(|value| f64::from(*value)),
         _ => None,
-    }
+    }?;
+    value.is_finite().then_some(value)
+}
+
+/// `value` rounded to a whole number that fits a `u32`.
+fn rounded(value: f64) -> Option<u32> {
+    let value = value.round();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "checked to be within u32 first"
+    )]
+    (value >= 1.0 && value <= f64::from(u32::MAX)).then(|| value as u32)
+}
+
+fn rational(exif: &exif::Exif, tag: Tag) -> Option<f64> {
+    number(exif, tag)
+}
+
+fn signed_rational(exif: &exif::Exif, tag: Tag) -> Option<f64> {
+    number(exif, tag)
 }
 
 fn read_u32_be(bytes: &[u8], at: usize) -> Option<u32> {
