@@ -133,10 +133,6 @@ msgstr ""
 msgid "File commands"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui
-msgid "Close details pane"
-msgstr ""
-
 #: crates/ox-app/resources/ui/network-sign-in.ui
 msgid "Cancel sign-in"
 msgstr ""
@@ -4325,6 +4321,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/desktop_link.rs
 msgid "This link points to an address OpenXplorer cannot open."
+msgstr ""
+
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/details_pane.rs
+msgid "Close details pane"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane.rs
+msgid "Close preview pane"
 msgstr ""
 
 #: crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/entry/type_label.rs

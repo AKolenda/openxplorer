@@ -284,15 +284,26 @@ impl DetailsPane {
     pub(super) fn set_mode(&self, mode: PaneMode) {
         let imp = self.imp();
         imp.mode.set(mode);
-        let (title, toggle) = match mode {
-            PaneMode::Details => (ox_core::i18n::gettext("Details"), WindowAction::DetailsPane),
-            PaneMode::Preview => (ox_core::i18n::gettext("Preview"), WindowAction::PreviewPane),
+        let (title, toggle, close) = match mode {
+            PaneMode::Details => (
+                ox_core::i18n::gettext("Details"),
+                WindowAction::DetailsPane,
+                ox_core::i18n::gettext("Close details pane"),
+            ),
+            PaneMode::Preview => (
+                ox_core::i18n::gettext("Preview"),
+                WindowAction::PreviewPane,
+                ox_core::i18n::gettext("Close preview pane"),
+            ),
         };
         if let Some(label) = self.title_label() {
             label.set_text(&title);
         }
-        // The close button closes the pane that is open.
+        // The close button closes the pane that is open, and says which.
         toggle.assign_to(&*imp.close_button);
+        imp.close_button.set_tooltip_text(Some(&close));
+        imp.close_button
+            .update_property(&[gtk::accessible::Property::Label(&close)]);
         self.show_mode();
     }
 
@@ -344,6 +355,16 @@ impl DetailsPane {
     pub(super) fn title_text(&self) -> String {
         self.title_label()
             .map(|label| label.text().to_string())
+            .unwrap_or_default()
+    }
+
+    /// The close button's tooltip, for tests.
+    #[cfg(test)]
+    pub(super) fn close_tooltip(&self) -> String {
+        self.imp()
+            .close_button
+            .tooltip_text()
+            .map(String::from)
             .unwrap_or_default()
     }
 
