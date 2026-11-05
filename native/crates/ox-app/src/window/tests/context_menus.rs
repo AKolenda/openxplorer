@@ -502,7 +502,7 @@ fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     test.window.right_click(None);
     menu.row("View").emit_activate();
     wait_until("the View menu", || {
-        menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Details")
+        menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Extra large icons")
     });
 }
 

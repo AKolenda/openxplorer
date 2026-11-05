@@ -35,7 +35,12 @@ fn explorers_further_keys_sit_beside_the_ones_they_match() {
     let keys = |action: WindowAction| app.accels_for_action(&action.detailed_name());
 
     assert_eq!(keys(WindowAction::Search), ["<Control>f", "<Control>e"]);
-    assert_eq!(keys(WindowAction::DetailsPane), ["<Shift><Alt>p", "<Alt>p"]);
+    assert_eq!(keys(WindowAction::DetailsPane), ["<Shift><Alt>p"]);
+    assert_eq!(
+        keys(WindowAction::PreviewPane),
+        ["<Alt>p"],
+        "Alt+P is Windows' Preview pane"
+    );
     assert_eq!(keys(WindowAction::FullScreen), ["F11"]);
     assert_eq!(keys(WindowAction::SplitView), ["F3"], "F3 keeps Split view");
     for key in ["<Primary>e", "<Alt>p", "F11"] {
@@ -135,42 +140,51 @@ fn ctrl_d_leaves_text_fields_and_the_settings_page_alone() {
     assert!(fixture.path("Résumé.txt").is_file());
 }
 
-/// Alt+P toggles the details pane, which also previews the selection
-/// here, as Alt+Shift+P does, and saves the choice the same way.
+/// Alt+P toggles the Preview pane and Alt+Shift+P the Details pane, as in
+/// Windows: the two share the pane, so each key switches from the other,
+/// and each saves the choice.
 ///
-/// parity: VIEW-063
+/// parity: VIEW-063, VIEW-070
 #[gtk::test]
-fn alt_p_toggles_the_details_pane_as_alt_shift_p_does() {
+fn alt_p_toggles_the_preview_pane_and_alt_shift_p_the_details_pane() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let shown = || {
+    let state = |action: WindowAction| {
         test.window
-            .window_action_state(WindowAction::DetailsPane)
+            .window_action_state(action)
             .and_then(|state| state.get::<bool>())
-            .expect("the details pane action has a state")
+            .expect("the pane actions have a state")
     };
-    let before = shown();
     test.window.folder_pane().focus_view();
+    assert!(
+        state(WindowAction::DetailsPane),
+        "the Details pane is open by default"
+    );
 
     assert!(press_shortcut_where_focused(
         &test,
         gdk::Key::p,
         gdk::ModifierType::ALT_MASK
     ));
-    let after_alt_p = shown();
+    assert!(state(WindowAction::PreviewPane), "Alt+P opens the Preview pane");
+    assert!(!state(WindowAction::DetailsPane), "in place of the Details pane");
     wait_until("Alt+P's choice to be saved", || {
-        test.context.settings_data().preferences.show_details_pane == after_alt_p
+        test.context.settings_data().preferences.preview_pane
     });
+
     assert!(press_shortcut_where_focused(
         &test,
         gdk::Key::p,
         gdk::ModifierType::ALT_MASK | gdk::ModifierType::SHIFT_MASK
     ));
-
-    assert_ne!(after_alt_p, before, "Alt+P toggles the pane");
-    assert_eq!(shown(), before, "Alt+Shift+P toggles it back");
+    assert!(
+        state(WindowAction::DetailsPane),
+        "Alt+Shift+P opens the Details pane"
+    );
+    assert!(!state(WindowAction::PreviewPane));
     wait_until("Alt+Shift+P's choice to be saved", || {
-        test.context.settings_data().preferences.show_details_pane == before
+        let saved = test.context.settings_data().preferences;
+        saved.show_details_pane && !saved.preview_pane
     });
 }
 

@@ -13,12 +13,15 @@ use gtk::subclass::prelude::*;
 use ox_core::location::{
     self, is_archive_location, is_device_location, is_server_location, parent_location, LocationContext,
 };
-use ox_core::places::NetworkLocation;
+use ox_core::ops::JournalDirection;
+use ox_core::places::{NetworkLocation, Place};
 
+use crate::folder_view::shown_name::shown_name;
 use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
+use super::command_bar::{FolderPin, MoreMenuState, MorePlace, NetworkDrive};
 use super::session::{Session, Tab};
 use super::tab_strip::TabView;
 use super::window_action::WindowAction;
@@ -129,6 +132,15 @@ fn tab_view(
     }
 }
 
+/// What the "…" menu keeps of the places the sidebar was last drawn from.
+#[derive(Debug, Default)]
+pub(super) struct MoreMenuPlaces {
+    /// Quick access, for Pin or Unpin.
+    quick_access: Vec<Place>,
+    /// The connected network shares, for Disconnect network drive.
+    network_drives: Vec<NetworkDrive>,
+}
+
 impl BrowserWindow {
     /// Updates the frame after the active tab moved: the address bar
     /// returns to breadcrumbs.
@@ -163,6 +175,7 @@ impl BrowserWindow {
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
         self.show_extract_button();
+        self.update_more_menu();
         self.update_cache_folder_action();
         self.render_tabs();
         self.show_pane_captions();
@@ -173,6 +186,68 @@ impl BrowserWindow {
         self.render_landing();
         self.show_surface_for(uri);
         self.picker_selection_changed();
+    }
+
+    /// Keeps what "…" needs of `places`, which the sidebar has just been
+    /// drawn from: Quick access, for Pin or Unpin, and, for Disconnect
+    /// network drive, the network mounts themselves, one per mount, so
+    /// a saved share inside a mount is not listed as a drive of its own.
+    pub(super) fn remember_more_menu_places(&self, places: &crate::places::Places) {
+        let network_drives = crate::places::network_drive_mounts(&self.imp().volumes.borrow())
+            .into_iter()
+            .map(|mount| NetworkDrive {
+                label: mount.label,
+                uri: mount.uri,
+            })
+            .collect();
+        self.imp().more_menu_places.replace(Some(MoreMenuPlaces {
+            quick_access: places.quick_access.clone(),
+            network_drives,
+        }));
+    }
+
+    /// Shows in "…" what the location shown allows, as Windows 11's "…"
+    /// does: in This PC and Network the network drive commands; in a
+    /// folder Undo and Redo while each can run, named for the step, and
+    /// Unpin from Quick access while the folder is pinned, else Pin to
+    /// Quick access. It follows the location, every change to Quick access
+    /// or the network shares, and the undo journal.
+    pub(super) fn update_more_menu(&self) {
+        let Some(uri) = self.current_uri() else {
+            return;
+        };
+        if self.imp().more_menu_places.borrow().is_none() {
+            let places = self.places();
+            self.remember_more_menu_places(&places);
+        }
+        let sources = self.imp().more_menu_places.borrow();
+        let Some(sources) = sources.as_ref() else {
+            return;
+        };
+        let page = Page::from_uri(&uri);
+        let place = match page {
+            Some(Page::ThisPc) => MorePlace::ThisPc,
+            Some(Page::Network) => MorePlace::Network,
+            _ => MorePlace::Folder,
+        };
+        // Only This PC asks GIO, which lists every application.
+        let system_information =
+            place == MorePlace::ThisPc && crate::integration::system_information().is_some();
+        let pinned = sources
+            .quick_access
+            .iter()
+            .find(|pin| page.is_none() && location::same_location(&pin.uri, &uri));
+        let pin = pinned.map_or(FolderPin::Unpinned, |pin| FolderPin::Pinned(pin.uri.clone()));
+        let context = self.context();
+        let state = MoreMenuState {
+            place,
+            pin,
+            can_undo: context.journal_label(JournalDirection::Undo).is_some(),
+            can_redo: context.journal_label(JournalDirection::Redo).is_some(),
+            network_drives: sources.network_drives.clone(),
+            system_information,
+        };
+        self.command_bar().show_more_menu(state);
     }
 
     /// Titles the window after the active tab's location: its name, or
@@ -213,9 +288,24 @@ impl BrowserWindow {
     /// Shows `uri` in the address bar: its icon, and its crumbs divided as
     /// `renderNavigation` divides them.
     fn render_address(&self, uri: &str) {
+        self.render_address_of(uri);
+    }
+
+    /// Draws the crumbs and the address of `uri`. The crumb of an opened
+    /// archive is a file's name, so it hides a known extension while
+    /// names do, as Windows' does for a ZIP folder; folders keep theirs.
+    pub(super) fn render_address_of(&self, uri: &str) {
         let full_path = self.shows_full_path();
+        let extensions = self.file_name_extensions();
         let locations = self.imp().locations.borrow();
-        let crumbs = crumb_buttons(&locations, uri, full_path);
+        let mut crumbs = crumb_buttons(&locations, uri, full_path);
+        if let Some(archive) = crumbs
+            .iter_mut()
+            .find(|crumb| is_archive_location(&crumb.crumb.uri))
+        {
+            let shown = shown_name(&archive.crumb.label, false, extensions).to_owned();
+            archive.crumb.label = shown;
+        }
         let address = locations.display_location(uri);
         let icon = address_icon(uri, &locations.home_uri());
         self.address_bar().show_location(&crumbs, &address, icon);

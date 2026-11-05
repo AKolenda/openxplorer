@@ -13,6 +13,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::is_smb_location;
 
+use crate::folder_view::shown_name::shown_name;
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
@@ -191,7 +192,7 @@ impl BrowserWindow {
             Vec::new()
         };
         let locations = self.imp().locations.borrow();
-        let content = details_pane::pane_content(&PaneFacts {
+        let mut content = details_pane::pane_content(&PaneFacts {
             selection: &selection,
             folder_uri: &folder_uri,
             folder_item_count,
@@ -199,6 +200,14 @@ impl BrowserWindow {
             network: &network,
             condensed_dates: pane.options().condensed_dates,
         });
+        // One item is named as the file list names it (VIEW-069).
+        if let [item] = selection.as_slice() {
+            let entry = item.entry();
+            if content.name == entry.name {
+                let extensions = self.file_name_extensions();
+                shown_name(&entry.name, entry.is_dir, extensions).clone_into(&mut content.name);
+            }
+        }
         pane.set_content(&content);
     }
 }

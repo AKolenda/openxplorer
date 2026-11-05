@@ -56,6 +56,7 @@ fn escape(test: &TestWindow, field: &gtk::Entry) {
 fn new_text_document_makes_the_file_at_once_and_renames_its_name_in_place() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
 
     let field = make_new_text_document(&test);
 
@@ -94,6 +95,7 @@ fn taken_names_give_the_next_numbered_text_documents() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("New Text Document.txt"), b"kept").expect("a taken name");
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
 
     let field = make_new_text_document(&test);
     assert_eq!(field.text(), "New Text Document (2).txt");
@@ -137,6 +139,7 @@ fn escape_keeps_the_name_new_text_document() {
 fn leaving_the_field_keeps_the_typed_name() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     let field = make_new_text_document(&test);
     field.set_text("Ideas.txt");
 
@@ -155,6 +158,7 @@ fn leaving_the_field_keeps_the_typed_name() {
 fn a_listing_that_arrives_during_the_rename_keeps_the_field() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     let field = make_new_text_document(&test);
     field.set_text("Draft.txt");
 
@@ -386,6 +390,7 @@ fn a_create_that_ends_after_navigating_away_leaves_the_new_folder_alone() {
 fn a_create_that_ends_back_in_its_own_tab_renames_there() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     let first = test.active_tab().expect("a tab");
     let release = start_held_text_document(&test);
     test.window
@@ -438,6 +443,7 @@ fn a_slow_create_shows_the_cancellable_panel_after_a_moment() {
 fn a_quick_create_never_shows_the_panel() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     let release = start_held_text_document(&test);
 
     drop(release);

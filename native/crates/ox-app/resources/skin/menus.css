@@ -29,6 +29,22 @@ popover.ox-menu list > row:disabled { color: @ox_text_disabled; }
 popover.ox-menu list > row .shortcut { color: @ox_muted; padding-left: 12px; }
 /* A disabled row greys its shortcut too, as the web's opacity did. */
 popover.ox-menu list > row:disabled .shortcut { color: @ox_text_disabled; }
+/* A glyph shown the other way round, as Windows 11 draws Redo with
+   Undo's arrow (src/window/menu_popover.rs). The bundled file is not
+   changed; GTK turns the icon when it paints it. */
+popover.ox-menu list > row image.mirrored { -gtk-icon-transform: scaleX(-1); }
+/* Windows 11's blue in the "…" menu: Undo, Redo and Pin are drawn in it
+   (accent-glyph), and the custom icons (Select all, Invert selection,
+   Options and the network commands) keep it for their blue parts, which
+   their files mark "success" for GTK's icon palette; their grey follows
+   the text colour. A disabled
+   row greys both out. */
+popover.ox-menu list > row image { -gtk-icon-palette: success @ox_command_blue; }
+popover.ox-menu list > row image.accent-glyph { color: @ox_command_blue; }
+popover.ox-menu list > row:disabled image.accent-glyph { color: @ox_text_disabled; }
+popover.ox-menu list > row:disabled image { -gtk-icon-palette: success @ox_text_disabled; }
+/* The mark column: a check mark for a toggle, a dot for a choice. */
+popover.ox-menu list > row image.menu-mark { color: @ox_text; }
 popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }
 
 /* ---- Toast (§4.15, E08) ---- */

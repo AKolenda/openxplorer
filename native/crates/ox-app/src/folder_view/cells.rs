@@ -264,6 +264,12 @@ impl FileCell {
         imp.label.set_text(&item.entry().name);
     }
 
+    /// Shows `name` as the item's name: its own, or without a known type's
+    /// extension (VIEW-069).
+    pub(crate) fn show_name(&self, name: &str) {
+        self.imp().label.set_text(name);
+    }
+
     /// Puts `editor` in the name's place, to rename the item in place.
     pub(crate) fn show_name_editor(&self, editor: &gtk::Entry) {
         self.hide_name_editor();
@@ -356,9 +362,12 @@ pub(crate) fn connect_file_cells(
         let list_item = as_list_item(object);
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
-            // A tile is named after its item (`aria-label` in app.js).
-            list_item.set_accessible_label(&item.entry().name);
+            // A tile is named after its item (`aria-label` in app.js), as
+            // it shows the name.
+            let name = bind_owners.shown_name(&item);
+            list_item.set_accessible_label(&name);
             cell.bind(&item);
+            cell.show_name(&name);
             cell.show_item_check(bind_owners.shows_item_checks());
             cell.look_up_picture(&item, bind_owners.previews());
             bind_owners.style_cell(&cell, &item);

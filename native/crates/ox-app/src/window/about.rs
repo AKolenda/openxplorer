@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "About this build" and "License & source" in the More options menu and
-//! the About settings.
+//! "About this build" and "License & source" in Settings > About, which
+//! the More options menu held until they moved there (CMD-007).
 //!
 //! Ports the `About this build` item of the More menu and `showLicense`
 //! in `v2.0.0:desktop/ui/app.js`: message boxes with one OK button. About names
@@ -171,7 +171,7 @@ mod tests {
     }
 
     /// License & source shows the copyright, the source, the whole AGPL and
-    /// the original MIT notice, and More options and Settings can open it.
+    /// the original MIT notice, and Settings > About opens it.
     ///
     /// parity: UPD-016
     #[gtk::test]

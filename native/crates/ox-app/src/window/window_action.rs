@@ -132,6 +132,12 @@ pub(crate) enum WindowAction {
     Hidden,
     /// Shows or hides the details pane.
     DetailsPane,
+    /// Shows or hides the Preview pane, which shows the selection's
+    /// preview alone in the details pane's place (VIEW-070).
+    PreviewPane,
+    /// Shows or hides the extensions of known file types in names
+    /// (View > Show > File name extensions, VIEW-069).
+    FileNameExtensions,
     /// Switches the details pane option or field named by the string
     /// target (the pane's menu).
     DetailsPaneOption,
@@ -295,6 +301,9 @@ pub(crate) enum WindowAction {
     DropChoice,
     /// Opens the connect dialog for a network share.
     MapNetworkLocation,
+    /// Opens the connect dialog at a web address, as Windows 11's "Add a
+    /// network location" (This PC's and Network's "…").
+    AddNetworkLocation,
     /// Looks for SMB servers that advertise themselves.
     DiscoverServers,
     /// Stops looking for servers.
@@ -369,6 +378,9 @@ pub(crate) enum WindowAction {
     Properties,
     /// Properties on its Previous versions tab.
     PreviousVersions,
+    /// Opens the desktop's system information app, from This PC's "…" >
+    /// Properties, as Windows opens the system's properties (CMD-007).
+    SystemProperties,
     /// Properties of the location in the string target, for the menus of
     /// the sidebar, drives and network places, and `ShowItemProperties`.
     PropertiesOf,
@@ -506,6 +518,8 @@ impl WindowAction {
             WindowAction::View => "view",
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
+            WindowAction::PreviewPane => "preview-pane",
+            WindowAction::FileNameExtensions => "file-name-extensions",
             WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::DetailsColumn => "details-column",
             WindowAction::Stop => "stop",
@@ -575,6 +589,7 @@ impl WindowAction {
             WindowAction::MoveTabIntoWindow => "move-tab-into-window",
             WindowAction::DropChoice => "drop-choice",
             WindowAction::MapNetworkLocation => "map-network-location",
+            WindowAction::AddNetworkLocation => "add-network-location",
             WindowAction::DiscoverServers => "discover-servers",
             WindowAction::StopDiscovery => "stop-discovery",
             WindowAction::KeepInNetwork => "keep-in-network",
@@ -606,6 +621,7 @@ impl WindowAction {
             WindowAction::Properties => "properties",
             WindowAction::PreviousVersions => "previous-versions",
             WindowAction::PropertiesOf => "properties-of",
+            WindowAction::SystemProperties => "system-properties",
             WindowAction::PreviousVersionsOf => "previous-versions-of",
             WindowAction::CalculateFolderSize => "calculate-folder-size",
             WindowAction::CalculateFolderSizes => "calculate-folder-sizes",

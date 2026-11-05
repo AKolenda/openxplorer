@@ -15,7 +15,7 @@ use ox_core::network::{connect_share, ConnectedShare};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
-use crate::dialogs::{map_network_dialog, MapRequest, ShareKeeping};
+use crate::dialogs::{map_network_dialog, network_location_dialog, MapRequest, ShareKeeping};
 use crate::network::user_recent_servers;
 use crate::places::network_row;
 use crate::settings_store::Change;
@@ -34,6 +34,16 @@ fn share_change(action: BookmarkAction, uri: String, label: String) -> Change {
         let request = BookmarkRequest::new(uri, label);
         settings.bookmark(action, BookmarkKind::Share, &request)
     })
+}
+
+/// Which connect dialog opens: Map network location, which "…" names
+/// Map network drive as Windows 11 does, or Add a network location.
+#[derive(Debug, Clone, Copy)]
+enum ConnectDialog {
+    /// Starts at a Windows share.
+    MapNetworkDrive,
+    /// Starts at a web address.
+    AddNetworkLocation,
 }
 
 /// Adds a mapped folder to the recent servers GTK's Other Locations and
@@ -63,6 +73,10 @@ impl BrowserWindow {
                 WindowAction::MapNetworkLocation,
                 BrowserWindow::open_map_network_dialog,
             ),
+            plain_action(
+                WindowAction::AddNetworkLocation,
+                BrowserWindow::open_network_location_dialog,
+            ),
             plain_action(WindowAction::DiscoverServers, BrowserWindow::discover_servers),
             plain_action(WindowAction::StopDiscovery, BrowserWindow::stop_discovery),
             text_action(WindowAction::KeepInNetwork, BrowserWindow::keep_in_network),
@@ -86,14 +100,25 @@ impl BrowserWindow {
 
     /// Map network location: asks for a share, then connects it.
     fn open_map_network_dialog(&self) {
-        let dialog = map_network_dialog(
+        self.open_connect_dialog(ConnectDialog::MapNetworkDrive);
+    }
+
+    /// "Add a network location": the same dialog at a web address.
+    fn open_network_location_dialog(&self) {
+        self.open_connect_dialog(ConnectDialog::AddNetworkLocation);
+    }
+
+    /// Opens the connect dialog `kind` names, connecting what it asks for.
+    fn open_connect_dialog(&self, kind: ConnectDialog) {
+        let on_connect = glib::clone!(
+            #[weak(rename_to = window)]
             self,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |dialog, request| window.connect_mapped_share(dialog, request)
-            ),
+            move |dialog: &Dialog, request: MapRequest| window.connect_mapped_share(dialog, request)
         );
+        let dialog = match kind {
+            ConnectDialog::MapNetworkDrive => map_network_dialog(self, on_connect),
+            ConnectDialog::AddNetworkLocation => network_location_dialog(self, on_connect),
+        };
         dialog.open();
     }
 
