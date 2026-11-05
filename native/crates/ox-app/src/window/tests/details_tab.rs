@@ -239,3 +239,29 @@ fn a_folder_has_no_details_tab() {
     let window = test.wait_for_properties("Documents Properties");
     assert!(!window.tab_labels().contains(&"Details".to_owned()));
 }
+
+/// Properties opened straight on Details, before the item is read, still
+/// read the file's own rows.
+///
+/// parity: PROP-034
+#[gtk::test]
+fn properties_opened_on_details_read_the_media_rows() {
+    let fixture = Fixture::empty();
+    fs::write(
+        fixture.path("Harbour.jpg"),
+        jpeg_with_exif(64, 48, &camera_exif()),
+    )
+    .expect("the photo");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.window.open_properties_of(
+        &fixture.uri_of("Harbour.jpg"),
+        crate::properties::PropertiesTab::Details,
+    );
+
+    let window = test.wait_for_properties("Harbour.jpg Properties");
+    assert_eq!(window.selected_tab().as_deref(), Some("details"));
+    wait_until("the photo's details", || {
+        lines(&window).iter().any(|line| line == "Camera model: FO-100")
+    });
+}

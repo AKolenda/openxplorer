@@ -141,7 +141,7 @@ fn picture_sections(properties: &ItemProperties, media: &MediaDetails, sections:
             message_id("Date taken"),
             media
                 .date_taken
-                .and_then(|taken| taken.local_unix_seconds())
+                .and_then(crate::media_details::NaiveDateTime::local_unix_seconds)
                 .map(|seconds| format::date_short_time_text(Some(seconds))),
         )
         .text(message_id("Program name"), media.program_name.clone())

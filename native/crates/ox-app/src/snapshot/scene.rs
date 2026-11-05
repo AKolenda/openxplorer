@@ -13,6 +13,8 @@
 //!   `context-menu`, `properties` or `details-pane`;
 //! - `action=<name>:<target>`: runs it with a string target, such as
 //!   `open-tab-background:/home/demo/Documents`;
+//! - `tab=<name>`: shows the tab named `<name>` (`general`, `security`,
+//!   `details`, `versions`, ...) of the Properties window opened last;
 //! - `wait=<milliseconds>`: lets work the app does in the background, such
 //!   as building the search cache, finish first (at most ten seconds).
 //!
@@ -42,6 +44,8 @@ pub(crate) enum SceneStep {
         /// Its string target, if it takes one.
         target: Option<String>,
     },
+    /// Show this tab of the Properties window opened last.
+    Tab(String),
     /// Wait this long before the next step.
     Wait(Duration),
 }
@@ -67,6 +71,7 @@ impl SceneStep {
         }
         match verb.trim() {
             "select" => Some(Self::Select(argument.to_owned())),
+            "tab" => Some(Self::Tab(argument.to_owned())),
             "action" => {
                 let (name, target) = match argument.split_once(':') {
                     Some((name, target)) => (name, Some(target.to_owned())),
@@ -99,6 +104,16 @@ impl SceneStep {
                     .map(|()| Duration::ZERO)
                     .map_err(|_| format!("the window has no action “{name}”"))
             }
+            Self::Tab(name) => {
+                let properties = window
+                    .properties_windows()
+                    .pop()
+                    .ok_or_else(|| "no Properties window is open".to_owned())?;
+                properties.select_tab(name);
+                (properties.selected_tab().as_deref() == Some(name.as_str()))
+                    .then_some(Duration::ZERO)
+                    .ok_or_else(|| format!("the Properties window has no tab “{name}”"))
+            }
             Self::Wait(pause) => Ok(*pause),
         }
     }
@@ -111,7 +126,7 @@ mod tests {
     #[test]
     fn a_scene_lists_selections_and_actions_in_order() {
         let scene = SceneStep::parse_scene(
-            "select=Notes.md; action=context-menu;action=open-tab:/home/demo;wait=250",
+            "select=Notes.md; action=context-menu;action=open-tab:/home/demo;tab=details;wait=250",
         )
         .expect("a valid scene");
         assert_eq!(
@@ -126,6 +141,7 @@ mod tests {
                     name: "open-tab".to_owned(),
                     target: Some("/home/demo".to_owned())
                 },
+                SceneStep::Tab("details".to_owned()),
                 SceneStep::Wait(Duration::from_millis(250)),
             ]
         );
@@ -135,6 +151,7 @@ mod tests {
     fn an_unknown_or_empty_step_is_refused() {
         assert_eq!(SceneStep::parse_scene("rename=Notes.md"), None);
         assert_eq!(SceneStep::parse_scene("select="), None);
+        assert_eq!(SceneStep::parse_scene("tab="), None);
         assert_eq!(SceneStep::parse_scene("details-pane"), None);
         assert_eq!(SceneStep::parse_scene("wait=soon"), None);
         assert_eq!(

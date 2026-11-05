@@ -43,122 +43,38 @@ pub(crate) fn camera_exif() -> Vec<u8> {
         .flat_map(u16::to_le_bytes)
         .collect();
     title.extend_from_slice(&[0, 0]);
+    let field = |tag, value| Field {
+        tag,
+        ifd_num: In::PRIMARY,
+        value,
+    };
     let fields = [
-        Field {
-            tag: Tag::Make,
-            ifd_num: In::PRIMARY,
-            value: ascii("Fictional Optics"),
-        },
-        Field {
-            tag: Tag::Model,
-            ifd_num: In::PRIMARY,
-            value: ascii("FO-100"),
-        },
-        Field {
-            tag: Tag::Software,
-            ifd_num: In::PRIMARY,
-            value: ascii("Example Editor 2"),
-        },
-        Field {
-            tag: Tag::Artist,
-            ifd_num: In::PRIMARY,
-            value: ascii("A. Example"),
-        },
-        Field {
-            tag: Tag::XResolution,
-            ifd_num: In::PRIMARY,
-            value: rational(300, 1),
-        },
-        Field {
-            tag: Tag::YResolution,
-            ifd_num: In::PRIMARY,
-            value: rational(300, 1),
-        },
-        Field {
-            tag: Tag::ResolutionUnit,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![2]),
-        },
-        Field {
-            tag: Tag(exif::Context::Tiff, 0x9c9b),
-            ifd_num: In::PRIMARY,
-            value: Value::Byte(title),
-        },
-        Field {
-            tag: Tag(exif::Context::Tiff, 0x4746),
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![4]),
-        },
-        Field {
-            tag: Tag::DateTimeOriginal,
-            ifd_num: In::PRIMARY,
-            value: ascii("2026:05:01 18:42:07"),
-        },
-        Field {
-            tag: Tag::FNumber,
-            ifd_num: In::PRIMARY,
-            value: rational(28, 10),
-        },
-        Field {
-            tag: Tag::ExposureTime,
-            ifd_num: In::PRIMARY,
-            value: rational(1, 125),
-        },
-        Field {
-            tag: Tag::PhotographicSensitivity,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![200]),
-        },
-        Field {
-            tag: Tag::ExposureBiasValue,
-            ifd_num: In::PRIMARY,
-            value: Value::SRational(vec![SRational { num: -2, denom: 3 }]),
-        },
-        Field {
-            tag: Tag::FocalLength,
-            ifd_num: In::PRIMARY,
-            value: rational(50, 1),
-        },
-        Field {
-            tag: Tag::MeteringMode,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![5]),
-        },
-        Field {
-            tag: Tag::Flash,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![0x10]),
-        },
-        Field {
-            tag: Tag::FocalLengthIn35mmFilm,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![75]),
-        },
-        Field {
-            tag: Tag::ColorSpace,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![1]),
-        },
-        Field {
-            tag: Tag::LensModel,
-            ifd_num: In::PRIMARY,
-            value: ascii("FO 50mm F2.8"),
-        },
-        Field {
-            tag: Tag::ExposureProgram,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![3]),
-        },
-        Field {
-            tag: Tag::WhiteBalance,
-            ifd_num: In::PRIMARY,
-            value: Value::Short(vec![0]),
-        },
-        Field {
-            tag: Tag::ExifVersion,
-            ifd_num: In::PRIMARY,
-            value: Value::Undefined(b"0232".to_vec(), 0),
-        },
+        field(Tag::Make, ascii("Fictional Optics")),
+        field(Tag::Model, ascii("FO-100")),
+        field(Tag::Software, ascii("Example Editor 2")),
+        field(Tag::Artist, ascii("A. Example")),
+        field(Tag::XResolution, rational(300, 1)),
+        field(Tag::YResolution, rational(300, 1)),
+        field(Tag::ResolutionUnit, Value::Short(vec![2])),
+        field(Tag(exif::Context::Tiff, 0x9c9b), Value::Byte(title)),
+        field(Tag(exif::Context::Tiff, 0x4746), Value::Short(vec![4])),
+        field(Tag::DateTimeOriginal, ascii("2026:05:01 18:42:07")),
+        field(Tag::FNumber, rational(28, 10)),
+        field(Tag::ExposureTime, rational(1, 125)),
+        field(Tag::PhotographicSensitivity, Value::Short(vec![200])),
+        field(
+            Tag::ExposureBiasValue,
+            Value::SRational(vec![SRational { num: -2, denom: 3 }]),
+        ),
+        field(Tag::FocalLength, rational(50, 1)),
+        field(Tag::MeteringMode, Value::Short(vec![5])),
+        field(Tag::Flash, Value::Short(vec![0x10])),
+        field(Tag::FocalLengthIn35mmFilm, Value::Short(vec![75])),
+        field(Tag::ColorSpace, Value::Short(vec![1])),
+        field(Tag::LensModel, ascii("FO 50mm F2.8")),
+        field(Tag::ExposureProgram, Value::Short(vec![3])),
+        field(Tag::WhiteBalance, Value::Short(vec![0])),
+        field(Tag::ExifVersion, Value::Undefined(b"0232".to_vec(), 0)),
     ];
     let mut writer = Writer::new();
     for field in &fields {
@@ -384,7 +300,7 @@ fn damaged_pictures_are_read_safely() {
     );
 }
 
-/// An audio file's tags, length, rate and channels come from GStreamer's
+/// An audio file's tags, length, rate and channels come from `GStreamer`'s
 /// discoverer.
 ///
 /// parity: PROP-034
@@ -414,7 +330,7 @@ fn a_songs_tags_and_stream_are_discovered() {
 }
 
 /// A video's frame size, frame rate, length, audio and title come from
-/// GStreamer's discoverer, and the rates it leaves out from the size.
+/// `GStreamer`'s discoverer, and the rates it leaves out from the size.
 ///
 /// parity: PROP-034
 #[test]
@@ -439,7 +355,31 @@ fn a_videos_streams_are_discovered() {
     assert!(details.data_rate.is_some_and(|rate| rate > 0));
 }
 
-/// A file GStreamer cannot read, or that is not there, gives no rows.
+/// Parsing alone, the way taken when no decoder is installed, gives a
+/// video's frame size, frame rate, length and audio stream without
+/// decoding it. (Vorbis comments are not parsed this way: an Ogg file's
+/// tags come from the discoverer, MP4's, MP3's and FLAC's from their
+/// demuxers either way.)
+///
+/// parity: PROP-034
+#[test]
+fn a_video_is_read_without_decoding_it() {
+    gst::init().expect("GStreamer");
+    let folder = tempfile::tempdir().expect("a folder");
+    let video = folder.path().join("Harbour walk.ogv");
+    write_video(&video);
+
+    let facts = streams::parse(&uri_of(&video)).expect("the parsed streams");
+
+    let shown = facts.video.expect("a video stream");
+    assert_eq!((shown.width, shown.height), (Some(320), Some(240)));
+    assert_eq!(shown.frame_rate, Some((15, 1)));
+    let audio = facts.audio.expect("an audio stream");
+    assert_eq!((audio.sample_rate, audio.channels), (Some(48_000), Some(1)));
+    assert!(facts.length.is_some_and(|length| length > 1_500_000_000));
+}
+
+/// A file `GStreamer` cannot read, or that is not there, gives no rows.
 ///
 /// parity: PROP-034
 #[test]
@@ -531,14 +471,13 @@ fn stopping_ends_a_running_reader() {
     let process = ReaderProcess::default();
     let started = Instant::now();
     let reading = process.clone();
-    let stop = glib::timeout_add_local_once(Duration::from_millis(200), move || reading.stop());
+    glib::timeout_add_local_once(Duration::from_millis(200), move || reading.stop());
     let arguments = [OsStr::new("sleep"), OsStr::new("30")];
     let output = glib::MainContext::default().block_on(run_with_timeout(
         &arguments,
         Duration::from_secs(20),
         &process,
     ));
-    drop(stop);
     assert_eq!(output, None);
     assert!(
         started.elapsed() < Duration::from_secs(5),

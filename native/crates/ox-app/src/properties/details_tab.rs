@@ -76,7 +76,7 @@ impl DetailsPanel {
         let page = super::window::page();
         page.add_css_class("properties-details");
         let rows = gtk::ListBox::builder()
-            .selection_mode(gtk::SelectionMode::Browse)
+            .selection_mode(gtk::SelectionMode::Single)
             .activate_on_single_click(false)
             .css_classes(["details-rows"])
             .build();
@@ -152,9 +152,7 @@ impl DetailsPanel {
         let Some(kind) = inner.kind.get() else {
             return;
         };
-        if !inner.shown.get() || inner.reading.replace(true) {
-            return;
-        }
+        // Read once, when the tab is shown and the item is known.
         let Some((uri, size)) = inner
             .properties
             .borrow()
@@ -163,6 +161,9 @@ impl DetailsPanel {
         else {
             return;
         };
+        if !inner.shown.get() || inner.reading.replace(true) {
+            return;
+        }
         let panel = Rc::downgrade(&self.inner);
         glib::spawn_future_local(async move {
             let process = match panel.upgrade() {
@@ -170,17 +171,14 @@ impl DetailsPanel {
                 None => return,
             };
             let media = read_in_reader(&uri, kind, size, &process).await;
-            if let Some(inner) = panel.upgrade() {
-                let panel = DetailsPanel { inner };
-                if media.is_some() {
-                    panel.inner.media.replace(media);
-                    panel.fill();
-                }
+            if let Some(inner) = panel.upgrade().filter(|_| media.is_some()) {
+                inner.media.replace(media);
+                DetailsPanel { inner }.fill();
             }
         });
     }
 
-    /// Fills the list from what is known, keeping the cursor's row.
+    /// Fills the list from what is known, keeping the selected row.
     fn fill(&self) {
         let inner = &self.inner;
         let Some(properties) = inner.properties.borrow().clone() else {
@@ -193,28 +191,30 @@ impl DetailsPanel {
             &inner.locations,
         );
         let had_focus = inner.rows.focus_child().is_some();
-        let cursor = inner.rows.selected_row().map(|row| row.widget_name().to_string());
+        let selected = inner.rows.selected_row().map(|row| row.widget_name().to_string());
+        let cursor = inner.rows.focus_child().map(|row| row.widget_name().to_string());
         while let Some(child) = inner.rows.first_child() {
             inner.rows.remove(&child);
         }
-        let mut first = None;
         let mut values = Vec::new();
         for section in &sections {
             inner.rows.append(&heading_row(section));
             for row in &section.rows {
                 let widget = property_row(&row.name, &row.value);
-                first.get_or_insert_with(|| widget.clone());
                 inner.rows.append(&widget);
                 values.push((widget, row.value.text()));
             }
         }
         inner.values.replace(values);
-        let again = cursor.and_then(|name| find_row(&inner.rows, &name)).or(first);
-        if let Some(row) = again {
+        // As in Windows, no row is selected until the user picks one.
+        if let Some(row) = selected.and_then(|name| find_row(&inner.rows, &name)) {
             inner.rows.select_row(Some(&row));
-            if had_focus {
-                row.grab_focus();
-            }
+        }
+        if let Some(row) = cursor
+            .and_then(|name| find_row(&inner.rows, &name))
+            .filter(|_| had_focus)
+        {
+            row.grab_focus();
         }
     }
 
@@ -227,7 +227,12 @@ impl DetailsPanel {
                 return glib::Propagation::Proceed;
             };
             let rows = &inner.rows;
-            let Some(row) = rows.selected_row().filter(|row| row.is_focus()) else {
+            // The row with the keyboard cursor, selected or not.
+            let Some(row) = rows
+                .focus_child()
+                .and_downcast::<gtk::ListBoxRow>()
+                .filter(WidgetExt::is_focus)
+            else {
                 return glib::Propagation::Proceed;
             };
             let copy = modifiers.contains(gdk::ModifierType::CONTROL_MASK)

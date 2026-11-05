@@ -122,17 +122,7 @@ pub(crate) fn open_item_properties(
             &location,
         );
     }
-    // Windows gives files a Details tab, never folders.
-    let details = (target.kind != ItemKind::Folder).then(|| {
-        let details = DetailsPanel::new(context.locations.clone());
-        window.add_tab(
-            PropertiesTab::Details.page_name(),
-            PropertiesTab::Details.label(),
-            details.page(),
-        );
-        details.follow_window(&window);
-        details
-    });
+    let details = add_details_tab(&window, &target, &context);
     let versions = VersionsPanel::new(&target, Arc::clone(&context.versions), context.locations.clone());
     window.add_tab(
         PropertiesTab::PreviousVersions.page_name(),
@@ -150,34 +140,7 @@ pub(crate) fn open_item_properties(
         );
         customize
     });
-    let refreshed = versions.clone();
-    window.connect_refresh(move |name| {
-        if name == PropertiesTab::PreviousVersions.page_name() {
-            refreshed.load();
-        }
-    });
-    let shown_versions = versions.clone();
-    let shown_details = details.clone();
-    window.connect_tab_shown(move |name| {
-        if name == PropertiesTab::PreviousVersions.page_name() {
-            shown_versions.load_once();
-        } else if name == PropertiesTab::Details.page_name() {
-            if let Some(details) = &shown_details {
-                details.shown();
-            }
-        }
-    });
-    window.select_tab(initial.page_name());
-    let selected = window.selected_tab();
-    if selected.as_deref() == Some(PropertiesTab::PreviousVersions.page_name()) {
-        versions.load_once();
-    }
-    if let Some(details) = details
-        .as_ref()
-        .filter(|_| selected.as_deref() == Some(PropertiesTab::Details.page_name()))
-    {
-        details.shown();
-    }
+    follow_shown_tabs(&window, &versions, details.as_ref(), initial);
     let closing = versions.clone();
     window.connect_closed_once(move || closing.cancel());
     let count = Cancellation::new();
@@ -211,6 +174,57 @@ pub(crate) fn open_item_properties(
         kept.take();
     });
     window
+}
+
+/// A file's Details tab, as Windows gives files and never folders.
+fn add_details_tab(
+    window: &PropertiesWindow,
+    target: &PropertiesTarget,
+    context: &PropertiesContext,
+) -> Option<DetailsPanel> {
+    if target.kind == ItemKind::Folder {
+        return None;
+    }
+    let details = DetailsPanel::new(context.locations.clone());
+    window.add_tab(
+        PropertiesTab::Details.page_name(),
+        PropertiesTab::Details.label(),
+        details.page(),
+    );
+    details.follow_window(window);
+    Some(details)
+}
+
+/// Shows `initial`, and reads the versions and a file's media details the
+/// first time their tab is shown; F5 looks for versions again.
+fn follow_shown_tabs(
+    window: &PropertiesWindow,
+    versions: &VersionsPanel,
+    details: Option<&DetailsPanel>,
+    initial: PropertiesTab,
+) {
+    let refreshed = versions.clone();
+    window.connect_refresh(move |name| {
+        if name == PropertiesTab::PreviousVersions.page_name() {
+            refreshed.load();
+        }
+    });
+    let shown_versions = versions.clone();
+    let shown_details = details.cloned();
+    let shown = move |name: &str| {
+        if name == PropertiesTab::PreviousVersions.page_name() {
+            shown_versions.load_once();
+        } else if name == PropertiesTab::Details.page_name() {
+            if let Some(details) = &shown_details {
+                details.shown();
+            }
+        }
+    };
+    window.select_tab(initial.page_name());
+    if let Some(selected) = window.selected_tab() {
+        shown(&selected);
+    }
+    window.connect_tab_shown(shown);
 }
 
 /// The path of a folder on this computer, which can be shared and
