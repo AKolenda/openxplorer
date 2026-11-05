@@ -1,7 +1,28 @@
-# Unreleased
+# 2.0.14 — 2026-11-05
 
 ## Security
 * Deleting a whole folder permanently while using **Open as administrator** no longer goes through GVfs, which deleted it by path as root. OpenXplorer now asks for administrator authentication and deletes it with its own small helper, which holds each folder open while it empties it, so another user who swaps a folder inside it for a shortcut cannot redirect the deletion, and nothing on another drive is entered. This replaces the refusals in 2.0.12 and 2.0.13: folders in a user's home, `/tmp`, `/var/tmp`, group-writable folders such as `/var/log`, and folders on removable drives, drives other users can mount and network shares can be deleted this way again. A drive mounted inside the folder is left in place and named. A shortcut on the way to the folder is followed only when it belongs to the administrator on the system drive and nobody else can change the folders above it. In the Flatpak, a whole folder still can't be deleted under **Open as administrator**. Single files and links are deleted as before.
+
+## What's Changed
+* fix(tabs): Don't crash on Wayland when a tab is dragged out quickly by @AKolenda in https://github.com/AKolenda/openxplorer/pull/199
+* feat(updates): Pop up new releases, show Update in the bars and bring back the Settings gear by @AKolenda in https://github.com/AKolenda/openxplorer/pull/198
+* fix(focus): Return the keyboard to the file list after navigating or editing the address by @clansty in https://github.com/AKolenda/openxplorer/pull/197
+* fix(ops): Delete admin:// folders through a pinned walk, building on #192 by @addition-official in https://github.com/AKolenda/openxplorer/pull/196
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.14_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.14-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.14-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.14-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.14-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.13...v2.0.14
 
 # 2.0.13 — 2026-11-03
 

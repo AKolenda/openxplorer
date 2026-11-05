@@ -227,7 +227,11 @@ struct IncomingCall {
 /// The dispatch thread: its main loop, which unexporting stops.
 struct Dispatch {
     registration: gio::RegistrationId,
-    main_loop: glib::MainLoop,
+    main_loop: Option<glib::MainLoop>,
+    /// Dropped once [`Self::main_loop`] is: the thread waits for that
+    /// before it ends, so it lets go of its main context last (see
+    /// [`start_dispatch`]).
+    released: Option<mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -322,7 +326,11 @@ impl FileChooserBus {
         // The ID came from this connection and was not unregistered yet,
         // so this cannot fail; GDBus allows it from any thread.
         let _ = self.connection.unregister_object(dispatch.registration);
-        dispatch.main_loop.quit();
+        if let Some(main_loop) = dispatch.main_loop.take() {
+            main_loop.quit();
+        }
+        // The loop is let go of first, then the thread told it may end.
+        dispatch.released.take();
         if let Some(thread) = dispatch.thread.take() {
             let _ = thread.join();
         }
@@ -338,11 +346,19 @@ impl Drop for FileChooserBus {
 /// Starts the dispatch thread, registers the object there and waits for
 /// the outcome. The thread forwards each method call to `calls` and
 /// returns its outcome to the caller when it comes back.
+///
+/// Once its loop stops, the thread waits until the [`Dispatch`] has let
+/// go of the loop, so the thread drops the last reference to its main
+/// context itself. What still waits there, such as the reply to a call
+/// nobody answered, is then dropped on the thread it belongs to: dropped
+/// on another thread, `GLib` 2.86 and later report a critical
+/// (`g_source_get_context` on a destroyed source).
 fn start_dispatch(
     connection: &gio::DBusConnection,
     calls: call_queue::UnboundedSender<IncomingCall>,
 ) -> Result<Dispatch, ChooserRegistrationFailed> {
     let (ready, registered) = mpsc::channel::<Result<(gio::RegistrationId, glib::MainLoop), glib::Error>>();
+    let (released, release) = mpsc::channel::<()>();
     let connection = connection.clone();
     let thread = std::thread::Builder::new()
         .name(DISPATCH_THREAD.to_owned())
@@ -355,6 +371,8 @@ fn start_dispatch(
                 let _ = ready.send(registration.map(|id| (id, main_loop.clone())));
                 if is_registered {
                     main_loop.run();
+                    // Returns once the Dispatch dropped its sender.
+                    let _ = release.recv();
                 }
             });
         })
@@ -362,7 +380,8 @@ fn start_dispatch(
     match registered.recv() {
         Ok(Ok((registration, main_loop))) => Ok(Dispatch {
             registration,
-            main_loop,
+            main_loop: Some(main_loop),
+            released: Some(released),
             thread: Some(thread),
         }),
         Ok(Err(error)) => {
