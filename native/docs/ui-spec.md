@@ -562,12 +562,12 @@ where it differs; ✓ means the target equals the current app.
 |---|---|---|---|
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
 | Order | preview, small icon and name, Share, "Details" heading over the rows, Properties: Windows 11's Details pane (View › Show › Details pane, Alt+Shift+P) | Windows 11 Explorer's Details pane (observed, unverified) | safe |
-| Close | close button 24 × 24, glyph 12, at the top right; 8 px below; padding top 14 | — (Explorer closes the pane from View) | Keep. |
+| Close | none: View › Details pane, the command bar's Details toggle and Alt+Shift+P hide the pane | Explorer's pane has no close button (observed, unverified) | safe |
 | Preview | min height 162 with its border; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); large icon 96 (copy glyph 80 for several items) with `drop-shadow(0 4px 4px alpha(black, .04))`; a photo, a document's thumbnail or a player fills the width, at most 180 high | Windows' pane shows the picture itself or the large icon (observed, unverified) | safe |
 | Icon and name | icon 20 beside the name, 8 apart; name 14 / 600, selectable, wraps anywhere; 14 px above and below | — | safe |
 | Share | bordered button 32 high with glyph 16, as wide as its text; only where the desktop can share (CMD-037) and something is selected; 18 px below | — | safe |
 | Details | heading 13 / 600, 10 px below; grid with an 88 px name column, row gap 10, column gap 12; names `@ox_muted`; values selectable, each read as "Name: value" | — | safe |
-| Rows | one item: Type, Size, File location, Date modified, Date created, then a photo's Date taken, Dimensions, Rating, Title, Tags, Authors, Camera maker, Camera model, F-stop, Exposure time, ISO speed, Exposure bias, Focal length, Flash mode, or a recording's Length, bit rates and artists, as Properties' Details tab words them; several: "N items selected" with Total size, Date modified (first – last) and File location; none: "N items" and Folder | — | safe |
+| Rows | one item: Type, Size (not for a folder), File location, Date modified, Date created (date and time, as the Date modified column), then a photo's Date taken, Dimensions, Rating, Title, Tags, Authors, Camera maker, Camera model, F-stop, Exposure time, ISO speed, Exposure bias, Focal length, Flash mode, or a recording's Length, bit rates and artists, as Properties' Details tab words them; several: "N items selected" with Total size (files only), Date modified (first – last, days) and File location; none: "N items" and Folder | — | safe |
 | Properties | bordered button 32 high with the info glyph 16; 20 px below the rows | — | safe |
 
 ### 4.9 Menus and context menus

@@ -3,8 +3,7 @@
    (PROP-009; src/window/details_pane.rs, resources/ui/details-pane.ui). */
 
 .details { background-color: @ox_bg; border-left: 1px solid @ox_border; }
-.details-inner { padding: 14px 22px 16px 22px; }
-.details button.detail-close { min-width: 24px; min-height: 24px; margin-bottom: 8px; }
+.details-inner { padding: 22px 22px 16px 22px; }
 /* The large preview: a picture of the content as wide as the pane, or
    the large icon, on a soft card 162px tall with its border. */
 .details .detail-preview {

@@ -14,7 +14,9 @@
 //! [`DetailsPane`] is a widget subclass whose static tree is the template
 //! `resources/ui/details-pane.ui`. This module adds what a template cannot
 //! express: the glyphs, the window actions of the buttons and the
-//! Details rows, one per property shown.
+//! Details rows, one per property shown. As in Windows, the pane has no
+//! close button: View > Details pane, the command bar's Details toggle
+//! and Alt+Shift+P show and hide it.
 
 mod content;
 mod media;
@@ -51,9 +53,6 @@ const SMALL_ART: i32 = 20;
 /// The glyphs in the pane's buttons.
 const SMALL_GLYPH: i32 = 16;
 
-/// The glyph of the close button.
-const CLOSE_GLYPH: i32 = 12;
-
 /// The width of the names column, so every value starts at one line.
 const PROPERTY_NAME_WIDTH: i32 = 88;
 /// The Details column of the names.
@@ -82,9 +81,6 @@ mod imp {
         /// `dispose_template` unparents it with the pane.
         #[template_child]
         pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
-        /// The close button above the preview.
-        #[template_child]
-        pub(super) close_button: TemplateChild<gtk::Button>,
         /// The art or glyph at the top.
         #[template_child]
         pub(super) preview: TemplateChild<ArtImage>,
@@ -200,17 +196,13 @@ impl DetailsPane {
     /// Shows the glyphs the template leaves empty.
     fn show_glyphs(&self) {
         let imp = self.imp();
-        let close = icons::image(Icon::Dismiss16, CLOSE_GLYPH);
-        imp.close_button.set_child(Some(&close));
         icons::set_icon(&imp.share_glyph, Icon::Share, SMALL_GLYPH);
         icons::set_icon(&imp.properties_glyph, Icon::Info, SMALL_GLYPH);
     }
 
-    /// Gives each button its window action; the close button switches the
-    /// pane's toggle off.
+    /// Gives each button its window action.
     fn bind_actions(&self) {
         let imp = self.imp();
-        WindowAction::DetailsPane.assign_to(&*imp.close_button);
         WindowAction::Share.assign_to(&*imp.share_button);
         WindowAction::Properties.assign_to(&*imp.properties_button);
     }

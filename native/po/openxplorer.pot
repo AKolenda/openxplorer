@@ -133,10 +133,6 @@ msgstr ""
 msgid "File commands"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui
-msgid "Close details pane"
-msgstr ""
-
 #: crates/ox-app/resources/ui/network-sign-in.ui
 msgid "Cancel sign-in"
 msgstr ""
@@ -1804,10 +1800,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/folder_sizes.rs
 msgid "Logical file bytes"
-msgstr ""
-
-#: crates/ox-app/src/properties/folder_sizes.rs
-msgid "Not scanned"
 msgstr ""
 
 #: crates/ox-app/src/properties/folder_sizes.rs

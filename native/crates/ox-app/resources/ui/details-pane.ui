@@ -5,8 +5,9 @@
   (View > Show > Details pane, Alt+Shift+P; PROP-009): from top to
   bottom a large preview of the selection, its small icon and name, the
   Share button, a "Details" heading over a name and value list, and the
-  Properties button (src/window/details_pane.rs). A close button sits
-  above the preview, as the pane's own way to hide it.
+  Properties button (src/window/details_pane.rs). Like Windows' pane it
+  has no close button: View > Details pane, the command bar's Details
+  toggle and Alt+Shift+P hide it.
 
   Every text wraps with a natural width of a few words (max-width-chars
   10), so a long name or path wraps inside the pane instead of widening it.
@@ -31,18 +32,6 @@
             <style>
               <class name="details-inner"/>
             </style>
-            <child>
-              <object class="GtkButton" id="close_button">
-                <property name="halign">end</property>
-                <property name="tooltip-text" translatable="yes">Close details pane</property>
-                <accessibility>
-                  <property name="label" translatable="yes">Close details pane</property>
-                </accessibility>
-                <style>
-                  <class name="detail-close"/>
-                </style>
-              </object>
-            </child>
             <child>
               <object class="GtkCenterBox" id="preview_area">
                 <style>

@@ -26,7 +26,6 @@ use crate::i18n::message_id;
 use crate::icons::{Art, Icon};
 use crate::locations::Page;
 use crate::media_details::MediaKind;
-use crate::properties::{FolderSizeState, NOT_SCANNED};
 
 /// The keys of the rows the pane's menu can turn off (PROP-010), which
 /// are also the names the settings keep them under.
@@ -205,9 +204,16 @@ pub(in crate::window) fn pane_content(facts: &PaneFacts<'_>) -> PaneContent {
 fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
     let entry = item.entry();
     let dates = |seconds: Option<u64>| date_text(seconds, facts.condensed_dates);
+    // Windows' pane names no size for a folder, and nothing is counted
+    // for it.
+    let size = if entry.is_dir {
+        String::new()
+    } else {
+        entry.size.map(format::pretty_bytes).unwrap_or_default()
+    };
     let mut properties = vec![
         Property::new(keys::TYPE, message_id("Type"), entry.type_label.clone()),
-        Property::new(keys::SIZE, message_id("Size"), size_text(item)),
+        Property::new(keys::SIZE, message_id("Size"), size),
         Property::new(
             keys::LOCATION,
             message_id("File location"),
@@ -242,10 +248,7 @@ fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
     if let Some(size) = total_size_text(items) {
         properties.push(Property::new(keys::SIZE, message_id("Total size"), size));
     }
-    let modified = date_range_text(
-        items.iter().filter_map(|item| item.entry().modified),
-        facts.condensed_dates,
-    );
+    let modified = date_range_text(items.iter().filter_map(|item| item.entry().modified));
     if let Some(modified) = modified {
         properties.push(Property::new(
             keys::MODIFIED,
@@ -327,67 +330,42 @@ fn container_text(uri: &str, locations: &LocationContext) -> String {
     locations.display_location(&container)
 }
 
-/// The size line: a file's size, a folder's measured size, or "Not
-/// scanned" for a folder never measured (PROP-027).
-fn size_text(item: &FileItem) -> String {
-    let entry = item.entry();
-    match (entry.is_dir, item.folder_size(), entry.size) {
-        (true, Some(measured), _) => measured.size_text(),
-        (true, None, _) => ox_core::i18n::gettext_static(NOT_SCANNED).to_owned(),
-        (false, _, Some(size)) => format::pretty_bytes(size),
-        (false, _, None) => String::new(),
-    }
-}
-
-/// The total size of `items`: their files' sizes and their folders'
-/// measured sizes. A folder never measured, or measured only in part,
-/// makes it a lower bound (`≥ 1.2 MB`), never a false total; `None` when
-/// nothing of theirs has a known size.
+/// The total size of the files among `items`, as Windows' pane sums a
+/// selection: folders are left out and never counted; `None` when no
+/// file has a known size.
 fn total_size_text(items: &[FileItem]) -> Option<String> {
-    let mut bytes = 0_u64;
-    let mut known = false;
-    let mut exact = true;
-    for item in items {
-        let entry = item.entry();
-        if entry.is_dir {
-            match item.folder_size() {
-                Some(state @ FolderSizeState::Measured(_)) => {
-                    bytes = bytes.saturating_add(state.sort_bytes());
-                    known = true;
-                    exact &= state.is_complete();
-                }
-                _ => exact = false,
-            }
-        } else if let Some(size) = entry.size {
-            bytes = bytes.saturating_add(size);
-            known = true;
-        } else {
-            exact = false;
-        }
-    }
-    let text = format::pretty_bytes(bytes);
-    known.then(|| if exact { text } else { format!("≥ {text}") })
+    let sizes = items
+        .iter()
+        .map(FileItem::entry)
+        .filter(|entry| !entry.is_dir)
+        .filter_map(|entry| entry.size);
+    let (bytes, known) = sizes.fold((0_u64, false), |(bytes, _), size| {
+        (bytes.saturating_add(size), true)
+    });
+    known.then(|| format::pretty_bytes(bytes))
 }
 
-/// A date row: the day, or the day and time; empty without a date.
+/// A date row: the day and the time without seconds, as the Date
+/// modified column writes it; the day only with condensed dates; empty
+/// without a date.
 fn date_text(seconds: Option<u64>, condensed: bool) -> String {
     if seconds.is_none() {
         String::new()
     } else if condensed {
         format::date_text(seconds)
     } else {
-        format::date_time_text(seconds)
+        format::date_short_time_text(seconds)
     }
 }
 
-/// The earliest and latest of `dates`, as `first - last`, or the one
-/// date when they fall on one day (or moment, with the time shown).
-fn date_range_text(dates: impl Iterator<Item = u64>, condensed: bool) -> Option<String> {
+/// The days of the earliest and latest of `dates`, as `first - last`,
+/// or the one day when they fall on it: a range shows no time.
+fn date_range_text(dates: impl Iterator<Item = u64>) -> Option<String> {
     let (first, last) = dates.fold(None, |range: Option<(u64, u64)>, date| {
         Some(range.map_or((date, date), |(first, last)| (first.min(date), last.max(date))))
     })?;
-    let first = date_text(Some(first), condensed);
-    let last = date_text(Some(last), condensed);
+    let first = format::date_text(Some(first));
+    let last = format::date_text(Some(last));
     Some(if first == last {
         first
     } else {
@@ -418,7 +396,7 @@ mod tests {
             folder_item_count: 7,
             locations: &locations,
             network: &network,
-            condensed_dates: true,
+            condensed_dates: false,
         })
     }
 
@@ -459,7 +437,8 @@ mod tests {
         );
         assert_eq!(
             property(&content, keys::MODIFIED),
-            Some(format::date_text(entry.modified).as_str())
+            Some(format::date_short_time_text(entry.modified).as_str()),
+            "the day and the time, as the Date modified column"
         );
         assert_eq!(property(&content, keys::LOCATION), Some("/tmp/ox-test"));
         assert!(content.has_selection && content.has_properties);
@@ -484,7 +463,7 @@ mod tests {
     fn condensed_dates_drop_the_time() {
         let modified = Some(1_790_000_000);
         assert_eq!(date_text(modified, true), format::date_text(modified));
-        assert_eq!(date_text(modified, false), format::date_time_text(modified));
+        assert_eq!(date_text(modified, false), format::date_short_time_text(modified));
         assert!(date_text(modified, false).starts_with(&date_text(modified, true)));
     }
 
@@ -531,10 +510,10 @@ mod tests {
 
     /// parity: PROP-009
     #[test]
-    fn a_folder_is_not_scanned_and_has_no_media_details() {
+    fn a_folder_has_no_size_and_no_media_details() {
         let item = FileItem::new(folder_entry("Projects"));
         let content = content_for(&[item], "file:///tmp/ox-test");
-        assert_eq!(property(&content, keys::SIZE), Some("Not scanned"));
+        assert_eq!(property(&content, keys::SIZE), None, "Windows names no size");
         assert_eq!(content.metadata, None);
     }
 
@@ -601,8 +580,16 @@ mod tests {
         let content = content_for(&with_folder, "file:///tmp/ox-test");
         assert_eq!(
             property(&content, keys::SIZE),
-            Some(format!("≥ {}", format::pretty_bytes(1000)).as_str()),
-            "a folder never measured makes the total a lower bound"
+            Some(format::pretty_bytes(1000).as_str()),
+            "only the files are summed, as in Windows"
+        );
+        let folders = [
+            FileItem::new(folder_entry("Projects")),
+            FileItem::new(folder_entry("Drafts")),
+        ];
+        assert_eq!(
+            property(&content_for(&folders, "file:///tmp/ox-test"), keys::SIZE),
+            None
         );
     }
 

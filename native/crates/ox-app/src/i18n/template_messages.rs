@@ -22,8 +22,6 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("command-bar.ui", "appearance_button", "label", true, "Appearance"),
     ("command-bar.ui", "i18n_1", "label", false, "Details"),
     ("command-bar.ui", "settings_button", "label", true, "Settings"),
-    ("details-pane.ui", "close_button", "label", true, "Close details pane"),
-    ("details-pane.ui", "close_button", "tooltip-text", false, "Close details pane"),
     ("details-pane.ui", "i18n_1", "label", false, "Share"),
     ("details-pane.ui", "i18n_2", "label", false, "Details"),
     ("details-pane.ui", "i18n_3", "label", false, "Properties"),

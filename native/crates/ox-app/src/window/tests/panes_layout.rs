@@ -181,8 +181,8 @@ fn the_details_pane_stacks_its_parts_as_windows_does() {
     );
     assert_eq!(
         preview_place.y,
-        pane_place.y + 14 + 24 + 8,
-        "padding, the 24px close button and its margin"
+        pane_place.y + 22,
+        "the pane's padding, with no close button above"
     );
     let title = descendants::<gtk::Box>(pane)
         .into_iter()
