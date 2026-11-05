@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.13
+Version:        2.0.14
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -131,6 +131,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Thu Nov 05 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.14-1
+- OpenXplorer 2.0.14: a notice when a new release is out, administrator
+  folder deletes through a pinned walk, and no crash when a tab is dragged
+  out on Wayland.
+
 * Tue Nov 03 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.13-1
 - OpenXplorer 2.0.13: administrator folder deletes are also refused on
   drives an ordinary user can mount or plug in.

@@ -4515,4 +4515,96 @@ mod tests {
         assert_eq!(test.action_state("sort").as_deref(), Some("size"));
         wait_until("the menu to close", || !menu.is_visible());
     }
+
+    /// An Open dialog for PNG pictures, which a website's upload button
+    /// asks the portal for, leaves every bundled icon it showed loaded
+    /// once it closes, however many other icons pass through the icon
+    /// theme's cache of recent ones: so GTK's loading thread never drops
+    /// the last reference to a cached icon while the next dialog looks it
+    /// up, which `GLib` reports as `object_ref` on a finalized object and
+    /// which crashed the service in `begin_picking`.
+    #[gtk::test]
+    fn a_closed_dialog_leaves_the_icons_it_showed_loaded() {
+        let fixture = Fixture::empty();
+        for index in 0..12 {
+            fixture.write(&format!("picture-{index:02}.png"));
+        }
+        fixture.write("notes.txt");
+        std::fs::create_dir(fixture.path("Drafts")).expect("a folder");
+        let portal = Portal::new();
+        let png = (
+            "PNG image".to_owned(),
+            vec![(0_u32, "*.png".to_owned()), (1, "image/png".to_owned())],
+        )
+            .to_variant();
+        let answer = portal.call(
+            "OpenFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(png.type_(), [png.clone()]),
+                ),
+                ("current_filter", png.clone()),
+            ],
+        );
+        let window = &portal.test.window;
+        settle();
+        let theme = gtk::IconTheme::for_display(&WidgetExt::display(window));
+        // The icon each image shows, as the theme caches it for the image.
+        let shown: Vec<(String, i32, i32, gtk::TextDirection)> =
+            crate::test_support::harness::descendants::<gtk::Image>(window)
+                .into_iter()
+                .filter(|image| image.storage_type() == gtk::ImageType::IconName)
+                .filter_map(|image| {
+                    let name = image.icon_name()?.to_string();
+                    let is_bundled = name.starts_with("ox-");
+                    is_bundled.then(|| (name, image.pixel_size(), image.scale_factor(), image.direction()))
+                })
+                .collect();
+        assert!(shown.len() > 10, "the dialog shows its icons: {shown:?}");
+        let looked_up = |(name, size, scale, direction): &(String, i32, i32, gtk::TextDirection)| {
+            theme.lookup_by_gicon(
+                &gio::ThemedIcon::new(name),
+                *size,
+                *scale,
+                *direction,
+                gtk::IconLookupFlags::PRELOAD,
+            )
+        };
+        let cached: Vec<glib::WeakRef<gtk::IconPaintable>> =
+            shown.iter().map(|key| looked_up(key).downgrade()).collect();
+        let dialog = window.downgrade();
+
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+        drop(portal);
+        wait_until("the dialog to go", || dialog.upgrade().is_none());
+        // Far more distinct icons than the cache of recent ones holds, and
+        // time for GTK's loading threads to finish and let go.
+        for (name, ..) in &shown {
+            for size in 60..72 {
+                drop(theme.lookup_icon(
+                    name,
+                    &[],
+                    size,
+                    1,
+                    gtk::TextDirection::Ltr,
+                    gtk::IconLookupFlags::empty(),
+                ));
+            }
+        }
+        for _ in 0..20 {
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(10));
+        }
+
+        for (key, cached) in shown.iter().zip(&cached) {
+            let kept = cached.upgrade();
+            assert!(kept.is_some(), "{key:?} is still loaded");
+            assert_eq!(Some(looked_up(key)), kept, "the theme hands out the kept {key:?}");
+        }
+    }
 }
