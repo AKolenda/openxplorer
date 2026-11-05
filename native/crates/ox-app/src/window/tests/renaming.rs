@@ -470,6 +470,7 @@ fn windows_balloon() -> Vec<String> {
 fn a_character_windows_forbids_is_refused_with_its_balloon() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("rename", None);
     let field = name_editor(&test);
@@ -508,6 +509,7 @@ fn a_character_windows_forbids_is_refused_with_its_balloon() {
 fn pasting_a_forbidden_character_leaves_the_name_as_it_was() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("rename", None);
     let field = name_editor(&test);
@@ -543,6 +545,7 @@ fn a_file_renamed_to_a_taken_name_is_offered_the_next_free_number() {
     fixture.write("Notes 10 (2).txt");
     fs::write(fixture.path("Notes 2.txt"), b"renamed").expect("the renamed file");
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("rename", None);
     let field = name_editor(&test);

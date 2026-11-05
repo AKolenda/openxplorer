@@ -30,7 +30,7 @@ msgid "- Deleted items go to the Recycle Bin of their drive. Restore puts them b
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
+msgid "- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together. As in Windows, \\ / : * ? \" < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -728,12 +728,12 @@ msgid "Date created: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
 msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
 msgid "Size: {size}"
 msgstr ""
 
@@ -5325,6 +5325,10 @@ msgstr ""
 msgid "“{name}” cannot be moved directly to “{destination}”, which is on another drive, share or device. The items can be copied there and the originals removed once their copies are complete. An original that changes during the move is kept."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/name_balloon.rs
+msgid "A file name can't contain any of the following characters:"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/name_dialog.rs
 msgid "Names must not contain slashes."
 msgstr ""
@@ -5376,6 +5380,27 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/rename.rs
 msgid "The name was not changed."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+msgid "No"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "Rename File"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "There is already a file with the same name in this location."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "Would you like to rename \"{name}\" to \"{numbered}\"?"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+msgid "Yes"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/template_dialog.rs
@@ -5499,10 +5524,6 @@ msgid "More settings…"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "No"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
 msgid "Open File Explorer to:"
 msgstr ""
 
@@ -5532,10 +5553,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "Use check boxes to select items"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
-msgid "Yes"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
