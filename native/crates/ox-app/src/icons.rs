@@ -24,9 +24,10 @@
 //! `object_ref` on a finalized object. Keeping one reference to each icon
 //! the app shows means its last reference is never dropped, on any
 //! thread. The bundle is about a hundred small files, at the few sizes
-//! the skin uses. The icons are kept at every scale a display may use and
-//! looked up again when the icon theme changes, since images then look
-//! their icons up afresh without the app setting them again.
+//! the skin uses. The icons are kept at every scale the display's
+//! monitors use, and looked up again when the icon theme changes or a
+//! monitor is added or rescaled, since images then look their icons up
+//! afresh without the app setting them again.
 //!
 //! Icons are hidden from assistive technology, as app.js marks every icon
 //! `aria-hidden`: the button, row, tab or card around an icon names it.
@@ -40,7 +41,7 @@ mod icon;
 mod tint;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Once;
 
 use gtk::prelude::*;
@@ -113,11 +114,13 @@ pub(crate) fn set_icon(image: &gtk::Image, icon: Icon, size: i32) {
     keep_loaded(image, icon, size);
 }
 
-/// Whole scales GTK draws at on most screens: it rounds a fractional
-/// scale up, so displays at 100 % to 300 % use these. Icons are kept at
-/// them from the start, so a monitor added or rescaled later finds its
-/// icons kept even before [`KeptIcons::follow`] has caught up.
-const COMMON_SCALES: [i32; 3] = [1, 2, 3];
+/// The scale a window can draw at before it knows its monitor's, on X11
+/// and on Wayland compositors without buffer scales, so icons are kept at
+/// it too. Every other scale is a monitor's: GTK rounds a fractional
+/// scale up, as the monitor reports it. Keeping 2 and 3 everywhere would
+/// load four and nine times the pixels of each icon on screens that never
+/// use them.
+const FIRST_SCALE: i32 = 1;
 
 /// An icon as an image shows it, apart from the scale: its name, edge and
 /// whether the text runs right to left.
@@ -127,11 +130,11 @@ type Shown = (&'static str, i32, bool);
 type CacheKey = (&'static str, i32, bool, i32);
 
 /// One reference to every icon shown on one display, at every scale its
-/// monitors use and the [`COMMON_SCALES`].
+/// monitors use and the [`FIRST_SCALE`].
 #[derive(Default)]
 struct KeptIcons {
     /// What the display's images show.
-    shown: Vec<Shown>,
+    shown: HashSet<Shown>,
     /// The scales the icons are kept at.
     scales: Vec<i32>,
     /// The icon theme's cached icon for each key.
@@ -159,7 +162,8 @@ impl KeptIcons {
     fn refresh(&mut self, display: &gdk::Display) {
         let theme = gtk::IconTheme::for_display(display);
         self.scales = scales_of(display);
-        for shown in self.shown.clone() {
+        let shown: Vec<Shown> = self.shown.iter().copied().collect();
+        for shown in shown {
             for scale in self.scales.clone() {
                 self.keep(&theme, shown, scale);
             }
@@ -205,7 +209,7 @@ fn follow_scale(display: &gdk::Display, monitor: &gdk::Monitor) {
     ));
 }
 
-/// The scales to keep icons at on `display`: the [`COMMON_SCALES`] and
+/// The scales to keep icons at on `display`: the [`FIRST_SCALE`] and
 /// every monitor's.
 fn scales_of(display: &gdk::Display) -> Vec<i32> {
     let mut scales: Vec<i32> = display
@@ -213,7 +217,7 @@ fn scales_of(display: &gdk::Display) -> Vec<i32> {
         .iter::<gdk::Monitor>()
         .filter_map(Result::ok)
         .map(|monitor| monitor.scale_factor())
-        .chain(COMMON_SCALES)
+        .chain([FIRST_SCALE])
         .collect();
     scales.sort_unstable();
     scales.dedup();
@@ -251,10 +255,10 @@ pub(crate) fn keep_loaded(image: &impl IsA<gtk::Widget>, icon: Icon, size: i32) 
             scales: scales_of(&display),
             ..KeptIcons::default()
         });
-        if !icons.shown.contains(&shown) {
-            icons.shown.push(shown);
-        }
-        // Looked up again on every call: cheap hits in the theme's cache.
+        icons.shown.insert(shown);
+        // Looked up again on every call, cheap hits in the theme's cache:
+        // a lookup can empty the cache itself, when it finds the theme's
+        // folders changed, before the theme's `changed` signal comes.
         for scale in icons.scales.clone() {
             icons.keep(&theme, shown, scale);
         }
@@ -430,27 +434,6 @@ mod tests {
 
         let kept = cached.upgrade().expect("the fresh icon is still loaded");
         assert_eq!(shown_folder(&theme, 1), kept, "the theme hands out the kept icon");
-        drop(image);
-    }
-
-    /// GTK draws on a display scaled to 125 % to 300 % at a whole scale
-    /// of 2 or 3, and a monitor can be added or rescaled at any time: an
-    /// icon is kept at those scales as well, not only at the scales the
-    /// monitors had when it was first shown.
-    #[gtk::test]
-    fn a_shown_icon_stays_loaded_at_every_common_scale() {
-        let theme = registered_theme();
-        let image = image(Icon::FileFolder, 16);
-        let cached: Vec<glib::WeakRef<gtk::IconPaintable>> = [2, 3]
-            .map(|scale| shown_folder(&theme, scale).downgrade())
-            .to_vec();
-        flood_the_cache(&theme);
-
-        for (scale, cached) in [2, 3].into_iter().zip(&cached) {
-            let kept = cached.upgrade();
-            assert!(kept.is_some(), "the icon at scale {scale} is still loaded");
-            assert_eq!(Some(shown_folder(&theme, scale)), kept, "scale {scale}");
-        }
         drop(image);
     }
 
