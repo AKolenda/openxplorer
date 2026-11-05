@@ -18,6 +18,7 @@
 //! | Move to Trash | Restoring the items from the Recycle Bin |
 //! | Restore from the Recycle Bin | Moving the items to the Trash again |
 //! | Copy or move that replaced files | Undoing the copy or move, then restoring the replaced files from the Recycle Bin |
+//! | Folders a merging move emptied and removed | Making them again, never over an item |
 //!
 //! A Replace answered in the name-conflict questions moves the replaced
 //! file to the Recycle Bin before the incoming file takes its name
@@ -101,7 +102,22 @@ pub enum UndoRecord {
         /// Where the restored items are now.
         restored: Vec<String>,
     },
-    /// A copy or move that replaced files, which went to the Recycle Bin:
+    /// Folders a move merged into folders of their names, emptied and
+    /// removed: undone by making each again where nothing has its name.
+    /// A Replace record lists them first, so the moved items have their
+    /// folders to go back into.
+    EmptiedFolders {
+        /// The folders, each after the folder it is in.
+        folders: Vec<String>,
+    },
+    /// Folders an Undo made again: undone (Redo) by removing each again
+    /// while it is still empty.
+    RemadeFolders {
+        /// The folders, each after the folder it is in.
+        folders: Vec<String>,
+    },
+    /// A copy or move that replaced files, which went to the Recycle Bin,
+    /// or that removed the folders it emptied:
     /// undone by undoing `steps` in order, then restoring each replaced
     /// file. The Recycle Bin items are looked up before the steps run,
     /// since the steps may move other items from the same paths to the
@@ -220,7 +236,9 @@ impl UndoRecord {
             UndoRecord::Create { .. } => Operation::New,
             UndoRecord::Copy { .. } => Operation::Copy,
             UndoRecord::Duplicate { .. } => Operation::Duplicate,
-            UndoRecord::Move { .. } => Operation::Move,
+            UndoRecord::Move { .. }
+            | UndoRecord::EmptiedFolders { .. }
+            | UndoRecord::RemadeFolders { .. } => Operation::Move,
             UndoRecord::Trash { .. } => Operation::Delete,
             UndoRecord::Restore { .. } => Operation::Restore,
             UndoRecord::Replace { operation, .. } => *operation,
@@ -284,6 +302,14 @@ impl UndoRecord {
                 restored: finished.clone(),
             },
             UndoRecord::Replace { .. } => return None,
+            // Made again, they are removed again, the innermost first; and
+            // the other way round.
+            UndoRecord::EmptiedFolders { .. } => UndoRecord::RemadeFolders {
+                folders: finished.iter().rev().cloned().collect(),
+            },
+            UndoRecord::RemadeFolders { .. } => UndoRecord::EmptiedFolders {
+                folders: finished.iter().rev().cloned().collect(),
+            },
         };
         Some(inverse)
     }

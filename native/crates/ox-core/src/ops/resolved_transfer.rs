@@ -50,6 +50,7 @@ use super::run_transfer::{
 use super::undo::{MovedItem, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::location::{kept_both_name, ItemKind};
+use crate::transfer::SourceChange;
 use crate::transfer::{
     ConflictPolicy, Landed, Node, Operation, Progress, ProgressScope, TransferEngine, TransferMode,
     TransferResult, MAX_ITEMS,
@@ -84,6 +85,8 @@ pub struct FreeItemsDone {
     started: u64,
     /// How many planned items the steps so far handled.
     before: u64,
+    /// The merged folders a move emptied and removed.
+    removed_folders: Vec<String>,
 }
 
 impl FreeItemsDone {
@@ -129,11 +132,12 @@ pub async fn run_resolved_transfer(
     let answers = answers.to_vec();
     let context = context.clone();
     on_worker(move || {
+        preflight(&scan, &context)?;
         let mut run = Run::new(&scan, &answers, &context, progress, None);
-        if !run.free_items()? {
-            run.answered_items()?;
-        }
-        Ok(run.finish())
+        let ran = run
+            .free_items()
+            .and_then(|cancelled| if cancelled { Ok(()) } else { run.answered_items() });
+        run.finish_after(ran)
     })
     .await
 }
@@ -153,8 +157,10 @@ pub async fn run_free_items(
     let scan = scan.clone();
     let context = context.clone();
     on_worker(move || {
+        preflight(&scan, &context)?;
         let mut run = Run::new(&scan, &[], &context, progress, None);
-        run.free_items()?;
+        let ran = run.free_items().map(|_| ());
+        run.record_late_error(ran)?;
         Ok(run.into_free_items_done())
     })
     .await
@@ -179,12 +185,36 @@ pub async fn run_answered_items(
     let context = context.clone();
     on_worker(move || {
         let mut run = Run::new(&scan, &answers, &context, progress, Some(done));
-        if !run.total.result.cancelled {
-            run.answered_items()?;
-        }
-        Ok(run.finish())
+        let ran = if run.total.result.cancelled {
+            Ok(())
+        } else {
+            run.answered_items()
+        };
+        run.finish_after(ran)
     })
     .await
+}
+
+/// XFER-020 for the whole selection: every selected item, with the item
+/// of its name it merges into, is one tree to the write protection, which
+/// refuses the transfer before anything changes. The steps then run per
+/// folder, which alone would let a free file move before a protected
+/// folder merged elsewhere in the same selected tree is refused.
+fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsError> {
+    let source_change = if scan.mode == TransferMode::Move {
+        SourceChange::Changed
+    } else {
+        SourceChange::Kept
+    };
+    let destination = GioNode::new(&scan.destination_folder);
+    for uri in &scan.selection {
+        let source = GioNode::new(uri);
+        let target = destination.child(&source.name());
+        context
+            .protection
+            .check_tree(&source, target.as_ref(), &context.cancel, source_change)?;
+    }
+    Ok(())
 }
 
 /// Refuses answers that are not one per conflict.
@@ -218,6 +248,8 @@ struct Run<'a> {
     place: Arc<Mutex<(u64, u64)>>,
     /// How many planned items the steps so far handled.
     before: u64,
+    /// The merged folders a move emptied and removed.
+    removed_folders: Vec<String>,
 }
 
 impl<'a> Run<'a> {
@@ -280,7 +312,33 @@ impl<'a> Run<'a> {
             overwritten: HashSet::new(),
             place,
             before: earlier.before,
+            removed_folders: earlier.removed_folders,
         }
+    }
+
+    /// Keeps an error that came after some item was done in the outcome,
+    /// which still lists and undoes what was done; an error before
+    /// anything was done is the transfer's.
+    fn record_late_error(&mut self, ran: Result<(), OpsError>) -> Result<(), OpsError> {
+        let Err(error) = ran else {
+            return Ok(());
+        };
+        if self.landed.is_empty() && self.total.result.done.is_empty() {
+            return Err(error);
+        }
+        if error.is_cancelled() {
+            self.total.result.cancelled = true;
+        } else {
+            let folder = GioNode::new(&self.scan.destination_folder).display_name();
+            super::results::record_failure(&mut self.total.result, &folder, &error);
+        }
+        Ok(())
+    }
+
+    /// The outcome once the steps ended with `ran`.
+    fn finish_after(mut self, ran: Result<(), OpsError>) -> Result<TransferOutcome, OpsError> {
+        self.record_late_error(ran)?;
+        Ok(self.finish())
     }
 
     /// The next step handles `items` planned items.
@@ -297,6 +355,7 @@ impl<'a> Run<'a> {
             landed: self.landed,
             started: self.started,
             before: self.before,
+            removed_folders: self.removed_folders,
         }
     }
 
@@ -397,7 +456,10 @@ impl<'a> Run<'a> {
         };
         for number in 2..MAX_KEPT_NUMBER {
             self.context.cancel.check()?;
-            let candidate = kept_both_name(&name, number, kind)?;
+            let candidate = match kept_both_name(&name, number, kind) {
+                Ok(candidate) => candidate,
+                Err(error) => return Ok(failed(&source.display_name(), &error.into())),
+            };
             if folder
                 .child(OsStr::new(&candidate))
                 .exists(Some(&self.context.cancel))
@@ -490,9 +552,9 @@ impl<'a> Run<'a> {
         for uri in &self.scan.merged_folders {
             let folder = GioNode::new(uri);
             let empty = folder.children(None).is_ok_and(|children| children.is_empty());
-            if empty && self.context.protection.check(uri).is_ok() {
-                // A folder that cannot go stays; its items moved.
-                let _ = folder.delete();
+            // A folder that cannot go stays; its items moved.
+            if empty && self.context.protection.check(uri).is_ok() && folder.delete().is_ok() {
+                self.removed_folders.push(uri.clone());
             }
         }
     }
@@ -541,8 +603,17 @@ impl<'a> Run<'a> {
             }
             TransferMode::Trash | TransferMode::Delete => None,
         };
-        if self.kept.is_empty() {
+        // Undo makes the removed folders again first, the deepest last, so
+        // the items can go back into them.
+        let remade = (!self.removed_folders.is_empty()).then(|| UndoRecord::EmptiedFolders {
+            folders: self.removed_folders.iter().rev().cloned().collect(),
+        });
+        if self.kept.is_empty() && remade.is_none() {
             return step;
+        }
+        let steps: Vec<UndoRecord> = remade.into_iter().chain(step).collect();
+        if steps.is_empty() && self.kept.is_empty() {
+            return None;
         }
         Some(UndoRecord::Replace {
             operation: if self.scan.mode == TransferMode::Move {
@@ -550,7 +621,7 @@ impl<'a> Run<'a> {
             } else {
                 super::undo::Operation::Copy
             },
-            steps: step.into_iter().collect(),
+            steps,
             replaced: self.kept.clone(),
             replaced_since: self.started,
         })

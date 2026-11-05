@@ -108,7 +108,11 @@ fn undo_replace(
     };
     // Looked up first: the steps may move other items from these paths
     // to the Trash.
-    let found = find_trashed_since(replaced, *replaced_since, &context.cancel)?;
+    let found = if replaced.is_empty() {
+        Vec::new()
+    } else {
+        find_trashed_since(replaced, *replaced_since, &context.cancel)?
+    };
     let progress = Arc::new(Mutex::new(progress));
     let mut done = Vec::new();
     for step in steps {
@@ -124,7 +128,11 @@ fn undo_replace(
             return Ok((done, TransferResult::default()));
         }
     }
-    let restored = restore_found(replaced, &found, context);
+    let restored = if replaced.is_empty() {
+        TransferResult::default()
+    } else {
+        restore_found(replaced, &found, context)
+    };
     Ok((done, restored))
 }
 
@@ -170,6 +178,8 @@ fn undo_blocking(
             original_paths,
             trashed_since,
         } => restore_trashed_since(original_paths, *trashed_since, context)?,
+        UndoRecord::EmptiedFolders { folders } => make_folders_again(folders, context),
+        UndoRecord::RemadeFolders { folders } => remove_empty_folders(folders, context),
         UndoRecord::Replace { .. } => {
             drop(engine);
             let (steps, restored) = undo_replace(record, context, Box::new(|_| {}))?;
@@ -252,6 +262,10 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
         let Some(folder) = original.parent() else {
             continue;
         };
+        if let Err(error) = recreate_folder(&folder.uri(), context) {
+            record_failure(&mut total, &GioNode::new(&item.moved_uri).display_name(), &error);
+            continue;
+        }
         let part = engine
             .run_renamed(
                 TransferMode::Move,
@@ -282,6 +296,47 @@ fn recreate_folder(uri: &str, context: &OperationContext) -> Result<(), OpsError
         Err(error) if !error.matches(gio::IOErrorEnum::Exists) => Err(OpsError::failed(error.to_string())),
         _ => Ok(()),
     }
+}
+
+/// Makes each of `folders` again, the outer ones first, where nothing has
+/// its name; each made is done.
+fn make_folders_again(folders: &[String], context: &OperationContext) -> TransferResult {
+    let mut result = TransferResult::default();
+    for uri in folders {
+        let folder = gio::File::for_uri(uri);
+        if folder.query_exists(gio::Cancellable::NONE) {
+            result.skipped.push(uri.clone());
+            continue;
+        }
+        match recreate_folder(uri, context) {
+            Ok(()) => result.done.push(uri.clone()),
+            Err(error) => record_failure(&mut result, &GioNode::new(uri).display_name(), &error),
+        }
+    }
+    result
+}
+
+/// Removes each of `folders` again, the inner ones first, while it is
+/// still empty; one that holds an item stays, skipped.
+fn remove_empty_folders(folders: &[String], context: &OperationContext) -> TransferResult {
+    let mut result = TransferResult::default();
+    for uri in folders {
+        let folder = GioNode::new(uri);
+        let empty = folder.children(None).is_ok_and(|children| children.is_empty());
+        if !empty {
+            result.skipped.push(uri.clone());
+            continue;
+        }
+        let removed = context
+            .protection
+            .check(uri)
+            .and_then(|()| folder.delete().map_err(OpsError::from));
+        match removed {
+            Ok(()) => result.done.push(uri.clone()),
+            Err(error) => record_failure(&mut result, &folder.display_name(), &error),
+        }
+    }
+    result
 }
 
 /// The name `item` had before the move, when it landed under another one.

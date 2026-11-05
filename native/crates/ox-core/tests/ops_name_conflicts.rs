@@ -12,20 +12,23 @@ mod folders;
 mod ops_support;
 #[path = "ops_support/private_trash.rs"]
 mod private_trash;
+#[path = "ops_support/snapshots.rs"]
+mod snapshots;
 
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use ox_core::ops::{
-    reverse, run_answered_items, run_free_items, run_resolved_transfer, scan_name_conflicts, ConflictScan,
-    OperationContext, OpsError, PlannedKind, Resolution, UndoRecord,
+    changed_copies, reverse, run_answered_items, run_free_items, run_resolved_transfer, scan_name_conflicts,
+    ConflictScan, OperationContext, OpsError, PlannedKind, Resolution, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, TransferMode, MAX_ITEMS};
 
 use folders::Folders;
 use ops_support::{block_on, file_uri};
 use private_trash::require_private_trash;
+use snapshots::{snapshot_protection, READ_ONLY};
 
 /// The conflicts of moving or copying `names` of `from` into `into`.
 fn scan(mode: TransferMode, from: &Path, names: &[&str], into: &Path) -> ConflictScan {
@@ -450,4 +453,155 @@ fn stopping_at_the_question_keeps_the_items_copied_before_it() {
             copies: vec![file_uri(&dst.join("free.txt"))]
         })
     );
+}
+
+/// XFER-020 keeps a merging move whole: a selected folder holding a
+/// protected snapshot in a merged subfolder is refused as one tree before
+/// anything in it moves, as the engine refuses a selected folder before
+/// it changes it.
+///
+/// parity: XFER-020, OPS-026
+#[test]
+fn a_merging_move_with_a_protected_folder_inside_moves_nothing() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("project/a.txt"), b"plain");
+    write(&src.join("project/sub/.snapshot/version.txt"), b"kept");
+    fs::create_dir_all(dst.join("project/sub")).unwrap();
+    let context = OperationContext::new(snapshot_protection());
+    let scan = scan(TransferMode::Move, &src, &["project"], &dst);
+
+    let free = block_on(run_free_items(&scan, &context, |_| {}));
+    let whole = block_on(run_resolved_transfer(&scan, &[], &context, |_| {}));
+
+    assert_eq!(free.map(|_| ()), Err(OpsError::Failed(READ_ONLY.into())));
+    assert_eq!(whole.map(|_| ()), Err(OpsError::Failed(READ_ONLY.into())));
+    assert_eq!(
+        fs::read(src.join("project/a.txt")).unwrap(),
+        b"plain",
+        "nothing moved"
+    );
+    assert!(!dst.join("project/a.txt").exists());
+}
+
+/// A conflict whose answer cannot be carried out after the free items
+/// moved is reported in a finished outcome, which still lists and undoes
+/// what was done: here the extension leaves no room for " (2)".
+///
+/// parity: OPS-028, OPS-029
+#[test]
+fn a_failed_answer_after_the_free_items_still_finishes_the_outcome() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    let crowded = format!("a.{}", "x".repeat(252));
+    write(&src.join("free.txt"), b"free");
+    write(&src.join(&crowded), b"incoming");
+    write(&dst.join(&crowded), b"existing");
+    let context = OperationContext::default();
+    let scan = scan(TransferMode::Copy, &src, &["free.txt", &crowded], &dst);
+
+    let first = block_on(run_free_items(&scan, &context, |_| {})).expect("the free items");
+    let outcome = block_on(run_answered_items(
+        &scan,
+        &[Resolution::KeepBoth],
+        first,
+        &context,
+        |_| {},
+    ))
+    .expect("a finished outcome, not a bare error");
+
+    assert_eq!(outcome.result.errors.len(), 1, "{:?}", outcome.result.errors);
+    assert_eq!(outcome.created, [file_uri(&dst.join("free.txt"))]);
+    assert_eq!(
+        outcome.undo,
+        Some(UndoRecord::Copy {
+            copies: vec![file_uri(&dst.join("free.txt"))]
+        })
+    );
+    assert_eq!(fs::read(dst.join(&crowded)).unwrap(), b"existing");
+}
+
+/// A merged move answered with Keep both lands under a numbered name and
+/// empties its folder, which goes; Undo makes the folder again and moves
+/// the item back under its own name.
+///
+/// parity: OPS-028, OPS-029
+#[test]
+fn undoing_a_kept_both_move_out_of_a_removed_folder_makes_the_folder_again() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("Music/cover.jpg"), b"incoming");
+    write(&dst.join("Music/cover.jpg"), b"existing");
+    let context = OperationContext::default();
+    let scan = scan(TransferMode::Move, &src, &["Music"], &dst);
+
+    let outcome = run(&scan, &[Resolution::KeepBoth]);
+    assert_eq!(fs::read(dst.join("Music/cover (2).jpg")).unwrap(), b"incoming");
+    assert!(!src.join("Music").exists(), "the emptied folder went");
+    let record = outcome.undo.expect("an undoable move");
+    let undone = block_on(reverse(&record, &context, |_| {})).expect("an undo");
+
+    assert!(undone.result.errors.is_empty(), "{:?}", undone.result.errors);
+    assert_eq!(fs::read(src.join("Music/cover.jpg")).unwrap(), b"incoming");
+    assert!(!dst.join("Music/cover (2).jpg").exists());
+}
+
+/// A merged move removes the empty folders it merged, even one that held
+/// nothing at all; Undo makes them again and Redo removes them again.
+///
+/// parity: OPS-026, OPS-029, OPS-031
+#[test]
+fn undo_makes_again_the_empty_folders_a_merging_move_removed() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    fs::create_dir_all(src.join("Empty/Inner")).unwrap();
+    fs::create_dir_all(dst.join("Empty/Inner")).unwrap();
+    let context = OperationContext::default();
+    let scan = scan(TransferMode::Move, &src, &["Empty"], &dst);
+
+    let outcome = run(&scan, &[]);
+    assert!(!src.join("Empty").exists(), "the merged folders went");
+    let record = outcome.undo.expect("removed folders are undoable");
+    let undone = block_on(reverse(&record, &context, |_| {})).expect("an undo");
+    assert!(undone.result.errors.is_empty(), "{:?}", undone.result.errors);
+    assert!(src.join("Empty/Inner").is_dir(), "made again");
+
+    let redo = undone.inverse.expect("Redo removes them again");
+    let redone = block_on(reverse(&redo, &context, |_| {})).expect("a redo");
+    assert!(redone.result.errors.is_empty(), "{:?}", redone.result.errors);
+    assert!(!src.join("Empty").exists());
+    assert!(
+        dst.join("Empty/Inner").is_dir(),
+        "the destination keeps its folders"
+    );
+}
+
+/// After Undo and Redo of a copy that replaced a file, editing the copy
+/// still makes the next Undo ask first (OPS-030).
+///
+/// parity: OPS-030, OPS-031
+#[test]
+fn a_redone_replacing_copy_still_reports_its_edited_copy() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+    let context = OperationContext::default();
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    let record = run(&scan, &[Resolution::Replace]).undo.expect("undoable");
+    let undone = block_on(reverse(&record, &context, |_| {})).expect("an undo");
+    let redone = block_on(reverse(&undone.inverse.expect("a redo"), &context, |_| {})).expect("a redo");
+    let again = redone.inverse.expect("Undo again");
+
+    let now = std::time::SystemTime::now();
+    let since = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    fs::File::options()
+        .write(true)
+        .open(dst.join("report.png"))
+        .and_then(|file| file.set_modified(now + std::time::Duration::from_secs(60)))
+        .unwrap();
+
+    assert_eq!(again.undo_label(), "Undo Copy");
+    assert_eq!(block_on(changed_copies(&again, since)), ["report.png"]);
 }
