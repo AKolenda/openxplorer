@@ -602,6 +602,13 @@ radius 4; padding `6px 9px 8px 9px`; maximum width 320 (wrap with
 border 1, padding `9,6,9,8`, max width 320, ControlCornerRadius (TT#L29–33,
 TT#L52, TT#L76–77). Tag: safe.
 
+The balloon under a name being renamed in place, when a character Windows
+forbids is typed or pasted (OPS-010), has the tooltip's look with a tail
+pointing up at the field (`popover.name-balloon`, `skin/folder-views.css`):
+Windows' "A file name can't contain any of the following characters:" and,
+indented 16 px on the next line, `\ / : * ? " < > |`. It never takes the
+keyboard from the field and hides at the next key or after 5 s. Tag: visible.
+
 ### 4.11 Dialogs
 
 | Element | Target | Windows reference | Tag |

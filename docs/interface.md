@@ -34,6 +34,12 @@ Your Templates folder supplies entries directly in New, with its subfolders as s
 
 Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys; Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E moves to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
 
+## Rename an item
+
+Press F2, or choose Rename, and the name becomes a text field in its row or tile, with a file’s name before its extension selected. Press Enter or click elsewhere to keep the new name, or Escape to keep the old one. As in Windows, the characters \ / : * ? " < > | can’t be typed or pasted into the name: nothing is inserted, and a balloon under the field says “A file name can’t contain any of the following characters”. A name that already has one keeps it while you edit it.
+
+If another file in the folder already has the name you type, the Rename File question offers the next free numbered name, such as Report (2).txt: Yes renames the file to it, and No lets you edit the name again. A folder given a name that is taken is not renamed, and nothing is ever overwritten.
+
 ## Rename several items at once
 
 As in Windows Explorer, select several items and press F2, or choose Rename, then type one name for the item whose name opens for editing and press Enter. Every selected item gets that name with a number in brackets, in the order the folder shows them: Holiday (1).jpg, Holiday (2).jpg, Holiday (3).png. Each file keeps its own extension, and folders and files without an extension get none. A numbered name that is already taken is skipped, so nothing is overwritten. Escape renames nothing, an item that cannot be renamed is listed in Operation result while the others are renamed, and one Ctrl+Z renames them all back.

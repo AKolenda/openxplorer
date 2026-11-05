@@ -36,6 +36,8 @@
 //! | `template_menu` | The user's templates in the New menu, subfolders as submenus |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
+//! | `name_balloon` | The characters Windows forbids, refused as they are typed in that field |
+//! | `rename_conflict` | The "Rename File" question when a file takes a taken name |
 //! | `batch_rename` | Rename items…: the dialog's `#` template for several items |
 //! | `numbered_rename` | F2 on several items: one name with (1), (2), as in Windows Explorer |
 //! | `hide_confirm` | Asking before a rename hides an item |
@@ -71,6 +73,7 @@ mod jobs;
 mod journal;
 mod links;
 mod move_by_copying_dialog;
+mod name_balloon;
 mod name_dialog;
 mod names;
 mod new_items;
@@ -78,6 +81,7 @@ mod numbered_rename;
 mod progress;
 mod recycle_bin;
 mod rename;
+mod rename_conflict;
 mod running;
 mod shortcuts;
 mod template_dialog;
@@ -92,6 +96,8 @@ use ox_core::ops::TemplateList;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+#[cfg(test)]
+pub(super) use name_balloon::FORBIDDEN_KEYS;
 pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
 

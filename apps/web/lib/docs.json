@@ -410,6 +410,14 @@
         ]
       },
       {
+        "id": "rename",
+        "title": "Rename an item",
+        "paragraphs": [
+          "Press F2, or choose Rename, and the name becomes a text field in its row or tile, with a file’s name before its extension selected. Press Enter or click elsewhere to keep the new name, or Escape to keep the old one. As in Windows, the characters \\ / : * ? \" < > | can’t be typed or pasted into the name: nothing is inserted, and a balloon under the field says “A file name can’t contain any of the following characters”. A name that already has one keeps it while you edit it.",
+          "If another file in the folder already has the name you type, the Rename File question offers the next free numbered name, such as Report (2).txt: Yes renames the file to it, and No lets you edit the name again. A folder given a name that is taken is not renamed, and nothing is ever overwritten."
+        ]
+      },
+      {
         "id": "rename-several",
         "title": "Rename several items at once",
         "paragraphs": [
