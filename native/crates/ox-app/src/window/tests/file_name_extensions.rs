@@ -37,6 +37,12 @@ fn saved_shown(test: &TestWindow) -> bool {
         .show_extensions
 }
 
+/// Whether the app's settings hold `shown` for extensions, which every
+/// window takes up after each save.
+fn holds_shown(test: &TestWindow, shown: bool) -> bool {
+    test.context.settings_data().preferences.show_extensions == shown
+}
+
 /// The View menu's Show submenu, opened, and whether it checks File name
 /// extensions.
 fn show_menu_checks_extensions(test: &TestWindow) -> bool {
@@ -97,8 +103,13 @@ fn known_extensions_are_hidden_by_default_and_view_show_shows_them() {
 
     test.activate("file-name-extensions", None);
 
-    let names = shown_names(&test);
-    assert!(names.contains(&"Notes 2.txt".to_owned()), "{names:?}");
+    // Every finished save has the windows take up the saved preferences,
+    // so one that finished before the toggle's own (View's, here) can show
+    // the old choice for a moment. Once the choice is held, none can.
+    wait_until("the choice to be held", || holds_shown(&test, true));
+    wait_until("the names to show their extensions", || {
+        shown_names(&test).contains(&"Notes 2.txt".to_owned())
+    });
     assert!(show_menu_checks_extensions(&test));
     wait_until("the choice to be saved", || saved_shown(&test));
     wait_until("the details pane to follow", || {
@@ -125,12 +136,17 @@ fn toggling_extensions_renames_the_rows_for_a_screen_reader() {
 
     test.activate("file-name-extensions", None);
 
-    let after = labels();
-    assert!(after.contains(&"Notes 2.txt".to_owned()), "{after:?}");
-    assert!(!after.contains(&"Notes 2".to_owned()), "{after:?}");
+    // As above, an earlier save can show the old names for a moment.
+    wait_until("the choice to be held", || holds_shown(&test, true));
+    wait_until("the labels to show extensions", || {
+        let after = labels();
+        after.contains(&"Notes 2.txt".to_owned()) && !after.contains(&"Notes 2".to_owned())
+    });
     test.activate("file-name-extensions", None);
-    let again = labels();
-    assert!(again.contains(&"Notes 2".to_owned()), "hidden again: {again:?}");
+    wait_until("the choice to be held", || holds_shown(&test, false));
+    wait_until("the labels to hide them again", || {
+        labels().contains(&"Notes 2".to_owned())
+    });
 }
 
 /// With extensions hidden, F2 edits the name without its extension and
@@ -153,6 +169,7 @@ fn renaming_with_extensions_hidden_keeps_the_extension() {
     wait_until("the rename to end", || !is_renaming_in_place(&test));
 
     test.activate("file-name-extensions", None);
+    wait_until("the choice to be held", || holds_shown(&test, true));
     wait_until("the listing to have the new name", || {
         test.names().contains(&"Minutes.txt".to_owned())
     });
