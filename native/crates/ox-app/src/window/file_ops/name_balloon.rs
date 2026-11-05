@@ -4,8 +4,8 @@
 //!
 //! As in Windows File Explorer, typing or pasting `\ / : * ? " < > |` in
 //! the field inserts nothing and leaves the text and its selection as
-//! they were (a paste or an input method that replaced the selection
-//! puts it back); a balloon under the field says, in Windows' words, which
+//! they were (a key, a paste or an input method that replaced the
+//! selection puts it back); a balloon under the field says, in Windows' words, which
 //! characters a name can't contain. It goes away after a few seconds or
 //! at the next key. Linux would store every one of them but the slash,
 //! yet they are refused on every drive, as Windows refuses them: a name
@@ -32,9 +32,6 @@ const BALLOON_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The CSS class of the balloon.
 const BALLOON_CLASS: &str = "name-balloon";
-
-/// The name of the key handler that refuses typed characters.
-pub(crate) const FORBIDDEN_KEYS: &str = "forbidden-characters";
 
 /// The forbidden characters as the balloon's second line lists them:
 /// `\ / : * ? " < > |`.
@@ -65,8 +62,9 @@ fn is_modifier_key(key: gdk::Key) -> bool {
     )
 }
 
-/// True when pressing `key` with `modifiers` types a forbidden character.
-/// Ctrl and Alt make it a shortcut, which types nothing.
+/// True when pressing `key` with `modifiers` types a forbidden character,
+/// which the balloon stays up for. Ctrl and Alt make it a shortcut, which
+/// types nothing.
 fn types_forbidden_character(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
     if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
         return false;
@@ -174,23 +172,20 @@ impl Balloon {
 
 /// Refuses the characters Windows forbids in names as they are typed,
 /// pasted or dropped into `editor`, with Windows' balloon. GTK runs the
-/// last key handler added first, so call it after the field's others.
+/// last key handler added first, so call it after the field's others: it
+/// then sees every key first.
 pub(super) fn refuse_forbidden_characters(editor: &gtk::Entry) {
     let balloon = Balloon::new(editor);
-    // A typed character is refused before the field sees it, so a
-    // selection it would have replaced stays.
+    // The next key hides the balloon. Every key still reaches the field
+    // and its input method, so Compose and dead-key sequences that start
+    // with a forbidden character work; what they insert is checked below.
     let keys = gtk::EventControllerKey::new();
-    keys.set_name(Some(FORBIDDEN_KEYS));
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     keys.connect_key_pressed(glib::clone!(
         #[strong]
         balloon,
         move |_, key, _, modifiers| {
-            if types_forbidden_character(key, modifiers) {
-                balloon.show();
-                return glib::Propagation::Stop;
-            }
-            if !is_modifier_key(key) {
+            if !types_forbidden_character(key, modifiers) && !is_modifier_key(key) {
                 balloon.hide();
             }
             glib::Propagation::Proceed
@@ -200,7 +195,7 @@ pub(super) fn refuse_forbidden_characters(editor: &gtk::Entry) {
     let Some(text) = editor.delegate().and_downcast::<gtk::Text>() else {
         return;
     };
-    // A paste or an input method replaces the selection before it
+    // Typing, a paste or an input method replaces the selection before it
     // inserts: what a change deletes is kept until the change ends, so a
     // refused insertion gives the text and selection back.
     let before_change: Rc<RefCell<Option<FieldState>>> = Rc::default();

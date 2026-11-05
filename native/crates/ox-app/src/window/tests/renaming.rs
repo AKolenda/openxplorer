@@ -16,7 +16,7 @@ use super::file_ops_support::{
     wait_for_no_dialog,
 };
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
-use crate::window::file_ops::FORBIDDEN_KEYS;
+use crate::test_support::pointer::{screen_point, Pointer};
 use crate::window::session::PaneSide;
 use crate::window::slow_click_rename::NamePress;
 
@@ -440,19 +440,6 @@ fn the_rename_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
     );
 }
 
-/// Types `key` with `modifiers` in `editor` as far as the handler that
-/// refuses forbidden characters goes; whether it kept the key.
-fn type_in(editor: &gtk::Entry, key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
-    let keys = editor
-        .observe_controllers()
-        .iter::<glib::Object>()
-        .filter_map(Result::ok)
-        .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
-        .find(|controller| controller.name().as_deref() == Some(FORBIDDEN_KEYS))
-        .expect("the field refuses forbidden characters");
-    keys.emit_by_name("key-pressed", &[&key.into_glib(), &0_u32, &modifiers])
-}
-
 /// The lines of the balloon under `editor`, while it shows.
 fn balloon_lines(editor: &gtk::Entry) -> Option<Vec<String>> {
     descendants::<gtk::Popover>(editor)
@@ -474,7 +461,9 @@ fn windows_balloon() -> Vec<String> {
 
 /// A character Windows forbids in names is refused as it is typed, with
 /// Windows' balloon under the field; the name and its selection stay,
-/// the rename goes on, and the next key hides the balloon.
+/// the rename goes on, and the next key hides the balloon. The key is a
+/// real one on the private display, so it goes through the field's input
+/// method as a typed key does, and Compose sequences keep working.
 ///
 /// parity: OPS-010
 #[gtk::test]
@@ -484,28 +473,28 @@ fn a_character_windows_forbids_is_refused_with_its_balloon() {
     select_names(&test, &["Notes 2.txt"]);
     test.activate("rename", None);
     let field = name_editor(&test);
-    let shift = gdk::ModifierType::SHIFT_MASK;
+    let mut pointer = Pointer::connect();
+    let middle = (f64::from(field.width()) / 2.0, f64::from(field.height()) / 2.0);
+    let (x, y) = screen_point(&mut pointer, &field, middle, (200, 200));
+    pointer.move_to(x, y);
+    let name_back = || field.text() == "Notes 2.txt" && field.selection_bounds() == Some((0, 7));
 
-    let kept_colon = type_in(&field, gdk::Key::colon, shift);
-    wait_until("the balloon", || balloon_lines(&field).is_some());
+    pointer.tap_key(gdk::Key::slash);
+    wait_until("the balloon and the name back", || {
+        balloon_lines(&field).is_some() && name_back()
+    });
     let shown = balloon_lines(&field);
     let mut position = 5;
     field.insert_text("10:30", &mut position);
     wait_for(Duration::from_millis(300));
+    let unchanged = name_back();
     let still_renaming = is_renaming_in_place(&test);
-    let kept_letter = type_in(&field, gdk::Key::a, gdk::ModifierType::empty());
+    pointer.tap_key(gdk::Key::End);
     wait_until("the balloon to go", || balloon_lines(&field).is_none());
 
-    assert!(kept_colon, "a typed colon never reaches the field");
     assert_eq!(shown, Some(windows_balloon()));
-    assert_eq!(field.text(), "Notes 2.txt", "nothing was inserted");
-    assert_eq!(
-        field.selection_bounds(),
-        Some((0, 7)),
-        "the name before its extension stays selected"
-    );
+    assert!(unchanged, "nothing was inserted and the stem stays selected");
     assert!(still_renaming, "the balloon leaves the keyboard in the field");
-    assert!(!kept_letter, "other keys go on to the field");
     press_in(&field, gdk::Key::Escape, gdk::ModifierType::empty());
     wait_until("the rename to end", || !is_renaming_in_place(&test));
 }
