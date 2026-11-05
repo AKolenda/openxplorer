@@ -22,8 +22,8 @@ use ox_core::location::{is_smb_location, parent_location, ArchiveLocation, Locat
 use ox_core::places::NetworkLocation;
 
 use crate::folder_view::item::FileItem;
-use crate::icons::{Art, Icon};
 use crate::i18n::message_id;
+use crate::icons::{Art, Icon};
 use crate::locations::Page;
 use crate::media_details::MediaKind;
 use crate::properties::{FolderSizeState, NOT_SCANNED};
@@ -214,14 +214,19 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
             container_text(&entry.uri, facts.locations),
         ),
         Property::new(keys::MODIFIED, message_id("Date modified"), dates(entry.modified)),
-        Property::new(keys::CREATED, message_id("Date created"), dates(entry.meta.created)),
+        Property::new(
+            keys::CREATED,
+            message_id("Date created"),
+            dates(entry.meta.created),
+        ),
     ];
     properties.retain(|property| !property.value.is_empty());
     PaneContent {
         preview: Preview::Art(item.art()),
         name: entry.name.clone(),
         has_selection: true,
-        has_properties: true,
+        // Items inside a ZIP have no file of their own to describe.
+        has_properties: !ox_core::location::is_archive_location(facts.folder_uri),
         properties,
         media: MediaPreview::of(item),
         metadata: MetadataRequest::of(item),
@@ -242,7 +247,11 @@ fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
         facts.condensed_dates,
     );
     if let Some(modified) = modified {
-        properties.push(Property::new(keys::MODIFIED, message_id("Date modified"), modified));
+        properties.push(Property::new(
+            keys::MODIFIED,
+            message_id("Date modified"),
+            modified,
+        ));
     }
     let first_folder = parent_location(&items[0].entry().uri);
     let one_folder = items
@@ -544,7 +553,8 @@ mod tests {
     }
 
     /// A ZIP opened like a folder is pictured as a compressed folder at
-    /// its top.
+    /// its top, and its items offer no Properties, as Properties is off
+    /// there.
     ///
     /// parity: PROP-009, ARC-026
     #[test]
@@ -554,6 +564,9 @@ mod tests {
         assert_eq!(content.preview, Preview::Art(Art::ZipFolder));
         let inside = content_for(&[], &top.member("Docs/").uri());
         assert_eq!(inside.preview, Preview::Art(Art::Folder));
+        let member = FileItem::new(file_entry("Read me.txt"));
+        let content = content_for(&[member], &top.uri());
+        assert!(!content.has_properties, "a ZIP's item has no Properties");
     }
 
     /// Several items: "N items selected", their total size, their dates

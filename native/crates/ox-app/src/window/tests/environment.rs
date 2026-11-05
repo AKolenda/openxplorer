@@ -230,10 +230,7 @@ fn the_details_pane_previews_an_image_and_names_its_dimensions() {
     let picture = descendants::<gtk::Picture>(pane).remove(0);
     test.window.update_details_pane();
     assert_eq!(descendants::<gtk::Picture>(pane), [picture]);
-    assert_eq!(
-        property(&pane.shown_properties(), "Dimensions"),
-        Some("4 x 3")
-    );
+    assert_eq!(property(&pane.shown_properties(), "Dimensions"), Some("4 x 3"));
     test.window.folder_model().select_none();
     wait_until("the folder's art again", || {
         descendants::<gtk::Picture>(pane).is_empty()
@@ -282,10 +279,7 @@ fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
     assert!(property(&shown, "Type").is_some());
     assert!(property(&shown, "Size").is_none(), "Size is turned off");
     test.window.pointer_over_items(&view, None);
-    assert!(
-        pane.shown_name().ends_with(" items"),
-        "the folder again"
-    );
+    assert!(pane.shown_name().ends_with(" items"), "the folder again");
     wait_until("the options saved", || {
         let saved = Settings::open(test.settings_directory())
             .data()

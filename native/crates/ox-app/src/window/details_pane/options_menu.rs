@@ -11,8 +11,8 @@ use gtk::{gdk, glib};
 use ox_core::settings::DetailsPaneOptions;
 
 use super::content::keys;
-use crate::i18n::message_id;
 use super::DetailsPane;
+use crate::i18n::message_id;
 use crate::icons::Icon;
 use crate::window::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;

@@ -212,7 +212,11 @@ mod tests {
     fn a_picture_is_as_tall_as_its_shape_needs() {
         assert_eq!(preview_height(4000, 3000), 162);
         assert_eq!(preview_height(320, 200), 135);
-        assert_eq!(preview_height(1000, 3000), PREVIEW_HEIGHT, "a tall picture is held");
+        assert_eq!(
+            preview_height(1000, 3000),
+            PREVIEW_HEIGHT,
+            "a tall picture is held"
+        );
         assert_eq!(preview_height(0, 0), PREVIEW_HEIGHT);
     }
 

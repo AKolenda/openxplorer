@@ -6,9 +6,7 @@ use gtk::prelude::*;
 use ox_core::settings::{PreferencesUpdate, Settings};
 
 use super::geometry::{bounds, laid_out, Bounds};
-use crate::test_support::harness::{
-    descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard,
-};
+use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 use crate::window::widget_tree::children;
 
 /// The column titles of the details view, left to right.
@@ -214,9 +212,8 @@ fn the_details_values_line_up() {
     let pane = test.window.details_pane();
     let grid = descendants::<gtk::Grid>(pane).remove(0);
     let labels = descendants::<gtk::Label>(&grid);
-    let (names, values): (Vec<_>, Vec<_>) = labels
-        .iter()
-        .partition(|label| label.has_css_class("detail-key"));
+    let (names, values): (Vec<_>, Vec<_>) =
+        labels.iter().partition(|label| label.has_css_class("detail-key"));
     assert!(names.len() >= 4, "Type, Size, File location, Date modified");
     let name_x: Vec<i32> = names.iter().map(|label| bounds(&test, *label).x).collect();
     let value_x: Vec<i32> = values.iter().map(|label| bounds(&test, *label).x).collect();
