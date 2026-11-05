@@ -8638,6 +8638,10 @@ msgstr ""
 msgid "A name being renamed in place no longer closes when you use its own right-click menu, such as Paste or Select All, or switch to another window. Item check boxes are off by default, so a selected item is only highlighted, as in Windows; View > Item check boxes turns them back on. A search word found only in a name's extension no longer matches, so pd no longer finds every PDF."
 msgstr ""
 
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "A notice at the top right of the window says when a new release is out, the command bar's Update and the status bar's Update available stay until it is installed, and the Settings gear is back in the command bar. Deleting a folder permanently under Open as administrator works again for folders 2.0.12 and 2.0.13 refused, through a small helper that holds each folder open while it empties it. Dragging a tab out into a new window no longer crashes on Wayland, and the keyboard returns to the file list after navigating or editing the address."
+msgstr ""
+
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "A preview of the next OpenXplorer, drawn with native GTK 4 widgets instead of a web page. It browses local folders, SMB shares and connected phones in the familiar tabbed window styled after Windows 11 File Explorer."
 msgstr ""
