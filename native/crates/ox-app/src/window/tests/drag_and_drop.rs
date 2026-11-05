@@ -525,6 +525,40 @@ fn tooltips_are_off_while_items_are_dragged() {
     assert!(row.has_tooltip(), "it is back once the drag ends");
 }
 
+/// Every window of the app turns its tooltips off while items are
+/// dragged, not only the one they come from, as a drag can hover over
+/// another window's rows; all come back once the drag ends.
+///
+/// parity: DND-027
+#[gtk::test]
+fn every_window_turns_its_tooltips_off_while_items_are_dragged() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    let row_of = |test: &TestWindow| {
+        test.window
+            .sidebar()
+            .list()
+            .row_at_index(1)
+            .expect("the sidebar has rows")
+    };
+    let (row, other_row) = (row_of(&test), row_of(&other));
+    let before = other_row.has_tooltip();
+
+    test.window
+        .drag_content_for(test.position_of("Notes 2.txt"))
+        .expect("the item can be dragged");
+    test.window.show_file_drag_feedback();
+    wait_until("this window's tooltips to go off", || !row.has_tooltip());
+    wait_until("the other window's tooltips to go off", || {
+        !other_row.has_tooltip()
+    });
+    test.window.end_file_drag();
+
+    assert!(before, "the other window's row has a tooltip");
+    assert!(row.has_tooltip() && other_row.has_tooltip(), "both come back");
+}
+
 /// A right-button drag dropped in the folder it comes from asks, as in
 /// Windows Explorer: Copy here and Create shortcuts here, but no Move
 /// here, which would do nothing, and nothing in bold, as a plain drop

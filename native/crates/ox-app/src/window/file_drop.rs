@@ -222,6 +222,18 @@ fn outside_folder(uris: Vec<String>, folder: &str) -> Vec<String> {
         .collect()
 }
 
+/// Refuses a drop of Recycle Bin items that brings none or too many, or
+/// mixes them with other items.
+fn check_recycle_bin_items(uris: &[String]) -> Result<(), DropRefusal> {
+    if !(1..=MAX_DROPPED_ITEMS).contains(&uris.len()) {
+        return Err(DropRefusal::ItemCount);
+    }
+    if !uris.iter().all(|uri| is_recycle_bin_item(uri)) {
+        return Err(DropRefusal::MixedWithRecycleBin);
+    }
+    Ok(())
+}
+
 /// The action `drop` is finished with: a copy whenever the drag offers
 /// one, else the action it settled on, which is never "ask" (a drop
 /// finished with "ask" breaks the Wayland protocol).
@@ -504,7 +516,9 @@ impl BrowserWindow {
     }
 
     /// Copies, moves or links `uris` into `folder`, or asks which. Items
-    /// moved into the folder they are in are left alone.
+    /// moved into the folder they are in are left alone. Recycle Bin items
+    /// are always moved out, after the menu's answer for a right-button
+    /// drop.
     fn drop_into_folder(
         &self,
         uris: &[String],
@@ -512,6 +526,13 @@ impl BrowserWindow {
         action: DropAction,
     ) -> Result<(), DropRefusal> {
         if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+            check_recycle_bin_items(uris)?;
+            // A right-button drop asks first (Move here or Cancel, DND-027);
+            // any other drop moves them out at once (OPS-046).
+            if let DropAction::Ask(origin) = action {
+                self.ask_drop_action(uris.to_vec(), folder, origin);
+                return Ok(());
+            }
             return self.drop_from_recycle_bin(uris, folder);
         }
         let uris = dropped_uris(uris)?;
@@ -564,12 +585,7 @@ impl BrowserWindow {
     /// Moves the Recycle Bin items `uris` into `folder`, whatever the
     /// drop's action, as Dolphin does (OPS-046, DND-018).
     fn drop_from_recycle_bin(&self, uris: &[String], folder: String) -> Result<(), DropRefusal> {
-        if !(1..=MAX_DROPPED_ITEMS).contains(&uris.len()) {
-            return Err(DropRefusal::ItemCount);
-        }
-        if !uris.iter().all(|uri| is_recycle_bin_item(uri)) {
-            return Err(DropRefusal::MixedWithRecycleBin);
-        }
+        check_recycle_bin_items(uris)?;
         let uris = uris.to_vec();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

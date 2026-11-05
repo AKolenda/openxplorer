@@ -3,10 +3,11 @@
 //!
 //! Windows Explorer shows no tooltip during a drag or while a menu is
 //! open. GTK 4 shows the tooltips of the rows a drag passes over on
-//! Wayland, and of the row under a drop menu, and has no switch for
-//! tooltips, so the window turns off the tooltip of each of its widgets
-//! that has one, menus apart, and turns them on again once neither reason
-//! holds. A drag's tooltips go off once it has started: changing widgets
+//! Wayland, in any window of the app, and of the row under a drop menu,
+//! and has no switch for tooltips, so each window turns off the tooltip of
+//! each of its widgets that has one, menus apart: every window during a
+//! drag, the drop menu's window while it is open. They come back once
+//! neither reason holds. A drag's tooltips go off once it has started: changing widgets
 //! while GTK starts it stops the drag.
 
 use gtk::glib;
@@ -28,6 +29,16 @@ impl TooltipsOff {
     /// True while any reason holds.
     fn any(self) -> bool {
         self.drag || self.drop_menu
+    }
+}
+
+/// Turns tooltips off in every window of the app for a drag (`during`),
+/// or lets them back.
+fn set_drag_tooltips_off_everywhere(during: bool) {
+    for window in gtk::Window::list_toplevels() {
+        if let Ok(window) = window.downcast::<BrowserWindow>() {
+            window.set_drag_tooltips_off(during);
+        }
     }
 }
 
@@ -58,12 +69,12 @@ impl BrowserWindow {
         });
     }
 
-    /// Turns tooltips off while a drag of this window's items lasts, once
-    /// GTK has started it (`during`), or lets them back once it ended.
+    /// Turns tooltips off in every window of the app while a drag of this
+    /// window's items lasts, once GTK has started it (`during`), as the
+    /// drag can pass over any of them; or lets them back once it ended.
     pub(super) fn quiet_tooltips_for_drag(&self, during: bool) {
         if !during {
-            let off = self.imp().tooltips_off.get();
-            self.set_tooltips_off(TooltipsOff { drag: false, ..off });
+            set_drag_tooltips_off_everywhere(false);
             return;
         }
         glib::idle_add_local_once(glib::clone!(
@@ -72,11 +83,17 @@ impl BrowserWindow {
             move || {
                 // The drag may have ended already.
                 if window.imp().outgoing_drag.borrow().is_some() {
-                    let off = window.imp().tooltips_off.get();
-                    window.set_tooltips_off(TooltipsOff { drag: true, ..off });
+                    set_drag_tooltips_off_everywhere(true);
                 }
             }
         ));
+    }
+
+    /// Turns tooltips off in this window for a drag (`during`), or lets
+    /// them back.
+    fn set_drag_tooltips_off(&self, during: bool) {
+        let off = self.imp().tooltips_off.get();
+        self.set_tooltips_off(TooltipsOff { drag: during, ..off });
     }
 
     /// Records why tooltips are off, and turns them off or on as the

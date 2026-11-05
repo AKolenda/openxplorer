@@ -344,6 +344,49 @@ fn items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder() {
     );
 }
 
+/// A right-button drop of Recycle Bin items asks before anything moves,
+/// with Move here (bold) and Cancel only, as items can only be moved out
+/// of the Recycle Bin; Cancel leaves them there and Move here moves them.
+///
+/// parity: OPS-046, DND-027
+#[gtk::test]
+fn a_right_drop_of_recycle_bin_items_asks_before_moving_them() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Ask before moving.txt");
+    trash(&fixture.path("Ask before moving.txt"));
+    let bin = TestWindow::open(TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        bin.names().contains(&"Ask before moving.txt".to_owned())
+    });
+    select_names(&bin, &["Ask before moving.txt"]);
+    let trashed = bin.window.folder_model().selected_uris();
+    let documents = TestWindow::open(&fixture.uri_of("Documents"));
+    let moved = fixture.path("Documents").join("Ask before moving.txt");
+    let ask = DropAction::Ask(crate::window::file_drop::DragOrigin::ThisApp);
+
+    assert!(documents.window.drop_files(&trashed, None, ask));
+    let menu = documents.window.drop_menu();
+    wait_until("the drop menu", || menu.is_mapped());
+    let labels = menu.row_labels();
+    let bold = menu.emphasised_labels();
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    let moved_before_the_answer = moved.exists();
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    let moved_after_cancel = moved.exists();
+    assert!(documents.window.drop_files(&trashed, None, ask));
+    wait_until("the drop menu", || menu.is_mapped());
+    menu.click_row("Move here");
+
+    assert_eq!(labels, ["Move here", "-", "Cancel"]);
+    assert_eq!(bold, ["Move here"]);
+    assert!(!moved_before_the_answer, "nothing moves before the answer");
+    assert!(!moved_after_cancel, "Cancel leaves the item in the Recycle Bin");
+    wait_until("the item to be moved into Documents", || moved.is_file());
+}
+
 /// Undo asks before it moves a copy that changed after the copy to the
 /// Recycle Bin; Cancel keeps the copy and the Undo step.
 ///
