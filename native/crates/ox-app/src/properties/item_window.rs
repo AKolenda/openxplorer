@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Properties window of one item (PROP-001, PROP-003, PROP-006).
 //!
-//! A file has General, Security and Previous Versions; a folder on this
-//! computer adds Sharing (where Samba user shares can be used) and
-//! Customize, and a standard folder Location, in Windows 11's order:
-//! General, Sharing, Security, Location, Previous Versions, Customize.
-//! The item's properties are read once, off the main thread, when the
-//! window opens; the versions are looked up the first time their tab is
-//! shown, and a folder's size is counted from the start.
+//! A file has General, Security, Details and Previous Versions; a folder
+//! on this computer adds Sharing (where Samba user shares can be used)
+//! and Customize, and a standard folder Location, in Windows 11's order:
+//! General, Sharing, Security, Location, Details, Previous Versions,
+//! Customize. The item's properties are read once, off the main thread,
+//! when the window opens; the versions and a file's media details are
+//! read the first time their tab is shown, and a folder's size is counted
+//! from the start.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -23,6 +24,7 @@ use ox_core::network::Usershares;
 use ox_core::transfer::Cancellation;
 use ox_core::versions::{is_conventional_snapshot, PreviousVersions};
 
+use super::details_tab::DetailsPanel;
 use super::folder_count::{count_folders, Totals};
 use super::general_tab::{general_tab, GeneralEdits, GeneralRights};
 use super::location_panel::LocationPanel;
@@ -63,6 +65,8 @@ struct ItemPages {
     shown_uri: RefCell<String>,
     /// The Previous Versions tab.
     versions: VersionsPanel,
+    /// A file's Details tab.
+    details: Option<DetailsPanel>,
     /// Points the Sharing tab at a renamed folder.
     share_folder: Option<Rc<dyn Fn(std::path::PathBuf)>>,
     general: gtk::Box,
@@ -118,6 +122,17 @@ pub(crate) fn open_item_properties(
             &location,
         );
     }
+    // Windows gives files a Details tab, never folders.
+    let details = (target.kind != ItemKind::Folder).then(|| {
+        let details = DetailsPanel::new(context.locations.clone());
+        window.add_tab(
+            PropertiesTab::Details.page_name(),
+            PropertiesTab::Details.label(),
+            details.page(),
+        );
+        details.follow_window(&window);
+        details
+    });
     let versions = VersionsPanel::new(&target, Arc::clone(&context.versions), context.locations.clone());
     window.add_tab(
         PropertiesTab::PreviousVersions.page_name(),
@@ -142,14 +157,26 @@ pub(crate) fn open_item_properties(
         }
     });
     let shown_versions = versions.clone();
+    let shown_details = details.clone();
     window.connect_tab_shown(move |name| {
         if name == PropertiesTab::PreviousVersions.page_name() {
             shown_versions.load_once();
+        } else if name == PropertiesTab::Details.page_name() {
+            if let Some(details) = &shown_details {
+                details.shown();
+            }
         }
     });
     window.select_tab(initial.page_name());
-    if window.selected_tab().as_deref() == Some(PropertiesTab::PreviousVersions.page_name()) {
+    let selected = window.selected_tab();
+    if selected.as_deref() == Some(PropertiesTab::PreviousVersions.page_name()) {
         versions.load_once();
+    }
+    if let Some(details) = details
+        .as_ref()
+        .filter(|_| selected.as_deref() == Some(PropertiesTab::Details.page_name()))
+    {
+        details.shown();
     }
     let closing = versions.clone();
     window.connect_closed_once(move || closing.cancel());
@@ -160,6 +187,7 @@ pub(crate) fn open_item_properties(
         uri: Rc::new(RefCell::new(target.uri.clone())),
         shown_uri: RefCell::new(target.uri.clone()),
         versions,
+        details,
         share_folder,
         target,
         context,
@@ -274,6 +302,10 @@ impl ItemPages {
             can_edit,
         };
         fill_security(&self.security, &facts, &security_context);
+        // A rename or a permission change shows in the File rows.
+        if let Some(details) = &self.details {
+            details.show_properties(&properties);
+        }
         if !first {
             if let Some(edits) = self.general_edits.borrow().as_ref() {
                 edits.follow_mode(properties.mode);

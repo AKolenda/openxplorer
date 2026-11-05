@@ -24,7 +24,7 @@ Follow the [installation guide](docs/installation.md), and finish file operation
 
 ## Develop
 
-The app lives in `native/` (Rust, GTK 4, GIO/GVfs); see [native/README.md](native/README.md). It needs Rust 1.92 or newer and the GTK 4.14+, SQLite and libsoup 3 development packages (`libgtk-4-dev libsqlite3-dev libsoup-3.0-dev` on Ubuntu and Debian):
+The app lives in `native/` (Rust, GTK 4, GIO/GVfs); see [native/README.md](native/README.md). It needs Rust 1.92 or newer and the GTK 4.14+, SQLite, libsoup 3 and GStreamer development packages (`libgtk-4-dev libsqlite3-dev libsoup-3.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev` on Ubuntu and Debian):
 
 ```sh
 cargo build --release --locked --manifest-path native/Cargo.toml

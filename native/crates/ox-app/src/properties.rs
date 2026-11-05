@@ -25,6 +25,8 @@
 //! | `folder_count` | A folder's size and content, counting up |
 //! | `security_tab` | The Security tab and its Edit and Advanced dialogs |
 //! | `security_model` | Windows' permission names over Linux bits |
+//! | `details_tab` | The Details tab of a file: its list, keys and reader |
+//! | `details_rows` | The Details tab's headings, rows and value wording |
 //! | `permissions_editor` | Changing several items' permissions together |
 //! | `custom_icon` | The Customize tab: Change Icon... |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
@@ -39,6 +41,8 @@
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
 mod custom_icon;
+mod details_rows;
+mod details_tab;
 mod folder_count;
 mod folder_sizes;
 mod general_tab;
@@ -115,6 +119,9 @@ pub(crate) enum PropertiesTab {
     Security,
     /// Where a standard folder is stored (standard folders only).
     Location,
+    /// What the file says about itself: its tags, picture, video or audio
+    /// (files only).
+    Details,
     /// Snapshots and backups of the item.
     PreviousVersions,
     /// The folder's icon (local folders only).
@@ -129,6 +136,7 @@ impl PropertiesTab {
             PropertiesTab::Sharing => ox_core::i18n::gettext_static("Sharing"),
             PropertiesTab::Security => ox_core::i18n::gettext_static("Security"),
             PropertiesTab::Location => ox_core::i18n::gettext_static("Location"),
+            PropertiesTab::Details => ox_core::i18n::gettext_static("Details"),
             PropertiesTab::PreviousVersions => ox_core::i18n::gettext_static("Previous Versions"),
             PropertiesTab::Customize => ox_core::i18n::gettext_static("Customize"),
         }
@@ -141,6 +149,7 @@ impl PropertiesTab {
             PropertiesTab::Sharing => "sharing",
             PropertiesTab::Security => "security",
             PropertiesTab::Location => "location",
+            PropertiesTab::Details => "details",
             PropertiesTab::PreviousVersions => "versions",
             PropertiesTab::Customize => "customize",
         }
