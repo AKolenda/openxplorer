@@ -24,7 +24,7 @@ mod height;
 #[cfg(test)]
 mod inspection;
 #[cfg(test)]
-pub(crate) use inspection::row_label;
+pub(crate) use inspection::{row_label, row_tooltip};
 mod items;
 
 use gtk::prelude::*;
@@ -808,6 +808,14 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Bo
     content
 }
 
+/// The whole label of `row` while the menu cuts it short, else `None`.
+fn cut_short_label(row: &gtk::ListBoxRow) -> Option<String> {
+    let content = row.child()?;
+    let label = crate::window::widget_tree::children(&content)
+        .find_map(|child| child.downcast::<gtk::Label>().ok())?;
+    label.layout().is_ellipsized().then(|| label.text().to_string())
+}
+
 /// The row for `item`, showing `check` in the menu's `marks` column.
 fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::ListBoxRow {
     let role = match check {
@@ -820,8 +828,21 @@ fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::ListBo
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
     // No tooltip that would only repeat the label (`b.title=it.label` in
-    // app.js), as Windows 11's menus show none; a disabled row still says
-    // why ([`explain_availability`]).
+    // app.js), as Windows 11's menus show none: only a label the menu cuts
+    // short shows whole, which adds what the row cannot show. A disabled
+    // row's own tooltip, saying why ([`explain_availability`]), comes
+    // first.
+    row.set_has_tooltip(true);
+    row.connect_query_tooltip(|row, _, _, _, tooltip| {
+        if row.tooltip_text().is_some() {
+            return false;
+        }
+        let Some(label) = cut_short_label(row) else {
+            return false;
+        };
+        tooltip.set_text(Some(&label));
+        true
+    });
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

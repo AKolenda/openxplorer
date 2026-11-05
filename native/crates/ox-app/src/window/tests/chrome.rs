@@ -203,6 +203,33 @@ fn the_more_menu_items_work_and_show_no_tooltip_repeating_their_name() {
     more_button.popdown();
 }
 
+/// A row whose label the menu cuts short shows its whole label as a
+/// tooltip, which then adds what the row cannot show; a row shown whole
+/// shows none.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn a_menu_row_cut_short_shows_its_whole_label_as_a_tooltip() {
+    use crate::icons::Icon;
+    use crate::window::menu_popover::{row_tooltip, MenuItem};
+    use crate::window::window_action::WindowAction;
+
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let more_button = menu_button_with_class(&test, "more-command");
+    let more = app_menu(&more_button);
+    let long = format!("{}final", "Quarterly planning notes ".repeat(30));
+    more.set_entries(vec![
+        MenuItem::new(&long, Icon::Document, WindowAction::SelectAll).into(),
+        MenuItem::new("Select all", Icon::Document, WindowAction::SelectAll).into(),
+    ]);
+    more_button.popup();
+    wait_for_frames(&test.window, 3);
+    assert_eq!(row_tooltip(&more.row(&long)), Some(long.clone()));
+    assert_eq!(row_tooltip(&more.row("Select all")), None);
+    more_button.popdown();
+}
+
 /// A new window on a landing page has no file list to focus; GTK's first
 /// focusable widget was a crumb, which drew the address bar's editing
 /// line.
