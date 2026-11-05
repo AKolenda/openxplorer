@@ -1,19 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The details pane: the selection's properties.
+//! The details pane, laid out as Windows 11 Explorer's Details pane
+//! (View > Show > Details pane, Alt+Shift+P; PROP-009).
 //!
-//! Ports `renderDetails` in `v2.0.0:desktop/ui/app.js`, laid out as §4.8 of
-//! `native/docs/ui-spec.md`: a header with a close button, a preview, the
-//! name and type, an Open or "Pin to Quick access" button, a Properties
-//! grid and a note. What the pane says is computed by [`pane_content`]
-//! ([`content`]); this module draws it.
+//! From top to bottom: a large preview of the selection (the picture
+//! itself for a photo, a document's thumbnail, a player for a recording,
+//! else the large icon), its small icon and name, the Share button, a
+//! "Details" heading over the name and value rows, and the Properties
+//! button. What the pane says is computed by [`pane_content`]
+//! ([`content`]); a photo's, video's or audio file's own rows are read by
+//! Properties' metadata reader ([`metadata`]) without holding up the
+//! rest; the content preview is [`media`]. This module draws it.
 //!
 //! [`DetailsPane`] is a widget subclass whose static tree is the template
 //! `resources/ui/details-pane.ui`. This module adds what a template cannot
 //! express: the glyphs, the window actions of the buttons and the
-//! Properties rows, one per property shown.
+//! Details rows, one per property shown.
 
 mod content;
 mod media;
+mod metadata;
 mod options_menu;
 
 use gtk::glib;
@@ -28,30 +33,32 @@ use crate::icons::{self, Art, Icon};
 use super::window_action::WindowAction;
 
 pub(super) use content::{pane_content, PaneFacts};
-use content::{PaneAction, PaneContent, Preview, Property};
+use content::{PaneContent, Preview};
 
 /// Width of the pane (`.details` in `v2.0.0:desktop/ui/style.css`).
 pub(super) const PANE_WIDTH: i32 = 262;
 
-/// Preview size in the pane: app.js draws `fileIcon(e, 84)` and
-/// `.detail-preview svg` shows it at 83 pixels.
-const PREVIEW_SIZE: i32 = 83;
+/// The large icon of the preview, when there is no picture of the
+/// content: Windows shows its jumbo icon there.
+const PREVIEW_SIZE: i32 = 96;
 
 /// The copy glyph that stands for several selected items.
 const SEVERAL_ITEMS_GLYPH: i32 = 80;
 
-/// The glyphs in the pane's buttons and note.
-const SMALL_GLYPH: i32 = 14;
+/// The small icon beside the name.
+const SMALL_ART: i32 = 20;
 
-/// The glyph of the header's close button.
+/// The glyphs in the pane's buttons.
+const SMALL_GLYPH: i32 = 16;
+
+/// The glyph of the close button.
 const CLOSE_GLYPH: i32 = 12;
 
-/// The width of the Properties names column
-/// (`.detail-props{grid-template-columns:73px minmax(0,1fr)}`).
-const PROPERTY_NAME_WIDTH: i32 = 73;
-/// The Properties column of the names.
+/// The width of the names column, so every value starts at one line.
+const PROPERTY_NAME_WIDTH: i32 = 88;
+/// The Details column of the names.
 const NAME_COLUMN: i32 = 0;
-/// The Properties column of the values.
+/// The Details column of the values.
 const VALUE_COLUMN: i32 = 1;
 
 mod imp {
@@ -75,7 +82,7 @@ mod imp {
         /// `dispose_template` unparents it with the pane.
         #[template_child]
         pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
-        /// The header's close button.
+        /// The close button above the preview.
         #[template_child]
         pub(super) close_button: TemplateChild<gtk::Button>,
         /// The art or glyph at the top.
@@ -85,49 +92,42 @@ mod imp {
         /// (PROP-011).
         #[template_child]
         pub(super) preview_area: TemplateChild<gtk::CenterBox>,
-        /// The item's or folder's name.
+        /// The small icon beside the name.
+        #[template_child]
+        pub(super) small_art: TemplateChild<ArtImage>,
+        /// The item's name, "N items selected" or "N items".
         #[template_child]
         pub(super) name: TemplateChild<gtk::Label>,
-        /// The type line under the name.
+        /// Shares the selected files (win.share).
         #[template_child]
-        pub(super) kind: TemplateChild<gtk::Label>,
-        /// Opens the one selected item.
+        pub(super) share_button: TemplateChild<gtk::Button>,
+        /// The glyph of [`Self::share_button`].
         #[template_child]
-        pub(super) open_button: TemplateChild<gtk::Button>,
-        /// The glyph beside "Open".
-        #[template_child]
-        pub(super) open_glyph: TemplateChild<gtk::Image>,
-        /// Pins the one selected folder.
-        #[template_child]
-        pub(super) pin_item_button: TemplateChild<gtk::Button>,
-        /// The glyph of [`Self::pin_item_button`].
-        #[template_child]
-        pub(super) pin_item_glyph: TemplateChild<gtk::Image>,
-        /// Pins the folder the tab shows.
-        #[template_child]
-        pub(super) pin_folder_button: TemplateChild<gtk::Button>,
-        /// The glyph of [`Self::pin_folder_button`].
-        #[template_child]
-        pub(super) pin_folder_glyph: TemplateChild<gtk::Image>,
-        /// The Properties grid.
+        pub(super) share_glyph: TemplateChild<gtk::Image>,
+        /// The Details rows.
         #[template_child]
         pub(super) properties: TemplateChild<gtk::Grid>,
-        /// The info glyph before the note.
+        /// Opens Properties (win.properties).
         #[template_child]
-        pub(super) note_glyph: TemplateChild<gtk::Image>,
-        /// The note's row, its glyph included, shown only with a note.
+        pub(super) properties_button: TemplateChild<gtk::Button>,
+        /// The glyph of [`Self::properties_button`].
         #[template_child]
-        pub(super) note_row: TemplateChild<gtk::Box>,
-        /// The note at the bottom.
-        #[template_child]
-        pub(super) note: TemplateChild<gtk::Label>,
+        pub(super) properties_glyph: TemplateChild<gtk::Image>,
+        /// The desktop can share: the window offers Share.
+        pub(super) share_offered: Cell<bool>,
+        /// Some item is selected, which Share would share.
+        pub(super) has_selection: Cell<bool>,
+        /// The file rows of the content shown.
+        pub(super) base_rows: RefCell<Vec<super::content::Property>>,
+        /// The selected file's own details, read by the reader.
+        pub(super) metadata: super::metadata::MetadataState,
         /// Counts the content shown, so a preview read for an earlier
         /// selection is dropped.
         pub(super) media_generation: Cell<u64>,
         /// The content preview shown, which a redraw for the same item
         /// keeps (PROP-011).
         pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
-        /// The Properties rows the preview added: Dimensions, Length.
+        /// The Details rows the preview added: Dimensions, Length.
         pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
         /// The pane's options, as saved (PROP-010).
         pub(super) options: RefCell<DetailsPaneOptions>,
@@ -202,10 +202,8 @@ impl DetailsPane {
         let imp = self.imp();
         let close = icons::image(Icon::Dismiss16, CLOSE_GLYPH);
         imp.close_button.set_child(Some(&close));
-        icons::set_icon(&imp.open_glyph, Icon::Open, SMALL_GLYPH);
-        icons::set_icon(&imp.pin_item_glyph, Icon::Pin, SMALL_GLYPH);
-        icons::set_icon(&imp.pin_folder_glyph, Icon::Pin, SMALL_GLYPH);
-        icons::set_icon(&imp.note_glyph, Icon::Info, SMALL_GLYPH);
+        icons::set_icon(&imp.share_glyph, Icon::Share, SMALL_GLYPH);
+        icons::set_icon(&imp.properties_glyph, Icon::Info, SMALL_GLYPH);
     }
 
     /// Gives each button its window action; the close button switches the
@@ -213,14 +211,16 @@ impl DetailsPane {
     fn bind_actions(&self) {
         let imp = self.imp();
         WindowAction::DetailsPane.assign_to(&*imp.close_button);
-        WindowAction::Open.assign_to(&*imp.open_button);
-        WindowAction::PinSelected.assign_to(&*imp.pin_item_button);
-        WindowAction::PinFolder.assign_to(&*imp.pin_folder_button);
+        WindowAction::Share.assign_to(&*imp.share_button);
+        WindowAction::Properties.assign_to(&*imp.properties_button);
     }
 
     /// Shows the folder art a pane shows before its first [`Self::set_content`].
     fn show_placeholder(&self) {
-        self.imp().preview.set_art(Art::Folder, PREVIEW_SIZE);
+        let imp = self.imp();
+        imp.preview.set_art(Art::Folder, PREVIEW_SIZE);
+        imp.small_art.set_art(Art::Folder, SMALL_ART);
+        imp.share_button.set_visible(false);
     }
 
     /// Makes the pane `width` pixels wide ([`PANE_WIDTH`], or less in a
@@ -274,40 +274,62 @@ impl DetailsPane {
             Preview::Art(art) => imp.preview.set_art(art, PREVIEW_SIZE),
             Preview::Several => imp.preview.set_art(Art::Glyph(Icon::Copy), SEVERAL_ITEMS_GLYPH),
         }
+        imp.small_art.set_art(content.preview.art(), SMALL_ART);
         imp.name.set_text(&content.name);
-        imp.kind.set_text(&content.kind);
-        self.show_buttons(content.action);
-        self.show_properties(&content.properties);
-        imp.note.set_text(content.note);
-        imp.note_row.set_visible(!content.note.is_empty());
+        imp.has_selection.set(content.has_selection);
+        self.show_share();
+        imp.properties_button.set_visible(content.has_properties);
+        imp.base_rows.replace(content.properties.clone());
+        self.follow_metadata(content.metadata.as_ref());
+        self.redraw_properties();
         self.show_media(content.media.as_ref());
     }
 
-    /// Shows the buttons `action` offers and hides the others.
-    fn show_buttons(&self, action: PaneAction) {
-        let imp = self.imp();
-        let offers_open = matches!(action, PaneAction::Open { .. });
-        let offers_item_pin = action == PaneAction::Open { can_pin: true };
-        let offers_folder_pin = action == PaneAction::PinFolder;
-        imp.open_button.set_visible(offers_open);
-        imp.pin_item_button.set_visible(offers_item_pin);
-        imp.pin_folder_button.set_visible(offers_folder_pin);
+    /// Shows Share where the desktop can share (the window's command bar
+    /// offers it then too, CMD-037), for a selection; the window's
+    /// `win.share` enables it for files it can attach.
+    pub(super) fn offer_share(&self, offered: bool) {
+        self.imp().share_offered.set(offered);
+        self.show_share();
     }
 
-    fn show_properties(&self, properties: &[Property]) {
-        let grid = &*self.imp().properties;
+    fn show_share(&self) {
+        let imp = self.imp();
+        imp.share_button
+            .set_visible(imp.share_offered.get() && imp.has_selection.get());
+    }
+
+    /// Draws the Details rows again: the file rows, then the rows the
+    /// reader found, then those the preview found (an image's Dimensions,
+    /// a recording's Length) that the reader did not give.
+    pub(super) fn redraw_properties(&self) {
+        let imp = self.imp();
+        let grid = &*imp.properties;
         while let Some(child) = grid.first_child() {
             grid.remove(&child);
         }
-        for property in properties {
-            self.add_property(property.name, &property.value);
+        let mut shown: Vec<&str> = Vec::new();
+        for property in imp.base_rows.borrow().iter() {
+            self.add_property(property.key, &property.name, &property.value);
+            shown.push(property.key);
+        }
+        for (key, name, value) in imp.metadata.rows() {
+            if !shown.contains(&key) {
+                self.add_property(key, &name, &value);
+                shown.push(key);
+            }
+        }
+        for (key, value) in imp.media_rows.borrow().iter() {
+            if !shown.contains(key) {
+                self.add_property(key, ox_core::i18n::gettext_static(key), value);
+            }
         }
     }
 
     /// Adds the row `name` with `value` under the others, unless the
-    /// user turned the field off.
-    fn add_property(&self, name: &str, value: &str) {
-        if !self.imp().options.borrow().shows(name) {
+    /// user turned off the field `key`.
+    fn add_property(&self, key: &str, name: &str, value: &str) {
+        if !self.imp().options.borrow().shows(key) {
             return;
         }
         let grid = &*self.imp().properties;
@@ -315,14 +337,26 @@ impl DetailsPane {
         while grid.child_at(NAME_COLUMN, row).is_some() {
             row += 1;
         }
-        grid.attach(&property_name(name), NAME_COLUMN, row, 1, 1);
-        grid.attach(&property_value(value), VALUE_COLUMN, row, 1, 1);
+        let name_label = property_name(name);
+        let value_label = property_value(value);
+        value_label.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::format_message(
+            "{name}: {value}",
+            &[("name", name), ("value", value)],
+        ))]);
+        grid.attach(&name_label, NAME_COLUMN, row, 1, 1);
+        grid.attach(&value_label, VALUE_COLUMN, row, 1, 1);
     }
 
     /// The name shown under the preview, for tests.
     #[cfg(test)]
     pub(super) fn shown_name(&self) -> String {
         self.imp().name.text().to_string()
+    }
+
+    /// Whether Share shows in the pane, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_share(&self) -> bool {
+        self.imp().share_button.is_visible()
     }
 
     /// The property rows shown, top to bottom, for tests.
@@ -349,7 +383,7 @@ impl DetailsPane {
     }
 }
 
-/// A Properties row as the pane shows it, for tests.
+/// A Details row as the pane shows it, for tests.
 #[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ShownProperty {
@@ -359,7 +393,7 @@ pub(super) struct ShownProperty {
     pub(super) value: String,
 }
 
-/// A wrapping Properties label. Its natural width is a few words, so a
+/// A wrapping Details label. Its natural width is a few words, so a
 /// long path wraps inside the pane instead of widening it.
 fn property_label(text: &str, css_class: &str) -> gtk::Label {
     gtk::Label::builder()

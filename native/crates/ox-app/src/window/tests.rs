@@ -19,6 +19,7 @@ mod closing;
 mod command_bar;
 mod compact_density;
 mod context_menus;
+mod details_pane;
 mod details_preview;
 mod details_tab;
 mod devices;

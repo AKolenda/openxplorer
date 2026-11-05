@@ -25,9 +25,11 @@ use crate::icons::{Art, ArtImage};
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 /// The art above the controls of an audio file.
 const AUDIO_ART_SIZE: i32 = 64;
-/// The largest picture or player the preview area holds.
-const PREVIEW_WIDTH: i32 = 220;
-const PREVIEW_HEIGHT: i32 = 146;
+/// The largest picture or player the preview area holds: the width of
+/// the widest pane inside its padding, and a height that leaves room for
+/// the Details rows, as Windows' pane does.
+const PREVIEW_WIDTH: i32 = 216;
+const PREVIEW_HEIGHT: i32 = 180;
 
 impl DetailsPane {
     /// Shows `media` in the preview area, or the item's art without one.
@@ -38,14 +40,14 @@ impl DetailsPane {
         let imp = self.imp();
         let media = media.filter(|_| self.is_visible());
         if imp.shown_media.borrow().as_ref() == media {
-            // The Properties rows were drawn again without the media's.
-            for (name, value) in imp.media_rows.borrow().iter() {
-                self.add_property(name, value);
-            }
+            // The rows it found stay with the Details rows.
             return;
         }
         imp.shown_media.replace(media.cloned());
-        imp.media_rows.borrow_mut().clear();
+        if !imp.media_rows.borrow().is_empty() {
+            imp.media_rows.borrow_mut().clear();
+            self.redraw_properties();
+        }
         let generation = imp.media_generation.get().wrapping_add(1);
         imp.media_generation.set(generation);
         self.set_preview_widget(None);
@@ -98,7 +100,11 @@ impl DetailsPane {
             }
             let picture = gtk::Picture::for_paintable(&texture);
             picture.set_content_fit(gtk::ContentFit::Contain);
-            picture.set_size_request(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+            // As wide as the pane allows, which is narrower in a narrow
+            // window: the picture shrinks with it, never widening it.
+            picture.set_can_shrink(true);
+            picture.set_hexpand(true);
+            picture.set_size_request(-1, preview_height(texture.width(), texture.height()));
             picture.add_css_class("detail-picture");
             picture.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
                 "Preview",
@@ -122,13 +128,14 @@ impl DetailsPane {
         let stream = gtk::MediaFile::for_filename(path);
         let player: gtk::Widget = if is_video {
             let video = gtk::Video::builder().media_stream(&stream).build();
-            video.set_size_request(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+            video.set_hexpand(true);
+            video.set_size_request(-1, PREVIEW_HEIGHT);
             video.upcast()
         } else {
             let column = gtk::Box::new(gtk::Orientation::Vertical, 6);
             column.append(&ArtImage::new(art, AUDIO_ART_SIZE));
             column.append(&gtk::MediaControls::new(Some(&stream)));
-            column.set_size_request(PREVIEW_WIDTH, -1);
+            column.set_hexpand(true);
             column.upcast()
         };
         self.set_preview_widget(Some(&player));
@@ -151,11 +158,11 @@ impl DetailsPane {
 }
 
 impl DetailsPane {
-    /// Adds the row `name` that the media shown says, and keeps it for
-    /// when the rows are drawn again.
+    /// Adds the row `name` that the media shown says, unless the reader
+    /// gave it already, and keeps it for when the rows are drawn again.
     fn add_media_property(&self, name: &'static str, value: String) {
-        self.add_property(name, &value);
         self.imp().media_rows.borrow_mut().push((name, value));
+        self.redraw_properties();
     }
 }
 
@@ -169,6 +176,17 @@ fn cached_thumbnail(uri: &str) -> Option<PathBuf> {
         )
         .ok()?;
     thumbnail_path(&info)
+}
+
+/// The height of a picture `width` by `height` pixels shown as wide as
+/// the preview allows, at most [`PREVIEW_HEIGHT`]: a wide photo takes no
+/// more room than it needs, as in Windows' pane.
+fn preview_height(width: i32, height: i32) -> i32 {
+    if width <= 0 || height <= 0 {
+        return PREVIEW_HEIGHT;
+    }
+    let scaled = i64::from(PREVIEW_WIDTH) * i64::from(height) / i64::from(width);
+    i32::try_from(scaled.clamp(1, i64::from(PREVIEW_HEIGHT))).unwrap_or(PREVIEW_HEIGHT)
 }
 
 /// A length in microseconds as `1:02:03` or `2:03`.
@@ -185,6 +203,14 @@ fn length_text(micros: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_picture_is_as_tall_as_its_shape_needs() {
+        assert_eq!(preview_height(4000, 3000), 162);
+        assert_eq!(preview_height(320, 200), 135);
+        assert_eq!(preview_height(1000, 3000), PREVIEW_HEIGHT, "a tall picture is held");
+        assert_eq!(preview_height(0, 0), PREVIEW_HEIGHT);
+    }
 
     #[test]
     fn a_length_reads_as_a_clock() {
