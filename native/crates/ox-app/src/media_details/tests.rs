@@ -532,6 +532,64 @@ fn stopping_ends_a_running_reader() {
     );
 }
 
+/// A date with bytes that are not UTF-8, which the reader turns into
+/// replacement characters, is refused instead of stopping the reader.
+///
+/// parity: PROP-034
+#[test]
+fn a_date_with_broken_bytes_is_refused() {
+    let broken_bytes: [&[u8]; 3] = [
+        b"2026\xff05:01 18:42:07",
+        b"2026:05:0\xff 18:42",
+        b"\xff\xfe\xfd\xfc\xfb\xfa\xf9",
+    ];
+    for bytes in broken_bytes {
+        let text = String::from_utf8_lossy(bytes);
+        assert_eq!(NaiveDateTime::parse_exif(&text), None, "{text}");
+    }
+    // 19 bytes, the length of a date, with a character of two or three
+    // bytes over a separator's place.
+    for text in [
+        "2026\u{e9}5:01 18:42:07",
+        "202\u{fffd}05:01 18:42:0",
+        "2026:05:01\u{e9}18:42:0",
+    ] {
+        assert_eq!(text.len(), 19, "{text}");
+        assert_eq!(NaiveDateTime::parse_exif(text), None, "{text}");
+    }
+}
+
+/// A photo whose date has a broken byte keeps its other rows.
+///
+/// parity: PROP-034
+#[test]
+fn a_broken_date_keeps_the_photos_other_rows() {
+    let field = |tag, value| Field {
+        tag,
+        ifd_num: In::PRIMARY,
+        value,
+    };
+    let fields = [
+        field(Tag::Model, Value::Ascii(vec![b"FO-100".to_vec()])),
+        field(
+            Tag::DateTimeOriginal,
+            Value::Ascii(vec![b"202\xe2\x8205:01 18:42:0".to_vec()]),
+        ),
+    ];
+    let mut writer = Writer::new();
+    for field in &fields {
+        writer.push_field(field);
+    }
+    let mut tiff = std::io::Cursor::new(Vec::new());
+    writer.write(&mut tiff, true).expect("the EXIF");
+    let mut details = MediaDetails::default();
+
+    picture::read_picture(&jpeg_with_exif(16, 16, &tiff.into_inner()), &mut details);
+
+    assert_eq!(details.camera_model.as_deref(), Some("FO-100"));
+    assert_eq!(details.date_taken, None);
+}
+
 /// The reader process runs only for its own first argument.
 #[test]
 fn only_the_reader_flag_starts_the_reader() {

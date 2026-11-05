@@ -89,13 +89,22 @@ pub(crate) struct NaiveDateTime {
 impl NaiveDateTime {
     /// `2026:05:01 10:30:00`, as EXIF writes a date.
     pub(crate) fn parse_exif(text: &str) -> Option<Self> {
-        let text = text.trim();
-        let number = |range: std::ops::Range<usize>| text.get(range)?.parse::<i32>().ok();
-        let separators = [(4, ':'), (7, ':'), (10, ' '), (13, ':'), (16, ':')];
+        // Read as bytes: a broken byte the reader turned into a
+        // replacement character must never be sliced through.
+        let text = text.trim().as_bytes();
+        let number = |range: std::ops::Range<usize>| {
+            let digits = text.get(range)?;
+            digits
+                .iter()
+                .all(u8::is_ascii_digit)
+                .then(|| std::str::from_utf8(digits).ok()?.parse::<i32>().ok())
+                .flatten()
+        };
+        let separators = [(4, b':'), (7, b':'), (10, b' '), (13, b':'), (16, b':')];
         let well_formed = text.len() == 19
             && separators
                 .iter()
-                .all(|(at, separator)| text[*at..].starts_with(*separator));
+                .all(|(at, separator)| text.get(*at) == Some(separator));
         if !well_formed {
             return None;
         }
