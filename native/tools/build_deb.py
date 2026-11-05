@@ -80,6 +80,10 @@ RECOMMENDS = (
     # The Email portal backend that Share uses on GNOME; KDE Plasma's own
     # portal backend has Email too.
     'xdg-desktop-portal-gtk',
+    # GStreamer's plug-ins, which read videos and audio files for the
+    # Details tab of Properties.
+    'gstreamer1.0-plugins-base',
+    'gstreamer1.0-plugins-good',
     # pkexec, which asks for the administrator before an in-app update and
     # before the permanent-delete helper deletes a folder under admin://.
     'pkexec',

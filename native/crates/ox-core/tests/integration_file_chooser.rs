@@ -1528,6 +1528,38 @@ fn the_portal_gets_the_users_choice() {
     assert_eq!(uris, ["file:///tmp/one", "file:///tmp/two"]);
 }
 
+/// Dropping the backend while a call still waits for its answer stops
+/// the dispatch thread cleanly: what waits there is dropped on that
+/// thread, never on the thread that dropped the backend, which `GLib`
+/// 2.86 and later report as a critical (`g_source_get_context` on a
+/// destroyed source) and which aborted the tests on Arch Linux and
+/// openSUSE Tumbleweed at random.
+#[test]
+fn dropping_the_backend_with_a_call_waiting_stops_cleanly() {
+    for round in 0..20 {
+        let fixture = ServiceFixture::new();
+        let pending = fixture.start_call(
+            &fixture.frontend,
+            "OpenFile",
+            &format!("/org/freedesktop/portal/desktop/request/1_1/t{round}"),
+            &options_from_entries(&[]),
+        );
+        let _reply = fixture.context.spawn_local(pending);
+        fixture.run_until("the call", || !fixture.received.borrow().is_empty());
+        let unanswered = fixture.received.borrow_mut().remove(0);
+
+        let ServiceFixture {
+            context,
+            _service: service,
+            ..
+        } = fixture;
+        context
+            .with_thread_default(|| drop(service))
+            .expect("the context is free");
+        drop(unanswered);
+    }
+}
+
 /// The calling application is named for the folder its dialogs
 /// remember: by the portal's application ID, else, for an unsandboxed
 /// program the portal could not name, by the program's file name, found

@@ -24,7 +24,10 @@
 //! `object_ref` on a finalized object. Keeping one reference to each icon
 //! the app shows means its last reference is never dropped, on any
 //! thread. The bundle is about a hundred small files, at the few sizes
-//! the skin uses.
+//! the skin uses. The icons are kept at every scale the display's
+//! monitors use, and looked up again when the icon theme changes or a
+//! monitor is added or rescaled, since images then look their icons up
+//! afresh without the app setting them again.
 //!
 //! Icons are hidden from assistive technology, as app.js marks every icon
 //! `aria-hidden`: the button, row, tab or card around an icon names it.
@@ -38,11 +41,11 @@ mod icon;
 mod tint;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Once;
 
-use gtk::gdk;
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
 pub(crate) use art::{Art, Connection, Storage};
 pub(crate) use art_image::ArtImage;
@@ -111,48 +114,159 @@ pub(crate) fn set_icon(image: &gtk::Image, icon: Icon, size: i32) {
     keep_loaded(image, icon, size);
 }
 
-/// What the icon theme caches an icon under, as a `gtk::Image` looks it
-/// up: its name, edge, scale and text direction, on one display.
-type CacheKey = (String, &'static str, i32, i32, bool);
+/// The scale a window can draw at before it knows its monitor's, on X11
+/// and on Wayland compositors without buffer scales, so icons are kept at
+/// it too. Every other scale is a monitor's: GTK rounds a fractional
+/// scale up, as the monitor reports it. Keeping 2 and 3 everywhere would
+/// load four and nine times the pixels of each icon on screens that never
+/// use them.
+const FIRST_SCALE: i32 = 1;
 
-thread_local! {
-    /// One reference to every icon [`keep_loaded`] was asked for.
-    static KEPT: RefCell<HashMap<CacheKey, gtk::IconPaintable>> = RefCell::new(HashMap::new());
+/// An icon as an image shows it, apart from the scale: its name, edge and
+/// whether the text runs right to left.
+type Shown = (&'static str, i32, bool);
+
+/// What the icon theme caches an icon under: [`Shown`] and the scale.
+type CacheKey = (&'static str, i32, bool, i32);
+
+/// One reference to every icon shown on one display, at every scale its
+/// monitors use and the [`FIRST_SCALE`].
+#[derive(Default)]
+struct KeptIcons {
+    /// What the display's images show.
+    shown: HashSet<Shown>,
+    /// The scales the icons are kept at.
+    scales: Vec<i32>,
+    /// The icon theme's cached icon for each key.
+    icons: HashMap<CacheKey, gtk::IconPaintable>,
 }
 
-/// Keeps `icon` at `size` loaded for good, at every scale of `image`'s
-/// display, as `image` will look it up: a `gtk::Image` showing an icon
-/// name asks the theme with a themed icon of that name and
-/// [`gtk::IconLookupFlags::PRELOAD`]. So the icon theme's cached icon is
-/// never finalized (see the module documentation). Each call looks the
-/// icon up again, a hit in the theme's cache, so an icon kept before a
-/// change of icon theme is replaced by the new theme's. Only the main
-/// thread calls it, as GTK does.
-pub(crate) fn keep_loaded(image: &impl IsA<gtk::Widget>, icon: Icon, size: i32) {
-    let display = image.as_ref().display();
-    let direction = image.as_ref().direction();
-    let is_rtl = direction == gtk::TextDirection::Rtl;
-    let theme = gtk::IconTheme::for_display(&display);
+impl KeptIcons {
+    /// Looks `shown` up at `scale` as a `gtk::Image` does: a themed icon
+    /// of its name, with [`gtk::IconLookupFlags::PRELOAD`]. A hit in the
+    /// theme's cache, which a change of icon theme empties: the icon kept
+    /// before is then replaced by the new theme's.
+    fn keep(&mut self, theme: &gtk::IconTheme, shown: Shown, scale: i32) {
+        let (name, size, is_rtl) = shown;
+        let direction = if is_rtl {
+            gtk::TextDirection::Rtl
+        } else {
+            gtk::TextDirection::Ltr
+        };
+        let themed = gio::ThemedIcon::new(name);
+        let icon = theme.lookup_by_gicon(&themed, size, scale, direction, gtk::IconLookupFlags::PRELOAD);
+        self.icons.insert((name, size, is_rtl, scale), icon);
+    }
+
+    /// Looks every shown icon up again at the display's current scales.
+    fn refresh(&mut self, display: &gdk::Display) {
+        let theme = gtk::IconTheme::for_display(display);
+        self.scales = scales_of(display);
+        let shown: Vec<Shown> = self.shown.iter().copied().collect();
+        for shown in shown {
+            for scale in self.scales.clone() {
+                self.keep(&theme, shown, scale);
+            }
+        }
+    }
+
+    /// Keeps the icons of `display` up to date: after a change of icon
+    /// theme, which empties GTK's cache before the images look their
+    /// icons up again (the theme's `changed` signal comes first), and
+    /// when a monitor is added or changes its scale.
+    fn follow(display: &gdk::Display) {
+        let theme = gtk::IconTheme::for_display(display);
+        theme.connect_changed(glib::clone!(
+            #[weak]
+            display,
+            move |_| refresh_kept(&display)
+        ));
+        let monitors = display.monitors();
+        for monitor in monitors.iter::<gdk::Monitor>().filter_map(Result::ok) {
+            follow_scale(display, &monitor);
+        }
+        monitors.connect_items_changed(glib::clone!(
+            #[weak]
+            display,
+            move |monitors, position, _removed, added| {
+                for index in position..position + added {
+                    if let Some(monitor) = monitors.item(index).and_downcast::<gdk::Monitor>() {
+                        follow_scale(&display, &monitor);
+                    }
+                }
+                refresh_kept(&display);
+            }
+        ));
+    }
+}
+
+/// Keeps the icons of `display` at `monitor`'s scale when it changes.
+fn follow_scale(display: &gdk::Display, monitor: &gdk::Monitor) {
+    monitor.connect_scale_factor_notify(glib::clone!(
+        #[weak]
+        display,
+        move |_| refresh_kept(&display)
+    ));
+}
+
+/// The scales to keep icons at on `display`: the [`FIRST_SCALE`] and
+/// every monitor's.
+fn scales_of(display: &gdk::Display) -> Vec<i32> {
     let mut scales: Vec<i32> = display
         .monitors()
         .iter::<gdk::Monitor>()
         .filter_map(Result::ok)
         .map(|monitor| monitor.scale_factor())
+        .chain([FIRST_SCALE])
         .collect();
-    scales.push(1);
     scales.sort_unstable();
     scales.dedup();
-    let themed = gio::ThemedIcon::new(icon.name());
+    scales
+}
+
+thread_local! {
+    /// The kept icons of each display, by its name.
+    static KEPT: RefCell<HashMap<String, KeptIcons>> = RefCell::new(HashMap::new());
+}
+
+/// Looks the kept icons of `display` up again.
+fn refresh_kept(display: &gdk::Display) {
     KEPT.with_borrow_mut(|kept| {
-        for scale in scales {
-            let key = (display.name().to_string(), icon.name(), size, scale, is_rtl);
-            // A hit in the theme's cache, which a change of icon theme
-            // empties: the icon kept before is then replaced.
-            let cached =
-                theme.lookup_by_gicon(&themed, size, scale, direction, gtk::IconLookupFlags::PRELOAD);
-            kept.insert(key, cached);
+        if let Some(icons) = kept.get_mut(display.name().as_str()) {
+            icons.refresh(display);
         }
     });
+}
+
+/// Keeps `icon` at `size` loaded for good, at every scale `image`'s
+/// display may use, as `image` will look it up, so the icon theme's
+/// cached icon is never finalized (see the module documentation). The
+/// icon stays kept after a change of icon theme and when a monitor is
+/// added or rescaled. Only the main thread calls it, as GTK does.
+pub(crate) fn keep_loaded(image: &impl IsA<gtk::Widget>, icon: Icon, size: i32) {
+    let display = image.as_ref().display();
+    let is_rtl = image.as_ref().direction() == gtk::TextDirection::Rtl;
+    let shown: Shown = (icon.name(), size, is_rtl);
+    let theme = gtk::IconTheme::for_display(&display);
+    let is_new_display = KEPT.with_borrow_mut(|kept| {
+        let name = display.name().to_string();
+        let is_new = !kept.contains_key(&name);
+        let icons = kept.entry(name).or_insert_with(|| KeptIcons {
+            scales: scales_of(&display),
+            ..KeptIcons::default()
+        });
+        icons.shown.insert(shown);
+        // Looked up again on every call, cheap hits in the theme's cache:
+        // a lookup can empty the cache itself, when it finds the theme's
+        // folders changed, before the theme's `changed` signal comes.
+        for scale in icons.scales.clone() {
+            icons.keep(&theme, shown, scale);
+        }
+        is_new
+    });
+    if is_new_display {
+        KeptIcons::follow(&display);
+    }
 }
 
 #[cfg(test)]
@@ -272,6 +386,55 @@ mod tests {
 
         let kept = cached.upgrade().expect("the icon is still loaded");
         assert_eq!(looked_up(), kept, "the theme hands out the kept icon");
+    }
+
+    /// Pushes far more distinct icons through the theme's cache of
+    /// recent ones than it holds, and gives GTK's loading threads time to
+    /// finish and let go.
+    fn flood_the_cache(theme: &gtk::IconTheme) {
+        for icon in ALL_ICONS {
+            for size in [10, 11, 12, 13] {
+                drop(look_up(theme, icon, size));
+            }
+        }
+        for _ in 0..20 {
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(10));
+        }
+    }
+
+    /// The folder icon at 16 pixels and `scale`, as a `gtk::Image` showing
+    /// it looks it up.
+    fn shown_folder(theme: &gtk::IconTheme, scale: i32) -> gtk::IconPaintable {
+        theme.lookup_by_gicon(
+            &gio::ThemedIcon::new(Icon::FileFolder.name()),
+            16,
+            scale,
+            gtk::Widget::default_direction(),
+            gtk::IconLookupFlags::PRELOAD,
+        )
+    }
+
+    /// A change of icon theme empties GTK's cache, and the images on
+    /// screen then look their icons up afresh, without the app setting
+    /// them again: the fresh icons are kept too.
+    #[gtk::test]
+    fn a_shown_icon_stays_loaded_after_the_icon_theme_changes() {
+        let theme = registered_theme();
+        let image = image(Icon::FileFolder, 16);
+        // The same folders again: GTK treats it as a change of theme and
+        // empties its cache, and nothing else changes for later tests.
+        let search_path = theme.search_path();
+        theme.set_search_path(&search_path.iter().map(PathBuf::as_path).collect::<Vec<_>>());
+        crate::test_support::harness::settle();
+
+        let fresh = shown_folder(&theme, 1);
+        let cached = fresh.downgrade();
+        drop(fresh);
+        flood_the_cache(&theme);
+
+        let kept = cached.upgrade().expect("the fresh icon is still loaded");
+        assert_eq!(shown_folder(&theme, 1), kept, "the theme hands out the kept icon");
+        drop(image);
     }
 
     #[gtk::test]

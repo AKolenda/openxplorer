@@ -14,9 +14,9 @@ Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with ta
 
 ## Install
 
-Version **2.0.13** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.13 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
+Version **2.0.14** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.14 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
 
-- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.13_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
+- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.14_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
 - **Fedora, openSUSE Tumbleweed, Arch Linux:** the `.rpm` or `.pkg.tar.zst` of the release, when the release lists one.
 - **Any distribution with Flatpak**, including Debian 12 and others with GTK older than 4.14: `io.winspace.Development.flatpak`.
 
@@ -24,7 +24,7 @@ Follow the [installation guide](docs/installation.md), and finish file operation
 
 ## Develop
 
-The app lives in `native/` (Rust, GTK 4, GIO/GVfs); see [native/README.md](native/README.md). It needs Rust 1.92 or newer and the GTK 4.14+, SQLite and libsoup 3 development packages (`libgtk-4-dev libsqlite3-dev libsoup-3.0-dev` on Ubuntu and Debian):
+The app lives in `native/` (Rust, GTK 4, GIO/GVfs); see [native/README.md](native/README.md). It needs Rust 1.92 or newer and the GTK 4.14+, SQLite, libsoup 3 and GStreamer development packages (`libgtk-4-dev libsqlite3-dev libsoup-3.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev` on Ubuntu and Debian):
 
 ```sh
 cargo build --release --locked --manifest-path native/Cargo.toml

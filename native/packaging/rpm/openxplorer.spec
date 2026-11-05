@@ -21,13 +21,14 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.13
+Version:        2.0.14
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
-# Apache-2.0 or both, and their licences are installed beside it
+# Apache-2.0 or both, and BSD-2-Clause for the EXIF reader (kamadak-exif
+# and mutate_once), and their licences are installed beside it
 # (rust-crates/INDEX.txt).
-License:        AGPL-3.0-only AND MIT AND Apache-2.0
+License:        AGPL-3.0-only AND MIT AND Apache-2.0 AND BSD-2-Clause
 URL:            https://openxplorer.app
 Source0:        openxplorer-%{version}.tar.gz
 Source1:        openxplorer-%{version}-vendor.tar.gz
@@ -37,6 +38,7 @@ BuildRequires:  rust >= 1.92
 BuildRequires:  pkgconfig(gtk4) >= 4.14
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(libsoup-3.0)
+BuildRequires:  pkgconfig(gstreamer-pbutils-1.0)
 BuildRequires:  /usr/bin/glib-compile-resources
 BuildRequires:  python3
 BuildRequires:  /usr/bin/desktop-file-validate
@@ -54,6 +56,15 @@ Recommends:     gvfs-backend-samba
 %else
 Recommends:     gvfs-smb
 Recommends:     gvfs-mtp
+%endif
+# GStreamer's base plug-ins, which read videos and audio files for the
+# Details tab of Properties.
+%if 0%{?suse_version}
+Recommends:     gstreamer-plugins-base
+Recommends:     gstreamer-plugins-good
+%else
+Recommends:     gstreamer1-plugins-base
+Recommends:     gstreamer1-plugins-good
 %endif
 # The Secret Service that remembers SMB passwords.
 Recommends:     gnome-keyring
@@ -131,6 +142,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Thu Nov 05 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.14-1
+- OpenXplorer 2.0.14: a notice when a new release is out, administrator
+  folder deletes through a pinned walk, and no crash when a tab is dragged
+  out on Wayland.
+
 * Tue Nov 03 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.13-1
 - OpenXplorer 2.0.13: administrator folder deletes are also refused on
   drives an ordinary user can mount or plug in.

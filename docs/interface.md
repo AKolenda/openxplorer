@@ -78,13 +78,15 @@ To copy an item’s path instead, right-click it and choose Copy as path, or pre
 
 ## Properties
 
-Alt+Enter, or Properties in a right-click menu, opens Properties as Windows 11 lays it out, in a window of its own: it blocks neither the main window nor another Properties window, and asking again for the same item brings its window back. A file has General, Security and Previous Versions; a folder on this computer adds Sharing and Customize, and Downloads, Documents and the other standard folders add Location.
+Alt+Enter, or Properties in a right-click menu, opens Properties as Windows 11 lays it out, in a window of its own: it blocks neither the main window nor another Properties window, and asking again for the same item brings its window back. A file has General, Security, Details and Previous Versions; a folder on this computer adds Sharing and Customize, and Downloads, Documents and the other standard folders add Location.
 
 General shows the name, Type of file and Opens with (Change… picks another app), Location, Size and Size on disk with every byte, such as 314 KB (322,003 bytes), the dates in the long style, such as Tuesday, October 20, 2026, 14:24:52, and the Read-only and Hidden attributes. A folder counts its Size, Size on disk and Contains by itself and shows Created only. Hidden adds a dot to the start of the name, which is how Linux hides an item.
 
 Changes wait for OK or Apply: Apply stays grey until something changes, OK applies and closes, and Cancel or Escape closes without changing anything. A refused change, such as a name that is taken, shows in a message and Properties stays open.
 
 Security shows the item’s real Linux permissions in Windows’ words: the owner, the group and everyone else, and what the one selected may do, from Full control to Read. Edit… and Advanced change them when you own the item; Linux has no deny entries, so the Deny column stays empty. Customize holds Change Icon… for a folder.
+
+Details lists what a file says about itself under Windows’ headings, Property on the left and Value on the right: for a photo its title, rating stars, authors, date taken, dimensions, resolution and the camera’s EXIF (maker, model, F-stop, exposure time, ISO speed, focal length, flash), for a video its length, frame size, data rate and frame rate, for a song its artists, album, year, track number, genre, length, bit rate, channels and sample rate, and for every file its name, type, folder, dates, size, attributes and owner. Rows OpenXplorer cannot read on Linux are left out rather than shown empty, and the values cannot be changed here. The arrow keys move through the list, Ctrl+C copies the value of the row you are on, and Enter, F2 or a click in a value lets you select part of it. The file is read in the background and given up after 10 seconds, so a slow share or a large or damaged file never holds Properties up. Windows’ Remove Properties and Personal Information is not offered yet, as it cannot be done safely for every kind of file the tab shows.
 
 ## Previous versions
 
@@ -156,4 +158,4 @@ The website tour shows pictures and cannot drag files. Compatibility with a part
 
 ---
 
-OpenXplorer 2.0.13. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.14. Project-authored documentation: AGPL-3.0-only.
