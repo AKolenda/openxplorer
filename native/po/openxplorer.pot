@@ -6290,6 +6290,14 @@ msgstr ""
 msgid "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first."
 msgstr ""
 
+#: crates/ox-core/src/archive/create.rs
+msgid "The new archive could not be told apart from another item, so it was left in place."
+msgstr ""
+
+#: crates/ox-core/src/archive/create.rs
+msgid "The new archive was moved or replaced while it was written. Nothing was removed."
+msgstr ""
+
 #: crates/ox-core/src/archive/error.rs
 msgid "An item changed while it was compressed. Nothing was created."
 msgstr ""
