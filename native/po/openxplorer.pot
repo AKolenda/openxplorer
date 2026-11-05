@@ -6779,6 +6779,11 @@ msgstr ""
 msgid "The folder listing could not be closed."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/query.rs
+msgid "{name} could not be read. Check that its folder can be opened."
+msgstr ""
+
 #: crates/ox-core/src/grouping.rs
 msgid "(None)"
 msgstr ""
