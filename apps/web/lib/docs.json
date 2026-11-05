@@ -73,7 +73,7 @@
         "paragraphs": [
           "Close every old Winspace/OpenXplorer window and finish file operations. Download the .deb, then run these commands from that download directory as your normal user."
         ],
-        "code": "sudo apt update\nsudo apt install ./openxplorer_2.0.13_all.deb\nopenxplorer --version\nopenxplorer",
+        "code": "sudo apt update\nsudo apt install ./openxplorer_2.0.14_all.deb\nopenxplorer --version\nopenxplorer",
         "callout": "This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts."
       },
       {
@@ -570,7 +570,7 @@
           "The website remains a Next.js static export. pnpm build writes apps/web/out, and pnpm check performs dependency-aware TypeScript checking. Cloudflare Workers Static Assets serves that export without a framework migration or application backend. The offline design renderer does not exercise the Next.js runtime.",
           "The native experience roadmap and public source checklist are in docs/NATIVE-EXPERIENCE-ROADMAP.md and docs/PUBLIC-RELEASE-CHECKLIST.md. They distinguish remaining desktop work, source-publication preparation and stable-release validation."
         ],
-        "code": "pnpm check\npnpm build\npnpm preview\n\n# Native checks and the release .deb (Ubuntu 24.04 build host)\npython3 native/tools/check.py\npython3 native/parity/check.py\npython3 native/tools/build_deb.py --app-id io.winspace.Development\npython3 native/tools/verify_deb.py dist/native/openxplorer_2.0.13_all.deb"
+        "code": "pnpm check\npnpm build\npnpm preview\n\n# Native checks and the release .deb (Ubuntu 24.04 build host)\npython3 native/tools/check.py\npython3 native/parity/check.py\npython3 native/tools/build_deb.py --app-id io.winspace.Development\npython3 native/tools/verify_deb.py dist/native/openxplorer_2.0.14_all.deb"
       },
       {
         "id": "contribute",

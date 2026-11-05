@@ -14,7 +14,7 @@ Close every old Winspace/OpenXplorer window and finish file operations. Download
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_2.0.13_all.deb
+sudo apt install ./openxplorer_2.0.14_all.deb
 openxplorer --version
 openxplorer
 ```
