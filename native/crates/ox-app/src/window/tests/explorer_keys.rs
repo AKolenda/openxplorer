@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Windows 11 File Explorer's further keys: Ctrl+E for the search box,
+//! Windows 11 File Explorer's further keys: Ctrl+E and F3 for the search box,
 //! Ctrl+D for Delete, F11 for full screen and Alt+P for the preview pane,
 //! which is the details pane here (CMD-036, VIEW-063).
 //!
@@ -26,7 +26,8 @@ fn focus_is_in_search(test: &TestWindow) -> bool {
 }
 
 /// The new keys are application accelerators beside the ones they match,
-/// and the keys they sit beside keep their own: F3 is still Split view.
+/// and the keys they sit beside keep their own. F3 is Explorer's search
+/// key, so Split view has no key, only its View menu entry.
 ///
 /// parity: CMD-036, VIEW-063
 #[gtk::test]
@@ -34,7 +35,7 @@ fn explorers_further_keys_sit_beside_the_ones_they_match() {
     let app = application();
     let keys = |action: WindowAction| app.accels_for_action(&action.detailed_name());
 
-    assert_eq!(keys(WindowAction::Search), ["<Control>f", "<Control>e"]);
+    assert_eq!(keys(WindowAction::Search), ["<Control>f", "<Control>e", "F3"]);
     assert_eq!(keys(WindowAction::DetailsPane), ["<Shift><Alt>p"]);
     assert_eq!(
         keys(WindowAction::PreviewPane),
@@ -42,8 +43,8 @@ fn explorers_further_keys_sit_beside_the_ones_they_match() {
         "Alt+P is Windows' Preview pane"
     );
     assert_eq!(keys(WindowAction::FullScreen), ["F11"]);
-    assert_eq!(keys(WindowAction::SplitView), ["F3"], "F3 keeps Split view");
-    for key in ["<Primary>e", "<Alt>p", "F11"] {
+    assert!(keys(WindowAction::SplitView).is_empty(), "F3 no longer splits");
+    for key in ["<Primary>e", "F3", "<Alt>p", "F11"] {
         assert_eq!(app.actions_for_accel(key).len(), 1, "{key} runs one action");
     }
 }

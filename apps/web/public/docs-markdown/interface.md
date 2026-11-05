@@ -18,7 +18,7 @@ Right-click a Details heading to choose columns, then drag headings to reorder t
 
 ## Two folders in one tab
 
-Press F3 or choose View → Split view to open two panes. Click either pane to make its path, selection and commands active. Each pane keeps its own folder and history. F3 again closes the active pane and keeps the other.
+Choose View → Split view to open two panes. Click either pane to make its path, selection and commands active. Each pane keeps its own folder and history. Choosing Split view again closes the active pane and keeps the other.
 
 Settings → General → Start up lets you choose where new windows open and turn on Reopen my tabs when OpenXplorer starts. Session restoration is off by default. New tabs normally open beside the current tab.
 
@@ -32,7 +32,7 @@ View → Folder tree (F7) shows a tree of folders below the navigation places. E
 
 Your Templates folder supplies entries directly in New, with its subfolders as submenus. Choose a template and a new name; creating from a template never overwrites an existing file.
 
-Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys; Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E moves to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
+Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys; Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E and F3 move to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
 
 ## Rename several items at once
 

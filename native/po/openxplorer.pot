@@ -22,7 +22,7 @@ msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
+msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -54,7 +54,7 @@ msgid "- This PC lists drives, USB sticks and connected phones. Click one to ope
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
+msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -3443,7 +3443,7 @@ msgid "New windows show the address as text you can type in instead of breadcrum
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "New windows show two folders side by side. F3 splits or unsplits a tab."
+msgid "New windows show two folders side by side. View > Split view splits or unsplits a tab."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3543,7 +3543,7 @@ msgid "show full path in the title bar window title taskbar caption path"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "split view dual pane two panes side by side f3 commander"
+msgid "split view dual pane two panes side by side commander"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3911,7 +3911,7 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/history_menu.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
@@ -5732,7 +5732,12 @@ msgid "Finish the current operation before disconnecting."
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Back (Alt+Left)"
+msgid "Back (Alt + Left Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Back to {place} (Alt + Left Arrow)"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -5740,7 +5745,17 @@ msgid "Forward"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Forward (Alt+Right)"
+msgid "Forward (Alt + Right Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Forward to {place} (Alt + Right Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Refresh \"{place}\" (F5)"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
@@ -5748,7 +5763,12 @@ msgid "Refresh (F5)"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Up (Alt+Up)"
+msgid "Up (Alt + Up Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Up to \"{place}\" (Alt + Up Arrow)"
 msgstr ""
 
 #: crates/ox-app/src/window/network_page.rs

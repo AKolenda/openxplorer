@@ -87,7 +87,7 @@ then X11), with disposable data:
   RPM and Arch packages on their distributions.
 - The remaining items of docs/RELEASE-CHECKLIST.md, "Native desktop gate".
 
-## Remaining parity items (67)
+## Remaining parity items (66)
 
 Generated from `native/parity/features.toml`; the replacement gate is
 every behaviour the Python app had. The other items come from the Dolphin
@@ -105,7 +105,7 @@ baseline and GNOME integration. Priority is from the inventory.
 | ACC-003 | partial | must | Consistent keyboard focus in the file list |
 | PERF-008 | todo | must | Tested on the supported desktops |
 
-### Dolphin and GNOME additions (60)
+### Dolphin and GNOME additions (59)
 
 #### TAB: Tabs and windows (2)
 
@@ -231,11 +231,10 @@ baseline and GNOME integration. Priority is from the inventory.
 | ARC-023 | partial | should | Compress the selection into an archive |
 | ARC-024 | partial | should | Extract non-ZIP archives in-app |
 
-#### PROP: Properties, details pane, previous versions and folder sizes (2)
+#### PROP: Properties, details pane, previous versions and folder sizes (1)
 
 | ID | Status | Priority | Behaviour |
 |---|---|---|---|
-| PROP-012 | partial | could | Quick Look with Space via the GNOME previewer |
 | PROP-013 | partial | could | Media and document metadata in Properties and Details |
 
 #### LOOK: Appearance (1)

@@ -46,23 +46,23 @@ impl BrowserWindow {
         else {
             return;
         };
-        let (glyph, name, tooltip, action) = if loading {
-            (Icon::Dismiss, "Stop", "Stop", WindowAction::Stop)
+        let (glyph, name, action) = if loading {
+            (Icon::Dismiss, "Stop", WindowAction::Stop)
         } else {
-            (
-                Icon::ArrowClockwise,
-                "Refresh",
-                "Refresh (F5)",
-                WindowAction::Refresh,
-            )
+            (Icon::ArrowClockwise, "Refresh", WindowAction::Refresh)
         };
         if button.action_name().as_deref() == Some(action.detailed_name().as_str()) {
             return;
         }
         button.set_child(Some(&icons::image(glyph, BUTTON_GLYPH)));
-        button.set_tooltip_text(Some(tooltip));
         button.update_property(&[gtk::accessible::Property::Label(name)]);
         action.assign_to(&button);
+        if loading {
+            button.set_tooltip_text(Some("Stop"));
+        } else {
+            // Refresh names the folder it lists again.
+            self.show_navigation_tooltips();
+        }
     }
 
     /// Cancels what the active tab is opening, leaving the tab where it

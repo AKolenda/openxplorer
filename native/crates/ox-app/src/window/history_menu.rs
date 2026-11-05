@@ -3,8 +3,8 @@
 //!
 //! app.js had neither; this brings Dolphin's and Explorer's: a right-click
 //! or a long press on Back or Forward lists up to twelve locations of the
-//! tab's history, nearest first, named relative to the home folder
-//! ("Home/Documents"), and choosing one jumps straight there (NAV-006). A
+//! tab's history, nearest first, each named as its tab would be
+//! ("Documents"), and choosing one jumps straight there (NAV-006). A
 //! middle-click on Back, Forward or Up, or on an entry of their menus,
 //! opens where it leads in a new tab and leaves the current tab alone
 //! (NAV-007).
@@ -12,10 +12,9 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{parent_location, LocationContext};
+use ox_core::location::parent_location;
 
 use crate::history::History;
-use crate::locations::Page;
 
 use super::gestures;
 use super::location_view::address_icon;
@@ -26,29 +25,6 @@ use super::BrowserWindow;
 
 /// The most locations a Back or Forward menu lists (Dolphin's limit).
 const MENU_LENGTH: usize = 12;
-
-/// A location as a history menu names it: a page by its title, a place
-/// under the home folder relative to it ("Home/Documents"), anything
-/// else as the address bar shows it.
-fn history_label(locations: &LocationContext, uri: &str) -> String {
-    if let Some(page) = Page::from_uri(uri) {
-        return page.title().to_owned();
-    }
-    let path = uri
-        .starts_with("file:")
-        .then(|| gtk::gio::File::for_uri(uri).path())
-        .flatten();
-    if let Some(relative) = path
-        .as_deref()
-        .and_then(|path| path.strip_prefix(locations.home_path()).ok())
-    {
-        if relative.as_os_str().is_empty() {
-            return ox_core::i18n::gettext("Home");
-        }
-        return format!("Home/{}", relative.display());
-    }
-    locations.display_location(uri)
-}
 
 /// The steps a history menu offers from `history`'s current location in
 /// `direction`, nearest first, each with the location it leads to.
@@ -90,7 +66,8 @@ impl BrowserWindow {
         steps
             .into_iter()
             .map(|(steps, uri)| {
-                let label = history_label(&locations, &uri);
+                // As Windows Explorer's menus do, and as the tab is titled.
+                let label = locations.title_for(&uri);
                 let glyph = address_icon(&uri, &home);
                 let item = MenuItem::with_target(&label, glyph, WindowAction::GoHistory, steps.to_variant());
                 (item.into(), uri)
@@ -98,9 +75,9 @@ impl BrowserWindow {
             .unzip()
     }
 
-    /// Where Back, Forward or Up leads from the active tab, for a
-    /// middle-click; `None` where it leads nowhere.
-    fn navigation_target(&self, action: WindowAction) -> Option<String> {
+    /// Where Back, Forward, Up or Refresh leads from the active tab, for
+    /// a middle-click and the tooltips; `None` where it leads nowhere.
+    pub(super) fn navigation_target(&self, action: WindowAction) -> Option<String> {
         let session = self.imp().session.borrow();
         let history = &session.active()?.history;
         let position = history.position();
@@ -108,6 +85,7 @@ impl BrowserWindow {
             WindowAction::Back => history.entries().get(position.checked_sub(1)?).cloned(),
             WindowAction::Forward => history.entries().get(position + 1).cloned(),
             WindowAction::Up => parent_location(history.current()),
+            WindowAction::Refresh => Some(history.current().to_owned()),
             _ => None,
         }
     }
@@ -191,8 +169,6 @@ impl BrowserWindow {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
 
     fn history(entries: &[&str], position: usize) -> History {
@@ -224,24 +200,5 @@ mod tests {
                 .map(|number| (number - 15, format!("file:///tmp/{number}")))
                 .collect::<Vec<_>>()
         );
-    }
-
-    /// parity: NAV-006
-    #[test]
-    fn history_menus_name_places_relative_to_home() {
-        let locations = LocationContext {
-            home: Some(PathBuf::from("/home/demo")),
-            ..LocationContext::default()
-        };
-
-        let label = |uri: &str| history_label(&locations, uri);
-
-        assert_eq!(label("file:///home/demo"), "Home");
-        assert_eq!(
-            label("file:///home/demo/Documents/Work%201"),
-            "Home/Documents/Work 1"
-        );
-        assert_eq!(label("file:///srv/media"), "/srv/media");
-        assert_eq!(label(Page::ThisPc.uri()), "This PC");
     }
 }
