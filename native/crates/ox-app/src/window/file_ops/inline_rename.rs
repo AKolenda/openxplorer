@@ -29,6 +29,7 @@ use super::names::check_typed_name;
 use super::numbered_rename::numbered_batch_for;
 use super::rename::selected_name_length;
 use crate::folder_view::cells::FileCell;
+use crate::folder_view::shown_name::{hidden_extension, shown_name};
 use crate::window::folder_pane::FolderView;
 use crate::window::BrowserWindow;
 
@@ -44,6 +45,10 @@ struct RenameTarget {
     name: String,
     /// True for a folder, whose name has no extension.
     is_folder: bool,
+    /// The extension the field leaves out, with its dot, while names hide
+    /// known types' extensions; the rename puts it back, as Windows'
+    /// does (VIEW-069).
+    hidden_extension: Option<String>,
     /// Every selected item in the order shown, the edited one included,
     /// when several are renamed together; `None` for one item.
     several: Option<Rc<[Entry]>>,
@@ -71,8 +76,11 @@ impl BrowserWindow {
     /// Starts editing `entry`'s name in `cell`; with `several`, the
     /// selected items in the order shown, the typed name goes to them all.
     pub(super) fn rename_in_place(&self, cell: &FileCell, entry: &Entry, several: Option<Vec<Entry>>) {
+        let hidden_extension =
+            hidden_extension(&entry.name, entry.is_dir, self.file_name_extensions()).map(str::to_owned);
+        let shown = shown_name(&entry.name, entry.is_dir, self.file_name_extensions());
         let editor = gtk::Entry::builder()
-            .text(&entry.name)
+            .text(shown)
             .hexpand(true)
             .css_classes([NAME_EDITOR_CLASS])
             .build();
@@ -84,11 +92,17 @@ impl BrowserWindow {
             name: entry.name.clone(),
             is_folder: entry.is_dir,
             several: several.map(Rc::from),
+            hidden_extension: hidden_extension.clone(),
         };
         self.connect_name_editor(cell, &editor, &target);
         cell.show_name_editor(&editor);
         editor.grab_focus();
-        let selected = i32::try_from(selected_name_length(entry)).unwrap_or(-1);
+        // With the extension left out, the whole name shown is selected.
+        let selected = if hidden_extension.is_some() {
+            -1
+        } else {
+            i32::try_from(selected_name_length(entry)).unwrap_or(-1)
+        };
         editor.select_region(0, selected);
     }
 
@@ -223,7 +237,12 @@ impl BrowserWindow {
         if !editor.is_sensitive() || editor.parent().is_none() {
             return;
         }
-        let typed = editor.text();
+        // An empty name stays empty, to be refused, rather than becoming
+        // the extension alone.
+        let typed = match &target.hidden_extension {
+            Some(extension) if !editor.text().trim().is_empty() => format!("{}{extension}", editor.text()),
+            _ => editor.text().to_string(),
+        };
         if typed == target.name {
             self.end_rename_in_place(cell);
             if let Some(next) = self.take_rename_next() {

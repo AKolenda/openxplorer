@@ -352,6 +352,8 @@ impl BrowserWindow {
         }
         self.command_bar().set_new_enabled(self.allows(FileCommand::New));
         self.command_bar().show_delete_label(self.delete_label());
+        // "…" lists Undo and Redo only while each can run.
+        self.update_more_menu();
     }
 }
 

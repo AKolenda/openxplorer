@@ -21,7 +21,7 @@ mod network_sign_in;
 mod network_sign_out;
 
 pub(crate) use format_drive::{confirm_erase, format_drive_dialog};
-pub(crate) use network_map::{map_network_dialog, MapRequest, ShareKeeping};
+pub(crate) use network_map::{map_network_dialog, network_location_dialog, MapRequest, ShareKeeping};
 pub(crate) use network_protocol::Protocol;
 pub(crate) use network_sign_in::SignInDialog;
 pub(crate) use network_sign_out::{sign_out_dialog, SearchCacheChoice, SignOutChoice};

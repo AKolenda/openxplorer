@@ -107,6 +107,84 @@ fn the_menus_are_captured_light_and_dark() {
     }
 }
 
+/// The command bar's "…" in a folder, with Undo and Redo both to run, and
+/// in This PC, and View with its Show submenu, in both themes, to compare
+/// with Windows 11's (CMD-006, CMD-007).
+#[gtk::test]
+fn the_more_view_and_sort_menus_are_captured_light_and_dark() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for _ in 0..2 {
+        test.activate("new-folder", None);
+        super::file_ops_support::name_editor(&test).emit_activate();
+        wait_until("the name to be kept", || {
+            !super::file_ops_support::is_renaming_in_place(&test)
+        });
+    }
+    test.activate("undo", None);
+    let more_button = menu_button_with_class(&test, "more-command");
+    let more = app_menu(&more_button);
+    wait_until("… to offer Undo and Redo", || {
+        let labels = more.row_labels();
+        labels.contains(&"Undo".to_owned()) && labels.contains(&"Redo".to_owned())
+    });
+    let view_button = menu_button_with_class(&test, "view-command");
+    let view = app_menu(&view_button);
+    let sort_button = menu_button_with_class(&test, "sort-command");
+    let sort = app_menu(&sort_button);
+    test.activate("sort", Some("modified"));
+    test.activate("direction", Some("descending"));
+    for theme in THEMES {
+        test.activate("theme", Some(theme));
+        test.window.navigate(&fixture.uri()).expect("the folder");
+        test.wait_for_listing("the folder");
+        for (page, name) in [(None, "folder"), (Some(Page::ThisPc), "this-pc")] {
+            if let Some(page) = page {
+                test.window.navigate(page.uri()).expect("a page");
+            }
+            more_button.popup();
+            capture_popover(
+                &test.window,
+                more.upcast_ref(),
+                &format!("native-menu-more-{name}-{theme}.png"),
+            );
+            more_button.popdown();
+            wait_until("… to close", || !more.is_mapped());
+        }
+        test.window.navigate(&fixture.uri()).expect("the folder");
+        test.wait_for_listing("the folder");
+        view_button.popup();
+        capture_popover(
+            &test.window,
+            view.upcast_ref(),
+            &format!("native-menu-view-{theme}.png"),
+        );
+        view.click_row("Show");
+        capture_popover(
+            &test.window,
+            view.upcast_ref(),
+            &format!("native-menu-view-show-{theme}.png"),
+        );
+        view_button.popdown();
+        wait_until("View to close", || !view.is_mapped());
+        // Sort, as Windows 11 draws it: no glyphs, dots on the choices,
+        // and Type under the pointer.
+        sort_button.popup();
+        let hovered = sort.row("Type");
+        hovered.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+        wait_for(TRANSITION_TIME);
+        capture_popover(
+            &test.window,
+            sort.upcast_ref(),
+            &format!("native-menu-sort-{theme}.png"),
+        );
+        hovered.unset_state_flags(gtk::StateFlags::PRELIGHT);
+        sort_button.popdown();
+        wait_until("Sort to close", || !sort.is_mapped());
+    }
+}
+
 /// Hover on a caption button, "+", an inactive tab and a file row, with
 /// Sort pressed and a row selected, in both themes. (A list box manages its
 /// rows' hover itself, so the sidebar cannot be hovered this way.)

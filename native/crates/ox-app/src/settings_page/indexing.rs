@@ -14,20 +14,27 @@
 //! privacy is in the indexed folders row's ⓘ. Watching and the network interval are the
 //! Python app's `autoIndex` and `networkInterval`, which the index service
 //! follows at once.
+//!
+//! "Cache this folder for search" heads the group: a switch for the folder
+//! shown before Settings opened, which the command bar's "…" menu used to
+//! hold (CMD-007, SRCH-020). Windows 11 File Explorer's "…" has no search
+//! commands; its indexing options are in Settings, so this one moved
+//! there. The folder's own menu and the search strip still offer it.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
-use ox_core::search::{CacheStatus, FrequentIndexing, PinIndexing};
+use ox_core::location::same_location;
+use ox_core::search::{CacheStatus, FrequentIndexing, IndexRoot, PinIndexing};
 use ox_core::settings::PreferencesUpdate;
 
 use super::bindings::{Choice, PreferenceBinding};
 use super::group::SettingsGroup;
-use super::indexed_folders::IndexCommand;
+use super::indexed_folders::{IndexCandidate, IndexCommand};
 use super::pages::{Category, SettingsView, Subpage};
 use super::parts;
 use super::row::{ControlName, SettingRow};
@@ -36,6 +43,18 @@ use super::section::{PageKind, SettingsSection};
 use super::status_card::{StatusCard, StatusText};
 use super::{SettingsPage, SharedHandler, MESSAGE};
 use crate::icons::Icon;
+
+const CACHE_THIS_FOLDER: RowText = RowText {
+    title: "Cache this folder for search",
+    description: "Index the names and paths of the folder you came to Settings from, so searches \
+                  in it are instant. Its right-click menu and the search bar offer this too.",
+    keywords: "cache this folder for search current folder here index instant search stop caching",
+};
+
+/// Why "Cache this folder for search" is off: Settings was opened from a
+/// page, a device or a server's share list, which cannot be indexed.
+const NO_FOLDER_TO_CACHE: &str =
+    crate::i18n::message_id("Only a folder on a drive or share can be cached for search.");
 
 const FOLDERS_TO_INDEX: RowText = RowText {
     title: "Indexed folders",
@@ -218,6 +237,7 @@ impl CacheSummary {
 /// index keeps current.
 fn instant_search_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Instant search"));
+    group.add_row(&this_folder_row(page));
     let row = SettingRow::new(FOLDERS_TO_INDEX);
     row.add_details(ox_core::i18n::gettext_static(PRIVACY_NOTE));
     let manage = parts::page_button(&ox_core::i18n::gettext("Manage…"));
@@ -252,6 +272,105 @@ fn instant_search_group(page: &SettingsPage) -> SettingsGroup {
     network.add_control(&choice, ControlName::RowTitle);
     group.add_row(&network);
     group
+}
+
+/// "Cache this folder for search" and the folder it caches now.
+#[derive(Debug)]
+pub(super) struct ThisFolder {
+    /// The row, whose line under the title names the folder.
+    row: SettingRow,
+    /// On while the folder is indexed.
+    switch: gtk::Switch,
+    /// The folder shown before Settings opened, when it can be indexed.
+    folder: RefCell<Option<IndexCandidate>>,
+}
+
+/// "Cache this folder for search": its switch indexes the folder shown
+/// before Settings opened, or stops indexing it, as the folder's menu
+/// does. The window tells the page the folder ([`SettingsPage::show_this_folder`]).
+fn this_folder_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(CACHE_THIS_FOLDER);
+    let switch = parts::switch();
+    switch.connect_active_notify(glib::clone!(
+        #[weak]
+        page,
+        move |switch| {
+            if page.is_user_change() {
+                page.cache_this_folder(switch.is_active());
+            }
+        }
+    ));
+    row.add_control(&switch, ControlName::RowTitle);
+    let this_folder = ThisFolder {
+        row: row.clone(),
+        switch,
+        folder: RefCell::default(),
+    };
+    show_no_folder(&this_folder);
+    // A page is built once; a second build would leave its row unused.
+    let _ = page.imp().this_folder.set(this_folder);
+    row
+}
+
+/// Shows that there is no folder to cache: the switch off and disabled,
+/// and why.
+fn show_no_folder(this_folder: &ThisFolder) {
+    this_folder.folder.replace(None);
+    this_folder.switch.set_active(false);
+    this_folder.switch.set_sensitive(false);
+    this_folder
+        .row
+        .set_description(ox_core::i18n::gettext_static(NO_FOLDER_TO_CACHE));
+}
+
+impl SettingsPage {
+    /// Shows "Cache this folder for search" for `origin`, the folder shown
+    /// before Settings opened: on while `roots` index it, and disabled
+    /// where `candidates`, the folders that can be indexed, do not have it.
+    pub(super) fn show_this_folder(
+        &self,
+        candidates: &[IndexCandidate],
+        roots: &[IndexRoot],
+        origin: Option<&str>,
+    ) {
+        let Some(this_folder) = self.imp().this_folder.get() else {
+            return;
+        };
+        let candidate = origin.and_then(|origin| {
+            candidates
+                .iter()
+                .find(|candidate| same_location(&candidate.uri, origin))
+        });
+        self.while_showing_preferences(|| {
+            let Some(candidate) = candidate else {
+                show_no_folder(this_folder);
+                return;
+            };
+            let is_cached = roots
+                .iter()
+                .any(|root| root.is_enabled() && same_location(&root.uri, &candidate.uri));
+            this_folder.row.set_description(&candidate.label);
+            this_folder.switch.set_sensitive(true);
+            this_folder.switch.set_active(is_cached);
+            this_folder.folder.replace(Some(candidate.clone()));
+        });
+    }
+
+    /// Starts caching the folder shown before Settings, or stops.
+    fn cache_this_folder(&self, cache: bool) {
+        let Some(this_folder) = self.imp().this_folder.get() else {
+            return;
+        };
+        let Some(folder) = this_folder.folder.borrow().clone() else {
+            return;
+        };
+        let command = if cache {
+            folder.index_command()
+        } else {
+            IndexCommand::StopIndexing(folder.uri)
+        };
+        self.run_index_command(command);
+    }
 }
 
 /// "Index pinned folders automatically" (SRCH-040), on by default. The

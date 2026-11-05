@@ -48,12 +48,40 @@ pub(crate) fn map_network_dialog(
     parent: &impl IsA<gtk::Window>,
     on_connect: impl Fn(&Dialog, MapRequest) + 'static,
 ) -> Dialog {
-    let dialog = Dialog::new(
+    connect_dialog(
         parent,
         &ox_core::i18n::gettext("Map network location"),
-        ox_core::i18n::gettext_static(MESSAGE),
-    );
+        Protocol::Smb,
+        on_connect,
+    )
+}
+
+/// The same dialog as Windows 11's "Add a network location" (the "…"
+/// menu of This PC and Network): it starts at a web address, as Windows'
+/// wizard adds websites and FTP sites, and saves what it connects under
+/// Network locations like any mapped folder.
+pub(crate) fn network_location_dialog(
+    parent: &impl IsA<gtk::Window>,
+    on_connect: impl Fn(&Dialog, MapRequest) + 'static,
+) -> Dialog {
+    connect_dialog(
+        parent,
+        &ox_core::i18n::gettext("Add a network location"),
+        Protocol::WebDavs,
+        on_connect,
+    )
+}
+
+/// The connect dialog titled `title`, starting at `protocol`.
+fn connect_dialog(
+    parent: &impl IsA<gtk::Window>,
+    title: &str,
+    protocol: Protocol,
+    on_connect: impl Fn(&Dialog, MapRequest) + 'static,
+) -> Dialog {
+    let dialog = Dialog::new(parent, title, ox_core::i18n::gettext_static(MESSAGE));
     let fields = ServerFields::add_to(&dialog);
+    fields.choose(protocol);
     let label = address_field(&dialog, "Display name (optional)", "Projects (Z:)");
     let save = dialog.add_check_button(
         &ox_core::i18n::gettext("Save in the sidebar · reconnect when opened"),
@@ -122,6 +150,13 @@ impl ServerFields {
             Dialog::set_field_visible(&user, chosen.asks_user());
         });
         fields
+    }
+
+    /// Chooses `protocol` in the Type list, which shows its fields.
+    fn choose(&self, protocol: Protocol) {
+        let position = Protocol::ALL.iter().position(|each| *each == protocol);
+        let position = position.and_then(|position| u32::try_from(position).ok());
+        self.protocol.set_selected(position.unwrap_or_default());
     }
 
     /// Shows the fields `protocol` asks for.

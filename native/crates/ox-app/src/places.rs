@@ -121,6 +121,26 @@ fn network_mount(row: &VolumeRow) -> Option<NetworkMount> {
     })
 }
 
+/// The network mounts Disconnect network drive can end, one per mount, in
+/// the volume monitor's order: each mounted network row's root, as GIO
+/// spells it, since unmounting ends the whole mount. A saved share inside a
+/// mount is not a drive of its own, and a browsed SMB server (`smb://host/`)
+/// is not a drive at all. Roots that name the same location once their
+/// spelling is normalised (`network_key`) are listed once.
+pub(crate) fn network_drive_mounts(volumes: &[VolumeRow]) -> Vec<NetworkMount> {
+    let mut keys = Vec::new();
+    network_mounts(volumes)
+        .into_iter()
+        .filter(|mount| !ox_core::location::is_smb_server(&mount.uri))
+        .filter(|mount| {
+            let key = network_key(&mount.uri).ok();
+            let is_new = !keys.contains(&key);
+            keys.push(key);
+            is_new
+        })
+        .collect()
+}
+
 /// True when a mounted row's root is the share or contains it, compared
 /// with GIO's own `equal` and `has_prefix`, as winspace.py does.
 fn is_share_connected(share_uri: &str, volumes: &[VolumeRow]) -> bool {
@@ -188,6 +208,42 @@ mod tests {
     }
 
     /// parity: NET-018, SIDE-001, SIDE-019
+    /// Disconnect network drive's choices are the mounts, each once: two
+    /// rows for one share spelled differently are one drive, a browsed
+    /// server is none, and a local drive is not a network drive.
+    #[test]
+    fn network_drives_are_the_mounts_each_once() {
+        let volumes = [
+            mounted_volume(
+                "share on fileserver",
+                "smb://fileserver/share/",
+                VolumeKind::Drive,
+            ),
+            mounted_volume(
+                "share on FileServer",
+                "smb://FileServer:445/share",
+                VolumeKind::Drive,
+            ),
+            mounted_volume("fileserver", "smb://fileserver/", VolumeKind::Drive),
+            mounted_volume("Photos", "sftp://studio-nas/photos/", VolumeKind::Drive),
+            mounted_volume("USB", "file:///media/user/USB", VolumeKind::Drive),
+        ];
+        let drives: Vec<(String, String)> = network_drive_mounts(&volumes)
+            .into_iter()
+            .map(|mount| (mount.label, mount.uri))
+            .collect();
+        assert_eq!(
+            drives,
+            [
+                (
+                    "share on fileserver".to_owned(),
+                    "smb://fileserver/share/".to_owned()
+                ),
+                ("Photos".to_owned(), "sftp://studio-nas/photos/".to_owned()),
+            ]
+        );
+    }
+
     #[test]
     fn an_smb_mount_is_listed_under_network_and_not_among_the_drives() {
         let volumes = [

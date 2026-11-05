@@ -80,6 +80,10 @@ impl BrowserWindow {
             plain_action(WindowAction::OpenTerminalHere, BrowserWindow::open_terminals_here),
             plain_action(WindowAction::CompareFiles, BrowserWindow::compare_files),
             plain_action(WindowAction::SearchTool, BrowserWindow::open_search_tool),
+            plain_action(
+                WindowAction::SystemProperties,
+                BrowserWindow::open_system_information,
+            ),
             text_action(WindowAction::OpenWithOf, BrowserWindow::open_folder_with),
             text_action(WindowAction::OpenInEditor, BrowserWindow::open_in_editor),
             text_action(WindowAction::OpenWithApp, BrowserWindow::open_with_app),
@@ -252,6 +256,18 @@ impl BrowserWindow {
     fn open_search_tool(&self) {
         if let Some(folder) = self.folder_subject() {
             self.run_tool(Tool::Search, &[folder.uri]);
+        }
+    }
+
+    /// This PC's "…" > Properties: the desktop's system information app,
+    /// as Windows opens the system's properties (CMD-007). The menu offers
+    /// it only where one is installed.
+    fn open_system_information(&self) {
+        let Some(app) = crate::integration::system_information() else {
+            return;
+        };
+        if let Err(error) = self.context().launch_application(&app, self.upcast_ref()) {
+            self.show_message(&error.to_string());
         }
     }
 

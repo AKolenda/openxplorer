@@ -77,6 +77,7 @@ fn several_selected_items_get_the_typed_name_numbered_in_view_order() {
     fs::write(fixture.path("Map.jpg"), "a map").expect("the file is written");
     fs::write(fixture.path("Documents/inside.txt"), "inside").expect("the file is written");
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     let order = ["Documents", "Map.jpg", "Notes 2.txt", "Notes 10.txt", "README"];
     let shown: Vec<String> = test
         .names()
@@ -142,6 +143,7 @@ fn a_file_without_an_extension_gaining_one_asks_first() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("README"), "read me").expect("the file is written");
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_with_focus(&test, &["Notes 2.txt", "README"], "Notes 2.txt");
     test.activate("rename", None);
     let field = name_editor(&test);
@@ -255,6 +257,7 @@ fn an_item_that_cannot_be_renamed_is_reported_and_the_rest_are_renamed() {
 fn one_selected_item_gets_exactly_the_typed_name() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_with_focus(&test, &["Notes 2.txt"], "Notes 2.txt");
 
     test.activate("rename", None);

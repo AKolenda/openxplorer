@@ -49,6 +49,7 @@ fn press_in(editor: &gtk::Entry, key: gdk::Key, modifiers: gdk::ModifierType) {
 fn a_slow_second_click_on_the_selected_name_renames_it_in_place() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
     let position = test.window.folder_model().first_selected();
     let press = |clicks| NamePress {
@@ -219,6 +220,7 @@ fn activating_the_other_pane_cancels_a_pending_slow_click_rename() {
 fn the_name_fields_own_menu_keeps_the_rename_going() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("rename", None);
     let field = name_editor(&test);
@@ -259,6 +261,7 @@ fn the_name_fields_own_menu_keeps_the_rename_going() {
 fn tab_commits_the_name_and_goes_on_to_rename_the_next_item() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     test.activate("view", Some("details"));
     let none = gdk::ModifierType::empty();
     select_names(&test, &["Notes 2.txt"]);
@@ -324,6 +327,7 @@ fn cancelling_the_hide_question_keeps_the_name_and_the_field() {
 fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("rename", None);
     let field = name_editor(&test);
