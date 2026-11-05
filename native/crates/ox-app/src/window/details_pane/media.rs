@@ -73,6 +73,10 @@ impl DetailsPane {
         if imp.preview_area.center_widget().as_ref() != Some(widget) {
             imp.preview_area.set_center_widget(Some(widget));
         }
+        // A picture of the content stands on the pane itself, as in
+        // Windows' pane; the art keeps its card.
+        let is_picture = widget.is::<gtk::Picture>();
+        crate::window::widget_tree::toggle_class(&*imp.preview_area, "has-picture", is_picture);
     }
 
     /// Decodes the image at `path`, or the cached thumbnail of the item at

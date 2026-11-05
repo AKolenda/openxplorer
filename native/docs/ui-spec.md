@@ -561,13 +561,14 @@ where it differs; ✓ means the target equals the current app.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
-| Header | "Details" at 13 px; close button 24 × 24, glyph 12; 20 px below | — | Keep. |
-| Preview | min height 148; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); icon 83 with `drop-shadow(0 4px 4px alpha(black, .04))`; 18 px below; thumbnails when available (gain) | — | safe |
-| Name | 16 / 600, line height 1.4, selectable, wraps anywhere; 4 px below | — | Keep. |
-| Type | 12 px `@ox_muted`; 17 px below | — | Keep. |
-| Action button | "Open", or "Pin to Quick access" for folders: full width, 32 high, E06 border, background `@ox_control_fill`, 12 px, glyph 14; 24 px below | ButtonPadding `11,5,11,6` (BT#L152) | safe |
-| Properties | heading 12 / 600, 17 px below; grid with a 73 px key column, row gap 15, column gap 8; keys `@ox_muted`; values selectable; text **12** px (11) | — | text visible, P2 |
-| Note | 12 px (11) `@ox_muted`, line height 1.65, `border-top: 1px solid @ox_border`, `padding-top: 17`, `margin-top: 23`; info glyph 14 in `@ox_accent` | — | text visible, P2 |
+| Order | preview, small icon and name, Share, "Details" heading over the rows, Properties: Windows 11's Details pane (View › Show › Details pane, Alt+Shift+P) | Windows 11 Explorer's Details pane (observed, unverified) | safe |
+| Close | close button 24 × 24, glyph 12, at the top right; 8 px below; padding top 14 | — (Explorer closes the pane from View) | Keep. |
+| Preview | min height 162 with its border; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); large icon 96 (copy glyph 80 for several items) with `drop-shadow(0 4px 4px alpha(black, .04))`; a photo, a document's thumbnail or a player fills the width, at most 180 high | Windows' pane shows the picture itself or the large icon (observed, unverified) | safe |
+| Icon and name | icon 20 beside the name, 8 apart; name 14 / 600, selectable, wraps anywhere; 14 px above and below | — | safe |
+| Share | bordered button 32 high with glyph 16, as wide as its text; only where the desktop can share (CMD-037) and something is selected; 18 px below | — | safe |
+| Details | heading 13 / 600, 10 px below; grid with an 88 px name column, row gap 10, column gap 12; names `@ox_muted`; values selectable, each read as "Name: value" | — | safe |
+| Rows | one item: Type, Size, File location, Date modified, Date created, then a photo's Date taken, Dimensions, Rating, Title, Tags, Authors, Camera maker, Camera model, F-stop, Exposure time, ISO speed, Exposure bias, Focal length, Flash mode, or a recording's Length, bit rates and artists, as Properties' Details tab words them; several: "N items selected" with Total size, Date modified (first – last) and File location; none: "N items" and Folder | — | safe |
+| Properties | bordered button 32 high with the info glyph 16; 20 px below the rows | — | safe |
 
 ### 4.9 Menus and context menus
 

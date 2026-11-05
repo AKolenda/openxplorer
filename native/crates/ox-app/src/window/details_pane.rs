@@ -113,7 +113,7 @@ mod imp {
         /// The glyph of [`Self::properties_button`].
         #[template_child]
         pub(super) properties_glyph: TemplateChild<gtk::Image>,
-        /// The desktop can share: the window offers Share.
+        /// The window can share the selection.
         pub(super) share_offered: Cell<bool>,
         /// Some item is selected, which Share would share.
         pub(super) has_selection: Cell<bool>,
@@ -285,9 +285,10 @@ impl DetailsPane {
         self.show_media(content.media.as_ref());
     }
 
-    /// Shows Share where the desktop can share (the window's command bar
-    /// offers it then too, CMD-037), for a selection; the window's
-    /// `win.share` enables it for files it can attach.
+    /// Shows Share while the window can share the selection (CMD-037):
+    /// the desktop can share, and the selection is files it can attach.
+    /// Unlike the command bar, which keeps a disabled Share, the pane
+    /// leaves it out for a folder.
     pub(super) fn offer_share(&self, offered: bool) {
         self.imp().share_offered.set(offered);
         self.show_share();

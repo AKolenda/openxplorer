@@ -139,8 +139,8 @@ fn several_items_show_their_count_and_total_size() {
     assert!(pane.shown_name().ends_with(" items"));
 }
 
-/// Share shows in the pane where the desktop can share, for a
-/// selection; Properties opens the Properties of what the pane shows.
+/// Share shows in the pane where the desktop can share, for files it
+/// can attach; Properties opens the Properties of what the pane shows.
 ///
 /// parity: PROP-009, CMD-037
 #[gtk::test]
@@ -157,6 +157,8 @@ fn the_pane_offers_share_and_properties() {
     });
     wait_for_frames(&test.window, 2);
     assert!(!pane.shows_share(), "nothing selected, nothing to share");
+    test.select_named("Documents");
+    assert!(!pane.shows_share(), "a folder cannot be shared");
     test.select_named("Notes 2.txt");
     assert!(pane.shows_share());
 

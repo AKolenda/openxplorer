@@ -13,6 +13,13 @@
   border-radius: 7px;
   min-height: 160px;
 }
+/* A picture of the content stands on the pane, as wide as it, with no
+   card around it. */
+.details .detail-preview.has-picture {
+  background-color: transparent;
+  border-color: transparent;
+  min-height: 0;
+}
 /* The art's soft shadow (GTK's cairo renderer drops a shadow this faint,
    its GL renderers draw it). */
 .details .detail-preview image { -gtk-icon-shadow: 0 4px 4px @ox_preview_shadow; }
