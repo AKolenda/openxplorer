@@ -4,7 +4,7 @@
 //!
 //! A file is untrusted input, and reading it may be slow (a share) or
 //! large, so it is read in a child process: the app itself, started again
-//! with [`READER_FLAG`]. The child limits its own processor time, reads at
+//! with [`READER_FLAG`]. The child limits its own processor time and memory, reads at
 //! most the start of a picture ([`picture`]) or lets `GStreamer` read a
 //! video or audio file ([`streams`]), and writes what it
 //! found as JSON. The app waits at most [`READ_TIMEOUT`] for it and stops
@@ -29,6 +29,9 @@ pub(crate) const READER_FLAG: &str = "--ox-read-media-details";
 pub(crate) const READ_TIMEOUT: Duration = Duration::from_secs(10);
 /// The processor time the reader may use, in seconds.
 const READER_CPU_SECONDS: u64 = 20;
+/// The memory the reader may allocate, in bytes: room for a decoded 8K
+/// frame and a cover picture, and a stop for a file that asks for more.
+const READER_MEMORY_BYTES: u64 = 1 << 30;
 /// The most the app reads from the reader.
 const OUTPUT_LIMIT: usize = 256 * 1024;
 
@@ -253,12 +256,20 @@ pub(crate) fn run_as_reader(arguments: &[String]) -> Option<glib::ExitCode> {
         return Some(glib::ExitCode::FAILURE);
     };
     let size = arguments.get(4).and_then(|size| size.parse().ok());
-    // A file that keeps the reader busy is stopped by the kernel too.
-    let limit = rustix::process::Rlimit {
-        current: Some(READER_CPU_SECONDS),
-        maximum: Some(READER_CPU_SECONDS),
-    };
-    let _ = rustix::process::setrlimit(rustix::process::Resource::Cpu, limit);
+    // A file that keeps the reader busy, or makes it allocate without end,
+    // is stopped by the kernel too. The memory limit is on written data
+    // (RLIMIT_DATA), not address space: GStreamer's threads reserve far more
+    // than they use. A refused allocation aborts the reader.
+    for (resource, limit) in [
+        (rustix::process::Resource::Cpu, READER_CPU_SECONDS),
+        (rustix::process::Resource::Data, READER_MEMORY_BYTES),
+    ] {
+        let limit = rustix::process::Rlimit {
+            current: Some(limit),
+            maximum: Some(limit),
+        };
+        let _ = rustix::process::setrlimit(resource, limit);
+    }
     let details = read_details(uri, kind, size);
     match serde_json::to_string(&details) {
         Ok(json) => {
