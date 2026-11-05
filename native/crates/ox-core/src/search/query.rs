@@ -149,10 +149,10 @@ impl SearchIndex {
             });
         }
         let plan = QueryPlan::new(&words, scope.as_deref(), query.hidden_items, self.engine(), limit);
-        let connection = self.connect()?;
+        let mut connection = self.connect()?;
         add_name_pattern_function(&connection)?;
         add_name_word_function(&connection)?;
-        let mut hits = run_cancellable(&connection, &plan, cancellable)?;
+        let mut hits = run_cancellable(&mut connection, &plan, cancellable)?;
         let is_truncated = hits.len() > limit;
         hits.truncate(limit);
         Ok(SearchResults {
@@ -312,7 +312,7 @@ fn add_name_word_function(connection: &Connection) -> rusqlite::Result<()> {
 
 /// Runs `plan`, stopping when `cancellable` is cancelled.
 fn run_cancellable(
-    connection: &Connection,
+    connection: &mut Connection,
     plan: &QueryPlan,
     cancellable: Option<&gio::Cancellable>,
 ) -> Result<Vec<SearchHit>, SearchError> {
@@ -679,11 +679,11 @@ mod tests {
         share.store(&items);
         let words = vec!["pd".to_owned()];
         let plan = QueryPlan::new(&words, None, HiddenItems::Skip, SearchEngine::Trigram, 2000);
-        let connection = share.index.connect().unwrap();
+        let mut connection = share.index.connect().unwrap();
         let cancellable = gio::Cancellable::new();
 
         cancellable.cancel();
-        let result = run_cancellable(&connection, &plan, Some(&cancellable));
+        let result = run_cancellable(&mut connection, &plan, Some(&cancellable));
 
         assert!(matches!(result, Err(SearchError::Cancelled)));
         assert_eq!(found_names(&share.index, "2999.pdf"), ["2999.pdf"]);
