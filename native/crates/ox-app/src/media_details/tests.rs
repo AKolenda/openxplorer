@@ -220,6 +220,42 @@ fn a_photos_exif_is_read_from_its_start() {
     assert_eq!(details.exif_version.as_deref(), Some("0232"));
 }
 
+/// Camera values some writers store as doubles or signed rationals, not
+/// as the unsigned rationals cameras write, read the same.
+///
+/// parity: PROP-034
+#[test]
+fn camera_values_of_any_numeric_type_are_read() {
+    let field = |tag, value| Field {
+        tag,
+        ifd_num: In::PRIMARY,
+        value,
+    };
+    let fields = [
+        field(Tag::FNumber, Value::Double(vec![2.8])),
+        field(Tag::ExposureTime, Value::Double(vec![0.008])),
+        field(Tag::ExposureBiasValue, Value::Double(vec![0.0])),
+        field(
+            Tag::FocalLength,
+            Value::SRational(vec![SRational { num: 50, denom: 1 }]),
+        ),
+    ];
+    let mut writer = Writer::new();
+    for field in &fields {
+        writer.push_field(field);
+    }
+    let mut tiff = std::io::Cursor::new(Vec::new());
+    writer.write(&mut tiff, false).expect("the EXIF");
+    let mut details = MediaDetails::default();
+
+    picture::read_picture(&jpeg_with_exif(16, 16, &tiff.into_inner()), &mut details);
+
+    assert_eq!(details.f_number, Some(2.8));
+    assert_eq!(details.exposure_time, Some((1, 125)));
+    assert_eq!(details.exposure_bias, Some(0.0));
+    assert_eq!(details.focal_length, Some(50.0));
+}
+
 /// A PNG gives its size, bit depth, resolution and text chunks, and an
 /// unrated picture still has a rating to show.
 ///
