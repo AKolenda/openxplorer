@@ -1094,6 +1094,7 @@ mod tests {
             uri: DOWNLOADS.to_owned(),
             properties: own,
             subfolders: false,
+            template: None,
         });
         assert_eq!(per_folder.view_in(DOWNLOADS, downloads).grouping(), GroupBy::Type);
     }

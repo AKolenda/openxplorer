@@ -47,7 +47,8 @@ use ox_core::entry::Entry;
 use ox_core::folder_locations::FolderRelocation;
 use ox_core::places::FolderLocations;
 use ox_core::settings::{
-    PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError, ViewProperties, ViewScope,
+    FolderTemplate, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError, ViewProperties,
+    ViewScope,
 };
 use ox_core::versions::PreviousVersions;
 
@@ -427,6 +428,23 @@ impl AppContext {
             settings.remember_view(&uri, properties, scope).map(|_| ())
         });
         self.change_settings(change, reply);
+    }
+
+    /// Optimizes the folder at `uri` for `template`, and its sub-folders
+    /// with `subfolders`, off the main thread (PROP-036); `reply` hears
+    /// the outcome, after which every window shows the folders in their
+    /// new style.
+    pub(crate) fn customize_folder(
+        &self,
+        uri: String,
+        template: FolderTemplate,
+        subfolders: bool,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        let change: Change = Box::new(move |settings: &mut Settings| {
+            settings.customize_folder(&uri, template, subfolders).map(|_| ())
+        });
+        self.change_settings(change, self.announcing_folder_views(reply));
     }
 
     /// Forgets every folder's display style and the shared one; `reply`

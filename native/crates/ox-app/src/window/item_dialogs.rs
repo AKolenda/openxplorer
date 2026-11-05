@@ -22,6 +22,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{same_location, ItemKind};
+use ox_core::settings::{template_for, FolderTemplate, SettingsError};
 use ox_core::versions::SnapshotLocation;
 
 use crate::dialog::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
@@ -374,6 +375,25 @@ impl BrowserWindow {
         frame.body().append(&quiet_text(text));
         frame.add_closing_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent, || {});
         self.present_window_dialog(&frame);
+    }
+
+    /// The template the folder at `uri` is optimized for, if it was
+    /// customized (PROP-036).
+    pub(crate) fn folder_template(&self, uri: &str) -> Option<FolderTemplate> {
+        template_for(&self.context().settings_data().preferences.folder_views, uri)
+    }
+
+    /// Optimizes the folder at `uri` for `template`, and its sub-folders
+    /// with `subfolders` (PROP-036); `reply` hears the outcome.
+    pub(crate) fn customize_folder(
+        &self,
+        uri: &str,
+        template: FolderTemplate,
+        subfolders: bool,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        self.context()
+            .customize_folder(uri.to_owned(), template, subfolders, reply);
     }
 
     /// Shows the new icon of the item at `uri` in the folder view

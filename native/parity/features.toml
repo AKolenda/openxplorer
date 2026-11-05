@@ -13395,7 +13395,37 @@ bridge = ["properties"]
 dolphin = "Properties icon button → .directory Icon= key"
 gnome = "GVfs metadata metadata::custom-icon / metadata::custom-icon-name / metadata::emblems (Nautilus 46 supports custom icons)"
 native = "done"
-native_note = "native/crates/ox-app/src/properties/custom_icon.rs, native/crates/ox-app/src/folder_view/cells/custom_icon.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (a_custom_icon_shows_in_the_view_until_the_default_is_restored). Deliberate change, as Windows 11 lays it out: a local folder outside previous versions has a Customize tab whose 'Folder icons' group holds 'Change Icon...' (a GTK file dialog filtered to images) with a preview of the icon beside it, and 'Restore Default' once one is set; the choice is applied by OK or Apply. Files no longer have Change icon…, as Windows offers it only for folders and shortcuts; an icon a file already has still shows. The choice is stored as the GVfs metadata key metadata::custom-icon, the key Files reads and writes, so both file managers show it; restoring unsets the key with `gio set -t unset` because GIO's Rust binding cannot unset an attribute. The details and icon views look the key up at low priority whenever a cell is bound and show the picture (local images up to 16 MiB) in place of the Windows-style art. Porting notes: The default Windows-style artwork stays."
+native_note = "native/crates/ox-app/src/properties/custom_icon.rs, native/crates/ox-app/src/folder_view/cells/custom_icon.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (a_custom_icon_shows_in_the_view_until_the_default_is_restored). Deliberate change, as Windows 11 lays it out: a local folder outside previous versions has a Customize tab whose 'Folder icons' group holds 'Change Icon...' (a GTK file dialog filtered to images) with a preview of the icon beside it, and 'Restore Default' once one is set; the choice is applied by OK or Apply. Files no longer have Change icon…, as Windows offers it only for folders and shortcuts; an icon a file already has still shows. The choice is stored as the GVfs metadata key metadata::custom-icon, the key Files reads and writes, so both file managers show it; restoring unsets the key with `gio set -t unset` because GIO's Rust binding cannot unset an attribute. The details and icon views look the key up at low priority whenever a cell is bound and show the picture (local images up to 16 MiB) in place of the Windows-style art. The tab's other groups, 'What kind of folder do you want?' and 'Folder pictures', are PROP-036 and PROP-037. Porting notes: The default Windows-style artwork stays."
+
+
+[[feature]]
+id = "PROP-036"
+area = "PROP"
+title = "Customize tab: What kind of folder do you want?"
+behaviour = "As in Windows 11, a local folder's Customize tab starts with the group 'What kind of folder do you want?': 'Optimize this folder for:' with General items, Documents, Pictures, Music and Videos, and 'Also apply this template to all subfolders'. On OK or Apply the folder, and with the box its sub-folders, show the template's view: Large icons for Pictures and Videos, Details for the others. The list shows the folder's template when the window opens again."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Properties > Customize > What kind of folder do you want?"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/properties/custom_icon/folder_type.rs; native/crates/ox-core/src/settings/view_properties.rs (a_template_picks_the_view_and_reaches_subfolders_when_asked); native/crates/ox-app/src/window/tests/item_dialogs.rs (a_template_optimizes_a_folder_and_its_subfolders). The template is kept in the app's settings, in the folder's own entry of folderViews (folderType, with subfolders for the box), the store that keeps each folder's view; no desktop.ini or anything else is written into the folder. Applying keeps the folder's sort, groups and columns and changes only the view; with the box, sub-folders' own views are dropped so they show the template, and a template once applied to sub-folders keeps reaching them when the folder's template changes later (Windows would leave them on the earlier one, which they hold for themselves). A sub-folder restyled later keeps the template it inherits, and the folder keeps its template through a change of view. Not done, for want of a source on Linux or of the columns: the columns each template adds in Windows (Date taken, Tags, Size and Rating for pictures; #, Title, Contributing artists and Album for music; Length for videos), and choosing a template by itself from a folder's contents or from the standard Pictures, Music, Videos and Documents folders: an unchanged folder shows General items. With 'Remember each folder's view settings' off, the template is stored but every folder shares one view."
+
+[[feature]]
+id = "PROP-037"
+area = "PROP"
+title = "Customize tab: Folder pictures"
+behaviour = "As in Windows 11, a local folder's Customize tab has a 'Folder pictures' group: 'Choose a file to show on this folder icon.', with 'Choose File...' and 'Restore Default' stacked and a preview of the folder with its picture beside them. On OK or Apply the picture shows on the folder's icon at Medium icons and larger; Details, List and Small icons show the plain folder, and a custom icon (Change Icon...) replaces the whole folder."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Properties > Customize > Folder pictures"]
+python_tests = []
+bridge = []
+gnome = "GVfs metadata, as metadata::custom-icon (PROP-016)"
+native = "done"
+native_note = "native/crates/ox-app/src/properties/custom_icon/folder_picture.rs, native/crates/ox-app/src/folder_view/cells/folder_picture.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (a_folder_picture_shows_on_large_icons_until_restored). The choice is stored as the GVfs metadata key metadata::openxplorer-folder-picture in the user's metadata store (Files has no such key), never as desktop.ini or folder.jpg in the folder; Restore Default unsets it. Choose File... offers images only. The picture is cropped to a card with a white edge laid over the front of the bundled folder art, which has no separate front flap to tuck it behind as Windows 11 draws it."
 
 [[feature]]
 id = "PROP-017"

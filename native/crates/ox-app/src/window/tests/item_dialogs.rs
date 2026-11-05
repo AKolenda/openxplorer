@@ -13,6 +13,7 @@ use std::os::unix::fs::PermissionsExt;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
+use ox_core::settings::FolderTemplate;
 
 use super::icons::{assert_same_colour, css_colour, painted_colour, TRANSITION_TIME};
 use crate::dialog::{Dialog, DialogFrame};
@@ -1797,9 +1798,9 @@ fn a_custom_icon_shows_in_the_view_until_the_default_is_restored() {
     test.select_named("Album");
     test.activate("properties", None);
     let window = test.wait_for_properties("Album Properties");
-    let customize = tab(&window, "customize");
+    let customize = group_box(&tab(&window, "customize"), "Folder icons");
     wait_until("the icon buttons", || {
-        texts(&customize).contains(&"Restore Default".to_owned())
+        button(&customize, "Restore Default").is_visible()
     });
     assert!(button(&customize, "Change Icon...").is_sensitive());
     press(&customize, "Restore Default");
@@ -1815,6 +1816,170 @@ fn a_custom_icon_shows_in_the_view_until_the_default_is_restored() {
         )
         .expect("metadata")
         .attribute_string("metadata::custom-icon");
+    assert_eq!(stored, None);
+}
+
+/// The group box of the Customize tab titled `title`.
+fn group_box(page: &gtk::Widget, title: &str) -> gtk::Widget {
+    descendants::<gtk::Frame>(page)
+        .into_iter()
+        .find(|frame| frame.label().as_deref() == Some(title))
+        .unwrap_or_else(|| panic!("a {title} group"))
+        .upcast()
+}
+
+/// Stores `picture` as the folder picture of `folder`, as OK does.
+fn put_folder_picture(folder: &str, picture: &str) {
+    let done = std::rc::Rc::new(std::cell::Cell::new(false));
+    let finished = std::rc::Rc::clone(&done);
+    let (folder, picture) = (folder.to_owned(), picture.to_owned());
+    glib::spawn_future_local(async move {
+        let info = gtk::gio::FileInfo::new();
+        info.set_attribute_string(crate::folder_view::FOLDER_PICTURE, &picture);
+        gtk::gio::File::for_uri(&folder)
+            .set_attributes_future(&info, gtk::gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
+            .await
+            .expect("the metadata is stored");
+        finished.set(true);
+    });
+    wait_until("the folder picture to be stored", || done.get());
+}
+
+/// The Customize tab has Windows 11's three groups in its order. A
+/// template chosen under "What kind of folder do you want?" and applied
+/// with "Also apply this template to all subfolders" shows the folder and
+/// its sub-folders in the template's view (Pictures: Large icons) and is
+/// there when the window opens again; nothing is written into the folder.
+///
+/// parity: PROP-036
+#[gtk::test]
+fn a_template_optimizes_a_folder_and_its_subfolders() {
+    use crate::window::FolderView;
+
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Holiday/Beach")).expect("folders");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Holiday");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Holiday Properties");
+    let page = tab(&window, "customize");
+    let titles: Vec<String> = descendants::<gtk::Frame>(&page)
+        .iter()
+        .filter_map(|frame| frame.label().map(|label| label.to_string()))
+        .collect();
+    assert_eq!(
+        titles,
+        [
+            "What kind of folder do you want?",
+            "Folder pictures",
+            "Folder icons"
+        ]
+    );
+    let kind = group_box(&page, "What kind of folder do you want?");
+    let list = descendants::<gtk::DropDown>(&kind)
+        .into_iter()
+        .next()
+        .expect("the template list");
+    assert_eq!(list.selected(), 0, "General items");
+    let names: Vec<String> = (0..5)
+        .filter_map(|at| list.model()?.item(at)?.downcast::<gtk::StringObject>().ok())
+        .map(|name| name.string().to_string())
+        .collect();
+    assert_eq!(
+        names,
+        ["General items", "Documents", "Pictures", "Music", "Videos"]
+    );
+    assert!(!window.apply_button().is_sensitive());
+    list.set_selected(2);
+    check(&kind, "Also apply this template to all subfolders").set_active(true);
+    assert!(window.apply_button().is_sensitive());
+    window.ok_button().emit_clicked();
+
+    let holiday = fixture.uri_of("Holiday");
+    let beach = format!("{holiday}/Beach");
+    wait_until("the template to be saved", || {
+        test.window.folder_template(&beach) == Some(FolderTemplate::Pictures)
+    });
+    test.show(&beach);
+    test.wait_for_listing("Beach");
+    wait_until("Large icons", || {
+        test.window.folder_pane().view() == FolderView::Icons(crate::folder_view::grid::IconSize::LARGE)
+    });
+    let written: Vec<_> = fs::read_dir(fixture.path("Holiday"))
+        .expect("the folder")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name())
+        .collect();
+    assert_eq!(written, ["Beach"], "nothing is written into the folder");
+
+    test.show(&fixture.uri());
+    test.wait_for_listing("the fixture");
+    test.select_named("Holiday");
+    test.activate("properties", None);
+    let again = test.wait_for_properties("Holiday Properties");
+    let kind = group_box(&tab(&again, "customize"), "What kind of folder do you want?");
+    let list = descendants::<gtk::DropDown>(&kind)
+        .into_iter()
+        .next()
+        .expect("the template list");
+    assert_eq!(list.selected(), 2, "Pictures, as applied");
+    assert!(!check(&kind, "Also apply this template to all subfolders").is_active());
+    again.close();
+}
+
+/// A folder's picture shows on its icon at Large icons, not in Details;
+/// the Customize tab previews it, and Restore Default with OK takes it
+/// off again, in the view too.
+///
+/// parity: PROP-037
+#[gtk::test]
+fn a_folder_picture_shows_on_large_icons_until_restored() {
+    use crate::folder_view::cells::FileCell;
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Holiday")).expect("a folder");
+    let pixels = glib::Bytes::from_owned(vec![0x60_u8; 4 * 3 * 4]);
+    let picture = gtk::gdk::MemoryTexture::new(4, 3, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 16);
+    picture
+        .save_to_png(fixture.path("Harbour.png"))
+        .expect("a picture");
+    let holiday = fixture.uri_of("Holiday");
+    put_folder_picture(&holiday, &fixture.uri_of("Harbour.png"));
+    let test = TestWindow::open(&fixture.uri());
+    let shows_picture = |wanted: bool| {
+        descendants::<FileCell>(&test.window)
+            .iter()
+            .filter(|cell| cell.name() == "Holiday")
+            .all(|cell| cell.shows_folder_picture() == wanted)
+    };
+    wait_for(std::time::Duration::from_millis(300));
+    assert!(shows_picture(false), "Details shows the plain folder");
+    test.activate("view", Some("large"));
+    wait_until("the picture on the folder", || shows_picture(true));
+
+    test.select_named("Holiday");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Holiday Properties");
+    let pictures = group_box(&tab(&window, "customize"), "Folder pictures");
+    assert!(texts(&pictures).contains(&"Choose a file to show on this folder icon.".to_owned()));
+    assert!(button(&pictures, "Choose File...").is_sensitive());
+    wait_until("the folder's picture", || {
+        button(&pictures, "Restore Default").is_sensitive()
+    });
+    press(&pictures, "Restore Default");
+    assert!(!button(&pictures, "Restore Default").is_sensitive());
+    assert!(window.apply_button().is_sensitive());
+    window.ok_button().emit_clicked();
+
+    wait_until("the plain folder", || shows_picture(false));
+    let stored = gtk::gio::File::for_uri(&holiday)
+        .query_info(
+            crate::folder_view::FOLDER_PICTURE,
+            gtk::gio::FileQueryInfoFlags::NONE,
+            gtk::gio::Cancellable::NONE,
+        )
+        .expect("metadata")
+        .attribute_string(crate::folder_view::FOLDER_PICTURE);
     assert_eq!(stored, None);
 }
 
