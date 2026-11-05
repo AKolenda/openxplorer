@@ -529,7 +529,9 @@ fn pasting_a_forbidden_character_leaves_the_name_as_it_was() {
 
     field.clipboard().set_text("Plan: 2027");
     text.emit_paste_clipboard();
-    wait_until("the balloon", || balloon_lines(&field).is_some());
+    wait_until("the balloon and the name back", || {
+        balloon_lines(&field).is_some() && field.text() == "Notes 2.txt"
+    });
     let after_refusal = (field.text(), field.selection_bounds());
     field.clipboard().set_text("Plan 2027");
     text.emit_paste_clipboard();

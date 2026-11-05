@@ -4,7 +4,8 @@
 //!
 //! As in Windows File Explorer, typing or pasting `\ / : * ? " < > |` in
 //! the field inserts nothing and leaves the text and its selection as
-//! they were; a balloon under the field says, in Windows' words, which
+//! they were (a paste or an input method that replaced the selection
+//! puts it back); a balloon under the field says, in Windows' words, which
 //! characters a name can't contain. It goes away after a few seconds or
 //! at the next key. Linux would store every one of them but the slash,
 //! yet they are refused on every drive, as Windows refuses them: a name
@@ -199,44 +200,74 @@ pub(super) fn refuse_forbidden_characters(editor: &gtk::Entry) {
     let Some(text) = editor.delegate().and_downcast::<gtk::Text>() else {
         return;
     };
-    // A paste replaces the selection before it inserts, so the clipboard
-    // is read first and a refused paste leaves the field as it was.
-    let allowed_paste = Rc::new(std::cell::Cell::new(false));
-    text.connect_paste_clipboard(glib::clone!(
+    // A paste or an input method replaces the selection before it
+    // inserts: what a change deletes is kept until the change ends, so a
+    // refused insertion gives the text and selection back.
+    let before_change: Rc<RefCell<Option<FieldState>>> = Rc::default();
+    let restoring = Rc::new(std::cell::Cell::new(false));
+    text.connect_delete_text(glib::clone!(
         #[strong]
-        balloon,
-        move |text| {
-            if allowed_paste.replace(false) {
-                return;
+        before_change,
+        move |text, _, _| {
+            if before_change.borrow().is_none() {
+                before_change.replace(Some(FieldState::of(text)));
             }
-            text.stop_signal_emission_by_name("paste-clipboard");
-            glib::spawn_future_local(glib::clone!(
+        }
+    ));
+    text.connect_changed(glib::clone!(
+        #[strong]
+        before_change,
+        move |_| {
+            before_change.take();
+        }
+    ));
+    text.connect_insert_text(move |text, inserted, _| {
+        if restoring.get() || !has_windows_forbidden_character(inserted) {
+            return;
+        }
+        text.stop_signal_emission_by_name("insert-text");
+        balloon.show();
+        if let Some(state) = before_change.take() {
+            // Once GTK has finished the change it is in.
+            glib::idle_add_local_once(glib::clone!(
                 #[weak]
                 text,
                 #[strong]
-                balloon,
-                #[strong]
-                allowed_paste,
-                async move {
-                    let pasted = text.clipboard().read_text_future().await;
-                    let pasted = pasted.ok().flatten().unwrap_or_default();
-                    if has_windows_forbidden_character(&pasted) {
-                        balloon.show();
-                        return;
-                    }
-                    allowed_paste.set(true);
-                    text.emit_paste_clipboard();
+                restoring,
+                move || {
+                    restoring.set(true);
+                    state.restore(&text);
+                    restoring.set(false);
                 }
             ));
         }
-    ));
-    // Whatever else inserts text, such as an input method or a drop.
-    text.connect_insert_text(move |text, inserted, _| {
-        if has_windows_forbidden_character(inserted) {
-            text.stop_signal_emission_by_name("insert-text");
-            balloon.show();
-        }
     });
+}
+
+/// A name field's text and selection, to give back.
+#[derive(Debug)]
+struct FieldState {
+    /// The text.
+    text: glib::GString,
+    /// The selection's ends, or the cursor at both ends.
+    selection: (i32, i32),
+}
+
+impl FieldState {
+    /// What `text` holds now.
+    fn of(text: &gtk::Text) -> Self {
+        let cursor = text.position();
+        Self {
+            text: text.text(),
+            selection: text.selection_bounds().unwrap_or((cursor, cursor)),
+        }
+    }
+
+    /// Puts it back into `text`.
+    fn restore(&self, text: &gtk::Text) {
+        text.set_text(&self.text);
+        text.select_region(self.selection.0, self.selection.1);
+    }
 }
 
 #[cfg(test)]
