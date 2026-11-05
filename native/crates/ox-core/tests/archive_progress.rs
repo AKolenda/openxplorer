@@ -17,7 +17,7 @@ use ox_core::archive::{
 };
 use ox_core::transfer::{Cancellation, Progress};
 
-use archive_support::{file_uri, gio_factory, incompressible_bytes, opener};
+use archive_support::{file_uri, gio_factory, incompressible_bytes, opener, ExtractionFixture, TestMember};
 
 /// The single large file of these tests, fictional.
 const FILE_NAME: &str = "harbour-survey.iso";
@@ -240,4 +240,124 @@ fn a_compression_never_replaces_or_removes_another_programs_file() {
 
     assert!(stopped.is_err());
     assert_eq!(fs::read(&taken).unwrap(), b"a newer file");
+}
+
+/// A ZIP whose archive is moved away and replaced by another program's
+/// file while it is written is not reported as created: the item under
+/// the name is not the archive. Neither file is removed.
+///
+/// parity: ARC-023
+#[test]
+fn a_zip_moved_and_replaced_while_written_is_not_reported_as_created() {
+    let root = tempfile::tempdir().unwrap();
+    let uris = vec![large_file(root.path())];
+    let (folder, moved) = (root.path().to_owned(), Arc::new(Mutex::new(false)));
+    let once = Arc::clone(&moved);
+    let mut compressor = ZipCompressor::new().with_progress(move |progress| {
+        let halfway = progress
+            .bytes
+            .is_some_and(|bytes| bytes.file_written >= u64::try_from(FILE_SIZE / 2).unwrap());
+        if halfway && !std::mem::replace(&mut *once.lock().unwrap(), true) {
+            fs::rename(folder.join("harbour-survey.zip"), folder.join("moved-away.zip")).unwrap();
+            fs::write(folder.join("harbour-survey.zip"), b"another program's file").unwrap();
+        }
+    });
+
+    let result = compressor.compress(
+        &compression(root.path(), uris, "harbour-survey.zip"),
+        &Cancellation::new(),
+    );
+
+    assert!(
+        *moved.lock().unwrap(),
+        "the archive was moved while it was written"
+    );
+    assert!(result.is_err(), "{result:?}");
+    assert_eq!(
+        fs::read(root.path().join("harbour-survey.zip")).unwrap(),
+        b"another program's file"
+    );
+    assert!(root.path().join("moved-away.zip").exists());
+}
+
+/// When a stopped compression cannot even look up its partial ZIP, it
+/// says where the ZIP may remain instead of claiming nothing was left.
+/// Skipped as root, which reads any folder.
+///
+/// parity: ARC-023
+#[test]
+fn a_partial_zip_that_cannot_be_looked_up_is_reported_where_it_is() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("sources");
+    fs::create_dir(&source).unwrap();
+    let uris = vec![large_file(&source)];
+    let destination = root.path().join("Archives");
+    fs::create_dir(&destination).unwrap();
+    fs::set_permissions(&destination, fs::Permissions::from_mode(0o000)).unwrap();
+    let as_root = fs::read_dir(&destination).is_ok();
+    fs::set_permissions(&destination, fs::Permissions::from_mode(0o755)).unwrap();
+    if as_root {
+        return;
+    }
+    let cancel = Cancellation::new();
+    let (locked, cancelling) = (destination.clone(), cancel.clone());
+    let mut compressor = ZipCompressor::new().with_progress(move |progress| {
+        if progress.bytes.is_some_and(|bytes| bytes.file_written > 0) && !cancelling.is_cancelled() {
+            fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+            cancelling.cancel();
+        }
+    });
+
+    let stopped = compressor
+        .compress(
+            &CompressionRequest {
+                uris,
+                destination_uri: file_uri(&destination),
+                archive_name: "harbour-survey.zip".to_owned(),
+            },
+            &cancel,
+        )
+        .unwrap_err();
+
+    fs::set_permissions(&destination, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(
+        matches!(stopped, ArchiveError::ArchiveLeftBehind { .. }),
+        "{stopped:?}"
+    );
+    assert!(stopped.to_string().contains("harbour-survey.zip"), "{stopped}");
+    assert!(destination.join("harbour-survey.zip").exists());
+}
+
+/// A ZIP of empty files moves the progress window file by file rather
+/// than from "Checking" straight to the end.
+///
+/// parity: ARC-013, OPS-021
+#[test]
+fn extracting_empty_files_reports_each_file() {
+    let fixture = ExtractionFixture::new();
+    let members: Vec<TestMember> = (1..=3)
+        .map(|number| TestMember::file(&format!("empty-{number}.txt"), b""))
+        .collect();
+    fixture.write_zip(&members);
+
+    fixture.extract("Unpacked").expect("the empty files extract");
+
+    let reports = fixture.events();
+    let names: Vec<Option<String>> = reports
+        .iter()
+        .filter(|report| report.bytes.is_some())
+        .map(|report| report.name.clone())
+        .collect();
+    assert_eq!(
+        names,
+        ["empty-1.txt", "empty-2.txt", "empty-3.txt"].map(|name| Some(name.to_owned())),
+        "one report per file, each naming it"
+    );
+    let done: Vec<u64> = reports
+        .iter()
+        .filter_map(|report| report.items.map(|items| items.done))
+        .collect();
+    assert_eq!(done, [0, 1, 2, 3], "the items remaining count down");
 }

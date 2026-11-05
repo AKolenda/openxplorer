@@ -247,7 +247,7 @@ impl ZipCompressor {
         if let Err(error) = self.write_archive(plan, &output, is_tar_xz(name), cancel) {
             return Err(discard_created(archive, created, error.unless_cancelled(cancel)));
         }
-        Ok(())
+        still_named(archive, created)
     }
 
     /// Writes the new archive under a hidden, random staging name and
@@ -664,21 +664,58 @@ fn discard_created(archive: &dyn Node, created: Option<ItemIdentity>, cause: Arc
     let Some(created) = created else {
         // Without the file's identity, nothing under the name is known to
         // be ours; it is reported rather than removed.
-        let unknown = crate::i18n::gettext(
-            "The new archive could not be told apart from another item, so it was left in place.",
-        );
-        return left_behind(archive, cause, TransferError::failed(unknown));
+        return left_behind(archive, cause, unidentified());
     };
     match archive.info(None) {
         Ok(info) if info.identity == Some(created) => {}
-        // Gone, or another program's item: nothing of ours to remove.
-        _ => return cause,
+        // GIO answers with an empty info when the folder cannot be
+        // searched: not known either way, so the archive may remain.
+        Ok(info) if info.identity.is_none() => return left_behind(archive, cause, unidentified()),
+        // Another program's item: nothing of ours to remove.
+        Ok(_) => return cause,
+        // Confirmed gone: nothing left behind.
+        Err(lookup) if already_removed(archive, &lookup) => return cause,
+        // Not known either way: the partial archive may still be there.
+        Err(lookup) => return left_behind(archive, cause, lookup),
     }
     match archive.delete_staging(Some(created)) {
         Ok(()) => cause,
         Err(cleanup) if already_removed(archive, &cleanup) => cause,
         Err(cleanup) => left_behind(archive, cause, cleanup),
     }
+}
+
+/// Confirms that the finished archive is still the file `created`
+/// describes, so a file another program moved in under the name is never
+/// reported as the new archive. Nothing is removed either way: the item
+/// under the name is not ours, and ours may now be elsewhere.
+fn still_named(archive: &dyn Node, created: Option<ItemIdentity>) -> Result<(), ArchiveError> {
+    // Without an identity there is nothing to compare; local files have one.
+    let Some(created) = created else {
+        return Ok(());
+    };
+    match archive.info(None) {
+        Ok(info) if info.identity == Some(created) => Ok(()),
+        Ok(info) if info.identity.is_none() => Err(unidentified().into()),
+        Ok(_) => Err(moved_or_replaced()),
+        Err(lookup) if already_removed(archive, &lookup) => Err(moved_or_replaced()),
+        Err(lookup) => Err(lookup.into()),
+    }
+}
+
+/// The item under the archive's name could not be identified, so it was
+/// neither removed nor taken for the new archive.
+fn unidentified() -> TransferError {
+    TransferError::failed(crate::i18n::gettext(
+        "The new archive could not be told apart from another item, so it was left in place.",
+    ))
+}
+
+/// The new archive was moved, removed or replaced while it was written.
+fn moved_or_replaced() -> ArchiveError {
+    ArchiveError::Backend(TransferError::failed(crate::i18n::gettext(
+        "The new archive was moved or replaced while it was written. Nothing was removed.",
+    )))
 }
 
 /// `cause`, adding that the partial archive at `archive` remains.

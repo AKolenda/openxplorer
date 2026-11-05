@@ -92,6 +92,9 @@ impl<'a> Unpacking<'a> {
         let mut output = self.extractor.output.create(file, self.cancel)?;
         let mut block = vec![0u8; BLOCK_BYTES];
         self.written.start_member();
+        // OPS-021: every file, even an empty one, is reported as it starts,
+        // as compression and copies report it.
+        self.report_file(&name, (0, declared_size));
         loop {
             self.cancel.check()?;
             let count = source.read_chunk(&mut block)?;
