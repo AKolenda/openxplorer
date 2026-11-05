@@ -454,7 +454,7 @@ fn rounded(value: f64) -> Option<u32> {
         clippy::cast_sign_loss,
         reason = "checked to be within u32 first"
     )]
-    (value >= 1.0 && value <= f64::from(u32::MAX)).then(|| value as u32)
+    (value >= 1.0 && value <= f64::from(u32::MAX)).then_some(value as u32)
 }
 
 fn rational(exif: &exif::Exif, tag: Tag) -> Option<f64> {
