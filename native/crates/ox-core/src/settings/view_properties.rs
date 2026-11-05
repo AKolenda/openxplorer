@@ -353,7 +353,10 @@ pub(super) fn customize(
     let reached_below = folder_views
         .iter()
         .any(|view| same_location(&view.uri, uri) && view.subfolders && view.template.is_some());
-    folder_views.retain(|view| !same_location(&view.uri, uri) && !(subfolders && is_inside(&view.uri, uri)));
+    // The folder's own entry goes, and with the box every sub-folder's.
+    let replaced =
+        |view: &FolderView| same_location(&view.uri, uri) || (subfolders && is_inside(&view.uri, uri));
+    folder_views.retain(|view| !replaced(view));
     folder_views.push(FolderView {
         uri: uri.to_owned(),
         properties,

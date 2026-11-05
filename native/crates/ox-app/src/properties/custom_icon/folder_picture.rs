@@ -55,8 +55,8 @@ impl PictureChoice {
     }
 
     fn choose(self: &Rc<Self>, picture: Option<String>) {
-        self.chosen.replace(picture.clone());
         self.show(picture.as_deref());
+        self.chosen.replace(picture);
         if let Some(window) = self.window.upgrade() {
             window.changed();
         }
