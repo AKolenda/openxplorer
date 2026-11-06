@@ -201,11 +201,11 @@ mod tests {
     }
 
     #[test]
-    fn the_palettes_keep_the_current_apps_surfaces() {
+    fn the_palettes_keep_the_content_and_tint_the_strip_as_mica_alt() {
         assert!(palette(Appearance::Light).contains("@define-color ox_bg #ffffff;"));
         assert!(palette(Appearance::Dark).contains("@define-color ox_bg #202020;"));
-        assert!(palette(Appearance::Light).contains("@define-color ox_title #eff1f4;"));
-        assert!(palette(Appearance::Dark).contains("@define-color ox_title #191919;"));
+        assert!(palette(Appearance::Light).contains("@define-color ox_title #f3f3f3;"));
+        assert!(palette(Appearance::Dark).contains("@define-color ox_title #202020;"));
     }
 
     /// Loads `css` into a provider and returns GTK's parsing errors.

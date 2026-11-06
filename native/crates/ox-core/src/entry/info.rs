@@ -40,8 +40,13 @@ pub(super) fn build_entry(
     let is_symlink = info.boolean("standard::is-symlink");
     let type_label = if is_shortcut(uri, &name, is_symlink, &classification) {
         shortcut_label()
+    } else if is_symlink && content_type.as_deref() == Some("inode/symlink") {
+        // A link read without following it (Properties) is typed by its
+        // name's extension, as Windows types a symbolic link.
+        let (guessed, _) = gio::content_type_guess(Some(name.as_str()), None::<&[u8]>);
+        type_label(classification.folder_type, Some(guessed.as_str()), &name)
     } else {
-        type_label(classification.folder_type, content_type.as_deref())
+        type_label(classification.folder_type, content_type.as_deref(), &name)
     };
     let is_dir = classification.is_dir();
     // A folder's own size is not the size of its contents, so none is shown.
@@ -268,22 +273,29 @@ mod tests {
         let plain = file_info(gio::FileType::Regular, "Report.txt", Some("text/plain"));
         let named_link = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
         named_link.set_is_symlink(true);
+        let unfollowed_link = file_info(gio::FileType::SymbolicLink, "notes.txt", Some("inode/symlink"));
+        unfollowed_link.set_is_symlink(true);
 
         let file = entry_for_uri("file:///tmp/Report.txt%20-%20Shortcut", &file_link);
         let folder = entry_for_uri("file:///tmp/Reports%20-%20Shortcut", &folder_link);
         let original = entry_for_uri("file:///tmp/Report.txt", &plain);
         let named = entry_for_uri("file:///tmp/notes.txt", &named_link);
+        let unfollowed = entry_for_uri("file:///tmp/notes.txt", &unfollowed_link);
 
         assert_eq!(file.type_label, "Shortcut");
         assert!(file.is_symlink);
         assert_eq!(folder.type_label, "Shortcut");
         assert!(folder.is_dir, "a link to a folder still opens as one");
-        assert_eq!(original.type_label, "Text document");
+        assert_eq!(original.type_label, "Text Document");
         assert_eq!(
-            named.type_label, "Text document",
+            named.type_label, "Text Document",
             "a link named for a type is typed by it, as Windows types a symbolic link"
         );
         assert!(!named.is_shortcut());
+        assert_eq!(
+            unfollowed.type_label, "Text Document",
+            "read without following it, as Properties reads it"
+        );
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`
@@ -296,7 +308,7 @@ mod tests {
         let file = entry_for_uri("smb://nas/work/README", &info);
         assert!(!file.is_dir);
         assert_eq!(file.size, Some(0));
-        assert_eq!(file.type_label, "Text document");
+        assert_eq!(file.type_label, "Text Document");
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`

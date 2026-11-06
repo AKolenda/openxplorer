@@ -294,7 +294,7 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
     let general = general(&window);
     assert_eq!(
         value_after(&general, "Type of file:").as_deref(),
-        Some("Text document (.txt)")
+        Some("Text Document (.txt)")
     );
     assert!(value_after(&general, "Opens with:").is_some());
     assert!(button(&general, "Change...").is_visible());
@@ -1313,7 +1313,7 @@ fn several_items_attributes_show_mixed_and_apply_to_every_item() {
     let general = tab(&window, "general");
     assert_eq!(
         value_after(&general, "Type:").as_deref(),
-        Some("All of type Text document")
+        Some("All of type Text Document")
     );
     let (read_only, hidden) = (check(&general, "Read-only"), check(&general, "Hidden"));
     wait_until("the items read", || {
