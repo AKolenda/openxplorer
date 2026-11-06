@@ -73,7 +73,13 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> (gtk::Bo
     let identity = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     identity.append(&ArtImage::new(Art::Folder, FOLDER_ART));
     let names = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let folder_label = gtk::Label::builder().label(&folder_name).xalign(0.0).build();
+    names.set_hexpand(true);
+    // A long name ends in "…" inside the window's fixed width and height.
+    let folder_label = gtk::Label::builder()
+        .label(&folder_name)
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .build();
     names.append(&folder_label);
     let state = gtk::Label::builder()
         .label(ox_core::i18n::gettext("Checking whether this folder is shared…"))

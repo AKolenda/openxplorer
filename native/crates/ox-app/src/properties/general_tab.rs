@@ -102,12 +102,12 @@ pub(super) fn general_tab(
 
     let place = Rows::new();
     let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-    place.add(
+    place.add_line(
         &ox_core::i18n::gettext("Location"),
         &locations.display_location(container),
     );
     if let Some(target) = &properties.link_target {
-        place.add(&ox_core::i18n::gettext("Target"), target);
+        place.add_line(&ox_core::i18n::gettext("Target"), target);
     }
     let folder_rows = if is_folder {
         let size = place.add(&ox_core::i18n::gettext("Size"), "");
@@ -162,7 +162,12 @@ pub(super) fn general_tab(
 }
 
 /// `PNG File (.png)`: the type and, when the name has one, its extension.
+/// A shortcut is just "Shortcut": its name has no extension, and the
+/// `.lnk` Windows shows there does not exist here ([`Entry::is_shortcut`]).
 fn type_of_file(entry: &Entry) -> String {
+    if entry.is_shortcut() {
+        return entry.type_label.clone();
+    }
     let extension = std::path::Path::new(&entry.name)
         .extension()
         .and_then(|extension| extension.to_str())
@@ -253,6 +258,10 @@ pub(super) struct GeneralEdits {
     /// Renaming asks about a changed extension, except for a link to a
     /// folder, whose name has none (OPS-049).
     links_to_folder: bool,
+    /// A symbolic link: while its name has no known type's extension it
+    /// is a shortcut, whose name has none either, as Windows keeps a
+    /// shortcut's hidden `.lnk` and never asks ([`Entry::is_shortcut`]).
+    is_link: bool,
     name: gtk::Entry,
     read_only: gtk::CheckButton,
     /// Whether the item is read-only now; `None` for a folder, whose box
@@ -304,6 +313,7 @@ impl GeneralEdits {
             original_name: RefCell::new(entry.name.clone()),
             is_folder: entry.is_dir,
             links_to_folder: properties.links_to_folder,
+            is_link: entry.is_symlink,
             name,
             read_only,
             read_only_now: Cell::new(read_only_now),
@@ -472,7 +482,11 @@ impl GeneralEdits {
                 ));
             };
             let uri = self.uri.borrow().clone();
-            let is_folder = self.is_folder || self.links_to_folder;
+            // Asked of the current name: a rename can give a link a known
+            // type's extension, or take it away.
+            let has_no_extension = self.is_folder
+                || self.links_to_folder
+                || (self.is_link && ox_core::entry::known_extension(&original).is_none());
             let parent = window.as_ref().map_or_else(
                 || opener.clone().upcast::<gtk::Window>(),
                 |window| window.clone().upcast(),
@@ -483,7 +497,7 @@ impl GeneralEdits {
             self.name.set_editable(false);
             self.hidden.set_sensitive(false);
             let renaming = opener
-                .rename_item_at(&parent, &uri, &original, &wanted, is_folder)
+                .rename_item_at(&parent, &uri, &original, &wanted, has_no_extension)
                 .await;
             self.name.set_editable(editable);
             self.hidden.set_sensitive(can_hide);

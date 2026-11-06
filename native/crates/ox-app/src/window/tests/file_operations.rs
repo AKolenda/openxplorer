@@ -338,6 +338,42 @@ fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together
     assert!(!fixture.path("Plan 1.txt").exists());
 }
 
+/// Rename items gives a shortcut a whole new name, as Windows does: its
+/// name has no extension to keep or ask about, since Windows keeps a
+/// shortcut's `.lnk` hidden. A dot in the batch name asks nothing.
+///
+/// parity: OPS-014, OPS-049
+#[gtk::test]
+fn rename_items_names_a_shortcut_whole_without_the_extension_question() {
+    let fixture = Fixture::empty();
+    fixture.write("Report.txt");
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    fs::create_dir(fixture.path("v1.2 release")).expect("the folder is made");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Report.txt - Shortcut", "v1.2 release"]);
+    test.activate("rename-items", None);
+    let dialog = open_dialog(&test);
+    text_field(&dialog).set_text("Q3.#");
+    dialog.press("Rename");
+
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .any(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+    };
+    wait_until("the renamed items", || {
+        question() || test.selected_names().len() == 2 && fixture.path("Q3.2").exists()
+    });
+    assert!(!question(), "no extension question");
+    let shortcut = ["Q3.1", "Q3.2"]
+        .into_iter()
+        .find(|name| fixture.path(name).is_symlink());
+    assert!(shortcut.is_some(), "the shortcut's whole name is replaced");
+    assert!(fixture.path("Report.txt").is_file());
+}
+
 /// An error shown for an earlier name goes once a name is accepted, also
 /// when the extension question that follows is cancelled: the dialog then
 /// shows the typed name without a stale reason.
