@@ -148,7 +148,9 @@ impl BrowserWindow {
                 if window.clipboard_generation() != generation {
                     return;
                 }
-                match ClipboardFiles::new(ClipboardMode::Copy, &copies) {
+                let locations = window.imp().locations.borrow();
+                let validated = ClipboardFiles::new(ClipboardMode::Copy, &copies, &locations);
+                match validated {
                     Ok(files) => window.put_files_on_clipboard_noting(files, note.as_deref()),
                     Err(error) => window.show_message(&error.to_string()),
                 }
