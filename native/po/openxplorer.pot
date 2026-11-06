@@ -1377,7 +1377,7 @@ msgstr ""
 msgid "Change Icon for {folder} Folder"
 msgstr ""
 
-#: crates/ox-app/src/properties/change_icon.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/properties/change_icon.rs crates/ox-app/src/properties/custom_icon.rs crates/ox-core/src/search/facets.rs
 msgid "Images"
 msgstr ""
 
@@ -1421,7 +1421,7 @@ msgstr ""
 msgid "Also apply this template to all subfolders"
 msgstr ""
 
-#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
 msgid "Documents"
 msgstr ""
 
@@ -4845,10 +4845,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Desktop (create shortcut)"
-msgstr ""
-
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
-msgid "Documents"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
