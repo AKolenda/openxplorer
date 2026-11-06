@@ -252,23 +252,32 @@ impl Drop for Pointer {
 /// destroys, and what shows over a window still shown.
 /// Says on standard error what it put away, for a failure's log.
 fn close_leftovers() {
-    let shown: Vec<gtk::Window> = gtk::Window::list_toplevels()
-        .into_iter()
-        .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
-        .filter(|window| {
-            let over_a_shown_window = window.transient_for().is_some_and(|parent| parent.is_visible());
-            window.is_visible() && !window.is::<crate::window::BrowserWindow>() && !over_a_shown_window
-        })
-        .collect();
-    for window in &shown {
-        eprintln!(
-            "putting away a {} left shown by an earlier test: {:?}",
-            window.type_().name(),
-            window.title().unwrap_or_default()
-        );
-        super::harness::put_away(window);
+    // Hiding a window leaves the dialogs over it shown, now over no shown
+    // window: the next pass puts them away. A dialog chain is never this
+    // deep.
+    const PASSES: usize = 8;
+    for _ in 0..PASSES {
+        let shown: Vec<gtk::Window> = gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+            .filter(|window| {
+                let over_a_shown_window = window.transient_for().is_some_and(|parent| parent.is_visible());
+                window.is_visible() && !window.is::<crate::window::BrowserWindow>() && !over_a_shown_window
+            })
+            .collect();
+        if shown.is_empty() {
+            return;
+        }
+        for window in &shown {
+            eprintln!(
+                "putting away a {} left shown by an earlier test: {:?}",
+                window.type_().name(),
+                window.title().unwrap_or_default()
+            );
+            super::harness::put_away(window);
+        }
+        super::harness::settle();
     }
-    super::harness::settle();
 }
 
 /// The screen coordinates of (`x`, `y`) in `widget`, found by placing the
