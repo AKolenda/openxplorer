@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What a real pointer on check.py's private display sees: the label on
-//! the drag icon that says what a release would do (DND-028), and a click
-//! anywhere on a details row selecting it (SEL-002, SEL-012). GTK's own
+//! the drag icon that says what a release would do (DND-028), a click
+//! anywhere on a details row selecting it, and the rubber band drawn from
+//! the empty part of a details row (SEL-002, SEL-012). GTK's own
 //! drag source, drop targets and gestures run, so these catch what calling
 //! the handlers directly cannot, such as which gesture takes a press on a
 //! row.
@@ -158,4 +159,62 @@ fn a_real_click_anywhere_on_a_details_row_selects_it() {
             "a click on {place} draws no band"
         );
     }
+}
+
+/// The screen point of the Size column of the row at `position`, past the
+/// end of its name.
+fn beside_name_on_screen(pointer: &mut Pointer, test: &TestWindow, position: u32) -> (i32, i32) {
+    let view = test.window.folder_pane().input_widget();
+    let cell = test
+        .window
+        .folder_pane()
+        .owners()
+        .file_cell_at(position, &view)
+        .expect("the row is shown");
+    let bounds = cell.compute_bounds(&view).expect("the row is laid out");
+    let point = (
+        f64::from(view.width()) - 40.0,
+        f64::from(bounds.y() + bounds.height() / 2.0),
+    );
+    screen_point(pointer, &view, point, PROBE)
+}
+
+/// In a folder whose rows fill the details view, a real drag from the
+/// empty part of an unselected row draws a rubber band over the rows it
+/// crosses instead of dragging the row, as in Windows Explorer, where only
+/// the icon and name drag the item.
+///
+/// parity: SEL-012
+#[gtk::test]
+fn a_real_drag_from_beside_a_details_name_draws_a_band() {
+    let fixture = Fixture::with_files(FULL_FOLDER);
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    wait_for_frames(&test.window, 3);
+    let model = test.window.folder_model();
+    model.select_only(0);
+
+    let from = beside_name_on_screen(&mut pointer, &test, 2);
+    let to = beside_name_on_screen(&mut pointer, &test, 5);
+    pointer.move_to(from.0, from.1);
+    pointer.press(Button::Primary);
+    pointer.glide(from, (from.0 - 30, to.1), 12);
+    wait_until("the band to select the rows", || {
+        model.selected_positions() == [2, 3, 4, 5]
+    });
+    let band_shown = test.window.folder_pane().rubber_band_shown();
+    let dragged = test.window.imp().outgoing_drag.borrow().is_some();
+    pointer.release(Button::Primary);
+    wait_until("the band to end", || {
+        !test.window.folder_pane().rubber_band_shown()
+    });
+    wait_for(HOLD);
+
+    assert!(band_shown, "the band is drawn");
+    assert!(!dragged, "no row is dragged");
+    assert_eq!(
+        model.selected_positions(),
+        [2, 3, 4, 5],
+        "the release leaves the band's rows selected"
+    );
 }

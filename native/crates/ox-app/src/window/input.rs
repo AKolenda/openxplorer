@@ -550,7 +550,10 @@ impl BrowserWindow {
     /// the tiles, clears the selection and keeps keyboard focus on the
     /// view, as in Windows Explorer and Dolphin; with Ctrl or Shift held
     /// the selection stays. A drag from there draws a rubber band
-    /// ([`super::rubber_band`]).
+    /// ([`super::rubber_band`]). A press on the empty part of an unselected
+    /// details row keeps the selection: released there, the row's own click
+    /// selects the row (Ctrl toggles it, Shift extends to it), and dragged
+    /// from there, the band replaces the selection as it moves.
     fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
@@ -565,6 +568,9 @@ impl BrowserWindow {
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
                     return;
                 }
+                if window.is_beside_item(&view, x, y) {
+                    return;
+                }
                 if !press_keeps_selection(press.current_event_state()) {
                     window.folder_pane().model().select_none();
                 }
@@ -575,18 +581,45 @@ impl BrowserWindow {
     }
 
     /// Whether (`x`, `y`) in `view` is its blank space: inside the list,
-    /// not on an item, and not on the column titles. No part of a details
-    /// row is blank space: as with Windows 11 Explorer's full-row select,
-    /// a press anywhere on a row (its icon, its name, the empty end of its
-    /// Name cell or its other columns) is on its item.
+    /// not on an item, and not on the column titles. The empty part of an
+    /// unselected details row is blank space too ([`Self::is_beside_item`]).
     pub(super) fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
         if self.folder_pane().owners().position_at(view, x, y).is_some() {
-            return false;
+            return self.is_beside_item(view, x, y);
         }
         // The details view's rows are an inner list view; its titles are
         // not inside it. The icon grid is the list itself.
         view.pick(x, y, gtk::PickFlags::DEFAULT)
             .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
+    }
+
+    /// Whether (`x`, `y`) in `view` is on the empty part of an unselected
+    /// details row: past the end of its name, or in its other columns. As
+    /// in Windows Explorer, only the icon and the name (with the check box
+    /// and the expand arrow before them) are the item to drag there, so a
+    /// drag from the rest of the row draws a rubber band, even in a folder
+    /// whose rows fill the view. A click there still selects the row, as
+    /// Windows' full-row select does. A selected row stays the item across
+    /// its width, and so does every tile of the icon views. A drop still
+    /// goes into the folder of the whole row.
+    pub(super) fn is_beside_item(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
+        if !view.is::<gtk::ColumnView>() {
+            return false;
+        }
+        let pane = self.folder_pane();
+        let Some(position) = pane.owners().position_at(view, x, y) else {
+            return false;
+        };
+        if pane.model().selection().is_selected(position) {
+            return false;
+        }
+        let Some(cell) = pane.owners().file_cell_at(position, view) else {
+            return false;
+        };
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let in_view = gtk::graphene::Point::new(x as f32, y as f32);
+        view.compute_point(&cell, &in_view)
+            .is_some_and(|point| cell.is_past_name(point))
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;
