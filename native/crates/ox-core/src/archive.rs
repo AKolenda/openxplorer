@@ -19,8 +19,9 @@
 //!   streams.
 //! - ARC-012 to ARC-020: an extraction creates a new folder, checks every
 //!   member first, builds it privately and publishes it all or nothing.
-//! - ARC-023: compressing writes a new ZIP privately and publishes it
-//!   without replacing anything; links are never followed.
+//! - ARC-023: compressing creates a new ZIP without replacing anything,
+//!   under its final name in local folders and privately staged elsewhere,
+//!   and removes it when it stops; links are never followed.
 //!
 //! Every operation blocks on I/O; each has an `…_in_background` variant
 //! that runs it on a GIO worker thread for the main loop to await. All of
@@ -38,6 +39,7 @@
 //! | `source` | Opening archives: [`ArchiveOpener`] | `archives.py`, `native_opening.py` |
 //! | `gio_reader` | Reading archives on shares in place | `native_opening.py` |
 //! | `zip` | The ZIP format, as Python's `zipfile` reads it | `zipfile` |
+//! | `progress` | Progress reports in the terms of a copy | new (Explorer) |
 //! | `worker` | Running operations on a worker thread | `winspace.py` |
 //! | `error` | [`ArchiveError`] with the app's messages | all of them |
 
@@ -49,6 +51,7 @@ mod extract;
 mod gio_reader;
 mod member_names;
 mod preview;
+mod progress;
 mod source;
 mod tar;
 mod worker;
