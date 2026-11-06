@@ -134,7 +134,14 @@ impl BrowserWindow {
     /// outcome of a run that finished; `None` when another operation runs,
     /// the check failed or the user cancelled.
     pub(crate) async fn transfer_with_conflicts(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, true).await
+        self.transfer_checked(incoming, true, false).await
+    }
+
+    /// [`Self::transfer_with_conflicts`] for Send to (CMD-038): the copies
+    /// go to another folder, so the sent items stay selected, as in
+    /// Windows Explorer.
+    pub(in crate::window) async fn send_copies(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
+        self.transfer_checked(incoming, true, true).await
     }
 
     /// [`Self::transfer_with_conflicts`] for a move that is one step of a
@@ -142,18 +149,25 @@ impl BrowserWindow {
     /// of an extraction into an existing folder come from a private folder
     /// that is removed afterwards, so the journal does not record it.
     pub(crate) async fn transfer_without_undo(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, false).await
+        self.transfer_checked(incoming, false, false).await
     }
 
     /// Checks, asks, runs and reports `incoming`; the journal records it
-    /// when `undoable`.
+    /// when `undoable`. Afterwards the copies are selected, or with
+    /// `keeps_selection` the items that were sent.
     ///
     /// The job claims its action in the progress window first, as Windows
     /// shows "Copying 1 item from Downloads to Desktop" before it asks, so
     /// the four-job limit and the overlap check count it while it checks
     /// and asks, and the browsing windows stay free meanwhile.
-    async fn transfer_checked(&self, incoming: IncomingItems, undoable: bool) -> Option<TransferOutcome> {
+    async fn transfer_checked(
+        &self,
+        incoming: IncomingItems,
+        undoable: bool,
+        keeps_selection: bool,
+    ) -> Option<TransferOutcome> {
         let incoming = incoming.without_items_already_there()?;
+        let kept = keeps_selection.then(|| incoming.uris.clone());
         let origin = self.current_uri();
         let mode = incoming.mode;
         let destination = incoming.destination_folder.clone();
@@ -179,7 +193,10 @@ impl BrowserWindow {
         let changed = changed_folders(written, incoming.uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
         let finished = outcome.clone().map(|outcome| {
-            let finished = FinishedOperation::of_transfer(mode, outcome);
+            let mut finished = FinishedOperation::of_transfer(mode, outcome);
+            if let Some(kept) = kept {
+                finished.select_after = kept;
+            }
             if undoable {
                 finished
             } else {

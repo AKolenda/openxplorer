@@ -4143,8 +4143,8 @@ mod tests {
         );
     }
 
-    /// F3 opens no second pane in a dialog, and a pane split off anyway
-    /// lists only the type chosen, as the first one does.
+    /// A pane split off in a dialog, where Split view is off, lists only
+    /// the type chosen, as the first one does.
     ///
     /// parity: INT-032
     #[gtk::test]
@@ -4167,14 +4167,6 @@ mod tests {
         let test = &portal.test;
         let window = &test.window;
         wait_until("the text file", || test.names() == ["notes.txt"]);
-
-        press(test, gdk::Key::F3, gdk::ModifierType::empty());
-        assert!(
-            !gtk::subclass::prelude::ObjectSubclassIsExt::imp(window)
-                .end_pane_column
-                .is_visible(),
-            "F3 splits nothing"
-        );
 
         window.split_tab(None).expect("the folder splits");
         let split = window.pane_on(PaneSide::End);

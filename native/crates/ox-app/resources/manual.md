@@ -32,7 +32,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 ## Views and sorting
 
 - View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.
-- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
+- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
 - View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.
 - Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
@@ -44,7 +44,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Search
 
-- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.
+- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.
 - Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
 

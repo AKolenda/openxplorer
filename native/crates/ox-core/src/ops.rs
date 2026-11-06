@@ -51,6 +51,7 @@
 //! | `resolved_transfer` | A copy or move with an answer per name conflict, inside merged folders too |
 //! | `duplicate` | Duplicate in place |
 //! | `links` | Symbolic links to dropped items, and New ▸ Link |
+//! | `shortcuts` | Shortcuts named as Windows names them, for Send to ▸ Desktop |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
@@ -92,6 +93,7 @@ mod report;
 mod resolved_transfer;
 mod results;
 mod run_transfer;
+mod shortcuts;
 mod tab_transfer;
 mod templates;
 mod undo;
@@ -127,6 +129,7 @@ pub use resolved_transfer::{
     run_answered_items, run_free_items, run_resolved_transfer, FreeItemsDone, Resolution,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
+pub use shortcuts::{create_shortcut, create_shortcuts, shortcut_name, NO_LINKS_HERE};
 pub use tab_transfer::{
     Acceptance, Delivery, KeptReason, TabMessage, TabMoveOutcome, TabTransferError, TabTransferToken,
     TabTransfers, WindowId, MAX_PENDING_TAB_TRANSFERS, TAB_TRANSFER_LIFETIME,

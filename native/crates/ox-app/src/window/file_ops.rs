@@ -86,6 +86,7 @@ use ox_core::ops::TemplateList;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+pub(super) use jobs::MAX_JOBS;
 pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
 
@@ -118,9 +119,15 @@ impl FileOperations {
         self.running.is_some()
     }
 
+    /// How many transfers run now, each with its own panel. A paste that
+    /// checks or asks about name conflicts is one.
+    pub(crate) fn job_count(&self) -> usize {
+        self.jobs.len()
+    }
+
     /// True while an exclusive operation runs: no new file operation may
-    /// start. A paste that checks or asks about name conflicts is a job.
-    fn is_busy(&self) -> bool {
+    /// start.
+    pub(crate) fn is_busy(&self) -> bool {
         self.is_running()
     }
 
