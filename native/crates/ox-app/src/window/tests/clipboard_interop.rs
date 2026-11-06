@@ -2,7 +2,8 @@
 //! What other applications put on the clipboard: a plain URI list, a
 //! picture, nothing at all, empty file lists, a conversion that fails, an
 //! owner that changes during a read and payloads over the size the app
-//! accepts. Dolphin's cut and plain text are in the `clipboard` tests.
+//! accepts, and what a reader that takes text only gets from what this app
+//! copied. Dolphin's cut and plain text are in the `clipboard` tests.
 //!
 //! Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py`, against the
 //! display's clipboard instead of its fake GTK clipboard. GitHub issue #20 (1.1.4
@@ -19,7 +20,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::clipboard::{GNOME, MAX_BYTES, URI_LIST};
 
-use super::file_ops_support::is_enabled;
+use super::file_ops_support::{is_enabled, select_names};
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 
 use scripted_owner::{Script, ScriptedOwner};
@@ -446,7 +447,7 @@ fn pasting_the_same_picture_twice_never_overwrites_the_first_file() {
 fn paste_into_a_folder_writes_the_picture_there() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    super::file_ops_support::select_names(&test, &["Documents"]);
+    select_names(&test, &["Documents"]);
     let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
 
     take_clipboard(&test, &offering("image/png", &png));
@@ -538,4 +539,27 @@ fn a_read_overtaken_by_an_owner_change_is_dropped() {
         "the slow owner's cut is not moved"
     );
     assert!(!fixture.path("Documents/Notes 10.txt").exists());
+}
+
+/// A reader that takes text only, such as a terminal or an editor, pastes
+/// the items this app copied as their paths, although the same clipboard
+/// also holds the file list: text is published beside the files, never
+/// instead of them.
+///
+/// parity: CLIP-004
+#[gtk::test]
+fn a_text_reader_gets_the_copied_items_paths() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    let clipboard = test.window.clipboard();
+
+    let read = glib::MainContext::default().block_on(async { clipboard.read_text_future().await });
+    let text = read
+        .expect("the clipboard answers a text reader")
+        .expect("the clipboard holds text");
+    let path = fixture.path("Notes 2.txt").to_string_lossy().into_owned();
+
+    assert_eq!(text.as_str(), path);
 }

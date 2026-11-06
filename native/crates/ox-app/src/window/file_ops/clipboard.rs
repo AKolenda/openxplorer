@@ -7,8 +7,9 @@
 //! ox-core encodes and decodes the formats ([`ox_core::clipboard`]); this
 //! module claims and reads the display's clipboard:
 //!
-//! - Copy and Cut publish the four formats at once as one clipboard owner,
-//!   so Nautilus, Dolphin and other windows of this app can paste them.
+//! - Copy and Cut publish the five formats at once as one clipboard owner,
+//!   so Nautilus, Dolphin, terminals and other windows of this app can paste
+//!   them.
 //! - Reading tries the app's own format, then GNOME's, then the URI
 //!   list with the KDE cut marker, each asynchronously, so a slow owner
 //!   never freezes the window. When none of them holds a file list, the
@@ -37,6 +38,7 @@ use ox_core::clipboard::{
     decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, IMAGE_MIME_TYPES, KDE_CUT, MAX_BYTES,
     TEXTURE_EXTENSION,
 };
+use ox_core::location::LocationContext;
 
 use crate::window::BrowserWindow;
 
@@ -258,9 +260,15 @@ fn cut_uris(files: Option<&ClipboardFiles>) -> HashSet<String> {
 }
 
 /// Makes `files` the clipboard's content, in every format at once.
-fn publish(clipboard: &gdk::Clipboard, files: &ClipboardFiles) -> Result<(), glib::BoolError> {
+/// `locations` names the devices and the home folder of the paths the text
+/// format shows.
+fn publish(
+    clipboard: &gdk::Clipboard,
+    files: &ClipboardFiles,
+    locations: &LocationContext,
+) -> Result<(), glib::BoolError> {
     let providers: Vec<gdk::ContentProvider> = files
-        .encode()
+        .encode(locations)
         .into_iter()
         .map(|payload| {
             gdk::ContentProvider::for_bytes(payload.mime_type, &glib::Bytes::from_owned(payload.bytes))
@@ -313,7 +321,8 @@ impl BrowserWindow {
 
     /// Puts `uris` on the desktop's clipboard and says so.
     fn copy_items(&self, mode: ClipboardMode, uris: &[String]) {
-        let files = match ClipboardFiles::new(mode, uris) {
+        let validated = ClipboardFiles::new(mode, uris, &self.imp().locations.borrow());
+        let files = match validated {
             Ok(files) => files,
             Err(error) => {
                 self.show_message(&error.to_string());
@@ -332,7 +341,8 @@ impl BrowserWindow {
     /// Makes `files` the desktop's clipboard and shows `note`, such as
     /// what was left out, when there is one.
     pub(crate) fn put_files_on_clipboard_noting(&self, files: ClipboardFiles, note: Option<&str>) {
-        if publish(&self.clipboard(), &files).is_err() {
+        let published = publish(&self.clipboard(), &files, &self.imp().locations.borrow());
+        if published.is_err() {
             self.show_message(ox_core::i18n::gettext_static(
                 "The desktop clipboard could not be claimed.",
             ));
@@ -380,7 +390,7 @@ impl BrowserWindow {
             // meanwhile, and then there is nothing of this cut to clear.
             clipboard.set_content(None::<&gdk::ContentProvider>).ok();
             self.remember_clipboard(&ClipboardContent::Nothing);
-        } else if publish(&clipboard, &current).is_ok() {
+        } else if publish(&clipboard, &current, &self.imp().locations.borrow()).is_ok() {
             self.remember_clipboard(&ClipboardContent::Files(current));
         }
     }
