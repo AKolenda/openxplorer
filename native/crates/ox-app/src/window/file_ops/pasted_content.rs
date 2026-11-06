@@ -22,6 +22,7 @@
 use ox_core::clipboard::PastedImage;
 use ox_core::ops::create_pasted_file;
 
+use crate::search::changed_folders;
 use crate::window::BrowserWindow;
 
 /// What the transfer panel says while a paste writes its picture.
@@ -54,9 +55,15 @@ impl BrowserWindow {
                 // share can be navigated away from before the file lands:
                 // reloading the tab that is active now would replace its
                 // selection with an item it does not hold, so only the tab
-                // still showing the destination lists it again.
+                // still showing the destination selects it. Searches and the
+                // other tabs on that folder learn of the file either way,
+                // as after New ▸ Text document.
+                let changed = changed_folders([destination_folder.as_str()], [created.uri.as_str()]);
+                self.context().search_cache().folders_written(changed);
                 if self.current_uri().as_deref() == Some(destination_folder.as_str()) {
                     self.reload_selecting(vec![created.uri]);
+                } else {
+                    self.mark_changed(&destination_folder);
                 }
             }
             Err(error) => self.show_message(&error.to_string()),

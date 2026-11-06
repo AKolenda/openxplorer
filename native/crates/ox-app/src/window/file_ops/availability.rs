@@ -372,7 +372,7 @@ impl BrowserWindow {
         self.facts_for_command(command).allows(command)
     }
 
-    fn facts_for_command(&self, command: FileCommand) -> CommandFacts {
+    pub(crate) fn facts_for_command(&self, command: FileCommand) -> CommandFacts {
         let mut facts = self.command_facts();
         let jobs = self.imp().file_operations.borrow().jobs.len();
         if jobs > 0 {
