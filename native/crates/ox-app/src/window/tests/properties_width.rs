@@ -141,11 +141,10 @@ fn a_long_name_or_location_never_widens_properties() {
     test.show(&fixture.uri());
     test.wait_for_listing("the fixture");
     super::file_ops_support::select_names(&test, &[LONG_NAME, &file_name]);
-    // Windows titles them by their two names, in the selection's order.
+    // Windows titles them by their two names, in the listing's order.
     let is_both = |title: &str| {
-        title.contains(&format!("{LONG_NAME}, "))
-            && title.contains(&file_name)
-            && title.ends_with(" Properties")
+        title == format!("{LONG_NAME}, {file_name} Properties")
+            || title == format!("{file_name}, {LONG_NAME} Properties")
     };
     test.activate("properties", None);
     crate::test_support::harness::wait_until("Properties of the two items", || {
