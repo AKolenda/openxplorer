@@ -70,7 +70,7 @@ fn a_share_in_a_server_listing_is_a_network_folder_that_opens_its_target() {
     );
 }
 
-/// After Map network location connected, the share is saved with its
+/// After Map network drive connected, the share is saved with its
 /// label, the dialog closes, the sidebar lists it and the window opens it.
 /// Connecting itself needs a server, so the test starts where the mount
 /// succeeded.

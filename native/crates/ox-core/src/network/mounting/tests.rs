@@ -160,6 +160,7 @@ fn map_network_location_refuses_bad_input_before_mounting() {
                 &registry,
                 case.address,
                 case.label,
+                CredentialChoice::Known,
             ));
 
             let message = refused.expect_err("the input is refused").to_string();

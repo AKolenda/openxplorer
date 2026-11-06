@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Mounting network locations: shares on demand and Map network location.
+//! Mounting network locations: shares on demand and Map network drive.
 //!
 //! Ports `mount`, `after_connect`, `retry_list` and the `connect` operation
 //! of `v2.0.0:desktop/winspace.py`, and `verify_folder` of
@@ -22,7 +22,7 @@ use std::future::Future;
 use gio::prelude::*;
 
 use super::error::NetworkError;
-use super::prompts::{MountOutcome, MountPrompts};
+use super::prompts::{CredentialChoice, MountOutcome, MountPrompts};
 use super::sign_out::SignOutRegistry;
 use crate::entry::EntryError;
 use crate::location::{normalise, require_share, safe_label, split_location, unquote_lossy};
@@ -30,7 +30,7 @@ use crate::location::{normalise, require_share, safe_label, split_location, unqu
 /// The label of a mapped share whose address names no folder.
 const FALLBACK_SHARE_LABEL: &str = "Network folder";
 
-/// A share connected with Map network location.
+/// A share connected with Map network drive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectedShare {
     /// The canonical location of the share, verified to be a folder.
@@ -81,8 +81,17 @@ pub enum MountedReadError<E> {
 /// The [`LocationError`](crate::location::LocationError) of an invalid
 /// address, or GIO's error, for example a rejected password.
 pub async fn mount_location(prompts: &MountPrompts, uri: &str) -> Result<(), NetworkError> {
+    mount_location_as(prompts, uri, CredentialChoice::Known).await
+}
+
+/// [`mount_location`], signing in with the account `choice` names.
+async fn mount_location_as(
+    prompts: &MountPrompts,
+    uri: &str,
+    choice: CredentialChoice,
+) -> Result<(), NetworkError> {
     let uri = normalise(uri)?;
-    let mut prompted = PromptedOperation::new(prompts, &uri)?;
+    let mut prompted = PromptedOperation::new(prompts, &uri, choice)?;
     let file = gio::File::for_uri(&uri);
     let mounted = file
         .mount_enclosing_volume_future(gio::MountMountFlags::NONE, Some(&prompted.operation))
@@ -138,9 +147,10 @@ where
     read().await.map_err(MountedReadError::Read)
 }
 
-/// Map network location: mounts the share at `address` (`\\nas\Projects`
-/// or `smb://nas/Projects`) and checks that it is a folder. Saving it in
-/// the sidebar is the caller's choice.
+/// Map network drive: mounts the share at `address` (`\\nas\Projects`
+/// or `smb://nas/Projects`), signing in with the account `choice` names,
+/// and checks that it is a folder. Saving it in the sidebar is the
+/// caller's choice.
 ///
 /// # Errors
 ///
@@ -152,6 +162,7 @@ pub async fn connect_share(
     signing_out: &SignOutRegistry,
     address: &str,
     label: &str,
+    choice: CredentialChoice,
 ) -> Result<ConnectedShare, NetworkError> {
     let uri = require_share(address)?;
     // NET-023: a server being signed out is not mounted again halfway.
@@ -159,7 +170,7 @@ pub async fn connect_share(
         return Err(NetworkError::ReconnectAfterSignOut);
     }
     let label = safe_label(label, &share_name(&uri))?;
-    mount_location(prompts, &uri).await?;
+    mount_location_as(prompts, &uri, choice).await?;
     verify_folder(&uri).await?;
     Ok(ConnectedShare { uri, label })
 }
@@ -206,14 +217,19 @@ pub(super) struct PromptedOperation<'a> {
 }
 
 impl<'a> PromptedOperation<'a> {
-    /// A mount operation for `uri` that `prompts` answer.
+    /// A mount operation for `uri` that `prompts` answer, signing in with
+    /// the account `choice` names.
     ///
     /// # Errors
     ///
     /// The location error of an address that is not a supported location.
-    pub(super) fn new(prompts: &'a MountPrompts, uri: &str) -> Result<Self, NetworkError> {
+    pub(super) fn new(
+        prompts: &'a MountPrompts,
+        uri: &str,
+        choice: CredentialChoice,
+    ) -> Result<Self, NetworkError> {
         Ok(Self {
-            operation: prompts.create(uri)?,
+            operation: prompts.create_with(uri, choice)?,
             prompts,
             outcome: MountOutcome::Failed,
         })

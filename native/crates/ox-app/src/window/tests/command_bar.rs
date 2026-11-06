@@ -406,7 +406,7 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
         .any(|button| {
             button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
         });
-    assert!(sidebar_maps, "the sidebar keeps Map network location");
+    assert!(sidebar_maps, "the sidebar keeps Map network drive");
 }
 
 /// Disconnect network drive lists each network mount once, by the root
