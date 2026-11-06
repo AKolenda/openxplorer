@@ -190,15 +190,17 @@ impl Sidebar {
             .expect("constructed runs once per object");
     }
 
-    /// Draws a separator above every row that starts a new section.
+    /// Draws a divider above every row that starts a new group of
+    /// sections ([`Section::group`]), as Windows 11's navigation pane
+    /// divides Home, the pinned folders and This PC with Network.
     fn separate_sections(&self, list: &gtk::ListBox) {
         list.set_header_func(glib::clone!(
             #[weak(rename_to = sidebar)]
             self,
             move |row, before| {
-                let starts_section =
-                    before.is_some_and(|before| sidebar.section_of(before) != sidebar.section_of(row));
-                if starts_section {
+                let group = |row: &gtk::ListBoxRow| sidebar.section_of(row).map(Section::group);
+                let starts_group = before.is_some_and(|before| group(before) != group(row));
+                if starts_group {
                     row.set_header(Some(&section_separator()));
                 } else {
                     row.set_header(None::<&gtk::Widget>);

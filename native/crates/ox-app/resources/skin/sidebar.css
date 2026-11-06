@@ -6,10 +6,11 @@
    navigation pane rows (owner decision 2026-11-06; the web's were 35px
    with 1px margins that collapse to one pixel between rows and into the
    separators' 12px). GTK margins do not collapse, so rows keep only the
-   top one and separators give back a pixel below. Quick access rows sit in a box of their own, inset 4px
-   (3px margin, 1px border) with no row margins and 4px below the last.
-   The pane keeps the web's 13px 7px padding: the spec's 12px 8px (§4.4)
-   would move every row a pixel, off the current app's pixels. */
+   top one and separators give back a pixel below. The pinned folders
+   are rows like every other, full width and on the same 32px pitch, as
+   in Windows 11's navigation pane (the web's Quick access box, inset
+   4px, is gone). The pane keeps the web's 13px 7px padding: the spec's
+   12px 8px (§4.4) would move every row a pixel. */
 .sidebar { background-color: @ox_sidebar; }
 .sidebar list { background: none; padding: 13px 7px 0 7px; color: @ox_text; }
 .sidebar list > row {
@@ -21,9 +22,6 @@
   outline: none;
   transition: background-color 83ms linear;
 }
-.sidebar list > row.quick-access { margin: 0 4px; }
-.sidebar list > row.quick-access.section-start { margin-top: 2px; }
-.sidebar list > row.quick-access.section-end { margin-bottom: 5px; }
 /* The file list's item colours and focus ring (folder-views.css), as
    Windows 11 File Explorer's navigation pane shares them. */
 .sidebar list > row:hover { background-color: @ox_item_hover; }
@@ -58,11 +56,17 @@
    web row pulls its chevron into the padding with negative margins,
    which a GTK box cannot do. Glyphs and art are 16px, as Windows 11's
    navigation pane icons (owner decision 2026-11-06; the web's were 18px
-   and 19px in a 20px box), and the names keep their place. */
-.sidebar .side-entry { padding: 0 11px; }
+   and 19px in a 20px box).
+   As in Windows 11's navigation pane, every top-level row keeps the
+   room of an expander before its icon, so Home, the pinned folders,
+   This PC and Network line their icons up in one column (28px in from
+   the pane) and only This PC and Network draw a chevron there. Rows
+   inside This PC and Network sit one 16px level further in. */
+.sidebar .side-entry { padding: 0 11px 0 19px; }
 /* Rows inside This PC and Network (.side-entry.indent). */
-.sidebar list > row.indent .side-entry { padding-left: 32px; }
-/* This PC and Network: the 9px chevron starts 5px in and the icon 19px. */
+.sidebar list > row.indent .side-entry { padding-left: 35px; }
+/* This PC and Network: the 9px chevron starts 5px in and the icon 19px
+   after it, in the column of the other top-level icons. */
 .sidebar list > row.group .side-entry { padding-left: 5px; }
 /* The chevron of This PC and Network (SIDE-033): a 17px button of its
    own around the 9px glyph, which stays where it was (5px in, 5px before

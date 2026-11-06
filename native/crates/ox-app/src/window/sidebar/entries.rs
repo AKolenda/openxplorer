@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The sidebar's rows as data, in the order of `renderSidebar` in
-//! `v2.0.0:desktop/ui/app.js`: Home (the home folder), the Quick access folders
-//! and pins, the searches saved to the sidebar (SRCH-038), This PC with
-//! Local Disk and the drives and devices, and
-//! Network with the merged network locations, then Recent files and the
-//! Recycle Bin ([`recent_and_bin_entries`]). Mounted SMB shares appear
-//! once, under Network.
+//! The sidebar's rows as data, in the order of Windows 11's navigation
+//! pane: Home; a divider; the pinned folders (the standard folders and
+//! the user's pins, each with the pin glyph); a divider; This PC with
+//! Local Disk and the drives and devices, then Network with the merged
+//! network locations, in one group as Windows 11 lists them. The places
+//! Windows has no twin of follow in a last group of their own after
+//! Network: the searches saved to the sidebar (SRCH-038), then Recent
+//! files, Recent locations and the Recycle Bin
+//! ([`recent_and_bin_entries`]). Mounted SMB shares appear once, under
+//! Network. Windows 11's Gallery is not listed: the app has no Gallery
+//! view yet.
 //!
 //! [`sidebar_entries`] turns composed [`Places`] into rows without GTK, so
 //! the order is tested on its own. Drives and network locations carry
@@ -61,6 +65,19 @@ impl Section {
                 "recent",
                 ox_core::i18n::gettext_static("Recent files and Recycle Bin"),
             )),
+        }
+    }
+
+    /// The group of the navigation pane the section is drawn in; a
+    /// divider separates two groups, as in Windows 11: Home, the pinned
+    /// folders, This PC with Network, and the places Windows has no twin
+    /// of (saved searches, Recent files, Recent locations, Recycle Bin).
+    pub(in crate::window) fn group(self) -> u8 {
+        match self {
+            Section::Home => 0,
+            Section::QuickAccess => 1,
+            Section::ThisPc | Section::Network => 2,
+            Section::SavedSearches | Section::RecentAndBin => 3,
         }
     }
 }
@@ -302,8 +319,8 @@ fn pin_drop_tail() -> SidebarEntry {
     }
 }
 
-/// The sidebar rows, in the Python app's order, with the saved
-/// `searches` after Quick access.
+/// The sidebar rows, in Windows 11's order, with the saved `searches`
+/// after Network, where the places Windows has no twin of start.
 pub(in crate::window) fn sidebar_entries(
     places: &Places,
     searches: &[SavedSearch],
@@ -331,12 +348,12 @@ pub(in crate::window) fn sidebar_entries(
     if places.quick_access.is_empty() {
         entries.push(pin_drop_tail());
     }
-    entries.extend(saved);
     entries.push(this_pc);
     entries.push(local_disk_entry(locations));
     entries.extend(drives);
     entries.push(network);
     entries.extend(network_rows);
+    entries.extend(saved);
     entries
 }
 
@@ -443,7 +460,7 @@ mod tests {
 
     /// parity: SIDE-001, SIDE-019
     #[test]
-    fn rows_follow_the_python_order_and_smb_mounts_appear_once_under_network() {
+    fn rows_follow_windows_11_order_and_smb_mounts_appear_once_under_network() {
         let settings = SettingsData {
             pins: vec![Bookmark {
                 uri: "file:///srv/work".into(),
@@ -477,6 +494,68 @@ mod tests {
         let media = entries.last().expect("network row");
         assert_eq!(media.tooltip, "\\\\nas\\media · Connected");
         assert_eq!(media.section, Section::Network);
+    }
+
+    /// Windows 11's navigation pane: Home, a divider, the pins, a divider,
+    /// This PC and Network in one group; the places Windows has no twin
+    /// of (a saved search, Recent files, Recent locations, the Recycle
+    /// Bin) follow after Network in a last group, behind one divider.
+    ///
+    /// parity: SIDE-001, SRCH-038
+    #[test]
+    fn the_places_windows_lacks_follow_network_in_a_group_of_their_own() {
+        let settings = SettingsData {
+            pins: vec![Bookmark {
+                uri: "file:///home/demo/Projects".into(),
+                label: "Projects".into(),
+            }],
+            ..SettingsData::default()
+        };
+        let places = compose(PlaceSources {
+            settings: &settings,
+            known_folders: &[],
+            volumes: &[],
+            stable_mounts: &[],
+            visited_network: &[],
+        });
+        let locations = LocationContext {
+            home: Some(PathBuf::from("/home/demo")),
+            ..LocationContext::default()
+        };
+        let search = SavedSearch {
+            folder: "file:///home/demo/Projects".into(),
+            text: "budget".into(),
+            label: "Search for budget in Projects".into(),
+            search_in: ox_core::search::SearchIn::default(),
+            all_cached_folders: false,
+        };
+        let mut entries = sidebar_entries(&places, &[search], &locations);
+        entries.extend(recent_and_bin_entries(0));
+        assert_eq!(
+            labels(&entries),
+            [
+                "Home",
+                "Projects",
+                "This PC",
+                "Local Disk",
+                "Network",
+                "Search for budget in Projects",
+                "Recent files",
+                "Recent locations",
+                "Recycle Bin"
+            ]
+        );
+        // A divider is drawn where the group changes.
+        let dividers: Vec<&str> = entries
+            .windows(2)
+            .filter(|pair| pair[0].section.group() != pair[1].section.group())
+            .map(|pair| pair[1].label.as_str())
+            .collect();
+        assert_eq!(
+            dividers,
+            ["Projects", "This PC", "Search for budget in Projects"],
+            "no divider between This PC and Network, as in Windows 11"
+        );
     }
 
     /// parity: DND-014
