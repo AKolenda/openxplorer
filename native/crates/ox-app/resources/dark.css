@@ -45,10 +45,18 @@
 @define-color ox_hover #343434;                    /* C17 */
 @define-color ox_pressed #303030;                  /* C18 */
 @define-color ox_selected #263c50;                 /* C19 */
-@define-color ox_selected_hover @ox_selected;      /* C20 visible: mix(@ox_selected, @ox_accent, .06) */
-@define-color ox_selected_edge alpha(#80b4e0, .16);        /* C21 rows */
-@define-color ox_tile_selected_edge alpha(#80b4e0, .38);   /* C21 tiles */
+@define-color ox_selected_edge alpha(#80b4e0, .16);        /* C21 */
 @define-color ox_focus_outer @ox_accent;           /* C29 visible: #ffffff */
+/* The file list and the navigation pane, as Windows 11 File Explorer draws
+   their items (C17, C19, C20 "items", C29, C30; approximations): neutral
+   greys, not a tint, and the two-tone keyboard ring. The selection stays
+   at #3d3d3d rather than Windows' #444, so the grey Date, Type and Size
+   text keeps 4.5:1 on it. */
+@define-color ox_item_hover #2d2d2d;
+@define-color ox_item_selected #3d3d3d;
+@define-color ox_item_selected_hover @ox_item_selected;
+@define-color ox_item_focus_outer #ffffff;
+@define-color ox_item_focus_inner alpha(black, .7);
 
 /* The tab strip's own states (§4.1, §4.14) */
 @define-color ox_title_hover alpha(white, .06);    /* C03, D-A03: caption, +, windows */

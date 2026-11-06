@@ -24,10 +24,16 @@
 .sidebar list > row.quick-access { margin: 0 4px; }
 .sidebar list > row.quick-access.section-start { margin-top: 2px; }
 .sidebar list > row.quick-access.section-end { margin-bottom: 5px; }
-.sidebar list > row:hover { background-color: @ox_hover; }
-.sidebar list > row:active { background-color: @ox_pressed; }
-.sidebar list > row:selected { background-color: @ox_selected; color: @ox_text; }
-.sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+/* The file list's item colours and focus ring (folder-views.css), as
+   Windows 11 File Explorer's navigation pane shares them. */
+.sidebar list > row:hover { background-color: @ox_item_hover; }
+.sidebar list > row:active { background-color: @ox_item_selected; }
+.sidebar list > row:selected { background-color: @ox_item_selected; color: @ox_text; }
+.sidebar list > row:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 /* A place whose folder a drop would go into (DND-011), and the accent line
    where folders dropped on Quick access would be pinned: above the row
    they would go before, or under the last pin (`.drop-before::after`,
@@ -110,9 +116,13 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
 }
 /* Compact view (VIEW-067, window/compact_density.rs): closer folder tree rows. */
 window.compact-density .folder-tree listview > row { min-height: 24px; }
-.folder-tree listview > row:hover { background-color: @ox_hover; }
-.folder-tree listview > row:selected { background-color: @ox_selected; color: @ox_text; }
-.folder-tree listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+.folder-tree listview > row:hover { background-color: @ox_item_hover; }
+.folder-tree listview > row:selected { background-color: @ox_item_selected; color: @ox_text; }
+.folder-tree listview > row:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 .folder-tree treeexpander expander {
   min-width: 16px;
   min-height: 16px;

@@ -17,7 +17,9 @@ columnview.files > header { border-bottom: 1px solid @ox_border; padding: 0; }
 columnview.files > header > button {
   background: none;
   border-style: none;
-  border-right: 1px solid @ox_border;
+  /* The dividers between titles show only while the pointer is over the
+     titles, as in Windows 11 File Explorer. */
+  border-right: 1px solid transparent;
   border-radius: 0;
   color: @ox_muted;
   font-weight: normal;
@@ -27,24 +29,27 @@ columnview.files > header > button {
   min-height: 31px;
   box-shadow: none;
 }
+columnview.files > header:hover > button { border-right-color: @ox_border; }
 columnview.files > header > button:hover { background-color: @ox_hover; }
 /* Name never gets narrower than 260px (`minmax(260px,1fr)`, the Name
    default in app.js) plus the 14px end: a narrow window scrolls the list
    sideways instead. A width the user sets overrides it. */
 columnview.files > header > button:first-child { padding-left: 26px; min-width: 235px; }
+/* Every title is left-aligned, Size's too, as in Windows 11; the sizes
+   under it stay right-aligned. Size's padding holds the 14px end. */
+columnview.files > header > button:last-child { border-right: none; padding-right: 26px; }
 /* Size's divider stands 14px before the column's end, where the web
    header's padding starts, drawn as a 1px band of the background. */
-columnview.files > header > button:last-child {
-  border-right: none;
-  padding-right: 32px;
+columnview.files > header:hover > button:last-child {
   background-image: linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
 }
 columnview.files > header > button:last-child:hover { background-color: @ox_hover; }
-/* Only the sorted column shows an arrow: the app's 10px chevron, turned
-   up while ascending (src/folder_view/column_titles.rs). GTK's own filled
-   triangle takes no room, so the right-aligned Size title ends where its
-   values end. The arrow is centred on a half pixel, which Chromium draws
-   one pixel down. */
+/* Only the sorted column shows an arrow: as in Windows 11 File Explorer, a
+   small chevron centred on the top edge of its title, up while ascending
+   and down while descending (src/folder_view/column_titles.rs). It is the
+   title's background, centred on the content box, whose padding is even
+   once the 14px ends are left out, so it stands over the column's middle.
+   GTK's own filled triangle is hidden and takes no room. */
 columnview.files > header > button sort-indicator {
   -gtk-icon-source: none;
   -gtk-icon-size: 0;
@@ -52,8 +57,32 @@ columnview.files > header > button sort-indicator {
   min-height: 0;
   margin: 0;
 }
-columnview.files > header > button .sort-caret { margin: 1px 0 0 6px; color: @ox_muted; }
-columnview.files > header > button .sort-caret.ascending { transform: rotate(180deg); }
+columnview.files > header > button.sort-ascending,
+columnview.files > header > button.sort-descending {
+  background-repeat: no-repeat;
+  background-origin: content-box;
+  background-position: center -2px;
+  background-size: 10px 10px;
+}
+columnview.files > header > button.sort-ascending { background-image: -gtk-icontheme("ox-chevron-up-16-symbolic"); }
+columnview.files > header > button.sort-descending { background-image: -gtk-icontheme("ox-chevron-down-16-symbolic"); }
+/* A sorted Size title under the pointer draws both its chevron and its
+   divider. */
+columnview.files > header:hover > button:last-child.sort-ascending,
+columnview.files > header:hover > button:last-child.sort-descending {
+  background-repeat: no-repeat, no-repeat;
+  background-origin: content-box, padding-box;
+  background-position: center -2px, left top;
+  background-size: 10px 10px, auto;
+}
+columnview.files > header:hover > button:last-child.sort-ascending {
+  background-image: -gtk-icontheme("ox-chevron-up-16-symbolic"),
+    linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
+}
+columnview.files > header:hover > button:last-child.sort-descending {
+  background-image: -gtk-icontheme("ox-chevron-down-16-symbolic"),
+    linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
+}
 
 /* ---- Details view: rows ---- */
 /* Rows are inset 12px as in the web list. GTK places each cell at its
@@ -70,15 +99,24 @@ columnview.files > listview > row {
   outline: none;
   transition: background-color 83ms linear;
 }
-columnview.files > listview > row:hover { background-color: @ox_hover; }
-columnview.files > listview > row:active { background-color: @ox_pressed; }
+/* Windows 11 File Explorer's item colours: a pale tint under the pointer,
+   a stronger filled highlight without an edge for the selection, which a
+   press shows at once; keyboard focus draws Windows' two-tone ring, 2px
+   dark outside 1px light (ui-spec.md §4.5, §4.13). The dark ring is an
+   outline, as GTK 4 paints a later inset shadow over an earlier one
+   rather than under it, which would hide it under the light one. */
+columnview.files > listview > row:hover { background-color: @ox_item_hover; }
+columnview.files > listview > row:active { background-color: @ox_item_selected; }
 columnview.files > listview > row:selected {
-  background-color: @ox_selected;
+  background-color: @ox_item_selected;
   color: @ox_text;
-  box-shadow: inset 0 0 0 1px @ox_selected_edge;
 }
-columnview.files > listview > row:selected:hover { background-color: @ox_selected_hover; }
-columnview.files > listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+columnview.files > listview > row:selected:hover { background-color: @ox_item_selected_hover; }
+columnview.files > listview > row:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 columnview.files > listview > row > cell {
   padding: 0 12px;
   margin: 0 12px 0 -12px;
@@ -223,15 +261,19 @@ gridview.files > child > box { margin: 0; border-spacing: 0; }
    multiplies the font's own line height, 17px for Noto Sans at 12px,
    not the font size (T15). */
 gridview.files > child label { line-height: 0.95; }
-gridview.files > child:hover { background-color: @ox_hover; }
-gridview.files > child:active { background-color: @ox_pressed; }
+/* Tiles take the rows' colours and focus ring. */
+gridview.files > child:hover { background-color: @ox_item_hover; }
+gridview.files > child:active { background-color: @ox_item_selected; }
 gridview.files > child:selected {
-  background-color: @ox_selected;
+  background-color: @ox_item_selected;
   color: @ox_text;
-  box-shadow: inset 0 0 0 1px @ox_tile_selected_edge;
 }
-gridview.files > child:selected:hover { background-color: @ox_selected_hover; }
-gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+gridview.files > child:selected:hover { background-color: @ox_item_selected_hover; }
+gridview.files > child:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 
 /* ---- Compact view (Explorer's List layout, VIEW-008) ---- */
 /* Small icons with one-line names in columns: rows as tight as Explorer's
