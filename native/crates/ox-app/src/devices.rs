@@ -55,25 +55,32 @@ impl Removal {
     }
 
     /// The menu item: "Disconnect device" for a phone or camera and
-    /// "Disconnect mount" for a drive (`unmount` in app.js), "Eject" and
-    /// "Safely remove".
+    /// "Disconnect" for a drive (`unmount` in app.js), in the word Windows
+    /// uses for ending a mapped drive's connection; "Eject", Windows' word
+    /// for a removable drive or disc; and "Safely remove", after Windows'
+    /// Safely Remove Hardware.
     pub(crate) fn label(self, kind: VolumeKind) -> &'static str {
         match (self, kind) {
             (Removal::Disconnect, VolumeKind::Device) => ox_core::i18n::gettext_static("Disconnect device"),
-            (Removal::Disconnect, VolumeKind::Drive) => ox_core::i18n::gettext_static("Disconnect mount"),
+            (Removal::Disconnect, VolumeKind::Drive) => ox_core::i18n::gettext_static("Disconnect"),
             (Removal::Eject, _) => ox_core::i18n::gettext_static("Eject"),
             (Removal::SafelyRemove, _) => ox_core::i18n::gettext_static("Safely remove"),
         }
     }
 
     /// What the app says once the drive `label` is gone: only Safely
-    /// remove says it may be unplugged, as Dolphin does; the desktop tells
-    /// when an ejected medium's writes are flushed.
+    /// remove says it may be unplugged, in the words of Windows' "Safe To
+    /// Remove Hardware" notice; the desktop tells when an ejected
+    /// medium's writes are flushed.
     pub(crate) fn done_message(self, label: &str) -> Option<String> {
         match self {
-            Removal::SafelyRemove => Some(ox_core::i18n::format_message(
-                "“{label}” can now be safely unplugged.",
-                &[("label", label)],
+            Removal::SafelyRemove => Some(format!(
+                "{}\n{}",
+                ox_core::i18n::gettext_static("Safe To Remove Hardware"),
+                ox_core::i18n::format_message(
+                    "The '{label}' device can now be safely removed from the computer.",
+                    &[("label", label)],
+                )
             )),
             Removal::Disconnect | Removal::Eject => None,
         }
@@ -190,21 +197,25 @@ mod tests {
         }
     }
 
-    /// parity: DEV-006
+    /// A drive is disconnected and ejected in Windows' words.
+    ///
+    /// parity: DEV-006, DEV-007
     #[test]
     fn disconnect_names_a_device_or_a_mount_as_app_js_does() {
         assert_eq!(Removal::Disconnect.label(VolumeKind::Device), "Disconnect device");
-        assert_eq!(Removal::Disconnect.label(VolumeKind::Drive), "Disconnect mount");
+        assert_eq!(Removal::Disconnect.label(VolumeKind::Drive), "Disconnect");
         assert_eq!(Removal::Eject.label(VolumeKind::Drive), "Eject");
         assert_eq!(Removal::SafelyRemove.label(VolumeKind::Drive), "Safely remove");
     }
 
+    /// Safely remove's notice is Windows' "Safe To Remove Hardware".
+    ///
     /// parity: DEV-008
     #[test]
     fn only_safely_remove_says_the_drive_can_be_unplugged() {
         assert_eq!(
             Removal::SafelyRemove.done_message("USB stick").as_deref(),
-            Some("“USB stick” can now be safely unplugged.")
+            Some("Safe To Remove Hardware\nThe 'USB stick' device can now be safely removed from the computer.")
         );
         assert_eq!(Removal::Eject.done_message("USB stick"), None);
         assert_eq!(Removal::Disconnect.done_message("USB stick"), None);
