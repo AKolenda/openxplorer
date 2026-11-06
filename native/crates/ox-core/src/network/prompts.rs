@@ -83,6 +83,17 @@ pub trait SignInPrompter {
     fn show_notice(&self, message: &str);
 }
 
+/// Which account a mount signs in with when `GVfs` asks for one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CredentialChoice {
+    /// A known account first, else the sign-in dialog.
+    #[default]
+    Known,
+    /// The sign-in dialog at once, even for a server with a known account,
+    /// as Map network drive's "Connect using different credentials" asks.
+    Different,
+}
+
 /// Whether the mount that used an operation succeeded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MountOutcome {
@@ -128,9 +139,23 @@ impl MountPrompts {
     ///
     /// The [`LocationError`] of an address that is not a supported location.
     pub fn create(&self, uri: &str) -> Result<gio::MountOperation, LocationError> {
+        self.create_with(uri, CredentialChoice::Known)
+    }
+
+    /// [`MountPrompts::create`], signing in with the account `choice`
+    /// names.
+    ///
+    /// # Errors
+    ///
+    /// The [`LocationError`] of an address that is not a supported location.
+    pub fn create_with(
+        &self,
+        uri: &str,
+        choice: CredentialChoice,
+    ) -> Result<gio::MountOperation, LocationError> {
         let uri = normalise(uri)?;
         let operation = gio::MountOperation::new();
-        self.inner.track(&operation, uri);
+        self.inner.track(&operation, uri, choice);
         connect_signals(&operation, &self.inner);
         Ok(operation)
     }

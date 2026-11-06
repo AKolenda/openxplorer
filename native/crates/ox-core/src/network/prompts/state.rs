@@ -19,7 +19,7 @@ use gio::prelude::*;
 
 use super::challenge::{Challenge, ChallengeId, ChallengeKind, QuestionChallenge, SignInError};
 use super::operation::{send_reply, MountReply, PasswordRequest, QuestionSource};
-use super::{MountOutcome, SignInPrompter, KEYRING_SAVE_NOTICE};
+use super::{CredentialChoice, MountOutcome, SignInPrompter, KEYRING_SAVE_NOTICE};
 use crate::network::credential::Credential;
 use crate::network::credential_store::CredentialGeneration;
 use crate::network::server::{host_name, smb_host};
@@ -84,6 +84,9 @@ pub(super) struct OperationRecord {
     generation: CredentialGeneration,
     /// The latest password request.
     pub(super) request: Option<PasswordRequest>,
+    /// Whether the first password request shows the dialog or a known
+    /// account answers it.
+    pub(super) choice: CredentialChoice,
     /// The account given to `GVfs`, kept if the mount succeeds.
     candidate: Option<Candidate>,
 }
@@ -141,12 +144,14 @@ impl Inner {
     }
 
     /// Starts tracking `operation`, which mounts the canonical `uri`.
-    pub(super) fn track(&self, operation: &gio::MountOperation, uri: String) {
+    /// The first password request is answered as `choice` says.
+    pub(super) fn track(&self, operation: &gio::MountOperation, uri: String, choice: CredentialChoice) {
         let record = OperationRecord {
             generation: self.credentials.generation(&uri),
             uri,
             attempts: 0,
             request: None,
+            choice,
             candidate: None,
         };
         self.state
