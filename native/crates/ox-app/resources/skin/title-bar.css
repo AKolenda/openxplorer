@@ -32,13 +32,20 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
 .tab.active { background-color: @ox_chrome; color: @ox_text; box-shadow: 0 -1px 2px @ox_tab_shadow; }
 .tab:not(.active):hover { background-color: @ox_tab_hover; }
 .tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
-/* The strip draws a separator between two tabs that are neither in front
-   nor hovered, and the small outward curves at the foot of the tab in
-   front, in these swatches' colours (src/window/tab_strip/edges.rs): CSS
-   cannot draw outside a widget or a concave corner. The curves are the
-   tab in front's own colour. */
-.ox-titlebar .tab-separator { color: @ox_tab_separator; }
-.ox-titlebar .tab-flare { color: @ox_chrome; }
+/* A separator between two tabs that are neither in front nor hovered,
+   1 x 19 (the 35px tab less the Windows 11 separator's 8px margins), and
+   the 4px outward curves at the foot of the tab in front, in its own
+   colour: the corner outside a quarter circle. A tab cannot draw outside
+   itself, so the strip shows these where they belong
+   (src/window/tab_strip/edges.rs). */
+.ox-titlebar .tab-separator { min-width: 1px; min-height: 19px; background-color: @ox_tab_separator; }
+.ox-titlebar .tab-flare { min-width: 4px; min-height: 4px; }
+.ox-titlebar .tab-flare.start {
+  background-image: radial-gradient(circle 4px at left top, transparent 3.5px, @ox_chrome 4.5px);
+}
+.ox-titlebar .tab-flare.end {
+  background-image: radial-gradient(circle 4px at right top, transparent 3.5px, @ox_chrome 4.5px);
+}
 /* The 16px icon (I03) sits where the web's 17px one did, and the title
    starts 10px after it (S06), at x=50 as in the current app. */
 .tab > .tab-icon { margin-left: 2px; }

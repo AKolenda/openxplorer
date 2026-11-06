@@ -18,7 +18,7 @@
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
 //! shows while tabs and files are dragged is [`drag_marks`]'s, and the
 //! separators between tabs and the curves at the foot of the tab in front,
-//! which CSS cannot draw, are [`edges`]'.
+//! which a tab cannot show itself, are placed by [`edges`].
 
 mod carried_tab;
 mod drag_marks;
@@ -114,9 +114,9 @@ mod imp {
         pub(super) menu: OnceCell<MenuPopover>,
         /// The list of open windows, shown below the tab in front.
         pub(super) windows_menu: OnceCell<MenuPopover>,
-        /// The colours the skin gives the separators and the curves at the
-        /// foot of the tab in front, built by `constructed`.
-        pub(super) swatches: OnceCell<super::edges::Swatches>,
+        /// The widgets the skin draws the separators and the curves at the
+        /// foot of the tab in front on, built by `constructed`.
+        pub(super) edges: OnceCell<super::edges::Edges>,
         /// Each tab shown and its widget, left to right.
         pub(super) shown: RefCell<Vec<(TabView, gtk::Box)>>,
         /// The tab last grabbed for a drag, and where along it.
@@ -174,9 +174,9 @@ mod imp {
             self.windows_menu
                 .set(windows_menu)
                 .expect("constructed runs once per object");
-            let swatches = super::edges::Swatches::new(&self.obj());
-            self.swatches
-                .set(swatches)
+            let edges = super::edges::Edges::new(&self.obj());
+            self.edges
+                .set(edges)
                 .expect("constructed runs once per object");
         }
 
@@ -184,8 +184,8 @@ mod imp {
             for menu in [self.menu.get(), self.windows_menu.get()].into_iter().flatten() {
                 menu.unparent();
             }
-            if let Some(swatches) = self.swatches.get() {
-                swatches.unparent();
+            if let Some(edges) = self.edges.get() {
+                edges.unparent();
             }
             self.dispose_template();
         }
@@ -193,7 +193,9 @@ mod imp {
 
     impl WidgetImpl for TabStrip {
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
-            self.parent_snapshot(snapshot);
+            // Not the parent's snapshot, which would also draw the edge
+            // widgets at the strip's top left: the tabs, then the edges.
+            self.obj().snapshot_child(&*self.scroller, snapshot);
             self.obj().draw_edges(snapshot);
         }
     }

@@ -1,67 +1,68 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! What the strip draws between and beside its tabs, as Windows 11's File
+//! What the strip shows between and beside its tabs, as Windows 11's File
 //! Explorer does (ui-spec.md §4.1, C38 and R06).
 //!
 //! A thin separator stands in the gap between two tabs, unless one of them
 //! is in front or under the pointer, and the tab in front flares out at its
 //! foot in two small concave curves that join it to the navigation row
-//! below, as the Windows 11 tab view draws them. CSS can draw neither: a widget
-//! paints only inside itself, the separator belongs to the gap between two
-//! tabs, and GTK's CSS has no concave corner. So the strip draws them over
-//! its tabs where they are laid out, which keeps them in place while tabs
-//! slide during a drag, in the colours the skin gives two swatches
-//! (`.tab-separator` and `.tab-flare` in `skin/title-bar.css`).
+//! below, as the Windows 11 tab view draws them. A tab cannot show them
+//! itself: a widget paints only inside itself, and the separator belongs to
+//! the gap between two tabs. So the skin draws them on three small widgets
+//! of the strip (`.tab-separator` and `.tab-flare` in
+//! `skin/title-bar.css`, the curves as radial gradients), and the strip
+//! shows them over its tabs where the tabs are drawn, which keeps them in
+//! place while tabs slide during a drag.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, graphene, gsk};
+use gtk::graphene;
 
 use super::drag_marks::DRAGGED_CLASS;
 use super::TabStrip;
 use crate::window::widget_tree::children;
 
-/// A separator's height: the 35-pixel tab less the 8-pixel margins above
-/// and below a Windows 11 tab separator (`TabViewItemSeparator`, `0,8,0,8`).
-const SEPARATOR_HEIGHT: f32 = 19.0;
-/// How far the curves at the foot of the tab in front reach out, and
-/// their radius (R06, 4 × 4 in the Windows 11 tab view).
-const FLARE: f32 = 4.0;
-
-/// Two widgets that draw nothing and take no pointer, whose CSS colour is
-/// what the strip draws the separators and the curves in. They stay shown,
-/// so the skin restyles them with everything else when the theme changes.
+/// The widgets the skin draws a separator and the two curves on, at the
+/// sizes the skin gives them. They take no pointer and sit at the strip's
+/// top left, where the strip never draws them: it draws them where they
+/// belong instead (`draw_edges`), the separator once for each gap that has
+/// one.
 #[derive(Debug)]
-pub(super) struct Swatches {
+pub(super) struct Edges {
     separator: gtk::Widget,
-    flare: gtk::Widget,
+    start_flare: gtk::Widget,
+    end_flare: gtk::Widget,
 }
 
-impl Swatches {
-    /// The swatches, made children of `strip`.
+impl Edges {
+    /// The widgets, made children of `strip`.
     pub(super) fn new(strip: &TabStrip) -> Self {
-        let swatch = |class: &str| {
-            let swatch = gtk::Box::builder()
+        let piece = |classes: &[&str]| {
+            let piece = gtk::Box::builder()
                 .can_target(false)
+                .halign(gtk::Align::Start)
+                .valign(gtk::Align::Start)
                 .accessible_role(gtk::AccessibleRole::Presentation)
-                .css_classes([class])
+                .css_classes(classes)
                 .build();
-            swatch.set_parent(strip);
-            swatch.upcast::<gtk::Widget>()
+            piece.set_parent(strip);
+            piece.upcast::<gtk::Widget>()
         };
         Self {
-            separator: swatch("tab-separator"),
-            flare: swatch("tab-flare"),
+            separator: piece(&["tab-separator"]),
+            start_flare: piece(&["tab-flare", "start"]),
+            end_flare: piece(&["tab-flare", "end"]),
         }
     }
 
-    /// Takes the swatches out of the strip, as it goes.
+    /// Takes the widgets out of the strip, as it goes.
     pub(super) fn unparent(&self) {
-        self.separator.unparent();
-        self.flare.unparent();
+        for piece in [&self.separator, &self.start_flare, &self.end_flare] {
+            piece.unparent();
+        }
     }
 }
 
-/// A tab as the strip draws around it.
+/// A tab as the strip shows around it.
 #[derive(Debug, Clone, Copy)]
 struct DrawnTab {
     /// Where it is in the strip.
@@ -81,10 +82,10 @@ impl DrawnTab {
 }
 
 impl TabStrip {
-    /// Draws the separators between the tabs and the curves at the foot of
+    /// Shows the separators between the tabs and the curves at the foot of
     /// the tab in front, over the tabs.
     pub(super) fn draw_edges(&self, snapshot: &gtk::Snapshot) {
-        let Some(swatches) = self.imp().swatches.get() else {
+        let Some(edges) = self.imp().edges.get() else {
             return;
         };
         let tabs = self.drawn_tabs();
@@ -93,7 +94,12 @@ impl TabStrip {
             reason = "a strip is far narrower than 2^24 pixels"
         )]
         let width = self.width() as f32;
-        let separator = swatches.separator.color();
+        let size = |piece: &gtk::Widget| {
+            let (_, natural) = piece.preferred_size();
+            #[expect(clippy::cast_precision_loss, reason = "a few pixels")]
+            (natural.width() as f32, natural.height() as f32)
+        };
+        let (_, separator_height) = size(&edges.separator);
         for pair in tabs.windows(2) {
             let [left, right] = pair else {
                 continue;
@@ -106,12 +112,35 @@ impl TabStrip {
             if x < 0.0 || x + 1.0 > width {
                 continue;
             }
-            let y = left.bounds.y() + ((left.bounds.height() - SEPARATOR_HEIGHT) / 2.0).round();
-            snapshot.append_color(&separator, &graphene::Rect::new(x, y, 1.0, SEPARATOR_HEIGHT));
+            let y = left.bounds.y() + ((left.bounds.height() - separator_height) / 2.0).round();
+            self.show_at(snapshot, &edges.separator, x, y);
         }
-        if let Some(front) = tabs.iter().find(|tab| tab.front) {
-            draw_flares(snapshot, &front.bounds, width, &swatches.flare.color());
+        let Some(front) = tabs.iter().find(|tab| tab.front) else {
+            return;
+        };
+        // Only beside an edge of the tab that shows, so a tab scrolled
+        // partly out of the strip has none on its cut side, and one
+        // scrolled out of it has none.
+        let shows = |edge: f32| (-0.5..=width + 0.5).contains(&edge);
+        let start = front.bounds.x();
+        let end = start + front.bounds.width();
+        let (flare_width, flare_height) = size(&edges.start_flare);
+        let top = front.bounds.y() + front.bounds.height() - flare_height;
+        if shows(start) {
+            self.show_at(snapshot, &edges.start_flare, start - flare_width, top);
         }
+        if shows(end) {
+            self.show_at(snapshot, &edges.end_flare, end, top);
+        }
+    }
+
+    /// Shows `piece`, one of the strip's edge widgets, with its top left at
+    /// (`x`, `y`) of the strip.
+    fn show_at(&self, snapshot: &gtk::Snapshot, piece: &gtk::Widget, x: f32, y: f32) {
+        snapshot.save();
+        snapshot.translate(&graphene::Point::new(x, y));
+        self.snapshot_child(piece, snapshot);
+        snapshot.restore();
     }
 
     /// The tabs shown, left to right as they are drawn: during a drag the
@@ -133,34 +162,4 @@ impl TabStrip {
         tabs.sort_by(|a, b| a.bounds.x().total_cmp(&b.bounds.x()));
         tabs
     }
-}
-
-/// The two curves at the foot of the tab in front at `tab`, in `colour`,
-/// on a strip `width` pixels wide: only beside an edge of the tab that
-/// shows, so a tab scrolled partly out of the strip has none on its cut
-/// side, and one scrolled out of it has none.
-fn draw_flares(snapshot: &gtk::Snapshot, tab: &graphene::Rect, width: f32, colour: &gdk::RGBA) {
-    let bottom = tab.y() + tab.height();
-    let start = tab.x();
-    let end = start + tab.width();
-    let shows = |edge: f32| (-0.5..=width + 0.5).contains(&edge);
-    let path = gsk::PathBuilder::new();
-    if shows(start) {
-        add_flare(&path, start, bottom, -FLARE);
-    }
-    if shows(end) {
-        add_flare(&path, end, bottom, FLARE);
-    }
-    snapshot.append_fill(&path.to_path(), gsk::FillRule::Winding, colour);
-}
-
-/// One curve at the foot of the tab edge at `x`, reaching `out` pixels
-/// beyond it (to the left when negative): the corner between the edge and
-/// the bottom, less a quarter circle of radius [`FLARE`].
-fn add_flare(path: &gsk::PathBuilder, x: f32, bottom: f32, out: f32) {
-    path.move_to(x + out, bottom);
-    path.line_to(x, bottom);
-    path.line_to(x, bottom - FLARE);
-    path.conic_to(x, bottom, x + out, bottom, std::f32::consts::FRAC_1_SQRT_2);
-    path.close();
 }
