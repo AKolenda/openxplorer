@@ -440,6 +440,83 @@ fn the_rename_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
     );
 }
 
+/// What F2 shows and selects of each name, as Windows 11 does: a file's
+/// name before its last extension, and the whole name of a shortcut (a
+/// symbolic link named as Explorer names one, whose `.lnk` Windows
+/// hides), a folder, a name with no extension and a name that starts
+/// with its only dot. With extensions hidden, the field shows the name
+/// without its extension and all of it is selected.
+///
+/// parity: OPS-010, VIEW-069
+#[gtk::test]
+fn rename_selects_the_name_windows_selects_with_extensions_shown_and_hidden() {
+    let fixture = Fixture::empty();
+    for name in ["Report.txt", "archive.tar.gz", "my.notes.txt", ".hidden"] {
+        fixture.write(name);
+    }
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    std::fs::create_dir(fixture.path("v1.2 release")).expect("the folder is made");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("hidden", None);
+    wait_until("the hidden file to be listed", || {
+        test.names().contains(&".hidden".to_owned())
+    });
+    let shown_and_selected = |name: &str| {
+        select_names(&test, &[name]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        let selected = field.selection_bounds();
+        let shown = field.text().to_string();
+        press_in(&field, gdk::Key::Escape, gdk::ModifierType::empty());
+        wait_until("the rename to end", || !is_renaming_in_place(&test));
+        (shown, selected)
+    };
+    let cases_hidden = [
+        ("Report.txt - Shortcut", "Report.txt - Shortcut", 21),
+        ("archive.tar.gz", "archive.tar", 11),
+        ("my.notes.txt", "my.notes", 8),
+        ("v1.2 release", "v1.2 release", 12),
+        (".hidden", ".hidden", 7),
+    ];
+    for (name, shown, selected) in cases_hidden {
+        assert_eq!(
+            shown_and_selected(name),
+            (shown.to_owned(), Some((0, selected))),
+            "{name}, extensions hidden"
+        );
+    }
+
+    super::support::show_file_name_extensions(&test);
+    let cases_shown = [
+        ("Report.txt - Shortcut", 21),
+        ("archive.tar.gz", 11),
+        ("my.notes.txt", 8),
+        ("v1.2 release", 12),
+        (".hidden", 7),
+    ];
+    for (name, selected) in cases_shown {
+        assert_eq!(
+            shown_and_selected(name),
+            (name.to_owned(), Some((0, selected))),
+            "{name}, extensions shown"
+        );
+    }
+
+    // A shortcut's name has no extension to change: typing over all of
+    // it renames it without asking, as Explorer does.
+    select_names(&test, &["Report.txt - Shortcut"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    field.set_text("Q3 figures");
+    field.emit_activate();
+    wait_until("the shortcut to be renamed", || {
+        test.selected_names() == ["Q3 figures"]
+    });
+    assert!(dialog_over(&test).is_none(), "no question about the extension");
+    assert!(fixture.path("Q3 figures").is_symlink());
+}
+
 /// The lines of the balloon under `editor`, while it shows.
 fn balloon_lines(editor: &gtk::Entry) -> Option<Vec<String>> {
     descendants::<gtk::Popover>(editor)
@@ -589,4 +666,83 @@ fn a_file_renamed_to_a_taken_name_is_offered_the_next_free_number() {
         let content = fs::read(fixture.path(kept)).ok();
         assert_eq!(content, Some(b"Synthetic test data\n".to_vec()), "{kept} stays");
     }
+}
+
+/// With extensions hidden, a shortcut still shows and edits its whole
+/// name, as Windows hides only a shortcut's `.lnk`, and the typed name is
+/// its whole new name. A symbolic link named for a type ("notes.txt") is
+/// a file, as Windows treats one: it shows "notes" and keeps ".txt".
+///
+/// parity: OPS-010, VIEW-069
+#[gtk::test]
+fn a_shortcut_keeps_its_whole_name_while_extensions_are_hidden() {
+    let fixture = Fixture::empty();
+    fixture.write("Report.txt");
+    for link in ["Report.txt - Shortcut", "notes.txt"] {
+        std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path(link)).expect("the link is made");
+    }
+    let test = super::geometry::laid_out(&fixture.uri());
+    wait_until("the listing", || test.names().contains(&"notes.txt".to_owned()));
+    let shown = super::file_name_extensions::shown_names(&test);
+    let mut renamed = Vec::new();
+    for (link, typed, result) in [
+        ("Report.txt - Shortcut", "Q3.final", "Q3.final"),
+        ("notes.txt", "Plan", "Plan.txt"),
+    ] {
+        select_names(&test, &[link]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        renamed.push((field.text().to_string(), field.selection_bounds()));
+        field.set_text(typed);
+        field.emit_activate();
+        wait_until("the renamed link to be selected", || {
+            test.selected_names() == [result]
+        });
+    }
+
+    assert_eq!(shown, ["Report", "Report.txt - Shortcut", "notes"]);
+    assert_eq!(
+        renamed,
+        [
+            ("Report.txt - Shortcut".to_owned(), Some((0, 21))),
+            ("notes".to_owned(), Some((0, 5)))
+        ]
+    );
+    assert!(
+        fixture.path("Q3.final").is_symlink(),
+        "the shortcut gets the typed name"
+    );
+    assert!(fixture.path("Plan.txt").is_symlink(), "the link keeps its type");
+}
+
+/// A shortcut renamed in place to a taken name is offered the next free
+/// number after its whole name, as Windows numbers a shortcut, whose
+/// `.lnk` is hidden: "Q3.v1 (2)", not "Q3 (2).v1".
+///
+/// parity: OPS-008, OPS-010
+#[gtk::test]
+fn a_shortcut_renamed_to_a_taken_name_is_numbered_after_its_whole_name() {
+    let fixture = Fixture::empty();
+    fixture.write("Report.txt");
+    fixture.write("Q3.v1");
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    select_names(&test, &["Report.txt - Shortcut"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    field.set_text("Q3.v1");
+    field.emit_activate();
+    let question = open_dialog(&test);
+    let texts = question.texts();
+    question.press("Yes");
+    wait_until("the numbered rename", || {
+        fixture.path("Q3.v1 (2)").is_symlink() && !is_renaming_in_place(&test)
+    });
+
+    let asks = "Would you like to rename \"Q3.v1\" to \"Q3.v1 (2)\"?";
+    assert!(texts.iter().any(|text| text == asks), "{texts:?}");
+    assert!(!fixture.path("Q3 (2).v1").exists());
+    assert!(fixture.path("Q3.v1").is_file(), "the other file stays");
 }
