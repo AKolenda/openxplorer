@@ -1054,7 +1054,7 @@ native_note = "native/crates/ox-app/src/window/address_bar/suggestions.rs: every
 id = "HOME-001"
 area = "HOME"
 title = "This PC page layout"
-behaviour = "The pseudo-location 'pc:' (sidebar This PC) shows the heading 'This PC' and subtitle 'Folders, devices, and connected storage.'. It then shows a Quick access section, a 'Devices and drives' section and a 'Network locations' section. The status bar reads 'Ready'. Search, Up and New are disabled."
+behaviour = "The pseudo-location 'pc:' (sidebar This PC) is laid out as Windows 11 lays it out (owner decision 2026-11-06: This PC follows Windows 11 (grouped drive tiles, no heading or Quick access cards)): an item view of tiles under collapsible group headers, 'Devices and drives (N)' then 'Network locations (N)', each a chevron, the title and count and a line to the right edge, with no heading, no subtitle and no Quick access cards; a group with nothing in it is left out. Clicking a header collapses or expands its group; with the keyboard, Up from a group's first row reaches its header, Left collapses it, Right expands it and Down returns to its tiles; an expanded group's header is no Tab stop, a collapsed group's header is one. A collapsed group, the selected tile and the keyboard's place survive the page being drawn again. The status bar reads 'Ready'. Search, Up and New are disabled. The app's own Home page is unchanged."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -1069,7 +1069,7 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/ui_rc4.py::This PC drive cards support middle-click"]
 bridge = ["environment"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/landing.rs; tested in native/crates/ox-app/src/window/tests/landing_pages.rs (this_pc_has_its_heading_three_sections_and_nothing_to_search_or_create): heading, subtitle, the three sections, 'Ready' in the status bar, and Search, Up and New disabled."
+native_note = "native/crates/ox-app/src/window/landing.rs; tested in native/crates/ox-app/src/window/tests/landing_pages.rs (this_pc_shows_its_groups_with_no_heading_or_quick_access_and_nothing_to_create: no heading or Quick access cards, the pinned folder only in the navigation pane, the groups, 'Ready' in the status bar, and Search, Up and New disabled; the_keyboard_collapses_and_expands_a_group_from_its_header: Up to the header, Left and Right, Down back to the tiles, a collapsed group kept across a redraw). Until 2026-11-06 This PC had the Python app's heading, subtitle and Quick access cards; the owner chose Windows 11's layout from before and after screenshots (PR #245)."
 
 [[feature]]
 id = "HOME-002"
@@ -1082,14 +1082,14 @@ openxplorer = "has"
 sources = ["v2.0.0:desktop/ui/app.js:428"]
 python_tests = []
 bridge = []
-native = "done"
-native_note = "native/crates/ox-app/src/window/landing.rs (quick_card); tested in native/crates/ox-app/src/window/tests/landing_pages.rs (a_quick_access_card_says_where_the_folder_is_and_opens_it, quick_access_cards_stretch_across_the_page_in_equal_columns): folder art, label, 'Stored on this PC', click and middle-click."
+native = "n-a"
+native_note = "No longer applies (owner decision 2026-11-06: This PC follows Windows 11 (grouped drive tiles, no heading or Quick access cards)): Windows 11 moved Quick access off This PC, so pinned folders are in the navigation pane's Quick access (SIDE-005), and middle-click opens them in a background tab there. The app's own Home page is unchanged. Until 2026-11-06 This PC showed them as cards (quick_card in native/crates/ox-app/src/window/landing.rs)."
 
 [[feature]]
 id = "HOME-003"
 area = "HOME"
-title = "Devices and drives cards on This PC"
-behaviour = "The first card is Local Disk (file:///), followed by every non-SMB mount or volume. Each card shows a phone icon (kind=device) or drive icon, the name and a subtitle: 'Connected device', the mount path, or 'Click to connect' for unmounted volumes. Clicking an unmounted volume mounts it; clicking a mounted one navigates. Middle-click on a mounted drive opens it in a background tab. Right-clicking a mounted card other than Local Disk offers 'Disconnect device' or 'Disconnect mount' (DEV-006). (Capacity bars are a separate feature.)"
+title = "Devices and drives tiles on This PC"
+behaviour = "The 'Devices and drives' group lists Local Disk (file:///) first, then every non-SMB mount or volume, as tiles of the Tiles view (VIEW-071; owner decision 2026-11-06: This PC follows Windows 11 (grouped drive tiles, no heading or Quick access cards)): a 48 px phone icon (kind=device) or drive icon, the name and, for an unmounted volume, 'Click to connect' (capacity is HOME-004). A click or the arrow keys select a tile, one on the page; a double-click or Enter opens it: an unmounted volume mounts, a mounted one navigates. Middle-click on a mounted drive opens it in a background tab. A right-click (which selects the tile), the Menu key or Shift+F10 opens the drive's menu (SIDE-017: Open, Open in new window, Open in Terminal, Disconnect, Eject or Safely remove where the mount allows them, Properties), and Alt+Enter opens the drive's Properties."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -1098,13 +1098,13 @@ python_tests = ["v2.0.0:desktop/tests/ui_rc4.py::This PC drive cards support mid
 bridge = ["mountVolume", "environment", "list"]
 dolphin = "Places > Devices with capacity bar"
 native = "done"
-native_note = "native/crates/ox-app/src/window/landing.rs (drive_cards_say_where_each_drive_is_or_that_it_connects_on_click); native/crates/ox-app/src/window/tests/network.rs (the_local_disk_card_shows_its_capacity); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it). Middle-click uses the landing cards' shared gesture."
+native_note = "native/crates/ox-app/src/window/landing.rs (drive_tiles_name_each_drive_and_a_volume_connects_when_opened); native/crates/ox-app/src/window/tests/landing_pages.rs (a_drive_tile_opens_the_drive_and_one_tile_is_selected, a_drive_tile_has_the_drive_menu_and_its_properties, a_redraw_keeps_the_selected_tile_and_the_keyboard); native/crates/ox-app/src/window/tests/network.rs (the_local_disk_tile_shows_its_capacity); native/crates/ox-app/src/window/tests/middle_click.rs (middle_clicking_a_this_pc_tile_opens_it_behind_the_page). Until 2026-11-06 drives were full-width cards with their mount path and only Disconnect on a right-click."
 
 [[feature]]
 id = "HOME-004"
 area = "HOME"
-title = "Drive capacity bar on drive cards"
-behaviour = "When a drive's total and free space are known, its card shows a used-space bar and '<free> free of <total>'. The native backend does not report capacity: volume_locations() returns no size fields, so the bars appear only in the simulated preview."
+title = "Drive capacity bar on drive tiles"
+behaviour = "When a drive's total and free space are known, its tile shows a thin used-space bar under the name, accent blue and red from 90% used, and '<free> free of <total>'. The native backend does not report capacity: volume_locations() returns no size fields, so the bars appear only in the simulated preview."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "partial"
@@ -1121,13 +1121,13 @@ bridge = ["environment"]
 dolphin = "Places panel capacity bars (KFilePlacesView)"
 gnome = "g_file_query_filesystem_info filesystem::size / filesystem::free; g_file_query_filesystem_info_async (filesystem::size, filesystem::free, filesystem::used), verified available via gio in the isolated runner"
 native = "done"
-native_note = "native/crates/ox-app/src/window/landing.rs (the_capacity_bar_turns_red_from_ninety_percent_used, the_capacity_line_says_how_much_is_free_of_the_size); native/crates/ox-app/src/window/tests/network.rs (the_local_disk_card_shows_its_capacity). GIO measures each mounted card's file system off the main thread."
+native_note = "native/crates/ox-app/src/window/landing.rs (the_capacity_bar_turns_red_from_ninety_percent_used, the_capacity_line_says_how_much_is_free_of_the_size); native/crates/ox-app/src/window/tests/network.rs (the_local_disk_tile_shows_its_capacity). GIO measures each mounted tile's file system off the main thread."
 
 [[feature]]
 id = "HOME-005"
 area = "HOME"
-title = "Saved network locations section on This PC"
-behaviour = "The heading 'Network locations' has a 'Map network location' button. Each saved share is a card with a server icon, label, UNC path and a status dot (green when connected, grey otherwise) labelled 'Mounted in this session' or 'Connect on open'. Click navigates and middle-click opens a background tab. The context menu offers Open, Open in new tab, Remove saved location and 'Sign out of server…'. With no saved shares, the notice reads: 'No network locations saved. Use “Map network location” to connect to a share and add it to the sidebar.'"
+title = "Saved network locations group on This PC"
+behaviour = "The 'Network locations' group lists each saved share as a tile (owner decision 2026-11-06: This PC follows Windows 11 (grouped drive tiles, no heading or Quick access cards)), with the share's art on the network bar, crossed out while it is not mounted (LOOK-016), named as Windows names a mapped drive, label, server and letter (Backup (\\\\fileserver) (S:)), its address as the tooltip, and a capacity bar and '<free> free of <total>' while it is mounted, else 'Connect on open'. Opening it navigates and middle-click opens a background tab. The context menu offers Open, Open in new tab, Remove saved location and 'Sign out of server…'. With no saved shares the group is left out; Map network drive is in '...' (CMD-007) and below the navigation pane."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -1135,7 +1135,7 @@ sources = ["v2.0.0:desktop/ui/app.js:429", "v2.0.0:desktop/ui/app.js:426"]
 python_tests = []
 bridge = ["bookmark", "signOut", "connect", "environment"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/network.rs (this_pc_lists_saved_locations_or_says_how_to_map_one); native/crates/ox-app/src/window/place_menus.rs (a_saved_share_card_opens_removes_and_signs_out); native/crates/ox-app/src/window/tests/landing_pages.rs (a_saved_share_card_shows_the_art_of_its_sidebar_row). A saved share's card shows it on the network bar, as its sidebar row does (the owner's icon mapping, 2026-09-28). Since 2026-11-03 (the user's Windows 11 screenshot) a saved share's card is named as Windows names a mapped drive, label, server and letter (Backup (\\\\fileserver) (S:)), shows a capacity bar and \"N free of M\" while it is mounted (only a mounted share is measured, so nothing is mounted to draw it), keeps its state line, and has its address as its tooltip (native/crates/ox-app/src/window/tests/network.rs: this_pc_lists_saved_locations_or_says_how_to_map_one, a_share_card_is_named_with_its_server_and_letter_as_windows_does). Since 2026-11-06 the button and the empty note name it Map network drive, as Windows 11 does."
+native_note = "native/crates/ox-app/src/window/tests/network.rs (this_pc_lists_saved_locations_in_their_own_group, a_share_card_is_named_with_its_server_and_letter_as_windows_does); native/crates/ox-app/src/window/place_menus.rs (a_saved_share_card_opens_removes_and_signs_out); native/crates/ox-app/src/window/tests/landing_pages.rs (a_saved_share_tile_shows_the_art_of_its_sidebar_row). A saved share shows it on the network bar, as its sidebar row does (the owner's icon mapping, 2026-09-28), and is named as Windows names a mapped drive (2026-11-03, the user's Windows 11 screenshot); only a mounted share is measured, so nothing is mounted to draw it. Until 2026-11-06 the group was a section with a Map network drive button, a status dot and an empty-state notice."
 
 [[feature]]
 id = "HOME-006"
@@ -1763,7 +1763,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "Landing-page cards (This PC drives, Home Quick access, Network servers and locations) get gestures::open_folder_on_middle_click, which opens a background tab without leaving the page. Test: native/crates/ox-app/src/window/tests/middle_click.rs (middle_clicking_a_this_pc_card_opens_it_behind_the_page)."
+native_note = "This PC's tiles (drives and saved network locations) and the Network listing's items get gestures::open_folder_on_middle_click or the folder views' middle-click, which opens a background tab without leaving the page; Quick access is in the navigation pane since 2026-11-06 (HOME-002). Test: native/crates/ox-app/src/window/tests/middle_click.rs (middle_clicking_a_this_pc_tile_opens_it_behind_the_page)."
 
 [[feature]]
 id = "TAB-025"
@@ -5601,7 +5601,7 @@ sources = ["v2.0.0:desktop/ui/app.js:372", "v2.0.0:desktop/ui/app.js:1563-1567"]
 python_tests = []
 bridge = ["newWindow", "cacheSet", "properties", "mountVolume"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/place_menus/tests.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts, drives_and_shares_offer_to_cache_their_folder, a_phone_is_not_cached_or_opened_in_a_terminal_and_drive_items_target_the_drive); native/crates/ox-app/src/window/tests/network.rs (open_in_new_window_shows_the_place_in_another_window). A mounted drive offers Open, Open in new window, Open in Terminal, the search cache entry (where the drive can be cached), Dolphin's Disconnect, Eject and Safely remove where the drive allows them, Format… (the app's own Format dialog), Open in Disks where GNOME Disks is installed, then Properties; an unmounted volume offers only 'Mount volume'. The menu of a This PC card belongs to the folder pane, not the card, so drawing the page again while it is open does not crash (native/crates/ox-app/src/window/tests/landing_pages.rs: a_this_pc_card_menu_survives_the_page_being_drawn_again)."
+native_note = "native/crates/ox-app/src/window/place_menus/tests.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts, drives_and_shares_offer_to_cache_their_folder, a_phone_is_not_cached_or_opened_in_a_terminal_and_drive_items_target_the_drive); native/crates/ox-app/src/window/tests/network.rs (open_in_new_window_shows_the_place_in_another_window). A mounted drive offers Open, Open in new window, Open in Terminal, the search cache entry (where the drive can be cached), Dolphin's Disconnect, Eject and Safely remove where the drive allows them, Format… (the app's own Format dialog), Open in Disks where GNOME Disks is installed, then Properties; an unmounted volume offers only 'Mount volume'. This PC's drive tiles open the same menu (native/crates/ox-app/src/window/tests/landing_pages.rs: a_drive_tile_has_the_drive_menu_and_its_properties). The menu of a This PC tile belongs to the folder pane, not the tile, so drawing the page again while it is open does not crash (native/crates/ox-app/src/window/tests/landing_pages.rs: a_this_pc_tile_menu_survives_the_page_being_drawn_again)."
 
 [[feature]]
 id = "SIDE-018"
@@ -11592,7 +11592,7 @@ bridge = ["unmount", "environment"]
 dolphin = "Places 'Unmount'/'Safely Remove'; Eject / Safely Remove in Places; Places panel “Unmount” / “Release”"
 gnome = "g_mount_unmount_with_operation; g_mount_unmount_with_operation + GMountOperation::show-processes"
 native = "done"
-native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected); native/crates/ox-app/src/devices.rs (disconnect_names_a_device_or_a_mount_as_app_js_does); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it); native/crates/ox-app/src/window/tests/network.rs (disconnect_asks_first_and_reports_a_location_without_a_mount, sign_out_and_disconnect_wait_for_a_running_file_operation). The card's 'Disconnect device'/'Disconnect' menu (named 'Disconnect mount' until 2026-11-06), the toast 'Finish the current operation before disconnecting.' while this window writes, 'Disconnect this mount?', the unmount with GTK's mount operation, 'Could not disconnect' and the move to Network work. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (DEV-007, DEV-008), now in the menus too. \"…\" in This PC and Network has Disconnect network drive, listing each connected share to unmount through the same win.disconnect (native/crates/ox-app/src/window/command_bar/menus.rs, disconnect_network_drive_lists_the_connected_shares_or_says_why_not)."
+native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected); native/crates/ox-app/src/devices.rs (disconnect_names_a_device_or_a_mount_as_app_js_does); native/crates/ox-app/src/window/tests/landing_pages.rs (a_drive_tile_has_the_drive_menu_and_its_properties); native/crates/ox-app/src/window/tests/network.rs (disconnect_asks_first_and_reports_a_location_without_a_mount, sign_out_and_disconnect_wait_for_a_running_file_operation). The card's 'Disconnect device'/'Disconnect' menu (named 'Disconnect mount' until 2026-11-06), the toast 'Finish the current operation before disconnecting.' while this window writes, 'Disconnect this mount?', the unmount with GTK's mount operation, 'Could not disconnect' and the move to Network work. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (DEV-007, DEV-008), now in the menus too. \"…\" in This PC and Network has Disconnect network drive, listing each connected share to unmount through the same win.disconnect (native/crates/ox-app/src/window/command_bar/menus.rs, disconnect_network_drive_lists_the_connected_shares_or_says_why_not)."
 
 [[feature]]
 id = "DEV-007"
