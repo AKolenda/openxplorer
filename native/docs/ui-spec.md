@@ -49,7 +49,7 @@ and does not "improve" them away.
 | Layout order | Tab strip in the title bar → navigation row (Back, Forward, Up, Refresh, breadcrumb address, search) → command bar (New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾, View ▾, More ··· ⟶ Details) → sidebar │ content │ details pane → status bar. |
 | Band heights | Title bar 42 (no border), navigation row 48, command bar 48, column header 32, status bar 30 (each of these four includes its 1 px border); row pitch 32. Windows 11's density (owner decision 2026-11-06, which replaced the identity's navigation row 62, command bar 55, column header 38 and row pitch 38, so about 22 rows fit a 900 px window instead of 17). |
 | Widths | Tab 215, sidebar 210 plus a 6 px resizer, details pane 262, search 235, caption buttons 46. |
-| Palette character | Blue-grey tab strip (`#eff1f4` / `#191919`) standing in for Mica Alt; the active tab merges into a light chrome band; white (or `#202020`) content; soft blue selection `#e8f1fb` / `#263c50` with a faint blue edge. |
+| Palette character | Neutral tab strip (`#f3f3f3` / `#202020`), a flat stand-in for Mica Alt; the active tab merges into a light chrome band; white (or `#202020`) content; soft blue selection `#e8f1fb` / `#263c50` with a faint blue edge. |
 | Artwork | The project's own colour art (`folderIcon`, `appendFolderArt`, `zipFolderIcon`, `fileIcon`, `networkIcon` in `app.js`) and its own stroke glyphs (the `paths` table). Folder art: `#d99a22` back, `#ffce56` / `#f7bd40` front, `#fff0bd` paper. Network pipe: `#23873f` with `#62cf7c` / `#35a854` highlights. |
 | Sizes | Row icons 16, sidebar icons 16, Large icons tiles 96, details preview 83. Windows 11's icon sizes (owner decision 2026-11-06; before it 21, 19 and 56). |
 | Behaviour you can see | Breakpoints at 1190 / 960 / 680 px, text sizes 80–200 %, the Windows 11 (default) or classic Windows 10 context menu, the amber snapshot-tab marker, type-to-select feedback in the status bar, drag-to-pin highlighting, reduced-motion support. |
@@ -163,9 +163,9 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 
 | ID | Token (`@ox_…`) | Current app, light / dark | Windows 11, light / dark (source) | Native target, light / dark | Tag, note |
 |---|---|---|---|---|---|
-| C01 | `title`: tab strip | `#eff1f4` / `#191919` | Mica Alt, tinted by the wallpaper (L-MICA); solid fallback SolidBackgroundFillColorBaseAlt `#DADADA` / `#0A0A0A` (CT#L279 / CT#L75) | `#eff1f4` / `#191919` | Keep. GTK cannot sample the wallpaper (§6.2), and the fallback greys are much darker than the identity. |
-| C02 | `title_backdrop`: tab strip, inactive window | same as C01 | When the window deactivates, Mica falls back to SolidBackgroundFillColorBase and **Mica Alt to SolidBackgroundFillColorBaseAlt** (L-MICA). The tab strip is Mica Alt (C01), so its fallback is `#DADADA` / `#0A0A0A` (CT#L279 / CT#L75). | `@ox_title` (`#eff1f4` / `#191919`) | Keep, for the same reason as C01. The inactive state shows through the labels instead (§4.1). |
-| C03 | `title_hover`: inactive tab, caption, new-tab and windows buttons | `#ffffff55` / `#ffffff0c` on tabs; `#f0f0f0` / `#343434` on caption buttons | TabViewItemHeaderBackgroundPointerOver = LayerOnMicaBaseAltFillColorSecondary `#0A000000` / `#0FFFFFFF` (TV#L9 / TV#L87; CT#L269 / CT#L65) | `alpha(black, .04)` / `alpha(white, .06)` | visible in light: hover darkens instead of lightening. Fixes the caption hover, which is nearly invisible today (`#f0f0f0` on `#eff1f4`). |
+| C01 | `title`: tab strip | `#eff1f4` / `#191919` | Mica Alt, tinted by the wallpaper (L-MICA); solid fallback SolidBackgroundFillColorBaseAlt `#DADADA` / `#0A0A0A` (CT#L279 / CT#L75) | `#f3f3f3` / `#202020` | Applied (2026-11-06): Mica Alt over a neutral wallpaper, drawn flat, as GTK cannot sample the wallpaper (§6.2); the fallback greys are much darker. |
+| C02 | `title_backdrop`: tab strip, inactive window | same as C01 | When the window deactivates, Mica falls back to SolidBackgroundFillColorBase and **Mica Alt to SolidBackgroundFillColorBaseAlt** (L-MICA). The tab strip is Mica Alt (C01), so its fallback is `#DADADA` / `#0A0A0A` (CT#L279 / CT#L75). | `@ox_title` (`#f3f3f3` / `#202020`) | Keep, for the same reason as C01. The inactive state shows through the labels instead (§4.1). |
+| C03 | `title_hover`: inactive tab, caption and new-tab buttons | `#ffffff55` / `#ffffff0c` on tabs; `#f0f0f0` / `#343434` on caption buttons | TabViewItemHeaderBackgroundPointerOver = LayerOnMicaBaseAltFillColorSecondary `#0A000000` / `#0FFFFFFF` (TV#L9 / TV#L87; CT#L269 / CT#L65) | `alpha(black, .04)` / `alpha(white, .06)` | Applied, tabs too (2026-11-06: `ox_tab_hover`): hover darkens in light instead of lightening. Fixes the caption hover, which was nearly invisible (`#f0f0f0` on `#eff1f4`). |
 | C04 | `chrome`: active tab, navigation row, command bar | `#f7f7f7` / `#262626` | TabViewItemHeaderBackgroundSelected = SolidBackgroundFillColorTertiary `#F9F9F9` / `#282828` (TV#L7 / TV#L85; CT#L274 / CT#L70) | `#f9f9f9` / `#282828` | safe |
 | C05 | `bg`: content, details pane, status bar | `#ffffff` / `#202020` | LayerFillColorAlt `#FFFFFF` (CT#L265); SolidBackgroundFillColorBase `#202020` (CT#L68). Explorer content is white, and near `#191919` in dark (observed, unverified). | `#ffffff` / `#202020` | Keep. |
 | C06 | `sidebar` | `#fafafa` / `#252525` | Explorer's navigation pane shares the content surface (observed, unverified); LayerFillColorDefault `#80FFFFFF` on Mica ≈ `#f9f9f9` (CT#L264) | `#fafafa` / `#252525` | Keep. |
@@ -202,7 +202,7 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C35 | `caution_*`: snapshot banner, badge and tab marker | banner `#fff7e8` / `#775314` / `#dfcba5`, dark `#302a20` / `#ecc993` / `#51422a`; badge `#fff2d6` / `#714a08`, dark `#443721` / `#f4cc82`; tab top `#c48c2f` | SystemFillColorCautionBackground `#FFF4CE` / `#433519` (CT#L287 / CT#L83) | current values | Keep (identity); within a few steps of WinUI. |
 | C36 | `smoke`: modal scrim | `#0004`, auth `#0006` | SmokeFillColorDefault `#4D000000` (CT#L263 / CT#L59) | `alpha(black, .3)` for both dialogs | safe |
 | C37 | `tab_text_inactive` (new) | same as the active tab (`@text`) | TabViewItemHeaderForeground = TextFillColorSecondary (TV#L12 / TV#L90) | `@ox_muted` | Applied 2026-11-02 (owner: Explorer fidelity). |
-| C38 | `tab_separator` (new) | none | TabViewItemSeparator = DividerStrokeColorDefault (TV#L46 / TV#L124) | `alpha(black, .06)` / `alpha(white, .08)` | visible, P3 |
+| C38 | `tab_separator` (new) | none | TabViewItemSeparator = DividerStrokeColorDefault (TV#L46 / TV#L124) | `alpha(black, .06)` / `alpha(white, .08)` | Applied (2026-11-06); the strip draws it (`tab_strip/edges.rs`). |
 | C39 | `tab_strip_line` (new) | none | TabViewBorderBrush = CardStrokeColorDefault `#0F000000` / `#19000000` (TV#L68 / TV#L146). The strip draws it left of the tabs and right of the add button (TVX#L36–37); each tab draws its own bottom line (TVX#L546), hidden on the selected tab (TVX#L337). The selected tab also gets a 1 px outline of the same colour on its top and sides (TV#L72–80, TV#L268; TVX#L344–345). | `alpha(black, .06)` / `alpha(black, .10)` | visible, P3. §1.1 fixes the title bar as having no border, so this ships only if sign-off amends §1.1. |
 | C40 | `scrollbar_thumb` | web `#aaa8`; native `alpha(@ox_text, .35)` | ScrollBarThumbFill = ControlStrongFillColorDefault `#72000000` / `#8BFFFFFF` (SB#L138; CT#L226 / CT#L22) | `alpha(black, .45)` / `alpha(white, .55)` | safe |
 | C41 | `window_stroke` (new) | framed preview `#adb7c54a` | Window stroke 1 px (L-LAYER); SurfaceStrokeColorDefault `#66757575` (CT#L254 / CT#L50) | `alpha(#757575, .4)` | safe |
@@ -263,10 +263,10 @@ unverified). That is why the app's 12 px base is correct.
 |---|---|---|---|---|---|
 | R01 | Window | framed preview 10; native CSD 8 | 8 for top-level windows; 0 when snapped or maximized (L-GEO) | 8; 0 for `.maximized`, `.fullscreen` and `.tiled*` | safe. On this machine the user's own `gtk.css` forces 0 at a higher priority (§2); leave that choice winning. |
 | R02 | Menus (Windows 11 style) and popovers | 10 (`.menu.win11`), 8 (base `.menu`) | 8, OverlayCornerRadius (L-GEO; CR#L13–14) | 8 | safe |
-| R03 | Menus (classic style) | 2 | Windows 10 menus are square (observed, unverified) | 2 | Keep (a deliberate option). |
+| R03 | Menus (classic style) and the drop-down menus that share it | 8 (2 before 2026-11-06) | Windows 11 rounds even its classic menu ("Show more options") by OverlayCornerRadius, 8 (L-GEO; CR#L13–14); Windows 10's were square | 8; submenus the same | Applied (2026-11-06). The style stays a deliberate option. |
 | R04 | Dialogs | 9 | 8 (L-GEO; CD `CornerRadius` = OverlayCornerRadius) | 8 | safe |
 | R05 | Tab top corners | 8 8 0 0 | TabViewItem CornerRadius = OverlayCornerRadius, top only (TVX#L297, TVX#L562) | 8 8 0 0 | Keep. |
-| R06 | Selected-tab bottom flare | none | 4 × 4 outward arcs at both bottom corners of the selected tab (TVX#L547–548) | 4 px concave arcs in `@ox_chrome` | visible, P3 (§6.2) |
+| R06 | Selected-tab bottom flare | none | 4 × 4 outward arcs at both bottom corners of the selected tab (TVX#L547–548) | 4 px concave arcs in `@ox_chrome` | Applied (2026-11-06); the strip draws them (§6.2). |
 | R07 | Controls: buttons, rows, sidebar entries, crumbs, fields, list backplates | buttons 4, rows 4, fields **5** | 4, ControlCornerRadius (L-GEO; CR#L13; LV#L210) | 4 everywhere | safe (fields 5 → 4) |
 | R08 | Tiles and quick cards | 6 | 4 (GV#L109) | 4 | safe |
 | R09 | Large panels: details preview, drive card, network banner, settings section, integration card, transfer panel, toast | 7 / 7 / 7 / 9 / 7 / 7 / 7 | L-GEO gives 8 only to top-level containers and transient or overlay UI (windows, flyouts, dialogs). In-page elements get 4 (L-GEO). | Overlays (transfer panel, toast): 8. In-page panels (details preview, drive card, network banner, settings section, integration card): keep 7, with the settings section 9 → 7. | Overlays safe. In-page panels: keep. 4 would match L-GEO but a 3 px change is visible, P3. |
@@ -294,7 +294,7 @@ and its label, 12 between content areas, and 16 from a surface's edge to its tex
 | S06 | Tab icon to title | 9 | 10 (TV#L247) | safe |
 | S07 | Command glyph to label | 9 | 8 | safe |
 | S08 | Tab strip top | 7: the tab renders 35 high because `.tab{min-height:max(35px,…)}` overrides `height:34px` (measured: `explorer-light.png` column x = 150, tab rows y = 7–41) | 7 (35-high tabs in the 42 bar). WinUI's TabViewHeaderPadding is `0,8,0,0` (TV#L239). | Keep. 8 would need 34-high tabs (1 px, safe, optional). |
-| S09 | Menu item insets | item margin 0; menu padding 3 (classic) / 5 (Windows 11) | Windows 11 style: menu padding `2px 0`, item margin `2px 4px`, item padding `0 11px` (WinUI: presenter padding `0,2`, MF#L255; item margin `4,2`, MF#L259; item padding `11,4,11,5` for mouse, pen and keyboard, MF#L261); classic unchanged | safe |
+| S09 | Menu item insets | item margin 0; menu padding 3 (classic) / 5 (Windows 11) | Windows 11 style: menu padding `2px 0`, item margin `2px 4px`, item padding `0 11px` (WinUI: presenter padding `0,2`, MF#L255; item margin `4,2`, MF#L259; item padding `11,4,11,5` for mouse, pen and keyboard, MF#L261); classic: Windows 11's classic menu spacing, rows 32 high with `0 12px` padding, menu padding 3 (2026-11-06) | safe |
 
 ### 3.6 Elevation
 
@@ -322,12 +322,12 @@ stroke. Fluent's CSS shadow ramp (FT `utils/shadows.js`):
 | ID | Use | Current | Windows 11 (source) | Native target | Tag |
 |---|---|---|---|---|---|
 | M01 | Hover, pressed and selected colour changes | instant | BrushTransition 83 ms (BT#L174); ControlFasterAnimationDuration 83 ms (CT#L606); "Fade – In + Out, Linear, 83ms" (L-MOTION) | `transition: background-color 83ms linear, color 83ms linear, box-shadow 83ms linear;` | safe |
-| M02 | Entrance (surfaces, expanding elements) | none | Fast-in `cubic-bezier(0,0,0,1)`, 167 / 250 / 333 ms (L-MOTION); ControlFastOutSlowInKeySpline `0,0,0,1` (CT#L602); ControlFastAnimationDuration 167 ms, Normal 250 ms (CT#L603–604) | `167ms cubic-bezier(0,0,0,1)` for anything the app animates | n/a |
-| M03 | Exit | none | Fast-out `cubic-bezier(0,0,0,1)`, 167 ms, always with a fade (L-MOTION) | `167ms cubic-bezier(0,0,0,1)` plus `opacity` | n/a |
+| M02 | Entrance (surfaces, expanding elements) | menus (M07); otherwise none | Fast-in `cubic-bezier(0,0,0,1)`, 167 / 250 / 333 ms (L-MOTION); ControlFastOutSlowInKeySpline `0,0,0,1` (CT#L602); ControlFastAnimationDuration 167 ms, Normal 250 ms (CT#L603–604) | `167ms cubic-bezier(0,0,0,1)` for anything the app animates | n/a |
+| M03 | Exit | none | Fast-out `cubic-bezier(0,0,0,1)`, 167 ms, always with a fade (L-MOTION) | `167ms cubic-bezier(0,0,0,1)` plus `opacity`; menus close at once: fading one out keeps its popup, which holds the pointer grab, on screen after the chosen command has opened the next menu ("Show more options"), and Wayland refuses a second grabbing popup that is not the first's child | n/a |
 | M04 | Point to point (moving selection pill) | instant | `cubic-bezier(0.55,0.55,0,1)`, 167 / 250 / 333 ms (L-MOTION) | optional, 167 ms | visible, P3 |
 | M05 | Scrollbar expand and contract | web: none | expand 167 ms after 400 ms; contract 167 ms after 500 ms (SB#L173–176, SB#L188–189); spline `0,0,0,1` (SB#L484) | `transition: min-width 167ms cubic-bezier(0,0,0,1), min-height 167ms cubic-bezier(0,0,0,1);` GTK controls the delays. | safe |
 | M06 | Loading line | 25 % bar, `1s ease-in-out infinite` | none; Fluent duration and curve tokens are in FT `global/durations.js` and `global/curves.js` | Replaced (VIEW-068): as in Windows Explorer, the address bar's fill is the only progress bar, from the first moment, and no line runs over the items. "Working on it..." and the status bar's "Loading…" wait 300 ms (`slow_delay.rs`) so fast folders never flash them. | safe |
-| M07 | Popover open | instant (web) | Direct entrance (M02) | GTK 4.14 popovers do not animate; keep them instant. | n/a |
+| M07 | Popover open | menus fade in while sliding 8 px in from the edge nearest what they open from (down below a button or the pointer, up when GTK flips them above it, sideways beside a submenu's row), 167 ms `cubic-bezier(0,0,0,1)`, a CSS animation of `popover.ox-menu > contents` that each opening restarts (menus.css, `window/menu_popover/motion.rs`); the address bar's suggestion lists do not animate (2026-11-06) | Direct entrance (M02); Windows 11's menus fade and slide in from their anchor (observed) | as now; 8 px stays inside the room GTK keeps for the menu's shadow, so nothing is cut off; no animation while `gtk-enable-animations` is off (M08). While a menu opens its contents keep an opacity of 254/255, because GTK 4.14 tells the compositor a popup is opaque from its background colour alone, ignoring CSS opacity, and Weston then drew the fading menu over black | Applied |
 | M08 | Reduced motion | `@media (prefers-reduced-motion: reduce)` → 0.01 ms | n/a | GTK disables CSS transitions and animations when `gtk-enable-animations` is false (GNOME "Reduce animation" / `enable-animations`). The address bar's progress fill must then stay still, at a third of the field. | must keep (rule 1) |
 
 ### 3.8 Target palette files
@@ -337,7 +337,7 @@ names.
 
 ```css
 /* light.css */
-@define-color ox_title #eff1f4;
+@define-color ox_title #f3f3f3;
 @define-color ox_title_backdrop @ox_title;
 @define-color ox_title_hover alpha(black, .04);
 @define-color ox_chrome #f9f9f9;
@@ -392,7 +392,7 @@ names.
 
 ```css
 /* dark.css */
-@define-color ox_title #191919;
+@define-color ox_title #202020;
 @define-color ox_title_backdrop @ox_title;
 @define-color ox_title_hover alpha(white, .06);
 @define-color ox_chrome #282828;
@@ -466,16 +466,16 @@ where it differs; ✓ means the target equals the current app.
 |---|---|---|---|
 | Bar | height 42 (min `max(42, ceil(25·s + 12))`), `padding-left: 9`, background `@ox_title`, **no bottom border** under the active tab ✓ | WinUI TitleBar is 32 (compact) or 48 (tall) (TTL#L77–78); tabs use the title-bar space and keep the caption buttons on the right (L-TITLE) | Keep. |
 | Tab | 35 high (`max(35, ceil(25·s + 7))`; the current app's `height: 34px` loses to this min-height), 7 below the bar top ✓ (S08), natural width 215, shrinking to **100** (80) when crowded, radius 8 8 0 0, padding `0 10 0 13`, 2 px apart | TabView: min height 32, width 100–240, header padding `8,3,4,3` (TV#L240–244) | min-width safe |
-| Active tab | background `@ox_chrome`, label `@ox_text`, joins the navigation row with no seam; 4 px outward flares at the bottom corners (P3) | TabViewItemHeaderBackgroundSelected (TV#L7); flares: the selected background path extends 4 px past each side (TVX#L551) and 4 × 4 arcs stroke its edge in TabViewBorderBrush (TVX#L547–548). WinUI also sets the selected title SemiBold (TVX#L351); not adopted, because the current app keeps the active tab at 400. | flare visible |
-| Inactive tab | transparent; label `@ox_tab_text_inactive`; hover `@ox_title_hover`; pressed `alpha(white, .7)` / `alpha(#3a3a3a, .45)` | Foreground TextFillColorSecondary (TV#L12); pressed LayerOnMicaBaseAltFillColorDefault `#B3FFFFFF` / `#733A3A3A` (TV#L10; CT#L268 / CT#L64) | visible, P3 |
-| Separators | 1 × 19 px `@ox_tab_separator` (the 35 px tab minus WinUI's 8 px top and bottom margins), centred in the gap between two inactive tabs; hidden next to the active or a hovered tab | TabViewItemSeparator, margin `0,8,0,8` (TV#L46, TV#L266) | visible, P3 |
+| Active tab | background `@ox_chrome`, label `@ox_text`, joins the navigation row with no seam; 4 px outward flares at the bottom corners in `@ox_chrome`, drawn by the strip where an edge of the tab shows | TabViewItemHeaderBackgroundSelected (TV#L7); flares: the selected background path extends 4 px past each side (TVX#L551) and 4 × 4 arcs stroke its edge in TabViewBorderBrush (TVX#L547–548). WinUI also sets the selected title SemiBold (TVX#L351); not adopted, because the current app keeps the active tab at 400. | Applied (2026-11-06). |
+| Inactive tab | transparent; label `@ox_tab_text_inactive`; hover `@ox_tab_hover` (`alpha(black, .04)` / `alpha(white, .06)`), rounded with the tab's top corners; no pressed fill, as a press brings the tab to the front at once (TAB-004) | Foreground TextFillColorSecondary (TV#L12); hover LayerOnMicaBaseAltFillColorSecondary (TV#L9); pressed LayerOnMicaBaseAltFillColorDefault `#B3FFFFFF` / `#733A3A3A` (TV#L10; CT#L268 / CT#L64) | Applied (2026-11-06). |
+| Separators | 1 × 19 px `@ox_tab_separator` (the 35 px tab minus WinUI's 8 px top and bottom margins), in the first pixel of the 2 px gap between two inactive tabs, in the order the tabs show (also while they slide); hidden next to the tab in front or a hovered tab, and none before the first tab or after the last | TabViewItemSeparator, margin `0,8,0,8` (TV#L46, TV#L266) | Applied (2026-11-06); the strip draws them. |
 | Tab icon | 16 colour art (folder, drive, network, device), then 10 px to the title | 16 icon, 10 margin (TV#L246–247) | safe |
 | Tab title | 12 px, ellipsis at the end | 12 (TV#L245) | Keep. |
-| Close button | 22 × 22, radius 4, glyph 12, hover `@ox_hover` on the active tab and `@ox_title_hover` elsewhere | 32 × 24, glyph 12 (TV#L248–251); hover SubtleFillColorSecondary (TV#L49) | Keep size. |
+| Close button | 22 × 22, radius 4, glyph 12, hover `@ox_hover` on the active tab and `@ox_title_hover` elsewhere; shown only on the tab in front, a hovered tab and a tab holding the keyboard focus; elsewhere transparent, keeping its room, so no title moves | 32 × 24, glyph 12 (TV#L248–251); hover SubtleFillColorSecondary (TV#L49); Explorer shows the × on the selected and the hovered tab (observed) | Keep size; visibility applied (2026-11-06). |
 | Snapshot tab | width 330, min 285, `border-top: 2px solid #c48c2f`, badge 10 → 12 px (T05) ✓ | — | Keep. |
 | New tab (+) | 38 × 34, glyph 14, margin `0 3 0 5`, **directly after the last tab**; hover `@ox_title_hover` | 32 × 24, glyph 12 (TV#L261–263) | Keep size. |
 | Drag area | fills the remaining width, **min 48** (16) | TitleBarMinDragRegionWidth 48 (TTL#L85) | safe |
-| Open-windows button | 35 × 30, glyph 16, `@ox_muted`, before the caption buttons ✓ | — | Keep. |
+| Open-windows button | none (35 × 30 before): the tab menu's Open windows…, Settings > General and the launcher's Open windows open the list below the tab in front, and the drag area reaches the caption buttons | Windows 11's title bar has none | Removed (2026-11-06). |
 | Caption buttons | 46 wide × full bar height (42), radius 0, glyph 10 (I04); hover `@ox_title_hover`; close hover `@ox_critical_fill` with a white glyph; close pressed `alpha(@ox_critical_fill, .9)` with `alpha(white, .7)` | full-bleed backplates; glyphs E921, E922, E923, E8BB (L-TITLE); 46 px width and the close pressed colours (observed, unverified) | glyph visible (crisper) |
 | Inactive window (`:backdrop`) | bar unchanged (`@ox_title_backdrop` = `@ox_title`, C02); inactive tab labels and caption glyphs `@ox_text_tertiary`; active tab unchanged | inactive title-bar elements are semi-transparent (L-TITLE); TitleBarDeactivatedOpacity 0.5, deactivated foreground TextFillColorTertiary (TTL#L86, TTL#L33); Mica Alt's inactive fallback is `#DADADA` / `#0A0A0A` (C02) | safe |
 | Maximized or tiled | window radius 0; caption buttons flush to the top | L-GEO | safe |
@@ -594,11 +594,14 @@ Both styles stay, because the preference is behaviour (rule 1).
 
 | Element | Classic target | Windows 11 style target | Windows reference | Tag |
 |---|---|---|---|---|
-| Surface | width `max(264, 235·s)`; padding 3; radius 2; 1 px `@ox_flyout_stroke`; background `@ox_flyout`; shadow `0 5px 16px alpha(black, .2)` | width `max(276, 235·s)`; padding `2 0`; radius 8; 1 px `@ox_flyout_stroke`; background `@ox_flyout`; shadow E03 | MF#L202–203, MF#L255; L-GEO; L-LAYER | safe |
+| Surface | width `max(264, 235·s)`; padding 3; radius 8 (2026-11-06; it was 2); 1 px `@ox_flyout_stroke`; background `@ox_flyout`; shadow `0 5px 16px alpha(black, .2)` | width `max(276, 235·s)`; padding `2 0`; radius 8; 1 px `@ox_flyout_stroke`; background `@ox_flyout`; shadow E03 | MF#L202–203, MF#L255; L-GEO; L-LAYER | safe |
 | Height and placement | as tall as the monitor it opens on, less 8 px above and below; scrolls only beyond that. At a point, a menu that may fit neither below nor above opens beside it, top at the point, and GTK slides it up to stay on the monitor; below a button, a menu GTK cuts short there opens beside the button the same way (`window/menu_popover/height.rs`) | same | a menu fits on its monitor and scrolls only when taller (observed, unverified) | Keep. |
-| Item | min height `ceil(22·s + 11)` (33); padding `0 9`; radius 0; gap 9; glyph 16 (15) | min height 29 plus a `2 4` margin (33 pitch); padding `0 11`; radius 4; icon column 16 + 12 | MF#L259–261, MF#L212, MF#L388 | safe |
+| Item | min height `22·s + 10` (32, Windows 11's classic menu spacing; it was 33); padding `0 12` (it was `0 9`); radius 0; gap 9; glyph 16 (15) | min height 29 plus a `2 4` margin (33 pitch); padding `0 11`; radius 4; icon column 16 + 12 | MF#L259–261, MF#L212, MF#L388 | safe |
 | Label | 12 px `@ox_text`, ellipsis | same | MenuFlyoutItemForeground (MF#L177) | Keep. |
-| Accelerator | 12 px (10) `@ox_muted`, right-aligned, at least 12 px after the label | 12 px `@ox_muted`, at least 24 px after the label | Caption style, margin 24 (MF#L392); TextFillColorSecondary (MF#L197) | visible, P2 |
+| Accelerator | none in the context menu, its submenus included, as Windows 11's classic menu shows no shortcut text (the keys work; 2026-11-06); 12 px (10) `@ox_muted`, right-aligned, at least 12 px after the label in the other menus that list one | 12 px `@ox_muted`, at least 24 px after the label | Caption style, margin 24 (MF#L392); TextFillColorSecondary (MF#L197); Windows 11's classic menu (observed) | visible, P2 |
+| Default command | Open, what Enter and a double-click run, in bold (weight 700), as Windows marks the default command | as before: regular | Windows' classic menu (observed) | Applied (2026-11-06) |
+| Glyphs (context menu) | only on the rows Windows' classic menu draws with an icon: Open in Terminal, Open with and the applications' icons, Send to, Properties, Open as administrator; the app's own commands keep theirs; Windows' text-only commands (Open, Open in new tab and window, Pin to Quick access, Cut, Copy, Paste, Rename, Delete, Copy as path, Previous versions, Extract all, Mount, View, Sort by, Group by, New, Refresh, Undo, Redo, Open file location, Restore, Empty Recycle Bin) show none, their glyph column kept empty so every label lines up; submenus keep their glyphs (Send to's destinations, New's types, the command bar's View and Sort as #200 set them) (2026-11-06) | as before | Windows 11 classic menu (observed; Windows' exact icon set for Open with, Send to and Properties unverified, so they keep theirs) | Applied |
+| Opening motion | fade and slide in (M07) | same | Windows 11 menus (observed) | Applied |
 | Hover, keyboard highlight | `@ox_hover` | `@ox_hover` | SubtleFillColorSecondary (MF#L173) | Keep. |
 | Pressed | `@ox_pressed` | `@ox_pressed` | SubtleFillColorTertiary (MF#L174) | safe |
 | Disabled | `@ox_text_disabled` | `@ox_text_disabled` | TextFillColorDisabled (MF#L180) | safe |
@@ -606,7 +609,7 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Heading | 12 px (10) `@ox_muted`, padding `7 12 5` | same | L-TYPE minimum | visible, P2 |
 | Check and radio | a mark column of 16 before the glyph in every row of a menu with a choice or toggle: a check mark for a toggle that is on, a dot (`circle_small_20_filled`) for the chosen choice and the open Details or Preview pane; the glyph stays beside it (2026-11-03; it replaced the glyph before) | same | File Explorer View menu, Windows 11 (the user's screenshots, 2026-11-03) | Applied. |
 | Submenu arrow | chevron 12 `@ox_muted`, right end | same | chevron margin 24 (MF#L257) | Keep. |
-| Submenu | a flyout beside its row, opening after the pointer rests on the row for 400 ms (Windows' MenuShowDelay) or at once on a click, Right or Enter; its first item level with the row, overlapping the menu by its border and padding; flipped left near the screen's edge; the row stays highlighted while it is open. It is a popup of the menu's surface without a grab of its own | same | Windows 11 cascades a flyout (SPI_GETMENUSHOWDELAY 400 ms) | Keep: only the first menu holds a Wayland popup grab |
+| Submenu | a flyout beside its row, opening after the pointer rests on the row for 400 ms (Windows' MenuShowDelay) or at once on a click, Right or Enter; its first item level with the row, overlapping the menu by its border and padding; flipped left near the screen's edge; the row stays highlighted while it is open; the menu's radius and shadow, and it slides in sideways out of its row (M07). It is a popup of the menu's surface without a grab of its own | same | Windows 11 cascades a flyout (SPI_GETMENUSHOWDELAY 400 ms) | Keep: only the first menu holds a Wayland popup grab |
 | Quick-action strip (Windows 11 style only) | — | five 34-high icon buttons at 20 % width each, 2 px gap and padding, above the list ✓ | Windows 11 context menu (observed, unverified) | Keep. |
 | Send to (classic item menu only) | a submenu row between dividers above Cut, as in Windows Explorer's classic menu; its rows in Windows' order: Bluetooth device, Compressed (zipped) folder, Desktop (create shortcut), Documents, Mail recipient, then the removable drives and saved network locations under their This PC names; rows the computer lacks are left out, rows that cannot run are disabled with the reason in their tooltip; Documents and Mail recipient show Fluent's colour art, as Windows shows colour glyphs, the others their Fluent glyphs, as Fluent has no colour art for them (CMD-038) | — (Windows 11's compact menu has no Send to) | Windows Explorer classic menu, Send To folder | Keep. |
 | Right-drag menu (DND-027) | opens at the drop point when a right-button drag is released: Copy here, Move here, Create shortcuts here, a separator, Cancel; only the entries the items allow; what a left drop would do is **bold** (the Item label at weight 700); **text only**: no glyph, the empty glyph column keeps the label where other menus put it; no tooltip of the window shows while it is open; the first item takes the keyboard, Up/Down/Enter choose, Escape closes it doing nothing; no third-party entries | same | Windows 11 right-drag menu (observed) | Keep. |
@@ -677,7 +680,7 @@ pointer click. That already holds in both apps.
 | Surface | Rest | Hover | Pressed | Selected | Disabled |
 |---|---|---|---|---|---|
 | Subtle button (bars, rows, sidebar, menus) | transparent | `@ox_hover` | `@ox_pressed` + `@ox_muted` text | `@ox_selected` | `@ox_text_disabled` |
-| Title-strip button (+, caption, windows; inactive tabs per §4.1) | transparent | `@ox_title_hover` | `alpha(black, .02)` / `alpha(white, .04)` (SubtleFillColorTertiary, TV#L23 / TV#L101) | active tab `@ox_chrome` | `@ox_text_disabled` |
+| Title-strip button (+, caption; inactive tabs per §4.1) | transparent | `@ox_title_hover` | `alpha(black, .02)` / `alpha(white, .04)` (SubtleFillColorTertiary, TV#L23 / TV#L101) | active tab `@ox_chrome` | `@ox_text_disabled` |
 | Bordered button | `@ox_control_fill` + E06 | `@ox_control_fill_hover` | `@ox_control_fill_pressed` + `@ox_muted` text, border `@ox_control_stroke` only | — | fill ControlFillColorDisabled (`@ox_control_fill_pressed` in light, `alpha(white, .04)` in dark), border `@ox_control_stroke`, text `@ox_text_disabled`, no opacity (BT#L131, BT#L135, BT#L139; CT#L223 / CT#L19) |
 | Accent button | `@ox_accent` | `@ox_accent_hover` | `@ox_accent_pressed` | — | `alpha(black, .22)` / `alpha(white, .16)` fill (AccentFillColorDisabled, CT#L242 / CT#L38) |
 | Row or tile, navigation pane row | transparent | `@ox_item_hover` | `@ox_item_selected` | `@ox_item_selected`, no edge; hover `@ox_item_selected_hover` | — |
@@ -806,7 +809,7 @@ where marked, so both apps stay comparable during parity testing.
 | D-A08 | P2 | safe | The sidebar pill is 3 × 15 with radius 4. | `.side-entry.selected:before{height:16px;top:50%;transform:translateY(-50%);border-radius:2px}`, which stays centred at every text size. |
 | D-A09 | P2 | safe | Modal scrims are `#0004` and `#0006`. | `#0000004d` for both (C36). |
 | D-A10 | P2 | safe | Weight 500 is not on the ramp, and headings use negative tracking. | T10–T13. |
-| D-A11 | P3 | visible | Inactive tabs use primary text; tab hover lightens instead of darkening; there are no tab separators, strip line or bottom flares. | C03, C37–C39, R06. |
+| D-A11 | P3 | visible | Inactive tabs use primary text; tab hover lightens instead of darkening; there are no tab separators, strip line or bottom flares. | C03, C37–C39, R06. Fixed (2026-11-06) but for the strip line (C39). |
 | D-A12 | P3 | visible | The dark accent `#74beff` is not the Windows default (`#4CC2FF`), and text on accent is `#142535` rather than black. | C14, C16. |
 | D-A13 | P3 | safe | Dark menus sit on the same `#262626` as the chrome and do not lift off the content. | C07. |
 
@@ -835,7 +838,7 @@ size before judging hairlines.
 | D-N12 | P1 | visible | The details pane is **238** wide (spec 262), has no Open or Pin button, no "Properties" heading or key/value grid, and shows a raw path. | §4.8. |
 | D-N13 | P1 | visible | The status bar joins its parts with " · "; the view toggles are not highlighted; there is no status mode or update button. | §4.7; add class `active` to the current view's toggle. |
 | D-N14 | P1 | visible | No responsive behaviour: at 990 px the capture still shows a 238 px details pane and a 218 px sidebar. The current app shows 235 / 185 there and hides the pane at ≤ 960. | Follow `.workspace` width with a `notify::width` handler (or `GtkConstraintLayout`) that applies the §4 breakpoints: 1190, 960 and 680. |
-| D-N15 | P1 | visible | The open-windows button is missing. | §4.1. |
+| D-N15 | P1 | visible | The open-windows button was missing. | Since 2026-11-06 the title bar has none on purpose, as Windows 11's (§4.1). |
 | D-N16 | P2 | safe | The sidebar default width is 220 (`window.rs`); the current app uses 210 plus a 6 px resizer. | `unwrap_or(210)`; draw the resizer per §4.4. |
 | D-N17 | P2 | safe | The Size column is 90 wide (spec 78). | `SortColumn::Size => Some(78)` in `folder_view/details.rs`. |
 | D-N18 | P2 | safe | `ox_pressed` is darker than hover (`#e9e9e9` / `#3a3a3a`). | C18. |
@@ -877,7 +880,7 @@ size before judging hairlines.
 | No media queries: `prefers-color-scheme` and `prefers-contrast` arrive in 4.19.3 (stable 4.20), reduced motion in 4.21.1 (GTK-NEWS) | Swap palette providers from `theme::system` (already done); add a `.high-contrast` window class from `org.gnome.desktop.a11y.interface high-contrast`; rely on `gtk-enable-animations` for motion. |
 | No `text-align`, `width`, `height`, `max-width`, `margin: auto`, `display`, `position` or `cursor` (GTK-CSS property list) | Label `xalign`, `set_size_request`, `max-width-chars` and `set_cursor` in code; `border-spacing` for Box gaps. |
 | No `backdrop-filter`, so no Mica or Acrylic (it arrives in 4.21.2, GTK-NEWS) | Static tints: `@ox_title` stands in for Mica Alt and `@ox_flyout` for Acrylic, using the documented fallbacks where they fit (C01, C07). |
-| No concave (outward) corners for the tab flare | A 4 × 4 child widget on each side of the active tab that draws the WinUI arc path (TVX#L547–548) with `gsk::PathBuilder` (GskPath is in GTK 4.14; the glyphs already use it). |
+| No concave (outward) corners for the tab flare, and a widget paints only inside itself | The skin draws the flares as radial gradients (the corner outside a quarter circle) and the separator as a 1 × 19 box on three small widgets of the tab strip, which shows them over its tabs where they belong (`tab_strip/edges.rs`). It uses no GTK or Cairo drawing call, as the icon guard requires. |
 | No `::before` or `::after` | Real child widgets (sidebar pill, drop insertion line). |
 | No `:has()` | Toggle state classes in code (`.active`, `.current`, `.classic`, `.editing`). |
 | Negative margins are allowed: they parse, and GTK's own theme uses them (for example `margin-top: -1px` on `.solid-csd` header bars, GTK-SRC `_common.scss`). But they push a widget outside its allocation, and `overflow: hidden` parents clip it. | Restructure instead where clipping matters (§6.4). |
@@ -914,14 +917,13 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
   color: @ox_muted;
   transition: background-color 83ms linear, color 83ms linear;
 }
-.ox-titlebar .tab:hover { background-color: @ox_title_hover; }
+.ox-titlebar .tab:not(.active):hover { background-color: @ox_tab_hover; }
 .ox-titlebar .tab.active { background-color: @ox_chrome; color: @ox_text; }
 window.ox:backdrop .ox-titlebar .tab:not(.active),
 window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
 .ox-titlebar button.caption { min-width: 46px; min-height: 42px; border-radius: 0; }
 .ox-titlebar button.caption:hover,
-.ox-titlebar button.newtab:hover,
-.ox-titlebar button.windows-button:hover { background-color: @ox_title_hover; }
+.ox-titlebar button.newtab:hover { background-color: @ox_title_hover; }
 .ox-titlebar button.caption.close:hover { background-color: @ox_critical_fill; color: white; }
 .ox-titlebar button.caption.close:active { background-color: alpha(@ox_critical_fill, .9); color: alpha(white, .7); }
 

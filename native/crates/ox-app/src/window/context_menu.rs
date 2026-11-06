@@ -36,9 +36,9 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 use entries::{
-    background_menu, compact_background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu,
-    zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation,
-    ItemShape,
+    background_menu, classic_look, compact_background_menu, item_menu, recycle_bin_background_menu,
+    recycle_bin_item_menu, zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu,
+    ItemFacts, ItemLocation, ItemShape,
 };
 pub(super) use entries::{SendToDrive, SendToTargets};
 
@@ -183,6 +183,9 @@ impl BrowserWindow {
             );
         }
         add_extras(&mut menu.entries, extras);
+        if style == MenuStyle::Classic {
+            menu.entries = classic_look(menu.entries);
+        }
         popover.set_entries(menu.entries);
         popover.set_style_and_strip(style, menu.strip);
         popover.set_pointing_to(Some(point));

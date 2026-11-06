@@ -300,16 +300,18 @@ fn selection_bar_rules(scale: f64) -> [String; 2] {
     ]
 }
 
-/// Menu rows and width (`.menu button{min-height:calc(22px * s + 11px)}`
-/// and `.menu.win10{width:max(264px, calc(235px * s))}`). The width rule
-/// sets the contents box, inside 3px of padding and a 1px border. The
-/// Windows 11 style (`.menu.win11{width:max(276px, calc(235px * s))}`,
-/// ui-spec.md §4.9) has no side padding, and its rows keep the same pitch
+/// Menu rows and width (`.menu.win10{width:max(264px, calc(235px * s))}`).
+/// The rows are Windows 11's 32 pixels at 100% text, as its classic menu
+/// spaces them (ui-spec.md §4.9; the web app's
+/// `.menu button{min-height:calc(22px * s + 11px)}` drew 33). The width
+/// rule sets the contents box, inside 3px of padding and a 1px border.
+/// The Windows 11 style (`.menu.win11{width:max(276px, calc(235px * s))}`)
+/// has no side padding, and its rows keep the web app's 33-pixel pitch
 /// with a 2px margin above and below.
 fn menu_rules(scale: f64) -> String {
-    let row = 22.0 * scale + 11.0;
+    let row = 22.0 * scale + 10.0;
     let width = (235.0 * scale).max(264.0) - 8.0;
-    let compact_row = row - 4.0;
+    let compact_row = 22.0 * scale + 7.0;
     let compact_width = (235.0 * scale).max(276.0) - 2.0;
     format!(
         "popover.ox-menu list > row, popover.menu.ox-menu modelbutton {{ min-height: {row:.0}px; }}\n\
@@ -414,7 +416,7 @@ mod tests {
         assert!(css.contains("gridview.files.tiles > child { min-height: 51px; }"));
         assert!(css.contains("gridview.files.content > child { min-height: 57px; }"));
         assert!(css
-            .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 33px; }"));
+            .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 32px; }"));
         assert!(
             css.contains("popover.ox-menu > contents, popover.menu.ox-menu > contents { min-width: 256px; }")
         );
