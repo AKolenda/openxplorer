@@ -25,6 +25,7 @@
 //! | `drive_tab` | A drive's General and Hardware tabs |
 //! | `drive_facts` | A drive's label, type and file system |
 //! | `space_ring` | [`SpaceRing`](space_ring::SpaceRing): the ring of a drive's used and free space |
+//! | `fixed_width` | [`FixedWidth`](fixed_width::FixedWidth): the window's content at Windows' width |
 //! | `folder_count` | A folder's size and content, counting up |
 //! | `security_tab` | The Security tab and its Edit and Advanced dialogs |
 //! | `security_model` | Windows' permission names over Linux bits |
@@ -48,6 +49,7 @@ mod details_rows;
 mod details_tab;
 mod drive_facts;
 mod drive_tab;
+mod fixed_width;
 mod folder_count;
 mod folder_sizes;
 mod general_tab;
