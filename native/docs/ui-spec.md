@@ -544,6 +544,8 @@ where it differs; ✓ means the target equals the current app.
 | Other cells | `@ox_muted`; Size right-aligned with 12 px right padding and tabular figures (T14) | — | Keep. |
 | Row states | hover `@ox_hover`; selected `@ox_selected` + `inset 0 0 0 1px @ox_selected_edge`; selected and hovered `@ox_selected_hover`; keyboard focus: inset ring (§4.13); cut: `opacity: .5`; drag source: `opacity: .5`; drop target: `outline: 2px solid @ox_accent` inset with `@ox_selected` | LV#L170–173, LV#L183 | see §3.1 |
 | Rubberband | 1 px `@ox_accent`, fill `alpha(@ox_accent, .15)`, radius 0 | — | Keep (native). |
+| Rubberband start (new) | a primary press below the rows, or on the empty part of an **unselected** row (right of the end of its name, or in its other columns); the icon and name, and a selected row, are the item | Explorer: the white space right of an unselected item's name is the background (The Old New Thing, 2009-08-05) | Applied (SEL-012). |
+| Drag label (new) | under the drag icon, over this app's drop targets: "→ Move to Documents", "+ Copy to Documents", "Create link in Documents"; padding `3 8`, 1 px `@ox_border`, radius 4, `@ox_chrome`, text `@ox_text`, glyph 12 (`arrow_right`, `add`, `link`) in `@ox_accent`; none where a release does nothing or for a right-button drag | Explorer's drop description beside the pointer (observed) | Applied (DND-028). |
 
 ### 4.6 Icon view
 
