@@ -1099,6 +1099,15 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Bo
     });
     if let Some(glyph) = glyph {
         content.append(&glyph);
+    } else if marks == MarkColumn::None {
+        // A row without a glyph or a mark column, such as Windows
+        // Explorer's text-only right-drag menu's (DND-027), keeps the
+        // glyph's column empty, so its text sits where other menus' does.
+        let column = gtk::Box::builder()
+            .width_request(ROW_GLYPH)
+            .height_request(ROW_GLYPH)
+            .build();
+        content.append(&column);
     }
     let label = gtk::Label::builder()
         .label(&item.label)

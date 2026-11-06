@@ -84,6 +84,7 @@ fn right_clicking_an_empty_folder_opens_its_menu_and_paste_works() {
         .find(|gesture| gesture.button() == gdk::BUTTON_SECONDARY)
         .expect("the empty page takes a right-click");
     right_click.emit_by_name::<()>("pressed", &[&1_i32, &20.0_f64, &20.0_f64]);
+    right_click.emit_by_name::<()>("released", &[&1_i32, &20.0_f64, &20.0_f64]);
     let menu = menu_of(&page).expect("the empty page has the folder menu");
     wait_until("the menu", || menu.is_visible());
 
@@ -277,6 +278,7 @@ fn each_pane_of_a_split_tab_has_its_own_empty_page_menu() {
         .find(|gesture| gesture.button() == gdk::BUTTON_SECONDARY)
         .expect("the empty page takes a right-click");
     right_click.emit_by_name::<()>("pressed", &[&1_i32, &20.0_f64, &20.0_f64]);
+    right_click.emit_by_name::<()>("released", &[&1_i32, &20.0_f64, &20.0_f64]);
     let menu = menu_of(&page).expect("the page has the folder menu");
     wait_until("the menu", || menu.is_visible());
     assert!(menu.row("New").is_sensitive());
