@@ -195,6 +195,10 @@ pub(crate) struct BrowserWindow {
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// Set while the window itself empties the search box, which then
+    /// does not leave search results as the user emptying it does; see
+    /// [`super::search_steps`].
+    pub(super) clears_search_box: Cell<bool>,
     /// In tests, a volume id and the root it mounts at, standing in for a
     /// drive the isolated session does not have.
     #[cfg(test)]

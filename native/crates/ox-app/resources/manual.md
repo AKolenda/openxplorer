@@ -47,6 +47,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 - Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.
 - Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
+- A search is a step of the tab's history, as in Windows: the tab and the address bar read Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box goes back to the folder too.
 
 ## Network locations
 
