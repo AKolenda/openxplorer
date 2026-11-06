@@ -2220,6 +2220,7 @@ fn applying_the_customize_tab_is_captured_before_and_after() {
         });
         capture(&test.window, &format!("customize-apply-after-{theme}.png"));
     }
+}
 
 /// Change Icon... opens Windows' "Change Icon for <folder> Folder", which
 /// lists the icon theme's folder icons, never its glyphs, with Browse...,
