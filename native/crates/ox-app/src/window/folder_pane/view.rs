@@ -131,6 +131,10 @@ impl FolderView {
     /// Windows: the wheel never lands on them, and from them it steps as
     /// from Details (VIEW-071).
     pub(crate) fn zoomed(self, steps: i32) -> FolderView {
+        // Part of a notch, which a touchpad sends, moves nothing.
+        if steps == 0 {
+            return self;
+        }
         let order: Vec<FolderView> = [FolderView::Details, FolderView::Compact]
             .into_iter()
             .chain(IconSize::levels().map(FolderView::Icons))
@@ -216,6 +220,7 @@ mod tests {
     #[test]
     fn tiles_and_content_are_off_the_wheel_and_have_windows_keys() {
         for view in [FolderView::Tiles, FolderView::Content] {
+            assert_eq!(view.zoomed(0), view, "part of a notch stays");
             assert_eq!(view.zoomed(1), FolderView::Compact);
             assert_eq!(view.zoomed(-1), FolderView::Details);
         }
