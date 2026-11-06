@@ -20,7 +20,7 @@ use super::command_bar::CommandBar;
 use super::connections::ExternalHandlers;
 use super::details_pane::DetailsPane;
 use super::file_drag::OutgoingDrag;
-use super::file_drop::{FirstOffer, PendingDrop, ProgramChecks};
+use super::file_drop::{DropLabels, FirstOffer, PendingDrop, ProgramChecks};
 use super::file_ops::FileOperations;
 use super::folder_pane::FolderPane;
 use super::menu_popover::MenuPopover;
@@ -56,9 +56,9 @@ pub(crate) struct BrowserWindow {
     /// "+", right after the last tab.
     #[template_child]
     pub(super) new_tab_button: TemplateChild<gtk::Button>,
-    /// Lists the open windows.
+    /// The empty part of the title bar, after "+", where the tab row ends.
     #[template_child]
-    pub(super) open_windows_button: TemplateChild<gtk::MenuButton>,
+    pub(super) title_drag: TemplateChild<gtk::Box>,
     /// The history buttons, the address and the search box.
     #[template_child]
     pub(super) navigation_row: TemplateChild<gtk::Box>,
@@ -195,6 +195,9 @@ pub(crate) struct BrowserWindow {
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// Counts the re-reads of changed text matches, so a late one never
+    /// removes what a newer one kept; see [`super::live_search`].
+    pub(super) content_recheck: Cell<u64>,
     /// Set while the window itself empties the search box, which then
     /// does not leave search results as the user emptying it does; see
     /// [`super::search_steps`].
@@ -227,6 +230,9 @@ pub(crate) struct BrowserWindow {
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].
     pub(super) file_list_awaits_focus: Cell<bool>,
+    /// Folder Options' "Always search file names and contents" as the
+    /// window last followed it; `None` until it first did.
+    pub(super) searches_contents: Cell<Option<bool>>,
     /// Set while a pin request is being checked and saved; another waits
     /// its turn by being ignored, as `state.pinBusy` in app.js.
     pub(super) pinning: Cell<bool>,
@@ -254,6 +260,8 @@ pub(crate) struct BrowserWindow {
     pub(super) pending_drop: RefCell<Option<PendingDrop>>,
     /// What the drag over the window offered when it arrived.
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
+    /// What the label on the drag icon says over the window (DND-028).
+    pub(super) drop_labels: RefCell<DropLabels>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
     /// Why tooltips are off now: a drag of this window's items, and the

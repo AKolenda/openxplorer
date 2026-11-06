@@ -16,6 +16,9 @@
 //! ([`super::resolved_transfer`]). A file meeting a folder's name, or a
 //! folder a file's, is a conflict, never a merge.
 
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
 use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
 use crate::gio_node::GioNode;
@@ -117,6 +120,8 @@ impl ConflictScan {
 /// The plan of copying or moving (`mode`) `uris` into the folder at
 /// `destination_folder`, with every name conflict, inside merged folders
 /// too. Hidden items and dangling links count: their names are taken too.
+/// A destination reached through a symbolic link is the folder, and an
+/// item already in it is in its own folder whatever address it came by.
 ///
 /// # Errors
 ///
@@ -155,12 +160,24 @@ fn scan_blocking(
         .collect::<Result<Vec<String>, _>>()?;
     let destination = normalise(destination_folder)?;
     let folder = GioNode::new(&destination);
-    // Inspected without following a link, as the Python bridge does.
-    if unless_cancelled(cancel, || folder.info(Some(cancel)))??.kind != NodeKind::Directory {
+    let kind = unless_cancelled(cancel, || folder.info(Some(cancel)))??.kind;
+    // Follows a link: a folder opened through a symbolic link is the
+    // folder and takes pasted items like the folder itself, as a drop
+    // onto it already did.
+    let is_folder = match kind {
+        NodeKind::Directory => true,
+        NodeKind::Symlink => unless_cancelled(cancel, || folder.is_directory(Some(cancel)))??,
+        NodeKind::File | NodeKind::Special => false,
+    };
+    // The folder's own local path, with every link resolved, so the items
+    // already in it are recognised under any of its addresses.
+    let destination_path = resolved_path(&folder);
+    if !takes_items(is_folder, kind, destination_path.as_deref()) {
         return Err(OpsError::failed(crate::i18n::gettext(
             "Open a destination folder before pasting.",
         )));
     }
+    let mut asked: HashMap<String, bool> = HashMap::new();
     let mut scan = ConflictScan {
         mode,
         destination_folder: destination.clone(),
@@ -170,13 +187,21 @@ fn scan_blocking(
         merged_folders: Vec::new(),
     };
     for uri in items {
-        let own_folder = parent_location(&uri).is_some_and(|parent| same_location(&parent, &destination));
-        if mode == TransferMode::Copy && own_folder {
-            scan.items.push(PlannedItem {
-                uri,
-                destination_folder: destination.clone(),
-                kind: PlannedKind::OwnFolderCopy,
-            });
+        let own_folder = parent_location(&uri).is_some_and(|parent| {
+            same_location(&parent, &destination)
+                || is_folder_at(&parent, destination_path.as_deref(), &mut asked)
+        });
+        if own_folder {
+            // A copy into the item's own folder is kept as "name - Copy";
+            // a cut item moved into it stays where it is, without asking,
+            // and asking would make it meet itself as a name conflict.
+            if mode == TransferMode::Copy {
+                scan.items.push(PlannedItem {
+                    uri,
+                    destination_folder: destination.clone(),
+                    kind: PlannedKind::OwnFolderCopy,
+                });
+            }
             continue;
         }
         let source = GioNode::new(&uri);
@@ -187,6 +212,35 @@ fn scan_blocking(
         .place(&source, &folder, 0)?;
     }
     Ok(scan)
+}
+
+/// True when a paste may go into a destination that is a folder (`is_folder`,
+/// asked following links) of `kind`, whose own local path, every link
+/// resolved, is `path`. A link takes items only where its own path resolves:
+/// an address that does not — a share's symbolic link, which no identity
+/// check can compare — may be the item's own folder under another name, and
+/// the merge planned into it would then remove it.
+fn takes_items(is_folder: bool, kind: NodeKind, path: Option<&Path>) -> bool {
+    is_folder && (kind != NodeKind::Symlink || path.is_some())
+}
+
+/// The local path of `node` with every link resolved. `None` for a location
+/// without one (a share, a phone), which is only ever compared by address.
+fn resolved_path(node: &GioNode) -> Option<PathBuf> {
+    std::fs::canonicalize(node.path()?).ok()
+}
+
+/// True when the folder at `uri` is `path`, a local folder's own path with
+/// every link resolved: a folder and its symbolic links are one folder.
+/// `asked` keeps the answer of each folder, so a paste of many items from
+/// one folder resolves that folder once.
+fn is_folder_at(uri: &str, path: Option<&Path>, asked: &mut HashMap<String, bool>) -> bool {
+    let Some(path) = path else {
+        return false;
+    };
+    *asked
+        .entry(uri.to_owned())
+        .or_insert_with(|| resolved_path(&GioNode::new(uri)).as_deref() == Some(path))
 }
 
 /// Walks the incoming items and the folders they merge into.
@@ -290,6 +344,18 @@ mod tests {
             incoming,
             existing,
         }
+    }
+
+    /// A link is a destination only where its own path resolves, so the
+    /// items already in it are recognised under any of its addresses.
+    #[test]
+    fn a_link_destination_needs_its_own_path() {
+        let path = Path::new("/home/anna/Arcade");
+
+        assert!(takes_items(true, NodeKind::Directory, None));
+        assert!(takes_items(true, NodeKind::Symlink, Some(path)));
+        assert!(!takes_items(true, NodeKind::Symlink, None));
+        assert!(!takes_items(false, NodeKind::Directory, Some(path)));
     }
 
     /// parity: OPS-028

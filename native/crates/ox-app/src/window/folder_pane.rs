@@ -23,7 +23,7 @@ use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
-use crate::folder_view::grid::{GridLayout, IconView};
+use crate::folder_view::grid::IconView;
 use crate::folder_view::model::FolderModel;
 use crate::text_size::TextSize;
 
@@ -289,7 +289,7 @@ impl FolderPane {
                     .and_then(|titles| titles.compute_bounds(overlay))
                     .map_or(0.0, |bounds| bounds.y() + bounds.height())
             }
-            FolderView::Compact | FolderView::Icons(_) => self
+            _ => self
                 .icon_view()
                 .grid()
                 .compute_bounds(overlay)
@@ -392,10 +392,7 @@ impl FolderPane {
         if shown.as_deref() == Some(FolderView::Details.stack_name()) {
             return FolderView::Details;
         }
-        match self.icon_view().layout() {
-            GridLayout::Compact => FolderView::Compact,
-            GridLayout::Icons(size) => FolderView::Icons(size),
-        }
+        FolderView::of_grid_layout(self.icon_view().layout())
     }
 
     /// Switches views. Only the visible view holds the selection model.
@@ -435,7 +432,7 @@ impl FolderPane {
     fn visible_vadjustment(&self) -> gtk::Adjustment {
         match self.view() {
             FolderView::Details => self.details().vadjustment(),
-            FolderView::Compact | FolderView::Icons(_) => self.icon_view().scroll_adjustment(),
+            _ => self.icon_view().scroll_adjustment(),
         }
     }
 
@@ -489,7 +486,7 @@ impl FolderPane {
     pub(super) fn view_widget(&self) -> gtk::Widget {
         match self.view() {
             FolderView::Details => self.details().column_view().clone().upcast(),
-            FolderView::Compact | FolderView::Icons(_) => self.icon_view().grid().clone().upcast(),
+            _ => self.icon_view().grid().clone().upcast(),
         }
     }
 
@@ -634,7 +631,7 @@ impl FolderPane {
                 .details()
                 .column_view()
                 .scroll_to(position, None, flags, scroll),
-            FolderView::Compact | FolderView::Icons(_) => {
+            _ => {
                 self.icon_view().grid().scroll_to(position, flags, scroll);
             }
         }

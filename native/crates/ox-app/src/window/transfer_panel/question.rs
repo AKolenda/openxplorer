@@ -84,10 +84,34 @@ pub(super) fn question_texts(scan: &ConflictScan) -> [String; 4] {
     ]
 }
 
+/// What the action says when the destination's drive is full, in
+/// Windows' words.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SpaceTexts {
+    /// "There is not enough space on USB Drive."
+    pub(crate) summary: String,
+    /// "4.4 GB is needed to copy this item. Delete or move files so you
+    /// have enough space."
+    pub(crate) needed: String,
+    /// "Space free: 3.8 GB" and "Total size: 7.5 GB", each when known.
+    pub(crate) drive: Vec<String>,
+}
+
 impl TransferPanel {
     /// Sets the rows' glyphs and buttons; called once the template is
     /// built.
     pub(super) fn connect_question(&self) {
+        let imp = self.imp();
+        for (button, retry) in [
+            (&*imp.space_retry_button, true),
+            (&*imp.space_cancel_button, false),
+        ] {
+            button.connect_clicked(glib::clone!(
+                #[weak(rename_to = panel)]
+                self,
+                move |_| panel.answer_space(retry)
+            ));
+        }
         let imp = self.imp();
         icons::set_icon(&imp.replace_icon, Icon::Checkmark, ROW_GLYPH_SIZE);
         icons::set_icon(&imp.skip_icon, Icon::ArrowUndo, ROW_GLYPH_SIZE);
@@ -134,28 +158,100 @@ impl TransferPanel {
         answers
     }
 
-    /// True while the action asks.
+    /// Asks, in place of the progress, about a drive too full for what
+    /// the action writes, and waits: true for Try Again, false for Cancel
+    /// or once the action was cancelled.
+    pub(crate) async fn ask_about_space(&self, texts: &SpaceTexts) -> bool {
+        let imp = self.imp();
+        self.show_asking(&texts.summary);
+        imp.space_label.set_text(&texts.needed);
+        let drive = texts.drive.join("\n");
+        imp.space_drive_label.set_text(&drive);
+        imp.space_drive_label.set_visible(!drive.is_empty());
+        imp.space_question.set_visible(true);
+        let (sender, receiver) = async_channel::bounded(1);
+        imp.space_answer.replace(Some(sender));
+        if imp
+            .cancel
+            .borrow()
+            .as_ref()
+            .is_some_and(ox_core::transfer::Cancellation::is_cancelled)
+        {
+            self.answer_space(false);
+        }
+        if let Some(window) = imp.window.upgrade() {
+            window.show_question();
+        }
+        let retry = receiver.recv().await.unwrap_or(false);
+        self.end_question();
+        retry
+    }
+
+    /// Answers the question about a full drive, if one waits.
+    fn answer_space(&self, retry: bool) {
+        if let Some(sender) = self.imp().space_answer.take() {
+            // The receiver waits for exactly one answer.
+            let _ = sender.try_send(retry);
+        }
+    }
+
+    /// True while the action asks about taken names or a full drive.
     pub(crate) fn is_asking(&self) -> bool {
-        self.imp().question.get_visible()
+        let imp = self.imp();
+        imp.question.get_visible() || imp.space_question.get_visible()
+    }
+
+    /// What the action says about a full drive, for tests.
+    #[cfg(test)]
+    pub(crate) fn space_texts_shown(&self) -> (String, String) {
+        let imp = self.imp();
+        (imp.percent_label.text().into(), imp.space_label.text().into())
+    }
+
+    /// Presses Try Again (true) or Cancel in the question about a full
+    /// drive, for tests.
+    #[cfg(test)]
+    pub(crate) fn press_space_answer(&self, retry: bool) {
+        let imp = self.imp();
+        let button = if retry {
+            &imp.space_retry_button
+        } else {
+            &imp.space_cancel_button
+        };
+        button.emit_clicked();
+    }
+
+    /// True while the action asks about a full drive.
+    pub(crate) fn asks_about_space(&self) -> bool {
+        self.imp().space_question.get_visible()
+    }
+
+    /// Says `summary` in the percentage's place, wrapping, and hides the
+    /// bar, the details and Pause, as the action does while it asks.
+    fn show_asking(&self, summary: &str) {
+        let imp = self.imp();
+        imp.percent_label.set_text(summary);
+        imp.percent_label.set_wrap(true);
+        imp.percent_label.set_ellipsize(gtk::pango::EllipsizeMode::None);
+        imp.pause_button.set_visible(false);
+        imp.progress_bar.set_visible(false);
+        imp.details.set_visible(false);
+        self.add_css_class("asking");
     }
 
     /// Shows the question and waits for a row; `None` once cancelled.
     async fn ask_row(&self, scan: &ConflictScan) -> Option<Row> {
         let imp = self.imp();
         let [summary, replace, skip, decide] = question_texts(scan);
-        imp.percent_label.set_text(&summary);
-        imp.percent_label.set_wrap(true);
-        imp.percent_label.set_ellipsize(gtk::pango::EllipsizeMode::None);
+        self.show_asking(&summary);
         imp.replace_label.set_text(&replace);
         imp.skip_label.set_text(&skip);
         imp.decide_label.set_text(&decide);
-        imp.pause_button.set_visible(false);
-        imp.progress_bar.set_visible(false);
+        // "More details" stays as it was left, and compares the files.
         self.compare_in_details(scan);
         let details = imp.window.upgrade().is_some_and(|window| window.shows_details());
         imp.details.set_visible(details);
         imp.question.set_visible(true);
-        self.add_css_class("asking");
         let (sender, receiver) = async_channel::bounded(1);
         imp.question_answer.replace(Some(sender));
         if imp
@@ -228,7 +324,9 @@ impl TransferPanel {
         let imp = self.imp();
         imp.cancel_button.set_visible(true);
         imp.question_answer.replace(None);
+        imp.space_answer.replace(None);
         imp.question.set_visible(false);
+        imp.space_question.set_visible(false);
         self.remove_css_class("asking");
         imp.percent_label.set_wrap(false);
         imp.percent_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
@@ -246,6 +344,7 @@ impl TransferPanel {
     /// the File Conflict window it opened, close unanswered.
     pub(super) fn stop_asking(&self) {
         self.answer(None);
+        self.answer_space(false);
         if let Some(conflicts) = self.imp().conflict_window.upgrade() {
             conflicts.cancel();
         }

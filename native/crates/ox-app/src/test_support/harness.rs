@@ -399,6 +399,18 @@ impl Drop for TestWindow {
             settle();
             thread::sleep(POLL_INTERVAL);
         }
+        // A dialog still shown over the window, as a failed test leaves
+        // its question, would outlive it and stay on the screen.
+        let dialogs: Vec<gtk::Window> = gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+            .filter(|dialog| {
+                dialog.is_visible() && dialog.transient_for().as_ref() == Some(self.window.upcast_ref())
+            })
+            .collect();
+        for dialog in &dialogs {
+            put_away(dialog);
+        }
         // `close()` does nothing for an unpresented window and can ask a
         // question for a presented one. Tests exercise those user-facing
         // requests explicitly; fixture teardown must always unregister it.
@@ -407,6 +419,19 @@ impl Drop for TestWindow {
         // directory that is about to be deleted.
         self.context.search_cache().shut_down();
         settle();
+    }
+}
+
+/// Takes `window`, left shown by a test, off the screen. The app's own
+/// dialogs and browser windows are destroyed, as their code does; any
+/// other window is only hidden, as its owner may destroy it or answer for
+/// it later: GTK's `AlertDialog` does both with its window, so destroying
+/// or closing it here would do either twice.
+pub(crate) fn put_away(window: &gtk::Window) {
+    if window.is::<crate::dialog::Dialog>() || window.is::<BrowserWindow>() {
+        window.destroy();
+    } else {
+        window.set_visible(false);
     }
 }
 
@@ -500,6 +525,8 @@ pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, fi
     let Some(directory) = capture_directory() else {
         return;
     };
+    // A menu fades and slides in as it opens.
+    wait_for(crate::window::MENU_OPENING_MOTION);
     wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
     crate::snapshot::render_png(popover, None, &directory.join(filename))
         .expect("an open popover is drawn and the capture directory is writable");

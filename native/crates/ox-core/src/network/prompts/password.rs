@@ -11,6 +11,7 @@ use std::sync::Arc;
 use super::challenge::{ChallengeKind, PasswordChallenge};
 use super::operation::{send_reply, MountReply, PasswordRequest};
 use super::state::{Candidate, CandidateSource, Inner, OperationRecord, PendingRequest};
+use super::CredentialChoice;
 use crate::network::credential::Credential;
 use crate::network::server::host_name;
 
@@ -21,13 +22,14 @@ impl Inner {
         operation: &gio::MountOperation,
         request: PasswordRequest,
     ) {
-        let Some((attempts, uri)) = self.record_attempt(operation, request) else {
+        let Some((attempts, uri, choice)) = self.record_attempt(operation, request) else {
             send_reply(operation, MountReply::Abort);
             return;
         };
         // Safety rule (NET-014): a rejected attempt shows the dialog
-        // instead of reusing the same credential in a loop.
-        if attempts > 1 {
+        // instead of reusing the same credential in a loop. "Connect using
+        // different credentials" shows it at once.
+        if attempts > 1 || choice == CredentialChoice::Different {
             self.show_password(operation);
             return;
         }
@@ -37,18 +39,19 @@ impl Inner {
         }
     }
 
-    /// Counts a password request of `operation`; returns the attempt number
-    /// and location, or `None` for an operation these prompts do not track.
+    /// Counts a password request of `operation`; returns the attempt number,
+    /// location and account choice, or `None` for an operation these
+    /// prompts do not track.
     fn record_attempt(
         &self,
         operation: &gio::MountOperation,
         request: PasswordRequest,
-    ) -> Option<(u32, String)> {
+    ) -> Option<(u32, String, CredentialChoice)> {
         let mut state = self.state.borrow_mut();
         let record = state.operations.get_mut(operation)?;
         record.attempts += 1;
         record.request = Some(request);
-        Some((record.attempts, record.uri.clone()))
+        Some((record.attempts, record.uri.clone(), record.choice))
     }
 
     /// Looks the server's credential up in the keyring off the main thread,

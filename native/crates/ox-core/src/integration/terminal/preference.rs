@@ -105,6 +105,7 @@ fn kind_of_desktop_entry(entry: &str) -> Option<TerminalKind> {
         "org.gnome.Console" | "kgx" => Some(TerminalKind::Console),
         "xfce4-terminal" | "org.xfce.terminal" => Some(TerminalKind::XfceTerminal),
         "org.kde.konsole" | "konsole" => Some(TerminalKind::Konsole),
+        "kitty" => Some(TerminalKind::Kitty),
         "xterm" | "debian-xterm" => Some(TerminalKind::XTerm),
         "uxterm" | "debian-uxterm" => Some(TerminalKind::UXTerm),
         _ => None,
@@ -149,7 +150,7 @@ mod tests {
         );
         write(
             &folder.path().join("user/gnome-xdg-terminals.list"),
-            "-org.kde.konsole.desktop\nkitty.desktop\n+org.gnome.Console.desktop:new-window\n",
+            "-org.kde.konsole.desktop\nalacritty.desktop\n+org.gnome.Console.desktop:new-window\n",
         );
 
         let gnome = config(folder.path(), &["zorin", "gnome"]);
@@ -159,11 +160,17 @@ mod tests {
         assert_eq!(listed_terminal(&other), Some(TerminalKind::GnomeTerminal));
         assert_eq!(listed_terminal(&config(&folder.path().join("none"), &[])), None);
 
-        write(&folder.path().join("user/xdg-terminals.list"), "kitty.desktop\n");
+        write(
+            &folder.path().join("user/xdg-terminals.list"),
+            "alacritty.desktop\n",
+        );
         assert_eq!(
             listed_terminal(&other),
             Some(TerminalKind::GnomeTerminal),
             "a list of unknown terminals leaves the choice to the next"
         );
+
+        write(&folder.path().join("user/xdg-terminals.list"), "kitty.desktop\n");
+        assert_eq!(listed_terminal(&other), Some(TerminalKind::Kitty));
     }
 }

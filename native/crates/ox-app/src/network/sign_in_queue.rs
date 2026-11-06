@@ -9,7 +9,7 @@
 //! - Challenges that arrive while one is shown wait in order; a duplicate
 //!   is ignored, and dismissing a waiting challenge drops it (NET-010).
 //! - The dialog is modal over the window, or over the window's own
-//!   dialog, such as Map network location, which stays open underneath
+//!   dialog, such as Map network drive, which stays open underneath
 //!   (NET-009).
 //! - An answer the service refuses keeps the dialog open with the reason;
 //!   an accepted one dismisses it, and the next challenge follows.
@@ -203,7 +203,7 @@ impl fmt::Debug for SignInQueue {
 }
 
 /// The window a sign-in dialog belongs to: the dialog `window` shows,
-/// such as Map network location, else `window` itself, so the dialog
+/// such as Map network drive, else `window` itself, so the dialog
 /// underneath stays as it was (NET-009).
 fn dialog_parent(window: &gtk::Window) -> gtk::Window {
     let is_over_window = |candidate: &gtk::Window| {

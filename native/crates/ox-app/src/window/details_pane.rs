@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The details pane: the selection's properties.
 //!
-//! Ports `renderDetails` in `v2.0.0:desktop/ui/app.js`, laid out as §4.8 of
-//! `native/docs/ui-spec.md`: a header with a close button, a preview, the
-//! name and type, an Open or "Pin to Quick access" button, a Properties
-//! grid and a note. What the pane says is computed by [`pane_content`]
-//! ([`content`]); this module draws it.
+//! Laid out as Windows 11 File Explorer's Details pane and §4.8 of
+//! `native/docs/ui-spec.md`: a header with a close button, then a large
+//! picture without a frame, the name in large text, the folder's item
+//! count, and rows of names and values. It has no buttons: Open and Pin to
+//! Quick access are in the item's and the folder's menus, as in Windows.
+//! What the pane says is computed by [`pane_content`] ([`content`]); this
+//! module draws it.
 //!
 //! [`DetailsPane`] is a widget subclass whose static tree is the template
 //! `resources/ui/details-pane.ui`. This module adds what a template cannot
-//! express: the glyphs, the window actions of the buttons and the
-//! Properties rows, one per property shown.
+//! express: the close glyph and action, the stacked picture of several
+//! items and the rows, one per property shown.
 
 mod content;
 mod media;
@@ -23,7 +25,7 @@ use gtk::subclass::prelude::*;
 use ox_core::settings::DetailsPaneOptions;
 
 use crate::folder_view::item::FileItem;
-use crate::icons::{self, Art, Icon};
+use crate::icons::{self, Art, ArtImage, Icon};
 
 use super::window_action::WindowAction;
 
@@ -32,33 +34,31 @@ pub(super) use content::{pane_content, PaneFacts};
 /// What the pane at the right shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum PaneMode {
-    /// The Details pane: the preview, name, type and properties.
+    /// The Details pane: the preview, name and properties.
     #[default]
     Details,
     /// The Preview pane: the preview alone.
     Preview,
 }
-use content::{PaneAction, PaneContent, Preview, Property};
+use content::{Field, PaneContent, Preview, Property};
 
 /// Width of the pane (`.details` in `v2.0.0:desktop/ui/style.css`).
 pub(super) const PANE_WIDTH: i32 = 262;
 
-/// Preview size in the pane: app.js draws `fileIcon(e, 84)` and
-/// `.detail-preview svg` shows it at 83 pixels.
-const PREVIEW_SIZE: i32 = 83;
+/// The size of the item's picture in the pane, Windows' large icon.
+const PREVIEW_SIZE: i32 = 96;
 
-/// The copy glyph that stands for several selected items.
-const SEVERAL_ITEMS_GLYPH: i32 = 80;
+/// The size of each picture stacked for several selected items.
+const STACKED_SIZE: i32 = 80;
 
-/// The glyphs in the pane's buttons and note.
-const SMALL_GLYPH: i32 = 14;
+/// How far each picture of the stack sits from the one in front of it.
+const STACK_STEP: i32 = 10;
 
 /// The glyph of the header's close button.
 const CLOSE_GLYPH: i32 = 12;
 
-/// The width of the Properties names column
-/// (`.detail-props{grid-template-columns:73px minmax(0,1fr)}`).
-const PROPERTY_NAME_WIDTH: i32 = 73;
+/// The width of the rows' names column, wide enough for "Date modified".
+const PROPERTY_NAME_WIDTH: i32 = 92;
 /// The Properties column of the names.
 const NAME_COLUMN: i32 = 0;
 /// The Properties column of the values.
@@ -98,47 +98,25 @@ mod imp {
         /// The item's or folder's name.
         #[template_child]
         pub(super) name: TemplateChild<gtk::Label>,
-        /// The type line under the name.
+        /// The folder's item count under its name, shown only for the
+        /// folder.
         #[template_child]
-        pub(super) kind: TemplateChild<gtk::Label>,
-        /// Opens the one selected item.
-        #[template_child]
-        pub(super) open_button: TemplateChild<gtk::Button>,
-        /// The glyph beside "Open".
-        #[template_child]
-        pub(super) open_glyph: TemplateChild<gtk::Image>,
-        /// Pins the one selected folder.
-        #[template_child]
-        pub(super) pin_item_button: TemplateChild<gtk::Button>,
-        /// The glyph of [`Self::pin_item_button`].
-        #[template_child]
-        pub(super) pin_item_glyph: TemplateChild<gtk::Image>,
-        /// Pins the folder the tab shows.
-        #[template_child]
-        pub(super) pin_folder_button: TemplateChild<gtk::Button>,
-        /// The glyph of [`Self::pin_folder_button`].
-        #[template_child]
-        pub(super) pin_folder_glyph: TemplateChild<gtk::Image>,
-        /// The Properties grid.
+        pub(super) summary: TemplateChild<gtk::Label>,
+        /// The rows of names and values.
         #[template_child]
         pub(super) properties: TemplateChild<gtk::Grid>,
-        /// The info glyph before the note.
-        #[template_child]
-        pub(super) note_glyph: TemplateChild<gtk::Image>,
-        /// The note's row, its glyph included, shown only with a note.
-        #[template_child]
-        pub(super) note_row: TemplateChild<gtk::Box>,
-        /// The note at the bottom.
-        #[template_child]
-        pub(super) note: TemplateChild<gtk::Label>,
         /// Counts the content shown, so a preview read for an earlier
         /// selection is dropped.
         pub(super) media_generation: Cell<u64>,
         /// The content preview shown, which a redraw for the same item
         /// keeps (PROP-011).
         pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
-        /// The Properties rows the preview added: Dimensions, Length.
-        pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
+        /// The Preview pane shows the item's icon in place of its
+        /// contents (Folder Options' "Show preview handlers in preview
+        /// pane" off).
+        pub(super) hides_media: Cell<bool>,
+        /// The rows the preview added: Dimensions, Length.
+        pub(super) media_rows: RefCell<Vec<(super::Field, String)>>,
         /// The pane's options, as saved (PROP-010).
         pub(super) options: RefCell<DetailsPaneOptions>,
         /// Whether the pane shows the details or only the preview.
@@ -209,25 +187,15 @@ glib::wrapper! {
 }
 
 impl DetailsPane {
-    /// Shows the glyphs the template leaves empty.
+    /// Shows the close glyph the template leaves empty.
     fn show_glyphs(&self) {
-        let imp = self.imp();
         let close = icons::image(Icon::Dismiss16, CLOSE_GLYPH);
-        imp.close_button.set_child(Some(&close));
-        icons::set_icon(&imp.open_glyph, Icon::Open, SMALL_GLYPH);
-        icons::set_icon(&imp.pin_item_glyph, Icon::Pin, SMALL_GLYPH);
-        icons::set_icon(&imp.pin_folder_glyph, Icon::Pin, SMALL_GLYPH);
-        icons::set_icon(&imp.note_glyph, Icon::Info, SMALL_GLYPH);
+        self.imp().close_button.set_child(Some(&close));
     }
 
-    /// Gives each button its window action; the close button switches the
-    /// pane's toggle off.
+    /// The close button switches the pane's toggle off.
     fn bind_actions(&self) {
-        let imp = self.imp();
-        WindowAction::DetailsPane.assign_to(&*imp.close_button);
-        WindowAction::Open.assign_to(&*imp.open_button);
-        WindowAction::PinSelected.assign_to(&*imp.pin_item_button);
-        WindowAction::PinFolder.assign_to(&*imp.pin_folder_button);
+        WindowAction::DetailsPane.assign_to(&*self.imp().close_button);
     }
 
     /// Shows the folder art a pane shows before its first [`Self::set_content`].
@@ -307,6 +275,19 @@ impl DetailsPane {
         self.show_mode();
     }
 
+    /// Whether the pane shows the Details or only the preview.
+    pub(super) fn mode(&self) -> PaneMode {
+        self.imp().mode.get()
+    }
+
+    /// Makes the Preview pane show the item's icon in place of its
+    /// contents with `hide`, as Windows does with "Show preview handlers
+    /// in preview pane" off; true when that changed, so the content is
+    /// shown again.
+    pub(super) fn set_hides_media(&self, hide: bool) -> bool {
+        self.imp().hides_media.replace(hide) != hide
+    }
+
     /// The header's title, before the close button.
     fn title_label(&self) -> Option<gtk::Label> {
         self.imp()
@@ -316,23 +297,20 @@ impl DetailsPane {
     }
 
     /// Hides everything under the preview while only the preview shows;
-    /// shows the name, the type and the properties again otherwise. The
-    /// buttons and the note follow the content.
+    /// shows the name and the properties again otherwise. The item count
+    /// follows the content.
     fn show_mode(&self) {
         let imp = self.imp();
         let preview_only = imp.mode.get() == PaneMode::Preview;
-        let conditional: [&gtk::Widget; 4] = [
-            imp.open_button.upcast_ref(),
-            imp.pin_item_button.upcast_ref(),
-            imp.pin_folder_button.upcast_ref(),
-            imp.note_row.upcast_ref(),
-        ];
+        let summary = imp.summary.upcast_ref::<gtk::Widget>();
         let mut below = imp.preview_area.next_sibling();
         while let Some(widget) = below {
             below = widget.next_sibling();
             if preview_only {
                 widget.set_visible(false);
-            } else if !conditional.contains(&&widget) {
+            } else if &widget == summary {
+                widget.set_visible(!imp.summary.text().is_empty());
+            } else {
                 widget.set_visible(true);
             }
         }
@@ -371,31 +349,29 @@ impl DetailsPane {
     /// Shows `content`.
     pub(super) fn set_content(&self, content: &PaneContent) {
         let imp = self.imp();
-        match content.preview {
-            Preview::Art(art) => imp.preview.set_art(art, PREVIEW_SIZE),
-            Preview::Several => imp.preview.set_art(Art::Glyph(Icon::Copy), SEVERAL_ITEMS_GLYPH),
-        }
         imp.name.set_text(&content.name);
-        imp.kind.set_text(&content.kind);
-        self.show_buttons(content.action);
+        imp.summary.set_text(&content.summary);
+        imp.summary.set_visible(!content.summary.is_empty());
         self.show_properties(&content.properties);
-        imp.note.set_text(content.note);
-        imp.note_row.set_visible(!content.note.is_empty());
-        self.show_media(content.media.as_ref());
-        if imp.mode.get() == PaneMode::Preview {
+        let preview_only = imp.mode.get() == PaneMode::Preview;
+        let media = content
+            .media
+            .as_ref()
+            .filter(|_| !(preview_only && imp.hides_media.get()));
+        self.show_media(media);
+        // After the media, which puts the art back when it has none.
+        match &content.preview {
+            Preview::Art(art) => {
+                imp.preview.set_art(*art, PREVIEW_SIZE);
+                if imp.shown_media.borrow().is_none() {
+                    self.set_preview_widget(None);
+                }
+            }
+            Preview::Stack(arts) => self.set_preview_widget(Some(&stacked_art(arts))),
+        }
+        if preview_only {
             self.show_mode();
         }
-    }
-
-    /// Shows the buttons `action` offers and hides the others.
-    fn show_buttons(&self, action: PaneAction) {
-        let imp = self.imp();
-        let offers_open = matches!(action, PaneAction::Open { .. });
-        let offers_item_pin = action == PaneAction::Open { can_pin: true };
-        let offers_folder_pin = action == PaneAction::PinFolder;
-        imp.open_button.set_visible(offers_open);
-        imp.pin_item_button.set_visible(offers_item_pin);
-        imp.pin_folder_button.set_visible(offers_folder_pin);
     }
 
     fn show_properties(&self, properties: &[Property]) {
@@ -404,14 +380,14 @@ impl DetailsPane {
             grid.remove(&child);
         }
         for property in properties {
-            self.add_property(property.name, &property.value);
+            self.add_property(property.field, &property.value);
         }
     }
 
-    /// Adds the row `name` with `value` under the others, unless the
+    /// Adds the row of `field` with `value` under the others, unless the
     /// user turned the field off.
-    fn add_property(&self, name: &str, value: &str) {
-        if !self.imp().options.borrow().shows(name) {
+    fn add_property(&self, field: Field, value: &str) {
+        if !self.imp().options.borrow().shows(field.key()) {
             return;
         }
         let grid = &*self.imp().properties;
@@ -419,8 +395,20 @@ impl DetailsPane {
         while grid.child_at(NAME_COLUMN, row).is_some() {
             row += 1;
         }
-        grid.attach(&property_name(name), NAME_COLUMN, row, 1, 1);
+        grid.attach(&property_name(field.label()), NAME_COLUMN, row, 1, 1);
         grid.attach(&property_value(value), VALUE_COLUMN, row, 1, 1);
+    }
+
+    /// The item count under the folder's name, empty while hidden, for
+    /// tests.
+    #[cfg(test)]
+    pub(super) fn shown_summary(&self) -> String {
+        let summary = &self.imp().summary;
+        if summary.is_visible() {
+            summary.text().to_string()
+        } else {
+            String::new()
+        }
     }
 
     /// The name shown under the preview, for tests.
@@ -453,17 +441,39 @@ impl DetailsPane {
     }
 }
 
-/// A Properties row as the pane shows it, for tests.
+/// A row as the pane shows it, for tests.
 #[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ShownProperty {
-    /// The name on the left, such as "Items".
+    /// The name on the left, such as "Type".
     pub(super) name: String,
     /// The value on the right.
     pub(super) value: String,
 }
 
-/// A wrapping Properties label. Its natural width is a few words, so a
+/// The pictures of several selected items, the first in front and each
+/// next one behind it, up and to the right, as Windows stacks them.
+fn stacked_art(arts: &[Art]) -> gtk::Widget {
+    let behind = i32::try_from(arts.len().saturating_sub(1)).unwrap_or_default();
+    let room = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    let side = STACKED_SIZE + STACK_STEP * behind;
+    room.set_size_request(side, side);
+    let stack = gtk::Overlay::builder().child(&room).build();
+    stack.add_css_class("detail-stack");
+    let layers: Vec<(i32, &Art)> = (0..).zip(arts).collect();
+    // Back to front: each picture is drawn over the ones behind it.
+    for (depth, art) in layers.into_iter().rev() {
+        let picture = ArtImage::new(*art, STACKED_SIZE);
+        picture.set_halign(gtk::Align::Start);
+        picture.set_valign(gtk::Align::Start);
+        picture.set_margin_start(STACK_STEP * depth);
+        picture.set_margin_top(STACK_STEP * (behind - depth));
+        stack.add_overlay(&picture);
+    }
+    stack.upcast()
+}
+
+/// A wrapping row label. Its natural width is a few words, so a
 /// long path wraps inside the pane instead of widening it.
 fn property_label(text: &str, css_class: &str) -> gtk::Label {
     gtk::Label::builder()

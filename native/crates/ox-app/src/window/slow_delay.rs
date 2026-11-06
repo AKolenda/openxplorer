@@ -72,6 +72,12 @@ impl BusyClock {
             .is_some_and(|since| now.saturating_duration_since(since) >= APPEARANCE_DELAY)
     }
 
+    /// Since when the tab has been busy, for tests.
+    #[cfg(test)]
+    pub(crate) fn since(&self) -> Option<Instant> {
+        self.since
+    }
+
     /// How long until the location of a `busy` tab becomes slow; `None`
     /// when it is slow already or the tab is not busy.
     pub(crate) fn until_slow(&self, busy: bool, now: Instant) -> Option<Duration> {

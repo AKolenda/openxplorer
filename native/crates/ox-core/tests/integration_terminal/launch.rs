@@ -137,6 +137,20 @@ fn without_an_alternative_the_first_installed_terminal_in_order_is_used() {
     assert_eq!(terminal.executable(), Path::new("/usr/bin/konsole"));
 }
 
+/// kitty is a native addition to the ported list, ahead of the `XTerm` family.
+///
+/// parity: OPEN-018
+#[test]
+fn kitty_is_preferred_over_xterm_when_nothing_else_is_installed() {
+    let root = temporary_folder();
+    install_program(&root.path().join("usr/bin/kitty"), "#!/bin/sh\n");
+    install_program(&root.path().join("usr/bin/xterm"), "#!/bin/sh\n");
+
+    let terminal = find_terminal(&ExecutableSearch::under(root.path())).expect("a terminal");
+
+    assert_eq!(terminal.kind(), TerminalKind::Kitty);
+}
+
 /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_all_cli_styles`
 /// parity: OPEN-020
 #[test]
@@ -164,6 +178,10 @@ fn each_terminal_gets_its_own_working_directory_option() {
         CommandLineStyle {
             kind: TerminalKind::Konsole,
             option: Some("--workdir="),
+        },
+        CommandLineStyle {
+            kind: TerminalKind::Kitty,
+            option: Some("--directory="),
         },
         CommandLineStyle {
             kind: TerminalKind::XTerm,

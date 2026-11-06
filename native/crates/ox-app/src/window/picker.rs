@@ -476,7 +476,6 @@ impl BrowserWindow {
         }
         imp.tab_strip.set_visible(false);
         imp.new_tab_button.set_visible(false);
-        imp.open_windows_button.set_visible(false);
         for action in DISABLED_ACTIONS {
             self.set_action_enabled(action, false);
         }
@@ -658,6 +657,12 @@ impl BrowserWindow {
             picker.asking.set(false);
             self.update_picker();
         }
+    }
+
+    /// Whether this window is a file dialog for another application
+    /// (INT-032).
+    pub(super) fn is_file_dialog(&self) -> bool {
+        self.picker().is_some()
     }
 
     /// The window's picker, if it is one.
@@ -2768,7 +2773,7 @@ mod tests {
                     .collect();
                 (lists, details.vadjustment())
             }
-            FolderView::Compact | FolderView::Icons(_) => {
+            FolderView::Compact | FolderView::Icons(_) | FolderView::Tiles | FolderView::Content => {
                 let icons = pane.icon_view();
                 (vec![icons.grid().clone().upcast()], icons.scroll_adjustment())
             }

@@ -124,16 +124,14 @@ fn the_location_tab_moves_documents_and_offers_to_move_its_files() {
     question.press("Move files");
     super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
 
-    let report = open_dialog(&test);
-    assert_eq!(
-        report.title_text(),
-        "Operation result",
-        "the skipped name is reported"
-    );
-    report.press("OK");
+    // The user chose Skip: as in Windows, no report follows.
     wait_until("the status", || {
         panel.status_text().contains("Some items stayed in")
     });
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is reported about the skipped name"
+    );
     let read = |path: PathBuf| fs::read_to_string(path).expect("the file is kept");
     assert_eq!(read(folders.destination.join("Taxes").join("2025.txt")), "taxes");
     assert_eq!(read(folders.destination.join("notes.txt")), "new notes");
@@ -208,7 +206,6 @@ fn read_only_reaches_the_files_before_location_moves_them() {
 
     open_dialog(&test).press("Move files");
     super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
-    open_dialog(&test).press("OK");
     wait_until("the window to close", || window.is_closed());
     let mode = |path: PathBuf| fs::metadata(path).expect("the file").permissions().mode() & 0o777;
     assert_eq!(mode(folders.destination.join("plan.txt")), 0o444);
