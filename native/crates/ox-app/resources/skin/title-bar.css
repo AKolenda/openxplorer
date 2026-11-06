@@ -4,8 +4,9 @@
 
 /* GTK's own theme gives a window's title bar a 46px height, 6px padding at
    both ends and a line along the bottom. The Explorer title bar has none of
-   these: it is 42px of @ox_title from edge to edge, and the active tab runs
-   straight into the navigation row. */
+   these: it is 42px of @ox_title (Windows 11's Mica Alt, as a flat tint:
+   GTK cannot sample the wallpaper) from edge to edge, and the tab in front
+   runs straight into the navigation row. */
 window.ox > .titlebar, window.ox > .titlebar:backdrop {
   min-height: 0;
   padding: 0;
@@ -26,9 +27,26 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
   color: @ox_tab_text_inactive;
   transition: background-color 83ms linear, color 83ms linear, box-shadow 150ms ease-out;
 }
+/* The tab in front is the command bar's surface and joins the navigation
+   row below it without a seam; inactive tabs have none until hovered. */
 .tab.active { background-color: @ox_chrome; color: @ox_text; box-shadow: 0 -1px 2px @ox_tab_shadow; }
 .tab:not(.active):hover { background-color: @ox_tab_hover; }
 .tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
+/* A separator between two tabs that are neither in front nor hovered,
+   1 x 19 (the 35px tab less the Windows 11 separator's 8px margins), and
+   the 4px outward curves at the foot of the tab in front, in its own
+   colour: the corner outside a quarter circle, fading from the same colour
+   at no opacity, as GTK fades through black from `transparent`. A tab
+   cannot draw outside itself, so the strip shows these where they belong
+   (src/window/tab_strip/edges.rs). */
+.ox-titlebar .tab-separator { min-width: 1px; min-height: 19px; background-color: @ox_tab_separator; }
+.ox-titlebar .tab-flare { min-width: 4px; min-height: 4px; }
+.ox-titlebar .tab-flare.start {
+  background-image: radial-gradient(circle 4px at left top, alpha(@ox_chrome, 0) 3.5px, @ox_chrome 4.5px);
+}
+.ox-titlebar .tab-flare.end {
+  background-image: radial-gradient(circle 4px at right top, alpha(@ox_chrome, 0) 3.5px, @ox_chrome 4.5px);
+}
 /* The 16px icon (I03) sits where the web's 17px one did, and the title
    starts 10px after it (S06), at x=50 as in the current app. */
 .tab > .tab-icon { margin-left: 2px; }
@@ -40,6 +58,11 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
 /* On an inactive tab the close button sits on the strip's colour, where
    @ox_hover would barely show (§4.1). */
 .tab:not(.active) button.tab-close:hover { background-color: @ox_title_hover; }
+/* As in Windows 11, only the tab in front and the tab under the pointer
+   show their close button (or a tab holding the keyboard focus); the
+   others keep its room, so no title moves when the pointer comes. A tab
+   carried out of its strip keeps its own, which the carried tab copies. */
+.tab:not(.active):not(:hover):not(:focus-within):not(.tab-drag-source) button.tab-close { opacity: 0; }
 /* An inactive window dims the inactive tabs and the caption glyphs (§4.1). */
 window.ox:backdrop .tab:not(.active),
 window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
@@ -54,27 +77,19 @@ window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
 .tab.tab-drag-source { opacity: 0; }
 .tab.file-drop-active { outline: 2px solid @ox_accent; outline-offset: -2px; }
 
-/* ---- New tab, drag area, open windows ---- */
+/* ---- New tab and drag area ---- */
 .ox-titlebar button.newtab { min-width: 38px; min-height: 34px; margin: 0 3px 0 5px; }
 /* The empty part of the bar always leaves room to grab the window
    (TitleBarMinDragRegionWidth). */
 .ox-titlebar .title-drag { min-width: 48px; }
-.ox-titlebar button.windows-button, .ox-titlebar menubutton.windows-button > button {
-  min-width: 35px;
-  min-height: 30px;
-  color: @ox_muted;
-}
-.ox-titlebar .windows-button image { margin-left: 1px; }
 
 /* ---- Caption buttons ---- */
 .ox-titlebar button.caption { min-width: 46px; min-height: 42px; border-radius: 0; }
 /* The strip's buttons darken it a little when hovered (D-A03): @ox_hover
    on @ox_title was nearly invisible. */
 .ox-titlebar button.caption:hover,
-.ox-titlebar button.newtab:hover,
-.ox-titlebar menubutton.windows-button > button:hover { background-color: @ox_title_hover; }
+.ox-titlebar button.newtab:hover { background-color: @ox_title_hover; }
 .ox-titlebar button.caption:active,
-.ox-titlebar button.newtab:active,
-.ox-titlebar menubutton.windows-button > button:active { background-color: @ox_title_pressed; }
+.ox-titlebar button.newtab:active { background-color: @ox_title_pressed; }
 .ox-titlebar button.caption.close:hover { background-color: @ox_critical_fill; color: @ox_on_critical; }
 .ox-titlebar button.caption.close:active { background-color: alpha(@ox_critical_fill, .9); color: alpha(@ox_on_critical, .7); }
