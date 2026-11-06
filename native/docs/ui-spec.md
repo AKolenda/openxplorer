@@ -581,12 +581,11 @@ where it differs; ✓ means the target equals the current app.
 | Default | Closed for a new user; Details or Alt+Shift+P opens it, and the choice is saved | Windows 11 Explorer opens with the Details and Preview panes closed | Keep. |
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
 | Header | "Details" at 13 px; close button 24 × 24, glyph 12; 20 px below | — | Keep. |
-| Preview | min height 148; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); icon 83 with `drop-shadow(0 4px 4px alpha(black, .04))`; 18 px below; thumbnails when available (gain) | — | safe |
-| Name | 16 / 600, line height 1.4, selectable, wraps anywhere; 4 px below | — | Keep. |
-| Type | 12 px `@ox_muted`; 17 px below | — | Keep. |
-| Action button | "Open", or "Pin to Quick access" for folders: full width, 32 high, E06 border, background `@ox_control_fill`, 12 px, glyph 14; 24 px below | ButtonPadding `11,5,11,6` (BT#L152) | safe |
-| Properties | heading 12 / 600, 17 px below; grid with a 73 px key column, row gap 15, column gap 8; keys `@ox_muted`; values selectable; text **12** px (11) | — | text visible, P2 |
-| Note | 12 px (11) `@ox_muted`, line height 1.65, `border-top: 1px solid @ox_border`, `padding-top: 17`, `margin-top: 23`; info glyph 14 in `@ox_accent` | — | text visible, P2 |
+| Preview | 148 high, with no background, border or corners; icon **96** with `drop-shadow(0 4px 4px alpha(black, .04))`; several items show the art of the first three at 80, stacked 10 px apart, the first in front; 16 px below; thumbnails when available (gain) | Windows 11 Explorer's Details pane shows the large icon or thumbnail without a frame, and stacked icons for several items | visible |
+| Name | **20** / 600, selectable, wraps anywhere; "N items selected" for several items; 4 px below | Windows 11's pane shows the name in large text | visible |
+| Item count | With nothing selected, "N items" under the folder's name, as the status bar counts them; 12 px `@ox_muted` | Windows 11's pane: the folder's icon, name and item count | visible |
+| Rows | One item: Type, Size (folders: measured or "Not scanned"), Date modified, Date created (when the file system records it), Availability ("Available on this device" for a local item), then Dimensions or Length from the preview; several items: their total Size while all are files. A 92 px name column, row gap 12, column gap 8, 16 px above; names `@ox_muted`; values selectable; text 12 px | Windows 11's pane lists label and value rows (Type, Size, Date modified, Date created, Availability) | visible |
+| Buttons, heading and note | None: Open and Pin to Quick access are in the item's context menu and the command bar's More options, as in Windows | Windows 11's pane has no buttons | visible |
 
 ### 4.9 Menus and context menus
 
