@@ -264,10 +264,12 @@ jobs:
           fi
 
   # Keeps only the newest release packages. After this run publishes, deletes
-  # the release packages of earlier runs that succeeded; the published
-  # versions stay on the Releases page. A failed run keeps its packages for
-  # retry-release.yml, which reruns only the failed jobs, until they expire.
-  # The production concurrency group keeps runs from overlapping.
+  # the release packages of every successful run older than the newest one,
+  # including this run's own when retry-release.yml reran it after a newer
+  # run succeeded; the published versions stay on the Releases page. A failed
+  # run keeps its packages for retry-release.yml, which reruns only the failed
+  # jobs, until they expire. The production concurrency group keeps runs from
+  # overlapping.
   prune-artifacts:
     if: github.ref == 'refs/heads/main'
     name: Delete earlier release packages
@@ -277,19 +279,21 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: Delete release packages from earlier successful runs
+      - name: Delete release packages older than the newest successful run
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # This run's release has succeeded, since this job needs it.
+          succeeded=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/checks.yml/runs?status=success&per_page=100&created=>=$(date -u -d '-30 days' +%F)" \
+            --jq '.workflow_runs[].id'; echo "$GITHUB_RUN_ID")
+          keep=$(printf '%s\n' "$succeeded" | sort -n | tail -n 1)
           # Lists every page before deleting, since deleting shifts the pages.
           artifacts=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq "
             .artifacts[]
             | select(.expired | not)
-            | select(.workflow_run.id < $GITHUB_RUN_ID)
+            | select(.workflow_run.id < $keep)
             | select(.name | startswith(\"release-\"))
             | \"\(.id) \(.workflow_run.id)\"")
-          succeeded=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/checks.yml/runs?status=success&per_page=100&created=>=$(date -u -d '-30 days' +%F)" \
-            --jq '.workflow_runs[].id')
           echo "$artifacts" | while read -r id run; do
             [ -n "$id" ] || continue
             printf '%s\n' "$succeeded" | grep -qx "$run" || continue
