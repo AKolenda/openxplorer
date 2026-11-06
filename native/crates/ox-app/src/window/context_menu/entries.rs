@@ -17,7 +17,7 @@ use ox_core::search::Caching;
 use crate::icons::Icon;
 use crate::integration::{ApplicationChoice, EditorShortcut};
 use crate::window::cache_folder::cache_item;
-use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
+use crate::window::menu_popover::{MenuAction, MenuEntry, MenuItem, MenuStyle};
 use crate::window::window_action::WindowAction;
 
 /// What the right-clicked item is, as far as its menu cares.
@@ -598,6 +598,88 @@ fn show_more_options_item() -> MenuEntry {
     )
     .with_shortcut("Shift+F10")
     .into()
+}
+
+/// Windows' own commands that its classic menu ("Show more options",
+/// Shift+F10) draws as text alone: Open, Open in new tab and window, Pin
+/// to Quick access, Cut, Copy, Paste, Rename, Delete, Copy as path,
+/// Restore previous versions, Extract All…, Mount, View, Sort by, Group
+/// by, New, Refresh, Undo, Redo, Open file location (and the app's Open
+/// file location in a new tab or window, as Open in new tab and window)
+/// and the Recycle Bin's Restore and Empty Recycle Bin. The rows Windows draws with an icon keep
+/// their glyph: Open in Terminal, Open with and the applications' own
+/// icons, Send to, Properties and Open as administrator's shield; so do
+/// the app's own commands, which Windows does not have.
+const TEXT_ONLY_IN_CLASSIC: [WindowAction; 28] = [
+    WindowAction::Open,
+    WindowAction::OpenTab,
+    WindowAction::OpenSelectionInTabs,
+    WindowAction::OpenWindow,
+    WindowAction::PinSelected,
+    WindowAction::PinFolder,
+    WindowAction::Cut,
+    WindowAction::Copy,
+    WindowAction::Paste,
+    WindowAction::PasteInto,
+    WindowAction::Rename,
+    WindowAction::Trash,
+    WindowAction::CopyPath,
+    WindowAction::PreviousVersions,
+    WindowAction::ExtractAll,
+    WindowAction::MountDiskImage,
+    WindowAction::ShowViewMenu,
+    WindowAction::ShowSortMenu,
+    WindowAction::GroupBy,
+    WindowAction::ShowNewMenu,
+    WindowAction::Refresh,
+    WindowAction::Undo,
+    WindowAction::Redo,
+    WindowAction::OpenFileLocation,
+    WindowAction::OpenFileLocationInTab,
+    WindowAction::OpenFileLocationInWindow,
+    WindowAction::Restore,
+    WindowAction::EmptyRecycleBin,
+];
+
+/// `entries` as Windows 11 draws its classic menu: no row shows shortcut
+/// text, in its submenus either (the keys still work); Open, the command
+/// Enter and a double-click run, is in bold, as Windows marks the default
+/// command; and only the rows Windows draws with an icon show a glyph
+/// ([`TEXT_ONLY_IN_CLASSIC`]). The submenus keep their glyphs, as the
+/// command bar's menus and Windows' Send to and New draw them.
+pub(crate) fn classic_look(entries: Vec<MenuEntry>) -> Vec<MenuEntry> {
+    entries
+        .into_iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(item) => {
+                let text_only = matches!(item.action, MenuAction::Window(action) if TEXT_ONLY_IN_CLASSIC.contains(&action));
+                let is_default = item.action == MenuAction::Window(WindowAction::Open);
+                MenuEntry::Item(MenuItem {
+                    shows_glyph: item.shows_glyph && !text_only,
+                    emphasised: item.emphasised || is_default,
+                    ..without_shortcut(item)
+                })
+            }
+            MenuEntry::Divider => MenuEntry::Divider,
+        })
+        .collect()
+}
+
+/// `item` without shortcut text, nor its submenu's rows.
+fn without_shortcut(item: MenuItem) -> MenuItem {
+    let submenu = item
+        .submenu
+        .into_iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(inner) => MenuEntry::Item(without_shortcut(inner)),
+            MenuEntry::Divider => MenuEntry::Divider,
+        })
+        .collect();
+    MenuItem {
+        shortcut: None,
+        submenu,
+        ..item
+    }
 }
 
 /// The submenus of the folder's compact menu: the command bar's View,
@@ -1399,6 +1481,72 @@ mod tests {
             .map(|(label, keys)| (label.to_owned(), keys))
             .collect();
         assert_eq!(shortcuts, expected);
+    }
+
+    /// As Windows 11 draws its classic menu: no shortcut text, in the
+    /// submenus either; Open, the default command, in bold; a glyph only
+    /// on the rows Windows draws with an icon (and the app's own), Send
+    /// to's destinations keeping theirs. The compact menu is not changed.
+    ///
+    /// parity: LOOK-019, CMD-038
+    #[test]
+    fn the_classic_look_drops_shortcut_text_bolds_open_and_keeps_windows_icons() {
+        let entries = classic_look(item_menu(&folder(), MenuStyle::Classic).entries);
+        let items: Vec<&MenuItem> = items_of(&entries).collect();
+        assert!(
+            items.iter().all(|item| item.shortcut.is_none()),
+            "no shortcut text"
+        );
+        let bold: Vec<&str> = items
+            .iter()
+            .filter(|item| item.emphasised)
+            .map(|item| item.label.as_str())
+            .collect();
+        assert_eq!(bold, ["Open"]);
+        let glyphs: Vec<&str> = items
+            .iter()
+            .filter(|item| item.shows_glyph)
+            .map(|item| item.label.as_str())
+            .collect();
+        assert_eq!(
+            glyphs,
+            [
+                "Open in Terminal",
+                "Open folder with…",
+                "Send to",
+                "Duplicate",
+                "Compress to ZIP file",
+                "Compress to…",
+                "Cache this folder for search",
+                "Calculate folder size",
+                "Properties",
+            ]
+        );
+        let send_to = items
+            .iter()
+            .find(|item| item.label == "Send to")
+            .expect("Send to");
+        assert!(items_of(&send_to.submenu).all(|item| item.shows_glyph));
+
+        let new_folder =
+            item("Folder", Icon::FolderAdd, WindowAction::NewFolder).with_shortcut("Ctrl+Shift+N");
+        let submenus = BackgroundSubmenus {
+            new: vec![new_folder.into()],
+            ..submenus()
+        };
+        let background = classic_look(background_menu("Undo", "Redo", &[], submenus));
+        let new = items_of(&background)
+            .find(|item| item.label == "New")
+            .expect("New");
+        assert!(!new.shows_glyph, "New is text alone");
+        assert!(
+            items_of(&new.submenu).all(|item| item.shortcut.is_none() && item.shows_glyph),
+            "its rows keep their glyphs, without shortcut text"
+        );
+
+        let compact = item_menu(&folder(), MenuStyle::Compact).entries;
+        let open = items_of(&compact).next().expect("Open");
+        assert!(open.shows_glyph && !open.emphasised && open.shortcut == Some("Enter"));
     }
 
     /// parity: CMD-009

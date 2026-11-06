@@ -65,7 +65,7 @@ fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
         show(&test, view);
         let notes = cell_named(&test, "Notes 2").shown_item_lines();
         let lines = notes.unwrap_or_else(|| panic!("{view:?} shows the item's lines"));
-        assert_eq!(lines.kind, "Text document", "{view:?}");
+        assert_eq!(lines.kind, "Text Document", "{view:?}");
         assert_eq!(lines.size, "20 bytes", "{view:?}: the fixture's 20-byte file");
         assert!(!lines.modified.is_empty(), "{view:?}: a date modified");
         let folder = cell_named(&test, "Documents").shown_item_lines();

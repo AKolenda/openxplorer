@@ -15,11 +15,13 @@ use gtk::{gdk, glib};
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
 use super::icons::{
-    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
+    assert_same_colour, css_colour, is_same_colour, painted, pixel_rows, unpremultiplied_rgb, Pixel,
+    TRANSITION_TIME,
 };
 use super::support::{app_menu, menu_button_with_class};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow, ThemeGuard};
+use crate::window::widget_tree::children;
 
 /// parity: TAB-010, LOOK-009
 #[gtk::test]
@@ -92,6 +94,106 @@ fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
     }
 }
 
+/// As in Windows 11's File Explorer, a separator stands in the gap between
+/// two inactive tabs but not beside the tab in front or a hovered tab, the
+/// tab in front curves out at its foot into the navigation row, and only
+/// the tab in front and a hovered tab show their close button. Measured
+/// in the dark appearance, whose strip, bars and separator differ most.
+///
+/// parity: LOOK-009
+#[gtk::test]
+fn tabs_are_separated_flared_and_show_close_as_in_windows_11() {
+    /// The colour painted at (`x`, `y`) of `rows`.
+    fn colour_at(rows: &[Vec<Pixel>], x: i32, y: i32) -> gdk::RGBA {
+        let row = usize::try_from(y).expect("a point in the title bar");
+        let column = usize::try_from(x).expect("a point in the title bar");
+        let [red, green, blue] = unpremultiplied_rgb(rows[row][column]);
+        gdk::RGBA::new(red, green, blue, 1.0)
+    }
+    /// Whether the close button at `close` shows its glyph: some pixel
+    /// differs from the button's corner.
+    fn shows_glyph(rows: &[Vec<Pixel>], close: Bounds) -> bool {
+        let corner = colour_at(rows, close.x + 1, close.y + 1);
+        (close.y..close.y + close.height)
+            .any(|y| (close.x..close.right()).any(|x| !is_same_colour(colour_at(rows, x, y), corner)))
+    }
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    for _ in 0..2 {
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("valid folder");
+        test.wait_for_listing("another tab");
+    }
+    test.activate("theme", Some("dark"));
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 3);
+    let bar = test.window.titlebar().expect("the window has its title bar");
+    let tabs: Vec<gtk::Widget> = children(&test.window.tab_strip().tab_list()).collect();
+    let place =
+        |widget: &gtk::Widget| Bounds::from_rect(&widget.compute_bounds(&bar).expect("a laid out tab"));
+    let [first, second, front] = [&tabs[0], &tabs[1], &tabs[2]];
+    assert!(front.has_css_class("active"), "the tab opened last is in front");
+    let (first_place, second_place, front_place) = (place(first), place(second), place(front));
+    let close_of = |tab: &gtk::Widget| {
+        let close = descendants::<gtk::Button>(tab)
+            .into_iter()
+            .find(|button| button.has_css_class("tab-close"))
+            .expect("a tab has a close button");
+        Bounds::from_rect(&close.compute_bounds(&bar).expect("a laid out button"))
+    };
+    let middle = first_place.y + first_place.height / 2;
+    let bottom = front_place.y + front_place.height;
+    let strip = css_colour("#202020");
+    let gap_colours = |rows: &[Vec<Pixel>], left: Bounds, right: Bounds| -> Vec<gdk::RGBA> {
+        (left.right()..right.x)
+            .map(|x| colour_at(rows, x, middle))
+            .collect()
+    };
+
+    let rows = pixel_rows(&painted(&bar));
+    let between_inactive = gap_colours(&rows, first_place, second_place);
+    let beside_front = gap_colours(&rows, second_place, front_place);
+    let start_flare = colour_at(&rows, front_place.x - 1, bottom - 1);
+    let end_flare = colour_at(&rows, front_place.right(), bottom - 1);
+    let past_start_flare = colour_at(&rows, front_place.x - 4, bottom - 4);
+    let front_close = shows_glyph(&rows, close_of(front));
+    let inactive_close = shows_glyph(&rows, close_of(second));
+    second.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
+    let hovered_rows = pixel_rows(&painted(&bar));
+    second.unset_state_flags(gtk::StateFlags::PRELIGHT);
+    let beside_hovered = gap_colours(&hovered_rows, first_place, second_place);
+    let hovered_close = shows_glyph(&hovered_rows, close_of(second));
+
+    // alpha(white, .08) over #202020.
+    let separator = css_colour("#323232");
+    assert!(
+        between_inactive
+            .iter()
+            .any(|&colour| is_same_colour(colour, separator)),
+        "a separator between two inactive tabs: {between_inactive:?}"
+    );
+    for (gap, what) in [
+        (&beside_front, "the tab in front"),
+        (&beside_hovered, "a hovered tab"),
+    ] {
+        assert!(
+            gap.iter().all(|&colour| is_same_colour(colour, strip)),
+            "no separator beside {what}: {gap:?}"
+        );
+    }
+    let chrome = css_colour("#282828");
+    assert_same_colour(start_flare, chrome, "the curve at the start of the tab in front");
+    assert_same_colour(end_flare, chrome, "the curve at its end");
+    assert_same_colour(past_start_flare, strip, "the strip above the curve");
+    assert!(front_close, "the tab in front shows its close button");
+    assert!(!inactive_close, "an inactive tab does not");
+    assert!(hovered_close, "a hovered tab does");
+}
+
 /// parity: LOOK-012
 #[gtk::test]
 fn the_address_and_search_boxes_are_34_pixels_tall_7_pixels_below_the_title_bar() {
@@ -156,18 +258,45 @@ fn the_search_box_names_the_folder_it_searches() {
     assert_eq!(placeholder.as_deref(), Some("Search Documents"));
 }
 
+/// Windows 11's title bar has no open-windows button, so neither has
+/// this one: the tab menu's "Open windows…" lists every window below the
+/// tab in front, then New window and Quit.
+///
+/// parity: TAB-044
 #[gtk::test]
 fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
     let fixture = Fixture::standard();
     let first = laid_out(&fixture.uri());
     let second = first.open_beside(&fixture.uri_of("Documents"));
-    let button = menu_button_with_class(&first, "windows-button");
-    button.popup();
+    let bar = first.window.titlebar().expect("the window has its title bar");
+    assert!(
+        descendants::<gtk::MenuButton>(&bar).is_empty(),
+        "the title bar has no open-windows button"
+    );
+    first.activate("open-windows", None);
     wait_for_frames(&first.window, 2);
-    let menu = app_menu(&button);
+    let strip = first.window.tab_strip();
+    let menu = strip.windows_menu();
+    let shown = menu.is_visible();
+    let (has_target, pointing_to) = menu.pointing_to();
     let labels = menu.row_labels();
     let checked = menu.checked_labels();
-    button.popdown();
+    menu.popdown();
+    let front = strip
+        .tab_list()
+        .first_child()
+        .and_then(|tab| tab.compute_bounds(strip))
+        .expect("a laid out tab");
+    assert!(shown, "the menu opens");
+    #[expect(clippy::cast_possible_truncation, reason = "tab bounds are small")]
+    let below_front = gdk::Rectangle::new(
+        front.x() as i32,
+        front.y() as i32,
+        front.width() as i32,
+        front.height() as i32,
+    );
+    assert!(has_target);
+    assert_eq!(pointing_to, below_front, "it opens from the tab in front");
     let title_of = |test: &TestWindow| test.window.title().map(|title| title.to_string());
     let first_title = title_of(&first).expect("a titled window");
     let second_title = title_of(&second).expect("a titled window");
