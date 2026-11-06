@@ -80,6 +80,15 @@ pub enum NetworkError {
         crate::i18n::gettext("Sign-out is in progress. Reconnect after it finishes.")
     )]
     ReconnectAfterSignOut,
+    /// Map network drive asked for a different account, but the share is
+    /// already connected with one.
+    #[error(
+        "{}",
+        crate::i18n::gettext("Multiple connections to a server or shared resource by the same user, using more than one \
+             user name, are not allowed. Disconnect all previous connections to the server or shared resource and \
+             try again.")
+    )]
+    ConnectedWithAnotherAccount,
     /// One of the server's mounts cannot be unmounted.
     #[error("{}", crate::i18n::gettext("The system cannot disconnect one of this server’s mounts. Close other applications using it and \
          try again."))]

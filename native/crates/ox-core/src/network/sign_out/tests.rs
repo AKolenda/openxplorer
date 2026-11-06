@@ -393,7 +393,13 @@ fn a_server_being_signed_out_can_be_neither_listed_nor_connected() {
         let running = registry.begin("nas").expect("the sign-out starts");
 
         let listing = registry.check_listing("smb://nas/Projects/Film");
-        let connecting = fixture.block_on(connect_share(&fixture.prompts, &registry, r"\\nas\Projects", ""));
+        let connecting = fixture.block_on(connect_share(
+            &fixture.prompts,
+            &registry,
+            r"\\nas\Projects",
+            "",
+            CredentialChoice::Known,
+        ));
 
         let listing_error = listing.expect_err("listing is refused").to_string();
         assert_eq!(

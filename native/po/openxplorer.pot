@@ -30,7 +30,7 @@ msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, B
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network drive, below the navigation pane or in the \"…\" menu of This PC and Network, connects a share such as \\\\server\\share under a drive letter, as in Windows; Reconnect at sign-in saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -142,10 +142,6 @@ msgid "Connect as guest"
 msgstr ""
 
 #: crates/ox-app/resources/ui/network-sign-in.ui
-msgid "OpenXplorer Security"
-msgstr ""
-
-#: crates/ox-app/resources/ui/network-sign-in.ui
 msgid "Password"
 msgstr ""
 
@@ -158,11 +154,7 @@ msgid "Show or hide password"
 msgstr ""
 
 #: crates/ox-app/resources/ui/network-sign-in.ui
-msgid "Username"
-msgstr ""
-
-#: crates/ox-app/resources/ui/network-sign-in.ui
-msgid "Your network username"
+msgid "User name"
 msgstr ""
 
 #: crates/ox-app/resources/ui/open-with-dialog.ui
@@ -518,16 +510,20 @@ msgstr ""
 msgid "Could not safely remove"
 msgstr ""
 
+#: crates/ox-app/src/devices.rs crates/ox-app/src/window/mounting.rs crates/ox-app/src/window/place_menus.rs
+msgid "Disconnect"
+msgstr ""
+
 #: crates/ox-app/src/devices.rs
 msgid "Disconnect device"
 msgstr ""
 
 #: crates/ox-app/src/devices.rs
-msgid "Disconnect mount"
+msgid "Eject"
 msgstr ""
 
 #: crates/ox-app/src/devices.rs
-msgid "Eject"
+msgid "Safe To Remove Hardware"
 msgstr ""
 
 #: crates/ox-app/src/devices.rs
@@ -536,14 +532,14 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/devices.rs
-msgid "“{label}” can now be safely unplugged."
+msgid "The '{label}' device can now be safely removed from the computer."
 msgstr ""
 
 #: crates/ox-app/src/dialog/fields.rs crates/ox-core/src/format.rs
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/src/dialog/window.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -592,12 +588,37 @@ msgstr ""
 msgid "Add a network location"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/dialogs/network_sign_in.rs
+#: crates/ox-app/src/dialogs/network_map.rs
 msgid "Connect"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
-msgid "Map network location"
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Connect to a Web site that you can use to store your documents and pictures."
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Connect using different credentials"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Drive:"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Example: {address}"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Finish"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Folder:"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
+msgid "Map network drive"
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_map.rs
@@ -605,11 +626,23 @@ msgid "OpenXplorer will ask for your username and password if needed. Remember m
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_map.rs
+msgid "Reconnect at sign-in"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
 msgid "Save in the sidebar · reconnect when opened"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Specify the drive letter for the connection and the folder that you want to connect to:"
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Type"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "What network folder would you like to map?"
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_protocol.rs
@@ -640,17 +673,13 @@ msgstr ""
 msgid "Windows share (SMB)"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/dialogs/network_sign_in.rs
-msgid "Connect to {host}"
-msgstr ""
-
 #: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialogs/network_sign_in.rs
 msgid "Enter network credentials"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/dialogs/network_sign_in.rs
-msgid "Enter the credentials for this computer or network storage."
+msgid "Enter your credentials to connect to: {host}"
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-core/src/network/prompts/challenge.rs
@@ -706,12 +735,20 @@ msgstr ""
 msgid "This disconnects all SMB mounts for this server in your desktop session, including other applications. Close files on this server first."
 msgstr ""
 
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Date modified:"
+msgstr ""
+
 #: crates/ox-app/src/folder_view/cells.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Files"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/cells.rs crates/ox-app/src/window/input.rs
 msgid "Folder contents — type a filename prefix to select"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Size:"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/cells/expander.rs
@@ -1327,8 +1364,25 @@ msgstr ""
 msgid "Sharing"
 msgstr ""
 
-#: crates/ox-app/src/properties/custom_icon.rs
+#: crates/ox-app/src/properties/change_icon.rs
+msgid "Browse..."
+msgstr ""
+
+#: crates/ox-app/src/properties/change_icon.rs
 msgid "Change Icon"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/change_icon.rs
+msgid "Change Icon for {folder} Folder"
+msgstr ""
+
+#: crates/ox-app/src/properties/change_icon.rs crates/ox-core/src/search/facets.rs
+msgid "Images"
+msgstr ""
+
+#: crates/ox-app/src/properties/change_icon.rs
+msgid "_Select an icon from the list below:"
 msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
@@ -1337,10 +1391,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
 msgid "Folder icons"
-msgstr ""
-
-#: crates/ox-app/src/properties/custom_icon.rs crates/ox-core/src/search/facets.rs
-msgid "Images"
 msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
@@ -1392,7 +1442,7 @@ msgstr ""
 msgid "Aperture priority"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs
 msgid "Attributes"
 msgstr ""
 
@@ -1460,7 +1510,7 @@ msgstr ""
 msgid "Conductors"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Content"
 msgstr ""
 
@@ -1890,7 +1940,7 @@ msgstr ""
 msgid "Created"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "Hidden"
 msgstr ""
 
@@ -1910,11 +1960,11 @@ msgstr ""
 msgid "Opens with"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "Read-only"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "Read-only (Only applies to files in folder)"
 msgstr ""
 
@@ -1926,7 +1976,7 @@ msgstr ""
 msgid "Target"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "The window that opened these properties is closed."
 msgstr ""
 
@@ -2311,11 +2361,11 @@ msgid "Multiple"
 msgstr ""
 
 #: crates/ox-app/src/properties/selection_view.rs
-msgid "Multiple locations"
+msgid "Multiple Types"
 msgstr ""
 
 #: crates/ox-app/src/properties/selection_view.rs
-msgid "Multiple types"
+msgid "Multiple locations"
 msgstr ""
 
 #: crates/ox-app/src/properties/selection_view.rs
@@ -2324,7 +2374,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/selection_view.rs
-msgid "{count} items Properties"
+msgid "{first}, {second} Properties"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/selection_view.rs
+msgid "{first}, {second}, ... Properties"
 msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
@@ -4551,10 +4606,6 @@ msgid "List"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Map network drive"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "More"
 msgstr ""
 
@@ -4624,6 +4675,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Text Document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Tiles"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
@@ -5922,7 +5977,7 @@ msgid "Network locations"
 msgstr ""
 
 #: crates/ox-app/src/window/landing.rs
-msgid "No network locations saved. Use “Map network location” to connect to a share and add it to the sidebar."
+msgid "No network locations saved. Use “Map network drive” to connect to a share and add it to the sidebar."
 msgstr ""
 
 #: crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
@@ -5994,10 +6049,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/mounting.rs
 msgid "Could not mount device"
-msgstr ""
-
-#: crates/ox-app/src/window/mounting.rs crates/ox-app/src/window/place_menus.rs
-msgid "Disconnect"
 msgstr ""
 
 #: crates/ox-app/src/window/mounting.rs
@@ -8109,6 +8160,10 @@ msgstr ""
 
 #: crates/ox-core/src/network/error.rs
 msgid "Make sure the system keyring is running and try Sign out again."
+msgstr ""
+
+#: crates/ox-core/src/network/error.rs
+msgid "Multiple connections to a server or shared resource by the same user, using more than one user name, are not allowed. Disconnect all previous connections to the server or shared resource and try again."
 msgstr ""
 
 #: crates/ox-core/src/network/error.rs

@@ -4,7 +4,7 @@
 //! GTK 4's places view, and so Files and the file chooser, keep the
 //! servers connected through "Connect to Server" in a bookmark file,
 //! `$XDG_DATA_HOME/gtk-4.0/servers`; GTK 3 kept it in
-//! `$XDG_CONFIG_HOME/gtk-3.0/servers`. Map network location adds its
+//! `$XDG_CONFIG_HOME/gtk-3.0/servers`. Map network drive adds its
 //! folders to the GTK 4 list, and the address bar suggests from both, so a
 //! server typed once in any of these apps is offered in the others.
 //!
