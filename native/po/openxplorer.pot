@@ -539,11 +539,11 @@ msgstr ""
 msgid "OK"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/format_drive.rs
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/drive_tab.rs
 msgid "Capacity"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/drive_tab.rs
 msgid "File system"
 msgstr ""
 
@@ -572,7 +572,7 @@ msgstr ""
 msgid "Start"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/format_drive.rs
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/drive_tab.rs
 msgid "Volume label"
 msgstr ""
 
@@ -600,7 +600,7 @@ msgstr ""
 msgid "Save in the sidebar · reconnect when opened"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Type"
 msgstr ""
 
@@ -1287,6 +1287,10 @@ msgid "General"
 msgstr ""
 
 #: crates/ox-app/src/properties.rs
+msgid "Hardware"
+msgstr ""
+
+#: crates/ox-app/src/properties.rs
 msgid "Previous Versions"
 msgstr ""
 
@@ -1752,7 +1756,7 @@ msgstr ""
 msgid "{width} x {height}"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Details"
 msgstr ""
 
@@ -1767,6 +1771,57 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/details_tab.rs
 msgid "{name}: {value}"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_facts.rs
+msgid "CD Drive"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
+msgid "Local Disk"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_facts.rs
+msgid "Network Drive"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_facts.rs
+msgid "Removable Disk"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_tab.rs
+msgid "Free space"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_tab.rs
+msgid "Mounted from"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_tab.rs
+msgid "Mounted on"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_tab.rs
+msgid "Opens the disk usage analyser on this drive"
+msgstr ""
+
+#: crates/ox-app/src/properties/drive_tab.rs
+msgid "Used space"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
+msgid "{bytes} bytes"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/properties/window.rs
+msgid "{name}:"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/drive_tab.rs
+msgid "{value1} free of {value2}"
 msgstr ""
 
 #: crates/ox-app/src/properties/folder_count.rs crates/ox-app/src/properties/folder_sizes.rs
@@ -1811,10 +1866,6 @@ msgid "Created"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
-msgid "Free space"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_tab.rs
 msgid "Hidden"
 msgstr ""
 
@@ -1824,14 +1875,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/details_pane/content.rs
 msgid "Modified"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_tab.rs
-msgid "Mounted from"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_tab.rs
-msgid "Mounted on"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
@@ -1874,11 +1917,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/general_tab.rs
 msgid "{type} (.{extension})"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/properties/general_tab.rs
-msgid "{value1} free of {value2}"
 msgstr ""
 
 #: crates/ox-app/src/properties/item_window.rs
@@ -2483,11 +2521,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/window.rs crates/ox-app/src/window/folder_options.rs
 msgid "Apply"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/properties/window.rs
-msgid "{name}:"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5619,10 +5652,6 @@ msgstr ""
 msgid "Devices and drives"
 msgstr ""
 
-#: crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
-msgid "Local Disk"
-msgstr ""
-
 #: crates/ox-app/src/window/landing.rs
 msgid "Mounted in this session"
 msgstr ""
@@ -7169,11 +7198,6 @@ msgstr ""
 #: crates/ox-core/src/format/explorer_text.rs
 msgctxt "thousands separator"
 msgid ","
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
-msgid "{bytes} bytes"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
