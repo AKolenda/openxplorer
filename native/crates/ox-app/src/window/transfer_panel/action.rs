@@ -150,7 +150,7 @@ impl Verb {
 
 /// The name a location is shown by: its display name, or for a root
 /// such as a share, its URI.
-fn location_name(uri: &str) -> String {
+pub(crate) fn location_name(uri: &str) -> String {
     let file = gio::File::for_uri(uri);
     file.basename()
         .filter(|name| file.parent().is_some() && !name.as_os_str().is_empty())

@@ -64,6 +64,7 @@ mod closing;
 mod command_bar;
 mod compact_density;
 mod compress_dialog;
+pub(crate) mod conflict_window;
 mod connections;
 mod context_menu;
 mod copy_path;
