@@ -99,8 +99,9 @@ fn the_this_pc_chevron_collapses_and_expands_its_section() {
 }
 
 /// Left on This PC's row collapses the section and Right expands it
-/// again, as in Explorer's navigation pane; a key that changes nothing,
-/// or one pressed on a row that heads no section, is left to the list.
+/// again, as in Explorer's navigation pane. As in Windows 11's tree,
+/// Right on the expanded head moves to its first drive and Left on a
+/// drive back to the head; a key with nowhere to go is left to the list.
 ///
 /// parity: SIDE-033, ACC-006
 #[gtk::test]
@@ -118,11 +119,27 @@ fn left_and_right_on_a_section_head_collapse_and_expand_it() {
     assert!(press(&test, gdk::Key::Right), "Right expands it");
     assert!(!sidebar.section_is_collapsed("thisPc"));
     assert!(shows(&test, "Local Disk"));
-    assert!(!press(&test, gdk::Key::Right), "already expanded");
-
-    row_named(&test, "Local Disk").grab_focus();
-    assert!(!press(&test, gdk::Key::Left), "Local Disk heads no section");
+    let focused = || sidebar.list().focus_child().and_downcast::<gtk::ListBoxRow>();
+    assert!(
+        press(&test, gdk::Key::Right),
+        "Right on the expanded head steps in"
+    );
+    assert_eq!(focused(), Some(row_named(&test, "Local Disk")));
     assert!(!sidebar.section_is_collapsed("thisPc"));
+
+    assert!(
+        press(&test, gdk::Key::Left),
+        "Left on a drive steps out to its head"
+    );
+    assert_eq!(focused(), Some(row_named(&test, "This PC")));
+    assert!(
+        !sidebar.section_is_collapsed("thisPc"),
+        "stepping out collapses nothing"
+    );
+
+    row_named(&test, "Home").grab_focus();
+    assert!(!press(&test, gdk::Key::Left), "Home has nowhere to go");
+    assert!(!press(&test, gdk::Key::Right));
 }
 
 /// While the open place is inside a collapsed section, the section's head

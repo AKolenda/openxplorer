@@ -110,7 +110,8 @@ impl SceneStep {
     }
 
     /// Runs the step in `window` and returns how long to wait before the
-    /// next one; the error says why it could not run.
+    /// next one, for an action or submenu at least as long as a menu it
+    /// opens takes to fade in; the error says why it could not run.
     pub(crate) fn run(&self, window: &BrowserWindow) -> Result<Duration, String> {
         match self {
             Self::Select(name) => window
@@ -120,12 +121,12 @@ impl SceneStep {
             Self::Action { name, target } => {
                 let target = target.as_deref().map(ToVariant::to_variant);
                 WidgetExt::activate_action(window, &format!("win.{name}"), target.as_ref())
-                    .map(|()| Duration::ZERO)
+                    .map(|()| crate::window::MENU_OPENING_MOTION)
                     .map_err(|_| format!("the window has no action “{name}”"))
             }
             Self::Submenu(label) => window
                 .open_context_submenu(label)
-                .then_some(Duration::ZERO)
+                .then_some(crate::window::MENU_OPENING_MOTION)
                 .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
             Self::Tab(name) => {
                 let properties = window

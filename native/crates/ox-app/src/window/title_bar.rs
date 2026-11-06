@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The title bar: tabs, the new-tab button, an empty drag area, the
-//! open-windows button and the caption buttons.
+//! The title bar: tabs, the new-tab button, an empty drag area and the
+//! caption buttons, as in Windows 11's File Explorer.
 //!
 //! Ports `header.titlebar` in `v2.0.0:desktop/ui/index.html` and `windowsMenu` in
 //! `v2.0.0:desktop/ui/app.js`. The window template (`resources/ui/window.ui`)
@@ -9,8 +9,11 @@
 //! dragging or double-clicking any empty part moves or maximises the
 //! window as the desktop expects. A tab that is dragged is the tab drag's
 //! instead: its drag source on the handle claims the press first
-//! (`tab_moves::drag`). This module gives the bar's buttons
-//! their glyphs, the new-tab action and the open-windows menu.
+//! (`tab_moves::drag`). This module gives "+" its glyph and the new-tab
+//! action, and builds the open-windows menu. Windows 11 has no
+//! open-windows button in its title bar, so the app's is gone from it: the
+//! tab menu's "Open windows…", the launcher's and Settings' open the menu
+//! (TAB-044).
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -19,33 +22,23 @@ use gtk::subclass::prelude::*;
 use crate::application::AppAction;
 use crate::icons::{self, Icon};
 
-use super::menu_popover::{name_menu_button, ItemCheck, MenuEntry, MenuItem, MenuPopover};
+use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// The "+" glyph of the new-tab button (`.newtab svg{width:14px}`).
 const NEW_TAB_GLYPH: i32 = 14;
-/// The open-windows button's glyph, at app.js's default icon size
-/// (`icon(name, size=18)`).
-const OPEN_WINDOWS_GLYPH: i32 = 18;
 
 impl BrowserWindow {
-    /// Gives the template's title bar buttons their glyphs, the new-tab
-    /// action and the open-windows menu.
+    /// Gives the template's "+" its glyph and the new-tab action.
     pub(super) fn finish_title_bar(&self) {
-        let imp = self.imp();
-        let new_tab = &*imp.new_tab_button;
+        let new_tab = &*self.imp().new_tab_button;
         new_tab.set_child(Some(&icons::image(Icon::Add, NEW_TAB_GLYPH)));
         WindowAction::NewTab.assign_to(new_tab);
-        let open_windows = &*imp.open_windows_button;
-        open_windows.set_child(Some(&icons::image(Icon::Desktop, OPEN_WINDOWS_GLYPH)));
-        name_menu_button(open_windows, &ox_core::i18n::gettext("Open windows"));
-        list_open_windows_on_click(open_windows);
     }
 }
 
-/// Makes the monitor button (`#windows-button`), or Settings' "Open
-/// windows…", open the list of open windows.
+/// Makes Settings' "Open windows…" open the list of open windows.
 pub(crate) fn list_open_windows_on_click(button: &gtk::MenuButton) {
     let popover = MenuPopover::new(Vec::new());
     button.set_popover(Some(&popover));
@@ -60,7 +53,8 @@ pub(crate) fn list_open_windows_on_click(button: &gtk::MenuButton) {
 /// Every browser window by title, this one checked, then New window and
 /// Quit (`windowsMenu`). The tabs closed in this window come before New
 /// window, most recent first, as Dolphin's "Recently Closed Tabs" (TAB-016).
-pub(super) fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
+/// `anchor` is in the window whose menu opens.
+pub(super) fn open_windows_menu(anchor: &impl IsA<gtk::Widget>) -> Vec<MenuEntry> {
     let Some(this_window) = anchor.root().and_downcast::<BrowserWindow>() else {
         return Vec::new();
     };
@@ -170,7 +164,7 @@ mod tests {
             .expect("a named folder")
             .to_string_lossy();
 
-        let entries = open_windows_menu(&test.window.imp().open_windows_button);
+        let entries = open_windows_menu(&test.window);
 
         assert_eq!(test.window.title().as_deref(), Some("Documents — OpenXplorer"));
         let listed = items(&entries);

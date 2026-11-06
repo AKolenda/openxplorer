@@ -17,6 +17,9 @@ columnview.files.file-drop-active > listview, gridview.files.file-drop-active,
 columnview.files > listview > row.file-drop-active,
 gridview.files > child.file-drop-active,
 .tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }
+/* The separators between inactive tabs in the tertiary text colour, as
+   strong as the breadcrumb dividers (src/window/tab_strip/edges.rs). */
+.ox-titlebar .tab-separator { background-color: @ox_text_tertiary; }
 .sidebar list > row:focus-visible,
 .folder-tree listview > row:focus-visible,
 columnview.files > listview > row:focus-visible,

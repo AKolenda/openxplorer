@@ -5,10 +5,9 @@ name: Native distribution packages
 # install. native/packaging/README.md describes the formats; native-checks.yml
 # stays the quick check on the minimum supported Rust.
 on:
-  pull_request:
-    # One list for both triggers, shared through a YAML anchor so the two
-    # cannot drift apart.
-    paths: &packaged-paths
+  push:
+    branches: [main]
+    paths:
       # The app, its packaging and tools, and the licences the packages ship.
       # The 1.1.x updater the packages must satisfy is read from tag v2.0.0
       # (native/tools/python_app.py).
@@ -17,15 +16,13 @@ on:
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.md'
       - '.github/workflows/native-distros.yml'
-  push:
-    branches: [main]
-    paths: *packaged-paths
   workflow_dispatch:
-# A new push to a pull request cancels the run it replaces, so superseded
-# packages are never built or stored.
+# Pull requests do not start it; run it on a branch with "Run workflow"
+# (workflow_dispatch). A new run on a branch other than main cancels the one
+# it replaces, so superseded packages are never built or stored.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 # The jobs only read the repository.
 permissions:
   contents: read
@@ -107,7 +104,7 @@ jobs:
           if-no-files-found: error
           # Preview packages are for trying a change, not for keeping; the
           # release packages come from checks.yml.
-          retention-days: ${{ github.event_name == 'pull_request' && 3 || 7 }}
+          retention-days: ${{ github.ref != 'refs/heads/main' && 3 || 7 }}
 
   flatpak:
     name: Flatpak
@@ -140,4 +137,42 @@ jobs:
           name: io.winspace.Development.Native-x86_64.flatpak
           path: io.winspace.Development.Native.flatpak
           if-no-files-found: error
-          retention-days: ${{ github.event_name == 'pull_request' && 3 || 7 }}
+          retention-days: ${{ github.ref != 'refs/heads/main' && 3 || 7 }}
+
+  # Keeps only the newest packages. Once every package of this run is
+  # published, deletes the preview packages of every run older than the newest
+  # successful one, on any branch, including this run's own when a newer run
+  # already succeeded. Storage then holds one build instead of one per push,
+  # and a run whose packages failed keeps the previous ones.
+  prune-artifacts:
+    name: Delete earlier preview packages
+    needs: [distribution, flatpak]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # One cleanup at a time, so two never delete the same artifact.
+    concurrency:
+      group: ${{ github.workflow }}-prune-artifacts
+      cancel-in-progress: false
+    permissions:
+      actions: write
+    steps:
+      - name: Delete preview packages older than the newest successful run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          newest=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/native-distros.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0].id // 0')
+          keep=$(( newest > GITHUB_RUN_ID ? newest : GITHUB_RUN_ID ))
+          # Lists every page before deleting, since deleting shifts the pages.
+          ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq "
+            .artifacts[]
+            | select(.expired | not)
+            | select(.workflow_run.id < $keep)
+            | select((.name | startswith(\"openxplorer-native-\")) or .name == \"io.winspace.Development.Native-x86_64.flatpak\")
+            | .id")
+          for id in $ids; do
+            if ! gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" 2>"$RUNNER_TEMP/delete.err"; then
+              # Already expired or deleted.
+              grep -q 'HTTP 404' "$RUNNER_TEMP/delete.err" || { cat "$RUNNER_TEMP/delete.err" >&2; exit 1; }
+            fi
+          done
