@@ -43,7 +43,7 @@ pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     });
 }
 
-/// parity: CMD-008, CMD-009, CMD-015, SEL-003
+/// parity: CMD-008, CMD-009, CMD-015, SEL-003, CMD-038
 #[gtk::test]
 fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     let fixture = Fixture::standard();
@@ -72,6 +72,8 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Open",
             "Open containing folder in Terminal",
             "Open with…",
+            "-",
+            "Send to",
             "-",
             "Cut",
             "Copy",

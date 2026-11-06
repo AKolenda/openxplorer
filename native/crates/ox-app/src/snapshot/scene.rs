@@ -13,6 +13,8 @@
 //!   `context-menu`, `properties` or `details-pane`;
 //! - `action=<name>:<target>`: runs it with a string target, such as
 //!   `open-tab-background:/home/demo/Documents`;
+//! - `submenu=<label>`: opens the submenu of the open context menu's
+//!   item `<label>`, such as `Send to`, as Right on its row does;
 //! - `tab=<name>`: shows the tab named `<name>` (`general`, `security`,
 //!   `details`, `versions`, ...) of the Properties window opened last;
 //! - `row=<property>`: selects the Details row of that property (such
@@ -47,6 +49,8 @@ pub(crate) enum SceneStep {
         /// Its string target, if it takes one.
         target: Option<String>,
     },
+    /// Open the submenu of the open context menu's item with this label.
+    Submenu(String),
     /// Show this tab of the Properties window opened last.
     Tab(String),
     /// Select and focus this Details row of the Properties window opened
@@ -77,6 +81,7 @@ impl SceneStep {
         }
         match verb.trim() {
             "select" => Some(Self::Select(argument.to_owned())),
+            "submenu" => Some(Self::Submenu(argument.to_owned())),
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
             "action" => {
@@ -111,6 +116,10 @@ impl SceneStep {
                     .map(|()| Duration::ZERO)
                     .map_err(|_| format!("the window has no action “{name}”"))
             }
+            Self::Submenu(label) => window
+                .open_context_submenu(label)
+                .then_some(Duration::ZERO)
+                .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
             Self::Tab(name) => {
                 let properties = window
                     .properties_windows()
@@ -142,7 +151,7 @@ mod tests {
     #[test]
     fn a_scene_lists_selections_and_actions_in_order() {
         let scene = SceneStep::parse_scene(
-            "select=Notes.md; action=context-menu;action=open-tab:/home/demo;tab=details;row=Camera model;wait=250",
+            "select=Notes.md; action=context-menu;submenu=Send to;action=open-tab:/home/demo;tab=details;row=Camera model;wait=250",
         )
         .expect("a valid scene");
         assert_eq!(
@@ -153,6 +162,7 @@ mod tests {
                     name: "context-menu".to_owned(),
                     target: None
                 },
+                SceneStep::Submenu("Send to".to_owned()),
                 SceneStep::Action {
                     name: "open-tab".to_owned(),
                     target: Some("/home/demo".to_owned())

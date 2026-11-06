@@ -9,7 +9,7 @@ use gtk::subclass::prelude::*;
 use ox_core::ops::OperationContext;
 use ox_core::transfer::Cancellation;
 
-pub(super) const MAX_JOBS: usize = 4;
+pub(in crate::window) const MAX_JOBS: usize = 4;
 
 #[derive(Debug)]
 pub(super) struct Job {

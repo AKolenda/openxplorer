@@ -124,6 +124,37 @@ pub fn name_with_copy_marker(name: &str, marker: &str, kind: ItemKind) -> Result
     Ok(format!("{stem}{marker}{suffix}"))
 }
 
+/// `name` as `render` writes it, such as `report.txt - Shortcut (2)`,
+/// with the part before a file's last extension shortened by whole
+/// characters until the result fits 255 bytes, so the extension and what
+/// `render` adds are kept.
+///
+/// # Errors
+///
+/// The [`validate_name`] error for an invalid name, and "This file name is
+/// too long to generate a duplicate name." when nothing of the stem can be
+/// kept.
+pub fn fitted_name(
+    name: &str,
+    kind: ItemKind,
+    render: impl Fn(&str) -> String,
+) -> Result<String, LocationError> {
+    validate_name(name)?;
+    let (mut stem, suffix) = split_extension(name, kind);
+    loop {
+        let fitted = render(&format!("{stem}{suffix}"));
+        if fitted.len() <= NAME_MAX_BYTES {
+            return Ok(fitted);
+        }
+        stem = without_last_char(stem);
+        if stem.is_empty() {
+            return Err(LocationError::new(crate::i18n::gettext(
+                "This file name is too long to generate a duplicate name.",
+            )));
+        }
+    }
+}
+
 /// A user-supplied sidebar label, trimmed, or `fallback` when it is empty.
 ///
 /// # Errors
@@ -250,6 +281,24 @@ mod tests {
         let copy = new_copy_name(&name, 2, ItemKind::File).expect("the stem can be shortened");
         assert_eq!(copy, format!("{} - Copy (2).txt", "é".repeat(120)));
         assert_eq!(copy.len(), 255);
+    }
+
+    /// A name with a marker after it keeps its extension and the marker:
+    /// the part before the extension loses whole characters instead.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn a_fitted_name_shortens_the_stem_by_whole_characters() {
+        let shortcut = |name: &str| format!("{name} - Shortcut (2)");
+        let short = fitted_name("report.txt", ItemKind::File, shortcut);
+        let long = fitted_name(&format!("{}.txt", "é".repeat(125)), ItemKind::File, shortcut);
+        let folder = fitted_name(&"e".repeat(250), ItemKind::Folder, shortcut);
+
+        assert_eq!(short.as_deref(), Ok("report.txt - Shortcut (2)"));
+        assert_eq!(long, Ok(format!("{}.txt - Shortcut (2)", "é".repeat(118))));
+        assert_eq!(folder, Ok(format!("{} - Shortcut (2)", "e".repeat(240))));
+        let long_extension = format!("a.{}", "x".repeat(250));
+        assert!(fitted_name(&long_extension, ItemKind::File, shortcut).is_err());
     }
 
     /// parity: XFER-008
