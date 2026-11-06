@@ -10,7 +10,7 @@ pub(crate) fn item_label(mode: TransferMode, name: &str, position: usize, total:
     let message = match mode {
         TransferMode::Copy => crate::i18n::message_id("Copy: {name} ({position}/{total})"),
         TransferMode::Move => crate::i18n::message_id("Move: {name} ({position}/{total})"),
-        TransferMode::Trash => crate::i18n::message_id("Trash: {name} ({position}/{total})"),
+        TransferMode::Trash => crate::i18n::message_id("Recycle: {name} ({position}/{total})"),
         TransferMode::Delete => crate::i18n::message_id("Delete: {name} ({position}/{total})"),
     };
     crate::i18n::format_message(
@@ -63,7 +63,7 @@ mod tests {
     fn labels_match_the_python_strings() {
         assert_eq!(item_label(TransferMode::Copy, "a.txt", 1, 3), "Copy: a.txt (1/3)");
         assert_eq!(item_label(TransferMode::Move, "a", 2, 2), "Move: a (2/2)");
-        assert_eq!(item_label(TransferMode::Trash, "a", 1, 1), "Trash: a (1/1)");
+        assert_eq!(item_label(TransferMode::Trash, "a", 1, 1), "Recycle: a (1/1)");
         assert_eq!(item_label(TransferMode::Delete, "a", 1, 1), "Delete: a (1/1)");
         // The numbers are grouped as the numeric locale groups them.
         let grouped = crate::format::group_digits;

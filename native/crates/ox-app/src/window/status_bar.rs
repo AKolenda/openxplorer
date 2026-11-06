@@ -2,20 +2,21 @@
 //! The status bar at the bottom of the window.
 //!
 //! Ports `footer.statusbar` in `v2.0.0:desktop/ui/index.html` and `updateStatus`
-//! in `v2.0.0:desktop/ui/app.js`: the item count, the selection, the
-//! type-to-select hint, then at the right the volume's free space,
+//! in `v2.0.0:desktop/ui/app.js`, laid out as Windows 11 File Explorer's
+//! status bar: the item count ("6 items"), a thin divider and the
+//! selection ("1 item selected  19.0 KB", the size only when every
+//! selected item is a file), the type-to-select hint, then at the right
 //! "Check for updates" while a check found a newer release or a restart
 //! to finish one (the build it names is hidden, as Windows 11 Explorer's
 //! status bar has none), and the Details and Large icons view buttons, the
-//! current view's button highlighted. In the icon view a slider beside them zooms the
-//! icons, as Dolphin's status bar does (VIEW-010). "Check for updates" takes the accent colour when a
-//! check in any window found a newer release (UPD-001).
-//!
-//! As Dolphin's status bar does, the count adds the size of the files
-//! listed (VIEW-051), one selected item is described by name, type and
-//! size, and so is the item under the pointer until it leaves (VIEW-052);
-//! the free space has a bar of how full the volume is (VIEW-053), and a
+//! current view's button highlighted. "Check for updates" takes the accent
+//! colour when a check in any window found a newer release (UPD-001). A
 //! folder that cannot be watched for changes says so (VIEW-056).
+//!
+//! Explorer's status bar has none of Dolphin's extras, so neither has
+//! this one: no total size of the folder (VIEW-051), no name and type of
+//! the selected or hovered item (VIEW-052), no free space (VIEW-053; This
+//! PC and Properties show it) and no zoom slider (VIEW-012).
 //!
 //! [`StatusBar`] is a `GtkBox` subclass laid out by the template
 //! `resources/ui/status-bar.ui`; this module adds the glyphs, the build
@@ -29,16 +30,13 @@ use ox_core::i18n::{gettext, ngettext};
 
 use crate::announcement::announce;
 use crate::config::BUILD_NAME;
-use crate::folder_view::details::column_text::item_count_text;
 use crate::folder_view::grid::IconSize;
-use crate::folder_view::item::FileItem;
 use crate::folder_view::model::SelectionSummary;
 use crate::icons::{self, Icon};
 use crate::search::SearchCount;
 use crate::update::UpdateState;
 
 use super::folder_pane::FolderView;
-use super::landing::Capacity;
 use super::window_action::WindowAction;
 
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
@@ -63,8 +61,6 @@ pub(super) enum StatusSubject {
     Folder {
         /// Items shown after filtering.
         shown: u32,
-        /// The total size of the files shown.
-        bytes: u64,
         /// The folder is still being listed.
         loading: bool,
     },
@@ -82,23 +78,16 @@ pub(super) enum TypeaheadMatch {
 }
 
 /// The item count (`#status-count`): "Ready" on a landing page, else how
-/// many items are shown and how large the files among them are, and
+/// many items are shown, as Windows Explorer counts them ("6 items"), and
 /// "Loading…" while a slow listing runs.
 pub(super) fn count_text(subject: StatusSubject) -> String {
-    let (shown, bytes, loading) = match subject {
+    let (shown, loading) = match subject {
         StatusSubject::Page => return gettext("Ready"),
         StatusSubject::Search(count) => return count.text(),
-        StatusSubject::Folder {
-            shown,
-            bytes,
-            loading,
-        } => (shown, bytes, loading),
+        StatusSubject::Folder { shown, loading } => (shown, loading),
     };
-    let mut items = ngettext("{count} item", "{count} items", u64::from(shown))
+    let items = ngettext("{count} item", "{count} items", u64::from(shown))
         .replace("{count}", &format::group_digits(u64::from(shown)));
-    if bytes > 0 {
-        items = format!("{items}  {}", format::pretty_bytes(bytes));
-    }
     if loading {
         format!("{items} · {}", gettext("Loading…"))
     } else {
@@ -106,45 +95,30 @@ pub(super) fn count_text(subject: StatusSubject) -> String {
     }
 }
 
-/// The selection (`#status-selected`): how many items are selected and,
-/// as Windows Explorer shows, how large the selected files are.
+/// The selection (`#status-selected`) as Windows Explorer writes it:
+/// "1 item selected" or "3 items selected", then, when every selected item
+/// is a file, their size as Explorer writes sizes ("3 items selected
+/// 1.24 MB").
 pub(super) fn selection_text(selected: SelectionSummary) -> String {
     if selected.count == 0 {
         return String::new();
     }
-    let count = ngettext("{count} selected", "{count} selected", u64::from(selected.count))
-        .replace("{count}", &format::group_digits(u64::from(selected.count)));
-    if selected.has_files {
-        format!("{count}  {}", format::pretty_bytes(selected.bytes))
+    let count = ngettext(
+        "{count} item selected",
+        "{count} items selected",
+        u64::from(selected.count),
+    )
+    .replace("{count}", &format::group_digits(u64::from(selected.count)));
+    if selected.all_files {
+        format!("{count}  {}", format::short_size(selected.bytes))
     } else {
         count
     }
 }
 
-/// What the status bar says about one item, the one selected or the one
-/// under the pointer: its name, its type and its size, or its item count
-/// while `counts_items`, as the Size column shows it
-/// (`KFileItem::getStatusBarInfo` in Dolphin).
-pub(super) fn item_text(item: &FileItem, counts_items: bool) -> String {
-    let entry = item.entry();
-    let size = match (item.folder_size(), item.item_count()) {
-        (Some(measured), _) => Some(measured.size_text()),
-        (None, Some(count)) if counts_items => Some(item_count_text(count)),
-        (None, _) => item.file_size().map(format::pretty_bytes),
-    };
-    let mut parts = vec![entry.name.clone(), entry.type_label.clone()];
-    parts.extend(size);
-    parts.retain(|part| !part.is_empty());
-    parts.join(" · ")
-}
-
 mod imp {
-    use std::cell::{Cell, RefCell};
-
     use gtk::glib;
     use gtk::subclass::prelude::*;
-
-    use crate::folder_view::grid::IconSize;
 
     /// Private state of [`super::StatusBar`]: the template's widgets.
     #[derive(Debug, Default, gtk::CompositeTemplate)]
@@ -153,6 +127,9 @@ mod imp {
         /// The item count (`#status-count`).
         #[template_child]
         pub(super) count: TemplateChild<gtk::Label>,
+        /// The thin line between the item count and the selection.
+        #[template_child]
+        pub(super) selection_divider: TemplateChild<gtk::Separator>,
         /// The selection (`#status-selected`).
         #[template_child]
         pub(super) selection: TemplateChild<gtk::Label>,
@@ -162,15 +139,6 @@ mod imp {
         /// Says the folder cannot be watched for changes.
         #[template_child]
         pub(super) watch_state: TemplateChild<gtk::Label>,
-        /// The free space and the capacity bar.
-        #[template_child]
-        pub(super) free_space_box: TemplateChild<gtk::Box>,
-        /// The current volume's free space.
-        #[template_child]
-        pub(super) free_space: TemplateChild<gtk::Label>,
-        /// How full the current volume is.
-        #[template_child]
-        pub(super) capacity: TemplateChild<gtk::ProgressBar>,
         /// The build (`#status-mode`).
         #[template_child]
         pub(super) build: TemplateChild<gtk::Label>,
@@ -183,21 +151,12 @@ mod imp {
         /// "Update available" or "Restart to finish updating".
         #[template_child]
         pub(super) update_label: TemplateChild<gtk::Label>,
-        /// Zooms the icon view through its icon sizes.
-        #[template_child]
-        pub(super) zoom_slider: TemplateChild<gtk::Scale>,
         /// Shows the details view.
         #[template_child]
         pub(super) details_view_button: TemplateChild<gtk::Button>,
         /// Shows the Large icons view.
         #[template_child]
         pub(super) icons_view_button: TemplateChild<gtk::Button>,
-        /// The selection's text.
-        pub(super) selection_text: RefCell<String>,
-        /// The item under the pointer, described, while there is one.
-        pub(super) hovered_text: RefCell<Option<String>>,
-        /// The icon size the window shows, which the slider then shows.
-        pub(super) shown_level: Cell<Option<IconSize>>,
     }
 
     #[glib::object_subclass]
@@ -251,28 +210,6 @@ impl StatusBar {
             FolderView::Details,
         );
         show_view_on(&imp.icons_view_button, Icon::Grid, large_icons);
-        self.finish_zoom_slider();
-    }
-
-    /// The slider steps through every icon size and shows the icon view
-    /// at the one it is moved to.
-    fn finish_zoom_slider(&self) {
-        let slider = &*self.imp().zoom_slider;
-        slider.set_range(0.0, level_value(IconSize::LARGEST));
-        slider.set_increments(1.0, 1.0);
-        slider.set_round_digits(0);
-        slider.connect_value_changed(glib::clone!(
-            #[weak(rename_to = bar)]
-            self,
-            move |slider| {
-                let level = IconSize::at_index(zoom_level_at(slider.value()));
-                if bar.imp().shown_level.get() == Some(level) {
-                    return;
-                }
-                let view = FolderView::Icons(level);
-                WindowAction::View.activate_from(slider, Some(&view.as_str().to_variant()));
-            }
-        ));
     }
 
     /// "Check for updates" opens the Software updates dialog.
@@ -333,68 +270,17 @@ impl StatusBar {
         check_updates.tooltip_text().unwrap_or_default().to_string()
     }
 
-    /// Shows the item count and the selection; one selected item is
-    /// described by `single`, its [`item_text`].
-    pub(super) fn set_counts(
-        &self,
-        subject: StatusSubject,
-        selected: SelectionSummary,
-        single: Option<String>,
-    ) {
+    /// Shows the item count and, after the divider, the selection.
+    pub(super) fn set_counts(&self, subject: StatusSubject, selected: SelectionSummary) {
         let imp = self.imp();
         imp.count.set_text(&count_text(subject));
-        let selection = match (subject, single) {
-            (StatusSubject::Page, _) => String::new(),
-            (_, Some(single)) if selected.count == 1 => single,
-            (StatusSubject::Folder { .. } | StatusSubject::Search(_), _) => selection_text(selected),
+        let selection = match subject {
+            StatusSubject::Page => String::new(),
+            StatusSubject::Folder { .. } | StatusSubject::Search(_) => selection_text(selected),
         };
-        imp.selection_text.replace(selection);
-        self.show_selection_text();
-    }
-
-    /// Describes `hovered`, the item under the pointer, in place of the
-    /// selection, or the selection again for `None`.
-    pub(super) fn show_hovered(&self, hovered: Option<String>) {
-        if *self.imp().hovered_text.borrow() != hovered {
-            self.imp().hovered_text.replace(hovered);
-            self.show_selection_text();
-        }
-    }
-
-    /// Shows the item under the pointer, else the selection.
-    fn show_selection_text(&self) {
-        let imp = self.imp();
-        let text = imp
-            .hovered_text
-            .borrow()
-            .clone()
-            .unwrap_or_else(|| imp.selection_text.borrow().clone());
-        imp.selection.set_visible(!text.is_empty());
-        imp.selection.set_text(&text);
-    }
-
-    /// Shows how much room `capacity` has left, or hides the free space.
-    pub(super) fn show_free_space(&self, capacity: Option<Capacity>) {
-        let imp = self.imp();
-        imp.free_space_box.set_visible(capacity.is_some());
-        let Some(capacity) = capacity else { return };
-        let tooltip = capacity.free_tooltip();
-        imp.free_space.set_text(&capacity.free_text());
-        imp.free_space_box.set_tooltip_text(Some(&tooltip));
-        imp.capacity.set_fraction(capacity.used_share());
-        if capacity.is_nearly_full() {
-            imp.capacity.add_css_class("full");
-        } else {
-            imp.capacity.remove_css_class("full");
-        }
-        imp.capacity
-            .update_property(&[gtk::accessible::Property::Label(&tooltip)]);
-    }
-
-    /// The free space and its bar, which a click on offers the disk-usage
-    /// tools.
-    pub(super) fn free_space_widget(&self) -> gtk::Widget {
-        self.imp().free_space_box.get().upcast()
+        imp.selection_divider.set_visible(!selection.is_empty());
+        imp.selection.set_visible(!selection.is_empty());
+        imp.selection.set_text(&selection);
     }
 
     /// Says the folder shown is checked for changes only every `interval`
@@ -441,13 +327,6 @@ impl StatusBar {
                 button.remove_css_class("active");
             }
         }
-        let slider = &*imp.zoom_slider;
-        slider.set_visible(icons);
-        if let FolderView::Icons(size) = view {
-            // Recorded first, so moving the slider here runs no action.
-            imp.shown_level.set(Some(size));
-            slider.set_value(level_value(size));
-        }
     }
 
     /// The count and selection as shown, for tests.
@@ -457,16 +336,16 @@ impl StatusBar {
         (imp.count.text().to_string(), imp.selection.text().to_string())
     }
 
+    /// Whether the divider before the selection shows, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_selection_divider(&self) -> bool {
+        self.imp().selection_divider.is_visible()
+    }
+
     /// The type-to-select hint's label, for tests.
     #[cfg(test)]
     pub(super) fn typeahead_hint_label(&self) -> gtk::Label {
         self.imp().typeahead_hint.get()
-    }
-
-    /// The icon-size slider, for tests.
-    #[cfg(test)]
-    pub(super) fn zoom_slider(&self) -> gtk::Scale {
-        self.imp().zoom_slider.get()
     }
 
     /// The view buttons that show as active, for tests.
@@ -481,24 +360,6 @@ impl StatusBar {
     }
 }
 
-/// The slider position of `size`.
-fn level_value(size: IconSize) -> f64 {
-    // A handful of levels: the index converts exactly.
-    f64::from(u8::try_from(size.index()).unwrap_or(u8::MAX))
-}
-
-/// The level nearest the slider position `value`.
-fn zoom_level_at(value: f64) -> usize {
-    // The slider's range is 0 to the last level, so the cast is exact.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a small, non-negative index"
-    )]
-    let level = value.round().max(0.0) as usize;
-    level
-}
-
 /// Makes `button` show `glyph` and switch to `view`.
 fn show_view_on(button: &gtk::Button, glyph: Icon, view: FolderView) {
     button.set_child(Some(&icons::image(glyph, BUTTON_GLYPH)));
@@ -510,86 +371,50 @@ mod tests {
     use super::*;
 
     fn folder_count(shown: u32, loading: bool) -> String {
-        count_text(StatusSubject::Folder {
-            shown,
-            bytes: 0,
-            loading,
-        })
+        count_text(StatusSubject::Folder { shown, loading })
     }
 
+    /// The count is Windows Explorer's "N items", with no size added.
+    ///
     /// parity: VIEW-050
     #[test]
     fn the_status_counts_items_and_says_when_it_is_loading() {
         assert_eq!(folder_count(1, false), "1 item");
+        assert_eq!(folder_count(6, false), "6 items");
         assert_eq!(folder_count(4, true), "4 items · Loading…");
     }
 
+    /// The selection reads as Windows Explorer's: "1 item selected  19.0
+    /// KB", the size written as Explorer writes it, and no size once a
+    /// folder is among the selected items.
+    ///
     /// parity: VIEW-050
     #[test]
     fn the_selection_shows_its_count_and_file_size() {
         assert_eq!(selection_text(SelectionSummary::default()), "");
-        let two_files = SelectionSummary {
-            count: 2,
-            bytes: 2048,
-            has_files: true,
+        let one_file = SelectionSummary {
+            count: 1,
+            bytes: 19_456,
+            all_files: true,
         };
-        let size = format::pretty_bytes(2048);
-        assert_eq!(selection_text(two_files), format!("2 selected  {size}"));
+        assert_eq!(selection_text(one_file), "1 item selected  19.0 KB");
+        let three_files = SelectionSummary {
+            count: 3,
+            bytes: 1_300_000,
+            all_files: true,
+        };
+        assert_eq!(selection_text(three_files), "3 items selected  1.23 MB");
         let folders = SelectionSummary {
             count: 3,
             bytes: 0,
-            has_files: false,
+            all_files: false,
         };
-        assert_eq!(selection_text(folders), "3 selected");
-    }
-
-    /// The folder's count adds the size of its files, and one item is
-    /// described by name, type and size.
-    ///
-    /// parity: VIEW-051, VIEW-052
-    #[test]
-    fn the_count_adds_the_files_size_and_one_item_is_described() {
-        let folder = StatusSubject::Folder {
-            shown: 3,
-            bytes: 2048,
-            loading: false,
-        };
-        assert_eq!(
-            count_text(folder),
-            format!("3 items  {}", format::pretty_bytes(2048))
-        );
-        let mut entry = crate::test_support::file_entry("Report.pdf");
-        entry.size = Some(2048);
-        entry.type_label = "PDF document".to_owned();
-        let report = FileItem::new(entry);
-        assert_eq!(
-            item_text(&report, true),
-            format!("Report.pdf · PDF document · {}", format::pretty_bytes(2048))
-        );
+        assert_eq!(selection_text(folders), "3 items selected");
     }
 
     /// parity: VIEW-050
     #[test]
     fn a_landing_page_is_ready() {
         assert_eq!(count_text(StatusSubject::Page), "Ready");
-    }
-
-    /// A hovered filename must not force a narrow window wider, including
-    /// when font metrics grow at a different display scale.
-    #[gtk::test]
-    fn long_hover_descriptions_keep_the_status_bars_minimum_width() {
-        use crate::test_support::harness::{Fixture, TestWindow};
-
-        let fixture = Fixture::standard();
-        let test = TestWindow::open(&fixture.uri());
-        let bar = test.window.status_bar();
-        bar.show_hovered(Some("Notes.txt".to_owned()));
-        let minimum = bar.measure(gtk::Orientation::Horizontal, -1).0;
-        let description = format!("{}.txt · Text document · 2 KiB", "Project notes ".repeat(20));
-
-        bar.show_hovered(Some(description.clone()));
-
-        assert_eq!(bar.measure(gtk::Orientation::Horizontal, -1).0, minimum);
-        assert_eq!(bar.texts().1, description, "the full text remains accessible");
     }
 }

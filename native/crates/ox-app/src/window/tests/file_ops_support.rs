@@ -9,8 +9,36 @@ use std::path::PathBuf;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
+use ox_core::settings::{PreferencesUpdate, Settings};
+
 use crate::dialog::Dialog;
 use crate::test_support::harness::{descendants, settle, wait_until, TestWindow};
+
+/// Turns on "Moving items to the Recycle Bin" under Settings > Confirmations
+/// (Windows' "Display delete confirmation dialog"), off by default as in
+/// Windows 11, so Delete asks first.
+pub(in crate::window) fn ask_before_recycling(test: &TestWindow) {
+    let update = PreferencesUpdate {
+        confirm_trash: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.confirm_trash
+    });
+}
+
+/// The label of the button that has focus in `dialog`, the one Enter
+/// presses.
+pub(in crate::window) fn focused_button(dialog: &Dialog) -> Option<String> {
+    gtk::prelude::GtkWindowExt::focus(dialog)
+        .and_downcast::<gtk::Button>()
+        .and_then(|button| button.label())
+        .map(String::from)
+}
 
 /// The dialog open over `test`'s window, once it shows.
 ///

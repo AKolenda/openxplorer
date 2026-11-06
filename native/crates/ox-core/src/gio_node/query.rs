@@ -32,6 +32,15 @@ impl GioNode {
             gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
             gio_cancellable(cancel),
         )?;
+        // GIO answers for an item in a folder that cannot be searched with
+        // an info that holds nothing, not an error: the item's kind, and
+        // whether it exists at all, are unknown.
+        if !info.has_attribute("standard::type") {
+            return Err(TransferError::failed(crate::i18n::format_message(
+                "{name} could not be read. Check that its folder can be opened.",
+                &[("name", &self.display_name())],
+            )));
+        }
         let mode = info
             .has_attribute("unix::mode")
             .then(|| info.attribute_uint32("unix::mode") & PERMISSION_BITS);
