@@ -240,13 +240,13 @@ impl Drop for Pointer {
     }
 }
 
-/// Closes what earlier tests of the process left open on the screen: a
-/// window or dialog still shown, with any menu open in it and the pointer
-/// and keyboard grab such a menu holds, which goes with its window. Those
-/// tests' own events never went through the X server, so nothing they
-/// left showed there; a real pointer's press would land on it instead of
-/// on the window under test.
-/// Says on standard error what it closed, for a failure's log.
+/// Takes off the screen what earlier tests of the process left on it
+/// (see [`super::harness::put_away`]): a window or dialog still shown,
+/// with any menu open in it and the pointer and keyboard grab such a menu
+/// holds, which go with its window. Those tests' own events never went
+/// through the X server, so nothing they left showed there; a real
+/// pointer's press would land on it instead of on the window under test.
+/// Says on standard error what it put away, for a failure's log.
 fn close_leftovers() {
     let shown: Vec<gtk::Window> = gtk::Window::list_toplevels()
         .into_iter()
@@ -255,11 +255,11 @@ fn close_leftovers() {
         .collect();
     for window in &shown {
         eprintln!(
-            "closing a {} left shown by an earlier test: {:?}",
+            "putting away a {} left shown by an earlier test: {:?}",
             window.type_().name(),
             window.title().unwrap_or_default()
         );
-        window.destroy();
+        super::harness::put_away(window);
     }
     super::harness::settle();
 }

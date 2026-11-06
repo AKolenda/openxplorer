@@ -399,15 +399,17 @@ impl Drop for TestWindow {
             settle();
             thread::sleep(POLL_INTERVAL);
         }
-        // A dialog still open over the window, as a failed test leaves
+        // A dialog still shown over the window, as a failed test leaves
         // its question, would outlive it and stay on the screen.
-        for dialog in gtk::Window::list_toplevels() {
-            let Ok(dialog) = dialog.downcast::<gtk::Window>() else {
-                continue;
-            };
-            if dialog.transient_for().as_ref() == Some(self.window.upcast_ref()) {
-                dialog.destroy();
-            }
+        let dialogs: Vec<gtk::Window> = gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+            .filter(|dialog| {
+                dialog.is_visible() && dialog.transient_for().as_ref() == Some(self.window.upcast_ref())
+            })
+            .collect();
+        for dialog in &dialogs {
+            put_away(dialog);
         }
         // `close()` does nothing for an unpresented window and can ask a
         // question for a presented one. Tests exercise those user-facing
@@ -417,6 +419,19 @@ impl Drop for TestWindow {
         // directory that is about to be deleted.
         self.context.search_cache().shut_down();
         settle();
+    }
+}
+
+/// Takes `window`, left shown by a test, off the screen. The app's own
+/// dialogs and browser windows are destroyed, as their code does; any
+/// other window is only hidden, as its owner may destroy it or answer for
+/// it later: GTK's `AlertDialog` does both with its window, so destroying
+/// or closing it here would do either twice.
+pub(crate) fn put_away(window: &gtk::Window) {
+    if window.is::<crate::dialog::Dialog>() || window.is::<BrowserWindow>() {
+        window.destroy();
+    } else {
+        window.set_visible(false);
     }
 }
 
