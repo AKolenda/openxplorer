@@ -411,7 +411,9 @@ pub(super) fn write_thumbnail(
         uri: job.uri.clone(),
         modified: job.modified,
     };
-    writer::save_thumbnail(&job.cache_dir, &source, job.flavor, &picture)
+    // Nothing follows this program, so why the cache refused the picture is
+    // of no use here: no thumbnail was made.
+    writer::save_thumbnail(&job.cache_dir, &source, job.flavor, &picture).ok()
 }
 
 /// Removes the pictures of thumbnailers an earlier run of the app was

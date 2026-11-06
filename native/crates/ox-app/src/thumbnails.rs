@@ -7,13 +7,17 @@
 //! A request reads the cache through GIO (`thumbnail::path`,
 //! `thumbnail::is-valid`, `thumbnail::failed`) at low priority. A missing
 //! thumbnail is made by the session's thumbnailer service
-//! ([`service`]) when it has one and supports the type, else by a
-//! thumbnailer the desktop installs for the type ([`thumbnailers`], a
-//! program the app starts), else, for the picture types gdk-pixbuf reads,
-//! by the app itself ([`writer`]). Only a few are decoded or made at a
-//! time ([`slots`]); a type that cannot be previewed, or a failed attempt,
-//! keeps its icon. [`PreviewPolicy`] says which items of a folder get
-//! previews, from the Settings the user chose (VIEW-058).
+//! ([`service`]) when it has one and supports the type, else for the
+//! picture types gdk-pixbuf reads by the app itself ([`writer`]), which
+//! costs less than a program, else by a thumbnailer the desktop installs
+//! for the type ([`thumbnailers`], a program the app starts). The desktop's
+//! thumbnailer is asked for a picture only when the app cannot read it
+//! ([`writer::Failure::Unreadable`]): one the cache refuses would be
+//! refused for the program too, and a dropped request needs no picture at
+//! all. Only a few are decoded or made at a time ([`slots`]); a type that
+//! cannot be previewed, or a failed attempt, keeps its icon.
+//! [`PreviewPolicy`] says which items of a folder get previews, from the
+//! Settings the user chose (VIEW-058).
 
 mod service;
 mod slots;
@@ -203,6 +207,12 @@ async fn thumbnail_of(request: &PreviewRequest) -> Option<PathBuf> {
 async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
     let flavor = ThumbnailFlavor::for_pixels(request.pixels);
     let cache_dir = glib::user_cache_dir();
+    // The cache's own pictures keep their icons: a thumbnail of a
+    // thumbnail would grow the cache from itself, so nothing is read, made
+    // or asked of the service and the desktop's programs for them.
+    if writer::inside_cache(&cache_dir, &request.uri) {
+        return None;
+    }
     // GIO looks up local files only, and one size: a thumbnail this app
     // made earlier may be there all the same.
     let earlier = (cache_dir.clone(), request.uri.clone(), request.modified);
@@ -235,9 +245,9 @@ async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
 
 /// The thumbnail `request` asks for: the app decodes a picture itself,
 /// which costs less than a program of the desktop's, and a program of the
-/// desktop's makes it when the type is not a picture or the app cannot
-/// read it (a type without a gdk-pixbuf loader). `catalogue` is the
-/// desktop's own list unless a test hands its own.
+/// desktop's makes it when the type is not a picture or gdk-pixbuf cannot
+/// read it (a type without its loader). `catalogue` is the desktop's own
+/// list unless a test hands its own.
 async fn make_thumbnail_with(
     request: &PreviewRequest,
     cache_dir: &Path,
@@ -246,31 +256,40 @@ async fn make_thumbnail_with(
     modified: u64,
 ) -> Option<PathBuf> {
     if PIXBUF_TYPES.with(|types| types.contains(&request.content_type)) {
-        if let Some(path) = by_decoding(request, cache_dir, modified, flavor).await {
-            return Some(path);
+        match by_decoding(request, cache_dir, modified, flavor).await {
+            Ok(path) => return Some(path),
+            // Only a picture the app cannot read leaves room for another
+            // thumbnailer. One it read and the cache refused is refused
+            // for every thumbnailer, and a dropped request has nobody left
+            // to show a picture to: forking a program for either would
+            // only cost one.
+            Err(writer::Failure::Unreadable) => {}
+            Err(writer::Failure::Unwritable | writer::Failure::Cancelled) => return None,
         }
     }
     by_thumbnailer(request, cache_dir, modified, flavor, catalogue).await
 }
 
-/// The thumbnail of `request` decoded in the app: `None` when gdk-pixbuf
-/// cannot read the picture.
+/// The thumbnail of `request` decoded in the app, or why there is none:
+/// [`writer::Failure::Unreadable`] leaves the type to another thumbnailer,
+/// the others do not.
 async fn by_decoding(
     request: &PreviewRequest,
     cache_dir: &Path,
     modified: u64,
     flavor: ThumbnailFlavor,
-) -> Option<PathBuf> {
+) -> Result<PathBuf, writer::Failure> {
     let source = Source {
         uri: request.uri.clone(),
         modified,
     };
     let cache_dir = cache_dir.to_path_buf();
-    MAKING
+    let decoded = MAKING
         .with(Rc::clone)
         .blocking(move |cancel| writer::write_thumbnail(&cache_dir, &source, flavor, cancel))
-        .await
-        .flatten()
+        .await;
+    // A worker that never ran belongs to a request already dropped.
+    decoded.unwrap_or(Err(writer::Failure::Cancelled))
 }
 
 /// The thumbnail of `request` made by the desktop's thumbnailer for its
@@ -402,6 +421,20 @@ mod tests {
         let item = folder.path().join("photo.png");
         fs::write(&item, b"not a picture").expect("the item");
         let request = request_of(&item, "image/png");
+        // Reading it is what fails, which is the one failure that leaves
+        // room for another thumbnailer.
+        assert_eq!(
+            writer::write_thumbnail(
+                &cache,
+                &writer::Source {
+                    uri: request.uri.clone(),
+                    modified: 1_700_000_000,
+                },
+                ThumbnailFlavor::Normal,
+                &gio::Cancellable::new(),
+            ),
+            Err(writer::Failure::Unreadable)
+        );
 
         let written = glib::MainContext::default()
             .block_on(make_thumbnail_with(
@@ -458,5 +491,49 @@ mod tests {
         );
         let thumbnail = Pixbuf::from_file(&written).expect("a PNG");
         assert_eq!((thumbnail.width(), thumbnail.height()), (128, 64));
+    }
+
+    /// A picture of the cache's own folder is decoded but never written
+    /// there, and no program of the desktop's is started to try what the
+    /// cache refuses whatever makes it: browsing `~/.cache/thumbnails`
+    /// itself forks nothing for its pictures.
+    ///
+    /// parity: VIEW-057
+    #[gtk::test]
+    fn a_picture_of_the_cache_itself_starts_no_thumbnailer() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (thumbnailers, started) = fake_thumbnailer(folder.path());
+        let cache = folder.path().join("cache");
+        let inside = cache.join("thumbnails").join(ThumbnailFlavor::Normal.as_str());
+        fs::create_dir_all(&inside).expect("the cache folder");
+        let item = inside.join("photo.png");
+        let picture = Pixbuf::new(Colorspace::Rgb, false, 8, 400, 200).expect("a picture");
+        picture.fill(0x3366_99ff);
+        picture.savev(&item, "png", &[]).expect("the picture");
+        let request = request_of(&item, "image/png");
+        assert_eq!(
+            writer::write_thumbnail(
+                &cache,
+                &writer::Source {
+                    uri: request.uri.clone(),
+                    modified: 1_700_000_000,
+                },
+                ThumbnailFlavor::Normal,
+                &gio::Cancellable::new(),
+            ),
+            Err(writer::Failure::Unwritable),
+            "the picture reads, but the cache refuses its thumbnail"
+        );
+
+        let made = glib::MainContext::default().block_on(make_thumbnail_with(
+            &request,
+            &cache,
+            Some(Arc::new(thumbnailers)),
+            ThumbnailFlavor::Normal,
+            1_700_000_000,
+        ));
+
+        assert!(made.is_none(), "the cache holds no pictures of itself");
+        assert!(!started.exists(), "and no program is started for one");
     }
 }
