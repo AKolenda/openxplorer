@@ -217,7 +217,8 @@ impl ProgressWindow {
     }
 
     /// Titles the window for its actions: "44% complete" for one, or
-    /// "Replace or Skip Files" while it asks about taken names, as Windows
+    /// "Replace or Skip Files" while it asks about taken names and "1
+    /// Interrupted Action" while it asks about a full drive, as Windows
     /// titles it, and "2 Running Actions" for several; its icon is the
     /// first action's.
     pub(crate) fn refresh(&self) {
@@ -227,6 +228,10 @@ impl ProgressWindow {
         }
         let title = match actions.as_slice() {
             [] => return,
+            [action] if action.asks_about_space() => {
+                ox_core::i18n::ngettext("{count} Interrupted Action", "{count} Interrupted Actions", 1)
+                    .replace("{count}", "1")
+            }
             [action] if action.is_asking() => ox_core::i18n::gettext("Replace or Skip Files"),
             [action] => action.percent_text(),
             _ => {

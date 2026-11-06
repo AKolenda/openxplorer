@@ -575,3 +575,62 @@ fn set_active_listing(test: &TestWindow, state: ListingState) {
     let mut session = test.window.imp().session.borrow_mut();
     session.active_mut().expect("an active tab").listing_state = state;
 }
+
+/// A folder on this computer that may not be read keeps the tab where it
+/// was, as Windows 11 does: "Location is not available" says "<path> is
+/// not accessible. Access is denied.", the system's error stays under
+/// Details, and the folder is not in the history. Tests run as a normal
+/// user: root reads the folder anyway.
+///
+/// parity: VIEW-047
+#[gtk::test]
+fn a_folder_that_may_not_be_read_keeps_the_tab_where_it_was() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Gives the folder its permissions back, also when the test fails, so
+    /// the fixture can be removed.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Private")).expect("a folder");
+    let _unlock = Unlock(fixture.path("Private"));
+    fs::set_permissions(fixture.path("Private"), fs::Permissions::from_mode(0o000)).expect("mode");
+    if fs::read_dir(fixture.path("Private")).is_ok() {
+        return; // Running as root, which reads anything.
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the fixture");
+
+    test.window
+        .navigate(&fixture.uri_of("Private"))
+        .expect("a folder");
+
+    let dialog = super::file_ops_support::open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Location is not available");
+    assert!(
+        dialog
+            .message_text()
+            .ends_with("Private is not accessible.\n\nAccess is denied."),
+        "{}",
+        dialog.message_text()
+    );
+    assert!(
+        descendants::<gtk::Expander>(&dialog).len() == 1,
+        "the system's error under Details"
+    );
+    dialog.press("OK");
+    super::file_ops_support::wait_for_no_dialog(&test);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    wait_until("the folder's items", || {
+        test.names().iter().any(|name| name == "Notes 2.txt")
+    });
+    let session = test.window.imp().session.borrow();
+    let tab = session.active().expect("a tab");
+    assert!(!tab.history.can_go_forward(), "the folder is not in the history");
+    assert!(tab.error.is_none(), "no unavailable page");
+}

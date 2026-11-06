@@ -673,7 +673,7 @@ All transitions follow M01.
 |---|---|---|
 | Empty folder | The list stays, with its column titles in Details; "This folder is empty." in `@ox_muted`, centred just under the titles (near the top in the icon views), wrapping in a narrow pane, as in Windows Explorer. An empty Recycle Bin looks the same, as in Windows 11 (no "Recycle Bin is empty" page). | safe |
 | No results, unavailable location | Centred block starting 30 % down the pane, 20 px from each side, gap 12: glyph 44 at `opacity: .6` in `@ox_muted`; title 16 / **600** in `@ox_text`; message 12 px `@ox_muted`, max width 460, wrapping; optional action as a bordered button, padding `8 20`. | visible (subtle), P3 (weight, T13) |
-| Error (unreachable share, denied) | The same block with the error text and a Retry button. | Keep. |
+| Error (unreachable share, denied) | The same block with the error text and a Retry button. A folder on this computer that may not be read, opened in the tab in front, shows the dialog "Location is not available" instead ("<path> is not accessible." and "Access is denied.", the system's error under a Details expander), and the tab stays where it was, as in Windows 11. | Keep; the dialog: Windows 11. |
 | Opening a location | As in Windows Explorer, from the first moment: a `@ox_selected` fill crawls along behind the address (`.address.loading`, quickly at first, then ever slower, still at a third of the field when animations are off, M08), the address bar is busy for screen readers, and Refresh is Stop. After 300 ms (M06), "Working on it..." in `@ox_muted` where "This folder is empty." goes, in place of the previous folder's rows (VIEW-068). | safe |
 | Search in progress or cached | Search-info bar under the header area: min height 40, padding `7 14`, `@ox_chrome`, 1 px bottom border, **12** px text (11), accent glyph; cache freshness on the right in `@ox_muted`. | text visible, P2 |
 | Folder-size scan | Bottom bar: min height 44, padding `8 18`, `@ox_chrome`, 1 px top border, **12** px text (11), "Cancel scan" as a secondary button 27 high. | text visible, P2 (T04) |
@@ -713,6 +713,31 @@ all copy jobs). Templates: `resources/ui/progress-window.ui` and
 | Details | Speed graph 72 high in the bar's place, 1 px `@ox_border` edge on `@ox_bg`: faint gridlines (10 columns, 4 rows, `alpha(@ox_text, .07)`), the part done shaded `alpha(@ox_accent, .12)`, the speed as a filled area `alpha(@ox_accent, .6)` up to the current percentage, its top edge running straight from one report's speed to the next and anti-aliased, the highest speed at 1/1.3 of the height, and a 1 px `@ox_text` line across at the current speed with "Speed: 32.8 MB/s" (11 px) above its right end. Then "Name: <item>", "Time remaining: About 25 seconds" ("Calculating…" at first), "Items remaining: 1,030 (313 MB)". No bar of the file being copied, as in Windows. | B8-COPY ("a real-time throughput graph … the speed of data transfer, the transfer rate trend, and how much data is left"); wording from Windows screenshots; time formats per UX-PROG. Sizes and colours: not a source. |
 | Motion | None: the bar and graph change only on reports, and the paused colour applies at once, with or without animations (ACC-010). | — |
 | Replace or Skip Files | When a copy or move meets taken names, the items without a conflict go first, then the action asks in place of its bar and details, and the window shows at once, in front, titled "Replace or Skip Files" while it has that one action. The action keeps line 1, its folder links in `@ox_accent`, underlined only on hover; the 18 px line becomes 16 px and says what it found, wrapping. Alone in the window the action shows no Cancel, as in Windows: the window's close button cancels it; beside other actions its Cancel stays: one conflict, 'The destination already has a file named "report.png"' (a folder: 'a folder named'); several, "The destination has 3 files with the same names". Under it three command rows, flat buttons at least 32 high with padding `3 8 3 16`, radius 4, a 20 px glyph 8 from 15 px text: Fluent `checkmark_20` in `@ox_success` with "Replace the file in the destination" / "Replace the files in the destination", `arrow_undo_20` in `@ox_accent` with "Skip this file" / "Skip these files", `document_copy_20` in `@ox_accent` with "Compare info for both files" / "Let me decide for each file". Nothing is focused and no focus ring shows when it asks; Tab reaches the rows. A folder meeting a folder of its name merges without asking; only the files inside with taken names count. | Wording, rows and glyph colours: Windows 11 screenshots (private, not in the repository). Conflicts at the end of the job and the three choices: B8-COPY (the Windows team's replies: "conflicts are all queued to the end of the copy job"; "replace, skip or choose"). Silent merge: Folder Options' "Hide folder merge conflicts", on by default. Sizes: not a source. |
+| Not enough space | When the destination's drive is full, before the copy (the free-space check) or during it, the action asks in place of its bar and details, as Windows does, and the window shows at once, titled "1 Interrupted Action" while it has that one action: line 2 says "There is not enough space on USB Drive." (the drive's mount name, "Local Disk" for the system's own), then "4.4 GB is needed to copy this item. Delete or move files so you have enough space.", the drive's "Space free" and "Total size" in `@ox_muted`, and Try Again (accent) and Cancel, right-aligned, 26 high. No Skip, as in Windows. | Wording: Windows 11 screenshots (private, not in the repository). Sizes: not a source. |
+
+#### Failed-item questions
+
+When an item fails for a reason other than a name conflict (OPS-047), a
+dialog over the browsing window asks in Windows 11's words. Source:
+`src/window/file_ops/failure_dialog.rs`.
+
+| Cause | Caption | Text | Buttons |
+|---|---|---|---|
+| Permission | File Access Denied (Folder Access Denied) | You need permission to perform this action | Try Again, Skip, Cancel |
+| Destination folder not writable | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder ("move to") | Try Again, Skip, Cancel (Windows' Continue needs an administrator path a running copy does not have) |
+| Busy (EBUSY, ETXTBSY) | File In Use (Folder In Use) | The action can't be completed because the file is open in another program; Close the file and try again. | Try Again, Skip, Cancel |
+| Gone | Item Not Found | Could not find this item; This is no longer located in <folder>. Verify the item's location and try again. | Try Again, Skip, Cancel |
+| Anything else | Interrupted Action | An unexpected error is keeping you from copying the file. …; the system's error | Try Again, Skip, Cancel |
+
+The caption is the dialog's heading (the app's dialogs draw no title bar),
+and the text under it starts with Windows' main instruction. Under the
+text, the item: its 48 px icon, its name, then "Type:", "Size:"
+and "Date modified:" for a file or "Date created:" for a folder (the
+destination folder for Destination Folder Access Denied). "Do this for all
+current items" shows while other items remain; with it, Skip skips every
+later failure. Try Again is the accent button and has the focus; Escape
+and closing are Cancel. Nothing is reported afterwards about the failures
+answered here.
 
 The graph's pixels are computed in Rust (`render` in
 `speed_graph.rs`) at the device's scale and shown as a texture in a
