@@ -18,6 +18,7 @@ use ox_core::ops::{
 };
 
 use super::extension_confirm::changes_extension;
+use super::rename::has_no_extension;
 use super::running::FinishedOperation;
 use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
@@ -44,7 +45,9 @@ impl BrowserWindow {
             .map(|entry| BatchItem {
                 uri: entry.uri.clone(),
                 name: entry.name.clone(),
-                is_dir: entry.is_dir,
+                // A shortcut's name, like a folder's, has no extension:
+                // Windows numbers it whole and keeps its hidden `.lnk`.
+                is_dir: has_no_extension(entry),
             })
             .collect();
         let message = ox_core::i18n::format_message(
