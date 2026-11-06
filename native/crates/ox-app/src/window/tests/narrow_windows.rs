@@ -11,7 +11,7 @@ use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 
 /// Resizes the window to `width` pixels and waits until it is laid out.
-fn resize(test: &TestWindow, width: i32) {
+pub(super) fn resize(test: &TestWindow, width: i32) {
     test.window.set_default_size(width, 720);
     wait_until("the new width", || (test.window.width() - width).abs() <= 8);
     wait_for_frames(&test.window, 3);
