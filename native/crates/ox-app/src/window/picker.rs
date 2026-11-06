@@ -3651,6 +3651,11 @@ mod tests {
         let position = test.position_of(name);
         let pane = test.window.folder_pane();
         pane.focus_view();
+        // The list binds its rows on a layout frame, which settle() does
+        // not wait for.
+        wait_until("the item on screen", || {
+            pane.owners().widget_at(position).is_some()
+        });
         let cell = pane.owners().widget_at(position).expect("the item is on screen");
         cell.activate_action("list.select-item", Some(&(position, toggle, range).to_variant()))
             .expect("an item can be selected");
