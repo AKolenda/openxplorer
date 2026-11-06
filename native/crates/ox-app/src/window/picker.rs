@@ -3673,6 +3673,58 @@ mod tests {
             selection_blue(&name) > 100,
             "the selection shows again with the keyboard"
         );
+        // The blue is the selection's, not the focused box's underline.
+        name.select_region(0, 0);
+        settle();
+        let underline = selection_blue(&name);
+        assert!(
+            focused > underline + 100,
+            "the selection draws more than the underline ({focused} against {underline})"
+        );
+    }
+
+    /// Resizing the dialog across every layout width, as a window manager
+    /// does when it places the dialog, leaves the keyboard in File name
+    /// and the name selected, with files appearing meanwhile.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn resizing_the_save_dialog_leaves_the_keyboard_in_the_name_box() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        let mut bands = Vec::new();
+        for (step, width) in [1300, 1100, 1000, 900, 640, 1300, 980].into_iter().enumerate() {
+            window.set_default_size(width, 640);
+            wait_a_while(std::time::Duration::from_millis(200));
+            let band = window.window_width();
+            if !bands.contains(&band) {
+                bands.push(band);
+            }
+            if step == 3 {
+                create_elsewhere(test, &fixture, "gamma.txt");
+            }
+            assert!(
+                window.focus_is_in_picker_name(),
+                "the keyboard stays in File name at {width} pixels, not on {:?}",
+                GtkWindowExt::focus(window).map(|focus| focus.type_())
+            );
+            assert_eq!(name.selection_bounds(), Some((0, 4)), "at {width} pixels");
+        }
+        assert_eq!(bands.len(), 5, "the dialog went through every width: {bands:?}");
     }
 
     /// A file another application creates in the folder lists it, as
