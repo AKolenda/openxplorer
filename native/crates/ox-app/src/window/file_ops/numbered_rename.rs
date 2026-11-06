@@ -24,8 +24,8 @@ use ox_core::location::parent_location;
 use ox_core::ops::{rename_numbered_items, summarize_batch_rename, BatchItem, NumberedRename};
 
 use super::extension_confirm::changes_extension;
-use super::name_dialog::{ask_for_name, NameRequest, NameSelection};
-use super::rename::NOT_RENAMED;
+use super::name_dialog::{ask_for_name, NameRequest};
+use super::rename::{name_selection, NOT_RENAMED};
 use super::running::FinishedOperation;
 use crate::window::BrowserWindow;
 
@@ -55,11 +55,7 @@ impl BrowserWindow {
     /// `edited`'s name, then renames them all: the edited item's cell is
     /// not on screen.
     pub(super) async fn rename_numbered_with_dialog(&self, entries: &[Entry], edited: &Entry) {
-        let selection = if edited.is_dir {
-            NameSelection::Whole
-        } else {
-            NameSelection::Stem
-        };
+        let selection = name_selection(edited);
         let folder = parent_location(&edited.uri).unwrap_or_default();
         let request = NameRequest {
             title: "Rename",

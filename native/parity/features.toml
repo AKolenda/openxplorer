@@ -6884,7 +6884,7 @@ native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_
 id = "OPS-010"
 area = "OPS"
 title = "Rename inline with the base name selected"
-behaviour = "F2 on one item edits its name in place. For files the name without its extension is pre-selected (the last dot is used for unknown extensions); for folders the whole name is. Enter or moving focus away commits; Escape cancels. Left and Right collapse the selection to its start or end, and Home and End jump."
+behaviour = "F2 on one item edits its name in place. For files the name without its extension is pre-selected (the last dot is used for unknown extensions); for folders the whole name is. As in Windows 11, a shortcut (a symbolic link named like \"Report.txt - Shortcut\") has its whole name selected, since Windows hides its .lnk, and with extensions hidden the whole visible name is selected. Enter or moving focus away commits; Escape cancels. Left and Right collapse the selection to its start or end, and Home and End jump."
 origin = ["dolphin"]
 priority = "must"
 openxplorer = "partial"
@@ -6902,7 +6902,7 @@ python_tests = ["v2.0.0:desktop/tests/ui_type_select.py::Rename text is not inte
 bridge = ["rename"]
 dolphin = "renamefile: F2 (RenameInline default true)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try); native/crates/ox-app/src/window/file_ops/name_dialog.rs (rename_selects_the_name_before_its_last_extension); native/crates/ox-app/src/window/tests/renaming.rs (the_name_fields_own_menu_keeps_the_rename_going). The field is a GtkEntry in the row or tile: Enter or leaving it commits, Escape cancels, and the arrow, Home and End keys are the entry's own. The field's own right-click menu and switching to another window keep the rename going: a focus leave commits only once the keyboard is outside the field."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try); native/crates/ox-app/src/window/file_ops/name_dialog.rs (rename_selects_the_name_before_its_last_extension); native/crates/ox-app/src/window/file_ops/rename.rs (rename_selects_a_files_name_before_its_extension_and_all_of_a_shortcut); native/crates/ox-app/src/window/tests/renaming.rs (the_name_fields_own_menu_keeps_the_rename_going, rename_selects_the_name_windows_selects_with_extensions_shown_and_hidden). Renaming a shortcut never asks about changing its extension, as Explorer keeps the hidden .lnk. The field is a GtkEntry in the row or tile: Enter or leaving it commits, Escape cancels, and the arrow, Home and End keys are the entry's own. The field's own right-click menu and switching to another window keep the rename going: a focus leave commits only once the keyboard is outside the field."
 
 [[feature]]
 id = "OPS-011"

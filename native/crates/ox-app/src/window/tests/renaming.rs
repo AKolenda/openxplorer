@@ -437,3 +437,80 @@ fn the_rename_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
         Some("A name starting with a dot hides the item.")
     );
 }
+
+/// What F2 shows and selects of each name, as Windows 11 does: a file's
+/// name before its last extension, and the whole name of a shortcut (a
+/// symbolic link named as Explorer names one, whose `.lnk` Windows
+/// hides), a folder, a name with no extension and a name that starts
+/// with its only dot. With extensions hidden, the field shows the name
+/// without its extension and all of it is selected.
+///
+/// parity: OPS-010, VIEW-069
+#[gtk::test]
+fn rename_selects_the_name_windows_selects_with_extensions_shown_and_hidden() {
+    let fixture = Fixture::empty();
+    for name in ["Report.txt", "archive.tar.gz", "my.notes.txt", ".hidden"] {
+        fixture.write(name);
+    }
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    std::fs::create_dir(fixture.path("v1.2 release")).expect("the folder is made");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("hidden", None);
+    wait_until("the hidden file to be listed", || {
+        test.names().contains(&".hidden".to_owned())
+    });
+    let shown_and_selected = |name: &str| {
+        select_names(&test, &[name]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        let selected = field.selection_bounds();
+        let shown = field.text().to_string();
+        press_in(&field, gdk::Key::Escape, gdk::ModifierType::empty());
+        wait_until("the rename to end", || !is_renaming_in_place(&test));
+        (shown, selected)
+    };
+    let cases_hidden = [
+        ("Report.txt - Shortcut", "Report.txt - Shortcut", 21),
+        ("archive.tar.gz", "archive.tar", 11),
+        ("my.notes.txt", "my.notes", 8),
+        ("v1.2 release", "v1.2 release", 12),
+        (".hidden", ".hidden", 7),
+    ];
+    for (name, shown, selected) in cases_hidden {
+        assert_eq!(
+            shown_and_selected(name),
+            (shown.to_owned(), Some((0, selected))),
+            "{name}, extensions hidden"
+        );
+    }
+
+    super::support::show_file_name_extensions(&test);
+    let cases_shown = [
+        ("Report.txt - Shortcut", 21),
+        ("archive.tar.gz", 11),
+        ("my.notes.txt", 8),
+        ("v1.2 release", 12),
+        (".hidden", 7),
+    ];
+    for (name, selected) in cases_shown {
+        assert_eq!(
+            shown_and_selected(name),
+            (name.to_owned(), Some((0, selected))),
+            "{name}, extensions shown"
+        );
+    }
+
+    // A shortcut's name has no extension to change: typing over all of
+    // it renames it without asking, as Explorer does.
+    select_names(&test, &["Report.txt - Shortcut"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    field.set_text("Q3 figures");
+    field.emit_activate();
+    wait_until("the shortcut to be renamed", || {
+        test.selected_names() == ["Q3 figures"]
+    });
+    assert!(dialog_over(&test).is_none(), "no question about the extension");
+    assert!(fixture.path("Q3 figures").is_symlink());
+}
