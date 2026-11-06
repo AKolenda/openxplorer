@@ -29,7 +29,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::location::{require_item_uri, LocationContext, LocationError};
+use crate::location::{breaks_a_line, require_item_uri, LocationContext, LocationError};
 
 pub use decode::{decode, FileListFormat};
 
@@ -249,8 +249,8 @@ impl ClipboardFiles {
     }
 
     /// Encodes the formats for a single system-clipboard owner: the four
-    /// file-list formats, and [`TEXT`] when every item's address is one
-    /// line.
+    /// file-list formats, and [`TEXT`] when every item's address is one line
+    /// and the whole of it fits a paste.
     ///
     /// A consumed, empty selection has no file formats and should clear the
     /// clipboard instead of publishing an invalid empty file list.
@@ -273,10 +273,19 @@ impl ClipboardFiles {
             },
         ];
         if let Some(text) = self.text(locations) {
-            payloads.push(ClipboardPayload {
-                mime_type: TEXT,
-                bytes: text.into_bytes(),
-            });
+            // A selection this app made was measured by ClipboardFiles::new,
+            // but one decoded from another owner was not, and the move that
+            // consumes a cut republishes what is left with the labels of this
+            // moment: a phone's label alone can make 100,000 short addresses
+            // into more text than a paste reads. Publishing that would
+            // advertise a format no paste accepts, so the text is left out
+            // and the file formats still name every item.
+            if text.len() <= MAX_BYTES {
+                payloads.push(ClipboardPayload {
+                    mime_type: TEXT,
+                    bytes: text.into_bytes(),
+                });
+            }
         }
         payloads.push(ClipboardPayload {
             mime_type: KDE_CUT,
@@ -289,21 +298,22 @@ impl ClipboardFiles {
     /// unquoted, without a trailing newline, as GTK's file-list text
     /// serializer writes them; `None` when there is no such payload.
     ///
-    /// Safety rule (one line per item): an address holding a control
-    /// character is no line, so the selection publishes no text rather than
+    /// Safety rule (one line per item): an address holding a character that
+    /// ends a line is no line, so the selection publishes no text rather than
     /// a payload whose lines are not items, which a terminal would paste as
-    /// more than was copied. No URI can bring one, since
-    /// [`require_item_uri`] refuses an encoded control character: only a
-    /// device's label can, and the app cleans a label as it reads it. This is
-    /// the guard behind the public `devices` field that keeps such a name
-    /// from ever becoming a second line.
+    /// more than was copied. A control character is one, and so is U+2028 or
+    /// U+2029 ([`breaks_a_line`]), which an editor honours as a line break.
+    /// No URI can bring a control character, since [`require_item_uri`]
+    /// refuses an encoded one; a device's label could, and the app cleans a
+    /// label as it reads it. This is the guard behind the public `devices`
+    /// field that keeps such a name from ever becoming a second line.
     fn text(&self, locations: &LocationContext) -> Option<String> {
         let lines: Vec<String> = self
             .uris
             .iter()
             .map(|uri| locations.copied_location(uri))
             .collect();
-        if lines.iter().any(|line| line.chars().any(char::is_control)) {
+        if lines.iter().any(|line| line.chars().any(breaks_a_line)) {
             return None;
         }
         Some(lines.join("\n"))

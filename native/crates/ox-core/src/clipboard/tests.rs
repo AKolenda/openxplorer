@@ -3,6 +3,8 @@
 //! `v2.0.0:desktop/tests/test_file_clipboard_interop.py` and the `ClipboardTests`
 //! in `v2.0.0:desktop/tests/test_v05.py`.
 
+use std::fmt::Write as _;
+
 use super::*;
 use crate::location::DeviceLabel;
 
@@ -480,9 +482,10 @@ fn share_and_device_roots_are_refused_before_any_text_is_published() {
     }
 }
 
-/// An address holding a control character is no line: the selection then
-/// publishes no text at all, and the four file formats still name the item
-/// exactly. A terminal pasting two lines would run the second as a command.
+/// An address holding a character that ends a line is no line: the selection
+/// then publishes no text at all, and the four file formats still name the
+/// item exactly. A terminal pasting two lines would run the second as a
+/// command.
 ///
 /// Only a device's label can reach this, since `require_item_uri` refuses a
 /// URI carrying an encoded control character; the app also cleans a label as
@@ -491,28 +494,68 @@ fn share_and_device_roots_are_refused_before_any_text_is_published() {
 ///
 /// parity: CLIP-004
 #[test]
-fn a_label_holding_a_line_break_publishes_no_text() {
-    // A phone that names itself "Pixel\n7" would make the path two lines.
+fn a_label_holding_a_line_break_or_a_unicode_separator_publishes_no_text() {
+    // A phone that names itself "Pixel\n7", "Pixel\u{2028}7" or "Pixel\u{0085}7"
+    // would make the path two lines for a terminal, for an editor that honours
+    // Unicode separators, or for one that honours NEL, though only the first is
+    // a C0 control.
+    for label in ["Pixel\n7", "Pixel\u{2028}7", "Pixel\u{2029}7", "Pixel\u{85}7"] {
+        let locations = LocationContext {
+            devices: vec![DeviceLabel {
+                uri: "mtp://[usb:001,010]/".to_owned(),
+                label: label.to_owned(),
+            }],
+            ..LocationContext::default()
+        };
+
+        let uris = vec!["mtp://[usb:001,010]/Internal%20storage/DCIM".to_owned()];
+        let files = ClipboardFiles::new(ClipboardMode::Copy, &uris, &locations).expect("a valid item");
+
+        let published: Vec<&str> = files
+            .encode(&locations)
+            .into_iter()
+            .map(|payload| payload.mime_type)
+            .collect();
+        assert_eq!(
+            published,
+            vec![CUSTOM, GNOME, URI_LIST, KDE_CUT],
+            "no text for {label:?}, but every file format"
+        );
+    }
+}
+
+/// A file list read from another owner was never measured against
+/// [`MAX_BYTES`], and a device label can make its paths longer than its
+/// addresses: republishing it (a move that consumes part of a cut does) leaves
+/// the text out rather than advertising a payload no paste would read.
+///
+/// parity: CLIP-004
+#[test]
+fn text_a_label_makes_too_large_is_left_out_of_a_republished_cut() {
+    let label = "P".repeat(400);
     let locations = LocationContext {
         devices: vec![DeviceLabel {
             uri: "mtp://[usb:001,010]/".to_owned(),
-            label: "Pixel\n7".to_owned(),
+            label,
         }],
         ..LocationContext::default()
     };
+    let mut incoming = String::new();
+    for number in 0..MAX_ITEMS {
+        write!(incoming, "mtp://[usb:001,010]/DCIM{number}\r\n").expect("a string takes the write");
+    }
+    let incoming = decode(uri_list(None), incoming.as_bytes()).expect("an external cut");
 
-    let uris = vec!["mtp://[usb:001,010]/Internal%20storage/DCIM".to_owned()];
-    let files = ClipboardFiles::new(ClipboardMode::Copy, &uris, &locations).expect("a valid item");
-
-    let published: Vec<&str> = files
+    let published: Vec<&str> = incoming
         .encode(&locations)
         .into_iter()
         .map(|payload| payload.mime_type)
         .collect();
+
     assert_eq!(
         published,
         vec![CUSTOM, GNOME, URI_LIST, KDE_CUT],
-        "no text, but every file format"
+        "the same items without a text payload over the size a paste reads"
     );
 }
 

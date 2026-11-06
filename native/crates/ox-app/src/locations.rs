@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use ox_core::location::{DeviceLabel, LocationContext, VirtualPlace};
+use ox_core::location::{without_line_breaks, DeviceLabel, LocationContext, VirtualPlace};
 
 use crate::icons::Icon;
 use crate::volumes::{VolumeKind, VolumeRow};
@@ -133,35 +133,20 @@ pub(crate) fn location_context(home: PathBuf, volumes: &[VolumeRow]) -> Location
 
 /// The label of a mounted phone, camera or iOS device; `None` for drives
 /// and for devices that still have to be mounted.
-fn device_label(row: &VolumeRow) -> Option<DeviceLabel> {
-    if row.kind != VolumeKind::Device {
-        return None;
-    }
-    let uri = row.uri()?.to_owned();
-    let label = clean_label(&row.label);
-    Some(DeviceLabel { uri, label })
-}
-
-/// `label` without the control characters a device is free to report.
 ///
 /// A phone, camera or iOS device names itself, so the name is data from
 /// outside this computer, and it reaches the navigation pane, the address
 /// bar, Copy as path and the paths Copy publishes as text. A name holding a
 /// line break or an escape character would draw as two rows or reach a
-/// terminal's escape parsing, so such a character becomes U+FFFD, which is
-/// what a name this font cannot draw shows as too. Everything else is kept
-/// as the device wrote it.
-fn clean_label(label: &str) -> String {
-    label
-        .chars()
-        .map(|character| {
-            if character.is_control() {
-                '\u{FFFD}'
-            } else {
-                character
-            }
-        })
-        .collect()
+/// terminal's escape parsing, so such a character becomes U+FFFD
+/// ([`without_line_breaks`]); everything else is kept as the device wrote it.
+fn device_label(row: &VolumeRow) -> Option<DeviceLabel> {
+    if row.kind != VolumeKind::Device {
+        return None;
+    }
+    let uri = row.uri()?.to_owned();
+    let label = without_line_breaks(&row.label);
+    Some(DeviceLabel { uri, label })
 }
 
 #[cfg(test)]
@@ -208,7 +193,7 @@ mod tests {
     #[test]
     fn a_device_label_loses_the_control_characters_it_reports() {
         let mount = MountFacts {
-            name: "Pixel\n7\u{1b}[31m".into(),
+            name: "Pixel\n7\u{1b}[31m\u{2028}9".into(),
             root_uri: "mtp://[usb:001,010]/".into(),
             shadowed: false,
             controls: MountControls::UNMOUNTABLE,
@@ -217,11 +202,11 @@ mod tests {
 
         assert_eq!(
             context.device_name(PHONE_FOLDER),
-            "Pixel\u{FFFD}7\u{FFFD}[31m",
-            "the name is shown as one line, and its escape is no escape"
+            "Pixel\u{FFFD}7\u{FFFD}[31m\u{FFFD}9",
+            "the name is shown as one line: a control, an escape and a Unicode separator all go"
         );
         assert_eq!(
-            clean_label("Pixel 7"),
+            without_line_breaks("Pixel 7"),
             "Pixel 7",
             "an ordinary name is kept whole"
         );
