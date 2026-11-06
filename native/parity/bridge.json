@@ -209,14 +209,14 @@
     },
     "clipboardGet": {
       "status": "native-tested",
-      "note": "Validated GNOME/KDE/custom formats and cut identity tested. Native: The window reads the display clipboard asynchronously in format order, again when it changes and when the window becomes active; plain text is no file list.",
+      "note": "Validated GNOME/KDE/custom formats and cut identity tested. Native: The window reads the display clipboard asynchronously in format order (files, then an image, then text), again when it changes and when the window becomes active; plain text is no file list.",
       "evidence": [
         "native/crates/ox-core/src/clipboard/tests.rs::kde_requires_an_exact_short_cut_marker",
         "native/crates/ox-core/src/clipboard/tests.rs::uri_list_discards_comments_and_deduplicates_canonical_addresses",
         "native/crates/ox-core/src/clipboard/tests.rs::invalid_external_payloads_fail_closed",
         "native/crates/ox-core/src/clipboard/tests.rs::external_fingerprint_matches_the_python_clipboard",
         "native/crates/ox-core/src/clipboard/tests.rs::legacy_line_endings_do_not_drop_valid_selections",
-        "native/crates/ox-app/src/window/tests/clipboard.rs::text_on_the_clipboard_is_no_file_list_and_disables_paste",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::text_on_the_clipboard_is_no_file_list_but_stays_pasteable",
         "native/crates/ox-app/src/window/tests/clipboard.rs::a_cut_from_dolphin_pastes_as_a_move",
         "native/crates/ox-app/src/window/tests/clipboard_interop.rs::a_conversion_the_owner_refuses_is_no_file_list",
         "native/crates/ox-app/src/window/tests/clipboard_interop.rs::a_read_overtaken_by_an_owner_change_is_dropped"

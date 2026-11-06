@@ -124,15 +124,23 @@ fn cut_then_paste_moves_the_items_and_empties_the_cut() {
     });
 }
 
-/// parity: CLIP-005, CLIP-009, CLIP-016
+/// A path copied as text is never a file list, so the item it names is not
+/// copied; the text itself is pasted as one new file instead (CLIP-015,
+/// which `clipboard_interop` proves in full), so Paste stays enabled.
+///
+/// parity: CLIP-005, CLIP-009, CLIP-015, CLIP-016
 #[gtk::test]
-fn text_on_the_clipboard_is_no_file_list_and_disables_paste() {
+fn text_on_the_clipboard_is_no_file_list_but_stays_pasteable() {
     let fixture = Fixture::standard();
     let test = clipboard_then_documents(&fixture, "copy", &["Notes 2.txt"]);
 
     test.window.clipboard().set_text(&fixture.uri_of("Notes 10.txt"));
 
-    wait_until("Paste to be disabled", || !is_enabled(&test, "paste"));
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    assert!(
+        !fixture.path("Documents/Notes 10.txt").exists(),
+        "text is never read as a file list"
+    );
 }
 
 /// Pasting a copy into the folder it came from makes "Notes 2 - Copy.txt"

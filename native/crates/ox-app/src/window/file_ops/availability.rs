@@ -15,8 +15,9 @@
 //!   takes several: F2 gives them one numbered name, as Windows Explorer
 //!   does (OPS-050), and Rename items… (the same command) opens the batch
 //!   rename (OPS-014).
-//! - Paste: a file clipboard, no search, no operation, every selected item
-//!   operable, and a writable folder.
+//! - Paste: a file clipboard, or text or an image to write as one new file
+//!   (CLIP-015), no search, no operation, every selected item operable, and
+//!   a writable folder.
 //! - New: no search, no operation, and a writable folder.
 //!
 //! The commands the Python app did not have follow the nearest rule:
@@ -34,6 +35,8 @@ use crate::folder_view::item::FileItem;
 use crate::window::command_bar::RestoreTarget;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
+
+use super::ClipboardKind;
 
 /// A command whose enabled state these rules decide.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,10 +159,6 @@ pub(crate) struct FolderFacts {
 
 /// Everything the rules read.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "each flag is one independent fact that updateToolbar reads, not a state"
-)]
 pub(crate) struct CommandFacts {
     /// The selection.
     pub(crate) selection: SelectionFacts,
@@ -167,8 +166,9 @@ pub(crate) struct CommandFacts {
     pub(crate) folder: FolderFacts,
     /// An operation runs or a paste is being planned (`state.operation`).
     pub(crate) is_busy: bool,
-    /// The desktop's clipboard holds files (`state.clipboard`).
-    pub(crate) has_file_clipboard: bool,
+    /// What the desktop's clipboard holds: files, text, an image or
+    /// nothing (`state.clipboard`, CLIP-009, CLIP-015).
+    pub(crate) clipboard: ClipboardKind,
     /// Undo has something to reverse.
     pub(crate) can_undo: bool,
     /// Redo has something to take back.
@@ -193,13 +193,13 @@ impl CommandFacts {
             }
             FileCommand::Delete | FileCommand::DeletePermanently => can_change,
             FileCommand::Paste => {
-                self.has_file_clipboard && !folder.is_searching && !busy && folder.is_writable
+                self.clipboard.is_pasteable() && !folder.is_searching && !busy && folder.is_writable
             }
             // The selected folder is the destination, so a search does not
             // matter; whether it takes items is checked when pasting.
             FileCommand::PasteInto => {
                 let is_one_item = selection.count == 1 && !selection.has_read_only;
-                self.has_file_clipboard && !busy && !folder.is_recycle_bin && is_one_item
+                self.clipboard.is_pasteable() && !busy && !folder.is_recycle_bin && is_one_item
             }
             FileCommand::Undo => self.can_undo && !self.is_busy,
             FileCommand::Redo => self.can_redo && !self.is_busy,
@@ -223,7 +223,12 @@ impl CommandFacts {
             FileCommand::CancelOperation => ox_core::i18n::gettext_static("No file operation is running."),
             FileCommand::Undo if !self.can_undo => ox_core::i18n::gettext_static("Nothing to undo."),
             FileCommand::Redo if !self.can_redo => ox_core::i18n::gettext_static("Nothing to redo."),
-            FileCommand::Paste | FileCommand::PasteInto if !self.has_file_clipboard => {
+            // Text and an image are pasted as a file, which is why only
+            // an empty clipboard has nothing to paste (CLIP-015).
+            FileCommand::Paste | FileCommand::PasteInto if self.clipboard == ClipboardKind::TooLarge => {
+                ox_core::i18n::gettext_static(ox_core::clipboard::TOO_LARGE_TO_PASTE)
+            }
+            FileCommand::Paste | FileCommand::PasteInto if !self.clipboard.is_pasteable() => {
                 ox_core::i18n::gettext_static("Nothing to paste here.")
             }
             FileCommand::Restore | FileCommand::RestoreAll if !folder.is_recycle_bin => {
@@ -338,7 +343,7 @@ impl BrowserWindow {
             selection: selection_facts(&model.selected_items(), &locations),
             folder,
             is_busy: operations.is_busy(),
-            has_file_clipboard: operations.clipboard.is_some(),
+            clipboard: operations.clipboard,
             can_undo: context.journal_label(JournalDirection::Undo).is_some(),
             can_redo: context.journal_label(JournalDirection::Redo).is_some(),
         }
@@ -400,7 +405,7 @@ mod tests {
                 has_items: true,
                 ..FolderFacts::default()
             },
-            has_file_clipboard: true,
+            clipboard: ClipboardKind::Files,
             ..CommandFacts::default()
         }
     }
@@ -521,12 +526,39 @@ mod tests {
         assert!(enabled(&read_only_folder).is_empty());
     }
 
+    /// Text and an image are pasted as one new file, so they enable Paste
+    /// as a file list does; only an empty clipboard has nothing to write.
+    ///
+    /// parity: CLIP-015, CLIP-016
     #[test]
-    fn paste_needs_files_on_the_clipboard() {
+    fn paste_needs_files_text_or_an_image_on_the_clipboard() {
         let mut facts = selected(0);
-        facts.has_file_clipboard = false;
+        facts.clipboard = ClipboardKind::Empty;
 
         assert!(!facts.allows(FileCommand::Paste));
+        assert!(!facts.allows(FileCommand::PasteInto));
+        assert_eq!(facts.refusal(FileCommand::Paste), Some("Nothing to paste here."));
+        for kind in [ClipboardKind::Files, ClipboardKind::Text, ClipboardKind::Image] {
+            let mut holds = selected(0);
+            holds.clipboard = kind;
+            assert!(holds.allows(FileCommand::Paste), "{kind:?}");
+        }
+    }
+
+    /// A clipboard past the size the app accepts refuses Paste in its own
+    /// words, so a Ctrl+V that does nothing says why.
+    ///
+    /// parity: CLIP-015
+    #[test]
+    fn a_clipboard_over_the_size_limit_says_why_paste_is_off() {
+        let mut facts = selected(0);
+        facts.clipboard = ClipboardKind::TooLarge;
+
+        assert!(!facts.allows(FileCommand::Paste));
+        assert_eq!(
+            facts.refusal(FileCommand::Paste),
+            Some(ox_core::clipboard::TOO_LARGE_TO_PASTE)
+        );
     }
 
     /// parity: OPS-029, OPS-031

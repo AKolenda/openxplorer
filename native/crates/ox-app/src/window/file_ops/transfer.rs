@@ -3,7 +3,9 @@
 //! name-conflict check (CLIP-003, OPS-026, OPS-027, OPS-028, OPS-036).
 //!
 //! Ports `paste` and `transferWithConflicts` of `v2.0.0:desktop/ui/app.js`.
-//! Paste reads the desktop's clipboard again first. The copy or move then
+//! Paste reads the desktop's clipboard again first: its file list is
+//! copied or moved, and its text or an image is written as one new file
+//! (CLIP-015, [`BrowserWindow::paste_clipboard_data`]). The copy or move then
 //! takes its action in the progress window, and before anything is
 //! copied, the destination is checked for every incoming name, inside the
 //! folders it merges into too ([`scan_name_conflicts`]); without a
@@ -22,7 +24,7 @@
 //! window. After a move, the moved items leave a cut clipboard.
 
 use gtk::subclass::prelude::*;
-use ox_core::clipboard::{ClipboardFiles, ClipboardMode};
+use ox_core::clipboard::{ClipboardFiles, ClipboardMode, TOO_LARGE_TO_PASTE};
 use ox_core::location::{parent_location, same_location};
 use ox_core::ops::{
     run_answered_items, run_free_items, run_resolved_transfer, scan_name_conflicts, starting_label,
@@ -32,6 +34,7 @@ use ox_core::transfer::{Cancellation, TransferMode};
 
 use super::running::FinishedOperation;
 use super::unfinished::mark_unfinished;
+use super::ClipboardContent;
 use crate::dialog;
 use crate::search::changed_folders;
 use crate::window::transfer_panel::{Action, Verb};
@@ -67,11 +70,12 @@ impl IncomingItems {
 }
 
 impl BrowserWindow {
-    /// Paste: reads the clipboard, then copies or moves its items into
-    /// `into`, a selected folder (Dolphin's "Paste into folder", CMD-019),
-    /// or without one into the folder shown (`paste`).
+    /// Paste: reads the clipboard, then copies or moves its items, or
+    /// writes its text or image as one new file (CLIP-015), into `into`, a
+    /// selected folder (Dolphin's "Paste into folder", CMD-019), or
+    /// without one into the folder shown (`paste`).
     pub(crate) async fn paste(&self, into: Option<String>) {
-        let clipboard = self.refresh_file_clipboard().await;
+        let content = self.refresh_file_clipboard().await;
         if into.is_none() && self.is_searching() {
             self.show_message(ox_core::i18n::gettext_static(
                 "Open the destination folder before pasting.",
@@ -87,29 +91,50 @@ impl BrowserWindow {
         let Some(destination_folder) = into.or_else(|| self.current_uri()) else {
             return;
         };
-        self.paste_files(clipboard, destination_folder).await;
+        self.paste_content(content, destination_folder).await;
     }
 
     /// Paste into the folder at `uri`, from the folder tree's menu
     /// (SIDE-028), as Dolphin's "Paste" on a folder pastes into it.
     pub(crate) async fn paste_into(&self, uri: &str) {
-        let clipboard = self.refresh_file_clipboard().await;
-        self.paste_files(clipboard, uri.to_owned()).await;
+        let content = self.refresh_file_clipboard().await;
+        self.paste_content(content, uri.to_owned()).await;
+    }
+
+    /// Puts what the clipboard holds into `destination_folder`: a file
+    /// list is copied or moved item by item, and text or an image becomes
+    /// one new file (CLIP-015).
+    async fn paste_content(&self, content: ClipboardContent, destination_folder: String) {
+        match content {
+            // An empty clipboard has nothing to write; a payload over the
+            // size the app accepts says so rather than writing half of it.
+            ClipboardContent::Nothing => {}
+            ClipboardContent::TooLarge => {
+                self.show_message(ox_core::i18n::gettext_static(TOO_LARGE_TO_PASTE));
+            }
+            ClipboardContent::Data(data) => {
+                if self.takes_pasted_items(&destination_folder) {
+                    self.paste_clipboard_data(data, destination_folder).await;
+                }
+            }
+            ClipboardContent::Files(files) => self.paste_files(files, destination_folder).await,
+        }
+    }
+
+    /// Whether `folder` takes what a paste writes, saying why not when it
+    /// is read-only.
+    fn takes_pasted_items(&self, folder: &str) -> bool {
+        if self.imp().locations.borrow().is_writable_location(folder) {
+            return true;
+        }
+        self.show_message(ox_core::i18n::gettext_static("This folder is read-only."));
+        false
     }
 
     /// Copies or moves the clipboard's `files` into `destination_folder`
     /// where it is writable.
-    async fn paste_files(&self, clipboard: Option<ClipboardFiles>, destination_folder: String) {
-        let Some(files) = clipboard else {
-            return;
-        };
-        if !self
-            .imp()
-            .locations
-            .borrow()
-            .is_writable_location(&destination_folder)
-        {
-            self.show_message(ox_core::i18n::gettext_static("This folder is read-only."));
+    async fn paste_files(&self, files: ClipboardFiles, destination_folder: String) {
+        if !self.takes_pasted_items(&destination_folder) {
             return;
         }
         let mode = match files.mode() {

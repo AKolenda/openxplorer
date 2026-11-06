@@ -19,7 +19,10 @@ const MAX_TOKEN_CHARS: usize = 80;
 /// them.
 ///
 /// Plain text is deliberately not a variant: text copied in another
-/// application is never pasted as files.
+/// application is never pasted as files. It is written as one new file
+/// instead ([`super::PastedContent`], CLIP-015), and the file list is
+/// always read first, so a selection whose copy offers its paths as text
+/// beside the file formats stays a copy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileListFormat<'a> {
     /// [`CUSTOM`]: JSON with mode, URIs and owner token.

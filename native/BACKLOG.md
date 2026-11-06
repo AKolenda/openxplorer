@@ -183,12 +183,6 @@ baseline and GNOME integration. Priority is from the inventory.
 |---|---|---|---|
 | XFER-027 | todo | could | Resume interrupted copies |
 
-#### CLIP: Clipboard (1)
-
-| ID | Status | Priority | Behaviour |
-|---|---|---|---|
-| CLIP-015 | todo | could | Paste text or an image as a new file |
-
 #### DND: Drag and drop (3)
 
 | ID | Status | Priority | Behaviour |
