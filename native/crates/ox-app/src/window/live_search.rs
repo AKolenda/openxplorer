@@ -8,10 +8,10 @@ use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use ox_core::entry::Entry;
-use ox_core::search::{walk_search, LiveSearch, NamePattern, SearchError, SearchIn};
+use ox_core::search::{matches_by_contents, walk_search, LiveSearch, NamePattern, SearchError, SearchIn};
 
 use crate::folder_view::filter::Visibility;
 use crate::folder_view::item::FileItem;
@@ -79,7 +79,8 @@ impl BrowserWindow {
     /// again: its own matches that went away are removed and new ones
     /// added, in place, so the rows the walk found below it stay. A search
     /// of names and contents keeps a file it found by its text while the
-    /// file is still listed: its name alone does not match.
+    /// file is still listed, as it was: its name alone does not match. One
+    /// that changed is read again, and goes if its text no longer matches.
     pub(super) fn update_walked_listing(&self) {
         let Some(rows) = self.imp().search.borrow().results().cloned() else {
             return;
@@ -99,16 +100,21 @@ impl BrowserWindow {
             shows_hidden,
         };
         let listed = listed_name_matches(listing, &text).items;
-        let mut listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
-        if self.imp().search.borrow().search_in() == SearchIn::NamesAndContents {
-            listed_uris.extend(
+        let listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
+        // A search of contents: the folder's files as listed now, for the
+        // ones it found by their text.
+        let still_listed: HashMap<String, Entry> =
+            if self.imp().search.borrow().search_in() == SearchIn::NamesAndContents {
                 store
                     .iter::<FileItem>()
                     .filter_map(Result::ok)
                     .filter(|item| shows_hidden || item.visibility() == Visibility::Visible)
-                    .map(|item| item.entry().uri.clone()),
-            );
-        }
+                    .map(|item| (item.entry().uri.clone(), item.entry().clone()))
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+        let mut changed = Vec::new();
         let parent = gio::File::for_uri(&folder);
         for position in (0..rows.n_items()).rev() {
             let Some(item) = rows.item(position).and_downcast::<FileItem>() else {
@@ -118,10 +124,16 @@ impl BrowserWindow {
             let in_folder = gio::File::for_uri(uri)
                 .parent()
                 .is_some_and(|file| file.equal(&parent));
-            if in_folder && !listed_uris.contains(uri) {
-                rows.remove(position);
+            if !in_folder || listed_uris.contains(uri) {
+                continue;
+            }
+            match still_listed.get(uri) {
+                Some(now) if is_unchanged(item.entry(), now) => {}
+                Some(now) => changed.push(now.clone()),
+                None => rows.remove(position),
             }
         }
+        self.recheck_contents(&rows, &text, changed);
         let shown: HashSet<String> = rows
             .iter::<FileItem>()
             .filter_map(Result::ok)
@@ -134,6 +146,40 @@ impl BrowserWindow {
             .take(room)
             .collect();
         rows.extend_from_slice(&new);
+    }
+
+    /// Reads the files of `changed` again off the main thread and removes
+    /// from `rows` those whose text no longer matches `text`, unless the
+    /// search has moved on meanwhile.
+    fn recheck_contents(&self, rows: &gio::ListStore, text: &str, changed: Vec<Entry>) {
+        if changed.is_empty() {
+            return;
+        }
+        let pattern = NamePattern::new(text);
+        let check = gio::spawn_blocking(move || {
+            changed
+                .into_iter()
+                .filter(|entry| !matches_by_contents(&pattern, entry))
+                .map(|entry| entry.uri)
+                .collect::<HashSet<String>>()
+        });
+        let window = self.downgrade();
+        let rows = rows.clone();
+        glib::spawn_future_local(async move {
+            let Ok(unmatched) = check.await else { return };
+            let Some(window) = window.upgrade() else { return };
+            let is_shown = window.imp().search.borrow().results() == Some(&rows);
+            if !is_shown || unmatched.is_empty() {
+                return;
+            }
+            for position in (0..rows.n_items()).rev() {
+                let item = rows.item(position).and_downcast::<FileItem>();
+                if item.is_some_and(|item| unmatched.contains(&item.entry().uri)) {
+                    rows.remove(position);
+                }
+            }
+            window.show_search_state();
+        });
     }
 
     /// Shows the rows the walk of `run` found, or why it failed; a late
@@ -153,4 +199,10 @@ impl BrowserWindow {
         self.show_searched_items();
         self.show_search_state();
     }
+}
+
+/// Whether a file listed `now` is the one a search found as `found`: the
+/// same size and modification time.
+fn is_unchanged(found: &Entry, now: &Entry) -> bool {
+    found.size == now.size && found.modified == now.modified
 }

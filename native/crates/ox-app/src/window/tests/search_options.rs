@@ -38,32 +38,35 @@ fn names_and_contents_finds_files_by_their_text() {
 
 /// A file found by its text stays among the results when its folder is
 /// listed again, as when the folder changes while they show: its name
-/// alone does not match.
+/// alone does not match. It goes once its text no longer matches, or once
+/// it is deleted.
 ///
 /// parity: SRCH-036
 #[gtk::test]
-fn a_file_found_by_its_text_stays_when_its_folder_changes() {
+fn a_file_found_by_its_text_stays_until_its_text_changes_or_it_goes() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("minutes.txt"), "Notes from the meeting").expect("fixture file");
+    fs::write(fixture.path("agenda.txt"), "Meeting notes").expect("fixture file");
     let test = TestWindow::open(&fixture.uri());
     test.search_for("notes");
     test.window
         .search_strip()
         .choose_search_in(SearchIn::NamesAndContents);
+    let shows = |name: &str| test.names().contains(&name.to_owned());
     wait_until("the search of contents to finish", || {
-        test.names().contains(&"minutes.txt".to_owned()) && !test.status_count().starts_with("Searching")
+        shows("minutes.txt") && shows("agenda.txt") && !test.status_count().starts_with("Searching")
     });
 
     fixture.write("More notes.txt");
+    wait_until("the folder to be listed again", || shows("More notes.txt"));
+    assert!(shows("minutes.txt") && shows("agenda.txt"), "{:?}", test.names());
 
-    wait_until("the folder to be listed again", || {
-        test.names().contains(&"More notes.txt".to_owned())
-    });
-    assert!(
-        test.names().contains(&"minutes.txt".to_owned()),
-        "{:?}",
-        test.names()
-    );
+    fs::write(fixture.path("minutes.txt"), "The budget was approved.").expect("fixture file");
+    wait_until("the changed file to go", || !shows("minutes.txt"));
+    assert!(shows("agenda.txt"), "the unchanged file stays");
+
+    fs::remove_file(fixture.path("agenda.txt")).expect("fixture file");
+    wait_until("the deleted file to go", || !shows("agenda.txt"));
 }
 
 /// The kind option narrows the results at once, and ending the search
