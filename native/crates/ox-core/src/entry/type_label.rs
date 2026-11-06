@@ -83,9 +83,7 @@ fn file_type_label(content_type: Option<&str>, name: &str, desktop: Desktop) -> 
             return label;
         }
         if desktop.english && names_by_extension(content_type) {
-            if let Some(label) = extension_label(name) {
-                return label;
-            }
+            return extension_label(name).unwrap_or_else(|| crate::i18n::gettext(UNKNOWN_TYPE));
         }
         let description = gio::content_type_get_description(content_type);
         if !is_generic(content_type, &description) {
@@ -378,7 +376,10 @@ mod tests {
             );
         }
         let without_extension = file_type_label(Some("image/png"), "Beach", ENGLISH);
-        assert_eq!(without_extension, "PNG Image", "GIO's description, in Title Case");
+        assert_eq!(
+            without_extension, "File",
+            "Windows names these by extension alone"
+        );
     }
 
     /// parity: VIEW-002
