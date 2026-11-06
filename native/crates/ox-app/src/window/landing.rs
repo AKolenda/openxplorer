@@ -424,11 +424,13 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
     row.append(&chevron);
     row.append(&title);
     row.append(&line);
-    // Not a Tab stop, as in Explorer: Tab goes to the tiles, and the arrows
-    // reach the header from its group's first row ([`focus_header`]).
+    // Not a Tab stop while its group is expanded, as in Explorer: Tab goes
+    // to the tiles, and the arrows reach the header from its group's first
+    // row ([`focus_header`]). A collapsed group's header is one, so the
+    // keyboard can always come back to a page whose groups are collapsed.
     let header = gtk::Button::builder()
         .child(&row)
-        .focusable(false)
+        .focusable(collapsed)
         .css_classes(["group-header", group.header_class()])
         .build();
     header.update_state(&[gtk::accessible::State::Expanded(Some(!collapsed))]);
@@ -447,6 +449,11 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
                 page.remove_css_class(group.collapsed_class());
             }
             icons::set_icon(&chevron, chevron_of(collapse), CHEVRON);
+            if collapse {
+                header.set_focusable(true);
+            } else if !header.has_focus() {
+                header.set_focusable(false);
+            }
             header.update_state(&[gtk::accessible::State::Expanded(Some(!collapse))]);
         }
     ));
@@ -454,8 +461,8 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
     header
 }
 
-/// Gives `header` the keyboard. Headers are no Tab stops, so one takes
-/// focus only while it has it.
+/// Gives `header` the keyboard. An expanded group's header is no Tab
+/// stop, so it takes focus only while it has it.
 fn focus_header(header: &gtk::Button) {
     header.set_focusable(true);
     header.grab_focus();
@@ -528,13 +535,18 @@ fn connect_header_keys(header: &gtk::Button, tiles: &gtk::FlowBox) {
         }
     ));
     header.add_controller(keys);
-    // Out of the Tab order again once the keyboard leaves it.
+    // Out of the Tab order again once the keyboard leaves it, unless its
+    // group is collapsed.
     let focus = gtk::EventControllerFocus::new();
-    focus.connect_leave(|focus| {
-        if let Some(header) = focus.widget() {
-            header.set_focusable(false);
+    focus.connect_leave(glib::clone!(
+        #[weak]
+        tiles,
+        move |focus| {
+            if let Some(header) = focus.widget() {
+                header.set_focusable(!tiles.is_visible());
+            }
         }
-    });
+    ));
     header.add_controller(focus);
 }
 

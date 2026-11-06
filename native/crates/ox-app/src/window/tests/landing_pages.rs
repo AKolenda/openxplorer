@@ -182,6 +182,13 @@ fn the_keyboard_collapses_and_expands_a_group_from_its_header() {
     assert!(header.has_focus(), "the header has the keyboard");
     assert!(press_key(&header, gtk::gdk::Key::Left));
     assert!(!flow.is_visible(), "Left collapses the group");
+    gtk::prelude::GtkWindowExt::set_focus(&test.window, None::<&gtk::Widget>);
+    assert!(
+        header.is_focusable(),
+        "a collapsed group's header stays a Tab stop"
+    );
+    test.window.folder_pane().focus_view();
+    assert!(header.has_focus(), "the keyboard comes back to the page");
     test.window.render_places();
     let (flow, _) = landing::tile_groups(test.window.folder_pane().landing())
         .into_iter()
