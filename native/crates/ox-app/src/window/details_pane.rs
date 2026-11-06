@@ -344,7 +344,7 @@ impl DetailsPane {
         imp.title_row.set_visible(details);
         imp.small_art.set_visible(imp.small_icon.get());
         imp.hint_row.set_visible(details && hint);
-        imp.details_heading.set_visible(details && !hint);
+        self.show_heading();
         imp.properties.set_visible(details && !hint);
         self.show_share();
         imp.properties_button
@@ -444,6 +444,17 @@ impl DetailsPane {
                 self.add_property(key, ox_core::i18n::gettext_static(key), value);
             }
         }
+        self.show_heading();
+    }
+
+    /// Shows the "Details" heading over the rows, only while there is a
+    /// row under it: several items with a folder among them have none.
+    fn show_heading(&self) {
+        let imp = self.imp();
+        let details = imp.mode.get() == PaneMode::Details;
+        let has_rows = imp.properties.first_child().is_some();
+        imp.details_heading
+            .set_visible(details && !imp.shows_hint.get() && has_rows);
     }
 
     /// Adds the row `name` with `value` under the others, unless the

@@ -315,8 +315,15 @@ fn several_selected_items_are_pictured_stacked() {
     let pictures = descendants::<crate::icons::ArtImage>(&stack().expect("the stack"));
     assert_eq!(pictures.len(), 3);
     assert_eq!(pane.shown_name(), "3 items selected");
+    let heading = descendants::<gtk::Label>(pane)
+        .into_iter()
+        .find(|label| label.has_css_class("detail-section"))
+        .expect("the Details heading");
+    let has_rows = descendants::<gtk::Grid>(pane).remove(0).first_child().is_some();
+    assert_eq!(heading.is_visible(), has_rows, "no heading over no rows");
     test.select_named("Notes 2.txt");
     wait_until("one picture again", || stack().is_none());
+    assert!(heading.is_visible(), "the heading over the file's rows");
 }
 
 /// Every value of the Details rows starts at one line, right of the
