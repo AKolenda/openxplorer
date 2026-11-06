@@ -178,6 +178,17 @@ impl Group {
             Group::NetworkLocations => "network-collapsed",
         }
     }
+
+    /// The class of the group's header, which finds it again after a
+    /// redraw.
+    fn header_class(self) -> &'static str {
+        match self {
+            Group::DevicesAndDrives => "drives-header",
+            Group::NetworkLocations => "network-header",
+        }
+    }
+
+    const ALL: [Group; 2] = [Group::DevicesAndDrives, Group::NetworkLocations];
 }
 
 /// What opening a tile does: an action and its target.
@@ -214,7 +225,15 @@ impl Tile {
 /// An empty tile showing `icon` left of `name`, at the Tiles view's size,
 /// and the box of lines beside the icon, for what the tile says under the
 /// name.
-fn tile_frame(icon: &impl IsA<gtk::Widget>, name: &str, cell: CellSize) -> (gtk::FlowBoxChild, gtk::Box) {
+///
+/// The tile is named `key`, the location or volume it opens, which finds
+/// it again after a redraw ([`Kept`]).
+fn tile_frame(
+    icon: &impl IsA<gtk::Widget>,
+    name: &str,
+    key: &str,
+    cell: CellSize,
+) -> (gtk::FlowBoxChild, gtk::Box) {
     let lines = gtk::Box::new(gtk::Orientation::Vertical, 1);
     lines.set_valign(gtk::Align::Center);
     lines.set_hexpand(true);
@@ -225,7 +244,7 @@ fn tile_frame(icon: &impl IsA<gtk::Widget>, name: &str, cell: CellSize) -> (gtk:
     content.append(icon);
     content.append(&lines);
     content.set_size_request(cell.width - TILE_CHROME.0, cell.height - TILE_CHROME.1);
-    let child = gtk::FlowBoxChild::builder().child(&content).build();
+    let child = gtk::FlowBoxChild::builder().child(&content).name(key).build();
     child.update_property(&[gtk::accessible::Property::Label(name)]);
     (child, lines)
 }
@@ -236,7 +255,11 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
         VolumeKind::Device => Icon::Phone,
         VolumeKind::Drive => Icon::HardDrive,
     };
-    let (child, lines) = tile_frame(&icons::image(glyph, TILES_ICON), &row.label, cell);
+    let key = match &row.state {
+        VolumeState::Mounted { uri, .. } => uri,
+        VolumeState::Mountable { id } => id,
+    };
+    let (child, lines) = tile_frame(&icons::image(glyph, TILES_ICON), &row.label, key, cell);
     match &row.state {
         VolumeState::Mounted { uri, controls } => {
             show_capacity(&lines, uri, true);
@@ -291,7 +314,7 @@ fn share_tile(share: &SavedShare, locations: &LocationContext, cell: CellSize) -
     let uri = &share.bookmark.uri;
     let art = ArtImage::new(saved_share_art(share), TILES_ICON);
     let name = share_card_name(&share.bookmark.label, uri);
-    let (child, lines) = tile_frame(&art, &name, cell);
+    let (child, lines) = tile_frame(&art, &name, uri, cell);
     child.set_tooltip_text(Some(&locations.display_location(uri)));
     // Measuring never mounts: only a share that is mounted is asked.
     if share.is_connected {
@@ -375,7 +398,9 @@ fn header_text(title: &str, count: usize) -> String {
 }
 
 /// A group's header: a chevron, the title and count, and a line to the
-/// right edge. Clicking it collapses or expands `tiles`.
+/// right edge. Clicking it, Enter or Space collapses or expands `tiles`;
+/// with the keyboard on it, Left collapses them and Right expands them, as
+/// in Explorer ([`connect_header_keys`]).
 fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBox) -> gtk::Button {
     let collapsed = page.has_css_class(group.collapsed_class());
     let chevron_of = |collapsed: bool| {
@@ -399,12 +424,12 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
     row.append(&chevron);
     row.append(&title);
     row.append(&line);
-    // Not a Tab stop, as in Explorer: the keyboard goes to the tiles, and
-    // the arrows run on from one group into the next.
+    // Not a Tab stop, as in Explorer: Tab goes to the tiles, and the arrows
+    // reach the header from its group's first row ([`focus_header`]).
     let header = gtk::Button::builder()
         .child(&row)
         .focusable(false)
-        .css_classes(["group-header"])
+        .css_classes(["group-header", group.header_class()])
         .build();
     header.update_state(&[gtk::accessible::State::Expanded(Some(!collapsed))]);
     tiles.set_visible(!collapsed);
@@ -425,7 +450,139 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
             header.update_state(&[gtk::accessible::State::Expanded(Some(!collapse))]);
         }
     ));
+    connect_header_keys(&header, tiles);
     header
+}
+
+/// Gives `header` the keyboard. Headers are no Tab stops, so one takes
+/// focus only while it has it.
+fn focus_header(header: &gtk::Button) {
+    header.set_focusable(true);
+    header.grab_focus();
+}
+
+/// Selects `child` and gives it the keyboard, as the arrows do. The box
+/// moves its own cursor, which the arrows and Enter start from, only when
+/// the tile takes focus through its focus chain; a plain `grab_focus`
+/// would leave the cursor behind.
+fn focus_tile(child: &gtk::FlowBoxChild) {
+    child.child_focus(gtk::DirectionType::TabForward);
+}
+
+/// The first or last tile of `flow`.
+fn end_tile(flow: &gtk::FlowBox, last: bool) -> Option<gtk::FlowBoxChild> {
+    let count = super::widget_tree::children(flow).count();
+    let index = if last { count.checked_sub(1)? } else { 0 };
+    flow.child_at_index(i32::try_from(index).ok()?)
+}
+
+/// The header after `flow`, of the next group.
+fn next_header(flow: &gtk::FlowBox) -> Option<gtk::Button> {
+    flow.next_sibling().and_downcast::<gtk::Button>()
+}
+
+/// Left collapses the group and Right expands it; Down goes to its first
+/// tile, or past a collapsed group to the next header; Up goes to the
+/// previous group's last tile, or its header while it is collapsed.
+fn connect_header_keys(header: &gtk::Button, tiles: &gtk::FlowBox) {
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        header,
+        #[weak]
+        tiles,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, modifiers| {
+            if !modifiers.is_empty() {
+                return glib::Propagation::Proceed;
+            }
+            let expanded = tiles.is_visible();
+            match key {
+                gtk::gdk::Key::Left if expanded => header.emit_clicked(),
+                gtk::gdk::Key::Right if !expanded => header.emit_clicked(),
+                gtk::gdk::Key::Left | gtk::gdk::Key::Right => {}
+                gtk::gdk::Key::Down => {
+                    if let Some(first) = end_tile(&tiles, false).filter(|_| expanded) {
+                        focus_tile(&first);
+                    } else if let Some(next) = next_header(&tiles) {
+                        focus_header(&next);
+                    }
+                }
+                gtk::gdk::Key::Up => {
+                    let previous = header.prev_sibling().and_downcast::<gtk::FlowBox>();
+                    if let Some(previous) = previous {
+                        match end_tile(&previous, true).filter(|_| previous.is_visible()) {
+                            Some(last) => focus_tile(&last),
+                            None => {
+                                if let Some(above) = previous.prev_sibling().and_downcast::<gtk::Button>() {
+                                    focus_header(&above);
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => return glib::Propagation::Proceed,
+            }
+            glib::Propagation::Stop
+        }
+    ));
+    header.add_controller(keys);
+    // Out of the Tab order again once the keyboard leaves it.
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_leave(|focus| {
+        if let Some(header) = focus.widget() {
+            header.set_focusable(false);
+        }
+    });
+    header.add_controller(focus);
+}
+
+/// Up from a group's first row goes to its header and Down from its last
+/// row to the next group's header, as in Explorer; the box moves the
+/// keyboard everywhere else.
+fn connect_edge_keys(flow: &gtk::FlowBox) {
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        flow,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, modifiers| {
+            let up = match key {
+                gtk::gdk::Key::Up => true,
+                gtk::gdk::Key::Down => false,
+                _ => return glib::Propagation::Proceed,
+            };
+            if !modifiers.is_empty() {
+                return glib::Propagation::Proceed;
+            }
+            let Some(focused) = flow.focus_child() else {
+                return glib::Propagation::Proceed;
+            };
+            let Some(end) = end_tile(&flow, !up) else {
+                return glib::Propagation::Proceed;
+            };
+            let row_of = |tile: &gtk::Widget| tile.compute_bounds(&flow).map(|bounds| bounds.y());
+            if row_of(&focused) != row_of(end.upcast_ref()) {
+                return glib::Propagation::Proceed;
+            }
+            let header = if up {
+                flow.prev_sibling().and_downcast::<gtk::Button>()
+            } else {
+                next_header(&flow)
+            };
+            match header {
+                Some(header) => {
+                    focus_header(&header);
+                    glib::Propagation::Stop
+                }
+                None => glib::Propagation::Proceed,
+            }
+        }
+    ));
+    flow.add_controller(keys);
 }
 
 /// The tile `child` is, among `tiles`.
@@ -456,7 +613,7 @@ fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
                     return;
                 };
                 flow.select_child(&child);
-                child.grab_focus();
+                focus_tile(&child);
                 if let Some(tile) = tile_of(&tiles, &child) {
                     tile.popup_menu(x, y);
                 }
@@ -550,6 +707,106 @@ fn tile_group(page: &gtk::Box, group: Group, tiles: Vec<Tile>) {
     ));
     connect_menus(&flow, &tiles);
     connect_keys(&flow, &tiles);
+    connect_edge_keys(&flow);
+}
+
+/// The tile boxes `page` shows, one per group.
+fn tile_boxes(page: &gtk::Box) -> impl Iterator<Item = gtk::FlowBox> {
+    super::widget_tree::children(page).filter_map(|child| child.downcast::<gtk::FlowBox>().ok())
+}
+
+/// One tile is selected on the page, as in one item view: selecting a tile
+/// in one group clears the others.
+fn select_one_tile(page: &gtk::Box) {
+    for flow in tile_boxes(page) {
+        flow.connect_selected_children_changed(glib::clone!(
+            #[weak]
+            page,
+            move |flow| {
+                if flow.selected_children().is_empty() {
+                    return;
+                }
+                for other in tile_boxes(&page).filter(|other| other != flow) {
+                    other.unselect_all();
+                }
+            }
+        ));
+    }
+}
+
+/// Where the keyboard was on This PC.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum KeptFocus {
+    /// On the tile with this key.
+    Tile(String),
+    /// On a group's header.
+    Header(Group),
+}
+
+/// The selected tile and the keyboard's place on This PC, read before it
+/// is drawn again, as a drive coming or going does, and given back
+/// afterwards.
+#[derive(Debug, Default)]
+struct Kept {
+    selected: Option<String>,
+    focus: Option<KeptFocus>,
+}
+
+impl Kept {
+    fn read(page: &gtk::Box) -> Self {
+        let selected = tile_boxes(page)
+            .flat_map(|flow| flow.selected_children())
+            .map(|child| child.widget_name().to_string())
+            .next();
+        let focused = page
+            .root()
+            .and_then(|root| root.focus())
+            .filter(|focused| focused.is_ancestor(page));
+        let focus = focused.and_then(|focused| {
+            if let Some(tile) = focused.ancestor(gtk::FlowBoxChild::static_type()) {
+                return Some(KeptFocus::Tile(tile.widget_name().to_string()));
+            }
+            let header = std::iter::successors(Some(focused), WidgetExt::parent)
+                .find(|widget| widget.has_css_class("group-header"))?;
+            let group = Group::ALL
+                .into_iter()
+                .find(|group| header.has_css_class(group.header_class()))?;
+            Some(KeptFocus::Header(group))
+        });
+        Self { selected, focus }
+    }
+
+    /// The tile named `key` and its box, if the page still shows it.
+    fn tile(page: &gtk::Box, key: &str) -> Option<(gtk::FlowBox, gtk::FlowBoxChild)> {
+        tile_boxes(page).find_map(|flow| {
+            let child = super::widget_tree::children(&flow)
+                .filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
+                .find(|child| child.widget_name() == key)?;
+            Some((flow, child))
+        })
+    }
+
+    fn restore(&self, page: &gtk::Box) {
+        if let Some((flow, child)) = self.selected.as_deref().and_then(|key| Self::tile(page, key)) {
+            flow.select_child(&child);
+        }
+        match &self.focus {
+            Some(KeptFocus::Tile(key)) => {
+                if let Some((_, child)) = Self::tile(page, key) {
+                    focus_tile(&child);
+                }
+            }
+            Some(KeptFocus::Header(group)) => {
+                let header = super::widget_tree::children(page)
+                    .find(|child| child.has_css_class(group.header_class()))
+                    .and_downcast::<gtk::Button>();
+                if let Some(header) = header {
+                    focus_header(&header);
+                }
+            }
+            None => {}
+        }
+    }
 }
 
 fn this_pc(page: &gtk::Box, places: &Places, locations: &LocationContext, text_size: TextSize) {
@@ -572,11 +829,15 @@ pub(super) fn render(
     locations: &LocationContext,
     text_size: TextSize,
 ) {
+    // A redraw keeps the selected tile and the keyboard's place.
+    let kept = Kept::read(body);
     remove_children(body);
     match page {
         Page::ThisPc => {
             body.add_css_class(THIS_PC_CLASS);
             this_pc(body, places, locations, text_size);
+            select_one_tile(body);
+            kept.restore(body);
         }
         // Network is listed like a folder; the Settings page replaces the
         // whole browsing area, landing pages included
@@ -585,15 +846,39 @@ pub(super) fn render(
     }
 }
 
-/// The group titles `body` shows, for tests.
+/// The group titles `body` shows, without their counts, for tests.
 #[cfg(test)]
 pub(super) fn section_titles(body: &gtk::Box) -> Vec<String> {
-    super::widget_tree::children(body)
-        .filter(|child| child.has_css_class("group-header"))
+    group_headers(body)
+        .iter()
         .filter_map(|header| {
-            let row = header.first_child()?;
+            let row = header.child()?;
             let title = row.first_child()?.next_sibling().and_downcast::<gtk::Label>()?;
-            Some(title.text().to_string())
+            let text = title.text();
+            let (title, _count) = text.rsplit_once(" (")?;
+            Some(title.to_owned())
+        })
+        .collect()
+}
+
+/// The group headers `body` shows, for tests.
+#[cfg(test)]
+pub(super) fn group_headers(body: &gtk::Box) -> Vec<gtk::Button> {
+    super::widget_tree::children(body)
+        .filter_map(|child| child.downcast::<gtk::Button>().ok())
+        .filter(|child| child.has_css_class("group-header"))
+        .collect()
+}
+
+/// The tiles of each group `body` shows, for tests.
+#[cfg(test)]
+pub(super) fn tile_groups(body: &gtk::Box) -> Vec<(gtk::FlowBox, Vec<gtk::FlowBoxChild>)> {
+    tile_boxes(body)
+        .map(|flow| {
+            let tiles = super::widget_tree::children(&flow)
+                .filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
+                .collect();
+            (flow, tiles)
         })
         .collect()
 }

@@ -617,7 +617,7 @@ msgstr ""
 msgid "Folder:"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar.rs
 msgid "Map network drive"
 msgstr ""
 
@@ -807,7 +807,7 @@ msgid "{count} items"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/details/group_headers.rs
+#: crates/ox-app/src/folder_view/details/group_headers.rs crates/ox-app/src/window/landing.rs
 msgid "{title} ({count})"
 msgstr ""
 
@@ -1330,10 +1330,6 @@ msgstr ""
 
 #: crates/ox-app/src/integration/type_associations.rs
 msgid "That application is not installed."
-msgstr ""
-
-#: crates/ox-app/src/locations.rs
-msgid "Folders, devices, and connected storage."
 msgstr ""
 
 #: crates/ox-app/src/locations.rs
@@ -2117,7 +2113,7 @@ msgstr ""
 msgid "Mount setup command"
 msgstr ""
 
-#: crates/ox-app/src/properties/mount_assistant.rs crates/ox-app/src/window/landing.rs
+#: crates/ox-app/src/properties/mount_assistant.rs
 msgid "Network folder"
 msgstr ""
 
@@ -5944,31 +5940,11 @@ msgid "Connect on open"
 msgstr ""
 
 #: crates/ox-app/src/window/landing.rs
-msgid "Connected device"
-msgstr ""
-
-#: crates/ox-app/src/window/landing.rs
 msgid "Devices and drives"
-msgstr ""
-
-#: crates/ox-app/src/window/landing.rs
-msgid "Mounted in this session"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md crates/ox-app/src/window/landing.rs
 msgid "Network locations"
-msgstr ""
-
-#: crates/ox-app/src/window/landing.rs
-msgid "No network locations saved. Use “Map network drive” to connect to a share and add it to the sidebar."
-msgstr ""
-
-#: crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
-msgid "Quick access"
-msgstr ""
-
-#: crates/ox-app/src/window/landing.rs
-msgid "Stored on this PC"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6505,6 +6481,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Opened this session"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/entries.rs
+msgid "Quick access"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs

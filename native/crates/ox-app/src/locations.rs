@@ -94,12 +94,12 @@ impl Page {
         self.place().title()
     }
 
-    /// The line under the heading (`renderLanding`); Network, listed like
-    /// a folder, has no heading.
+    /// The line under the heading (`renderLanding`); This PC, laid out as
+    /// Windows 11 lays it out, and Network, listed like a folder, have no
+    /// heading.
     pub(crate) fn subtitle(self) -> &'static str {
         match self {
-            Page::ThisPc => ox_core::i18n::gettext_static("Folders, devices, and connected storage."),
-            Page::Network => "",
+            Page::ThisPc | Page::Network => "",
             Page::Settings => ox_core::i18n::gettext_static("Your explorer, your way."),
         }
     }
