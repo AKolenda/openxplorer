@@ -33,7 +33,7 @@ use ox_core::entry::{cached_thumbnail, CachedThumbnail, Entry, ThumbnailFlavor, 
 use ox_core::settings::{ViewOptions, PREVIEW_SIZE_LIMIT};
 
 pub(crate) use slots::Slots;
-use thumbnailers::Thumbnailer;
+use thumbnailers::Catalogue;
 use writer::Source;
 
 /// How many previews are decoded at a time.
@@ -236,12 +236,12 @@ async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
 /// The thumbnail `request` asks for: the app decodes a picture itself,
 /// which costs less than a program of the desktop's, and a program of the
 /// desktop's makes it when the type is not a picture or the app cannot
-/// read it (a type without a gdk-pixbuf loader). `thumbnailers` is the
+/// read it (a type without a gdk-pixbuf loader). `catalogue` is the
 /// desktop's own list unless a test hands its own.
 async fn make_thumbnail_with(
     request: &PreviewRequest,
     cache_dir: &Path,
-    thumbnailers: Option<&[Thumbnailer]>,
+    catalogue: Option<Arc<Catalogue>>,
     flavor: ThumbnailFlavor,
     modified: u64,
 ) -> Option<PathBuf> {
@@ -250,7 +250,7 @@ async fn make_thumbnail_with(
             return Some(path);
         }
     }
-    by_thumbnailer(request, cache_dir, modified, flavor, thumbnailers).await
+    by_thumbnailer(request, cache_dir, modified, flavor, catalogue).await
 }
 
 /// The thumbnail of `request` decoded in the app: `None` when gdk-pixbuf
@@ -274,13 +274,14 @@ async fn by_decoding(
 }
 
 /// The thumbnail of `request` made by the desktop's thumbnailer for its
-/// type: `None` when none of `thumbnailers` makes it, or it failed.
+/// type: `None` when none makes it, the user turned them off for the type,
+/// or it failed.
 async fn by_thumbnailer(
     request: &PreviewRequest,
     cache_dir: &Path,
     modified: u64,
     flavor: ThumbnailFlavor,
-    thumbnailers: Option<&[Thumbnailer]>,
+    catalogue: Option<Arc<Catalogue>>,
 ) -> Option<PathBuf> {
     let job = thumbnailers::Job {
         cache_dir: cache_dir.to_path_buf(),
@@ -289,15 +290,13 @@ async fn by_thumbnailer(
         modified,
         flavor,
     };
-    // The worker owns its copy: only a request that forks reaches it.
-    let given = thumbnailers.map(<[Thumbnailer]>::to_vec);
     MAKING
         .with(Rc::clone)
         .blocking(move |cancel| {
             // The desktop's entries are files, read in the worker rather
             // than on the thread that asked, and once per run; a test hands
             // its own instead.
-            let installed = given.map_or_else(thumbnailers::installed, Arc::new);
+            let installed = catalogue.unwrap_or_else(thumbnailers::installed);
             thumbnailers::write_thumbnail(&job, &installed, cancel)
         })
         .await
@@ -356,7 +355,7 @@ mod tests {
     /// A thumbnailer of the test's own, and the file it leaves when it is
     /// started: it hands back `handed.png`, so a test tells its picture
     /// from the app's, and its start from no program run at all.
-    fn fake_thumbnailer(folder: &Path) -> (Vec<Thumbnailer>, PathBuf) {
+    fn fake_thumbnailer(folder: &Path) -> (Catalogue, PathBuf) {
         let started = folder.join("started");
         let handed = folder.join("handed.png");
         let picture = Pixbuf::new(Colorspace::Rgb, false, 8, 64, 64).expect("a picture");
@@ -374,7 +373,8 @@ mod tests {
         .expect("the script");
         fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("the mode");
         let command = [script.to_str().expect("a path"), "%i", "%o", "%s"];
-        (vec![Thumbnailer::for_test(&command, &["image/png"])], started)
+        let thumbnailer = thumbnailers::Thumbnailer::for_test(&command, &["image/png"]);
+        (Catalogue::for_test(vec![thumbnailer]), started)
     }
 
     /// The request for the file at `path`, of `content_type` at the normal
@@ -407,7 +407,7 @@ mod tests {
             .block_on(make_thumbnail_with(
                 &request,
                 &cache,
-                Some(thumbnailers.as_slice()),
+                Some(Arc::new(thumbnailers)),
                 ThumbnailFlavor::Normal,
                 1_700_000_000,
             ))
@@ -445,7 +445,7 @@ mod tests {
             .block_on(make_thumbnail_with(
                 &request,
                 &cache,
-                Some(thumbnailers.as_slice()),
+                Some(Arc::new(thumbnailers)),
                 ThumbnailFlavor::Normal,
                 1_700_000_000,
             ))
