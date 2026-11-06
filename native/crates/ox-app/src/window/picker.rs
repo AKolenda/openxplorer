@@ -1433,17 +1433,6 @@ impl BrowserWindow {
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         buttons.add_css_class("picker-buttons");
         buttons.set_valign(gtk::Align::End);
-        // An Open dialog's buttons are on a row of their own under File
-        // name and the type list, at the right, as in Windows.
-        bar.set_orientation(if opens_files {
-            gtk::Orientation::Vertical
-        } else {
-            gtk::Orientation::Horizontal
-        });
-        if opens_files {
-            bar.set_spacing(12);
-            buttons.set_halign(gtk::Align::End);
-        }
         let accept = gtk::Button::builder()
             .label(request.accept_label())
             .css_classes(["picker-button", ButtonStyle::Accent.css_class()])
@@ -1455,6 +1444,11 @@ impl BrowserWindow {
         buttons.append(&accept);
         buttons.append(&cancel);
         if row > 0 {
+            // The buttons are on a row of their own under the fields, at
+            // the right, as in Windows' Open and Save dialogs.
+            bar.set_orientation(gtk::Orientation::Vertical);
+            bar.set_spacing(12);
+            buttons.set_halign(gtk::Align::End);
             bar.append(&fields);
         } else {
             let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -4176,7 +4170,8 @@ mod tests {
     }
 
     /// A Save dialog keeps "Save as type:" on its own row under File name,
-    /// with Save and Cancel beside them, as Windows' Save dialog does.
+    /// with Save and Cancel on a row below them at the right, as Windows'
+    /// Save dialog does.
     ///
     /// parity: INT-032
     #[gtk::test]
@@ -4200,11 +4195,15 @@ mod tests {
         let types = picker.types.clone().expect("a type list");
         assert_eq!(bar_captions(window), ["File name:", "Save as type:"]);
         let (name_left, _, name_right, name_bottom) = bounds_in(&name, window);
-        let (types_left, types_top, types_right, _) = bounds_in(&types, window);
-        let (accept_left, _, _, _) = bounds_in(&picker.accept, window);
+        let (types_left, types_top, types_right, types_bottom) = bounds_in(&types, window);
+        let (accept_left, accept_top, _, _) = bounds_in(&picker.accept, window);
         assert!(types_top >= name_bottom, "Save as type is under File name");
         assert!((types_left - name_left).abs() < 1.0 && (types_right - name_right).abs() < 1.0);
-        assert!(accept_left > name_right, "Save is beside the fields");
+        assert!(accept_top >= types_bottom, "Save is on a row below the fields");
+        assert!(
+            accept_left > name_left + (name_right - name_left) / 2.0,
+            "at the right"
+        );
     }
 
     /// Open and Save dialogs with a type list, light and dark, for review
