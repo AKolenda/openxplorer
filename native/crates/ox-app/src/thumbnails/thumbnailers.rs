@@ -435,7 +435,6 @@ fn disabled() -> (Vec<String>, bool) {
     (types, all)
 }
 
-
 /// Makes the thumbnail of `job` with the thumbnailer of `catalogue` that
 /// makes its type, and writes it into the cache as the Thumbnail Managing
 /// Standard asks; `None` when none makes the type, the user turned them
@@ -455,7 +454,7 @@ pub(super) fn write_thumbnail(
     // in the cache: the app copies a good picture there itself.
     let workspace = Workspace::new()?;
     let pixels = job.flavor.pixels();
-    let command = sandbox.command(thumbnailer, &path, &job.uri, workspace.path(), pixels);
+    let command = sandbox.command(thumbnailer, &path, workspace.path(), pixels);
     // One that failed on its own may still have written a good picture, so
     // the picture alone decides; a stopped one left none worth reading.
     run(&command, cancellation)?;
@@ -476,8 +475,15 @@ pub(super) fn write_thumbnail(
 /// How a desktop thumbnailer is run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Sandbox {
-    /// In bubblewrap, the program at this path, as Files runs them.
-    Bubblewrap(PathBuf),
+    /// In bubblewrap, as Files runs them.
+    Bubblewrap {
+        /// bubblewrap itself.
+        program: PathBuf,
+        /// Whether the sandbox has a `/proc` of its own, which a container
+        /// may refuse to mount; without one it is tighter still, and only
+        /// a program that needs it fails.
+        proc: bool,
+    },
     /// Without a sandbox: only a test's own program, which must see the
     /// files of its test.
     #[cfg(test)]
@@ -486,25 +492,40 @@ pub(super) enum Sandbox {
 
 impl Sandbox {
     /// The bubblewrap of this computer, if it is installed and can make
-    /// the sandbox here: it is tried once with `true`, since a container
-    /// or a strict kernel may refuse the namespaces it needs.
+    /// the sandbox here: it is tried with `true`, since a container or a
+    /// strict kernel may refuse the namespaces it needs, first with a
+    /// `/proc` of its own, as Files gives it, then without.
     fn find() -> Option<Self> {
-        let sandbox = Self::Bubblewrap(glib::find_program_in_path("bwrap")?);
-        let workspace = Workspace::new()?;
+        let program = glib::find_program_in_path("bwrap")?;
+        [true, false]
+            .into_iter()
+            .map(|proc| Self::Bubblewrap {
+                program: program.clone(),
+                proc,
+            })
+            .find(Self::works)
+    }
+
+    /// Whether this sandbox runs `true` here.
+    fn works(&self) -> bool {
+        let Some(workspace) = Workspace::new() else {
+            return false;
+        };
         let item = workspace.path().join("probe");
-        fs::write(&item, b"").ok()?;
+        if fs::write(&item, b"").is_err() {
+            return false;
+        }
         let probe = Thumbnailer {
             command: vec!["true".to_owned()],
             types: Vec::new(),
         };
-        let command = sandbox.command(&probe, &item, "", workspace.path(), 0);
+        let command = self.command(&probe, &item, workspace.path(), 0);
         run(&command, &gio::Cancellable::new()).is_some_and(|status| status.success())
-            .then_some(sandbox)
     }
 
-    /// The command that runs `thumbnailer` for the file at `item` (named
-    /// `uri`), writing its picture to [`OUTPUT`] in `workspace` with
-    /// `pixels` as its longest edge.
+    /// The command that runs `thumbnailer` for the file at `item`, writing
+    /// its picture to [`OUTPUT`] in `workspace` with `pixels` as its
+    /// longest edge.
     ///
     /// In the sandbox the program sees `workspace` as [`INSIDE`], and the
     /// item there under a name of the sandbox's own, read-only; it is
@@ -513,12 +534,11 @@ impl Sandbox {
         &self,
         thumbnailer: &Thumbnailer,
         item: &Path,
-        uri: &str,
         workspace: &Path,
         pixels: i32,
     ) -> Vec<OsString> {
         match self {
-            Self::Bubblewrap(bwrap) => {
+            Self::Bubblewrap { program: bwrap, proc } => {
                 let inside = Path::new(INSIDE);
                 let inside_item = inside.join(format!("{INPUT}{}", extension_of(item)));
                 let inside_uri = format!("file://{}", inside_item.display());
@@ -529,13 +549,17 @@ impl Sandbox {
                     item,
                     &inside_item,
                     program.first().map(OsString::as_os_str),
+                    *proc,
                 ));
                 command.push("--".into());
                 command.extend(program);
                 command
             }
             #[cfg(test)]
-            Self::Off => thumbnailer.command(item, uri, &workspace.join(OUTPUT), pixels),
+            Self::Off => {
+                let uri = gio::File::for_path(item).uri();
+                thumbnailer.command(item, &uri, &workspace.join(OUTPUT), pixels)
+            }
         }
     }
 }
@@ -558,12 +582,14 @@ fn extension_of(item: &Path) -> String {
 /// bubblewrap's arguments for a thumbnailer: the system read-only, the
 /// program itself when it lives elsewhere, `workspace` as [`INSIDE`] and
 /// the item at `inside_item`, in fresh namespaces (no network, no other
-/// process, no session bus) that end with the app.
+/// process, no session bus) that end with the app; `proc` gives it a
+/// `/proc` of its own.
 fn sandbox_arguments(
     workspace: &Path,
     item: &Path,
     inside_item: &Path,
     program: Option<&OsStr>,
+    proc: bool,
 ) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = Vec::new();
     let mut add = |words: &[&OsStr]| arguments.extend(words.iter().map(|word| (*word).to_owned()));
@@ -589,9 +615,10 @@ fn sandbox_arguments(
             add(&[word("--ro-bind"), program.as_os_str(), program.as_os_str()]);
         }
     }
+    if proc {
+        add(&[word("--proc"), word("/proc")]);
+    }
     add(&[
-        word("--proc"),
-        word("/proc"),
         word("--dev"),
         word("/dev"),
         word("--chdir"),
@@ -1247,14 +1274,13 @@ mod tests {
         fs::write(
             &script,
             format!(
-                "#!/bin/sh
-                 test \"$1\" = /tmp/openxplorer-item.ab || exit 1
-                 test \"$2\" = file:///tmp/openxplorer-item.ab || exit 2
-                 test -e '{secret}' && exit 3
-                 touch '{escaped}' 2>/dev/null
-                 : 2>/dev/null > \"$1\" && exit 4
-                 cp \"$1\" \"$3\"
-",
+                "#!/bin/sh\n\
+                 test \"$1\" = /tmp/openxplorer-item.ab || exit 1\n\
+                 test \"$2\" = file:///tmp/openxplorer-item.ab || exit 2\n\
+                 test -e '{secret}' && exit 3\n\
+                 touch '{escaped}' 2>/dev/null\n\
+                 (: > \"$1\") 2>/dev/null && exit 4\n\
+                 cp \"$1\" \"$3\"\n",
                 secret = secret.display(),
                 escaped = escaped.display(),
             ),
