@@ -250,6 +250,9 @@ pub(crate) enum WindowAction {
     CancelOperation,
     /// Puts the selected Recycle Bin items back where they came from.
     Restore,
+    /// Puts every item in the Recycle Bin back where it came from (the
+    /// command bar's "Restore all items").
+    RestoreAllItems,
     /// Deletes everything in the Recycle Bin, after asking.
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
@@ -560,6 +563,7 @@ impl WindowAction {
             WindowAction::Redo => "redo",
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
+            WindowAction::RestoreAllItems => "restore-all-items",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ClearRecentFiles => "clear-recent-files",
