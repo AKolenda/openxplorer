@@ -11,8 +11,9 @@ use gtk::subclass::prelude::*;
 use std::collections::HashSet;
 
 use ox_core::entry::Entry;
-use ox_core::search::{walk_search, LiveSearch, NamePattern, SearchError};
+use ox_core::search::{walk_search, LiveSearch, NamePattern, SearchError, SearchIn};
 
+use crate::folder_view::filter::Visibility;
 use crate::folder_view::item::FileItem;
 use crate::search::{listed_name_matches, Listing, SearchRun, RESULT_LIMIT};
 
@@ -76,7 +77,9 @@ impl BrowserWindow {
 
     /// Updates the rows of a finished walk after the folder was listed
     /// again: its own matches that went away are removed and new ones
-    /// added, in place, so the rows the walk found below it stay.
+    /// added, in place, so the rows the walk found below it stay. A search
+    /// of names and contents keeps a file it found by its text while the
+    /// file is still listed: its name alone does not match.
     pub(super) fn update_walked_listing(&self) {
         let Some(rows) = self.imp().search.borrow().results().cloned() else {
             return;
@@ -89,13 +92,23 @@ impl BrowserWindow {
         let Some(store) = active.and_then(|id| self.tab_store(id)) else {
             return;
         };
+        let shows_hidden = self.hidden_files_shown();
         let listing = Listing {
             items: &store,
             folder: &folder,
-            shows_hidden: self.hidden_files_shown(),
+            shows_hidden,
         };
         let listed = listed_name_matches(listing, &text).items;
-        let listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
+        let mut listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
+        if self.imp().search.borrow().search_in() == SearchIn::NamesAndContents {
+            listed_uris.extend(
+                store
+                    .iter::<FileItem>()
+                    .filter_map(Result::ok)
+                    .filter(|item| shows_hidden || item.visibility() == Visibility::Visible)
+                    .map(|item| item.entry().uri.clone()),
+            );
+        }
         let parent = gio::File::for_uri(&folder);
         for position in (0..rows.n_items()).rev() {
             let Some(item) = rows.item(position).and_downcast::<FileItem>() else {

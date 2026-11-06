@@ -47,16 +47,22 @@ pub(crate) enum Button {
     Middle = 2,
 }
 
-/// The tests' pointer, on the private X display.
+/// The tests' pointer, on the private X display. Dropping it releases
+/// the buttons it holds, so a test that fails mid-drag leaves none pressed
+/// for the next one.
 #[derive(Debug)]
 pub(crate) struct Pointer {
     connection: UnixStream,
     root: u32,
     xtest: u8,
+    /// The buttons pressed and not released yet.
+    held: Vec<Button>,
 }
 
 impl Pointer {
-    /// Connects to the private display of `native/tools/check.py`.
+    /// Connects to the private display of `native/tools/check.py`, after
+    /// closing what earlier tests left on its screen (see
+    /// [`close_leftovers`]), so the pointer reaches the window under test.
     ///
     /// # Panics
     ///
@@ -80,8 +86,10 @@ impl Pointer {
             connection,
             root,
             xtest: 0,
+            held: Vec::new(),
         };
         pointer.xtest = pointer.extension_opcode(b"XTEST");
+        close_leftovers();
         pointer
     }
 
@@ -92,11 +100,13 @@ impl Pointer {
 
     /// Presses `button` where the pointer is.
     pub(crate) fn press(&mut self, button: Button) {
+        self.held.push(button);
         self.fake(BUTTON_PRESS, button as u8, 0, 0);
     }
 
     /// Releases `button`.
     pub(crate) fn release(&mut self, button: Button) {
+        self.held.retain(|held| *held != button);
         self.fake(BUTTON_RELEASE, button as u8, 0, 0);
     }
 
@@ -129,6 +139,7 @@ impl Pointer {
     /// before a drag and drop may start, comes between them however busy
     /// its main loop is.
     pub(crate) fn press_and_flick(&mut self, button: Button, path: &[(i32, i32)]) {
+        self.held.push(button);
         let mut requests = self.fake_request(BUTTON_PRESS, button as u8, 0, 0);
         for &(x, y) in path {
             requests.extend(self.fake_request(MOTION_NOTIFY, 0, x, y));
@@ -210,6 +221,47 @@ impl Pointer {
             }
         }
     }
+}
+
+impl Drop for Pointer {
+    fn drop(&mut self) {
+        // Never panics, as a drop may run during a failed test's
+        // unwinding: a display that went away holds no buttons either.
+        for button in std::mem::take(&mut self.held) {
+            let request = self.fake_request(BUTTON_RELEASE, button as u8, 0, 0);
+            if self.connection.write_all(&request).is_err() {
+                return;
+            }
+        }
+        let _ = self.connection.write_all(&[GET_INPUT_FOCUS, 0, 1, 0]);
+        let mut reply = [0; 32];
+        let _ = self.connection.read_exact(&mut reply);
+        super::harness::settle();
+    }
+}
+
+/// Closes what earlier tests of the process left open on the screen: a
+/// window or dialog still shown, with any menu open in it and the pointer
+/// and keyboard grab such a menu holds, which goes with its window. Those
+/// tests' own events never went through the X server, so nothing they
+/// left showed there; a real pointer's press would land on it instead of
+/// on the window under test.
+/// Says on standard error what it closed, for a failure's log.
+fn close_leftovers() {
+    let shown: Vec<gtk::Window> = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+        .filter(WidgetExt::is_visible)
+        .collect();
+    for window in &shown {
+        eprintln!(
+            "closing a {} left shown by an earlier test: {:?}",
+            window.type_().name(),
+            window.title().unwrap_or_default()
+        );
+        window.destroy();
+    }
+    super::harness::settle();
 }
 
 /// The screen coordinates of (`x`, `y`) in `widget`, found by placing the

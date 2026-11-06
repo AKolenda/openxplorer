@@ -399,6 +399,16 @@ impl Drop for TestWindow {
             settle();
             thread::sleep(POLL_INTERVAL);
         }
+        // A dialog still open over the window, as a failed test leaves
+        // its question, would outlive it and stay on the screen.
+        for dialog in gtk::Window::list_toplevels() {
+            let Ok(dialog) = dialog.downcast::<gtk::Window>() else {
+                continue;
+            };
+            if dialog.transient_for().as_ref() == Some(self.window.upcast_ref()) {
+                dialog.destroy();
+            }
+        }
         // `close()` does nothing for an unpresented window and can ask a
         // question for a presented one. Tests exercise those user-facing
         // requests explicitly; fixture teardown must always unregister it.

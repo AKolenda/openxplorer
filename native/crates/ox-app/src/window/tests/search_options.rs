@@ -36,6 +36,36 @@ fn names_and_contents_finds_files_by_their_text() {
     );
 }
 
+/// A file found by its text stays among the results when its folder is
+/// listed again, as when the folder changes while they show: its name
+/// alone does not match.
+///
+/// parity: SRCH-036
+#[gtk::test]
+fn a_file_found_by_its_text_stays_when_its_folder_changes() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("minutes.txt"), "Notes from the meeting").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    test.window
+        .search_strip()
+        .choose_search_in(SearchIn::NamesAndContents);
+    wait_until("the search of contents to finish", || {
+        test.names().contains(&"minutes.txt".to_owned()) && !test.status_count().starts_with("Searching")
+    });
+
+    fixture.write("More notes.txt");
+
+    wait_until("the folder to be listed again", || {
+        test.names().contains(&"More notes.txt".to_owned())
+    });
+    assert!(
+        test.names().contains(&"minutes.txt".to_owned()),
+        "{:?}",
+        test.names()
+    );
+}
+
 /// The kind option narrows the results at once, and ending the search
 /// forgets it.
 ///
