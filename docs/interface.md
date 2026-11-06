@@ -98,7 +98,7 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 ## Measure folder sizes on demand
 
-Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
+Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. A drive's Properties shows what Windows 11's does instead: its label, type and file system, its used and free space and capacity in bytes and GB, and a ring of the two, without counting anything on it; where it is mounted and from what are on its Hardware tab. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
 
 Size counts logical file bytes; Size on disk counts the blocks the files take, which on a compressing filesystem such as ZFS is the compressed space. Neither is a ZFS dataset used/referenced value or a snapshot-exclusive block count.
 
