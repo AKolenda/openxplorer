@@ -200,6 +200,8 @@ mod imp {
         pub(super) window: glib::WeakRef<ProgressWindow>,
         /// Receives the row chosen while the action asks.
         pub(super) question_answer: RefCell<Option<async_channel::Sender<Option<Row>>>>,
+        /// What "More details" compares while the action asks.
+        pub(super) compared: RefCell<Option<gtk::Box>>,
         /// The File Conflict window the question opened, while it shows.
         pub(super) conflict_window: glib::WeakRef<FileConflictWindow>,
     }
@@ -457,10 +459,11 @@ impl TransferPanel {
 
     /// Shows or hides "More details": the graph in the bar's place, the
     /// name, and the time and items remaining.
+    /// While the action asks, its bar stays hidden either way.
     pub(crate) fn show_details(&self, shown: bool) {
         let imp = self.imp();
         imp.details.set_visible(shown);
-        imp.progress_bar.set_visible(!shown);
+        imp.progress_bar.set_visible(!shown && !self.is_asking());
     }
 
     /// "44% complete", or "Cancelling…" once cancelled, as the progress

@@ -13,6 +13,7 @@ use gtk::gio;
 use gtk::prelude::*;
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{delete_from_recycle_bin, list_recycle_bin};
+use ox_core::settings::PreferencesUpdate;
 use ox_core::transfer::Cancellation;
 
 use super::file_ops_support::{dialog_over, require_private_trash, select_names};
@@ -246,6 +247,75 @@ fn restore_conflicts_are_captured_light_and_dark() {
         capture(&test.window, &format!("native-restore-all-result-{theme}.png"));
         test.activate("restore-all-items", None);
         button(&question_window(&test), "Replace the files in the destination").emit_clicked();
+        ends_without_a_report(&test);
+        drop(test);
+        forget_trashed_items_of(&fixture);
+    }
+}
+
+/// Whether every one of `wanted` is a shown text of `window`.
+fn shows_all(window: &impl IsA<gtk::Widget>, wanted: &[&str]) -> bool {
+    let shown = texts(window);
+    wanted.iter().all(|text| shown.iter().any(|shown| shown == text))
+}
+
+/// "More details" stays as it was left, as in Windows: a question opened
+/// with the details remembered open reads "Fewer details" and compares
+/// both files (name, folders, dates and sizes) under it, never an empty
+/// body; folded, it reads "More details" and shows none. Saves
+/// `native-restore-question-expanded-*.png` and
+/// `native-restore-question-collapsed-*.png`.
+///
+/// parity: OPS-021, OPS-026
+#[gtk::test]
+fn the_question_keeps_the_remembered_details_and_compares_both_files_in_them() {
+    require_private_trash();
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        let fixture = Fixture::standard();
+        let name = "Report.txt - Shortcut";
+        let test = trash_and_take_names(&fixture, &[name]);
+        test.activate("theme", Some(theme));
+        test.context.remember_preferences(PreferencesUpdate {
+            progress_details: Some(true),
+            ..PreferencesUpdate::default()
+        });
+        wait_until("the details to be remembered as open", || {
+            test.context.settings_data().preferences.progress_details
+        });
+        select_names(&test, &[name]);
+        let compared = [
+            format!("Name: {name}"),
+            "From Recycle Bin".to_owned(),
+            "Already in Example projects".to_owned(),
+            "20 bytes".to_owned(),
+            "23 bytes".to_owned(),
+        ];
+        let compared: Vec<&str> = compared.iter().map(String::as_str).collect();
+
+        test.activate("restore", None);
+        let window = question_window(&test);
+
+        assert!(window.shows_details(), "the remembered choice is kept");
+        assert_eq!(window.details_text(), "Fewer details");
+        assert!(shows_all(&window, &compared), "{:?}", texts(&window));
+        button(&window, "Skip this file");
+        capture_dialog(&window, &format!("native-restore-question-expanded-{theme}.png"));
+
+        window.press_details();
+
+        assert_eq!(window.details_text(), "More details");
+        let folded = texts(&window);
+        assert!(
+            !folded.iter().any(|text| compared.contains(&text.as_str())),
+            "{folded:?}"
+        );
+        capture_dialog(&window, &format!("native-restore-question-collapsed-{theme}.png"));
+
+        window.press_details();
+        assert_eq!(window.details_text(), "Fewer details");
+        assert!(shows_all(&window, &compared), "{:?}", texts(&window));
+        button(&window, "Skip this file").emit_clicked();
         ends_without_a_report(&test);
         drop(test);
         forget_trashed_items_of(&fixture);
