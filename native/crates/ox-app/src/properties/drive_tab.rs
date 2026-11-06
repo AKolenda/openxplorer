@@ -42,9 +42,18 @@ pub(super) fn drive_general_tab(uri: &str, mount: &MountFacts, locations: &Locat
     kind.add(&ox_core::i18n::gettext("Type"), &mount.drive_type.label());
     kind.add(&ox_core::i18n::gettext("File system"), &mount.filesystem);
     page.append(kind.widget());
-    page.append(&divider());
+    // Space GIO could not read is left out, never shown as zero.
+    if let Some((free, total)) = mount.space {
+        page.append(&divider());
+        append_space(&page, free, total);
+    }
+    page.append(&name_row(uri, mount, locations));
+    page
+}
 
-    let (free, total) = mount.space.unwrap_or_default();
+/// Used space, Free space and Capacity, then the ring of `free` of
+/// `total` bytes.
+fn append_space(page: &gtk::Box, free: u64, total: u64) {
     let space = SpaceRows::new();
     space.add(
         &ox_core::i18n::gettext("Used space"),
@@ -57,7 +66,6 @@ pub(super) fn drive_general_tab(uri: &str, mount: &MountFacts, locations: &Locat
     let capacity = SpaceRows::new();
     capacity.add(&ox_core::i18n::gettext("Capacity"), None, total);
     page.append(&capacity.grid);
-
     let text = ox_core::i18n::format_message(
         "{value1} free of {value2}",
         &[
@@ -68,8 +76,6 @@ pub(super) fn drive_general_tab(uri: &str, mount: &MountFacts, locations: &Locat
     let ring = SpaceRing::new(free, total, &text);
     ring.add_css_class("drive-ring");
     page.append(&ring);
-    page.append(&name_row(uri, mount, locations));
-    page
 }
 
 /// The drive's picture and its volume label, which cannot be changed
@@ -189,4 +195,40 @@ pub(super) fn hardware_rows(mount: &MountFacts) -> gtk::Grid {
     rows.add(&ox_core::i18n::gettext("Mounted on"), &mount.mounted_on);
     rows.add(&ox_core::i18n::gettext("Mounted from"), &mount.mounted_from);
     rows.widget().clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::properties::drive_facts::DriveType;
+    use crate::test_support::harness::descendants;
+
+    /// A drive whose space GIO could not read keeps its other facts but
+    /// shows no sizes or ring, rather than zeros.
+    ///
+    /// parity: PROP-004
+    #[gtk::test]
+    fn unknown_space_is_left_out_not_shown_as_zero() {
+        let mount = MountFacts {
+            mounted_on: "/media/demo/USB".to_owned(),
+            mounted_from: "/dev/sdz1".to_owned(),
+            filesystem: "exFAT".to_owned(),
+            label: "USB".to_owned(),
+            drive_type: DriveType::Removable,
+            space: None,
+        };
+
+        let page = drive_general_tab("file:///media/demo/USB", &mount, &LocationContext::default());
+
+        let texts: Vec<String> = descendants::<gtk::Label>(&page)
+            .iter()
+            .map(|label| label.text().to_string())
+            .collect();
+        assert!(texts.contains(&"Removable Disk".to_owned()), "{texts:?}");
+        assert!(texts.contains(&"exFAT".to_owned()), "{texts:?}");
+        for row in ["Used space:", "Free space:", "Capacity:"] {
+            assert!(!texts.contains(&row.to_owned()), "no {row} without a measurement");
+        }
+        assert!(descendants::<SpaceRing>(&page).is_empty(), "no ring");
+    }
 }
