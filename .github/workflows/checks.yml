@@ -283,9 +283,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # This run's release has succeeded, since this job needs it.
           succeeded=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/checks.yml/runs?status=success&per_page=100&created=>=$(date -u -d '-30 days' +%F)" \
-            --jq '.workflow_runs[].id'; echo "$GITHUB_RUN_ID")
+            --jq '.workflow_runs[].id')
+          # This run's release has succeeded, since this job needs it.
+          succeeded=$(printf '%s\n%s\n' "$succeeded" "$GITHUB_RUN_ID")
           keep=$(printf '%s\n' "$succeeded" | sort -n | tail -n 1)
           # Lists every page before deleting, since deleting shifts the pages.
           artifacts=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq "
