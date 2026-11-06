@@ -183,6 +183,53 @@ fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
     second.window.close();
 }
 
+/// Every More menu command works in a folder, and a row shows no tooltip
+/// that would only repeat its name, as Windows 11's menus show none.
+/// License & source is in Settings > About now (CMD-007).
+///
+/// parity: CMD-031
+#[gtk::test]
+fn the_more_menu_items_work_and_show_no_tooltip_repeating_their_name() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let more_button = menu_button_with_class(&test, "more-command");
+    let more = app_menu(&more_button);
+    more_button.popup();
+    for label in ["Pin to Quick access", "Select all", "Options"] {
+        let row = more.row(label);
+        assert!(row.is_sensitive(), "{label}");
+        assert_eq!(row.tooltip_text(), None, "{label}");
+    }
+    more_button.popdown();
+}
+
+/// A row whose label the menu cuts short shows its whole label as a
+/// tooltip, which then adds what the row cannot show; a row shown whole
+/// shows none.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn a_menu_row_cut_short_shows_its_whole_label_as_a_tooltip() {
+    use crate::icons::Icon;
+    use crate::window::menu_popover::{row_tooltip, MenuItem};
+    use crate::window::window_action::WindowAction;
+
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let more_button = menu_button_with_class(&test, "more-command");
+    let more = app_menu(&more_button);
+    let long = format!("{}final", "Quarterly planning notes ".repeat(30));
+    more.set_entries(vec![
+        MenuItem::new(&long, Icon::Document, WindowAction::SelectAll).into(),
+        MenuItem::new("Select all", Icon::Document, WindowAction::SelectAll).into(),
+    ]);
+    more_button.popup();
+    wait_for_frames(&test.window, 3);
+    assert_eq!(row_tooltip(&more.row(&long)), Some(long.clone()));
+    assert_eq!(row_tooltip(&more.row("Select all")), None);
+    more_button.popdown();
+}
+
 /// A new window on a landing page has no file list to focus; GTK's first
 /// focusable widget was a crumb, which drew the address bar's editing
 /// line.

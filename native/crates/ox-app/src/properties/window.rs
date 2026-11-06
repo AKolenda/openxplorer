@@ -481,7 +481,6 @@ impl PropertiesWindow {
     }
 
     /// The page of the tab named `name`.
-    #[cfg(test)]
     pub(crate) fn tab_page(&self, name: &str) -> Option<gtk::Widget> {
         let notebook = &self.imp().notebook;
         (0..notebook.n_pages())

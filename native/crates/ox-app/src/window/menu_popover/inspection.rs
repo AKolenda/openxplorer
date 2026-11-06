@@ -131,10 +131,20 @@ impl MenuPopover {
     }
 }
 
-/// The label of `row`, for tests.
-fn row_label(row: &gtk::ListBoxRow) -> Option<String> {
+/// The tooltip `row` shows when the pointer rests on it, for tests.
+/// That is its own tooltip text (a disabled row's reason), else its whole
+/// label while the menu cuts it short.
+pub(crate) fn row_tooltip(row: &gtk::ListBoxRow) -> Option<String> {
+    row.tooltip_text()
+        .map(|text| text.to_string())
+        .or_else(|| super::cut_short_label(row))
+}
+
+/// The label of `row`, for tests: the first label after its mark and
+/// glyph.
+pub(crate) fn row_label(row: &gtk::ListBoxRow) -> Option<String> {
     let content = row.child()?;
-    let glyph = content.first_child()?;
-    let label = glyph.next_sibling().and_downcast::<gtk::Label>()?;
+    let label = crate::window::widget_tree::children(&content)
+        .find_map(|child| child.downcast::<gtk::Label>().ok())?;
     Some(label.text().to_string())
 }

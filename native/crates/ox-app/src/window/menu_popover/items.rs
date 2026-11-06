@@ -121,6 +121,24 @@ pub(in crate::window) struct MenuItem {
     /// subfolder's in the New menu (OPS-003); empty for an item that runs
     /// its action.
     pub submenu: Vec<MenuEntry>,
+    /// How its glyph is drawn: as it is, mirrored or in the accent colour.
+    pub glyph_look: GlyphLook,
+    /// Marks it with a dot rather than a check mark while it is on, as
+    /// Windows 11 marks a choice such as the view or the open pane.
+    pub dot_mark: bool,
+    /// Draws its glyph; false for a row with only its mark and label, as
+    /// Windows 11's Sort menu draws every row.
+    pub shows_glyph: bool,
+}
+
+/// How a menu item's glyph is drawn: as the bundled file draws it, or
+/// mirrored, or in Windows' blue, or both, as Windows 11 draws Redo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(in crate::window) struct GlyphLook {
+    /// Mirrored left to right, as Windows 11 draws Redo with Undo's arrow.
+    pub mirrored: bool,
+    /// In Windows' blue, as Windows 11 draws Undo, Redo and Pin in its "…".
+    pub accent: bool,
 }
 
 impl MenuItem {
@@ -139,6 +157,9 @@ impl MenuItem {
             disabled_reason: None,
             application_icon: None,
             submenu: Vec::new(),
+            glyph_look: GlyphLook::default(),
+            dot_mark: false,
+            shows_glyph: true,
         }
     }
 
@@ -185,6 +206,7 @@ impl MenuItem {
     pub(in crate::window) fn choice(label: &str, glyph: Icon, action: WindowAction, value: &str) -> Self {
         Self {
             check: ItemCheck::FollowsAction,
+            dot_mark: true,
             ..Self::with_text_target(label, glyph, action, value)
         }
     }
@@ -201,6 +223,45 @@ impl MenuItem {
     pub(in crate::window) fn text_only(self) -> Self {
         Self {
             text_only: true,
+            shows_glyph: false,
+            ..self
+        }
+    }
+
+    /// The same item with its glyph mirrored left to right.
+    pub(in crate::window) fn mirrored(self) -> Self {
+        Self {
+            glyph_look: GlyphLook {
+                mirrored: true,
+                ..self.glyph_look
+            },
+            ..self
+        }
+    }
+
+    /// The same item with its glyph in the accent colour.
+    pub(in crate::window) fn with_accent_glyph(self) -> Self {
+        Self {
+            glyph_look: GlyphLook {
+                accent: true,
+                ..self.glyph_look
+            },
+            ..self
+        }
+    }
+
+    /// The same item without its glyph: its mark and label alone.
+    pub(in crate::window) fn without_glyph(self) -> Self {
+        Self {
+            shows_glyph: false,
+            ..self
+        }
+    }
+
+    /// The same item, marked with a dot while it is on.
+    pub(in crate::window) fn with_dot_mark(self) -> Self {
+        Self {
+            dot_mark: true,
             ..self
         }
     }

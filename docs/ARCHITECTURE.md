@@ -11,7 +11,7 @@ asset publishing and synchronization without an operational benefit here.
 
 | Directory | Responsibility | Runtime dependencies |
 |---|---|---|
-| `native/` | The Rust GTK 4 app, its parity inventories, packaging and checks | GTK 4.14+, GLib/GIO, GVfs, SQLite, libsoup 3 |
+| `native/` | The Rust GTK 4 app, its parity inventories, packaging and checks | GTK 4.14+, GLib/GIO, GVfs, SQLite, libsoup 3, GStreamer (gst-pbutils) |
 | `apps/web/` | Next.js website and docs presentation | pnpm at build time; static export for hosting |
 | `docs/` | Generated guides and handwritten policies/release review | None |
 | `tools/` | Website preparation, native screenshots and tour, source/release assembly | Python, Node; bubblewrap and Xvfb for captures, Playwright for website captures |

@@ -23,6 +23,8 @@
 mod height;
 #[cfg(test)]
 mod inspection;
+#[cfg(test)]
+pub(crate) use inspection::{row_label, row_tooltip};
 mod items;
 
 use gtk::prelude::*;
@@ -410,7 +412,7 @@ impl MenuPopover {
 
     /// The items shown, one per row after the back row, without the
     /// dividers.
-    fn items(&self) -> Vec<MenuItem> {
+    pub(in crate::window) fn items(&self) -> Vec<MenuItem> {
         items_of(&self.shown_entries()).cloned().collect()
     }
 
@@ -455,13 +457,21 @@ impl MenuPopover {
             list.append(&back_row(&submenu));
             after_divider = true;
         }
-        for entry in &self.shown_entries() {
+        let entries = self.shown_entries();
+        // A menu with a choice or toggle keeps a column for the marks, as
+        // Windows 11 does, so every glyph lines up.
+        let marks = if items_of(&entries).any(|item| item.check != ItemCheck::Plain) {
+            MarkColumn::Shown
+        } else {
+            MarkColumn::None
+        };
+        for entry in &entries {
             let MenuEntry::Item(item) = entry else {
                 after_divider = true;
                 continue;
             };
             let can_choose = self.can_choose(item);
-            let row = item_row(item, self.check_mark(item));
+            let row = item_row(item, self.check_mark(item), marks);
             row.set_sensitive(can_choose);
             explain_availability(self, row.upcast_ref(), item, can_choose);
             if after_divider {
@@ -716,22 +726,63 @@ fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuIt
     control.update_property(&[gtk::accessible::Property::Description(&reason)]);
 }
 
-/// A row's glyph (the check mark while checked, as app.js draws it; the
+/// Whether a menu's rows keep a column for check marks and dots before
+/// their glyphs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MarkColumn {
+    /// The menu has no choice or toggle.
+    None,
+    /// The menu has one, so every row keeps the column.
+    Shown,
+}
+
+/// The mark column of a row: a dot for a chosen choice (or an item that
+/// asks for one, such as the open Details pane), a check mark for a toggle
+/// that is on, as Windows 11 draws them, else an empty slot.
+fn mark_slot(item: &MenuItem, check: CheckMark) -> gtk::Widget {
+    if check != CheckMark::Checked {
+        let slot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        slot.set_size_request(ROW_GLYPH, ROW_GLYPH);
+        slot.add_css_class("menu-mark-slot");
+        return slot.upcast();
+    }
+    let mark = if item.dot_mark {
+        Icon::CircleSmallFilled
+    } else {
+        Icon::Checkmark
+    };
+    let image = icons::image(mark, ROW_GLYPH);
+    image.add_css_class("menu-mark");
+    image.upcast()
+}
+
+/// A row's mark column when the menu has one, its glyph (the
 /// application's own icon for an item that opens one), its label and its
 /// shortcut.
-fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
-    let glyph = if check == CheckMark::Checked {
-        Icon::Checkmark
-    } else {
-        item.glyph
-    };
+fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Box {
     let application_icon = item
         .application_icon
         .as_deref()
-        .filter(|_| check != CheckMark::Checked)
         .and_then(|icon| integration::application_image(Some(icon), ROW_GLYPH));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    if item.text_only && check != CheckMark::Checked {
+    if marks == MarkColumn::Shown {
+        content.append(&mark_slot(item, check));
+    }
+    let glyph = application_icon.or_else(|| {
+        item.shows_glyph.then(|| {
+            let image = icons::image(item.glyph, ROW_GLYPH);
+            if item.glyph_look.mirrored {
+                image.add_css_class("mirrored");
+            }
+            if item.glyph_look.accent {
+                image.add_css_class("accent-glyph");
+            }
+            image
+        })
+    });
+    if let Some(glyph) = glyph {
+        content.append(&glyph);
+    } else if item.text_only {
         // The glyph's column stays, empty, so the text sits where the
         // other menus' text does.
         let column = gtk::Box::builder()
@@ -739,8 +790,6 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
             .height_request(ROW_GLYPH)
             .build();
         content.append(&column);
-    } else {
-        content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
     }
     let label = gtk::Label::builder()
         .label(&item.label)
@@ -767,19 +816,41 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
     content
 }
 
-/// The row for `item`, showing `check`.
-fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
+/// The whole label of `row` while the menu cuts it short, else `None`.
+fn cut_short_label(row: &gtk::ListBoxRow) -> Option<String> {
+    let content = row.child()?;
+    let label = crate::window::widget_tree::children(&content)
+        .find_map(|child| child.downcast::<gtk::Label>().ok())?;
+    label.layout().is_ellipsized().then(|| label.text().to_string())
+}
+
+/// The row for `item`, showing `check` in the menu's `marks` column.
+fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::ListBoxRow {
     let role = match check {
         CheckMark::NotCheckable => gtk::AccessibleRole::MenuItem,
         CheckMark::Unchecked | CheckMark::Checked => gtk::AccessibleRole::MenuItemCheckbox,
     };
     let row = gtk::ListBoxRow::builder()
-        .child(&item_content(item, check))
+        .child(&item_content(item, check, marks))
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // Every item's title is its label (`b.title=it.label` in app.js).
-    row.set_tooltip_text(Some(&item.label));
+    // No tooltip that would only repeat the label (`b.title=it.label` in
+    // app.js), as Windows 11's menus show none: only a label the menu cuts
+    // short shows whole, which adds what the row cannot show. A disabled
+    // row's own tooltip, saying why ([`explain_availability`]), comes
+    // first.
+    row.set_has_tooltip(true);
+    row.connect_query_tooltip(|row, _, _, _, tooltip| {
+        if row.tooltip_text().is_some() {
+            return false;
+        }
+        let Some(label) = cut_short_label(row) else {
+            return false;
+        };
+        tooltip.set_text(Some(&label));
+        true
+    });
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

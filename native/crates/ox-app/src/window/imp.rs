@@ -160,6 +160,9 @@ pub(crate) struct BrowserWindow {
     /// The folder shown before Settings and the places Settings offers
     /// the search index.
     pub(super) settings_tab: RefCell<SettingsTabState>,
+    /// What the command bar's "…" menu keeps of the places the sidebar
+    /// was last drawn from, until they are first drawn.
+    pub(super) more_menu_places: RefCell<Option<super::location_view::MoreMenuPlaces>>,
     /// What every window shares: the skin, settings and places. It
     /// comes from the application, so [`super::BrowserWindow::new`]
     /// sets it.

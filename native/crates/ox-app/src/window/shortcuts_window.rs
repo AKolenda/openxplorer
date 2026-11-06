@@ -2,7 +2,7 @@
 //! The keyboard shortcuts window: every bound key, grouped by task, with
 //! a search field (CMD-032).
 //!
-//! Ctrl+? and More options > Keyboard shortcuts open it, from any tab,
+//! Ctrl+? and Settings > About > Keyboard shortcuts open it, from any tab,
 //! Settings included, as Nautilus's Keyboard Shortcuts window. Its keys
 //! are read from the live bindings: the application's accelerators as
 //! GTK holds them, and the key tables the window installs its shortcut
@@ -153,6 +153,7 @@ fn describe(name: &str) -> Option<(Group, String)> {
         "win.open-terminal-here" => (Group::Files, ox_core::i18n::gettext_static("Open Terminal here")),
         "win.hidden" => (Group::View, ox_core::i18n::gettext_static("Show hidden files")),
         "win.details-pane" => (Group::View, ox_core::i18n::gettext_static("Details pane")),
+        "win.preview-pane" => (Group::View, ox_core::i18n::gettext_static("Preview pane")),
         "win.sidebar" => (Group::View, ox_core::i18n::gettext_static("Navigation pane")),
         "win.full-screen" => (Group::View, ox_core::i18n::gettext_static("Full screen")),
         "win.search" => (Group::Search, ox_core::i18n::gettext_static("Search")),
@@ -380,7 +381,8 @@ mod tests {
 
         assert_eq!(keys_of("Search"), ["Ctrl+F", "Ctrl+E"]);
         assert_eq!(keys_of("Delete"), ["Delete", "Ctrl+D"]);
-        assert_eq!(keys_of("Details pane"), ["Shift+Alt+P", "Alt+P"]);
+        assert_eq!(keys_of("Details pane"), ["Shift+Alt+P"]);
+        assert_eq!(keys_of("Preview pane"), ["Alt+P"]);
         assert_eq!(keys_of("Full screen"), ["F11"]);
         assert_eq!(
             rows.iter()

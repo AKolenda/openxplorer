@@ -18,11 +18,11 @@ msgid "- Choose Open as administrator on a local folder’s menu, confirm, then 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own search box.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own search box; so does More settings… in Folder Options (… > Options). Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
+msgid "- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -34,7 +34,7 @@ msgid "- New in the command bar creates a folder, a document from the built-in s
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location at the bottom of the navigation pane saves a share there.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -54,7 +54,7 @@ msgid "- This PC lists drives, USB sticks and connected phones. Click one to ope
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H shows or hides hidden files. Alt+Shift+P or Alt+P shows the details pane, F9 the navigation pane.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
+msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -74,7 +74,7 @@ msgid "Getting help"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nPress Ctrl+? for the full list of keys."
+msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nThe full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?)."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -131,10 +131,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/command-bar.ui
 msgid "File commands"
-msgstr ""
-
-#: crates/ox-app/resources/ui/details-pane.ui
-msgid "Close details pane"
 msgstr ""
 
 #: crates/ox-app/resources/ui/network-sign-in.ui
@@ -588,6 +584,10 @@ msgstr ""
 msgid "Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server."
 msgstr ""
 
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs
+msgid "Add a network location"
+msgstr ""
+
 #: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/dialogs/network_sign_in.rs
 msgid "Connect"
 msgstr ""
@@ -878,7 +878,7 @@ msgstr ""
 msgid "Date accessed"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/grouping.rs
 msgid "Date created"
 msgstr ""
 
@@ -890,7 +890,7 @@ msgstr ""
 msgid "Link destination"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/permissions_editor.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/permissions_editor.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs
 msgid "Owner"
 msgstr ""
 
@@ -906,15 +906,15 @@ msgstr ""
 msgid "Date deleted"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-core/src/grouping.rs
 msgid "Date modified"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs
 msgid "Folder path"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
 msgid "Name"
 msgstr ""
 
@@ -922,7 +922,7 @@ msgstr ""
 msgid "Original location"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Size"
 msgstr ""
 
@@ -1346,6 +1346,453 @@ msgstr ""
 msgid "You can change the folder icon. If you change the icon, it will no longer show a preview of the folder's contents."
 msgstr ""
 
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "#"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/format/explorer_text.rs
+msgctxt "decimal separator"
+msgid "."
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "1 (mono)"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "2 (stereo)"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "35mm focal length"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Action program"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Advanced photo"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Album"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Album artist"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Aperture priority"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs
+msgid "Attributes"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Audio"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Audio sample rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Authors"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Auto"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Average"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Bit depth"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Bit rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Camera"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Camera maker"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Camera model"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Center Weighted Average"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Channels"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Color representation"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/sharing_panel.rs
+msgid "Comments"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Composers"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Conductors"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Content"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Contributing artists"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Copyright"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Creative program"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Data rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Date taken"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Description"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Dimensions"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "EXIF version"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Encoded by"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Exposure bias"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Exposure program"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Exposure time"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "F-stop"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/file_ops/conflict_compare.rs crates/ox-core/src/entry/type_label.rs
+msgid "File"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash, auto"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Flash, compulsory"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Focal length"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Frame height"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Frame rate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Frame width"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Genre"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Height"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Horizontal resolution"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "ISO speed"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "ISO-{value}"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Image"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Item type"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Landscape mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Length"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Lens maker"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Lens model"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Manual"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Media"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Metering mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Multi Spot"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "No flash"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "No flash, auto"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "No flash, compulsory"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Normal"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Origin"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/grouping.rs
+msgid "Other"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Partial"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/select_matching.rs
+msgid "Pattern"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Portrait mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Program name"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Publisher"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Rating"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Shutter priority"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Spot"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Subject"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Tags"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Title"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Total bitrate"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Uncalibrated"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Unrated"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Vertical resolution"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Video"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "White balance"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Width"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "Year"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "f/{value}"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "sRGB"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{count} pixel"
+msgid_plural "{count} pixels"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{count} star"
+msgid_plural "{count} stars"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{flash}, red-eye reduction"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} dpi"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} frames/second"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} kHz"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} mm"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} sec."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value} step"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{value}kbps"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_rows.rs
+msgid "{width} x {height}"
+msgstr ""
+
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Details"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_tab.rs
+msgid "Property"
+msgstr ""
+
+#: crates/ox-app/src/properties/details_tab.rs
+msgid "Value"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/details_tab.rs
+msgid "{name}: {value}"
+msgstr ""
+
 #: crates/ox-app/src/properties/folder_count.rs crates/ox-app/src/properties/folder_sizes.rs
 msgid "Unavailable"
 msgstr ""
@@ -1369,10 +1816,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
 msgid "Accessed"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_tab.rs
-msgid "Attributes"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
@@ -1862,10 +2305,6 @@ msgid "Checking whether this folder is shared…"
 msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
-msgid "Comments"
-msgstr ""
-
-#: crates/ox-app/src/properties/sharing_panel.rs
 msgid "Network File and Folder Sharing"
 msgstr ""
 
@@ -2194,6 +2633,18 @@ msgid "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Every key OpenXplorer has, grouped by task. Ctrl+? opens them too."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Help"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Keyboard shortcuts"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "License & source"
 msgstr ""
 
@@ -2205,6 +2656,10 @@ msgstr ""
 msgid "Once a day, when OpenXplorer starts, ask GitHub whether a newer release exists. Nothing installs without you."
 msgstr ""
 
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Open the manual"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/about.rs
 msgid "OpenXplorer · License & source"
 msgstr ""
@@ -2214,11 +2669,27 @@ msgid "Read license & source information"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Show keyboard shortcuts"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "The OpenXplorer manual, which needs no network connection. F1 opens it too."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "Updates"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "automatic update check daily launch startup notify notification network github privacy"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "help manual guide documentation f1 how to user manual offline"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "keys keyboard shortcuts hotkeys accelerators bindings list ctrl+? cheat sheet"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -2735,10 +3206,6 @@ msgstr ""
 msgid "Compact view"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Details"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Documents and other files"
 msgstr ""
@@ -3249,6 +3716,10 @@ msgstr ""
 msgid "5 minutes"
 msgstr ""
 
+#: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/settings_page/indexing.rs crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/context_menu/entries.rs
+msgid "Cache this folder for search"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "Cached paths are stored locally and can be searched while a share is offline. Uncheck a root to stop caching and remove that root's names. Other overlapping roots may still contain them. Hidden folders and symbolic links are skipped."
 msgstr ""
@@ -3274,6 +3745,10 @@ msgid "Index pinned folders automatically"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
+msgid "Index the names and paths of the folder you came to Settings from, so searches in it are instant. Its right-click menu and the search bar offer this too."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
 msgid "Instant search"
 msgstr ""
 
@@ -3292,6 +3767,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "Manage…"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs crates/ox-app/src/window/disabled_reasons.rs
+msgid "Only a folder on a drive or share can be cached for search."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -3316,6 +3795,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "Watch folders for changes"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "cache this folder for search current folder here index instant search stop caching"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -3797,10 +4280,6 @@ msgstr ""
 msgid "Cache disabled; this root’s indexed names were removed."
 msgstr ""
 
-#: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/context_menu/entries.rs
-msgid "Cache this folder for search"
-msgstr ""
-
 #: crates/ox-app/src/window/caption_buttons.rs
 msgid "Close window"
 msgstr ""
@@ -3974,6 +4453,14 @@ msgid "Details pane"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Disconnect network drive"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "File name extensions"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "File…"
 msgstr ""
 
@@ -3995,6 +4482,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "HTML document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Hidden items"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4021,6 +4512,10 @@ msgstr ""
 msgid "List"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Map network drive"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "Markdown document"
 msgstr ""
@@ -4034,11 +4529,27 @@ msgid "Navigation pane"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Options"
+msgid "No network drive is connected."
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Pin current folder"
+msgid "Options"
+msgstr ""
+
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
+msgid "Pin to Quick access"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Preview pane"
+msgstr ""
+
+#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Properties"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
+msgid "Redo"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4053,8 +4564,8 @@ msgstr ""
 msgid "Select none"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Show hidden files"
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Show"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4071,6 +4582,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
 msgid "Text document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
+msgid "Undo"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Unpin from Quick access"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4199,14 +4718,6 @@ msgstr ""
 msgid "Pin this folder"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
-msgid "Pin to Quick access"
-msgstr ""
-
-#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
-msgid "Properties"
-msgstr ""
-
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Refresh"
 msgstr ""
@@ -4247,6 +4758,14 @@ msgstr ""
 msgid "This link points to an address OpenXplorer cannot open."
 msgstr ""
 
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/details_pane.rs
+msgid "Close details pane"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane.rs
+msgid "Close preview pane"
+msgstr ""
+
 #: crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/entry/type_label.rs
 msgid "Compressed folder"
 msgstr ""
@@ -4284,7 +4803,7 @@ msgstr ""
 msgid "{selected} items selected"
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/media.rs
+#: crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/details_pane/media.rs
 msgid "Preview"
 msgstr ""
 
@@ -4307,10 +4826,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
 msgid "Only a folder can be pinned to Quick access."
-msgstr ""
-
-#: crates/ox-app/src/window/disabled_reasons.rs
-msgid "Only a folder on a drive or share can be cached for search."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
@@ -4634,10 +5149,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/conflict_compare.rs
 msgid "Existing: {text}"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs crates/ox-core/src/entry/type_label.rs
-msgid "File"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4980,11 +5491,23 @@ msgid "Folder Views"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
+msgid "Hide extensions for known file types"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "More settings…"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
 msgid "No"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "Open File Explorer to:"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Open OpenXplorer's Settings"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -5518,10 +6041,6 @@ msgid "Search {title}"
 msgstr ""
 
 #: crates/ox-app/src/window/select_matching.rs
-msgid "Pattern"
-msgstr ""
-
-#: crates/ox-app/src/window/select_matching.rs
 msgid "Select items matching"
 msgstr ""
 
@@ -5592,15 +6111,7 @@ msgid "Go to the last tab"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
-msgid "Help"
-msgstr ""
-
-#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Home folder"
-msgstr ""
-
-#: crates/ox-app/src/window/shortcuts_window.rs
-msgid "Keyboard shortcuts"
 msgstr ""
 
 #: crates/ox-app/resources/ui/window.ui crates/ox-app/src/window/shortcuts_window.rs
@@ -5635,10 +6146,6 @@ msgstr ""
 msgid "Previous tab"
 msgstr ""
 
-#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
-msgid "Redo"
-msgstr ""
-
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Reopen closed tab"
 msgstr ""
@@ -5656,15 +6163,15 @@ msgid "Selection"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Show hidden files"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Tabs and windows"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Type an address"
-msgstr ""
-
-#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
-msgid "Undo"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -5761,15 +6268,7 @@ msgid "Huge icons"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
-msgid "Show"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/menu.rs
 msgid "Show all entries"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/menu.rs
-msgid "Unpin from Quick access"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6689,11 +7188,6 @@ msgctxt "thousands separator"
 msgid ","
 msgstr ""
 
-#: crates/ox-core/src/format/explorer_text.rs
-msgctxt "decimal separator"
-msgid "."
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
 msgid "{bytes} bytes"
@@ -6809,10 +7303,6 @@ msgstr ""
 
 #: crates/ox-core/src/grouping.rs
 msgid "Next week"
-msgstr ""
-
-#: crates/ox-core/src/grouping.rs
-msgid "Other"
 msgstr ""
 
 #: crates/ox-core/src/grouping.rs
@@ -8636,6 +9126,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "A name being renamed in place no longer closes when you use its own right-click menu, such as Paste or Select All, or switch to another window. Item check boxes are off by default, so a selected item is only highlighted, as in Windows; View > Item check boxes turns them back on. A search word found only in a name's extension no longer matches, so pd no longer finds every PDF."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "A notice at the top right of the window says when a new release is out, the command bar's Update and the status bar's Update available stay until it is installed, and the Settings gear is back in the command bar. Deleting a folder permanently under Open as administrator works again for folders 2.0.12 and 2.0.13 refused, through a small helper that holds each folder open while it empties it. Dragging a tab out into a new window no longer crashes on Wayland, and the keyboard returns to the file list after navigating or editing the address."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml

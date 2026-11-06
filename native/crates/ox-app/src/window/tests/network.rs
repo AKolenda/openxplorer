@@ -225,6 +225,50 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
 }
 
+/// "…" > Add a network location opens the connect dialog under Windows'
+/// title, at a web address type (Windows' wizard adds websites and FTP
+/// sites), and saves what it connects under Network locations; Map
+/// network drive opens it at a Windows share.
+///
+/// parity: NET-001, NET-002, CMD-007
+#[gtk::test]
+fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
+    let test = TestWindow::open(Page::ThisPc.uri());
+    for (action, title, kind) in [
+        (
+            "add-network-location",
+            "Add a network location",
+            "Secure WebDAV (HTTPS)",
+        ),
+        (
+            "map-network-location",
+            "Map network location",
+            "Windows share (SMB)",
+        ),
+    ] {
+        test.activate(action, None);
+        let dialog = open_form_dialog();
+        assert_eq!(dialog.title_text(), title);
+        let chosen = descendants::<gtk::DropDown>(&dialog)
+            .first()
+            .and_then(gtk::DropDown::selected_item)
+            .and_downcast::<gtk::StringObject>()
+            .map(|chosen| chosen.string().to_string());
+        assert_eq!(chosen.as_deref(), Some(kind), "{action}");
+        let save = descendants::<gtk::CheckButton>(&dialog)
+            .into_iter()
+            .find(|check| {
+                check
+                    .label()
+                    .is_some_and(|label| label.starts_with("Save in the sidebar"))
+            })
+            .expect("the dialog saves the location");
+        assert!(save.is_active(), "{action} saves it under Network locations");
+        dialog.press("Cancel");
+        wait_until("Cancel to close the dialog", || !dialog.is_visible());
+    }
+}
+
 /// A share that is not mounted is mounted once and listed again; a
 /// second "not mounted" is reported, never mounted again, and a failed
 /// mount is reported instead of the listing's error. The shares are on a
@@ -561,13 +605,44 @@ fn this_pc_lists_saved_locations_or_says_how_to_map_one() {
     assert!(shows(landing, empty));
     assert!(shows(landing, "Map network location"));
 
-    test.save_share("smb://nas/media", "Media (M:)");
-    wait_until("the saved share's card", || shows(landing, "Media (M:)"));
-
-    for expected in ["\\\\nas\\media", "Connect on open"] {
-        assert!(shows(landing, expected), "{expected} in {:?}", texts_in(landing));
-    }
+    test.save_share("smb://fileserver/backup", "Backup (S:)");
+    // Named as Windows 11 names a mapped drive: its label, its server and
+    // its letter; the full address is the card's tooltip.
+    let name = "Backup (\\\\fileserver) (S:)";
+    wait_until("the saved share's card", || shows(landing, name));
+    assert!(shows(landing, "Connect on open"), "{:?}", texts_in(landing));
+    let card = descendants::<gtk::Button>(landing)
+        .into_iter()
+        .find(|card| card.has_css_class("drive-card") && shows(card, name))
+        .expect("the share's card");
+    assert_eq!(card.tooltip_text().as_deref(), Some("\\\\fileserver\\backup"));
     assert!(!shows(landing, empty));
+}
+
+/// A share's card name, as Windows 11 writes a mapped drive: "Backup
+/// (\\fileserver) (S:)", the server put before a drive letter the label
+/// ends with, and only once.
+///
+/// parity: HOME-005
+#[test]
+fn a_share_card_is_named_with_its_server_and_letter_as_windows_does() {
+    use crate::window::landing::share_card_name;
+    assert_eq!(
+        share_card_name("Backup (S:)", "smb://fileserver/backup"),
+        "Backup (\\\\fileserver) (S:)"
+    );
+    assert_eq!(
+        share_card_name("Backup", "smb://fileserver/backup"),
+        "Backup (\\\\fileserver)"
+    );
+    assert_eq!(
+        share_card_name("Backup (\\\\fileserver) (S:)", "smb://fileserver/backup"),
+        "Backup (\\\\fileserver) (S:)"
+    );
+    assert_eq!(
+        share_card_name("Photos", "sftp://demo@archive.example/srv"),
+        "Photos (archive.example)"
+    );
 }
 
 /// Local Disk's card shows how full it is once GIO has measured it.
@@ -700,7 +775,9 @@ fn the_network_surfaces_are_captured() {
         test.activate("theme", Some(theme));
         test.window.navigate(Page::ThisPc.uri()).expect("This PC");
         let landing = test.window.folder_pane().landing();
-        wait_until("the saved share", || shows(landing, "Studio NAS (Z:)"));
+        wait_until("the saved share", || {
+            shows(landing, "Studio NAS (\\\\studio-nas) (Z:)")
+        });
         capture(&test.window, &format!("native-this-pc-saved-share-{theme}.png"));
         test.window
             .navigate(Page::Network.uri())

@@ -78,8 +78,13 @@ impl EmblemPieces {
 
     /// Shows the emblems of `emblems` over an icon `size` pixels high.
     pub(super) fn show(&self, emblems: Emblems, size: i32) {
-        for (image, is_shown) in [(&self.link, emblems.link), (&self.lock, emblems.read_only)] {
+        let pieces = [
+            (&self.link, Icon::Link, emblems.link),
+            (&self.lock, Icon::ShieldLock, emblems.read_only),
+        ];
+        for (image, icon, is_shown) in pieces {
             image.set_pixel_size(emblem_size(size));
+            super::keep_loaded(image, icon, emblem_size(size));
             image.set_visible(is_shown);
         }
     }
