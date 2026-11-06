@@ -7,15 +7,17 @@
 //! A request reads the cache through GIO (`thumbnail::path`,
 //! `thumbnail::is-valid`, `thumbnail::failed`) at low priority. A missing
 //! thumbnail is made by the session's thumbnailer service
-//! ([`service`]) when it has one and supports the type, else, for the
-//! picture types gdk-pixbuf reads, by the app itself ([`writer`]). Only a
-//! few are decoded or made at a time ([`slots`]); a type that cannot be
-//! previewed, or a failed attempt, keeps its icon. [`PreviewPolicy`]
-//! says which items of a folder get previews, from the Settings the user
-//! chose (VIEW-058).
+//! ([`service`]) when it has one and supports the type, else by a
+//! thumbnailer the desktop installs for the type ([`thumbnailers`], a
+//! program the app starts), else, for the picture types gdk-pixbuf reads,
+//! by the app itself ([`writer`]). Only a few are decoded or made at a
+//! time ([`slots`]); a type that cannot be previewed, or a failed attempt,
+//! keeps its icon. [`PreviewPolicy`] says which items of a folder get
+//! previews, from the Settings the user chose (VIEW-058).
 
 mod service;
 mod slots;
+mod thumbnailers;
 mod writer;
 
 use std::cell::RefCell;
@@ -194,7 +196,8 @@ async fn thumbnail_of(request: &PreviewRequest) -> Option<PathBuf> {
 }
 
 /// Makes the missing thumbnail of the item: by the thumbnailer service
-/// when it supports the type, else by gdk-pixbuf for a picture.
+/// when it supports the type, else by the desktop's own thumbnailer for
+/// the type when it installs one, else by gdk-pixbuf for a picture.
 async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
     let flavor = ThumbnailFlavor::for_pixels(request.pixels);
     let cache_dir = glib::user_cache_dir();
@@ -227,7 +230,22 @@ async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
     let is_picture = PIXBUF_TYPES.with(|types| types.contains(&request.content_type));
     let modified = request.modified?;
     if !is_picture {
-        return None;
+        // A thumbnailer the desktop installs for the type, which is the
+        // only way to a picture of it when no service runs. Asking it costs
+        // a forked program, so the picture types gdk-pixbuf reads never
+        // come here.
+        let job = thumbnailers::Job {
+            cache_dir: cache_dir.clone(),
+            uri: request.uri.clone(),
+            content_type: request.content_type.clone(),
+            modified,
+            flavor,
+        };
+        return MAKING
+            .with(Rc::clone)
+            .blocking(move |cancel| thumbnailers::write_thumbnail(&job, cancel))
+            .await
+            .flatten();
     }
     let source = Source {
         uri: request.uri.clone(),

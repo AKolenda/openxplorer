@@ -6,6 +6,10 @@
 //! written to a temporary file and renamed into place, readable by its
 //! owner only, in folders only its owner may enter. Other desktop
 //! programs, Files and Dolphin included, then find it too.
+//!
+//! A desktop thumbnailer's picture ([`super::thumbnailers`]) is written
+//! the same way, sharing [`save_thumbnail`]: such a program writes a plain
+//! PNG, so the app adds the keys that keep a thumbnail valid.
 
 use std::fs;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
@@ -37,6 +41,27 @@ pub(super) fn write_thumbnail(
     flavor: ThumbnailFlavor,
     cancellation: &gio::Cancellable,
 ) -> Option<PathBuf> {
+    let pixbuf = scaled_picture(&source.uri, flavor.pixels(), cancellation)?;
+    if cancellation.is_cancelled() {
+        return None;
+    }
+    save_thumbnail(cache_dir, source, flavor, &pixbuf)
+}
+
+/// Writes the picture `pixbuf` as the thumbnail of `source` in `flavor`
+/// under the cache folder `cache_dir`, as the Thumbnail Managing Standard
+/// asks; `None` when it cannot be written. Blocks.
+///
+/// [`write_thumbnail`] hands over the picture it decoded, and
+/// [`super::thumbnailers`] the one a desktop thumbnailer wrote: either way
+/// the cache gets the same keys, so Files and Dolphin find the thumbnail
+/// valid too.
+pub(super) fn save_thumbnail(
+    cache_dir: &Path,
+    source: &Source,
+    flavor: ThumbnailFlavor,
+    pixbuf: &Pixbuf,
+) -> Option<PathBuf> {
     let target = thumbnail_file(cache_dir, &source.uri, flavor);
     let folder = target.parent()?;
     // A thumbnail of a thumbnail would grow the cache from itself.
@@ -47,15 +72,7 @@ pub(super) fn write_thumbnail(
     ) {
         return None;
     }
-    let pixbuf = scaled_picture(&source.uri, flavor.pixels(), cancellation)?;
-    if cancellation.is_cancelled() {
-        return None;
-    }
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(folder)
-        .ok()?;
+    create_folder(folder)?;
     let temporary = folder.join(format!(".{}.openxplorer.tmp", glib::random_int()));
     let modified = source.modified.to_string();
     let options = [
@@ -64,7 +81,6 @@ pub(super) fn write_thumbnail(
         ("tEXt::Software", "OpenXplorer"),
     ];
     let saved = pixbuf.savev(&temporary, "png", &options).is_ok()
-        && !cancellation.is_cancelled()
         && fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600)).is_ok()
         && fs::rename(&temporary, &target).is_ok();
     if !saved {
@@ -87,6 +103,28 @@ pub(super) fn find_thumbnail(
     let is_current = thumbnail.option("tEXt::Thumb::URI").as_deref() == Some(uri)
         && thumbnail.option("tEXt::Thumb::MTime").as_deref() == Some(modified.to_string().as_str());
     is_current.then_some(path)
+}
+
+/// The folder `folder` and its parents, enterable by its owner only, as
+/// the standard asks of the cache folders.
+pub(super) fn create_folder(folder: &Path) -> Option<()> {
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(folder)
+        .ok()
+}
+
+/// `pixbuf` scaled down to fit `edge` pixels square, or as it is when it
+/// already does: a thumbnail is never larger than its flavor.
+pub(super) fn fit_thumbnail(pixbuf: &Pixbuf, edge: i32) -> Pixbuf {
+    if pixbuf.width() <= edge && pixbuf.height() <= edge {
+        return pixbuf.clone();
+    }
+    let (width, height) = fit(pixbuf.width(), pixbuf.height(), edge);
+    pixbuf
+        .scale_simple(width, height, gtk::gdk_pixbuf::InterpType::Bilinear)
+        .unwrap_or_else(|| pixbuf.clone())
 }
 
 /// The picture at `uri`, turned upright and decoded to fit `edge` pixels
