@@ -41,7 +41,14 @@ fn spilling_widgets(window: &PropertiesWindow) -> Vec<String> {
     descendants::<gtk::Widget>(window)
         .into_iter()
         .filter(|widget| widget.is_mapped() && widget.width() > width)
-        .map(|widget| format!("{} {:?} {}", widget.type_().name(), widget.css_classes(), widget.width()))
+        .map(|widget| {
+            format!(
+                "{} {:?} {}",
+                widget.type_().name(),
+                widget.css_classes(),
+                widget.width()
+            )
+        })
         .collect()
 }
 
@@ -54,9 +61,16 @@ fn assert_every_tab_keeps(window: &PropertiesWindow, width: i32, what: &str) {
         }
         window.select_tab(name);
         wait_for_frames(window, 4);
-        assert_eq!(window.width(), width, "{what}: the {name} tab keeps the window's width");
+        assert_eq!(
+            window.width(),
+            width,
+            "{what}: the {name} tab keeps the window's width"
+        );
         let spilling = spilling_widgets(window);
-        assert!(spilling.is_empty(), "{what}: on the {name} tab, wider than the window: {spilling:?}");
+        assert!(
+            spilling.is_empty(),
+            "{what}: on the {name} tab, wider than the window: {spilling:?}"
+        );
     }
 }
 
@@ -85,8 +99,12 @@ fn a_long_name_or_location_never_widens_properties() {
     test.select_named("Short");
     let short = properties_of_selection(&test, "Short Properties");
     let width = shown_width(&short);
+    let height = short.height();
     assert!(width > 0);
-    let short_name = descendants::<gtk::Entry>(&short).into_iter().next().expect("the name box");
+    let short_name = descendants::<gtk::Entry>(&short)
+        .into_iter()
+        .next()
+        .expect("the name box");
     let name_width = short_name.width();
     assert_every_tab_keeps(&short, width, "a short name");
     short.close();
@@ -94,7 +112,11 @@ fn a_long_name_or_location_never_widens_properties() {
     test.select_named(LONG_NAME);
     let folder = properties_of_selection(&test, &format!("{LONG_NAME} Properties"));
     assert_eq!(shown_width(&folder), width, "a long folder name");
-    let long_name = descendants::<gtk::Entry>(&folder).into_iter().next().expect("the name box");
+    assert_eq!(folder.height(), height, "nor makes it taller");
+    let long_name = descendants::<gtk::Entry>(&folder)
+        .into_iter()
+        .next()
+        .expect("the name box");
     assert_eq!(long_name.width(), name_width, "the name box keeps its width");
     assert_eq!(long_name.text(), LONG_NAME, "and holds the whole name");
     assert_every_tab_keeps(&folder, width, "a long folder name");
@@ -112,6 +134,7 @@ fn a_long_name_or_location_never_widens_properties() {
     test.select_named(LONG_NAME);
     let nested = properties_of_selection(&test, &format!("{LONG_NAME} Properties"));
     assert_eq!(shown_width(&nested), width, "a long location");
+    assert_eq!(nested.height(), height, "a long location keeps the height too");
     assert_every_tab_keeps(&nested, width, "a long location");
     nested.close();
 
@@ -148,4 +171,3 @@ fn properties_with_a_long_name_are_captured() {
         }
     }
 }
-

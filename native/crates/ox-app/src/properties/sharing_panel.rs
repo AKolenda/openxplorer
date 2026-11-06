@@ -74,12 +74,11 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> (gtk::Bo
     identity.append(&ArtImage::new(Art::Folder, FOLDER_ART));
     let names = gtk::Box::new(gtk::Orientation::Vertical, 0);
     names.set_hexpand(true);
-    // A long name wraps inside the window's fixed width.
+    // A long name ends in "…" inside the window's fixed width and height.
     let folder_label = gtk::Label::builder()
         .label(&folder_name)
         .xalign(0.0)
-        .wrap(true)
-        .wrap_mode(gtk::pango::WrapMode::WordChar)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
         .build();
     names.append(&folder_label);
     let state = gtk::Label::builder()

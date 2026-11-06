@@ -703,6 +703,26 @@ impl Rows {
         value
     }
 
+    /// Adds `name:` and the selectable `value` on one line, ending in "…"
+    /// when it is wider than the window, with the whole value as its
+    /// tooltip: Windows' one-line read-only fields, such as Location and
+    /// Object name, which keep the window's size. Selecting it copies
+    /// the whole value.
+    pub(crate) fn add_line(&self, name: &str, value: &str) -> gtk::Label {
+        let value = gtk::Label::builder()
+            .label(value)
+            .xalign(0.0)
+            .hexpand(true)
+            .selectable(true)
+            .single_line_mode(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .tooltip_text(value)
+            .css_classes(["property-value"])
+            .build();
+        self.add_control(name, &value);
+        value
+    }
+
     /// Adds `name:` before `control`.
     pub(crate) fn add_control(&self, name: &str, control: &impl IsA<gtk::Widget>) -> gtk::Label {
         let line = self.line.get();

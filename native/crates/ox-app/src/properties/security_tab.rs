@@ -96,7 +96,7 @@ pub(super) fn fill_security(page: &gtk::Box, facts: &SecurityFacts, context: &Se
         page.remove(&child);
     }
     let object = Rows::new();
-    object.add(&ox_core::i18n::gettext("Object name"), &facts.object_name);
+    object.add_line(&ox_core::i18n::gettext("Object name"), &facts.object_name);
     page.append(object.widget());
     let names = NameList::new(facts);
     page.append(&caption(

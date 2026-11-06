@@ -9,9 +9,9 @@
 //! and at most the window's width, so wrapping values wrap and ending
 //! values end with "…" at the window's width, on every tab.
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::glib;
 
 mod imp {
     use std::cell::{Cell, RefCell};
