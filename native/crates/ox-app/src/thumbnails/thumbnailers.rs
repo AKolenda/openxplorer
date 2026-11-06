@@ -695,14 +695,13 @@ impl Workspace {
 
 impl Drop for Workspace {
     fn drop(&mut self) {
-        // The program may have taken its folders' permissions away to keep
-        // what it left; they are given back first, and the links it left
-        // are removed, never followed. Its sandbox is gone by now, so
-        // nothing changes the folder meanwhile.
-        let removed = fs::symlink_metadata(&self.0)
-            .is_ok_and(|metadata| metadata.is_dir() && open_up(&self.0))
-            && fs::remove_dir_all(&self.0).is_ok();
-        if !removed && self.0.exists() {
+        // The program may have taken its folders' permissions away, or
+        // nested them deeper than a path may name, to keep what it left:
+        // the folder is emptied through the folders' own descriptors, each
+        // given back to its owner first, and links are removed, never
+        // followed. Its sandbox is gone by now, so nothing changes the
+        // folder meanwhile.
+        if !remove_tree(&self.0) {
             glib::g_warning!(
                 ox_core::LOG_DOMAIN,
                 "A thumbnailer's folder could not be removed: {}",
@@ -712,19 +711,70 @@ impl Drop for Workspace {
     }
 }
 
-/// Gives the folder `folder` and every folder in it back to their owner,
-/// without following a link; whether that worked everywhere.
-fn open_up(folder: &Path) -> bool {
-    if fs::set_permissions(folder, fs::Permissions::from_mode(0o700)).is_err() {
-        return false;
+/// How deep a workspace's folders are emptied; a thumbnailer has no need
+/// of more, and a deeper one is left, as a deeper walk could exhaust the
+/// stack or the descriptors.
+const CLEANUP_DEPTH: usize = 32;
+
+/// Removes the folder `folder` with everything in it, as [`Workspace`]'s
+/// drop describes; whether it is gone.
+fn remove_tree(folder: &Path) -> bool {
+    use rustix::fs::{Mode, OFlags};
+
+    if !fs::symlink_metadata(folder).is_ok_and(|metadata| metadata.is_dir()) {
+        return fs::remove_file(folder).is_ok() || !folder.exists();
     }
-    let Ok(read) = fs::read_dir(folder) else {
+    let _ = fs::set_permissions(folder, fs::Permissions::from_mode(0o700));
+    let flags = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
+    if let Ok(descriptor) = rustix::fs::open(folder, flags, Mode::empty()) {
+        empty_folder(&descriptor, 0);
+    }
+    fs::remove_dir(folder).is_ok()
+}
+
+/// Removes everything in the open folder `folder`, `depth` folders below
+/// the workspace; whether it is empty now.
+fn empty_folder(folder: &std::os::fd::OwnedFd, depth: usize) -> bool {
+    use rustix::fs::{AtFlags, FileType, Mode, OFlags};
+
+    let Ok(listing) = rustix::fs::Dir::read_from(folder) else {
         return false;
     };
-    read.filter_map(Result::ok).all(|entry| {
-        let is_folder = entry.file_type().is_ok_and(|kind| kind.is_dir());
-        !is_folder || open_up(&entry.path())
-    })
+    // The names are taken first, so removing them does not disturb the
+    // listing.
+    let mut names = Vec::new();
+    for entry in listing {
+        let Ok(entry) = entry else {
+            return false;
+        };
+        let name = entry.file_name().to_owned();
+        if name.as_bytes() != b"." && name.as_bytes() != b".." {
+            names.push((name, entry.file_type()));
+        }
+    }
+    let mut emptied = true;
+    for (name, kind) in names {
+        let kind = if kind == FileType::Unknown {
+            rustix::fs::statat(folder, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
+                .map_or(FileType::Unknown, |stat| FileType::from_raw_mode(stat.st_mode))
+        } else {
+            kind
+        };
+        if kind != FileType::Directory {
+            emptied &= rustix::fs::unlinkat(folder, name.as_c_str(), AtFlags::empty()).is_ok();
+            continue;
+        }
+        if depth >= CLEANUP_DEPTH {
+            emptied = false;
+            continue;
+        }
+        let _ = rustix::fs::chmodat(folder, name.as_c_str(), Mode::RWXU, AtFlags::empty());
+        let flags = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
+        let inner = rustix::fs::openat(folder, name.as_c_str(), flags, Mode::empty())
+            .is_ok_and(|inner| empty_folder(&inner, depth + 1));
+        emptied &= inner && rustix::fs::unlinkat(folder, name.as_c_str(), AtFlags::REMOVEDIR).is_ok();
+    }
+    emptied
 }
 
 /// The picture a thumbnailer wrote at `path`, decoded to fit `edge`
@@ -1466,10 +1516,33 @@ mod tests {
         let locked = path.join("locked");
         fs::create_dir(&locked).expect("a folder");
         fs::write(locked.join("kept"), b"left behind").expect("a file");
+        // Folders nested deeper than a path may name, made as a program
+        // makes them, one inside the other.
+        let mut deep = rustix::fs::open(
+            &path,
+            rustix::fs::OFlags::DIRECTORY | rustix::fs::OFlags::CLOEXEC,
+            rustix::fs::Mode::empty(),
+        )
+        .expect("the workspace");
+        let long = "d".repeat(250);
+        for _ in 0..20 {
+            rustix::fs::mkdirat(&deep, long.as_str(), rustix::fs::Mode::RWXU).expect("a folder");
+            deep = rustix::fs::openat(
+                &deep,
+                long.as_str(),
+                rustix::fs::OFlags::DIRECTORY | rustix::fs::OFlags::CLOEXEC,
+                rustix::fs::Mode::empty(),
+            )
+            .expect("the folder");
+        }
+        drop(deep);
+        // A link out of the workspace goes, and what it names stays.
+        std::os::unix::fs::symlink(&picture, path.join("out")).expect("the link");
         fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).expect("the mode");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o500)).expect("the mode");
         drop(workspace);
         assert!(!path.exists(), "the workspace is gone");
+        assert!(picture.exists(), "and a link in it was not followed");
         assert_eq!(extension_of(Path::new("/a/Clip.MP4")), ".MP4");
         assert_eq!(extension_of(Path::new("/a/odd.p n g")), "");
         assert_eq!(extension_of(Path::new("/a/none")), "");
