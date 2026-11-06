@@ -262,6 +262,13 @@ async fn read_image(clipboard: &gdk::Clipboard) -> Found<PastedContent> {
     if bytes.is_empty() {
         return Found::Nothing;
     }
+    // GTK's decoding is not bounded by the size of what the owner holds, so
+    // the limit is enforced on what the paste would write: a picture of this
+    // branch is as much "too large" as one whose own bytes were over it, and
+    // a paste never writes a file it would refuse to read back.
+    if bytes.len() > MAX_BYTES {
+        return Found::TooLarge;
+    }
     Found::Content(PastedContent::Image {
         extension: TEXTURE_EXTENSION,
         bytes,

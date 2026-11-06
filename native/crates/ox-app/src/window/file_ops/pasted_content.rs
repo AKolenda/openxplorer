@@ -51,7 +51,14 @@ impl BrowserWindow {
             Err(error) if error.is_cancelled() => {}
             Ok(created) => {
                 self.context().record_operation(created.undo_record());
-                self.reload_selecting(vec![created.uri]);
+                // Paste into writes into a folder of another tab, and a slow
+                // share can be navigated away from before the file lands:
+                // reloading the tab that is active now would replace its
+                // selection with an item it does not hold, so only the tab
+                // still showing the destination lists it again.
+                if self.current_uri().as_deref() == Some(destination_folder.as_str()) {
+                    self.reload_selecting(vec![created.uri]);
+                }
             }
             Err(error) => self.show_message(&error.to_string()),
         }

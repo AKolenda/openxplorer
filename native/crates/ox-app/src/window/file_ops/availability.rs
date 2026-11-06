@@ -275,6 +275,24 @@ impl CommandFacts {
     }
 }
 
+/// Whether the jobs that run keep `command` waiting.
+///
+/// A copy, a cut and a paste of a file list queue behind them, up to
+/// [`MAX_JOBS`](super::jobs::MAX_JOBS). Text or an image is written as the
+/// window's own quick write, which runs only while no job does, so such a
+/// paste waits for them instead: enabled, it would do nothing (CLIP-015).
+fn waits_for_running_jobs(command: FileCommand, clipboard: ClipboardKind, jobs: usize) -> bool {
+    match command {
+        FileCommand::Copy | FileCommand::Cut => false,
+        FileCommand::Paste | FileCommand::PasteInto if clipboard != ClipboardKind::Files => true,
+        FileCommand::Paste
+        | FileCommand::PasteInto
+        | FileCommand::Delete
+        | FileCommand::DeletePermanently => jobs >= super::jobs::MAX_JOBS,
+        _ => true,
+    }
+}
+
 /// The facts about `items`, the selected items (`canOperate` and
 /// `readonlyLocation` in app.js).
 pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -> SelectionFacts {
@@ -358,14 +376,7 @@ impl BrowserWindow {
         let mut facts = self.command_facts();
         let jobs = self.imp().file_operations.borrow().jobs.len();
         if jobs > 0 {
-            facts.is_busy |= match command {
-                FileCommand::Copy | FileCommand::Cut => false,
-                FileCommand::Paste
-                | FileCommand::PasteInto
-                | FileCommand::Delete
-                | FileCommand::DeletePermanently => jobs >= super::jobs::MAX_JOBS,
-                _ => true,
-            };
+            facts.is_busy |= waits_for_running_jobs(command, facts.clipboard, jobs);
         }
         facts
     }
@@ -524,6 +535,39 @@ mod tests {
 
         assert!(enabled(&searching).is_empty());
         assert!(enabled(&read_only_folder).is_empty());
+    }
+
+    /// A paste of a file list queues behind the jobs that run, as a copy does;
+    /// one of text or an image writes its file as the window's own quick write,
+    /// which runs only while no job does, so it waits for them (CLIP-015).
+    #[test]
+    fn a_paste_of_data_waits_for_the_jobs_that_run() {
+        let max = super::super::jobs::MAX_JOBS;
+        assert!(!waits_for_running_jobs(
+            FileCommand::Paste,
+            ClipboardKind::Files,
+            max - 1
+        ));
+        assert!(waits_for_running_jobs(
+            FileCommand::Paste,
+            ClipboardKind::Files,
+            max
+        ));
+        for kind in [ClipboardKind::Text, ClipboardKind::Image] {
+            assert!(
+                waits_for_running_jobs(FileCommand::Paste, kind, 1),
+                "{kind:?} waits for the first job"
+            );
+            assert!(
+                waits_for_running_jobs(FileCommand::PasteInto, kind, 1),
+                "{kind:?}"
+            );
+        }
+        assert!(!waits_for_running_jobs(
+            FileCommand::Copy,
+            ClipboardKind::Files,
+            1
+        ));
     }
 
     /// Text and an image are pasted as one new file, so they enable Paste

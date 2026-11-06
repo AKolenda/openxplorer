@@ -461,6 +461,15 @@ fn paste_into_a_folder_writes_the_text_there() {
         fs::read(fixture.path(&format!("Documents/{}", names[0]))).expect("the pasted text"),
         b"Plan Q3"
     );
+    // The file went into a folder that is not the one on screen, so this tab
+    // keeps its own selection: reloading it would select an item it does not
+    // hold.
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    assert_eq!(
+        test.window.folder_pane().model().selected_uris(),
+        [fixture.uri_of("Documents")],
+        "the selection this tab had"
+    );
 }
 
 /// parity: CLIP-016

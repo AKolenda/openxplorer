@@ -291,8 +291,14 @@ impl Shortfall {
 ///
 /// Pasting clipboard text or an image writes bytes measured before the
 /// first one is written, so nothing has to be walked as a copy's tree is.
-pub(crate) fn payload_refusal(folder: &dyn Node, needed: u64) -> Option<TransferError> {
-    let free = folder.filesystem(None)?.free?;
+/// `cancel` stops the query of a share that does not answer, so pressing
+/// Cancel ends the paste instead of waiting for the backend.
+pub(crate) fn payload_refusal(
+    folder: &dyn Node,
+    needed: u64,
+    cancel: Option<&Cancellation>,
+) -> Option<TransferError> {
+    let free = folder.filesystem(cancel)?.free?;
     (needed > free).then(|| Shortfall { needed, free }.error(&folder.display_name()))
 }
 

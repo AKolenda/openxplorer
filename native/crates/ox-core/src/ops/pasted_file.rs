@@ -47,7 +47,11 @@ pub async fn create_pasted_file(
         // XFER-028 before the first byte: the payload is measured already.
         // A folder whose free space cannot be read is not refused here;
         // writing that does not fit reports the backend's own error.
-        if let Some(refusal) = payload_refusal(&GioNode::new(&folder_uri), bytes.len() as u64) {
+        if let Some(refusal) = payload_refusal(
+            &GioNode::new(&folder_uri),
+            bytes.len() as u64,
+            Some(&context.cancel),
+        ) {
             return Err(refusal.into());
         }
         first_free_name(&name, |name| {
