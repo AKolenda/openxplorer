@@ -4,15 +4,18 @@
 //! Ports `renderSidebar` and `.sidebar` in `v2.0.0:desktop/ui/app.js` and
 //! `style.css`: the rows of [`entries::sidebar_entries`], separated by
 //! list-row headers so keyboard and screen-reader users never land on an
-//! empty separator row, and the "Map network drive" button pinned below
-//! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
+//! empty separator row. As in Windows 11's navigation pane, nothing is
+//! pinned below the list: the Python app's "Map network drive" button
+//! (`.sidebar-bottom`) is gone, and Map network drive is in This PC's and
+//! Network's menus and in their "…". Rows run [`WindowAction::GoTo`] or
 //! [`WindowAction::MountVolume`]; a middle-click or Ctrl+click opens a
 //! place in a tab, and the current location highlights the closest place
 //! that holds it.
 //! A right-click opens the row's menu: a Quick access pin's ([`menu`],
 //! `sidebarMenu` in app.js), or a drive's or a network location's
 //! (`driveMenu` and `networkLocationMenu`,
-//! [`PlaceMenu`](super::place_menus::PlaceMenu)).
+//! [`PlaceMenu`](super::place_menus::PlaceMenu)), or This PC's or
+//! Network's, laid out as Windows 11's.
 //!
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
 //! so the list's header function and its middle-click and right-click
@@ -32,8 +35,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::location::same_location;
-
-use crate::icons::{self, Icon};
 
 use super::folder_tree::FolderTree;
 use super::menu_popover::MenuPopover;
@@ -59,9 +60,6 @@ pub(super) enum HiddenRow {
 
 /// The class that dims a hidden row.
 const HIDDEN_ROW_CLASS: &str = "hidden-place";
-
-/// The "+" of Map network drive.
-const MAP_NETWORK_GLYPH: i32 = 17;
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
@@ -125,7 +123,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    /// The navigation pane: the scrolling list above the footer button.
+    /// The navigation pane: the scrolling list, and the folder tree below
+    /// it while shown.
     pub(crate) struct Sidebar(ObjectSubclass<imp::Sidebar>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
@@ -145,7 +144,7 @@ impl Sidebar {
             .expect("constructed builds the folder tree")
     }
 
-    /// Builds the list and, below it, the footer into the pane.
+    /// Builds the list and the folder tree into the pane.
     fn build_pane(&self) {
         self.set_orientation(gtk::Orientation::Vertical);
         self.add_css_class("sidebar");
@@ -182,7 +181,6 @@ impl Sidebar {
             .vexpand(true)
             .build();
         self.append(&panes);
-        self.append(&map_network_button());
         let imp = self.imp();
         imp.list.set(list).expect("constructed runs once per object");
         imp.folder_tree
@@ -559,30 +557,10 @@ fn section_separator() -> gtk::Separator {
     line
 }
 
-/// The "Map network drive" button below the list (`#connect-sidebar`).
-fn map_network_button() -> gtk::Box {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
-    content.append(&icons::image(Icon::Add, MAP_NETWORK_GLYPH));
-    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext(
-        "Map network drive",
-    ))));
-    let button = gtk::Button::builder()
-        .child(&content)
-        .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(ox_core::i18n::gettext("Map network drive"))
-        .build();
-    let footer = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .css_classes(["sidebar-bottom"])
-        .build();
-    footer.append(&button);
-    footer
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::icons::Art;
+    use crate::icons::{Art, Icon};
 
     fn place(label: &str, uri: &str) -> SidebarEntry {
         SidebarEntry {

@@ -101,12 +101,6 @@ window.ox .sidebar button.side-eject:hover { background-color: @ox_pressed; colo
 .sidebar .pill { min-width: 3px; min-height: 16px; border-radius: 2px; }
 .sidebar .side-separator { min-height: 1px; background-color: @ox_border; margin: 12px 13px 11px 13px; }
 
-/* ---- Map network location ---- */
-.sidebar-bottom { border-top: 1px solid @ox_border; margin: 0 7px; padding: 9px 0 11px 0; }
-window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
-/* The 17px glyph is centred on a half pixel as above. */
-.sidebar-bottom image { color: @ox_accent; margin-top: 1px; }
-
 /* ---- Folder tree (SIDE-028) ----
    Explorer's navigation-pane tree: 30px rows with the places' hover,
    selection and focus, a 16px chevron that turns down when open, and

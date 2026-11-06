@@ -15,7 +15,10 @@ use super::file_ops_support::{is_enabled, open_dialog, wait_for_no_dialog};
 use super::support::middle_click_at;
 use crate::icons::{Art, ArtImage, Icon};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    capture, capture_with_menus, descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow,
+    ThemeGuard,
+};
 use crate::window::menu_popover::{MenuEntry, MenuPopover};
 use crate::window::sidebar::entries::{RowLevel, RowTarget, Section, SidebarEntry};
 use crate::window::sidebar::SidebarDropSpot;
@@ -575,6 +578,134 @@ fn hidden_sections_and_places_are_listed_dimmed_and_shown_again() {
     let preferences = test.context.settings_data().preferences;
     assert!(preferences.hidden_sidebar_sections.is_empty());
     assert!(preferences.hidden_sidebar_places.is_empty());
+}
+
+/// This PC's menu, as Windows 11's navigation pane lists it: Collapse
+/// (Expand while collapsed), Open in new tab, Open in new window, Add a
+/// network location, Map network drive…, Disconnect network drive, then
+/// the app's Hide section. Network's is the same without Add a network
+/// location. Properties is left out where the test session has no system
+/// information app, as in "…". The items run their commands: Collapse
+/// folds the section and Map network drive… opens Windows' dialog.
+///
+/// parity: SIDE-001, SIDE-033, NET-001
+#[gtk::test]
+fn this_pc_and_network_menus_list_windows_items_in_its_order() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    assert!(
+        crate::integration::system_information().is_none(),
+        "the test session has no system information app"
+    );
+    let sidebar = test.window.sidebar();
+    let menu_labels = |label: &str| {
+        wait_for_frames(&test.window, 3);
+        let menu = sidebar.right_click_row(label);
+        let labels = menu.row_labels();
+        menu.popdown();
+        labels
+    };
+    assert_eq!(
+        menu_labels("This PC"),
+        [
+            "Collapse",
+            "Open in new tab",
+            "Open in new window",
+            "Add a network location",
+            "Map network drive…",
+            "Disconnect network drive",
+            "-",
+            "Hide section \u{201c}This PC\u{201d}",
+        ]
+    );
+    assert_eq!(
+        menu_labels("Network"),
+        [
+            "Collapse",
+            "Open in new tab",
+            "Open in new window",
+            "Map network drive…",
+            "Disconnect network drive",
+            "-",
+            "Hide section \u{201c}Network\u{201d}",
+        ]
+    );
+    let menu = sidebar.right_click_row("This PC");
+    let actions: Vec<(String, Option<String>)> = menu
+        .items()
+        .into_iter()
+        .map(|item| {
+            let target = item.target.as_ref().and_then(glib::Variant::get::<String>);
+            (item.label, target)
+        })
+        .collect();
+    menu.popdown();
+    let this_pc = Page::ThisPc.uri().to_owned();
+    assert_eq!(actions[1], ("Open in new tab".to_owned(), Some(this_pc.clone())));
+    assert_eq!(actions[2], ("Open in new window".to_owned(), Some(this_pc)));
+
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    assert!(
+        !menu.row("Disconnect network drive").is_sensitive(),
+        "no network drive is connected"
+    );
+    menu.click_row("Collapse");
+    wait_until("This PC to collapse", || sidebar.section_is_collapsed("thisPc"));
+    assert_eq!(menu_labels("This PC")[0], "Expand");
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    menu.click_row("Expand");
+    wait_until("This PC to expand", || !sidebar.section_is_collapsed("thisPc"));
+
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    menu.click_row("Map network drive…");
+    let dialog = super::network::open_form_dialog();
+    assert_eq!(dialog.title_text(), "Map network drive");
+    dialog.press("Cancel");
+}
+
+/// Windows 11's navigation pane has no button below its list; the Python
+/// app's "Map network drive" button is gone, and the list and the folder
+/// tree reach the pane's foot.
+///
+/// parity: SIDE-001, NET-001
+#[gtk::test]
+fn nothing_is_pinned_below_the_navigation_pane() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    let maps = descendants::<gtk::Button>(sidebar).into_iter().any(|button| {
+        button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
+    });
+    assert!(!maps, "no Map network drive button");
+    let last = sidebar.last_child().expect("the pane has its panes");
+    assert!(last.is::<gtk::Paned>(), "the list and the folder tree come last");
+}
+
+/// The navigation pane without a button below its list, and This PC's
+/// menu open over the window, light and dark: with
+/// `OX_NATIVE_CAPTURE_DIR` set, saved there as `native-sidebar-*.png`
+/// and `native-this-pc-menu-*.png` for visual review. Without it, they
+/// only prove the menu opens in both themes.
+#[gtk::test]
+fn the_sidebar_and_this_pc_menu_are_captured_light_and_dark() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    // Tall enough to show the pane's foot below This PC and Network.
+    test.window.set_default_size(960, 760);
+    wait_until("the taller window", || test.window.height() >= 700);
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        capture(&test.window, &format!("native-sidebar-{theme}.png"));
+        wait_for_frames(&test.window, 3);
+        let menu = test.window.sidebar().right_click_row("This PC");
+        capture_with_menus(&test.window, &format!("native-this-pc-menu-{theme}.png"));
+        menu.popdown();
+        wait_until("the menu to close", || !menu.is_mapped());
+    }
 }
 
 /// With the desktop's file history off, Recent files leaves the sidebar

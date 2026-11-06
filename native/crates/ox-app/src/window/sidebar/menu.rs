@@ -8,7 +8,11 @@
 //! access, Previous versions and Properties; every item acts on the pin's
 //! location, not on the folder shown. Drives and network locations have
 //! their [`PlaceMenu`](crate::window::place_menus::PlaceMenu), saved
-//! searches theirs. Every row's menu ends with Hide section, and a hidden
+//! searches theirs. This PC's and Network's ([`head_menu`]) list Windows
+//! 11's items in its order, where the app has them: Expand or Collapse,
+//! Open in new tab, Open in new window, Add a network location (This PC
+//! only), Map network drive…, Disconnect network drive and, for This PC,
+//! Properties. Every row's menu ends with Hide section, and a hidden
 //! row's offers Show (SIDE-010). The empty space offers Add entry…
 //! (SIDE-031), Show all entries and the icon sizes (SIDE-012). While the
 //! pane is hidden, the Places button lists the places (SIDE-024).
@@ -20,13 +24,14 @@ use ox_core::search::Caching;
 
 use crate::icons::{Art, Icon};
 use crate::window::cache_folder::cache_item;
+use crate::window::command_bar::{disconnect_network_drive, NetworkDrive};
 use crate::window::menu_popover::{MenuEntry, MenuItem};
 use crate::window::place_menus::caching_in;
 use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
-use super::entries::{RowLevel, RowTarget, SidebarEntry};
+use super::entries::{RowLevel, RowTarget, Section, SidebarEntry};
 use super::{HiddenRow, Sidebar};
 
 /// The menu of the pin that opens `uri`; `caching` says whether it is
@@ -121,6 +126,85 @@ pub(super) fn pin_menu(uri: &str, caching: Option<Caching>, editable: bool) -> V
     entries
 }
 
+/// What This PC's and Network's menus show besides their fixed items.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct HeadMenuState {
+    /// Whether the section is collapsed: Expand, else Collapse.
+    pub collapsed: bool,
+    /// The connected network shares, for Disconnect network drive.
+    pub network_drives: Vec<NetworkDrive>,
+    /// Whether the desktop has a system information app for This PC's
+    /// Properties to open, as "…" > Properties does.
+    pub system_information: bool,
+}
+
+/// The menu of This PC's or Network's row, which opens `uri`, laid out as
+/// Windows 11's navigation pane lays it out. Windows' Rename, Pin to Quick
+/// access, Pin to Start and Show more options are left out: the app
+/// cannot rename or pin a page, and has no Start menu or classic menu
+/// here. Network has no Add a network location, as in Windows, and no
+/// Properties, whose Windows twin is the Network and Sharing Center.
+pub(super) fn head_menu(section: Section, uri: &str, state: &HeadMenuState) -> Vec<MenuEntry> {
+    let mut entries = Vec::new();
+    if let Some((key, _)) = section.hiding() {
+        let (label, glyph) = if state.collapsed {
+            (ox_core::i18n::gettext("Expand"), Icon::ChevronRight16)
+        } else {
+            (ox_core::i18n::gettext("Collapse"), Icon::ChevronDown16)
+        };
+        entries
+            .push(MenuItem::with_text_target(&label, glyph, WindowAction::ToggleSidebarSection, key).into());
+    }
+    entries.extend([
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        )
+        .into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new window"),
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            uri,
+        )
+        .into(),
+    ]);
+    if section == Section::ThisPc {
+        entries.push(
+            MenuItem::new(
+                &ox_core::i18n::gettext("Add a network location"),
+                Icon::AddNetworkLocation24,
+                WindowAction::AddNetworkLocation,
+            )
+            .into(),
+        );
+    }
+    entries.extend([
+        MenuItem::new(
+            &ox_core::i18n::gettext("Map network drive…"),
+            Icon::MapNetworkDrive24,
+            WindowAction::MapNetworkLocation,
+        )
+        .into(),
+        disconnect_network_drive(&state.network_drives).into(),
+    ]);
+    // As "…" > Properties in This PC: left out, not greyed, without a
+    // system information app (the user's decision, 2026-11-04).
+    if section == Section::ThisPc && state.system_information {
+        entries.push(
+            MenuItem::new(
+                &ox_core::i18n::gettext("Properties"),
+                Icon::Info,
+                WindowAction::SystemProperties,
+            )
+            .into(),
+        );
+    }
+    entries
+}
+
 impl Sidebar {
     /// The menu of the row at `y` in the list: a pin's, or a drive's or a
     /// network location's; on empty space, "Add entry…" (SIDE-031);
@@ -180,10 +264,34 @@ impl Sidebar {
             });
             return Some(pin_menu(uri, caching, editable));
         }
+        if entry.level == RowLevel::Group {
+            if let RowTarget::Location(uri) = &entry.target {
+                return Some(head_menu(
+                    entry.section,
+                    uri,
+                    &self.head_menu_state(entry.section),
+                ));
+            }
+        }
         let place = entry.menu.as_ref()?;
         let place_menu = place.entries(caching_in(place, self));
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
+    }
+
+    /// What This PC's or Network's menu shows for `section` now.
+    fn head_menu_state(&self, section: Section) -> HeadMenuState {
+        let window = self.root().and_downcast::<BrowserWindow>();
+        HeadMenuState {
+            collapsed: self.is_collapsed(section),
+            network_drives: window
+                .as_ref()
+                .map(BrowserWindow::network_drives)
+                .unwrap_or_default(),
+            // Only This PC asks GIO, which lists every application.
+            system_information: section == Section::ThisPc
+                && crate::integration::system_information().is_some(),
+        }
     }
 
     /// The places as menu items, a divider between sections, for the
@@ -354,6 +462,78 @@ mod tests {
             .find(|item| item.label == "Cache this folder for search")
             .expect("a share can be cached");
         assert_eq!(cache.check, ItemCheck::Fixed(true), "the cached pin is checked");
+    }
+
+    /// This PC's menu follows Windows 11's order; Properties opens the
+    /// system information app where there is one, and Disconnect network
+    /// drive lists the connected shares.
+    ///
+    /// parity: SIDE-033, NET-001
+    #[test]
+    fn this_pc_menu_lists_windows_items_with_properties_and_the_drives() {
+        let state = HeadMenuState {
+            collapsed: true,
+            network_drives: vec![NetworkDrive {
+                label: "Backup (S:)".to_owned(),
+                uri: "smb://fileserver/backup".to_owned(),
+            }],
+            system_information: true,
+        };
+
+        let entries = head_menu(Section::ThisPc, "ox:pc", &state);
+
+        assert_eq!(
+            labels(&entries),
+            [
+                "Expand",
+                "Open in new tab",
+                "Open in new window",
+                "Add a network location",
+                "Map network drive…",
+                "Disconnect network drive",
+                "Properties",
+            ]
+        );
+        let item = |label: &str| {
+            entries
+                .iter()
+                .find_map(|entry| match entry {
+                    MenuEntry::Item(item) if item.label == label => Some(item.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{label}"))
+        };
+        assert_eq!(item("Expand").target, Some("thisPc".to_variant()));
+        assert_eq!(item("Disconnect network drive").submenu.len(), 1);
+        assert_eq!(
+            item("Properties").action,
+            crate::window::menu_popover::MenuAction::Window(WindowAction::SystemProperties)
+        );
+    }
+
+    /// Network's menu has no Add a network location, as in Windows, and no
+    /// Properties, whose Windows twin the app does not have.
+    ///
+    /// parity: SIDE-033, NET-001
+    #[test]
+    fn network_menu_has_no_add_a_network_location_or_properties() {
+        let state = HeadMenuState {
+            system_information: true,
+            ..HeadMenuState::default()
+        };
+
+        let entries = labels(&head_menu(Section::Network, "network:///", &state));
+
+        assert_eq!(
+            entries,
+            [
+                "Collapse",
+                "Open in new tab",
+                "Open in new window",
+                "Map network drive…",
+                "Disconnect network drive",
+            ]
+        );
     }
 
     #[test]

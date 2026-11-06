@@ -62,7 +62,6 @@ const FONT_SIZES: &[FontSize] = &[
     font(".search-wrap entry", 12.0),
     font(".commandbar .text-command", 12.0),
     font(".sidebar list > row", 12.0),
-    font(".sidebar-bottom button", 12.0),
     font("columnview.files", 12.0),
     font("columnview.files > header > button", 12.0),
     font("gridview.files", 12.0),
