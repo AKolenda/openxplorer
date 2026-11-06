@@ -16,7 +16,7 @@
 //!
 //! [`ArtImage`]: crate::icons::ArtImage
 
-use ox_core::entry::Entry;
+use ox_core::entry::{Entry, EntryKind};
 use ox_core::places::{KnownFolder, NetworkKind, NetworkLocation};
 
 use super::file_type::{is_zip, FileType};
@@ -103,13 +103,24 @@ impl Art {
         connection: Connection::Connected,
     });
 
-    /// The art of a listed item: a share in a server listing on the bar, a
+    /// A server, or a computer Network lists: the server on the bar.
+    pub(crate) const SERVER: Art = Art::Network(NetworkArt {
+        place: NetworkPlace::Server,
+        connection: Connection::Connected,
+    });
+
+    /// The art of a listed item: a computer (a shortcut to a server, as
+    /// Network lists one) or a share in a server listing on the bar, a
     /// folder, a ZIP archive as a folder with the zip badge, else the
     /// colour icon of the file's type. A folder whose name ends in `.zip`
     /// stays a plain folder.
     pub(crate) fn for_entry(entry: &Entry) -> Self {
         if entry.is_dir && entry.is_virtual {
-            return Art::SHARE;
+            return if entry.kind == EntryKind::Shortcut {
+                Art::SERVER
+            } else {
+                Art::SHARE
+            };
         }
         if entry.is_dir {
             return Art::Folder;
@@ -260,6 +271,8 @@ mod tests {
         let mut share = folder("media");
         share.is_virtual = true;
         assert_eq!(Art::for_entry(&share), Art::SHARE);
+        let computer = Entry::network_computer("smb://studio-nas/".into(), "studio-nas".into());
+        assert_eq!(Art::for_entry(&computer), Art::SERVER, "a computer Network lists");
     }
 
     /// A network location and the picture it shows on the bar.

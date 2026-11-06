@@ -14,7 +14,7 @@ use gtk::subclass::prelude::*;
 use super::file_ops_support::{dialog_over, open_dialog, select_names};
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 use crate::window::file_drag::DraggedItems;
-use crate::window::file_drop::DropAction;
+use crate::window::file_drop::{DragOrigin, DropAction, DropDestination};
 
 /// The URIs a drag's content offers as a file list.
 fn offered_uris(content: &gdk::ContentProvider) -> Vec<String> {
@@ -93,11 +93,8 @@ fn files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check() {
         Some(test.position_of("Documents")),
         DropAction::Copy,
     );
-    let dialog = open_dialog(&test);
-
     assert!(taken);
-    assert_eq!(dialog.title_text(), "Items already exist");
-    dialog.press("Keep both");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::KeepBoth);
     wait_until("the second copy", || {
         std::fs::read_dir(fixture.path("Documents"))
             .expect("the folder lists")
@@ -337,18 +334,22 @@ fn a_ctrl_shift_drop_creates_links_to_the_items() {
         .drop_files(&[source.uri_of("Notes 2.txt")], None, DropAction::Link);
 
     assert!(taken);
-    let link = fixture.path("Documents/Notes 2.txt");
+    let link = fixture.path("Documents/Notes 2.txt - Shortcut");
     wait_until("the link", || link.symlink_metadata().is_ok());
     assert_eq!(
         std::fs::read_link(&link).expect("a symbolic link"),
         source.path("Notes 2.txt")
     );
     wait_until("the new link to be selected", || {
-        test.selected_names() == ["Notes 2.txt"]
+        test.selected_names() == ["Notes 2.txt - Shortcut"]
     });
     super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
+/// An Alt drop from another app asks with the drop menu, a copy in bold
+/// as a plain drop of another app's items copies; Cancel does nothing and
+/// Move here moves.
+///
 /// parity: DND-018
 #[gtk::test]
 fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
@@ -357,10 +358,12 @@ fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     let dropped = [source.uri_of("Notes 2.txt")];
 
-    test.window.drop_files(&dropped, None, DropAction::Ask);
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::OtherApp));
     let menu = test.window.drop_menu();
     wait_until("the drop menu", || menu.is_mapped());
     let labels = menu.row_labels();
+    let bold = menu.emphasised_labels();
     test.activate("drop-choice", Some("cancel"));
     // Choosing an entry closes the menu; the action alone does not, and
     // no drop is taken while a menu is open.
@@ -369,16 +372,260 @@ fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
     wait_for(Duration::from_millis(100));
     let cancelled_kept_source = source.path("Notes 2.txt").is_file();
     let cancelled_made_nothing = !fixture.path("Documents/Notes 2.txt").exists();
-    test.window.drop_files(&dropped, None, DropAction::Ask);
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::OtherApp));
+    wait_until("the drop menu", || menu.is_mapped());
     test.activate("drop-choice", Some("move"));
 
     assert_eq!(
         labels,
-        ["Copy here", "Move here", "Create links here", "-", "Cancel"]
+        ["Copy here", "Move here", "Create shortcuts here", "-", "Cancel"]
     );
+    assert_eq!(bold, ["Copy here"]);
     assert!(cancelled_kept_source && cancelled_made_nothing);
     wait_until("the move", || fixture.path("Documents/Notes 2.txt").is_file());
     wait_until("the original to go", || !source.path("Notes 2.txt").exists());
+}
+
+/// A right-button drag of this app's own items within their drive asks
+/// with Windows Explorer's menu, Move here in bold; closing it unanswered,
+/// as Escape does, does nothing, and Create shortcuts here makes `Notes 2.txt - Shortcut`.
+///
+/// parity: DND-027
+#[gtk::test]
+fn a_right_drag_drop_asks_and_creates_shortcuts_here() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let dropped = [fixture.uri_of("Notes 2.txt")];
+
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    let menu = test.window.drop_menu();
+    wait_until("the drop menu", || menu.is_mapped());
+    let labels = menu.row_labels();
+    let bold = menu.emphasised_labels();
+    // Escape closes a popover as this does: the menu closes unanswered.
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+    wait_for(Duration::from_millis(100));
+    let escape_made_nothing = std::fs::read_dir(fixture.path("Documents"))
+        .expect("the folder is read")
+        .filter_map(Result::ok)
+        .all(|entry| !entry.file_name().to_string_lossy().contains("Notes 2"));
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    wait_until("the drop menu", || menu.is_mapped());
+    menu.click_row("Create shortcuts here");
+
+    assert_eq!(
+        labels,
+        ["Copy here", "Move here", "Create shortcuts here", "-", "Cancel"]
+    );
+    assert_eq!(bold, ["Move here"]);
+    assert!(escape_made_nothing, "Escape does nothing");
+    let shortcut = fixture.path("Documents/Notes 2.txt - Shortcut");
+    wait_until("the shortcut", || shortcut.symlink_metadata().is_ok());
+    assert_eq!(
+        std::fs::read_link(&shortcut).expect("a symbolic link"),
+        fixture.path("Notes 2.txt")
+    );
+    assert!(fixture.path("Notes 2.txt").is_file(), "the item stays");
+}
+
+/// The right-drag menu is text only, as in Windows Explorer: no glyph on
+/// any row, the text where the other menus' text is. No tooltip shows
+/// while it is open, and tooltips come back once it closes.
+///
+/// parity: DND-027
+#[gtk::test]
+fn the_right_drag_menu_is_text_only_and_hides_tooltips_while_open() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let dropped = [fixture.uri_of("Notes 2.txt")];
+    let sidebar_row = |label: &str| {
+        let index = test
+            .window
+            .sidebar()
+            .labels()
+            .iter()
+            .position(|shown| shown == label);
+        index
+            .and_then(|index| i32::try_from(index).ok())
+            .and_then(|index| test.window.sidebar().list().row_at_index(index))
+            .expect("the sidebar shows the row")
+    };
+    let tooltip_before = sidebar_row("Documents").has_tooltip();
+
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    let menu = test.window.drop_menu();
+    // Mapped is not laid out: the labels are measured once they have a
+    // width.
+    wait_until("the drop menu to be laid out", || {
+        let labels: Vec<gtk::Label> = menu
+            .rows()
+            .iter()
+            .filter_map(|row| {
+                crate::test_support::harness::descendants::<gtk::Label>(row)
+                    .into_iter()
+                    .next()
+            })
+            .collect();
+        menu.is_mapped() && !labels.is_empty() && labels.iter().all(|label| label.width() > 0)
+    });
+    let glyphs: usize = menu
+        .rows()
+        .iter()
+        .map(|row| crate::test_support::harness::descendants::<gtk::Image>(row).len())
+        .sum();
+    let text_starts: Vec<f32> = menu
+        .rows()
+        .iter()
+        .filter_map(|row| {
+            crate::test_support::harness::descendants::<gtk::Label>(row)
+                .into_iter()
+                .next()
+                .map(|label| (row.clone(), label))
+        })
+        .filter_map(|(row, label)| label.compute_point(&row, &gtk::graphene::Point::zero()))
+        .map(|point| point.x())
+        .collect();
+    let tooltip_while_open = sidebar_row("Documents").has_tooltip();
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+    let tooltip_after = sidebar_row("Documents").has_tooltip();
+
+    assert_eq!(glyphs, 0, "no glyphs, as in Windows Explorer");
+    assert!(
+        text_starts.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 0.5)
+            && text_starts.first().is_some_and(|x| *x > 16.0),
+        "the text keeps the glyph column's indent: {text_starts:?}"
+    );
+    assert!(
+        tooltip_before && tooltip_after,
+        "tooltips are back once it closes"
+    );
+    assert!(!tooltip_while_open, "no tooltip while the menu is open");
+}
+
+/// The window shows no tooltip while its items are dragged, once the drag
+/// has started, and its tooltips come back once the drag ends.
+///
+/// parity: DND-027
+#[gtk::test]
+fn tooltips_are_off_while_items_are_dragged() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let row = test
+        .window
+        .sidebar()
+        .list()
+        .row_at_index(1)
+        .expect("the sidebar has rows");
+    let before = row.has_tooltip();
+
+    test.window
+        .drag_content_for(test.position_of("Notes 2.txt"))
+        .expect("the item can be dragged");
+    test.window.show_file_drag_feedback();
+    wait_until("the tooltips to go off", || !row.has_tooltip());
+    test.window.end_file_drag();
+
+    assert!(before, "the row has a tooltip");
+    assert!(row.has_tooltip(), "it is back once the drag ends");
+}
+
+/// Every window of the app turns its tooltips off while items are
+/// dragged, not only the one they come from, as a drag can hover over
+/// another window's rows; all come back once the drag ends.
+///
+/// parity: DND-027
+#[gtk::test]
+fn every_window_turns_its_tooltips_off_while_items_are_dragged() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    let row_of = |test: &TestWindow| {
+        test.window
+            .sidebar()
+            .list()
+            .row_at_index(1)
+            .expect("the sidebar has rows")
+    };
+    let (row, other_row) = (row_of(&test), row_of(&other));
+    let before = other_row.has_tooltip();
+
+    test.window
+        .drag_content_for(test.position_of("Notes 2.txt"))
+        .expect("the item can be dragged");
+    test.window.show_file_drag_feedback();
+    wait_until("this window's tooltips to go off", || !row.has_tooltip());
+    wait_until("the other window's tooltips to go off", || {
+        !other_row.has_tooltip()
+    });
+    test.window.end_file_drag();
+
+    assert!(before, "the other window's row has a tooltip");
+    assert!(row.has_tooltip() && other_row.has_tooltip(), "both come back");
+}
+
+/// A right-button drag dropped in the folder it comes from asks, as in
+/// Windows Explorer: Copy here and Create shortcuts here, but no Move
+/// here, which would do nothing, and nothing in bold, as a plain drop
+/// there does nothing. Copy here makes `Notes 2 - Copy.txt`.
+///
+/// parity: DND-027
+#[gtk::test]
+fn a_right_drop_in_its_own_folder_asks_and_copy_here_makes_a_copy() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let dropped = [fixture.uri_of("Notes 2.txt")];
+
+    test.window
+        .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
+    let menu = test.window.drop_menu();
+    wait_until("the drop menu", || menu.is_mapped());
+    let labels = menu.row_labels();
+    let bold = menu.emphasised_labels();
+    menu.click_row("Copy here");
+
+    assert_eq!(labels, ["Copy here", "Create shortcuts here", "-", "Cancel"]);
+    assert!(bold.is_empty(), "{bold:?}");
+    let copy = fixture.path("Notes 2 - Copy.txt");
+    wait_until("the copy", || copy.is_file());
+    assert_eq!(
+        std::fs::read(&copy).expect("the copy"),
+        std::fs::read(fixture.path("Notes 2.txt")).expect("the item")
+    );
+    wait_until("the copy to be selected", || {
+        test.selected_names() == ["Notes 2 - Copy.txt"]
+    });
+}
+
+/// While items are dragged, the dragged items themselves take no drop: a
+/// dragged folder dropped onto itself is dropped on the folder shown, as
+/// in Windows Explorer, so a right-button drag asks there.
+///
+/// parity: DND-011, DND-027
+#[gtk::test]
+fn a_dragged_folder_is_no_drop_target_while_it_is_dragged() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let documents = test.position_of("Documents");
+
+    let before = test.window.folder_view_destination(Some(documents));
+    test.window
+        .drag_content_for(documents)
+        .expect("the folder can be dragged");
+    test.window.show_file_drag_feedback();
+    let while_dragged = test.window.folder_view_destination(Some(documents));
+    test.window.end_file_drag();
+    let after = test.window.folder_view_destination(Some(documents));
+
+    let into_documents = Some(DropDestination::Folder(fixture.uri_of("Documents")));
+    assert_eq!(before, into_documents);
+    assert_eq!(while_dragged, Some(DropDestination::Folder(fixture.uri())));
+    assert_eq!(after, into_documents);
 }
 
 /// parity: DND-011

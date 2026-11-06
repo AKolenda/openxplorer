@@ -114,9 +114,9 @@ pub(in crate::window) struct MenuItem {
     /// ([`ox_core::integration::ApplicationInfo::icon`]), which replaces
     /// the glyph.
     pub application_icon: Option<String>,
-    /// The entries it opens in place of the menu's, such as a Templates
-    /// subfolder's in the New menu (OPS-003); empty for an item that runs
-    /// its action.
+    /// The entries of the submenu it opens beside the menu, such as a
+    /// Templates subfolder's in the New menu (OPS-003); empty for an item
+    /// that runs its action.
     pub submenu: Vec<MenuEntry>,
     /// How its glyph is drawn: as it is, mirrored or in the accent colour.
     pub glyph_look: GlyphLook,
@@ -159,7 +159,7 @@ impl MenuItem {
         }
     }
 
-    /// An item that opens `entries` in place of the menu's. It is enabled
+    /// An item that opens `entries` in a submenu beside the menu. It is enabled
     /// while `action` is, which its entries share.
     pub(in crate::window) fn submenu(
         label: &str,

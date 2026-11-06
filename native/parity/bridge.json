@@ -314,10 +314,11 @@
     },
     "discover": {
       "status": "native-tested",
-      "note": "The Network page discovers servers on its first visit in three passes, merges them, and stops on Stop; ox-core reads GVfs's network browser without passwords. The page's tests use a fixed answer.",
+      "note": "Every listing of Network discovers computers in three passes, each server once, and Stop drops the passes with the listing; ox-core reads GVfs's network browser without passwords. The tests use a fixed answer.",
       "evidence": [
-        "native/crates/ox-app/src/window/tests/network.rs::the_network_page_discovers_servers_on_its_first_visit",
-        "native/crates/ox-app/src/network/discovery.rs::stop_ends_the_passes_and_keeps_what_was_found",
+        "native/crates/ox-app/src/window/tests/network.rs::network_lists_the_discovered_computers_as_items",
+        "native/crates/ox-app/src/network/discovery.rs::passes_list_each_server_once_in_the_order_first_found",
+        "native/crates/ox-app/src/folder_view/loader.rs::a_discovery_pass_that_answers_after_stop_is_ignored",
         "native/crates/ox-core/src/network/discovery.rs::discovery_aborts_every_password_request"
       ]
     },
@@ -332,7 +333,7 @@
       "evidence": [
         "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown",
         "native/crates/ox-app/src/window/file_drop/targets/tests.rs::only_the_folder_under_a_drag_is_highlighted",
-        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::sidebar_folders_take_drops_and_quick_access_pins_only_between_pins",
         "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_crumb_takes_drops_for_its_folder"
       ]
     },
@@ -604,13 +605,13 @@
     },
     "transferConflicts": {
       "status": "native-tested",
-      "note": "ox_core::ops::find_conflicts answers the paste-conflict query of v2.0.0:desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names are taken there, hidden items and dangling links included. A cancelled check is reported as cancelled, never as no conflicts. Native: Paste checks the destination with it and asks about taken names (Skip, Keep both, Replace, Apply to all).",
+      "note": "ox_core::ops::scan_name_conflicts answers the paste-conflict query of v2.0.0:desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names are taken there, hidden items and dangling links included, and, as Windows merges a folder into a folder of its name without asking, the files with taken names inside such folders too. A cancelled check is reported as cancelled, never as no conflicts. Native: the copy or move asks about taken names in its action of the progress window (Replace or Skip Files, and the File Conflict window).",
       "evidence": [
-        "native/crates/ox-core/tests/ops_transfer.rs::conflicts_list_the_items_whose_names_are_taken_hidden_and_dangling_ones_included",
-        "native/crates/ox-core/tests/ops_transfer.rs::a_conflict_check_needs_a_folder_and_between_one_and_the_maximum_items",
-        "native/crates/ox-core/tests/ops_transfer.rs::a_cancelled_conflict_check_reports_the_cancellation",
-        "native/crates/ox-app/src/window/tests/clipboard.rs::pasting_onto_a_taken_name_asks_and_keep_both_keeps_both",
-        "native/crates/ox-app/src/window/tests/clipboard.rs::clearing_apply_to_all_asks_about_each_conflict_in_turn"
+        "native/crates/ox-core/tests/ops_name_conflicts.rs::hidden_items_dangling_links_and_a_file_meeting_a_folder_count",
+        "native/crates/ox-core/tests/ops_name_conflicts.rs::a_check_needs_a_folder_and_reports_a_cancellation",
+        "native/crates/ox-core/tests/ops_name_conflicts.rs::the_check_looks_inside_a_folder_that_merges_into_its_namesake",
+        "native/crates/ox-app/src/window/tests/name_conflicts.rs::one_taken_name_asks_replace_or_skip_in_the_progress_window",
+        "native/crates/ox-app/src/window/tests/name_conflicts.rs::a_header_check_box_chooses_one_side_for_every_file"
       ]
     },
     "trashSupport": {

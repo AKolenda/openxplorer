@@ -92,6 +92,9 @@ mod imp {
         /// The sections collapsed with their chevron or the arrow keys
         /// (SIDE-033).
         pub(super) collapsed: RefCell<Vec<Section>>,
+        /// The collapsed section a drag is held over, and the wait before
+        /// it expands (DND-027).
+        pub(super) drag_expand: RefCell<Option<(Section, glib::SourceId)>>,
         /// The location last given to `select`, whose closest place is
         /// highlighted.
         pub(super) location: RefCell<Option<String>>,
@@ -290,9 +293,11 @@ impl Sidebar {
             .menu
             .set(menu)
             .expect("constructed runs once per object");
+        // The release opens the menu, as in Windows Explorer, so a
+        // right-button drag can start from the press (DND-027).
         let click = gtk::GestureClick::new();
         click.set_button(gdk::BUTTON_SECONDARY);
-        click.connect_pressed(glib::clone!(
+        click.connect_released(glib::clone!(
             #[weak(rename_to = sidebar)]
             self,
             move |gesture, _, x, y| {
@@ -324,8 +329,8 @@ impl Sidebar {
         true
     }
 
-    /// Right-clicks the row labelled `label` and returns the sidebar's
-    /// menu, for tests.
+    /// Right-clicks the row labelled `label`, pressing and releasing the
+    /// button, and returns the sidebar's menu, for tests.
     #[cfg(test)]
     pub(super) fn right_click_row(&self, label: &str) -> MenuPopover {
         let index = self
@@ -339,7 +344,16 @@ impl Sidebar {
             .expect("every entry has a row");
         let bounds = row.compute_bounds(self.list()).expect("a shown row has bounds");
         let middle = f64::from(bounds.y() + bounds.height() / 2.0);
-        self.show_menu(1.0, middle);
+        let right_click = self
+            .list()
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|click| click.button() == gdk::BUTTON_SECONDARY)
+            .expect("the sidebar takes right-clicks");
+        right_click.emit_by_name::<()>("pressed", &[&1_i32, &1.0_f64, &middle]);
+        right_click.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &middle]);
         self.imp()
             .menu
             .get()

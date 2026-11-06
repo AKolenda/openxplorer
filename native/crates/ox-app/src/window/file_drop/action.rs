@@ -11,7 +11,11 @@
 //! Explorer does: it moves them onto a folder of their drive and copies
 //! them to another drive ([`drive`](super::drive)); Ctrl held at the drop
 //! copies and Shift moves. Ask opens the menu of Windows Explorer's
-//! right-button drag: Copy here, Move here, Create links here and Cancel.
+//! right-button drag: Copy here, Move here, Create shortcuts here and
+//! Cancel. A drag of this app's own items made with the secondary button
+//! always asks, whatever keys are held, as in Windows Explorer (DND-027).
+//! The menu offers only what is possible, read once the items are dropped
+//! ([`drop_menu_offer`]), and shows in bold what a plain drop would do.
 //!
 //! Safety rule "a plain drop never removes its source" (DND-009): a drag
 //! from another app that did not offer a copy when it reached the window
@@ -29,11 +33,16 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
+use ox_core::location::{parent_location, same_location};
 use ox_core::ops::is_recycle_bin_item;
 
-use super::drive::{answer_within, on_same_drive, DRIVE_PROBES};
+use gtk::gio;
+use ox_core::transfer::stores_symbolic_links;
+
+use super::drive::{answer_or, answer_within, on_same_drive, DRIVE_PROBES};
 use super::DropDestination;
 use crate::icons::Icon;
+use crate::window::file_drag::{drag_button, DragButton};
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;
 use crate::window::zip_copies::is_zip_copy;
@@ -71,6 +80,9 @@ pub(crate) trait OfferedDrop {
     fn offered(&self) -> gdk::DragAction;
     /// Where the drag comes from.
     fn origin(&self) -> DragOrigin;
+    /// The button a drag of this app was made with; another app's drag
+    /// counts as [`DragButton::Primary`], as it applies its own rules.
+    fn button(&self) -> DragButton;
 }
 
 impl OfferedDrop for gdk::Drop {
@@ -84,6 +96,10 @@ impl OfferedDrop for gdk::Drop {
 
     fn origin(&self) -> DragOrigin {
         DragOrigin::of(self)
+    }
+
+    fn button(&self) -> DragButton {
+        self.drag().map_or(DragButton::Primary, |drag| drag_button(&drag))
     }
 }
 
@@ -189,14 +205,20 @@ pub(crate) enum DropAction {
     Move,
     /// Makes links to them (Ctrl+Shift).
     Link,
-    /// Asks with the drop menu (Alt, or the middle button).
-    Ask,
+    /// Asks with the drop menu (Alt, the middle button, or a drag made
+    /// with the secondary button), for a drag from this origin.
+    Ask(DragOrigin),
 }
 
 impl DropAction {
     /// Every action, in the order a drop prefers them when the drag
     /// offers several.
-    const PREFERENCE: [Self; 4] = [Self::Copy, Self::Move, Self::Link, Self::Ask];
+    const PREFERENCE: [Self; 4] = [
+        Self::Copy,
+        Self::Move,
+        Self::Link,
+        Self::Ask(DragOrigin::OtherApp),
+    ];
 
     /// The action a drop runs when the drag offers `offered`: the one the
     /// user's modifier left, or copy when several remain; `None` when the
@@ -219,7 +241,28 @@ impl DropAction {
         if origin == DragOrigin::OtherApp && !offers_a_copy {
             return None;
         }
-        Self::from_offered(offered)
+        Self::from_offered(offered).map(|action| match action {
+            Self::Ask(_) => Self::Ask(origin),
+            other => other,
+        })
+    }
+
+    /// What a drop runs: a drag of this app's own items made with the
+    /// secondary button always asks, as in Windows Explorer; any other
+    /// drag runs [`Self::for_drop`] with the keys `held` at the drop
+    /// ([`Self::with_keys`]). `None` when the drop is refused.
+    pub(crate) fn for_button_drop(
+        button: DragButton,
+        origin: DragOrigin,
+        first_offered: gdk::DragAction,
+        offered: gdk::DragAction,
+        held: gdk::ModifierType,
+    ) -> Option<DropRun> {
+        if button == DragButton::Secondary && origin == DragOrigin::ThisApp {
+            return Some(DropRun::Run(Self::Ask(origin)));
+        }
+        let action = Self::for_drop(origin, first_offered, offered)?;
+        Some(action.with_keys(origin, held))
     }
 
     /// What a drop that settled on `self` runs once the keys `held` at the
@@ -247,7 +290,7 @@ impl DropAction {
             Self::Copy => gdk::DragAction::COPY,
             Self::Move => gdk::DragAction::MOVE,
             Self::Link => gdk::DragAction::LINK,
-            Self::Ask => gdk::DragAction::ASK,
+            Self::Ask(_) => gdk::DragAction::ASK,
         }
     }
 
@@ -257,7 +300,7 @@ impl DropAction {
             Self::Copy => "copy",
             Self::Move => "move",
             Self::Link => "link",
-            Self::Ask => "ask",
+            Self::Ask(_) => "ask",
         }
     }
 
@@ -279,39 +322,164 @@ pub(crate) struct PendingDrop {
     folder: String,
 }
 
-/// The drop menu's items.
-fn drop_menu_entries() -> Vec<MenuEntry> {
-    let choice = |label: &str, glyph: Icon, target: &str| {
-        MenuEntry::from(MenuItem::with_text_target(
-            label,
-            glyph,
-            WindowAction::DropChoice,
-            target,
-        ))
+/// What the drop menu offers for some items dropped on a folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DropMenuOffer {
+    /// Copy here: anything but Recycle Bin items, which are only moved out
+    /// (OPS-046).
+    pub(crate) copies: bool,
+    /// Move here: items that may be deleted where they are, and not
+    /// copies taken out of a ZIP, which stays read-only.
+    pub(crate) moves: bool,
+    /// Create shortcuts here: items on this computer, into a folder on
+    /// this computer whose file system takes symbolic links.
+    pub(crate) shortcuts: bool,
+    /// What a plain drop would do, shown in bold: [`DropAction::Move`] or
+    /// [`DropAction::Copy`]; `None` in the items' own folder, where a plain
+    /// drop does nothing.
+    pub(crate) default: Option<DropAction>,
+}
+
+impl DropMenuOffer {
+    /// The offer when the items could not be read in time: a copy only.
+    const COPY_ONLY: Self = Self {
+        copies: true,
+        moves: false,
+        shortcuts: false,
+        default: Some(DropAction::Copy),
     };
-    vec![
-        choice(
+
+    /// The offer for Recycle Bin items, which a drop moves out: Move here.
+    const MOVE_ONLY: Self = Self {
+        copies: false,
+        moves: true,
+        shortcuts: false,
+        default: Some(DropAction::Move),
+    };
+}
+
+/// How long the drop menu waits to learn what the items allow; past it,
+/// it offers a copy only, or Move here for Recycle Bin items.
+const OFFER_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// What the drop menu offers for `uris`, dragged from `origin`, dropped on
+/// `folder`. It reads file metadata, so call it off the GTK thread.
+///
+/// What a plain drop would do follows the drop's own rule (DND-017): this
+/// app's own items move within their drive, and anything else copies; a
+/// move that is not possible falls back to a copy, as Windows Explorer
+/// bolds Copy here for read-only items.
+pub(crate) fn drop_menu_offer(uris: &[String], folder: &str, origin: DragOrigin) -> DropMenuOffer {
+    if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+        return DropMenuOffer::MOVE_ONLY;
+    }
+    // Dropped back in their own folder, as Windows Explorer does there:
+    // Copy here makes copies beside them, a move would do nothing and is
+    // not offered, and nothing is bold, as a plain drop does nothing.
+    if !uris.is_empty() && uris.iter().all(|uri| is_in_folder(uri, folder)) {
+        let shortcuts = !uris.iter().any(|uri| is_zip_copy(uri))
+            && takes_shortcuts(folder)
+            && uris.iter().all(|uri| gio::File::for_uri(uri).path().is_some());
+        return DropMenuOffer {
+            copies: true,
+            moves: false,
+            shortcuts,
+            default: None,
+        };
+    }
+    let from_zip = uris.iter().any(|uri| is_zip_copy(uri));
+    let moves = !from_zip && uris.iter().all(|uri| may_delete(uri));
+    let shortcuts = !from_zip
+        && takes_shortcuts(folder)
+        && uris.iter().all(|uri| gio::File::for_uri(uri).path().is_some());
+    let plain_drop_moves = origin == DragOrigin::ThisApp && !from_zip && on_same_drive(uris, folder);
+    let default = if moves && plain_drop_moves {
+        Some(DropAction::Move)
+    } else {
+        Some(DropAction::Copy)
+    };
+    DropMenuOffer {
+        copies: true,
+        moves,
+        shortcuts,
+        default,
+    }
+}
+
+/// True when the item at `uri` is directly in `folder`.
+pub(crate) fn is_in_folder(uri: &str, folder: &str) -> bool {
+    parent_location(uri).is_some_and(|parent| same_location(&parent, folder))
+}
+
+/// True when the item at `uri` may be deleted where it is, as a move
+/// deletes it; false when that cannot be read.
+fn may_delete(uri: &str) -> bool {
+    let info = gio::File::for_uri(uri).query_info(
+        gio::FILE_ATTRIBUTE_ACCESS_CAN_DELETE,
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        gio::Cancellable::NONE,
+    );
+    info.is_ok_and(|info| {
+        !info.has_attribute(gio::FILE_ATTRIBUTE_ACCESS_CAN_DELETE)
+            || info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_DELETE)
+    })
+}
+
+/// True when `folder` is on this computer and its file system takes
+/// symbolic links.
+fn takes_shortcuts(folder: &str) -> bool {
+    let file = gio::File::for_uri(folder);
+    if file.path().is_none() {
+        return false;
+    }
+    let kind = file
+        .query_filesystem_info(gio::FILE_ATTRIBUTE_FILESYSTEM_TYPE, gio::Cancellable::NONE)
+        .ok()
+        .and_then(|info| info.attribute_string(gio::FILE_ATTRIBUTE_FILESYSTEM_TYPE));
+    stores_symbolic_links(kind.as_deref())
+}
+
+/// The drop menu's items for `offer`: Copy here, Move here and Create
+/// shortcuts here where possible, what a plain drop would do in bold, then
+/// Cancel, as Windows Explorer's right-drag menu lists them: text only,
+/// with no glyphs.
+fn drop_menu_entries(offer: DropMenuOffer) -> Vec<MenuEntry> {
+    let choice = |label: &str, glyph: Icon, action: Option<DropAction>| {
+        let target = action.map_or(CANCEL_CHOICE, DropAction::name);
+        let mut item =
+            MenuItem::with_text_target(label, glyph, WindowAction::DropChoice, target).without_glyph();
+        item.emphasised = action.is_some() && action == offer.default;
+        MenuEntry::from(item)
+    };
+    let mut entries = Vec::new();
+    if offer.copies {
+        entries.push(choice(
             ox_core::i18n::gettext_static("Copy here"),
             Icon::Copy,
-            DropAction::Copy.name(),
-        ),
-        choice(
+            Some(DropAction::Copy),
+        ));
+    }
+    if offer.moves {
+        entries.push(choice(
             ox_core::i18n::gettext_static("Move here"),
             Icon::ArrowRight,
-            DropAction::Move.name(),
-        ),
-        choice(
-            ox_core::i18n::gettext_static("Create links here"),
+            Some(DropAction::Move),
+        ));
+    }
+    if offer.shortcuts {
+        entries.push(choice(
+            ox_core::i18n::gettext_static("Create shortcuts here"),
             Icon::Link,
-            DropAction::Link.name(),
-        ),
-        MenuEntry::Divider,
-        choice(
-            ox_core::i18n::gettext_static("Cancel"),
-            Icon::Dismiss,
-            CANCEL_CHOICE,
-        ),
-    ]
+            Some(DropAction::Link),
+        ));
+    }
+    entries.push(MenuEntry::Divider);
+    entries.push(choice(
+        ox_core::i18n::gettext_static("Cancel"),
+        Icon::Dismiss,
+        None,
+    ));
+    entries
 }
 
 impl BrowserWindow {
@@ -319,9 +487,13 @@ impl BrowserWindow {
     /// is read from disk: this runs at every motion of a drag.
     pub(super) fn drop_run(&self, drop: &impl OfferedDrop) -> Option<DropRun> {
         let first_offered = self.first_offer(drop);
-        let origin = drop.origin();
-        let action = DropAction::for_drop(origin, first_offered, drop.offered())?;
-        Some(action.with_keys(origin, self.held_drop_keys()))
+        DropAction::for_button_drop(
+            drop.button(),
+            drop.origin(),
+            first_offered,
+            drop.offered(),
+            self.held_drop_keys(),
+        )
     }
 
     /// The action `drop` shows now, or `None` when it is refused. For
@@ -368,13 +540,42 @@ impl BrowserWindow {
     }
 
     /// Opens the drop menu where the drop happened, keeping the drop of
-    /// `uris` onto `folder` until the user answers.
-    pub(super) fn ask_drop_action(&self, uris: Vec<String>, folder: String) {
-        self.imp()
-            .pending_drop
-            .replace(Some(PendingDrop { uris, folder }));
+    /// `uris`, dragged from `origin`, onto `folder` until the user
+    /// answers. What it offers is read first, off the GTK thread; a menu
+    /// that a newer drop replaced meanwhile is not opened.
+    pub(super) fn ask_drop_action(&self, uris: Vec<String>, folder: String, origin: DragOrigin) {
+        let pending = PendingDrop { uris, folder };
+        self.imp().pending_drop.replace(Some(pending.clone()));
+        // No tooltip of the row under the pointer covers the menu.
+        self.quiet_tooltips_for_drop_menu(true);
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let (uris, folder) = (pending.uris.clone(), pending.folder.clone());
+                // Recycle Bin items only move out, even when the items
+                // could not be read in time.
+                let fallback = if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+                    DropMenuOffer::MOVE_ONLY
+                } else {
+                    DropMenuOffer::COPY_ONLY
+                };
+                let offer = answer_or(&DRIVE_PROBES, OFFER_TIMEOUT, fallback, move || {
+                    drop_menu_offer(&uris, &folder, origin)
+                })
+                .await;
+                let still_waiting = window.imp().pending_drop.borrow().as_ref() == Some(&pending);
+                if still_waiting {
+                    window.show_drop_menu(offer);
+                }
+            }
+        ));
+    }
+
+    /// Opens the drop menu offering `offer` at the drop point.
+    fn show_drop_menu(&self, offer: DropMenuOffer) {
         let menu = self.drop_menu_popover();
-        menu.set_entries(drop_menu_entries());
+        menu.set_entries(drop_menu_entries(offer));
         let (x, y) = self.imp().drop_point.get();
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let target = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
@@ -391,6 +592,11 @@ impl BrowserWindow {
         let menu = MenuPopover::new(Vec::new());
         menu.set_offset(0, 0);
         menu.set_parent(self.folder_pane());
+        menu.connect_closed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| window.quiet_tooltips_for_drop_menu(false)
+        ));
         self.imp()
             .drop_menu
             .set(menu.clone())
@@ -399,13 +605,16 @@ impl BrowserWindow {
     }
 
     /// Runs the drop menu's answer `choice` on the waiting drop (`copy`,
-    /// `move`, `link` or `cancel`). A menu closed without an answer leaves
-    /// the drop waiting, unrun, until the next drop menu replaces it.
+    /// `move`, `link` or `cancel`). Cancel, and a menu closed without an
+    /// answer (Escape), do nothing: the drop waits, unrun, until the next
+    /// drop menu replaces it.
     pub(in crate::window) fn answer_drop_menu(&self, choice: &str) {
         let Some(pending) = self.imp().pending_drop.take() else {
             return;
         };
-        let Some(action) = DropAction::from_name(choice).filter(|action| *action != DropAction::Ask) else {
+        let Some(action) =
+            DropAction::from_name(choice).filter(|action| !matches!(action, DropAction::Ask(_)))
+        else {
             return;
         };
         let destination = super::DropDestination::Folder(pending.folder);
@@ -447,7 +656,7 @@ mod tests {
             },
             OfferCase {
                 offered: gdk::DragAction::ASK,
-                action: Some(DropAction::Ask),
+                action: Some(DropAction::Ask(DragOrigin::OtherApp)),
             },
             OfferCase {
                 offered: gdk::DragAction::MOVE | gdk::DragAction::ASK,
@@ -520,7 +729,7 @@ mod tests {
             DropRun::Run(DropAction::Copy),
             "another app's items are never moved unasked"
         );
-        for settled in [DropAction::Move, DropAction::Link, DropAction::Ask] {
+        for settled in [DropAction::Move, DropAction::Link, DropAction::Ask(own)] {
             assert_eq!(settled.with_keys(own, none), DropRun::Run(settled));
         }
         assert_eq!(
@@ -557,7 +766,7 @@ mod tests {
             gdk::DragAction::COPY
         );
         assert_eq!(
-            DropRun::Run(DropAction::Ask).protocol_action(plain_offer),
+            DropRun::Run(DropAction::Ask(DragOrigin::ThisApp)).protocol_action(plain_offer),
             gdk::DragAction::ASK
         );
     }
@@ -600,21 +809,200 @@ mod tests {
         );
     }
 
-    /// parity: DND-018
-    #[test]
-    fn the_drop_menu_offers_copy_move_link_and_cancel() {
-        let labels: Vec<String> = drop_menu_entries()
+    /// The labels of the drop menu for `offer`, a divider as `-` and the
+    /// bold one in `*`.
+    fn menu_labels(offer: DropMenuOffer) -> Vec<String> {
+        drop_menu_entries(offer)
             .into_iter()
             .map(|entry| match entry {
+                MenuEntry::Item(item) if item.emphasised => format!("*{}", item.label),
                 MenuEntry::Item(item) => item.label,
                 MenuEntry::Divider => "-".to_owned(),
             })
-            .collect();
+            .collect()
+    }
+
+    /// parity: DND-018, DND-027
+    #[test]
+    fn the_drop_menu_offers_what_is_possible_with_the_plain_drops_action_in_bold() {
+        let every = DropMenuOffer {
+            copies: true,
+            moves: true,
+            shortcuts: true,
+            default: Some(DropAction::Move),
+        };
+        let across_drives = DropMenuOffer {
+            default: Some(DropAction::Copy),
+            ..every
+        };
+        let read_only = DropMenuOffer {
+            moves: false,
+            default: Some(DropAction::Copy),
+            ..every
+        };
+        let onto_fat = DropMenuOffer {
+            shortcuts: false,
+            ..every
+        };
 
         assert_eq!(
-            labels,
-            ["Copy here", "Move here", "Create links here", "-", "Cancel"]
+            menu_labels(every),
+            ["Copy here", "*Move here", "Create shortcuts here", "-", "Cancel"]
+        );
+        assert_eq!(
+            menu_labels(across_drives),
+            ["*Copy here", "Move here", "Create shortcuts here", "-", "Cancel"]
+        );
+        assert_eq!(
+            menu_labels(read_only),
+            ["*Copy here", "Create shortcuts here", "-", "Cancel"]
+        );
+        assert_eq!(menu_labels(onto_fat), ["Copy here", "*Move here", "-", "Cancel"]);
+        let own_folder = DropMenuOffer {
+            moves: false,
+            default: None,
+            ..every
+        };
+        assert_eq!(
+            menu_labels(own_folder),
+            ["Copy here", "Create shortcuts here", "-", "Cancel"]
         );
         assert_eq!(DropAction::from_name(CANCEL_CHOICE), None);
+    }
+
+    /// A right-button drag of this app's own items always asks, whatever
+    /// the keys held and the drag offers, as in Windows Explorer; one of
+    /// another app keeps its own rules.
+    ///
+    /// parity: DND-027
+    #[test]
+    fn a_right_button_drag_of_own_items_always_asks() {
+        let plain_offer = gdk::DragAction::COPY | gdk::DragAction::ASK;
+        let held = [
+            gdk::ModifierType::empty(),
+            gdk::ModifierType::SHIFT_MASK,
+            gdk::ModifierType::CONTROL_MASK,
+        ];
+
+        for keys in held {
+            assert_eq!(
+                DropAction::for_button_drop(
+                    DragButton::Secondary,
+                    DragOrigin::ThisApp,
+                    plain_offer,
+                    plain_offer,
+                    keys
+                ),
+                Some(DropRun::Run(DropAction::Ask(DragOrigin::ThisApp))),
+                "{keys:?}"
+            );
+        }
+        assert_eq!(
+            DropAction::for_button_drop(
+                DragButton::Primary,
+                DragOrigin::ThisApp,
+                plain_offer,
+                plain_offer,
+                gdk::ModifierType::empty()
+            ),
+            Some(DropRun::MoveWithinDrive)
+        );
+        assert_eq!(
+            DropAction::for_button_drop(
+                DragButton::Primary,
+                DragOrigin::OtherApp,
+                gdk::DragAction::ASK,
+                gdk::DragAction::ASK,
+                gdk::ModifierType::empty()
+            ),
+            None,
+            "another app's drag that offers no copy is still refused"
+        );
+    }
+
+    /// What the menu offers is read from the items and the folder: Move
+    /// only for items that may be deleted, Create shortcuts only for local
+    /// items into a local folder that takes symbolic links, and the plain
+    /// drop's action in bold: a move of this app's own items within their
+    /// drive, a copy across drives and of another app's items.
+    ///
+    /// parity: DND-027
+    #[gtk::test]
+    fn the_drop_menu_reads_what_the_items_and_the_folder_allow() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let item = folder.path().join("Notes.txt");
+        std::fs::write(&item, "notes").expect("the item is written");
+        let locked = folder.path().join("Locked");
+        std::fs::create_dir(&locked).expect("the folder is made");
+        let kept = locked.join("Kept.txt");
+        std::fs::write(&kept, "kept").expect("the item is written");
+        let destination = folder.path().join("Documents");
+        std::fs::create_dir(&destination).expect("the folder is made");
+        let uri = |path: &std::path::Path| gtk::gio::File::for_path(path).uri().to_string();
+        let set_mode = |path: &std::path::Path, mode| {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).expect("the mode is set");
+        };
+        set_mode(&locked, 0o555);
+
+        let own = drop_menu_offer(&[uri(&item)], &uri(&destination), DragOrigin::ThisApp);
+        let foreign = drop_menu_offer(&[uri(&item)], &uri(&destination), DragOrigin::OtherApp);
+        let in_own_folder = drop_menu_offer(&[uri(&item)], &uri(folder.path()), DragOrigin::ThisApp);
+        let read_only = drop_menu_offer(&[uri(&kept)], &uri(&destination), DragOrigin::ThisApp);
+        let from_share = drop_menu_offer(
+            &["smb://nas/share/plan.odt".to_owned()],
+            &uri(&destination),
+            DragOrigin::OtherApp,
+        );
+        let from_bin = drop_menu_offer(
+            &["trash:///Notes.txt".to_owned()],
+            &uri(&destination),
+            DragOrigin::ThisApp,
+        );
+        set_mode(&locked, 0o755);
+
+        let every = DropMenuOffer {
+            copies: true,
+            moves: true,
+            shortcuts: true,
+            default: Some(DropAction::Move),
+        };
+        assert_eq!(own, every);
+        assert_eq!(
+            foreign,
+            DropMenuOffer {
+                default: Some(DropAction::Copy),
+                ..every
+            }
+        );
+        assert_eq!(
+            read_only,
+            DropMenuOffer {
+                moves: false,
+                default: Some(DropAction::Copy),
+                ..every
+            }
+        );
+        assert!(!from_share.shortcuts, "a share's item gets no shortcut");
+        assert_eq!(
+            in_own_folder,
+            DropMenuOffer {
+                copies: true,
+                moves: false,
+                shortcuts: true,
+                default: None,
+            },
+            "back in its own folder: no move, nothing bold"
+        );
+        assert_eq!(
+            from_bin,
+            DropMenuOffer {
+                copies: false,
+                moves: true,
+                shortcuts: false,
+                default: Some(DropAction::Move),
+            },
+            "Recycle Bin items are only moved out"
+        );
     }
 }

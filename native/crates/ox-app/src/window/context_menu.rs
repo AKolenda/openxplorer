@@ -111,6 +111,9 @@ impl BrowserWindow {
             move |_| popover.unparent()
         ));
         view.add_controller(self.context_menu_shortcuts());
+        // As in Windows Explorer, the press selects and the release opens
+        // the menu, so a right-button drag can start from the press
+        // (DND-027): a drag cancels the click before its release.
         let right_click = gtk::GestureClick::new();
         right_click.set_button(gdk::BUTTON_SECONDARY);
         right_click.connect_pressed(glib::clone!(
@@ -118,9 +121,15 @@ impl BrowserWindow {
             self,
             #[weak]
             view,
+            move |_, _, x, y| window.select_for_context_menu(&view, x, y)
+        ));
+        right_click.connect_released(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            view,
             move |gesture, _, x, y| {
                 gesture.set_state(gtk::EventSequenceState::Claimed);
-                window.select_for_context_menu(&view, x, y);
                 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
                 let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
                 let style = menu_style_for(window.preferred_menu_style(), gesture.current_event_state());
@@ -210,11 +219,20 @@ impl BrowserWindow {
                     },
                 )
             }
-            (None, false) => background_menu(
-                &self.journal_label(JournalDirection::Undo),
-                &self.journal_label(JournalDirection::Redo),
-                &self.folder_applications(),
-            ),
+            (None, false) => {
+                self.refresh_template_menu();
+                background_menu(
+                    &self.journal_label(JournalDirection::Undo),
+                    &self.journal_label(JournalDirection::Redo),
+                    &self.folder_applications(),
+                    BackgroundSubmenus {
+                        view: view_menu(),
+                        sort: sort_menu(),
+                        group: group_by_menu(),
+                        new: new_menu(self.template_menu_entries()),
+                    },
+                )
+            }
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
             (Some(first), false) => {
                 let mut facts = self.item_facts(first.entry(), items.len() == 1);
@@ -400,6 +418,25 @@ impl BrowserWindow {
         self.select_for_context_menu(&view, x, y);
         let point = gdk::Rectangle::new(KEYBOARD_MENU_INSET, KEYBOARD_MENU_INSET, 1, 1);
         self.open_context_menu(&view, &point, self.preferred_menu_style());
+    }
+
+    /// The view's right-button gesture and a point on the item at
+    /// `position`, to press and release it there, for tests.
+    #[cfg(test)]
+    pub(super) fn right_button_on_item(&self, position: u32) -> (gtk::GestureClick, f64, f64) {
+        let view = self.folder_pane().input_widget();
+        crate::test_support::harness::wait_until("the item to be laid out", || {
+            self.point_on_item(&view, position).is_some()
+        });
+        let (x, y) = self.point_on_item(&view, position).expect("the item is laid out");
+        let gesture = view
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|gesture| gesture.button() == gdk::BUTTON_SECONDARY)
+            .expect("the view takes right-clicks");
+        (gesture, x, y)
     }
 
     /// A point in `view` on the item at `position`, once it is laid out

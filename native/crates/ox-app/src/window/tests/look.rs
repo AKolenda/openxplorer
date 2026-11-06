@@ -97,9 +97,10 @@ fn assert_surfaces(window: &BrowserWindow, expected: &Surfaces) {
     );
 }
 
-/// From top to bottom: the 42-pixel tab strip, the navigation row, the
-/// command bar, the sidebar, file list and details pane side by side, and
-/// the 30-pixel status bar, all in the app's font stack at 13 pixels.
+/// From top to bottom: the 42-pixel tab strip, the 48-pixel navigation
+/// row and command bar, as Windows 11's (owner decision 2026-11-06), the
+/// sidebar, file list and details pane side by side, and the 30-pixel
+/// status bar, all in the app's font stack at 13 pixels.
 ///
 /// parity: LOOK-001
 #[gtk::test]
@@ -115,10 +116,10 @@ fn the_bars_and_panes_stack_as_in_explorer_in_the_apps_font() {
     let details = bounds(&test, window.details_pane());
     let status = bounds(&test, window.status_bar());
     assert_eq!((title.y, title.height), (0, 42), "the title bar");
-    assert_eq!((navigation.y, navigation.height), (42, 62), "the navigation row");
-    assert_eq!((commands.y, commands.height), (104, 55), "the command bar");
+    assert_eq!((navigation.y, navigation.height), (42, 48), "the navigation row");
+    assert_eq!((commands.y, commands.height), (90, 48), "the command bar");
     for pane in [sidebar, files, details] {
-        assert_eq!((pane.y, pane.y + pane.height), (159, status.y), "{pane:?}");
+        assert_eq!((pane.y, pane.y + pane.height), (138, status.y), "{pane:?}");
     }
     assert_eq!((sidebar.x, sidebar.width), (0, 210), "the sidebar");
     assert!(sidebar.right() < files.x, "the resizer sits between");
@@ -271,7 +272,7 @@ fn the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line() {
     }
 }
 
-/// The command bar is 55 pixels with its bottom line; Appearance,
+/// The command bar is 48 pixels with its bottom line; Appearance,
 /// Settings and Details sit at its right end, the file commands scroll
 /// sideways instead of clipping, and the switched-on Details toggle shows
 /// the selected colour.
@@ -285,7 +286,7 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
     show_theme(&test, "light");
     let bar = test.window.command_bar();
     let place = bounds(&test, bar);
-    assert_eq!(place.height, 55);
+    assert_eq!(place.height, 48);
     let details = descendants::<gtk::ToggleButton>(bar)
         .into_iter()
         .find(|button| button.has_css_class("details-toggle"))

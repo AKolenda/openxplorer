@@ -14,7 +14,7 @@ Local selected directories use filesystem watches while the app is open. Network
 
 ## Results open their real locations
 
-A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. Stale results can remain when a server is offline.
+A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. As in Windows 11, a search is a step of the tab’s history: the tab and address bar read Search Results in Documents, Back returns to the folder, Forward to the results, and Back from a folder opened from them shows them again. Emptying the search box also goes back to the folder. Stale results can remain when a server is offline.
 
 ![A cached search for “budget” in the native app, showing the folder of the result](../assets/screenshots/cached-search.png)
 

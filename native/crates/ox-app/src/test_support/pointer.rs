@@ -45,6 +45,7 @@ const SEARCH_STEP: usize = 80;
 pub(crate) enum Button {
     Primary = 1,
     Middle = 2,
+    Secondary = 3,
 }
 
 /// The tests' pointer, on the private X display.

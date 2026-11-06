@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The paste-conflict check and copy, move and delete requests on
+//! Copy, move and delete requests on
 //! temporary local files through the production GIO adapter. The transfer
 //! engine's own safety rules are tested in `transfer.rs`; these cases cover
-//! what the interface's requests add around it. The Delete plan, Duplicate,
+//! what the interface's requests add around it. The paste-conflict check
+//! and its answers are in `ops_name_conflicts.rs`; the Delete plan, Duplicate,
 //! moving to the Trash and Undo are in `ops_delete_plan.rs`,
 //! `ops_duplicate.rs`, `ops_recycle_bin.rs` and `ops_undo.rs`.
 
@@ -13,17 +14,14 @@ mod ops_support;
 mod snapshots;
 
 use std::fs;
-use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ox_core::ops::{
-    find_conflicts, run_chosen_transfer, run_transfer, ChosenTransfer, ItemChoice, OperationContext,
-    OpsError, TransferRequest, UndoRecord,
+    run_resolved_transfer, run_transfer, scan_name_conflicts, OperationContext, OpsError, Resolution,
+    TransferRequest, UndoRecord,
 };
-use ox_core::transfer::{
-    Cancellation, ConflictPolicy, ItemCount, Progress, ProgressScope, TransferMode, MAX_ITEMS,
-};
+use ox_core::transfer::{Cancellation, ConflictPolicy, ItemCount, Progress, ProgressScope, TransferMode};
 
 use folders::Folders;
 use ops_support::{block_on, file_uri};
@@ -37,79 +35,6 @@ fn request(mode: TransferMode, sources: &[&Path], folder: &Path, policy: Conflic
         destination_folder: Some(file_uri(folder)),
         policy,
     }
-}
-
-/// parity: OPS-027
-#[test]
-fn conflicts_list_the_items_whose_names_are_taken_hidden_and_dangling_ones_included() {
-    let folders = Folders::new();
-    let (src, dst) = (folders.source(), folders.destination());
-    for name in ["free.txt", "taken.txt", ".hidden", "link"] {
-        fs::write(src.join(name), b"incoming").unwrap();
-    }
-    fs::write(dst.join("taken.txt"), b"existing").unwrap();
-    fs::write(dst.join(".hidden"), b"existing").unwrap();
-    symlink("missing-target", dst.join("link")).unwrap();
-    let uris: Vec<String> = ["free.txt", "taken.txt", ".hidden", "link"]
-        .iter()
-        .map(|name| file_uri(&src.join(name)))
-        .collect();
-
-    let conflicts = block_on(find_conflicts(&uris, &file_uri(&dst), &Cancellation::new())).unwrap();
-
-    assert_eq!(conflicts, uris[1..]);
-}
-
-/// parity: OPS-027, OPS-035
-#[test]
-fn a_conflict_check_needs_a_folder_and_between_one_and_the_maximum_items() {
-    let folders = Folders::new();
-    let file = folders.source().join("a.txt");
-    fs::write(&file, b"a").unwrap();
-    let cancel = Cancellation::new();
-    let one = [file_uri(&file)];
-    let too_many = vec![file_uri(&file); MAX_ITEMS + 1];
-
-    let into_file = block_on(find_conflicts(&one, &file_uri(&file), &cancel));
-    let none = block_on(find_conflicts(&[], &file_uri(&folders.destination()), &cancel));
-    let oversized = block_on(find_conflicts(
-        &too_many,
-        &file_uri(&folders.destination()),
-        &cancel,
-    ));
-    let share = block_on(find_conflicts(
-        &["smb://nas/share".into()],
-        "file:///tmp",
-        &cancel,
-    ));
-
-    let open_folder = "Open a destination folder before pasting.";
-    assert_eq!(into_file, Err(OpsError::Failed(open_folder.into())));
-    let count = OpsError::Failed("Select between 1 and 100,000 items.".into());
-    assert_eq!(none, Err(count.clone()));
-    assert_eq!(oversized, Err(count));
-    assert!(
-        matches!(share, Err(OpsError::Failed(message)) if message.starts_with("Open the network share first"))
-    );
-}
-
-/// A cancelled check must never read as "no conflicts", which would start
-/// the copy the user just stopped.
-#[test]
-fn a_cancelled_conflict_check_reports_the_cancellation() {
-    let folders = Folders::new();
-    fs::write(folders.source().join("a.txt"), b"incoming").unwrap();
-    let uris = [file_uri(&folders.source().join("a.txt"))];
-    let cancelled = Cancellation::new();
-    cancelled.cancel();
-
-    let conflicts = block_on(find_conflicts(
-        &uris,
-        &file_uri(&folders.destination()),
-        &cancelled,
-    ));
-
-    assert_eq!(conflicts, Err(OpsError::Cancelled));
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_rc2.py::DispatchTests::test_operate_dispatch_protects_backup_descendants`.
@@ -329,9 +254,9 @@ fn a_deletion_counts_the_selected_items() {
     );
 }
 
-/// A paste whose conflicts were answered runs one group per answer, and
+/// A paste whose conflicts were answered runs in several steps, and
 /// the action reads complete only when its last group is: an earlier
-/// group's end is its share of the paste, not the whole.
+/// step's end is its share of the paste, not the whole.
 ///
 /// parity: OPS-021, OPS-028
 #[test]
@@ -343,22 +268,21 @@ fn a_paste_run_in_groups_is_complete_only_after_its_last_group() {
     fs::write(folders.destination().join("taken.txt"), "old").unwrap();
     let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
     let sink = Arc::clone(&reports);
-    let choice = |name: &str, policy| ItemChoice {
-        uri: file_uri(&folders.source().join(name)),
-        policy,
-        rename_to: None,
-    };
-    let paste = ChosenTransfer {
-        mode: TransferMode::Copy,
-        destination_folder: file_uri(&folders.destination()),
-        items: vec![
-            choice("new.txt", ConflictPolicy::Skip),
-            choice("taken.txt", ConflictPolicy::Replace),
-        ],
-    };
+    let uris: Vec<String> = ["new.txt", "taken.txt"]
+        .iter()
+        .map(|name| file_uri(&folders.source().join(name)))
+        .collect();
+    let scan = block_on(scan_name_conflicts(
+        TransferMode::Copy,
+        &uris,
+        &file_uri(&folders.destination()),
+        &Cancellation::new(),
+    ))
+    .unwrap();
 
-    block_on(run_chosen_transfer(
-        &paste,
+    block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
         &OperationContext::default(),
         move |progress| sink.lock().unwrap().push(progress),
     ))
@@ -380,7 +304,7 @@ fn a_paste_run_in_groups_is_complete_only_after_its_last_group() {
     );
 }
 
-/// A paste whose conflicts were all answered alike runs as one group,
+/// A paste of one answered conflict runs as one step,
 /// whose item counts are the whole paste's, for "Items remaining".
 ///
 /// parity: OPS-021, OPS-028
@@ -391,18 +315,18 @@ fn a_paste_run_as_one_group_counts_its_items() {
     fs::write(folders.destination().join("taken.txt"), "old").unwrap();
     let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
     let sink = Arc::clone(&reports);
-    let paste = ChosenTransfer {
-        mode: TransferMode::Copy,
-        destination_folder: file_uri(&folders.destination()),
-        items: vec![ItemChoice {
-            uri: file_uri(&folders.source().join("taken.txt")),
-            policy: ConflictPolicy::Replace,
-            rename_to: None,
-        }],
-    };
+    let uris = [file_uri(&folders.source().join("taken.txt"))];
+    let scan = block_on(scan_name_conflicts(
+        TransferMode::Copy,
+        &uris,
+        &file_uri(&folders.destination()),
+        &Cancellation::new(),
+    ))
+    .unwrap();
 
-    block_on(run_chosen_transfer(
-        &paste,
+    block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
         &OperationContext::default(),
         move |progress| sink.lock().unwrap().push(progress),
     ))

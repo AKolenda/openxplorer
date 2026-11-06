@@ -129,9 +129,9 @@ impl BrowserWindow {
         let mut style = ViewProperties {
             mode: view.style_mode().to_owned(),
             icon_size: match view {
-                FolderView::Icons(size) => u32::try_from(size.pixels()).unwrap_or(56),
+                FolderView::Icons(size) => u32::try_from(size.pixels()).unwrap_or(96),
                 FolderView::Details | FolderView::Compact => {
-                    u32::try_from(pane.icon_view().icon_size().pixels()).unwrap_or(56)
+                    u32::try_from(pane.icon_view().icon_size().pixels()).unwrap_or(96)
                 }
             },
             sort: sort.by.as_str().to_owned(),

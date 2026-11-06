@@ -35,7 +35,7 @@ pub(crate) struct NetworkServices {
     visited: RefCell<VisitedNetwork>,
     /// The kernel's CIFS and SMB3 mounts, as last read.
     stable_mounts: RefCell<Vec<StableMount>>,
-    /// Where Discover servers looks.
+    /// Where the listing of Network discovers computers.
     discoverer: RefCell<Discoverer>,
 }
 
@@ -112,12 +112,12 @@ impl NetworkServices {
         changed
     }
 
-    /// Where Discover servers looks.
+    /// Where the listing of Network discovers computers.
     pub(crate) fn discoverer(&self) -> Discoverer {
         self.discoverer.borrow().clone()
     }
 
-    /// Makes Discover servers find what `discoverer` returns, for tests.
+    /// Makes Network find what `discoverer` returns, for tests.
     #[cfg(test)]
     pub(crate) fn set_discoverer(&self, discoverer: Discoverer) {
         self.discoverer.replace(discoverer);

@@ -136,7 +136,7 @@
         "id": "connect",
         "title": "Connect to a server",
         "paragraphs": [
-          "Open Network and enter a server or share address. The address bar also accepts Linux paths, UNC paths and smb:// locations. Each breadcrumb is separately clickable.",
+          "Type a server or share address in the address bar, or open Network to see the computers on your network and open one. The address bar also accepts Linux paths, UNC paths and smb:// locations. Each breadcrumb is separately clickable.",
           "Windows-style paths use backslashes, not backticks: \\\\studio-nas\\Projects. You can also use smb://studio-nas/Projects. Click each breadcrumb to jump to an ancestor. The website walkthrough uses this exact interface; the website itself makes no SMB connections.",
           "A slow server shows that it is working, as Windows Explorer does: the address bar fills with progress and Refresh turns into Stop at once, and after a moment the file list says Working on it... in place of the previous folder. Press Stop, or Esc while you are still in the address bar, to cancel and stay where you were. Pressing Enter again does not start over; entering another address replaces the slow one. Other tabs stay usable meanwhile."
         ],
@@ -166,7 +166,7 @@
         "id": "discovery",
         "title": "Discover nearby servers",
         "paragraphs": [
-          "Discover servers uses the installed GVfs discovery providers. Devices must advertise themselves and be reachable through your network and firewall. It does not scan every IP address or guarantee an exhaustive list."
+          "Network lists the computers and servers that advertise themselves on your network, as Windows 11 does, through the installed GVfs discovery providers. It looks each time you open it, and Refresh looks again. Devices must advertise themselves and be reachable through your network and firewall. It does not scan every IP address or guarantee an exhaustive list. If Network says that network discovery is turned off, the GVfs network services are missing; type the server's address instead."
         ]
       },
       {
@@ -210,7 +210,7 @@
         "id": "results",
         "title": "Results open their real locations",
         "paragraphs": [
-          "A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. Stale results can remain when a server is offline."
+          "A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. As in Windows 11, a search is a step of the tab’s history: the tab and address bar read Search Results in Documents, Back returns to the folder, Forward to the results, and Back from a folder opened from them shows them again. Emptying the search box also goes back to the folder. Stale results can remain when a server is offline."
         ],
         "image": "cached-search",
         "imageAlt": "A cached search for “budget” in the native app, showing the folder of the result"
@@ -410,6 +410,14 @@
         ]
       },
       {
+        "id": "rename",
+        "title": "Rename an item",
+        "paragraphs": [
+          "Press F2, or choose Rename, and the name becomes a text field in its row or tile, with a file’s name before its extension selected. Press Enter or click elsewhere to keep the new name, or Escape to keep the old one. As in Windows, the characters \\ / : * ? \" < > | can’t be typed or pasted into the name: nothing is inserted, and a balloon under the field says “A file name can’t contain any of the following characters”. A name that already has one keeps it while you edit it.",
+          "If another file in the folder already has the name you type, the Rename File question offers the next free numbered name, such as Report (2).txt: Yes renames the file to it, and No lets you edit the name again. A folder given a name that is taken is not renamed, and nothing is ever overwritten."
+        ]
+      },
+      {
         "id": "rename-several",
         "title": "Rename several items at once",
         "paragraphs": [
@@ -422,7 +430,8 @@
         "title": "Follow file operations",
         "paragraphs": [
           "Copy, move and delete jobs show in a small progress window of their own, as in Windows Explorer: it appears when a job takes more than a moment, is titled with the job's percentage (“44% complete”) or, with several jobs, “2 Running Actions”, and closes when the last job ends. Each job says what it does, such as “Copying 12 items from Projects to Archive” (click a folder to open it), and has its own Pause and Cancel. More details shows a speed graph, the item being handled, the time remaining and the items remaining; the window remembers the choice. Closing the window cancels its jobs; finished items stay.",
-          "Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue. Inside a folder, only the file that fails is asked about, and the rest of the folder is still copied."
+          "Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue. Inside a folder, only the file that fails is asked about, and the rest of the folder is still copied.",
+          "When a copy or move meets files that already have the same names, OpenXplorer asks as Windows 11 does. The files without a conflict are copied first; then the job in the progress window shows Replace or Skip Files in place of its progress: “The destination already has a file named \"report.png\"” with Replace the file in the destination, Skip this file and Compare info for both files, or, for several, “The destination has 3 files with the same names” with Replace the files in the destination, Skip these files and Let me decide for each file. A folder that meets a folder of its name is merged without asking, and only the files inside with the same names count. Compare info or Let me decide opens the File Conflict window, which blocks only the progress window: check the files to keep on each side, with their thumbnails, dates and sizes (Files from … and Files already in … check a whole side), or Skip the files with the same date and size, then Continue. Checking both versions keeps both, and the copied file gets a number, as report (2).png. A replaced file goes to the Recycle Bin first where the drive has one, so Undo (Ctrl+Z) brings it back; Closing the window (or the job's Cancel, when other jobs run beside it) stops the job and keeps what it already copied."
         ]
       },
       {
@@ -544,7 +553,8 @@
         "title": "Drag files between applications",
         "paragraphs": [
           "Select one or more files or folders and drag them into an application that accepts native file drops. The desktop app supplies file URIs and readable paths through GTK, including already-mounted network paths when available. Ctrl-click or Shift-click to select multiple items. Press Escape to cancel.",
-          "Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. As in Windows Explorer, a plain drag of OpenXplorer's own items moves them to a folder on the same drive and copies them to another drive; hold Ctrl to copy or Shift to move. A plain drag of items from another app always copies them; hold Shift to move them instead. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.",
+          "Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. As in Windows Explorer, a plain drag of OpenXplorer's own items moves them to a folder on the same drive and copies them to another drive; hold Ctrl to copy or Shift to move. A plain drag of items from another app always copies them; hold Shift to move them instead. Files with the same names are asked about in the progress window, as for Paste. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Drop onto a folder or drive in the navigation pane to copy or move into it; drop between Quick access entries (where an accent line and Pin to Quick access show) to pin or reorder folders. Holding a drag over a folder in the file list never opens it, as in Windows 11; drop on it to copy or move into it. Holding a drag over the navigation pane never changes the folder shown either; held over a collapsed This PC or Network, it expands it. File drops never request deletion of the source.",
+        "Drag with the right mouse button to choose what happens, as in Windows Explorer. Pressing the right button selects the item; releasing it without moving opens its menu. When you release a right-button drag over a folder, a menu opens there: Copy here, Move here, Create shortcuts here and Cancel. The bold entry is what an ordinary drag would do, Move here on the same drive and Copy here on another. Only what is possible is listed: items you may not delete cannot be moved, and Create shortcuts here needs items and a folder on this computer whose drive can hold symbolic links (not FAT or exFAT). A shortcut is a symbolic link named like a Windows shortcut, such as report.txt - Shortcut, then report.txt - Shortcut (2). Dropped back in their own folder, the menu offers Copy here, which makes copies such as report - Copy.txt, and Create shortcuts here. Escape or Cancel does nothing. Once the menu is open, Up, Down and Enter choose an entry.",
           "ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Automatic extraction remains unavailable. Undo (Ctrl+Z) takes back a drop into an OpenXplorer folder, a copy or a move, as it takes back Paste.",
           "The website tour shows pictures and cannot drag files. Compatibility with a particular editor or a Wayland desktop must be checked on that system."
         ]

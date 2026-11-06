@@ -55,8 +55,8 @@ fn columns_run_from_14_pixels_in_with_the_web_widths() {
         "Size holds the 14 pixels after them"
     );
     assert!(
-        titles.iter().all(|title| title.height == 37),
-        "37-pixel titles above a 1-pixel line"
+        titles.iter().all(|title| title.height == 31),
+        "31-pixel titles above a 1-pixel line, as Windows 11's"
     );
 }
 
@@ -115,7 +115,7 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let row_place = bounds(&test, &row);
     assert_eq!(
         (row_place.x, row_place.width, row_place.height),
-        (list.x + 12, list.width - 24, 36),
+        (list.x + 12, list.width - 24, 30),
         "folders show no arrows by default, as in Explorer"
     );
     let (cell_x, title_x) = cell_and_title_x(&test, &row);
@@ -126,7 +126,7 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let row_place = bounds(&test, &row);
     assert_eq!(
         (row_place.x, row_place.width, row_place.height),
-        (list.x + 2, list.width - 14, 36),
+        (list.x + 2, list.width - 14, 30),
         "the fixture has folders, so rows make room for their arrows"
     );
     let (cell_x, title_x) = cell_and_title_x(&test, &row);
