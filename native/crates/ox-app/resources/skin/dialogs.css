@@ -50,6 +50,10 @@ window.ox.ox-dialog .dialog-note {
   color: @ox_muted;
 }
 window.ox.ox-dialog .dialog-hint { color: @ox_muted; margin-top: 12px; }
+/* Windows' "Rename File" question: each file with its icon, size and date
+   (src/window/file_ops/rename_conflict.rs). */
+window.ox.ox-dialog .rename-file-item { margin-top: 12px; }
+window.ox.ox-dialog .rename-file-detail { color: @ox_muted; }
 /* A licence keeps its line breaks, so it reads best in a fixed width. */
 window.ox.ox-dialog .scrolled-text { font-family: monospace; font-size: 12px; }
 window.ox.ox-dialog .dialog-check { margin-top: 12px; }
