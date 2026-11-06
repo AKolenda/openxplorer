@@ -77,6 +77,8 @@ fn describe(name: &str) -> Option<(Group, String)> {
         let label = match view {
             "details" => ox_core::i18n::gettext_static("Details"),
             "compact" => ox_core::i18n::gettext_static("List"),
+            "tiles" => ox_core::i18n::gettext_static("Tiles"),
+            "content" => ox_core::i18n::gettext_static("Content"),
             key => IconSize::from_key(key)?.label()?,
         };
         return Some((Group::View, label.to_owned()));

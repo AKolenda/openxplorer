@@ -6,6 +6,7 @@ use gtk::prelude::*;
 use ox_core::settings::{PreferencesUpdate, Settings};
 
 use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
+use super::icons::{pixel_rows, Pixel};
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 use crate::window::widget_tree::children;
 
@@ -58,20 +59,112 @@ fn columns_run_from_14_pixels_in_with_the_web_widths() {
     );
 }
 
+/// What a title paints above its label: the columns its ink spans, and
+/// how wide its ink is in its first and last inked rows.
+#[derive(Debug)]
+struct Ink {
+    left: i32,
+    right: i32,
+    top_width: i32,
+    bottom_width: i32,
+}
+
+/// What `title` paints in its rows above `limit`, measured against its
+/// top-left pixel; `None` where it paints nothing there.
+fn ink_above(title: &gtk::Widget, limit: i32) -> Option<Ink> {
+    let renderer = title
+        .native()
+        .and_then(|native| native.renderer())
+        .expect("the title is on a drawn window");
+    // Drawn in place by the header, so its pixels are the title's own,
+    // unscaled.
+    let header = title.parent().expect("a title is in the header");
+    let place = title.compute_bounds(&header).expect("the title is laid out");
+    let snapshot = gtk::Snapshot::new();
+    header.snapshot_child(title, &snapshot);
+    let node = snapshot.to_node()?;
+    let rows = pixel_rows(&renderer.render_texture(&node, Some(&place)));
+    let corner = rows[1][1];
+    let differs = |pixel: &Pixel| {
+        pixel
+            .iter()
+            .zip(corner)
+            .any(|(channel, background)| channel.abs_diff(background) > 40)
+    };
+    let limit = usize::try_from(limit).expect("the label is inside its title");
+    let inked: Vec<(i32, i32)> = rows[..limit]
+        .iter()
+        .filter_map(|row| {
+            let left = row.iter().position(differs)?;
+            let right = row.iter().rposition(differs)?;
+            let column = |index: usize| i32::try_from(index).expect("a narrow title");
+            Some((column(left), column(right)))
+        })
+        .collect();
+    let (first, last) = (inked.first()?, inked.last()?);
+    Some(Ink {
+        left: inked.iter().map(|span| span.0).min()?,
+        right: inked.iter().map(|span| span.1).max()?,
+        top_width: first.1 - first.0,
+        bottom_width: last.1 - last.0,
+    })
+}
+
+/// Every title is left-aligned, Size's too, as in Windows 11 File
+/// Explorer, while the sizes stay right-aligned under it. Only the
+/// sorted title shows an arrow: a chevron centred over its column on the
+/// title's top edge, above the label, up while ascending.
+///
+/// parity: VIEW-014
 #[gtk::test]
-fn the_size_title_is_right_aligned_and_only_the_sorted_column_has_an_arrow() {
+fn titles_are_left_aligned_and_the_sorted_one_has_a_chevron_on_its_top_edge() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let titles = column_titles(&test);
-    let size_title = titles.last().expect("four titles");
-    let labels = descendants::<gtk::Label>(size_title);
-    let size_label = labels.first().expect("the Size title has a label");
-    assert_eq!(size_label.text().as_str(), "Size");
-    assert_eq!(
-        bounds(&test, size_label).right(),
-        bounds(&test, size_title).right() - 32,
-        "12 pixels of padding and the 14-pixel end, as `padding-right:17px` \
-         plus the list's padding in style.css, and no room for an arrow"
+    let label_of = |title: &gtk::Widget| {
+        descendants::<gtk::Label>(title)
+            .into_iter()
+            .find(WidgetExt::is_visible)
+            .expect("a title has a label")
+    };
+    for title in &titles[1..] {
+        let label = label_of(title);
+        assert_eq!(
+            bounds(&test, &label).x,
+            bounds(&test, title).x + 12,
+            "{} starts after the title's 12-pixel padding",
+            label.text()
+        );
+    }
+    let name = &titles[0];
+    let name_place = bounds(&test, name);
+    // The chevron's rows: the label's box fills the title's height, and
+    // its 12-pixel text starts lower.
+    let chevron_rows = 8;
+    let chevron = ink_above(name, chevron_rows).expect("Name sorts, so its title has a chevron");
+    // Name's column runs from the 14-pixel end to the title's right edge.
+    let column_middle = i32::midpoint(14, name_place.width);
+    assert!(
+        (i32::midpoint(chevron.left, chevron.right) - column_middle).abs() <= 1,
+        "{chevron:?} centred on {column_middle}"
+    );
+    assert!(chevron.right - chevron.left <= 10, "a small chevron: {chevron:?}");
+    assert!(
+        chevron.top_width < chevron.bottom_width,
+        "up while ascending: {chevron:?}"
+    );
+    for title in &titles[1..] {
+        assert!(
+            ink_above(title, chevron_rows).is_none(),
+            "only the sorted title has an arrow"
+        );
+    }
+    test.activate("direction", Some("descending"));
+    wait_for_frames(&test.window, 2);
+    let chevron = ink_above(name, chevron_rows).expect("a chevron while descending");
+    assert!(
+        chevron.top_width > chevron.bottom_width,
+        "down while descending: {chevron:?}"
     );
 }
 

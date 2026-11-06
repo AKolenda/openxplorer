@@ -158,7 +158,7 @@ fn both_views_show_each_name_with_its_icon() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
@@ -188,7 +188,7 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
     std::fs::set_permissions(fixture.path("Locked.txt"), locked).expect("make it read-only");
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {

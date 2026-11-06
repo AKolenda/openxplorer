@@ -172,10 +172,10 @@ mod imp {
         pub(super) extract_button: OnceCell<gtk::Button>,
         /// Empty Recycle Bin and Restore, shown in the Recycle Bin.
         pub(super) recycle_bin: OnceCell<super::RecycleBinCommands>,
-        /// The "…" menu, which offers Map network location only in This
+        /// The "…" menu, which offers Map network drive only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
-        /// What the "…" menu shows now: Map network location or not, Pin
+        /// What the "…" menu shows now: Map network drive or not, Pin
         /// or Unpin.
         pub(super) more_state: RefCell<super::MoreMenuState>,
     }
@@ -280,7 +280,7 @@ impl CommandBar {
         imp.more_menu.set(menu).expect("constructed runs once per object");
     }
 
-    /// Shows `state` in "…": Map network location only in This PC and
+    /// Shows `state` in "…": Map network drive only in This PC and
     /// Network, as Windows 11 File Explorer lists Map network drive, and
     /// Pin to Quick access or Unpin from Quick access for the folder shown.
     pub(super) fn show_more_menu(&self, state: MoreMenuState) {

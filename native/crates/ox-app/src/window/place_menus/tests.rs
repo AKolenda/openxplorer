@@ -164,7 +164,7 @@ fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
             "Open in Terminal",
             "Cache this folder for search",
             "-",
-            "Disconnect mount",
+            "Disconnect",
             "Eject",
             "Safely remove",
             "Open in Disks",
@@ -176,7 +176,7 @@ fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
     assert_eq!(
         labels(&without_disks)[5..],
         [
-            "Disconnect mount",
+            "Disconnect",
             "Eject",
             "Safely remove",
             "Format…",
@@ -222,7 +222,7 @@ fn a_phone_is_not_cached_or_opened_in_a_terminal_and_drive_items_target_the_driv
     }
 }
 
-/// This PC's cards offer Disconnect device or Disconnect mount, and no
+/// This PC's cards offer Disconnect device or Disconnect, and no
 /// menu where the system keeps the mount (`canUnmount === false`).
 ///
 /// parity: DEV-006, HOME-003

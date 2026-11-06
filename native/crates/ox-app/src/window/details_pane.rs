@@ -134,6 +134,10 @@ mod imp {
         /// The content preview shown, which a redraw for the same item
         /// keeps (PROP-011).
         pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
+        /// The Preview pane shows the item's icon in place of its
+        /// contents (Folder Options' "Show preview handlers in preview
+        /// pane" off).
+        pub(super) hides_media: Cell<bool>,
         /// The Details rows the preview added: Dimensions, Length.
         pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
         /// The pane's options, as saved (PROP-010).
@@ -293,6 +297,19 @@ impl DetailsPane {
         self.show_mode();
     }
 
+    /// Whether the pane shows the Details or only the preview.
+    pub(super) fn mode(&self) -> PaneMode {
+        self.imp().mode.get()
+    }
+
+    /// Makes the Preview pane show the item's icon in place of its
+    /// contents with `hide`, as Windows does with "Show preview handlers
+    /// in preview pane" off; true when that changed, so the content is
+    /// shown again.
+    pub(super) fn set_hides_media(&self, hide: bool) -> bool {
+        self.imp().hides_media.replace(hide) != hide
+    }
+
     /// Hides everything under the preview while only the preview shows;
     /// shows the icon and name, the Details heading and rows again
     /// otherwise, and Share and Properties as the content allows.
@@ -344,7 +361,12 @@ impl DetailsPane {
         imp.base_rows.replace(content.properties.clone());
         self.follow_metadata(content.metadata.as_ref());
         self.redraw_properties();
-        self.show_media(content.media.as_ref());
+        let preview_only = imp.mode.get() == PaneMode::Preview;
+        let media = content
+            .media
+            .as_ref()
+            .filter(|_| !(preview_only && imp.hides_media.get()));
+        self.show_media(media);
     }
 
     /// Shows Share while the window can share the selection (CMD-037):
