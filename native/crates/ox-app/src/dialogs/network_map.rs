@@ -9,6 +9,7 @@
 //! drive), showing "Connecting…" meanwhile and any error inside the dialog.
 
 use gtk::prelude::*;
+use ox_core::location::MAX_LABEL_CHARS;
 use ox_core::network::CredentialChoice;
 
 use super::network_protocol::Protocol;
@@ -75,12 +76,17 @@ pub(crate) struct MapRequest {
 impl MapRequest {
     /// The share's label once connected as `name`: the drive letter
     /// after it, as `Projects (Z:)`, which This PC shows as Windows names
-    /// a mapped drive.
+    /// a mapped drive. A name too long to take the letter within a
+    /// sidebar label's limit is shortened, since this dialog has no field
+    /// to correct it.
     pub(crate) fn label_for(&self, name: &str) -> String {
-        match self.drive {
-            Some(letter) => format!("{name} ({letter})"),
-            None => name.to_owned(),
-        }
+        let Some(letter) = self.drive else {
+            return name.to_owned();
+        };
+        let suffix = format!(" ({letter})");
+        let room = MAX_LABEL_CHARS.saturating_sub(suffix.chars().count());
+        let name: String = name.chars().take(room).collect();
+        format!("{}{suffix}", name.trim_end())
     }
 }
 
@@ -353,6 +359,13 @@ mod tests {
         };
         assert_eq!(*requests.borrow(), std::slice::from_ref(&expected));
         assert_eq!(expected.label_for("Projects"), "Projects (Z:)");
+        let long = expected.label_for(&"é".repeat(MAX_LABEL_CHARS));
+        assert_eq!(
+            long.chars().count(),
+            MAX_LABEL_CHARS,
+            "the letter fits the label's limit"
+        );
+        assert!(long.ends_with("é (Z:)"));
         dialog.close();
         parent.close();
     }

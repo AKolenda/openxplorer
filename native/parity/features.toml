@@ -10789,7 +10789,7 @@ python_tests = [
 bridge = ["authReply"]
 gnome = "Gtk.MountOperation / GVfs ask-password dialog semantics."
 native = "done"
-native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (the_dialog_opens_over_the_windows_own_dialog, closing_the_dialog_aborts_its_mount, enter_connects_and_the_eye_reveals_the_password, escape_cancels_the_shown_challenge, text_size_keys_reach_the_window_under_the_dialog). The dialog is modal over the window, or over its own dialog such as Map network location, which stays open; Escape, × and closing cancel only its challenge; Enter presses Connect; the user name has focus and is selected; Ctrl+plus, Ctrl+minus and Ctrl+0 still resize the window's text (native/crates/ox-app/src/window/actions.rs, follow_text_size_keys, which every dialog window shares)."
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (the_dialog_opens_over_the_windows_own_dialog, closing_the_dialog_aborts_its_mount, enter_connects_and_the_eye_reveals_the_password, escape_cancels_the_shown_challenge, text_size_keys_reach_the_window_under_the_dialog). The dialog is modal over the window, or over its own dialog such as Map network drive, which stays open; Escape, × and closing cancel only its challenge; Enter presses OK (Connect until 2026-11-06); the user name has focus and is selected; Ctrl+plus, Ctrl+minus and Ctrl+0 still resize the window's text (native/crates/ox-app/src/window/actions.rs, follow_text_size_keys, which every dialog window shares)."
 
 [[feature]]
 id = "NET-010"
