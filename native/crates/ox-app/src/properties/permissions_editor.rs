@@ -12,7 +12,7 @@
 mod advanced;
 pub(super) mod choices;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -296,6 +296,7 @@ fn apply_button(
     let change = Rc::new(EditorChange {
         controls: controls.clone(),
         uris: RefCell::new(uris),
+        applied: Cell::new(None),
         versions,
         button: apply.downgrade(),
     });
@@ -320,15 +321,23 @@ pub(super) struct EditorChange {
     controls: Controls,
     /// The items' locations, which Hidden on General changes.
     uris: RefCell<Vec<String>>,
+    /// The request last made, which the window's next OK or Apply does not
+    /// make again over a Read-only applied after it.
+    applied: Cell<Option<PermissionRequest>>,
     versions: Arc<PreviousVersions>,
     /// Apply permissions, greyed while there is nothing to apply.
     button: glib::WeakRef<gtk::Button>,
 }
 
 impl EditorChange {
+    /// Whether the controls hold a change not made yet.
+    fn has_changes(&self) -> bool {
+        self.controls.has_changes() && self.applied.get() != Some(self.controls.request())
+    }
+
     /// Greys Apply permissions, and the window's Apply, or not.
     fn changed(&self) {
-        let has_changes = self.controls.has_changes();
+        let has_changes = self.has_changes();
         if let Some(button) = self.button.upgrade() {
             button.set_sensitive(has_changes);
             if let Some(window) = PropertiesWindow::of(&button) {
@@ -375,11 +384,15 @@ impl EditorChange {
         }
         let request = self.controls.request();
         let mut result = Ok(());
+        self.applied.set(None);
         for uri in uris {
             result = apply_in_background(uri, request, Cancellation::new()).await;
             if result.is_err() {
                 break;
             }
+        }
+        if result.is_ok() {
+            self.applied.set(Some(request));
         }
         self.changed();
         result.map_err(|error| error.to_string())
@@ -388,7 +401,7 @@ impl EditorChange {
 
 impl Pending for EditorChange {
     fn has_changes(&self) -> bool {
-        self.controls.has_changes()
+        EditorChange::has_changes(self)
     }
 
     fn apply(self: Rc<Self>) -> ApplyFuture {

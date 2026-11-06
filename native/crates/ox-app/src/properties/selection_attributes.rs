@@ -246,6 +246,12 @@ impl SelectionAttributes {
                 let names: Vec<String> = self.items.borrow().iter().map(|item| item.name.clone()).collect();
                 window.set_title_text(&selection_title(&names));
             }
+            if renaming.is_err() {
+                // The items renamed before the refusal keep their names: the
+                // box compares the choice with what they have now.
+                let now = shared(self.items.borrow().iter().map(|item| item.name.starts_with('.')));
+                self.hidden.now.set(now);
+            }
             renaming?;
             self.hidden.reset(Some(hide));
         }
