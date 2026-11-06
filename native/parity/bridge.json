@@ -333,7 +333,7 @@
       "evidence": [
         "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown",
         "native/crates/ox-app/src/window/file_drop/targets/tests.rs::only_the_folder_under_a_drag_is_highlighted",
-        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::sidebar_folders_take_drops_and_quick_access_pins_only_between_pins",
         "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_crumb_takes_drops_for_its_folder"
       ]
     },

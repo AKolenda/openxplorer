@@ -77,8 +77,20 @@ pub(super) async fn answer_within(
     timeout: Duration,
     check: impl FnOnce() -> bool + Send + 'static,
 ) -> bool {
+    answer_or(limit, timeout, false, check).await
+}
+
+/// What `check` answers on a thread of its own, or `fallback` when it does
+/// not answer within `timeout` or `limit` reads already run; the GTK
+/// thread goes on meanwhile.
+pub(super) async fn answer_or<T: Send + 'static>(
+    limit: &'static ProbeLimit,
+    timeout: Duration,
+    fallback: T,
+    check: impl FnOnce() -> T + Send + 'static,
+) -> T {
     let Some(slot) = limit.take() else {
-        return false;
+        return fallback;
     };
     let (sender, receiver) = async_channel::bounded(1);
     let started = std::thread::Builder::new()
@@ -89,13 +101,13 @@ pub(super) async fn answer_within(
             let _ = sender.try_send(answer);
         });
     if started.is_err() {
-        return false;
+        return fallback;
     }
     glib::future_with_timeout(timeout, receiver.recv())
         .await
         .ok()
         .and_then(Result::ok)
-        .unwrap_or(false)
+        .unwrap_or(fallback)
 }
 
 /// True when every item of `uris` is on the local drive of `folder`. It

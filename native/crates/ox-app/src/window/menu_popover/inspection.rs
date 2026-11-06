@@ -47,6 +47,15 @@ impl MenuPopover {
         self.items().into_iter().map(|item| item.label).collect()
     }
 
+    /// The labels of the items shown in bold, for tests.
+    pub(crate) fn emphasised_labels(&self) -> Vec<String> {
+        self.items()
+            .into_iter()
+            .filter(|item| item.emphasised)
+            .map(|item| item.label)
+            .collect()
+    }
+
     /// Presses `key` in the rows' list, as the keyboard does, for tests.
     pub(crate) fn press_in_list(&self, key: gtk::gdk::Key) -> bool {
         let keys = self

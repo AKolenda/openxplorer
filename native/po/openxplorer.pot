@@ -4562,7 +4562,7 @@ msgstr ""
 msgid "Options"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Pin to Quick access"
 msgstr ""
 
@@ -5115,7 +5115,7 @@ msgid "Copy here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
-msgid "Create links here"
+msgid "Create shortcuts here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
@@ -6855,7 +6855,7 @@ msgstr ""
 msgid "An item changed while it was compressed. Nothing was created."
 msgstr ""
 
-#: crates/ox-core/src/archive/error.rs crates/ox-core/src/ops/links.rs
+#: crates/ox-core/src/archive/error.rs
 msgid "An item with this name already exists. Nothing was replaced."
 msgstr ""
 
