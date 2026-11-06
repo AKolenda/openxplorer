@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use ox_core::location::{DeviceLabel, LocationContext, VirtualPlace};
+use ox_core::location::{without_line_breaks, DeviceLabel, LocationContext, VirtualPlace};
 
 use crate::icons::Icon;
 use crate::volumes::{VolumeKind, VolumeRow};
@@ -133,12 +133,19 @@ pub(crate) fn location_context(home: PathBuf, volumes: &[VolumeRow]) -> Location
 
 /// The label of a mounted phone, camera or iOS device; `None` for drives
 /// and for devices that still have to be mounted.
+///
+/// A phone, camera or iOS device names itself, so the name is data from
+/// outside this computer, and it reaches the navigation pane, the address
+/// bar, Copy as path and the paths Copy publishes as text. A name holding a
+/// line break or an escape character would draw as two rows or reach a
+/// terminal's escape parsing, so such a character becomes U+FFFD
+/// ([`without_line_breaks`]); everything else is kept as the device wrote it.
 fn device_label(row: &VolumeRow) -> Option<DeviceLabel> {
     if row.kind != VolumeKind::Device {
         return None;
     }
     let uri = row.uri()?.to_owned();
-    let label = row.label.clone();
+    let label = without_line_breaks(&row.label);
     Some(DeviceLabel { uri, label })
 }
 
@@ -176,6 +183,33 @@ mod tests {
             .into_iter()
             .map(|crumb| crumb.label)
             .collect()
+    }
+
+    /// A device names itself, so its name is data from outside this
+    /// computer: a line break or an escape character in it never reaches the
+    /// navigation pane, the address bar or the paths Copy publishes as text.
+    ///
+    /// parity: CLIP-004
+    #[test]
+    fn a_device_label_loses_the_control_characters_it_reports() {
+        let mount = MountFacts {
+            name: "Pixel\n7\u{1b}[31m\u{2028}9".into(),
+            root_uri: "mtp://[usb:001,010]/".into(),
+            shadowed: false,
+            controls: MountControls::UNMOUNTABLE,
+        };
+        let context = location_context(PathBuf::from(DEMO_HOME), &locations(&[mount], &[]));
+
+        assert_eq!(
+            context.device_name(PHONE_FOLDER),
+            "Pixel\u{FFFD}7\u{FFFD}[31m\u{FFFD}9",
+            "the name is shown as one line: a control, an escape and a Unicode separator all go"
+        );
+        assert_eq!(
+            without_line_breaks("Pixel 7"),
+            "Pixel 7",
+            "an ordinary name is kept whole"
+        );
     }
 
     #[test]
