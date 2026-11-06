@@ -34,10 +34,12 @@ pub(super) const NOT_RENAMED: &str = crate::i18n::message_id("The name was not c
 
 /// How much of `entry`'s name a rename selects, as in Windows 11: a
 /// file's name before its last extension ([`stem_length`]), the whole name
-/// of a folder or a shortcut. A shortcut here is a symbolic link named
-/// exactly as Explorer shows one, "Report.txt - Shortcut", with no hidden
-/// `.lnk`: Windows selects all of a shortcut's shown name, since its own
-/// extension is hidden, and so does this.
+/// of a folder or a shortcut. A shortcut here is a symbolic link with no
+/// known type's extension ([`Entry::is_shortcut`]), named as Explorer
+/// shows one, "Report.txt - Shortcut", with no hidden `.lnk`: Windows
+/// selects all of a shortcut's shown name, since its own extension is
+/// hidden, and so does this. A link named for a type ("photo.jpg") is
+/// renamed as a file, as Windows renames a symbolic link.
 pub(super) fn name_selection(entry: &Entry) -> NameSelection {
     if shows_whole(entry) {
         NameSelection::Whole
@@ -289,7 +291,9 @@ mod tests {
     /// As in Windows 11, Rename selects a file's name before its last
     /// extension and the whole name of a folder or a shortcut, the
     /// symbolic link named as Explorer names one ("Report.txt -
-    /// Shortcut"), whose hidden `.lnk` Windows keeps out of the field.
+    /// Shortcut"), whose hidden `.lnk` Windows keeps out of the field. A
+    /// link named for a type is renamed as a file, as Windows renames a
+    /// symbolic link.
     ///
     /// parity: OPS-010
     #[test]
@@ -300,6 +304,8 @@ mod tests {
         let mut shortcut = crate::test_support::file_entry("Report.txt - Shortcut");
         shortcut.is_symlink = true;
         let dotfile = crate::test_support::file_entry(".hidden");
+        let mut named_link = crate::test_support::file_entry("notes.txt");
+        named_link.is_symlink = true;
 
         assert_eq!(name_selection(&file), NameSelection::Stem);
         assert_eq!(selected_name_length(&file), 8, "my.notes");
@@ -309,5 +315,7 @@ mod tests {
         assert_eq!(name_selection(&shortcut), NameSelection::Whole);
         assert_eq!(selected_name_length(&shortcut), 21);
         assert_eq!(selected_name_length(&dotfile), 7);
+        assert_eq!(name_selection(&named_link), NameSelection::Stem);
+        assert_eq!(selected_name_length(&named_link), 5, "notes");
     }
 }

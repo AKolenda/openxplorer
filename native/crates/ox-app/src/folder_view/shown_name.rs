@@ -13,7 +13,6 @@
 //! (`.bashrc`) keeps it whole, and only the last extension goes, so
 //! `backup.tar.gz` shows as `backup.tar`, as in Windows.
 
-use gtk::gio;
 use ox_core::entry::Entry;
 
 /// Whether names show their extensions.
@@ -27,11 +26,12 @@ pub(crate) enum Extensions {
 }
 
 /// Whether `entry`'s name always shows whole: a folder's, or a
-/// shortcut's (a symbolic link, the app's shortcut), whose name is all
-/// Windows shows of it. Windows hides only a shortcut's `.lnk`, which a
-/// link here does not have, so "notes.txt" stays "notes.txt".
+/// shortcut's ([`Entry::is_shortcut`]), whose name is all Windows shows
+/// of it, as Windows hides only a shortcut's `.lnk`, which a link here
+/// does not have. A symbolic link named for a type ("notes.txt") is a
+/// file, as Windows treats one.
 pub(crate) fn shows_whole(entry: &Entry) -> bool {
-    entry.is_dir || entry.is_symlink
+    entry.is_dir || entry.is_shortcut()
 }
 
 /// The extension a view hides of `name`, with its dot, or `None` when the
@@ -41,32 +41,7 @@ pub(crate) fn hidden_extension(name: &str, is_folder: bool, extensions: Extensio
     if is_folder || extensions == Extensions::Shown {
         return None;
     }
-    let dot = name.rfind('.')?;
-    // ".bashrc" is all name; "draft." has no extension to hide.
-    if dot == 0 || dot + 1 == name.len() {
-        return None;
-    }
-    let extension = &name[dot..];
-    is_known_extension(extension).then_some(extension)
-}
-
-/// Whether `extension`, with its dot, names a file type the desktop
-/// knows: GIO names a type for it from the name alone, sure of it, and
-/// not the type of unknown data. Each extension is asked once.
-fn is_known_extension(extension: &str) -> bool {
-    thread_local! {
-        static KNOWN: std::cell::RefCell<std::collections::HashMap<String, bool>> =
-            std::cell::RefCell::default();
-    }
-    let key = extension.to_lowercase();
-    if let Some(known) = KNOWN.with(|known| known.borrow().get(&key).copied()) {
-        return known;
-    }
-    let sample = format!("name{key}");
-    let (content_type, uncertain) = gio::content_type_guess(Some(sample.as_str()), None::<&[u8]>);
-    let known = !uncertain && !gio::content_type_is_unknown(&content_type);
-    KNOWN.with(|cache| cache.borrow_mut().insert(key, known));
-    known
+    ox_core::entry::known_extension(name)
 }
 
 /// The name a view shows for `name`.

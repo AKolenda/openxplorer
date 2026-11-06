@@ -156,7 +156,8 @@ impl BrowserWindow {
         if renamed.is_dir || existing.is_dir {
             return TakenNameAnswer::NotAsked;
         }
-        let Some(numbered) = first_free_numbered_name(&folder, name, &renamed.name, renamed.is_symlink).await
+        let Some(numbered) =
+            first_free_numbered_name(&folder, name, &renamed.name, renamed.is_shortcut()).await
         else {
             return TakenNameAnswer::NotAsked;
         };

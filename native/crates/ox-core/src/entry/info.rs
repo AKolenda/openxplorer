@@ -36,8 +36,9 @@ pub(super) fn build_entry(
     let kind = file_kind(info);
     let content_type = string_attribute(info, "standard::content-type");
     let classification = classify_info(uri, info, kind, content_type.as_deref());
+    let name = display_name(uri, info, fallback_name);
     let is_symlink = info.boolean("standard::is-symlink");
-    let type_label = if is_shortcut(uri, is_symlink, &classification) {
+    let type_label = if is_shortcut(uri, &name, is_symlink, &classification) {
         shortcut_label()
     } else {
         type_label(classification.folder_type, content_type.as_deref())
@@ -47,7 +48,7 @@ pub(super) fn build_entry(
     let size = if is_dir { None } else { reported_size(info) };
     Entry {
         uri: uri.to_owned(),
-        name: display_name(uri, info, fallback_name),
+        name,
         kind,
         is_dir,
         is_virtual: classification.is_virtual,
@@ -73,12 +74,12 @@ pub(super) fn build_entry(
     }
 }
 
-/// Whether the item at `uri` is a shortcut: a symbolic link, as the app
-/// makes them, to a file or a folder. A server, a share or an item of
-/// Recent keeps its own wording.
-fn is_shortcut(uri: &str, is_symlink: bool, classification: &Classification) -> bool {
+/// Whether the item named `name` at `uri` is a shortcut to a file or a
+/// folder ([`super::is_shortcut`]), typed "Shortcut" as in Windows
+/// Explorer.
+fn is_shortcut(uri: &str, name: &str, is_symlink: bool, classification: &Classification) -> bool {
     let is_file_or_folder = matches!(classification.folder_type, None | Some(FolderType::FileFolder));
-    is_symlink && is_file_or_folder && !classification.is_virtual && scheme(uri).as_deref() != Some("recent")
+    is_file_or_folder && super::is_shortcut(uri, name, is_symlink, classification.is_virtual)
 }
 
 /// The file the Recently used files row at `uri` stands for, when `info`
@@ -244,12 +245,14 @@ mod tests {
         assert_eq!(date_text(file.modified), "—");
     }
 
-    /// A symbolic link is the app's shortcut, and its Type is "Shortcut",
-    /// as Windows Explorer's is, whether it points to a file or a folder.
+    /// A symbolic link named with no known type's extension is the app's
+    /// shortcut, and its Type is "Shortcut", as Windows Explorer's is,
+    /// whether it points to a file or a folder; one named for a type is
+    /// typed by it, as Windows types a symbolic link.
     ///
     /// parity: VIEW-002
     #[test]
-    fn a_symbolic_link_is_typed_shortcut() {
+    fn a_symbolic_link_with_no_known_extension_is_typed_shortcut() {
         let file_link = file_info(
             gio::FileType::Regular,
             "Report.txt - Shortcut",
@@ -263,16 +266,24 @@ mod tests {
         );
         folder_link.set_is_symlink(true);
         let plain = file_info(gio::FileType::Regular, "Report.txt", Some("text/plain"));
+        let named_link = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        named_link.set_is_symlink(true);
 
         let file = entry_for_uri("file:///tmp/Report.txt%20-%20Shortcut", &file_link);
         let folder = entry_for_uri("file:///tmp/Reports%20-%20Shortcut", &folder_link);
         let original = entry_for_uri("file:///tmp/Report.txt", &plain);
+        let named = entry_for_uri("file:///tmp/notes.txt", &named_link);
 
         assert_eq!(file.type_label, "Shortcut");
         assert!(file.is_symlink);
         assert_eq!(folder.type_label, "Shortcut");
         assert!(folder.is_dir, "a link to a folder still opens as one");
         assert_eq!(original.type_label, "Text document");
+        assert_eq!(
+            named.type_label, "Text document",
+            "a link named for a type is typed by it, as Windows types a symbolic link"
+        );
+        assert!(!named.is_shortcut());
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`

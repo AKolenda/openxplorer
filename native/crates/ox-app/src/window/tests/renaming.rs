@@ -669,39 +669,50 @@ fn a_file_renamed_to_a_taken_name_is_offered_the_next_free_number() {
 }
 
 /// With extensions hidden, a shortcut still shows and edits its whole
-/// name, as Windows hides only a shortcut's `.lnk`: "notes.txt" is not
-/// shown as "notes", F2 selects all of it, and the typed name is the
-/// whole new name, with nothing added back.
+/// name, as Windows hides only a shortcut's `.lnk`, and the typed name is
+/// its whole new name. A symbolic link named for a type ("notes.txt") is
+/// a file, as Windows treats one: it shows "notes" and keeps ".txt".
 ///
 /// parity: OPS-010, VIEW-069
 #[gtk::test]
 fn a_shortcut_keeps_its_whole_name_while_extensions_are_hidden() {
     let fixture = Fixture::empty();
     fixture.write("Report.txt");
-    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("notes.txt"))
-        .expect("the shortcut is made");
+    for link in ["Report.txt - Shortcut", "notes.txt"] {
+        std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path(link)).expect("the link is made");
+    }
     let test = super::geometry::laid_out(&fixture.uri());
     wait_until("the listing", || test.names().contains(&"notes.txt".to_owned()));
     let shown = super::file_name_extensions::shown_names(&test);
-    select_names(&test, &["notes.txt"]);
-    test.activate("rename", None);
-    let field = name_editor(&test);
-    let (text, selected) = (field.text().to_string(), field.selection_bounds());
-    field.set_text("Plan");
-    field.emit_activate();
-    wait_until("the rename", || {
-        fixture.path("Plan").is_symlink() || fixture.path("Plan.txt").exists()
-    });
+    let mut renamed = Vec::new();
+    for (link, typed, result) in [
+        ("Report.txt - Shortcut", "Q3.final", "Q3.final"),
+        ("notes.txt", "Plan", "Plan.txt"),
+    ] {
+        select_names(&test, &[link]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        renamed.push((field.text().to_string(), field.selection_bounds()));
+        field.set_text(typed);
+        field.emit_activate();
+        wait_until("the renamed link to be selected", || {
+            test.selected_names() == [result]
+        });
+    }
 
+    assert_eq!(shown, ["Report", "Report.txt - Shortcut", "notes"]);
     assert_eq!(
-        shown,
-        ["Report", "notes.txt"],
-        "the shortcut shows its whole name"
+        renamed,
+        [
+            ("Report.txt - Shortcut".to_owned(), Some((0, 21))),
+            ("notes".to_owned(), Some((0, 5)))
+        ]
     );
-    assert_eq!(text, "notes.txt");
-    assert_eq!(selected, Some((0, 9)));
-    assert!(fixture.path("Plan").is_symlink(), "nothing is added back");
-    assert!(!fixture.path("Plan.txt").exists());
+    assert!(
+        fixture.path("Q3.final").is_symlink(),
+        "the shortcut gets the typed name"
+    );
+    assert!(fixture.path("Plan.txt").is_symlink(), "the link keeps its type");
 }
 
 /// A shortcut renamed in place to a taken name is offered the next free
