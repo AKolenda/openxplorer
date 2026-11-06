@@ -5,7 +5,8 @@
   (View > Show > Details pane, Alt+Shift+P; PROP-009): from top to
   bottom a large preview of the selection, its small icon and name, the
   Share button, a "Details" heading over a name and value list, and the
-  Properties button (src/window/details_pane.rs). Like Windows' pane it
+  Properties button; with nothing selected, the folder's name and count
+  over Windows' hint box (src/window/details_pane.rs). Like Windows' pane it
   has no close button: View > Details pane, the command bar's Details
   toggle and Alt+Shift+P hide it.
 
@@ -48,7 +49,7 @@
             <child>
               <!-- The small icon and the name, as Windows 11 heads its
                    pane. -->
-              <object class="GtkBox">
+              <object class="GtkBox" id="title_row">
                 <property name="spacing">8</property>
                 <style>
                   <class name="detail-title"/>
@@ -74,6 +75,36 @@
                     <style>
                       <class name="detail-name"/>
                     </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <!-- With nothing selected, Windows' hint in a rounded box,
+                   where a selection's Details rows go. -->
+              <object class="GtkBox" id="hint_row">
+                <property name="spacing">8</property>
+                <property name="visible">false</property>
+                <style>
+                  <class name="detail-hint"/>
+                </style>
+                <child>
+                  <object class="GtkImage" id="hint_glyph">
+                    <property name="valign">start</property>
+                    <property name="accessible-role">presentation</property>
+                    <style>
+                      <class name="glyph"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="i18n_4">
+                    <property name="label" translatable="yes">Select a single file to get more information and share your cloud content.</property>
+                    <property name="hexpand">true</property>
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                    <property name="max-width-chars">10</property>
                   </object>
                 </child>
               </object>
@@ -109,7 +140,7 @@
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="i18n_2">
+              <object class="GtkLabel" id="details_heading">
                 <property name="label" translatable="yes">Details</property>
                 <property name="xalign">0</property>
                 <property name="wrap">true</property>

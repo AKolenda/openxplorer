@@ -99,9 +99,21 @@ mod imp {
         /// (PROP-011).
         #[template_child]
         pub(super) preview_area: TemplateChild<gtk::CenterBox>,
+        /// The row of the small icon and the name.
+        #[template_child]
+        pub(super) title_row: TemplateChild<gtk::Box>,
         /// The small icon beside the name.
         #[template_child]
         pub(super) small_art: TemplateChild<ArtImage>,
+        /// Windows' hint box, with nothing selected.
+        #[template_child]
+        pub(super) hint_row: TemplateChild<gtk::Box>,
+        /// The (i) glyph of [`Self::hint_row`].
+        #[template_child]
+        pub(super) hint_glyph: TemplateChild<gtk::Image>,
+        /// The "Details" heading over the rows.
+        #[template_child]
+        pub(super) details_heading: TemplateChild<gtk::Label>,
         /// The item's name, "N items selected" or "N items".
         #[template_child]
         pub(super) name: TemplateChild<gtk::Label>,
@@ -120,6 +132,10 @@ mod imp {
         /// The glyph of [`Self::properties_button`].
         #[template_child]
         pub(super) properties_glyph: TemplateChild<gtk::Image>,
+        /// The small icon shows beside the name.
+        pub(super) small_icon: Cell<bool>,
+        /// The hint box shows in place of the Details rows.
+        pub(super) shows_hint: Cell<bool>,
         /// The window can share the selection.
         pub(super) share_offered: Cell<bool>,
         /// Some item is selected, which Share would share.
@@ -219,7 +235,10 @@ impl DetailsPane {
     fn show_glyphs(&self) {
         let imp = self.imp();
         icons::set_icon(&imp.share_glyph, Icon::Share, SMALL_GLYPH);
-        icons::set_icon(&imp.properties_glyph, Icon::Info, SMALL_GLYPH);
+        // Windows' pane draws Properties with a wrench, as its "…" menu
+        // does.
+        icons::set_icon(&imp.properties_glyph, Icon::Wrench, SMALL_GLYPH);
+        icons::set_icon(&imp.hint_glyph, Icon::Info, SMALL_GLYPH);
     }
 
     /// Gives each button its window action.
@@ -310,17 +329,20 @@ impl DetailsPane {
         self.imp().hides_media.replace(hide) != hide
     }
 
-    /// Hides everything under the preview while only the preview shows;
-    /// shows the icon and name, the Details heading and rows again
-    /// otherwise, and Share and Properties as the content allows.
+    /// Shows what the mode and the content call for under the preview:
+    /// nothing in the Preview pane; in the Details pane the name (with the
+    /// small icon for a file), then Share, the Details rows and
+    /// Properties as the selection allows, or the hint box with nothing
+    /// selected.
     fn show_mode(&self) {
         let imp = self.imp();
         let details = imp.mode.get() == PaneMode::Details;
-        let mut below = imp.preview_area.next_sibling();
-        while let Some(widget) = below {
-            below = widget.next_sibling();
-            widget.set_visible(details);
-        }
+        let hint = imp.shows_hint.get();
+        imp.title_row.set_visible(details);
+        imp.small_art.set_visible(imp.small_icon.get());
+        imp.hint_row.set_visible(details && hint);
+        imp.details_heading.set_visible(details && !hint);
+        imp.properties.set_visible(details && !hint);
         self.show_share();
         imp.properties_button
             .set_visible(details && imp.has_properties.get());
@@ -354,10 +376,10 @@ impl DetailsPane {
         imp.small_art.set_art(content.preview.art(), SMALL_ART);
         imp.name.set_text(&content.name);
         imp.has_selection.set(content.has_selection);
-        self.show_share();
         imp.has_properties.set(content.has_properties);
-        imp.properties_button
-            .set_visible(content.has_properties && imp.mode.get() == PaneMode::Details);
+        imp.small_icon.set(content.small_icon);
+        imp.shows_hint.set(content.hint);
+        self.show_mode();
         imp.base_rows.replace(content.properties.clone());
         self.follow_metadata(content.metadata.as_ref());
         self.redraw_properties();
@@ -437,6 +459,18 @@ impl DetailsPane {
     #[cfg(test)]
     pub(super) fn shown_name(&self) -> String {
         self.imp().name.text().to_string()
+    }
+
+    /// Whether the hint box shows, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_hint(&self) -> bool {
+        self.imp().hint_row.is_visible()
+    }
+
+    /// Whether the Properties button shows, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_properties_button(&self) -> bool {
+        self.imp().properties_button.is_visible()
     }
 
     /// Whether Share shows in the pane, for tests.

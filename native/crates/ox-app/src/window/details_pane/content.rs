@@ -24,7 +24,6 @@ use ox_core::places::NetworkLocation;
 use crate::folder_view::item::FileItem;
 use crate::i18n::message_id;
 use crate::icons::{Art, Icon};
-use crate::locations::Page;
 use crate::media_details::MediaKind;
 
 /// The keys of the rows the pane's menu can turn off (PROP-010), which
@@ -176,8 +175,15 @@ impl Property {
 pub(in crate::window) struct PaneContent {
     /// The picture at the top, and the small art beside the name.
     pub preview: Preview,
-    /// The item's name, "N items selected" or "N items".
+    /// The item's name, "N items selected", or with nothing selected the
+    /// folder's name and count: "Downloads (2 items)".
     pub name: String,
+    /// The small icon shows beside the name: for a file, or several
+    /// items; Windows shows a folder's name alone.
+    pub small_icon: bool,
+    /// Nothing is selected: Windows' hint box takes the Details rows'
+    /// place.
+    pub hint: bool,
     /// Some item is selected: Share may be offered for it.
     pub has_selection: bool,
     /// Properties can open for what the pane shows: not on a landing
@@ -228,6 +234,13 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
     } else {
         entry.size.map(format::pretty_bytes).unwrap_or_default()
     };
+    // A folder lists Type, File location and Date modified, as Windows'
+    // pane does; a file adds its Size and Date created.
+    let created = if entry.is_dir {
+        String::new()
+    } else {
+        dates(entry.meta.created)
+    };
     let mut properties = vec![
         Property::new(keys::TYPE, message_id("Type"), entry.type_label.clone()),
         Property::new(keys::SIZE, message_id("Size"), size),
@@ -237,16 +250,14 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
             container_text(&entry.uri, facts.locations),
         ),
         Property::new(keys::MODIFIED, message_id("Date modified"), dates(entry.modified)),
-        Property::new(
-            keys::CREATED,
-            message_id("Date created"),
-            dates(entry.meta.created),
-        ),
+        Property::new(keys::CREATED, message_id("Date created"), created),
     ];
     properties.retain(|property| !property.value.is_empty());
     PaneContent {
         preview: Preview::Art(item.art()),
         name: entry.name.clone(),
+        small_icon: !entry.is_dir,
+        hint: false,
         has_selection: true,
         // Items inside a ZIP have no file of their own to describe.
         has_properties: !ox_core::location::is_archive_location(facts.folder_uri),
@@ -287,6 +298,8 @@ fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
     PaneContent {
         preview: Preview::Several,
         name,
+        small_icon: true,
+        hint: false,
         has_selection: true,
         has_properties: !ox_core::location::is_archive_location(facts.folder_uri),
         properties,
@@ -295,30 +308,27 @@ fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
     }
 }
 
-/// Nothing selected: the folder's picture and its item count, as
-/// Windows' pane shows "N items".
+/// Nothing selected: the folder's picture, its name with its item count
+/// ("Downloads (2 items)") and Windows' hint box, with no Details rows,
+/// Share or Properties, as Windows 11's pane shows a folder.
 fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
     let uri = facts.folder_uri;
-    let on_page = Page::from_uri(uri).is_some();
     let count = u64::from(facts.folder_item_count);
     let name = ox_core::i18n::format_message(
-        &ox_core::i18n::ngettext("{count} item", "{count} items", count),
-        &[("count", &ox_core::format::group_digits(count))],
+        &ox_core::i18n::ngettext("{folder} ({count} item)", "{folder} ({count} items)", count),
+        &[
+            ("folder", &facts.locations.title_for(uri)),
+            ("count", &ox_core::format::group_digits(count)),
+        ],
     );
-    let mut properties = Vec::new();
-    if !on_page {
-        properties.push(Property::new(
-            keys::LOCATION,
-            message_id("Folder"),
-            facts.locations.display_location(uri),
-        ));
-    }
     PaneContent {
         preview: Preview::Art(folder_art(facts)),
         name,
+        small_icon: false,
+        hint: true,
         has_selection: false,
-        has_properties: !on_page && !ox_core::location::is_archive_location(uri),
-        properties,
+        has_properties: false,
+        properties: Vec::new(),
         media: None,
         metadata: None,
     }
@@ -395,6 +405,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+    use crate::locations::Page;
     use crate::test_support::{file_entry, folder_entry, studio_nas_mapped_drive};
 
     fn context() -> LocationContext {
@@ -528,10 +539,21 @@ mod tests {
     /// parity: PROP-009
     #[test]
     fn a_folder_has_no_size_and_no_media_details() {
-        let item = FileItem::new(folder_entry("Projects"));
+        let mut entry = folder_entry("Projects");
+        entry.modified = Some(1_790_000_000);
+        entry.meta.created = Some(1_780_000_000);
+        let item = FileItem::new(entry);
         let uri = item.entry().uri.clone();
         let content = content_for(&[item], "file:///tmp/ox-test");
-        assert_eq!(property(&content, keys::SIZE), None, "Windows names no size");
+        assert_eq!(
+            names(&content),
+            ["Type", "File location", "Date modified"],
+            "Windows' rows for a folder"
+        );
+        assert!(
+            !content.small_icon,
+            "Windows names a folder without its small icon"
+        );
         assert_eq!(
             content.media,
             Some(MediaPreview::Folder { uri: uri.clone() }),
@@ -541,18 +563,20 @@ mod tests {
         assert_eq!(content.metadata, None);
     }
 
-    /// Nothing selected: the folder's item count, as Windows' pane says.
+    /// Nothing selected: the folder's name and item count, then Windows'
+    /// hint, with no Details rows and no Properties, as Windows 11's pane
+    /// shows "Downloads (2 items)".
     ///
     /// parity: PROP-009
     #[test]
     fn no_selection_counts_the_folders_items() {
         let content = content_for(&[], "file:///home/demo");
-        assert_eq!(content.name, "7 items");
+        assert_eq!(content.name, "Home (7 items)");
         assert_eq!(content.preview, Preview::Art(Art::Folder));
-        assert_eq!(names(&content), ["Folder"]);
-        assert_eq!(property(&content, keys::LOCATION), Some("/home/demo"));
+        assert!(content.hint && !content.small_icon);
+        assert!(content.properties.is_empty(), "no Details rows");
         assert!(!content.has_selection, "nothing to share");
-        assert!(content.has_properties, "the folder's own Properties");
+        assert!(!content.has_properties, "no Properties button");
     }
 
     /// A ZIP opened like a folder is pictured as a compressed folder at

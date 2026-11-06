@@ -133,6 +133,10 @@ msgstr ""
 msgid "File commands"
 msgstr ""
 
+#: crates/ox-app/resources/ui/details-pane.ui
+msgid "Select a single file to get more information and share your cloud content."
+msgstr ""
+
 #: crates/ox-app/resources/ui/network-sign-in.ui
 msgid "Cancel sign-in"
 msgstr ""
@@ -349,7 +353,7 @@ msgstr ""
 msgid "Extract all…"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/details_pane/content.rs
+#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/conflict_window.rs
 msgid "Folder"
 msgstr ""
 
@@ -4942,16 +4946,16 @@ msgid "Total size"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/status_bar.rs
-msgid "{count} item"
-msgid_plural "{count} items"
-msgstr[0] ""
-msgstr[1] ""
-
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/details_pane/content.rs
 msgid "{first} - {last}"
 msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "{folder} ({count} item)"
+msgid_plural "{folder} ({count} items)"
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/details_pane/content.rs
@@ -6617,6 +6621,13 @@ msgstr ""
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/window/status_bar.rs
 msgid "Ready"
 msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/status_bar.rs
+msgid "{count} item"
+msgid_plural "{count} items"
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/status_bar.rs

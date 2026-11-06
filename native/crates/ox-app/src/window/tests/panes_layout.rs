@@ -263,6 +263,8 @@ fn the_details_pane_stacks_its_parts_as_windows_does() {
     let fixture = Fixture::standard();
     let test = laid_out_with_details_pane(&fixture.uri());
     let pane = test.window.details_pane();
+    test.select_named("Notes 2.txt");
+    wait_for_frames(&test.window, 2);
     let pane_place = bounds(&test, pane);
     assert_eq!(pane_place.width, 262);
     let frames = descendants::<gtk::CenterBox>(pane);

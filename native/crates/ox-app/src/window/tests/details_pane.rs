@@ -136,7 +136,38 @@ fn several_items_show_their_count_and_total_size() {
         Some(ox_core::format::pretty_bytes(2000).as_str())
     );
     model.select_positions(&[]);
-    assert!(pane.shown_name().ends_with(" items"));
+    assert!(pane.shown_name().ends_with(" items)"));
+}
+
+/// Nothing selected, the pane shows Windows' hint in place of the Details
+/// rows, with no Share and no Properties; a selected folder lists Type,
+/// File location and Date modified over Properties, drawn with a wrench.
+///
+/// parity: PROP-009
+#[gtk::test]
+fn nothing_selected_shows_windows_hint_alone() {
+    let fixture = Fixture::standard();
+    let test = window_with_pane(&fixture);
+    let pane = test.window.details_pane();
+    let folder = fixture.root();
+    let title = folder
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    assert_eq!(pane.shown_name(), format!("{title} (4 items)"));
+    assert!(pane.shows_hint());
+    assert!(!pane.shows_properties(), "no Details rows");
+    assert!(!pane.shows_properties_button() && !pane.shows_share());
+
+    test.select_named("Documents");
+    assert!(!pane.shows_hint());
+    let names: Vec<String> = pane.shown_properties().into_iter().map(|row| row.name).collect();
+    assert_eq!(names, ["Type", "File location", "Date modified"]);
+    assert!(pane.shows_properties_button());
+    let wrench = crate::test_support::harness::descendants::<gtk::Image>(pane)
+        .iter()
+        .any(|image| image.icon_name().is_some_and(|name| name.contains("wrench")));
+    assert!(wrench, "Properties is drawn with a wrench");
 }
 
 /// Share shows in the pane where the desktop can share, for files it
@@ -213,14 +244,18 @@ fn search_results_are_counted_as_the_list_shows_them() {
     let test = window_with_pane(&fixture);
     test.start_search_cache();
     let pane = test.window.details_pane();
-    assert_eq!(pane.shown_name(), "4 items", "the folder");
+    assert!(pane.shown_name().ends_with(" (4 items)"), "the folder");
 
     test.search_for("notes");
 
     assert_eq!(test.names().len(), 2);
-    wait_until("the pane to count the results", || pane.shown_name() == "2 items");
+    wait_until("the pane to count the results", || {
+        pane.shown_name().ends_with(" (2 items)")
+    });
     test.window.search_box().entry().set_text("");
-    wait_until("the folder counted again", || pane.shown_name() == "4 items");
+    wait_until("the folder counted again", || {
+        pane.shown_name().ends_with(" (4 items)")
+    });
 }
 
 /// A selected folder whose picture changes in Properties shows the new

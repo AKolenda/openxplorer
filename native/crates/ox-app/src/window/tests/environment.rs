@@ -189,14 +189,16 @@ fn the_details_pane_lists_a_file_and_the_folder() {
     let pane = test.window.details_pane();
     // The Python backend lists hidden items only while they are shown
     // (`enumerate_folder(uri, showHidden)`), and app.js counts that list.
-    assert_eq!(pane.shown_name(), "4 items", "hidden items are not listed");
-    let folder_address = fixture.root().display().to_string();
-    assert_eq!(
-        property(&pane.shown_properties(), "Folder"),
-        Some(folder_address.as_str())
+    assert!(
+        pane.shown_name().ends_with(" (4 items)"),
+        "hidden items are not listed"
     );
+    let folder_address = fixture.root().display().to_string();
     test.activate("hidden", None);
-    assert_eq!(pane.shown_name(), "5 items", "shown hidden items count");
+    assert!(
+        pane.shown_name().ends_with(" (5 items)"),
+        "shown hidden items count"
+    );
     test.activate("hidden", None);
     test.window.folder_model().select_only(1);
     let file = pane.shown_properties();
@@ -289,7 +291,7 @@ fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
     assert!(property(&shown, "Type").is_some());
     assert!(property(&shown, "Size").is_none(), "Size is turned off");
     test.window.pointer_over_items(&view, None);
-    assert!(pane.shown_name().ends_with(" items"), "the folder again");
+    assert!(pane.shown_name().ends_with(" items)"), "the folder again");
     wait_until("the options saved", || {
         let saved = Settings::open(test.settings_directory())
             .data()
