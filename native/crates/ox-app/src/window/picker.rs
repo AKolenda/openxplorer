@@ -4004,6 +4004,171 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// The Properties window of the item called `name`, opened from the
+    /// dialog `test` shows, as its Details pane's Properties button and
+    /// its context menu open it.
+    fn properties_from_dialog(test: &TestWindow, name: &str) -> crate::properties::PropertiesWindow {
+        let selection = test.window.folder_model().selection().clone();
+        selection.select_item(test.position_of(name), true);
+        settle();
+        test.activate("properties", None);
+        let title = format!("{name} Properties");
+        let find = || {
+            test.window
+                .properties_windows()
+                .into_iter()
+                .find(|window| window.title_text() == title)
+        };
+        wait_until(&title, || find().is_some_and(|window| window.is_mapped()));
+        find().expect("the Properties window is open")
+    }
+
+    /// The progress of a copy started in a file dialog belongs to the
+    /// dialog, as its Properties do; it is modeless, so it holds back no
+    /// drag or drop in the dialog. A browsing window's progress stays a
+    /// window of its own (OPS-019).
+    ///
+    /// parity: INT-032, OPS-019
+    #[gtk::test]
+    fn the_progress_of_a_copy_in_a_dialog_belongs_to_the_dialog() {
+        use crate::window::progress_window::ProgressWindow;
+        use crate::window::transfer_panel::{TransferKind, TransferPanel};
+
+        let fixture = Fixture::standard();
+        let browsing = TestWindow::open(&fixture.uri());
+        let progress = ProgressWindow::of(&browsing.context);
+        progress.set_show_delay(std::time::Duration::ZERO);
+        let elsewhere = TransferPanel::for_window(&browsing.window);
+        elsewhere.start(
+            TransferKind::Files,
+            "Preparing copy…",
+            ox_core::transfer::Cancellation::new(),
+        );
+        wait_until("the progress window", || progress.is_visible());
+        assert_eq!(
+            progress.transient_for(),
+            None,
+            "a browsing window's progress stands alone"
+        );
+        elsewhere.finish();
+        wait_until("the progress window to close", || !progress.is_visible());
+
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let progress = ProgressWindow::of(&portal.test.context);
+        progress.set_show_delay(std::time::Duration::ZERO);
+        let action = TransferPanel::for_window(window);
+        action.start(
+            TransferKind::Files,
+            "Preparing copy…",
+            ox_core::transfer::Cancellation::new(),
+        );
+        wait_until("the progress window", || progress.is_visible());
+        assert_eq!(
+            progress.transient_for().as_ref(),
+            Some(window.upcast_ref::<gtk::Window>()),
+            "the dialog's progress is the dialog's child"
+        );
+        assert!(!progress.is_modal());
+        assert!(!window.has_open_dialog(), "no dialog over the dialog");
+        action.finish();
+    }
+
+    /// Properties opened from a Browse dialog, light and dark, for review
+    /// with `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`): the dialog, the
+    /// Properties window, and the screen with both.
+    #[gtk::test]
+    fn properties_from_a_dialog_are_captured_light_and_dark() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            let fixture = Fixture::empty();
+            fs::create_dir(fixture.path("Drop here")).expect("a folder");
+            for name in ["Beach.jpg", "cover.png", "Garden.png"] {
+                fixture.write(name);
+            }
+            let portal = Portal::new();
+            let _answer = dialog_on(
+                &portal,
+                &fixture,
+                "OpenFile",
+                vec![("title", "Browse".to_variant())],
+            );
+            let test = &portal.test;
+            test.activate("theme", Some(theme));
+            wait_until("the folder's listing", || test.window.is_listed());
+            let properties = properties_from_dialog(test, "Drop here");
+            capture(&test.window, &format!("dialog-child-browse-{theme}.png"));
+            crate::test_support::harness::capture_dialog(
+                &properties,
+                &format!("dialog-child-properties-{theme}.png"),
+            );
+            if let Some(directory) = std::env::var_os("OX_NATIVE_CAPTURE_DIR") {
+                crate::test_support::harness::wait_for_frames(&properties, 3);
+                let path = std::path::Path::new(&directory).join(format!("dialog-child-screen-{theme}.png"));
+                let saved = Command::new("import")
+                    .args(["-window", "root"])
+                    .arg(&path)
+                    .status()
+                    .is_ok_and(|status| status.success());
+                assert!(saved, "the screen is saved");
+            }
+            properties.close();
+            settle();
+        }
+    }
+
+    /// Properties opened from inside an Open dialog, as Properties >
+    /// Customize > Choose File... opens one, belong to the dialog, as in
+    /// Windows: the dialog's modeless child, so the desktop keeps it above
+    /// the dialog and never counts it among the windows the modal dialog
+    /// blocks, and the dialog stays usable beside it. Cancel closes it and
+    /// leaves the dialog; another one closes with the dialog.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn properties_opened_from_a_dialog_belong_to_the_dialog() {
+        let fixture = Fixture::empty();
+        fs::create_dir(fixture.path("Drop here")).expect("a folder");
+        fs::create_dir(fixture.path("Old scans")).expect("a folder");
+        fixture.write("cover.png");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        // As on Wayland, where the dialog is a modal child of its caller.
+        window.set_modal(true);
+        settle();
+
+        let properties = properties_from_dialog(test, "Drop here");
+        assert_eq!(
+            properties.transient_for().as_ref(),
+            Some(window.upcast_ref::<gtk::Window>()),
+            "Properties is the dialog's child"
+        );
+        assert!(!properties.is_modal(), "the dialog stays usable beside it");
+        assert!(!window.has_open_dialog(), "no dialog over the dialog");
+        let cancel = crate::test_support::harness::descendants::<gtk::Button>(&properties)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some("Cancel"))
+            .expect("a Cancel button");
+        cancel.emit_clicked();
+        wait_until("Properties to close", || !properties.is_visible());
+        assert!(window.is_visible(), "the dialog stays open");
+        assert!(window.picker().is_some_and(|picker| !picker.reply.is_answered()));
+
+        let other = properties_from_dialog(test, "Old scans");
+        assert_eq!(
+            other.transient_for().as_ref(),
+            Some(window.upcast_ref::<gtk::Window>())
+        );
+        window.close();
+        wait_until("the dialog to close", || !window.is_visible());
+        assert!(!other.is_visible(), "Properties closes with the dialog");
+    }
+
     /// F11 leaves a dialog at its size, as a Windows Open or Save dialog
     /// does, while Ctrl+E still moves to the search box.
     ///

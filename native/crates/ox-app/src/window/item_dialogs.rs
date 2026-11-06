@@ -271,10 +271,25 @@ impl BrowserWindow {
     }
 
     /// Shows the Properties window `window` and keeps it until it closes.
+    /// Opened from another application's file dialog, it belongs to the
+    /// dialog, as in Windows: see [`Self::own_in_dialog`].
     fn present_properties(&self, window: &PropertiesWindow) {
         self.keep_properties(window);
+        if self.is_picking() {
+            self.own_in_dialog(window.upcast_ref());
+        }
         self.hand_over_startup_id(window);
         window.present();
+    }
+
+    /// Makes `window`, opened from inside this file dialog, the dialog's
+    /// child, as Windows' common dialog owns the windows opened from it.
+    /// The desktop then keeps it above the dialog. Without a parent, `KWin`
+    /// counted it among the windows the modal dialog blocks: it could be
+    /// neither clicked nor closed. It stays modeless, so the dialog stays
+    /// usable beside it, and closes with the dialog (PROP-029).
+    pub(super) fn own_in_dialog(&self, window: &gtk::Window) {
+        window.set_transient_for(Some(self));
     }
 
     /// Gives `window` the caller's activation token kept for it, if any,

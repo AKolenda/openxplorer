@@ -315,7 +315,13 @@ impl TransferPanel {
         self.show_percent();
         let owner = imp.owner.upgrade();
         if let Some(owner) = &owner {
-            ProgressWindow::of(owner.context()).add(self);
+            let progress = ProgressWindow::of(owner.context());
+            progress.add(self);
+            // A file dialog owns the progress of what it started, as it
+            // owns its Properties windows.
+            if owner.is_picking() {
+                owner.own_in_dialog(progress.upcast_ref());
+            }
         }
         let session = match &owner {
             Some(owner) => OperationSession::start(owner),
