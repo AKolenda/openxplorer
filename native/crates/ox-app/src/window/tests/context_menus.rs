@@ -353,17 +353,12 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
         menu.row_labels(),
         [
             "Folder",
-            "Text document",
-            "File…",
+            "Shortcut",
             "-",
-            "Markdown document",
-            "CSV file",
-            "JSON file",
-            "HTML document",
-            "-",
-            "From template…",
-            "-",
-            "Link to file or folder…",
+            "Bitmap image",
+            "Rich Text Document",
+            "Text Document",
+            "Compressed (zipped) Folder",
         ]
     );
 }

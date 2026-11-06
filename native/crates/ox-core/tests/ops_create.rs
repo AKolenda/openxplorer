@@ -18,9 +18,9 @@ use std::path::Path;
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    create_from_template, create_item, create_numbered_starter, list_templates, BuiltinTemplate,
-    NewFromTemplate, OperationContext, OpsError, Template, TemplateId, UndoRecord, MAX_TEMPLATE_BYTES,
-    MAX_USER_TEMPLATES,
+    create_from_template, create_item, create_numbered_document, create_numbered_from_template,
+    list_templates, BuiltinTemplate, NewDocument, NewFromTemplate, OperationContext, OpsError, Template,
+    TemplateId, UndoRecord, MAX_TEMPLATE_BYTES, MAX_USER_TEMPLATES,
 };
 
 use fifo::make_fifo;
@@ -369,22 +369,21 @@ fn a_template_never_overwrites_and_never_goes_to_a_server_listing() {
     assert_eq!(names_in(temp.path()), ["New document.txt"]);
 }
 
-/// New ▸ Text document names the file as Windows does: "New Text
+/// New ▸ Text Document names the file as Windows does: "New Text
 /// Document.txt", then "New Text Document (2).txt", "(3)" and so on, each
-/// with the Text document starter's content, never overwriting a taken
-/// name.
+/// with the document's content, never overwriting a taken name.
 ///
 /// parity: OPS-002, OPS-008
 #[test]
-fn a_numbered_starter_takes_the_next_free_name_before_the_extension() {
+fn a_numbered_document_takes_the_next_free_name_before_the_extension() {
     let temp = tempfile::tempdir().unwrap();
     let folder = file_uri(temp.path());
     let context = OperationContext::default();
     let new_text_document = || {
-        block_on(create_numbered_starter(
+        block_on(create_numbered_document(
             &folder,
-            "New Text Document.txt",
-            BuiltinTemplate::Text,
+            "New Text Document",
+            NewDocument::TextDocument,
             &context,
         ))
     };
@@ -416,7 +415,7 @@ fn a_numbered_starter_takes_the_next_free_name_before_the_extension() {
     ] {
         assert_eq!(
             fs::read(temp.path().join(name)).unwrap(),
-            BuiltinTemplate::Text.contents(),
+            NewDocument::TextDocument.contents(),
             "{name}"
         );
     }
@@ -439,20 +438,20 @@ fn a_numbered_starter_takes_the_next_free_name_before_the_extension() {
     );
 }
 
-/// A cancelled numbered starter stops before anything is written: no
+/// A cancelled numbered document stops before anything is written: no
 /// file and no stage file is left.
 ///
 /// parity: OPS-002, OPS-022
 #[test]
-fn a_cancelled_numbered_starter_leaves_nothing() {
+fn a_cancelled_numbered_document_leaves_nothing() {
     let temp = tempfile::tempdir().unwrap();
     let context = OperationContext::default();
     context.cancel.cancel();
 
-    let created = block_on(create_numbered_starter(
+    let created = block_on(create_numbered_document(
         &file_uri(temp.path()),
-        "New Text Document.txt",
-        BuiltinTemplate::Text,
+        "New Text Document",
+        NewDocument::TextDocument,
         &context,
     ));
 
@@ -460,14 +459,14 @@ fn a_cancelled_numbered_starter_leaves_nothing() {
     assert!(names_in(temp.path()).is_empty());
 }
 
-/// A numbered starter is refused where any New file is: in a server
+/// A numbered document is refused where any New file is: in a server
 /// listing, with the template's own message, and nothing is created.
 #[test]
-fn a_numbered_starter_never_goes_to_a_server_listing() {
-    let created = block_on(create_numbered_starter(
+fn a_numbered_document_never_goes_to_a_server_listing() {
+    let created = block_on(create_numbered_document(
         "smb://nas/",
-        "New Text Document.txt",
-        BuiltinTemplate::Text,
+        "New Text Document",
+        NewDocument::TextDocument,
         &OperationContext::default(),
     ));
 
@@ -509,4 +508,99 @@ fn templates_in_subfolders_are_listed_by_path_and_copied_without_overwriting() {
         fs::read(target.join("Invoice.ods")).expect("the copy"),
         b"invoice"
     );
+}
+
+/// Each document of the New menu is made under Windows' name with its
+/// content, the next one numbered, and the empty ZIP opens as an empty
+/// archive.
+///
+/// parity: OPS-002, OPS-008
+#[test]
+fn each_new_document_is_made_under_its_windows_name_with_its_content() {
+    let temp = tempfile::tempdir().unwrap();
+    let folder = file_uri(temp.path());
+    let context = OperationContext::default();
+    let documents = [
+        (
+            "New Bitmap image",
+            NewDocument::BitmapImage,
+            "New Bitmap image.bmp",
+        ),
+        (
+            "New Rich Text Document",
+            NewDocument::RichTextDocument,
+            "New Rich Text Document.rtf",
+        ),
+        (
+            "New Compressed (zipped) Folder",
+            NewDocument::CompressedFolder,
+            "New Compressed (zipped) Folder (2).zip",
+        ),
+    ];
+    fs::write(temp.path().join("New Compressed (zipped) Folder.zip"), b"kept").unwrap();
+
+    for (base_name, document, file_name) in documents {
+        let created =
+            block_on(create_numbered_document(&folder, base_name, document, &context)).expect("a free name");
+
+        assert_eq!(created.uri, file_uri(&temp.path().join(file_name)));
+        assert_eq!(
+            fs::read(temp.path().join(file_name)).unwrap(),
+            document.contents(),
+            "{file_name}"
+        );
+    }
+    assert_eq!(
+        fs::read(temp.path().join("New Compressed (zipped) Folder.zip")).unwrap(),
+        b"kept"
+    );
+    let browser = ox_core::archive::ArchiveBrowser::new(
+        std::sync::Arc::new(ox_core::archive::GioArchiveOpener),
+        temp.path().join("previews"),
+    );
+    let zip = file_uri(&temp.path().join("New Compressed (zipped) Folder (2).zip"));
+    let listing = browser
+        .list(&zip, "", &context.cancel)
+        .expect("an empty ZIP lists");
+    assert!(listing.entries.is_empty());
+}
+
+/// A template New lists is copied under its file name, then the next
+/// numbered one, with its content, never overwriting; one the fresh list
+/// no longer offers is refused.
+///
+/// parity: OPS-003, OPS-008, OPS-048
+#[test]
+fn a_numbered_template_copy_takes_the_next_free_name() {
+    let temp = tempfile::tempdir().expect("a temporary folder");
+    let templates = temp.path().join("Templates");
+    fs::create_dir_all(templates.join("Office")).expect("a template folder");
+    fs::write(templates.join("Office/Letter.odt"), b"letter").expect("a template");
+    let target = temp.path().join("target");
+    fs::create_dir(&target).expect("a target folder");
+    let context = OperationContext::default();
+    let copy = |path: &str| {
+        block_on(create_numbered_from_template(
+            &file_uri(&target),
+            path,
+            &templates,
+            &context,
+        ))
+        .map(|created| created.uri)
+    };
+
+    let first = copy("Office/Letter.odt");
+    let second = copy("Office/Letter.odt");
+    let missing = copy("Office/Gone.odt");
+
+    assert_eq!(first, Ok(file_uri(&target.join("Letter.odt"))));
+    assert_eq!(second, Ok(file_uri(&target.join("Letter (2).odt"))));
+    assert_eq!(
+        missing,
+        Err(OpsError::Failed(
+            "This template is unavailable, too large, or not a regular template file.".into()
+        ))
+    );
+    assert_eq!(fs::read(target.join("Letter (2).odt")).unwrap(), b"letter");
+    assert_eq!(names_in(&target), ["Letter (2).odt", "Letter.odt"]);
 }

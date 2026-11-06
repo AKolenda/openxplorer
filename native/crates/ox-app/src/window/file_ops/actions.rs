@@ -13,9 +13,9 @@ use std::future::Future;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::clipboard::ClipboardMode;
-use ox_core::ops::{BuiltinTemplate, JournalDirection, TemplateId};
+use ox_core::ops::{JournalDirection, NewDocument, TemplateId};
 
-use super::new_items::NewFileKind;
+use super::new_items::NewFile;
 use crate::window::actions::{plain_action, text_action};
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
@@ -47,13 +47,13 @@ where
     })
 }
 
-/// A New menu item that opens the template dialog for `kind`.
-fn new_file_action(window_action: WindowAction, kind: NewFileKind) -> gio::ActionEntry<BrowserWindow> {
-    task_action(window_action, move |window| {
-        let kind = kind.clone();
-        async move {
-            window.create_file(kind).await;
-        }
+/// A New menu item that makes `document` in place.
+fn new_document_action(
+    window_action: WindowAction,
+    document: NewDocument,
+) -> gio::ActionEntry<BrowserWindow> {
+    task_action(window_action, move |window| async move {
+        window.create_new_file(NewFile::Document(document)).await;
     })
 }
 
@@ -77,8 +77,7 @@ impl BrowserWindow {
         [journal, clipboard]
     }
 
-    /// New ▸ Folder and Text document, the New menu's other files and
-    /// templates, and New ▸ Link.
+    /// New ▸ Folder, Shortcut, the documents and the user's templates.
     /// The templates are read now and whenever the New menu opens.
     fn install_new_actions(&self) {
         self.watch_input();
@@ -90,35 +89,26 @@ impl BrowserWindow {
                 move |_| window.refresh_template_menu()
             ));
         }
-        let starter = NewFileKind::Starter;
         self.add_action_entries([
             task_action(WindowAction::NewFolder, |window| async move {
                 window.create_folder().await;
             }),
-            task_action(WindowAction::NewTextDocument, |window| async move {
-                window.create_text_document().await;
+            task_action(WindowAction::NewLink, |window| async move {
+                window.create_link().await;
             }),
-            new_file_action(WindowAction::NewFile, NewFileKind::Empty),
-            new_file_action(
-                WindowAction::NewMarkdownDocument,
-                starter(BuiltinTemplate::Markdown),
-            ),
-            new_file_action(WindowAction::NewCsvFile, starter(BuiltinTemplate::Csv)),
-            new_file_action(WindowAction::NewJsonFile, starter(BuiltinTemplate::Json)),
-            new_file_action(WindowAction::NewHtmlDocument, starter(BuiltinTemplate::Html)),
-            new_file_action(WindowAction::NewFromTemplate, NewFileKind::AnyTemplate),
+            new_document_action(WindowAction::NewBitmapImage, NewDocument::BitmapImage),
+            new_document_action(WindowAction::NewRichTextDocument, NewDocument::RichTextDocument),
+            new_document_action(WindowAction::NewTextDocument, NewDocument::TextDocument),
+            new_document_action(WindowAction::NewCompressedFolder, NewDocument::CompressedFolder),
             text_action(WindowAction::NewFromUserTemplate, |window, id| {
-                let Ok(id) = id.parse::<TemplateId>() else {
+                let Ok(TemplateId::User(path)) = id.parse::<TemplateId>() else {
                     return;
                 };
                 glib::spawn_future_local(glib::clone!(
                     #[weak]
                     window,
-                    async move { window.create_file(NewFileKind::Template(id)).await }
+                    async move { window.create_new_file(NewFile::Template(path)).await }
                 ));
-            }),
-            task_action(WindowAction::NewLink, |window| async move {
-                window.create_link().await;
             }),
         ]);
     }
