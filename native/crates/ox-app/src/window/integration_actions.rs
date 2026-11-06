@@ -455,8 +455,8 @@ impl BrowserWindow {
         });
     }
 
-    /// Shows the application's updates in this window: the command bar's
-    /// Update, the status bar's notice, the notice the daily check pops
+    /// Shows the application's updates in this window: the status bar's
+    /// notice, the notice the daily check pops
     /// up, and the lock while an update installs (UPD-005).
     fn follow_updates(&self) {
         let updates = self.context().updates();
@@ -486,9 +486,6 @@ impl BrowserWindow {
 
     fn show_update_state(&self, updates: &Updates) {
         let state = updates.state();
-        let notice = state.status_bar_notice();
-        self.command_bar()
-            .show_update(state.command_bar_label(), notice.as_deref());
         self.status_bar().show_update_notice(&state);
         self.imp().update_notice.show_update(updates.notice());
         // Nothing in any window works while the package manager runs;
@@ -507,10 +504,14 @@ impl BrowserWindow {
         });
     }
 
-    /// The command bar's Update while it shows, for tests.
+    /// Whether any button of the command bar opens Software updates, for
+    /// tests: only the status bar and Settings › About do.
     #[cfg(test)]
-    pub(crate) fn shown_update_button(&self) -> Option<String> {
-        self.command_bar().shown_update()
+    pub(crate) fn command_bar_checks_updates(&self) -> bool {
+        let action = WindowAction::CheckUpdates.detailed_name();
+        crate::window::widget_tree::descendants::<gtk::Button>(self.command_bar())
+            .iter()
+            .any(|button| button.action_name().as_deref() == Some(action.as_str()))
     }
 
     /// The text of the status bar's "Check for updates", for tests.

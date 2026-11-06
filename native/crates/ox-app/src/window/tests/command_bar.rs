@@ -53,7 +53,7 @@ pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
             // Extract all shows only inside a ZIP opened like a folder.
             Some(group) => controls.extend(children(&group).filter(WidgetExt::is_visible)),
             // The appearance toggle is hidden, as Settings › Appearance
-            // chooses the theme; Update shows only while a release waits.
+            // chooses the theme.
             None if child.is_visible() => controls.push(child),
             None => {}
         }

@@ -254,16 +254,6 @@ impl UpdateState {
         }
     }
 
-    /// The command bar's update button: "Update" while a newer release
-    /// is available, "Restart" while an installed one waits, else hidden.
-    pub(crate) fn command_bar_label(&self) -> Option<&'static str> {
-        match self {
-            Self::Available(_) => Some(ox_core::i18n::gettext_static("Update")),
-            _ if self.needs_restart() => Some(ox_core::i18n::gettext_static("Restart")),
-            _ => None,
-        }
-    }
-
     /// The status bar's word on updates, beside its notice
     /// ([`Self::status_bar_notice`]).
     pub(crate) fn status_bar_label(&self) -> Option<&'static str> {

@@ -87,7 +87,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 - Ctrl+, or the gear in the command bar opens Settings, which has its own search box; so does More settings… in Folder Options (… > Options). Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.
 - OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.
-- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.
+- When a newer release is out, a notice pops up at the top right and Update available shows at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.
 - Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files.
 
 ## Getting help

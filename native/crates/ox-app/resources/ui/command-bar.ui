@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- The command bar (section.commandbar in v2.0.0:desktop/ui/index.html): the
-     file commands, then at the right Update while a release waits, the
-     hidden appearance toggle, Settings and the Details toggle
+     file commands, then at the right the hidden appearance toggle, Settings and the Details toggle
      (src/window/command_bar.rs). The gaps are CSS border-spacing, which
      narrow windows shrink. -->
 <interface>
@@ -29,38 +28,6 @@
             <style>
               <class name="command-group"/>
             </style>
-          </object>
-        </property>
-      </object>
-    </child>
-    <child>
-      <!-- Update: shown while a newer release is available ("Update") or
-           an installed one waits for a restart ("Restart"); it opens
-           Software updates. -->
-      <object class="GtkButton" id="update_button">
-        <property name="valign">center</property>
-        <property name="visible">false</property>
-        <style>
-          <class name="command"/>
-          <class name="text-command"/>
-          <class name="update-command"/>
-        </style>
-        <property name="child">
-          <object class="GtkBox">
-            <property name="spacing">7</property>
-            <child>
-              <object class="GtkImage" id="update_glyph">
-                <property name="halign">center</property>
-                <property name="valign">center</property>
-                <property name="accessible-role">presentation</property>
-                <style>
-                  <class name="glyph"/>
-                </style>
-              </object>
-            </child>
-            <child>
-              <object class="GtkLabel" id="update_label"/>
-            </child>
           </object>
         </property>
       </object>

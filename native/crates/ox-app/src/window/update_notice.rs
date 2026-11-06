@@ -6,8 +6,8 @@
 //! update…" (or "Details…" for a build that updates through its package
 //! manager), which opens Software updates, and Later, which dismisses the
 //! release's notice for good. The close button dismisses it too. The
-//! command bar's Update and the status bar's "Update available" stay
-//! until the update is installed, so dismissing loses nothing.
+//! status bar's "Update available" stays until the update is installed,
+//! so dismissing loses nothing.
 //!
 //! [`UpdateNotice`] is a widget subclass the window's overlay holds; the
 //! window decides when it shows ([`super::BrowserWindow`]'s updates).
