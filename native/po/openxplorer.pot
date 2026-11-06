@@ -357,7 +357,7 @@ msgstr ""
 msgid "Extract all…"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/details_pane/content.rs
+#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/conflict_window.rs
 msgid "Folder"
 msgstr ""
 
@@ -882,7 +882,7 @@ msgstr ""
 msgid "Date accessed"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Date created"
 msgstr ""
 
@@ -910,7 +910,7 @@ msgstr ""
 msgid "Date deleted"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Date modified"
 msgstr ""
 
@@ -1488,7 +1488,7 @@ msgstr ""
 msgid "Description"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/details_pane/content.rs
 msgid "Dimensions"
 msgstr ""
 
@@ -1585,7 +1585,7 @@ msgstr ""
 msgid "Landscape mode"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/details_pane/content.rs
 msgid "Length"
 msgstr ""
 
@@ -1894,11 +1894,11 @@ msgstr ""
 msgid "Hidden"
 msgstr ""
 
-#: crates/ox-app/resources/ui/address-bar.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/place_editor.rs
+#: crates/ox-app/resources/ui/address-bar.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/place_editor.rs
 msgid "Location"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/details_pane/content.rs
+#: crates/ox-app/src/properties/general_tab.rs
 msgid "Modified"
 msgstr ""
 
@@ -2504,7 +2504,7 @@ msgstr ""
 msgid "Folder versions:"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open"
 msgstr ""
 
@@ -4494,7 +4494,7 @@ msgstr ""
 msgid "Bitmap image"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
 msgid "Compressed (zipped) Folder"
 msgstr ""
 
@@ -4570,7 +4570,7 @@ msgstr ""
 msgid "Options"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Pin to Quick access"
 msgstr ""
 
@@ -4578,7 +4578,7 @@ msgstr ""
 msgid "Preview pane"
 msgstr ""
 
-#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/resources/manual.md crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Properties"
 msgstr ""
 
@@ -4602,7 +4602,7 @@ msgstr ""
 msgid "Select none"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
 msgid "Shortcut"
 msgstr ""
 
@@ -4622,7 +4622,7 @@ msgstr ""
 msgid "Terminal"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
 msgid "Text Document"
 msgstr ""
 
@@ -4890,37 +4890,20 @@ msgstr ""
 msgid "Close preview pane"
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/entry/type_label.rs
-msgid "Compressed folder"
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Availability"
 msgstr ""
 
 #: crates/ox-app/src/window/details_pane/content.rs
-msgid "Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter."
+msgid "Available on this device"
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Items"
-msgstr ""
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Multiple items"
-msgstr ""
-
-#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/sidebar/row.rs crates/ox-core/src/entry/classify.rs
-msgid "Network share"
-msgstr ""
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Select an item to see its properties. Double-click to open it."
-msgstr ""
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Storage"
-msgstr ""
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "This computer"
-msgstr ""
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/status_bar.rs
+msgid "{count} item"
+msgid_plural "{count} items"
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/details_pane/content.rs
@@ -6453,6 +6436,10 @@ msgstr ""
 msgid "Expand {section}"
 msgstr ""
 
+#: crates/ox-app/src/window/sidebar/row.rs crates/ox-core/src/entry/classify.rs
+msgid "Network share"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/sidebar_hiding.rs
 msgid "Could not save the sidebar: {error}"
@@ -6490,13 +6477,6 @@ msgstr ""
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/window/status_bar.rs
 msgid "Ready"
 msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/status_bar.rs
-msgid "{count} item"
-msgid_plural "{count} items"
-msgstr[0] ""
-msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/status_bar.rs
@@ -7319,23 +7299,56 @@ msgid "Only folders and network shares can be pinned to Quick access."
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Excel worksheet"
+msgid "Application"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "MP4 video"
+msgid "Microsoft Excel 97-2003 Worksheet"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "PowerPoint presentation"
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
-msgid "Text document"
+msgid "Microsoft Excel Worksheet"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Word document"
+msgid "Microsoft PowerPoint 97-2003 Presentation"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "Microsoft PowerPoint Presentation"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "Microsoft Word 97 - 2003 Document"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "Microsoft Word Document"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Presentation"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Spreadsheet"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Text"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "PDF Document"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "PDF File"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/entry/type_label.rs
+msgid "{extension} File"
 msgstr ""
 
 #: crates/ox-core/src/folder_locations.rs
@@ -8576,6 +8589,10 @@ msgstr ""
 
 #: crates/ox-core/src/ops/templates.rs
 msgid "Markdown document"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
+msgid "Text document"
 msgstr ""
 
 #: crates/ox-core/src/ops/undo.rs
