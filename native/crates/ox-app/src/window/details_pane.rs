@@ -30,7 +30,7 @@ use gtk::subclass::prelude::*;
 use ox_core::settings::DetailsPaneOptions;
 
 use crate::folder_view::item::FileItem;
-use crate::icons::{self, Art, Icon};
+use crate::icons::{self, Art, ArtImage, Icon};
 
 use super::window_action::WindowAction;
 
@@ -55,8 +55,11 @@ pub(super) const PANE_WIDTH: i32 = 262;
 /// content: Windows shows its jumbo icon there.
 const PREVIEW_SIZE: i32 = 96;
 
-/// The copy glyph that stands for several selected items.
-const SEVERAL_ITEMS_GLYPH: i32 = 80;
+/// The size of each picture stacked for several selected items.
+const STACKED_SIZE: i32 = 80;
+
+/// How far each picture of the stack sits from the one in front of it.
+const STACK_STEP: i32 = 10;
 
 /// The small icon beside the name.
 const SMALL_ART: i32 = 20;
@@ -369,9 +372,8 @@ impl DetailsPane {
     /// Shows `content`.
     pub(super) fn set_content(&self, content: &PaneContent) {
         let imp = self.imp();
-        match content.preview {
-            Preview::Art(art) => imp.preview.set_art(art, PREVIEW_SIZE),
-            Preview::Several => imp.preview.set_art(Art::Glyph(Icon::Copy), SEVERAL_ITEMS_GLYPH),
+        if let Preview::Art(art) = content.preview {
+            imp.preview.set_art(art, PREVIEW_SIZE);
         }
         imp.small_art.set_art(content.preview.art(), SMALL_ART);
         imp.name.set_text(&content.name);
@@ -390,6 +392,15 @@ impl DetailsPane {
             .as_ref()
             .filter(|_| !(preview_only && imp.hides_media.get()));
         self.show_media(media);
+        // After the media, which puts the art back when it has none.
+        match &content.preview {
+            Preview::Art(_) => {
+                if imp.shown_media.borrow().is_none() {
+                    self.set_preview_widget(None);
+                }
+            }
+            Preview::Stack(arts) => self.set_preview_widget(Some(&stacked_art(arts))),
+        }
     }
 
     /// Shows Share while the window can share the selection (CMD-037):
@@ -521,6 +532,28 @@ pub(super) struct ShownProperty {
     pub(super) name: String,
     /// The value on the right.
     pub(super) value: String,
+}
+
+/// The pictures of several selected items, the first in front and each
+/// next one behind it, up and to the right, as Windows stacks them.
+fn stacked_art(arts: &[Art]) -> gtk::Widget {
+    let behind = i32::try_from(arts.len().saturating_sub(1)).unwrap_or_default();
+    let room = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    let side = STACKED_SIZE + STACK_STEP * behind;
+    room.set_size_request(side, side);
+    let stack = gtk::Overlay::builder().child(&room).build();
+    stack.add_css_class("detail-stack");
+    let layers: Vec<(i32, &Art)> = (0..).zip(arts).collect();
+    // Back to front: each picture is drawn over the ones behind it.
+    for (depth, art) in layers.into_iter().rev() {
+        let picture = ArtImage::new(*art, STACKED_SIZE);
+        picture.set_halign(gtk::Align::Start);
+        picture.set_valign(gtk::Align::Start);
+        picture.set_margin_start(STACK_STEP * depth);
+        picture.set_margin_top(STACK_STEP * (behind - depth));
+        stack.add_overlay(&picture);
+    }
+    stack.upcast()
 }
 
 /// A wrapping Details label. Its natural width is a few words, so a

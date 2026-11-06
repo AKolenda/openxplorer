@@ -68,15 +68,15 @@ impl DetailsPane {
 
     /// Puts `widget` in the preview area in place of the art, or the art
     /// back for `None`.
-    fn set_preview_widget(&self, widget: Option<&gtk::Widget>) {
+    pub(super) fn set_preview_widget(&self, widget: Option<&gtk::Widget>) {
         let imp = self.imp();
         let art = imp.preview.upcast_ref::<gtk::Widget>();
         let widget = widget.unwrap_or(art);
         if imp.preview_area.center_widget().as_ref() != Some(widget) {
             imp.preview_area.set_center_widget(Some(widget));
         }
-        // A picture of the content stands on the pane itself, as in
-        // Windows' pane; the art keeps its card.
+        // A picture of the content takes the height its shape needs; the
+        // art keeps the area's own height.
         let is_picture = widget.is::<gtk::Picture>();
         crate::window::widget_tree::toggle_class(&*imp.preview_area, "has-picture", is_picture);
     }

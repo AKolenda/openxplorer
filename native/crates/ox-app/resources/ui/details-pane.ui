@@ -39,9 +39,10 @@
                   <class name="detail-preview"/>
                 </style>
                 <property name="center-widget">
-                  <!-- The item's large art, or the copy glyph for several
-                       items (an ArtImage, src/icons/art_image.rs); a
-                       picture of the file's content takes its place. -->
+                  <!-- The item's large art (an ArtImage,
+                       src/icons/art_image.rs); a picture of the file's
+                       content, or several items' art stacked, takes its
+                       place. -->
                   <object class="OxArtImage" id="preview"/>
                 </property>
               </object>

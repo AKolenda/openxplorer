@@ -7,9 +7,9 @@
 //! "Details" its Type, Size, File location, Date modified and Date
 //! created; a picture, video or audio file adds the rows its own metadata
 //! gives once the reader has read them ([`MetadataRequest`]). Several
-//! selected items show "N items selected" with their total size, the
-//! range of their dates and the folder they are in; nothing selected
-//! shows the folder's item count. A folder on an SMB share is pictured as
+//! selected items show their pictures stacked, "N items selected" and
+//! their total size while every one is a file; nothing selected shows the
+//! folder's item count. A folder on an SMB share is pictured as
 //! its tab and sidebar row picture it, on the network bar (the owner's
 //! icon mapping, 2026-09-28).
 
@@ -23,7 +23,7 @@ use ox_core::places::NetworkLocation;
 
 use crate::folder_view::item::FileItem;
 use crate::i18n::message_id;
-use crate::icons::{Art, Icon};
+use crate::icons::Art;
 use crate::media_details::MediaKind;
 
 /// The keys of the rows the pane's menu can turn off (PROP-010), which
@@ -38,21 +38,25 @@ pub(in crate::window) mod keys {
     pub(in crate::window) const LENGTH: &str = "Length";
 }
 
+/// How many of several selected items the stacked picture shows.
+const STACKED_ITEMS: usize = 3;
+
 /// The picture at the top of the pane.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::window) enum Preview {
     /// The one selected item's art, or the folder's.
     Art(Art),
-    /// The copy glyph for several items.
-    Several,
+    /// Several selected items: the art of the first few, stacked.
+    Stack(Vec<Art>),
 }
 
 impl Preview {
-    /// The art beside the name: the same picture, small.
-    pub(in crate::window) fn art(self) -> Art {
+    /// The art beside the name: the same picture, small, or the first
+    /// of the stack.
+    pub(in crate::window) fn art(&self) -> Art {
         match self {
-            Preview::Art(art) => art,
-            Preview::Several => Art::Glyph(Icon::Copy),
+            Preview::Art(art) => *art,
+            Preview::Stack(arts) => arts.first().copied().unwrap_or(Art::Folder),
         }
     }
 }
@@ -188,8 +192,9 @@ pub(in crate::window) struct PaneContent {
     /// The item's name, "N items selected", or with nothing selected the
     /// folder's name and count: "Downloads (2 items)".
     pub name: String,
-    /// The small icon shows beside the name: for a file, or several
-    /// items; Windows shows a folder's name alone.
+    /// The small icon shows beside the name: for a file; Windows shows a
+    /// folder's name alone, and several items have their stacked
+    /// pictures.
     pub small_icon: bool,
     /// What the pane describes: with nothing selected, Windows' hint box
     /// takes the Details rows' place; a selection may be shared.
@@ -274,38 +279,20 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
     }
 }
 
-/// "N items selected", their total size, the range of their dates and,
-/// when they share one, their folder, as Windows' pane sums a selection.
+/// "N items selected" with the art of the first few stacked, and their
+/// total size while every one is a file, as Windows' status bar adds it.
 fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
     let count = ox_core::format::group_digits(items.len() as u64);
     let name = ox_core::i18n::format_message("{selected} items selected", &[("selected", &count)]);
-    let mut properties = Vec::new();
-    if let Some(size) = total_size_text(items) {
-        properties.push(Property::new(keys::SIZE, message_id("Total size"), size));
-    }
-    let modified = date_range_text(items.iter().filter_map(|item| item.entry().modified));
-    if let Some(modified) = modified {
-        properties.push(Property::new(
-            keys::MODIFIED,
-            message_id("Date modified"),
-            modified,
-        ));
-    }
-    let first_folder = parent_location(&items[0].entry().uri);
-    let one_folder = items
-        .iter()
-        .all(|item| parent_location(&item.entry().uri) == first_folder);
-    if let Some(folder) = first_folder.filter(|_| one_folder) {
-        properties.push(Property::new(
-            keys::LOCATION,
-            message_id("File location"),
-            facts.locations.display_location(&folder),
-        ));
-    }
+    let arts = items.iter().take(STACKED_ITEMS).map(FileItem::art).collect();
+    let properties = total_size_text(items)
+        .map(|size| Property::new(keys::SIZE, message_id("Size"), size))
+        .into_iter()
+        .collect();
     PaneContent {
-        preview: Preview::Several,
+        preview: Preview::Stack(arts),
         name,
-        small_icon: true,
+        small_icon: false,
         subject: Subject::Selection,
         has_properties: !ox_core::location::is_archive_location(facts.folder_uri),
         properties,
@@ -362,19 +349,15 @@ fn container_text(uri: &str, locations: &LocationContext) -> String {
     locations.display_location(&container)
 }
 
-/// The total size of the files among `items`, as Windows' pane sums a
-/// selection: folders are left out and never counted; `None` when no
-/// file has a known size.
+/// The total size of `items` while every one is a file of known size;
+/// `None` once one is a folder or has no size.
 fn total_size_text(items: &[FileItem]) -> Option<String> {
-    let sizes = items
-        .iter()
-        .map(FileItem::entry)
-        .filter(|entry| !entry.is_dir)
-        .filter_map(|entry| entry.size);
-    let (bytes, known) = sizes.fold((0_u64, false), |(bytes, _), size| {
-        (bytes.saturating_add(size), true)
-    });
-    known.then(|| format::pretty_bytes(bytes))
+    let mut total = 0_u64;
+    for entry in items.iter().map(FileItem::entry) {
+        let size = entry.size.filter(|_| !entry.is_dir)?;
+        total = total.saturating_add(size);
+    }
+    Some(format::pretty_bytes(total))
 }
 
 /// A date row: the day and the time without seconds, as the Date
@@ -388,21 +371,6 @@ fn date_text(seconds: Option<u64>, condensed: bool) -> String {
     } else {
         format::date_short_time_text(seconds)
     }
-}
-
-/// The days of the earliest and latest of `dates`, as `first - last`,
-/// or the one day when they fall on it: a range shows no time.
-fn date_range_text(dates: impl Iterator<Item = u64>) -> Option<String> {
-    let (first, last) = dates.fold(None, |range: Option<(u64, u64)>, date| {
-        Some(range.map_or((date, date), |(first, last)| (first.min(date), last.max(date))))
-    })?;
-    let first = format::date_text(Some(first));
-    let last = format::date_text(Some(last));
-    Some(if first == last {
-        first
-    } else {
-        ox_core::i18n::format_message("{first} - {last}", &[("first", &first), ("last", &last)])
-    })
 }
 
 #[cfg(test)]
@@ -600,49 +568,41 @@ mod tests {
         assert!(!content.has_properties, "a ZIP's item has no Properties");
     }
 
-    /// Several items: "N items selected", their total size, their dates
-    /// and the folder they share.
+    /// Several items: their pictures stacked, "N items selected" and
+    /// their total size while every one is a file.
     ///
     /// parity: PROP-009
     #[test]
-    fn several_items_are_counted_and_summed() {
+    fn several_items_are_counted_stacked_and_summed() {
         let mut first = file_entry("a");
         first.size = Some(1000);
-        first.modified = Some(1_790_000_000);
         let mut second = file_entry("b");
         second.size = Some(2000);
-        second.modified = Some(1_790_000_000 - 30 * 86_400);
-        let selection = [FileItem::new(first.clone()), FileItem::new(second.clone())];
+        let selection = [FileItem::new(first.clone()), FileItem::new(second)];
         let content = content_for(&selection, "file:///tmp/ox-test");
         assert_eq!(content.name, "2 items selected");
-        assert_eq!(content.preview, Preview::Several);
-        assert_eq!(names(&content), ["Total size", "Date modified", "File location"]);
+        assert_eq!(
+            content.preview,
+            Preview::Stack(selection.iter().map(FileItem::art).collect())
+        );
+        assert!(!content.small_icon, "the stack stands for them");
+        assert_eq!(names(&content), ["Size"]);
         assert_eq!(
             property(&content, keys::SIZE),
             Some(format::pretty_bytes(3000).as_str())
         );
-        let range = format!(
-            "{} - {}",
-            format::date_text(second.modified),
-            format::date_text(first.modified)
-        );
-        assert_eq!(property(&content, keys::MODIFIED), Some(range.as_str()));
 
         let with_folder = [FileItem::new(first), FileItem::new(folder_entry("Projects"))];
         let content = content_for(&with_folder, "file:///tmp/ox-test");
-        assert_eq!(
-            property(&content, keys::SIZE),
-            Some(format::pretty_bytes(1000).as_str()),
-            "only the files are summed, as in Windows"
-        );
-        let folders = [
-            FileItem::new(folder_entry("Projects")),
-            FileItem::new(folder_entry("Drafts")),
-        ];
-        assert_eq!(
-            property(&content_for(&folders, "file:///tmp/ox-test"), keys::SIZE),
-            None
-        );
+        assert_eq!(property(&content, keys::SIZE), None, "a folder is never counted");
+        let four: Vec<FileItem> = ["a", "b", "c", "d"]
+            .into_iter()
+            .map(|name| FileItem::new(file_entry(name)))
+            .collect();
+        let Preview::Stack(arts) = content_for(&four, "file:///tmp/ox-test").preview else {
+            panic!("a stack");
+        };
+        assert_eq!(arts.len(), STACKED_ITEMS);
     }
 
     /// parity: LOOK-016

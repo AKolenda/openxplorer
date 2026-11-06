@@ -4941,15 +4941,6 @@ msgstr ""
 msgid "File location"
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Total size"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "{first} - {last}"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/details_pane/content.rs
 msgid "{folder} ({count} item)"

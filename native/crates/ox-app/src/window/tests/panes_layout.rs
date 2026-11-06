@@ -7,7 +7,9 @@ use ox_core::settings::{PreferencesUpdate, Settings};
 
 use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
 use super::icons::{pixel_rows, Pixel};
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
+use crate::test_support::harness::{
+    descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::window::widget_tree::children;
 
 /// The column titles of the details view, left to right.
@@ -253,8 +255,8 @@ fn a_folders_arrow_sits_inside_its_rows_highlight() {
     }
 }
 
-/// The pane stacks Windows 11's parts: the preview under the close
-/// button, then the small icon and name, the Details rows and the
+/// The pane stacks Windows 11's parts: the preview at the top, with no
+/// heading or close button above it, then the small icon and name, the Details rows and the
 /// Properties button, each in the pane's width.
 ///
 /// parity: PROP-009
@@ -272,7 +274,7 @@ fn the_details_pane_stacks_its_parts_as_windows_does() {
     let preview_place = bounds(&test, preview);
     assert_eq!(
         (preview_place.x, preview_place.width, preview_place.height),
-        (pane_place.x + 23, 217, 162)
+        (pane_place.x + 23, 217, 148)
     );
     assert_eq!(
         preview_place.y,
@@ -292,6 +294,29 @@ fn the_details_pane_stacks_its_parts_as_windows_does() {
         .expect("the Properties button");
     let grid = descendants::<gtk::Grid>(pane).remove(0);
     assert!(bounds(&test, &properties).y > bounds(&test, &grid).bottom());
+}
+
+/// Several selected items show their pictures stacked, as Windows 11's
+/// Details pane does, and one item its own picture again.
+///
+/// parity: PROP-009
+#[gtk::test]
+fn several_selected_items_are_pictured_stacked() {
+    let fixture = Fixture::standard();
+    let test = laid_out_with_details_pane(&fixture.uri());
+    let pane = test.window.details_pane();
+    let stack = || {
+        descendants::<gtk::Overlay>(pane)
+            .into_iter()
+            .find(|overlay| overlay.has_css_class("detail-stack"))
+    };
+    test.window.folder_model().select_positions(&[0, 1, 2]);
+    wait_until("the stacked pictures", || stack().is_some());
+    let pictures = descendants::<crate::icons::ArtImage>(&stack().expect("the stack"));
+    assert_eq!(pictures.len(), 3);
+    assert_eq!(pane.shown_name(), "3 items selected");
+    test.select_named("Notes 2.txt");
+    wait_until("one picture again", || stack().is_none());
 }
 
 /// Every value of the Details rows starts at one line, right of the
