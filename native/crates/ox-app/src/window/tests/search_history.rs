@@ -9,7 +9,7 @@ use std::fs;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::test_support::harness::{capture, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::session::Direction;
 
 /// What a search for "notes" in the standard fixture finds, with one
@@ -168,4 +168,28 @@ fn a_tab_on_results_shows_them_again_when_it_comes_back() {
 
     wait_until("the first tab's results", || test.names() == RESULTS);
     assert_eq!(test.search_text(), "notes");
+}
+
+/// Back and Forward show each step as it was, also while the strip's pin
+/// keeps searches when changing folders: Back from results shows the
+/// folder, not the kept search.
+///
+/// parity: SRCH-042, SRCH-005
+#[gtk::test]
+fn back_from_results_shows_the_folder_while_the_pin_keeps_searches() {
+    let fixture = Fixture::standard();
+    let test = window_with_notes(&fixture);
+    let root = root_title(&fixture);
+    test.search_for("notes");
+    test.window.search_strip().set_keeps_search(true);
+
+    test.activate("back", None);
+
+    test.wait_for_listing("the folder");
+    wait_until("the folder's items", || test.names() == STANDARD_NAMES);
+    // Past the idle callback through which the pin would search again.
+    settle();
+    assert_eq!(test.search_text(), "");
+    assert_eq!(test.names(), STANDARD_NAMES);
+    assert_eq!(test.active_tab_title(), root);
 }

@@ -35,6 +35,15 @@ pub(super) enum FocusOnShow {
     Keep,
 }
 
+/// What leaving a location does to the search shown there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LeftSearch {
+    /// It ends, unless the strip's pin keeps it (SRCH-005).
+    MayKeep,
+    /// It ends.
+    End,
+}
+
 /// What a tab needs to be put back on screen.
 #[derive(Debug)]
 struct SavedTabView {
@@ -215,7 +224,7 @@ impl BrowserWindow {
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
         };
-        self.leave_location();
+        self.leave_location(LeftSearch::MayKeep);
         self.render_navigation();
         if let Some(child) = left.as_deref().and_then(|left| child_toward(&uri, left)) {
             self.reveal_when_listed(id, child);
@@ -289,10 +298,15 @@ impl BrowserWindow {
     }
 
     /// Clears what belonged to the folder the active tab leaves: the
-    /// filter, the selection and the type-to-select prefix.
-    fn leave_location(&self) {
+    /// filter, the selection and the type-to-select prefix. A search the
+    /// strip's pin keeps goes on in the folder opened, unless `search`
+    /// ends it: Back and Forward show each step's own search (SRCH-042).
+    fn leave_location(&self, search: LeftSearch) {
         self.change_model(|| {
-            self.leave_search();
+            match search {
+                LeftSearch::MayKeep => self.leave_search(),
+                LeftSearch::End => self.end_search(),
+            }
             self.folder_pane().model().select_none();
         });
         self.reset_typeahead();
@@ -497,7 +511,7 @@ impl BrowserWindow {
         let Some(id) = self.step_history(steps) else {
             return;
         };
-        self.leave_location();
+        self.leave_location(LeftSearch::End);
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
         // Search results the step showed run again there (SRCH-042).
