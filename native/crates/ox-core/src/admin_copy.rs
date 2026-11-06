@@ -110,15 +110,41 @@ pub fn elevated_destination(folder_uri: &str) -> Result<String, TransferError> {
 /// [`elevated_destination`] under `rules`, without asking whether `GVfs`
 /// has `admin://`.
 fn elevated_destination_with(folder_uri: &str, rules: &Rules) -> Result<String, TransferError> {
-    if folder_uri.starts_with("admin:") {
-        return Ok(folder_uri.to_owned());
-    }
-    let path = local_folder(folder_uri)?;
+    // An `admin://` folder is checked by its path like any other.
+    let path = local_folder(&as_file_uri(folder_uri))?;
     let resolved = Checks::new(rules, &path)?.check(&path)?;
     let uri =
         glib::filename_to_uri(&resolved, None).map_err(|error| TransferError::failed(error.to_string()))?;
     let local = uri.strip_prefix("file://").unwrap_or(&uri);
     Ok(format!("{ADMIN_SCHEME}://{local}"))
+}
+
+/// Checks that the existing folder at `uri`, under `admin://` or `file:`,
+/// may be written as administrator by the rules of the module
+/// documentation: the folder a Replace run as administrator merges into
+/// (OPS-047). Once it passes, only root can change it or any folder on its
+/// path, so the merge's writes into it cannot be redirected.
+///
+/// # Errors
+///
+/// As [`elevated_destination`]'s refusals.
+pub fn check_elevated_folder(uri: &str) -> Result<(), TransferError> {
+    check_elevated_folder_with(uri, &Rules::default())
+}
+
+/// [`check_elevated_folder`] under `rules`.
+fn check_elevated_folder_with(uri: &str, rules: &Rules) -> Result<(), TransferError> {
+    let path = local_folder(&as_file_uri(uri))?;
+    Checks::new(rules, &path)?.check(&path)?;
+    Ok(())
+}
+
+/// `uri` with an `admin://` scheme read as the `file:` location it names.
+fn as_file_uri(uri: &str) -> String {
+    match uri.strip_prefix("admin://") {
+        Some(rest) => format!("file://{rest}"),
+        None => uri.to_owned(),
+    }
 }
 
 /// The absolute path of the `file:` folder `uri` on this computer.

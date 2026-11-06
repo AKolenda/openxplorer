@@ -62,6 +62,9 @@ pub struct TransferEngine {
     /// Where Continue writes a destination folder as administrator; without
     /// it Continue fails the item.
     elevation: Option<Box<ElevatedDestination>>,
+    /// Asked about every existing folder a Replace written as
+    /// administrator merges into.
+    elevated_merge_check: Option<Box<WriteGuard>>,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -200,6 +203,7 @@ impl TransferEngine {
             move_by_copying: MoveByCopying::default(),
             failures: ItemFailures::default(),
             elevation: None,
+            elevated_merge_check: None,
         }
     }
 
@@ -278,6 +282,26 @@ impl TransferEngine {
     ) -> Self {
         self.elevation = Some(Box::new(elevation));
         self
+    }
+
+    /// OPS-047: checks each existing folder a Replace written as
+    /// administrator merges into before anything is written into it
+    /// ([`crate::admin_copy::check_elevated_folder`]); a refusal fails the
+    /// item. Without it such a merge is refused outright.
+    #[must_use]
+    pub fn with_elevated_merge_check(
+        mut self,
+        check: impl Fn(&str) -> Result<(), TransferError> + Send + Sync + 'static,
+    ) -> Self {
+        self.elevated_merge_check = Some(Box::new(check));
+        self
+    }
+
+    /// The check for folders a Replace into `placement` merges into: none
+    /// for an ordinary run, and for a run written as administrator the
+    /// installed check, or a refusal of every merge without one.
+    fn merge_check(&self, placement: &Placement) -> Option<&WriteGuard> {
+        merge_check(self.elevated_merge_check.as_deref(), placement)
     }
 
     /// Replaces the delay used between device cleanup retries (tests).
@@ -788,7 +812,14 @@ impl TransferEngine {
         }
         if placement.mode == TransferMode::Move {
             state.moved_from.remember(source);
-            match self.move_item(source, destination, placement.policy, batch.cancel) {
+            let moved = self.move_item(
+                source,
+                destination,
+                placement.policy,
+                batch.cancel,
+                self.merge_check(placement),
+            );
+            match moved {
                 // XFER-013: the backend cannot move here (another filesystem,
                 // share or device). Once the user agreed, the item is copied
                 // through staging and the source is removed only once its
@@ -830,9 +861,10 @@ impl TransferEngine {
         destination: &dyn Node,
         policy: ConflictPolicy,
         cancel: &Cancellation,
+        merge_check: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
         if policy == ConflictPolicy::Replace {
-            commit_replace(source, destination, cancel, self.guard(), None)
+            commit_replace(source, destination, cancel, self.guard(), None, merge_check)
         } else {
             source.move_native(destination, Some(cancel))
         }
@@ -898,6 +930,7 @@ impl TransferEngine {
             policy: placement.policy,
             cancel,
             guard: self.write_guard.as_deref(),
+            merge_check: merge_check(self.elevated_merge_check.as_deref(), placement),
             unstorable: &mut self.unstorable,
             failures: &mut self.failures,
             emit: &mut *self.emit,
@@ -964,4 +997,22 @@ impl TransferEngine {
             Err(_) => uri.to_string(),
         }
     }
+}
+
+/// The check for folders a Replace into `placement` merges into, from the
+/// engine's `installed` check (see `TransferEngine::merge_check`).
+fn merge_check<'a>(installed: Option<&'a WriteGuard>, placement: &Placement) -> Option<&'a WriteGuard> {
+    if placement.requested_folder.uri() == placement.destination_folder.uri() {
+        return None;
+    }
+    Some(installed.unwrap_or(&refuse_elevated_merge))
+}
+
+/// Refuses a merge into an existing folder written as administrator when
+/// no check is installed.
+fn refuse_elevated_merge(uri: &str) -> Result<(), TransferError> {
+    Err(TransferError::failed(crate::i18n::format_message(
+        "{uri} already exists, so the items can't be merged into it as administrator.",
+        &[("uri", uri)],
+    )))
 }

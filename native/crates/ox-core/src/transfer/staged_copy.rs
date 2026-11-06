@@ -136,6 +136,9 @@ pub(crate) struct StagedCopy<'a> {
     pub(crate) cancel: &'a Cancellation,
     /// Asked about every destination a Replace changes.
     pub(crate) guard: Option<&'a WriteGuard>,
+    /// Asked about every existing folder a Replace merges into, when the
+    /// item is written as administrator (OPS-047).
+    pub(crate) merge_check: Option<&'a WriteGuard>,
     /// What the destination cannot store, and the user's answers about it
     /// (XFER-028).
     pub(crate) unstorable: &'a mut Unstorable,
@@ -342,6 +345,7 @@ impl StagedCopy<'_> {
                 self.cancel,
                 self.guard,
                 Some(modes),
+                self.merge_check,
             )
         } else {
             publish_staged(stage.item(), self.destination, modes, self.cancel)

@@ -9246,6 +9246,11 @@ msgid "This item can't be copied as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/transfer/engine.rs
+msgid "{uri} already exists, so the items can't be merged into it as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/transfer/guard.rs
 msgid "Folder nesting exceeds this build’s safety limit ({MAX_DEPTH})."
 msgstr ""

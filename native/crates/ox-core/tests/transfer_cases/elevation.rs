@@ -331,3 +331,61 @@ fn the_write_guard_still_refuses_items_written_as_administrator() {
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert!(result.errors[0].contains("read-only"), "{result:?}");
 }
+
+/// A Replace written as administrator merges into an existing folder only
+/// when the check passes for it: an existing folder another account could
+/// change (group-writable, other-writable, sticky) is refused before
+/// anything is written into it, and without a check every such merge is
+/// refused. A folder the check accepts is merged.
+///
+/// parity: OPS-047, XFER-015
+#[test]
+fn a_replace_as_administrator_merges_only_into_folders_the_check_accepts() {
+    use std::os::unix::fs::PermissionsExt;
+
+    for (mode, installed, merged) in [
+        (0o775, true, false),
+        (0o757, true, false),
+        (0o1777, true, false),
+        (0o755, false, false),
+        (0o755, true, true),
+    ] {
+        let test = Elevation::new();
+        let fixture = &test.fixture;
+        let source = fixture.source_folder.join("tmp");
+        fs::create_dir(&source).expect("a folder");
+        write(&source.join("x"), "incoming");
+        let existing = fixture.destination_folder.join("tmp");
+        fs::create_dir(&existing).expect("an existing folder");
+        fs::set_permissions(&existing, fs::Permissions::from_mode(mode)).expect("set the mode");
+        let checked = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&checked);
+        let mut engine = test.engine(&[FailureAnswer::Elevate], None);
+        if installed {
+            engine = engine.with_elevated_merge_check(move |uri: &str| {
+                log.lock().expect("check log").push(uri.to_owned());
+                let path = local::path_from_uri(uri);
+                let mode = fs::metadata(&path).expect("the folder").permissions().mode();
+                if mode & 0o022 == 0 {
+                    Ok(())
+                } else {
+                    Err(TransferError::failed("Other users can change the folder."))
+                }
+            });
+        }
+
+        let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
+
+        let case = format!("{mode:o}, check installed: {installed}");
+        assert_eq!(existing.join("x").exists(), merged, "{case}: {result:?}");
+        assert_eq!(result.errors.is_empty(), merged, "{case}: {result:?}");
+        if installed {
+            let checked = checked.lock().expect("check log");
+            assert!(
+                checked.iter().any(|uri| uri.ends_with("/tmp")),
+                "{case}: the existing folder was checked: {checked:?}"
+            );
+        }
+        fs::set_permissions(&existing, fs::Permissions::from_mode(0o755)).expect("reset the mode");
+    }
+}

@@ -112,7 +112,9 @@ fn move_with_owner_access(
 ///
 /// `modes` is `Some` for staged copies (their folders get final modes when
 /// published) and `None` for moves of the user's own items. `guard` is
-/// asked about every destination before it changes.
+/// asked about every destination before it changes. `merge_check`, given
+/// when the item is written as administrator (OPS-047), is asked about
+/// every existing folder before anything is written into it.
 ///
 /// # Errors
 ///
@@ -126,8 +128,14 @@ pub(crate) fn commit_replace(
     cancel: &Cancellation,
     guard: Option<&WriteGuard>,
     modes: Option<&mut DirectoryModes>,
+    merge_check: Option<&WriteGuard>,
 ) -> Result<(), TransferError> {
-    Replacement { cancel, guard }.replace(source, destination, modes, 0)
+    Replacement {
+        cancel,
+        guard,
+        merge_check,
+    }
+    .replace(source, destination, modes, 0)
 }
 
 /// One Replace commit of a top-level item.
@@ -135,6 +143,9 @@ struct Replacement<'a> {
     cancel: &'a Cancellation,
     /// Asked about every destination before it changes (XFER-020).
     guard: Option<&'a WriteGuard>,
+    /// Asked about every existing folder before a merge writes into it,
+    /// when the item is written as administrator (OPS-047).
+    merge_check: Option<&'a WriteGuard>,
 }
 
 impl Replacement<'_> {
@@ -189,6 +200,11 @@ impl Replacement<'_> {
         mut modes: Option<&mut DirectoryModes>,
         depth: usize,
     ) -> Result<(), TransferError> {
+        // Written as administrator, an existing folder is written into
+        // only when nobody but root can change it or its path.
+        if let Some(check) = self.merge_check {
+            check(&destination.uri())?;
+        }
         for child in source.children(Some(self.cancel))? {
             let target = child_node(destination, child.name())?;
             self.replace(child.as_ref(), target.as_ref(), modes.as_deref_mut(), depth + 1)?;

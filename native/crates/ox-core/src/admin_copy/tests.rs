@@ -321,10 +321,58 @@ fn only_folders_on_this_computer_are_written_as_administrator() {
     let file = root.join("plan.txt");
     fs::write(&file, "plan").expect("write the file");
     assert_eq!(check(&file, &rules), Err(not_a_folder(&file)));
+}
+
+/// An `admin://` destination is checked by its path like any other: one
+/// only root can change keeps its place, one others can change is
+/// refused.
+///
+/// parity: OPS-047, XFER-015
+#[test]
+fn an_admin_destination_is_checked_by_its_path() {
+    let (_folder, root) = workspace();
+    let closed = folder(&root.join("Apps"), 0o755);
+    let open = folder(&root.join("Shared"), 0o775);
+    let rules = on_ext4(&root);
+
     assert_eq!(
-        elevated_destination_with("admin:///opt/Apps", &rules),
-        Ok("admin:///opt/Apps".to_owned())
+        elevated_destination_with(&admin(&closed), &rules),
+        Ok(admin(&closed))
     );
+    assert_eq!(
+        elevated_destination_with(&admin(&open), &rules),
+        Err(others_can_change(&open))
+    );
+}
+
+/// The existing folder a Replace run as administrator merges into is
+/// refused when another account could change it: group-writable,
+/// other-writable or sticky and world-writable, or anything on its path.
+///
+/// parity: OPS-047, XFER-015
+#[test]
+fn an_existing_folder_to_merge_into_is_checked_like_the_destination() {
+    let (_folder, root) = workspace();
+    let destination = folder(&root.join("var"), 0o755);
+    let closed = folder(&destination.join("lib"), 0o755);
+    let rules = on_ext4(&root);
+    assert_eq!(check_elevated_folder_with(&admin(&closed), &rules), Ok(()));
+    assert_eq!(check_elevated_folder_with(&uri(&closed), &rules), Ok(()));
+
+    for mode in [0o775, 0o757, 0o1777] {
+        let existing = folder(&destination.join(format!("tmp {mode:o}")), mode);
+        let inside = folder(&existing.join("x"), 0o755);
+        assert_eq!(
+            check_elevated_folder_with(&admin(&existing), &rules),
+            Err(others_can_change(&existing)),
+            "{mode:o}"
+        );
+        assert_eq!(
+            check_elevated_folder_with(&admin(&inside), &rules),
+            Err(others_can_change(&inside)),
+            "below {mode:o}"
+        );
+    }
 }
 
 /// Without a mount table to believe, as in a Flatpak, nothing is written

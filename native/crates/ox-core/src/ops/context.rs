@@ -227,7 +227,8 @@ impl OperationContext {
             // Continue is only ever answered in that question (OPS-047).
             engine = engine
                 .with_failure_question(move |item: &FailedItem| asker.ask(item))
-                .with_elevation(crate::admin_copy::elevated_destination);
+                .with_elevation(crate::admin_copy::elevated_destination)
+                .with_elevated_merge_check(crate::admin_copy::check_elevated_folder);
         }
         engine
     }
