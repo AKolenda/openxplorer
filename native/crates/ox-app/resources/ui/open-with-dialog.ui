@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  "Open with": `openWithDialog` of v2.0.0:desktop/ui/app.js in the app's modal
-  dialog frame (native/docs/ui-spec.md §4.11): the item's name, "Find an
-  application", the list of installed applications, "Show all installed
-  applications", "Always use this app for this file type", a status line,
-  then Cancel and Open. src/integration/open_with_dialog.rs fills the list.
+  "Open with", laid out as Windows 11's app chooser (right-click > Open with >
+  Choose another app) in the app's modal dialog frame (native/docs/ui-spec.md
+  §4.11): "Select an app to open this .txt file", a filter (OPEN-011), the
+  current default, "Suggested apps", the "More apps" expander, "Choose an app
+  on your PC" and "Use a custom command…" with its command line (OPEN-014), a
+  status line, then Just once, Always and Cancel. src/integration/open_with_dialog.rs fills the lists.
 -->
 <interface>
   <requires lib="gtk" version="4.14"/>
@@ -45,113 +46,168 @@
                       <class name="dialog-content"/>
                     </style>
                     <child>
-                      <object class="GtkLabel" id="i18n_1">
-                        <property name="label" translatable="yes">Open with</property>
+                      <!-- "Select an app to open this .txt file", set for the item. -->
+                      <object class="GtkLabel" id="heading">
                         <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">40</property>
                         <style>
                           <class name="dialog-title"/>
                         </style>
                       </object>
                     </child>
                     <child>
-                      <!-- The item, as the Python dialog's description. -->
-                      <object class="GtkLabel" id="item_label">
-                        <property name="xalign">0</property>
-                        <property name="ellipsize">middle</property>
-                        <style>
-                          <class name="dialog-message"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="i18n_2">
-                        <property name="label" translatable="yes">Find an application</property>
-                        <property name="xalign">0</property>
-                        <property name="mnemonic-widget">filter_entry</property>
-                        <style>
-                          <class name="field-label"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
                       <object class="GtkEntry" id="filter_entry">
-                        <property name="placeholder-text" translatable="yes">Search installed applications</property>
+                        <property name="placeholder-text" translatable="yes">Find an application</property>
+                        <accessibility>
+                          <property name="label" translatable="yes">Find an application</property>
+                        </accessibility>
                       </object>
                     </child>
                     <child>
                       <object class="GtkScrolledWindow">
                         <property name="hscrollbar-policy">never</property>
-                        <property name="min-content-height">240</property>
-                        <property name="max-content-height">240</property>
+                        <property name="min-content-height">280</property>
+                        <property name="max-content-height">280</property>
                         <property name="margin-top">12</property>
                         <style>
                           <class name="app-choices"/>
                         </style>
                         <property name="child">
-                          <object class="GtkListBox" id="application_list">
-                            <property name="selection-mode">single</property>
-                            <accessibility>
-                              <property name="label" translatable="yes">Installed applications</property>
-                            </accessibility>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel" id="default_heading">
+                                <property name="label" translatable="yes">Current default</property>
+                                <property name="xalign">0</property>
+                                <property name="visible">false</property>
+                                <style>
+                                  <class name="app-section"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkListBox" id="default_list">
+                                <property name="selection-mode">single</property>
+                                <property name="activate-on-single-click">false</property>
+                                <property name="visible">false</property>
+                                <accessibility>
+                                  <property name="label" translatable="yes">Current default</property>
+                                </accessibility>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="suggested_heading">
+                                <property name="label" translatable="yes">Suggested apps</property>
+                                <property name="xalign">0</property>
+                                <property name="visible">false</property>
+                                <style>
+                                  <class name="app-section"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkListBox" id="suggested_list">
+                                <property name="selection-mode">single</property>
+                                <property name="activate-on-single-click">false</property>
+                                <accessibility>
+                                  <property name="label" translatable="yes">Suggested apps</property>
+                                </accessibility>
+                              </object>
+                            </child>
+                            <child>
+                              <!-- Every other installed application (OPEN-011's
+                                   "Show all installed applications"), open for a folder. -->
+                              <object class="GtkExpander" id="more_expander">
+                                <property name="label" translatable="yes">More apps</property>
+                                <style>
+                                  <class name="app-more"/>
+                                </style>
+                                <property name="child">
+                                  <object class="GtkListBox" id="more_list">
+                                    <property name="selection-mode">single</property>
+                                    <property name="activate-on-single-click">false</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">More apps</property>
+                                    </accessibility>
+                                  </object>
+                                </property>
+                              </object>
+                            </child>
                           </object>
                         </property>
                       </object>
                     </child>
                     <child>
-                      <object class="GtkCheckButton" id="show_all_check">
-                        <property name="label" translatable="yes">Show all installed applications</property>
-                        <style>
-                          <class name="dialog-check"/>
-                        </style>
+                      <object class="GtkBox">
+                        <property name="spacing">4</property>
+                        <property name="margin-top">8</property>
+                        <child>
+                          <object class="GtkButton" id="choose_program_button">
+                            <property name="label" translatable="yes">Choose an app on your PC</property>
+                            <style>
+                              <class name="link-button"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <!-- A command line instead of an application (OPEN-014). -->
+                          <object class="GtkButton" id="custom_command_button">
+                            <property name="label" translatable="yes">Use a custom command…</property>
+                            <style>
+                              <class name="link-button"/>
+                            </style>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>
-                      <object class="GtkCheckButton" id="make_default_check">
-                        <property name="label" translatable="yes">Always use this app for this file type</property>
-                        <style>
-                          <class name="dialog-check"/>
-                        </style>
+                      <!-- Shown by "Use a custom command…" or a program file. -->
+                      <object class="GtkBox" id="command_box">
+                        <property name="orientation">vertical</property>
+                        <property name="visible">false</property>
+                        <child>
+                          <object class="GtkLabel" id="i18n_1">
+                            <property name="label" translatable="yes">Command</property>
+                            <property name="xalign">0</property>
+                            <property name="mnemonic-widget">command_entry</property>
+                            <style>
+                              <class name="field-label"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkEntry" id="command_entry">
+                            <property name="placeholder-text" translatable="yes">Such as gimp %f (%f is the file, %u its address)</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="terminal_check">
+                            <property name="label" translatable="yes">Run in terminal</property>
+                            <style>
+                              <class name="dialog-check"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="keep_open_check">
+                            <property name="label" translatable="yes">Keep the terminal open when the command ends</property>
+                            <property name="sensitive">false</property>
+                            <style>
+                              <class name="dialog-check"/>
+                            </style>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>
-                      <!-- A command line instead of an application (OPEN-014). -->
-                      <object class="GtkLabel" id="i18n_3">
-                        <property name="label" translatable="yes">Or run a command</property>
-                        <property name="xalign">0</property>
-                        <property name="mnemonic-widget">command_entry</property>
-                        <style>
-                          <class name="field-label"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkEntry" id="command_entry">
-                        <property name="placeholder-text" translatable="yes">Such as gimp %f (%f is the file, %u its address)</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="terminal_check">
-                        <property name="label" translatable="yes">Run in terminal</property>
-                        <style>
-                          <class name="dialog-check"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="keep_open_check">
-                        <property name="label" translatable="yes">Keep the terminal open when the command ends</property>
-                        <property name="sensitive">false</property>
-                        <style>
-                          <class name="dialog-check"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
+                      <!-- Shown only while there is something to say: the list
+                           loading, or why an app could not open the item. -->
                       <object class="GtkLabel" id="status_label">
-                        <property name="label" translatable="yes">Loading…</property>
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>
                         <property name="max-width-chars">60</property>
+                        <property name="visible">false</property>
                         <property name="accessible-role">status</property>
                         <style>
                           <class name="dialog-hint"/>
@@ -173,8 +229,19 @@
                     <property name="halign">end</property>
                     <property name="spacing">8</property>
                     <child>
-                      <object class="GtkButton" id="cancel_button">
-                        <property name="label" translatable="yes">Cancel</property>
+                      <object class="GtkButton" id="just_once_button">
+                        <property name="label" translatable="yes">Just once</property>
+                        <property name="sensitive">false</property>
+                        <style>
+                          <class name="accent"/>
+                          <class name="dialog-button"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="always_button">
+                        <property name="label" translatable="yes">Always</property>
+                        <property name="sensitive">false</property>
                         <style>
                           <class name="bordered"/>
                           <class name="dialog-button"/>
@@ -182,11 +249,10 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkButton" id="open_button">
-                        <property name="label" translatable="yes">Open</property>
-                        <property name="sensitive">false</property>
+                      <object class="GtkButton" id="cancel_button">
+                        <property name="label" translatable="yes">Cancel</property>
                         <style>
-                          <class name="accent"/>
+                          <class name="bordered"/>
                           <class name="dialog-button"/>
                         </style>
                       </object>

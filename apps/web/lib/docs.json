@@ -446,7 +446,7 @@
         "id": "menus",
         "title": "Choose your context menu",
         "paragraphs": [
-          "The Windows 11-style compact menu is the default, as on the Menu key, with the classic menu behind Show more options, on Shift+F10 and on Shift+right-click; Settings can make the Windows 10-style classic menu the default instead. If you chose the classic menu in 2.0.11 or earlier, choose it again once: those versions saved it the same way as their default. Open with uses registered applications; identical editor names are deduplicated."
+          "The Windows 11-style compact menu is the default, as on the Menu key, with the classic menu behind Show more options, on Shift+F10 and on Shift+right-click; Settings can make the Windows 10-style classic menu the default instead. If you chose the classic menu in 2.0.11 or earlier, choose it again once: those versions saved it the same way as their default. Open with uses registered applications; identical editor names are deduplicated. Its chooser works like Windows 11's: the current default and suggested apps first, every other app under More apps, then Just once or Always (which makes the app the default for that file type); Choose an app on your PC runs a program file, and Use a custom command… runs a command line with the file."
         ]
       },
       {
