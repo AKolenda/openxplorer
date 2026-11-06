@@ -10,9 +10,10 @@
 //! ([`service`]) when it has one and supports the type, else for the
 //! picture types gdk-pixbuf reads by the app itself ([`writer`]), which
 //! costs less than a program, else by a thumbnailer the desktop installs
-//! for the type ([`thumbnailers`], a program the app starts). The desktop's
-//! thumbnailer is asked for a picture only when the app cannot read it
-//! ([`writer::Failure::Unreadable`]): one the cache refuses would be
+//! for the type ([`thumbnailers`], a program the app starts in a
+//! sandbox). The desktop's thumbnailer is asked for a picture only when
+//! the app cannot read it ([`writer::Failure::Unreadable`]): one the cache
+//! refuses would be
 //! refused for the program too, and a dropped request needs no picture at
 //! all. Only a few are decoded or made at a time ([`slots`]); a type that
 //! cannot be previewed, or a failed attempt, keeps its icon.

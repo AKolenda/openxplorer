@@ -147,7 +147,7 @@ pub(super) fn inside_cache(cache_dir: &Path, uri: &str) -> bool {
 
 /// The folder `folder` and its parents, enterable by its owner only, as
 /// the standard asks of the cache folders.
-pub(super) fn create_folder(folder: &Path) -> Option<()> {
+fn create_folder(folder: &Path) -> Option<()> {
     fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
@@ -155,16 +155,18 @@ pub(super) fn create_folder(folder: &Path) -> Option<()> {
         .ok()
 }
 
-/// `pixbuf` scaled down to fit `edge` pixels square, or as it is when it
-/// already does: a thumbnail is never larger than its flavor.
-pub(super) fn fit_thumbnail(pixbuf: &Pixbuf, edge: i32) -> Pixbuf {
-    if pixbuf.width() <= edge && pixbuf.height() <= edge {
-        return pixbuf.clone();
+/// The picture in `bytes`, decoded to fit `edge` pixels square as
+/// [`scaled_picture`] decodes a file: a desktop thumbnailer's picture,
+/// which the app read into memory itself (see [`super::thumbnailers`]).
+pub(super) fn scaled_bytes(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
+    let loader = scaling_loader(edge);
+    for chunk in bytes.chunks(READ_CHUNK) {
+        if loader.write(chunk).is_err() {
+            let _ = loader.close();
+            return None;
+        }
     }
-    let (width, height) = fit(pixbuf.width(), pixbuf.height(), edge);
-    pixbuf
-        .scale_simple(width, height, gtk::gdk_pixbuf::InterpType::Bilinear)
-        .unwrap_or_else(|| pixbuf.clone())
+    finish(&loader)
 }
 
 /// The picture at `uri`, turned upright and decoded to fit `edge` pixels
@@ -172,13 +174,7 @@ pub(super) fn fit_thumbnail(pixbuf: &Pixbuf, edge: i32) -> Pixbuf {
 /// in memory at full size.
 fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Option<Pixbuf> {
     let stream = gio::File::for_uri(uri).read(Some(cancellation)).ok()?;
-    let loader = PixbufLoader::new();
-    loader.connect_size_prepared(move |loader, width, height| {
-        if width > edge || height > edge {
-            let (width, height) = fit(width, height, edge);
-            loader.set_size(width, height);
-        }
-    });
+    let loader = scaling_loader(edge);
     let mut buffer = vec![0; READ_CHUNK];
     loop {
         let Ok(read) = stream.read(&mut buffer, Some(cancellation)) else {
@@ -193,6 +189,24 @@ fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Opti
             return None;
         }
     }
+    finish(&loader)
+}
+
+/// A loader that decodes its picture to fit `edge` pixels square, or at
+/// its own size when smaller.
+fn scaling_loader(edge: i32) -> PixbufLoader {
+    let loader = PixbufLoader::new();
+    loader.connect_size_prepared(move |loader, width, height| {
+        if width > edge || height > edge {
+            let (width, height) = fit(width, height, edge);
+            loader.set_size(width, height);
+        }
+    });
+    loader
+}
+
+/// The picture `loader` was given, turned upright.
+fn finish(loader: &PixbufLoader) -> Option<Pixbuf> {
     loader.close().ok()?;
     let pixbuf = loader.pixbuf()?;
     Some(pixbuf.apply_embedded_orientation().unwrap_or(pixbuf))

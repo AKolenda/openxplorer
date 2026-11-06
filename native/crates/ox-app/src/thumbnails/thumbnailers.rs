@@ -16,16 +16,28 @@
 //! program this computer lacks is skipped too, failing on every item
 //! otherwise.
 //!
+//! The program reads a file the user may have downloaded from anywhere,
+//! with a parser of its own, so it runs in a bubblewrap sandbox, as Files
+//! runs it ([`Sandbox`]): no network and no session bus, the system's
+//! programs and libraries read-only, the item alone of the user's files,
+//! and a private folder for its picture. A computer without bubblewrap,
+//! or where it cannot make its namespaces, starts none of these programs
+//! at all; the service and the app's own decoding still preview what
+//! they know.
+//!
 //! A thumbnailer writes a plain PNG, without the keys that keep a
-//! thumbnail valid; the app writes the picture into the shared cache
-//! itself, as Files does, through [`super::writer`].
+//! thumbnail valid; the app reads it with care (it was made from an
+//! untrusted file) and writes it into the shared cache itself, as Files
+//! does, through [`super::writer`].
 
 use std::ffi::{OsStr, OsString};
 use std::fs;
+use std::io::Read;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
+use std::process::ExitStatus;
 use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -33,7 +45,7 @@ use std::time::{Duration, Instant};
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::entry::{thumbnail_file, ThumbnailFlavor};
+use ox_core::entry::ThumbnailFlavor;
 use rustix::process::{kill_process_group, Pid, Signal};
 
 use super::writer::{self, Source};
@@ -55,9 +67,36 @@ const TIMEOUT: Duration = Duration::from_secs(30);
 /// cancellation and the timeout are looked at again.
 const POLL: Duration = Duration::from_millis(50);
 
-/// The end of the name of a thumbnailer's own picture in the cache folder,
-/// which tells a picture no one claimed from a thumbnail of the cache.
-const TEMPORARY: &str = "openxplorer-thumbnailer.png";
+/// The name of the private folder a thumbnailer writes its picture in,
+/// with `XXXXXX` for the random part.
+const WORKSPACE: &str = "openxplorer-thumbnailer-";
+
+/// Where the sandbox shows the private folder to the program.
+const INSIDE: &str = "/tmp";
+
+/// The name the item has inside the sandbox, before its extension.
+const INPUT: &str = "openxplorer-item";
+
+/// The name of the picture the program writes.
+const OUTPUT: &str = "openxplorer-thumbnail.png";
+
+/// The largest picture read back from a thumbnailer; a thumbnail is a few
+/// hundred pixels square.
+const OUTPUT_SIZE_LIMIT: u64 = 32 * 1024 * 1024;
+
+/// The system folders every program needs, shown read-only in the
+/// sandbox: each is a folder of its own, or a link into `/usr`.
+const SYSTEM_FOLDERS: [&str; 5] = ["/bin", "/sbin", "/lib", "/lib32", "/lib64"];
+
+/// The system files and folders a program may need besides `/usr`, shown
+/// read-only when this computer has them: the linker's cache, Debian's
+/// alternatives and the fonts.
+const SYSTEM_EXTRAS: [&str; 4] = [
+    "/etc/ld.so.cache",
+    "/etc/alternatives",
+    "/etc/fonts",
+    "/var/cache/fontconfig",
+];
 
 /// GNOME's settings for the desktop's thumbnailers, which Files honours:
 /// the MIME types no external thumbnailer is started for, and the switch
@@ -101,6 +140,7 @@ pub(super) struct Dirs {
 
 impl Dirs {
     /// The folders of this session, and what the desktop turned off.
+    #[cfg_attr(test, allow(dead_code))]
     fn of_session() -> Self {
         let mut folders = vec![glib::user_data_dir()];
         folders.extend(glib::system_data_dirs());
@@ -122,27 +162,38 @@ pub(super) struct Catalogue {
     disabled_types: Vec<String>,
     /// `disable-all` is set: no program is started for any type.
     disable_all: bool,
+    /// How the programs run; `None` runs none.
+    sandbox: Option<Sandbox>,
 }
 
 impl Catalogue {
-    /// The thumbnailers `dirs` holds: a desktop with every external
-    /// thumbnailer turned off has none read.
-    fn of(dirs: &Dirs) -> Self {
-        let thumbnailers = if dirs.disable_all { Vec::new() } else { read(dirs) };
+    /// The thumbnailers `dirs` holds, run in the sandbox `sandbox` finds:
+    /// a desktop with every external thumbnailer turned off has none read,
+    /// and one without a working sandbox keeps none, so the sandbox is
+    /// looked for only when there is a program to run in it.
+    fn of(dirs: &Dirs, sandbox: impl FnOnce() -> Option<Sandbox>) -> Self {
+        let mut thumbnailers = if dirs.disable_all { Vec::new() } else { read(dirs) };
+        let sandbox = if thumbnailers.is_empty() { None } else { sandbox() };
+        if sandbox.is_none() {
+            thumbnailers.clear();
+        }
         Self {
             thumbnailers,
             disabled_types: dirs.disabled_types.clone(),
             disable_all: dirs.disable_all,
+            sandbox,
         }
     }
 
-    /// The thumbnailers of a test, which read no folder of the desktop's.
+    /// The thumbnailers of a test, which read no folder of the desktop's
+    /// and run without the sandbox, so a test's program sees its files.
     #[cfg(test)]
     pub(super) fn for_test(thumbnailers: Vec<Thumbnailer>) -> Self {
         Self {
             thumbnailers,
             disabled_types: Vec::new(),
             disable_all: false,
+            sandbox: Some(Sandbox::Off),
         }
     }
 
@@ -285,7 +336,20 @@ fn expand(word: &str, values: &[(u8, &OsStr)]) -> OsString {
 /// read the first time a thumbnail has to be made and once per run
 /// (`thumbnailers/` holds a handful of small files).
 pub(super) fn installed() -> Arc<Catalogue> {
-    Arc::clone(INSTALLED.get_or_init(|| Arc::new(Catalogue::of(&Dirs::of_session()))))
+    Arc::clone(INSTALLED.get_or_init(|| Arc::new(session_catalogue())))
+}
+
+/// The desktop's thumbnailers, in the sandbox this computer offers.
+#[cfg(not(test))]
+fn session_catalogue() -> Catalogue {
+    Catalogue::of(&Dirs::of_session(), Sandbox::find)
+}
+
+/// None in a test: a window test never starts the programs of the
+/// computer it runs on, whose thumbnailers differ from one to the next.
+#[cfg(test)]
+fn session_catalogue() -> Catalogue {
+    Catalogue::for_test(Vec::new())
 }
 
 /// The thumbnailers `dirs` holds, the user's folders before the system
@@ -350,6 +414,7 @@ fn installed_program(program: &str) -> bool {
 /// `org.gnome.desktop.thumbnailers`: the MIME types `disable` names, and
 /// whether `disable-all` turns every one of them off. A session without
 /// the schema turns none off.
+#[cfg_attr(test, allow(dead_code))]
 fn disabled() -> (Vec<String>, bool) {
     let Some(schema) =
         gio::SettingsSchemaSource::default().and_then(|source| source.lookup(DISABLE_SCHEMA, true))
@@ -370,6 +435,7 @@ fn disabled() -> (Vec<String>, bool) {
     (types, all)
 }
 
+
 /// Makes the thumbnail of `job` with the thumbnailer of `catalogue` that
 /// makes its type, and writes it into the cache as the Thumbnail Managing
 /// Standard asks; `None` when none makes the type, the user turned them
@@ -381,29 +447,20 @@ pub(super) fn write_thumbnail(
     cancellation: &gio::Cancellable,
 ) -> Option<PathBuf> {
     let thumbnailer = catalogue.for_type(&job.content_type)?;
+    let sandbox = catalogue.sandbox.as_ref()?;
     // A thumbnailer takes a file of this computer, its `%i` being a path: a
     // file on a share, a phone or in an archive is left to the service.
     let path = gio::File::for_uri(&job.uri).path()?;
-    let target = thumbnail_file(&job.cache_dir, &job.uri, job.flavor);
-    let folder = target.parent()?;
-    // The program's own picture lands in the cache folder, which only its
-    // owner may enter, and is replaced by the cache's own file below.
-    writer::create_folder(folder)?;
-    sweep(folder);
-    let output = folder.join(format!(".{}.{}", glib::random_int(), TEMPORARY));
-    let command = thumbnailer.command(&path, &job.uri, &output, job.flavor.pixels());
-    let stopped = stopped_early(&command, cancellation);
-    // A stopped thumbnailer left no picture; one that failed on its own may
-    // still have written a good one, so the picture alone decides. A
-    // thumbnailer writes at the size it was asked for, and one that ignores
-    // `%s` is brought within the flavor.
-    let picture = (!stopped)
-        .then(|| Pixbuf::from_file(&output).ok())
-        .flatten()
-        .filter(|picture| picture.width() > 0 && picture.height() > 0)
-        .map(|picture| writer::fit_thumbnail(&picture, job.flavor.pixels()));
-    let _ = fs::remove_file(&output);
-    let picture = picture?;
+    // The program writes its picture in a private folder of its own, never
+    // in the cache: the app copies a good picture there itself.
+    let workspace = Workspace::new()?;
+    let pixels = job.flavor.pixels();
+    let command = sandbox.command(thumbnailer, &path, &job.uri, workspace.path(), pixels);
+    // One that failed on its own may still have written a good picture, so
+    // the picture alone decides; a stopped one left none worth reading.
+    run(&command, cancellation)?;
+    let picture = read_picture(&workspace.path().join(OUTPUT), pixels)?;
+    drop(workspace);
     if cancellation.is_cancelled() {
         return None;
     }
@@ -416,59 +473,238 @@ pub(super) fn write_thumbnail(
     writer::save_thumbnail(&job.cache_dir, &source, job.flavor, &picture).ok()
 }
 
-/// Removes the pictures of thumbnailers an earlier run of the app was
-/// killed with: quitting stops a program mid-run, and its picture would
-/// stay in the cache for ever. One older than twice [`TIMEOUT`] belongs to
-/// no running request, so a sibling one is never touched.
-fn sweep(folder: &Path) {
-    let Ok(read) = fs::read_dir(folder) else {
-        return;
-    };
-    for entry in read.filter_map(Result::ok) {
-        let name = entry.file_name();
-        let abandoned = name.to_str().is_some_and(|name| name.ends_with(TEMPORARY));
-        let old = entry
-            .metadata()
-            .and_then(|metadata| metadata.modified())
-            .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age > TIMEOUT * 2));
-        if abandoned && old {
-            let _ = fs::remove_file(entry.path());
+/// How a desktop thumbnailer is run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Sandbox {
+    /// In bubblewrap, the program at this path, as Files runs them.
+    Bubblewrap(PathBuf),
+    /// Without a sandbox: only a test's own program, which must see the
+    /// files of its test.
+    #[cfg(test)]
+    Off,
+}
+
+impl Sandbox {
+    /// The bubblewrap of this computer, if it is installed and can make
+    /// the sandbox here: it is tried once with `true`, since a container
+    /// or a strict kernel may refuse the namespaces it needs.
+    fn find() -> Option<Self> {
+        let sandbox = Self::Bubblewrap(glib::find_program_in_path("bwrap")?);
+        let workspace = Workspace::new()?;
+        let item = workspace.path().join("probe");
+        fs::write(&item, b"").ok()?;
+        let probe = Thumbnailer {
+            command: vec!["true".to_owned()],
+            types: Vec::new(),
+        };
+        let command = sandbox.command(&probe, &item, "", workspace.path(), 0);
+        run(&command, &gio::Cancellable::new()).is_some_and(|status| status.success())
+            .then_some(sandbox)
+    }
+
+    /// The command that runs `thumbnailer` for the file at `item` (named
+    /// `uri`), writing its picture to [`OUTPUT`] in `workspace` with
+    /// `pixels` as its longest edge.
+    ///
+    /// In the sandbox the program sees `workspace` as [`INSIDE`], and the
+    /// item there under a name of the sandbox's own, read-only; it is
+    /// given that path and URI.
+    fn command(
+        &self,
+        thumbnailer: &Thumbnailer,
+        item: &Path,
+        uri: &str,
+        workspace: &Path,
+        pixels: i32,
+    ) -> Vec<OsString> {
+        match self {
+            Self::Bubblewrap(bwrap) => {
+                let inside = Path::new(INSIDE);
+                let inside_item = inside.join(format!("{INPUT}{}", extension_of(item)));
+                let inside_uri = format!("file://{}", inside_item.display());
+                let program = thumbnailer.command(&inside_item, &inside_uri, &inside.join(OUTPUT), pixels);
+                let mut command = vec![bwrap.as_os_str().to_owned()];
+                command.extend(sandbox_arguments(
+                    workspace,
+                    item,
+                    &inside_item,
+                    program.first().map(OsString::as_os_str),
+                ));
+                command.push("--".into());
+                command.extend(program);
+                command
+            }
+            #[cfg(test)]
+            Self::Off => thumbnailer.command(item, uri, &workspace.join(OUTPUT), pixels),
         }
     }
 }
 
-/// Runs `command` with nothing of its output shown and returns whether it
-/// had to be killed, because the request was cancelled or it outlasted
-/// [`TIMEOUT`].
+/// The extension the item keeps inside the sandbox, with its dot, which
+/// some thumbnailers go by; one of other characters than letters and
+/// digits, or a long one, is left out.
+fn extension_of(item: &Path) -> String {
+    item.extension()
+        .and_then(OsStr::to_str)
+        .filter(|extension| {
+            !extension.is_empty()
+                && extension.len() <= 16
+                && extension.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        })
+        .map(|extension| format!(".{extension}"))
+        .unwrap_or_default()
+}
+
+/// bubblewrap's arguments for a thumbnailer: the system read-only, the
+/// program itself when it lives elsewhere, `workspace` as [`INSIDE`] and
+/// the item at `inside_item`, in fresh namespaces (no network, no other
+/// process, no session bus) that end with the app.
+fn sandbox_arguments(
+    workspace: &Path,
+    item: &Path,
+    inside_item: &Path,
+    program: Option<&OsStr>,
+) -> Vec<OsString> {
+    let mut arguments: Vec<OsString> = Vec::new();
+    let mut add = |words: &[&OsStr]| arguments.extend(words.iter().map(|word| (*word).to_owned()));
+    let word = OsStr::new;
+    add(&[word("--ro-bind"), word("/usr"), word("/usr")]);
+    for extra in SYSTEM_EXTRAS {
+        add(&[word("--ro-bind-try"), word(extra), word(extra)]);
+    }
+    for folder in SYSTEM_FOLDERS {
+        if let Ok(target) = fs::read_link(folder) {
+            add(&[word("--symlink"), target.as_os_str(), word(folder)]);
+        } else if Path::new(folder).is_dir() {
+            add(&[word("--ro-bind"), word(folder), word(folder)]);
+        }
+    }
+    // A program installed outside the system's folders, such as one in
+    // the user's own `bin` folder, is shown read-only where it is.
+    if let Some(program) = program.and_then(program_path) {
+        let in_system = std::iter::once("/usr")
+            .chain(SYSTEM_FOLDERS)
+            .any(|folder| program.starts_with(folder));
+        if !in_system {
+            add(&[word("--ro-bind"), program.as_os_str(), program.as_os_str()]);
+        }
+    }
+    add(&[
+        word("--proc"),
+        word("/proc"),
+        word("--dev"),
+        word("/dev"),
+        word("--chdir"),
+        word("/"),
+        word("--setenv"),
+        word("GIO_USE_VFS"),
+        word("local"),
+        word("--unshare-all"),
+        word("--die-with-parent"),
+        word("--new-session"),
+        word("--bind"),
+        workspace.as_os_str(),
+        word(INSIDE),
+        word("--ro-bind"),
+        item.as_os_str(),
+        inside_item.as_os_str(),
+    ]);
+    arguments
+}
+
+/// Where the program an `Exec` line starts with lives: a path as it is,
+/// a bare name looked for in `PATH`.
+fn program_path(program: &OsStr) -> Option<PathBuf> {
+    let path = Path::new(program);
+    if program.as_bytes().contains(&b'/') {
+        return path.is_absolute().then(|| path.to_path_buf());
+    }
+    glib::find_program_in_path(path)
+}
+
+/// A private folder for one thumbnailer's picture, readable by its owner
+/// only and removed with everything in it when dropped.
+struct Workspace(PathBuf);
+
+impl Workspace {
+    /// A new folder under the system's temporary folder.
+    fn new() -> Option<Self> {
+        let parent = glib::tmp_dir();
+        for _ in 0..8 {
+            let path = parent.join(format!("{WORKSPACE}{:08x}", glib::random_int()));
+            match fs::DirBuilder::new().mode(0o700).create(&path) {
+                Ok(()) => return Some(Self(path)),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(_) => return None,
+            }
+        }
+        None
+    }
+
+    /// The folder.
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Workspace {
+    fn drop(&mut self) {
+        // Links the program left are removed, never followed.
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The picture a thumbnailer wrote at `path`, decoded to fit `edge`
+/// pixels square. The program read an untrusted file, so what it left is
+/// taken with care: a link, a pipe or a device is not followed or read,
+/// and a file larger than [`OUTPUT_SIZE_LIMIT`] is refused.
+fn read_picture(path: &Path, edge: i32) -> Option<Pixbuf> {
+    let flags = rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK;
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(flags.bits().cast_signed())
+        .open(path)
+        .ok()?;
+    let metadata = file.metadata().ok()?;
+    if !metadata.is_file() || metadata.len() > OUTPUT_SIZE_LIMIT {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    file.take(OUTPUT_SIZE_LIMIT).read_to_end(&mut bytes).ok()?;
+    writer::scaled_bytes(&bytes, edge).filter(|picture| picture.width() > 0 && picture.height() > 0)
+}
+
+/// Runs `command` with nothing of its output shown, and returns how it
+/// ended; `None` when it could not start or had to be killed, because the
+/// request was cancelled or it outlasted [`TIMEOUT`].
 ///
 /// The wait polls instead of blocking on the child so that a cancelled
 /// request stops the program within [`POLL`]: a request scrolled away must
 /// not keep a slot for the whole timeout.
-fn stopped_early(command: &[OsString], cancellation: &gio::Cancellable) -> bool {
-    let Some((program, arguments)) = command.split_first() else {
-        return true;
-    };
-    let spawned = std::process::Command::new(program)
+fn run(command: &[OsString], cancellation: &gio::Cancellable) -> Option<ExitStatus> {
+    let (program, arguments) = command.split_first()?;
+    let mut child = std::process::Command::new(program)
         .args(arguments)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
+        // The program shows nothing: it is given no display to reach.
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
         // The thumbnailer gets a process group of its own, so stopping it
         // stops the programs it started too: a wrapper script's `cp`, or
         // ffmpeg, would otherwise keep writing the picture the app deletes.
         .process_group(0)
-        .spawn();
-    let Ok(mut child) = spawned else {
-        return true;
-    };
+        .spawn()
+        .ok()?;
     let deadline = Instant::now() + TIMEOUT;
     loop {
-        if let Ok(Some(_)) = child.try_wait() {
-            return false;
+        if let Ok(Some(status)) = child.try_wait() {
+            return Some(status);
         }
         if cancellation.is_cancelled() || Instant::now() >= deadline {
             stop(&mut child);
-            return true;
+            return None;
         }
         thread::sleep(POLL);
     }
@@ -476,18 +712,19 @@ fn stopped_early(command: &[OsString], cancellation: &gio::Cancellable) -> bool 
 
 /// Kills the process group `child` leads, and reaps the child.
 ///
-/// The group is the child's own, [`stopped_early`] having put it in one:
-/// its number is the child's. A group that is gone already is no
-/// failure — the program may have exited between the last look and this
-/// kill — so the outcome is not reported.
+/// The group is the child's own, [`run`] having put it in one: its number
+/// is the child's. A group that is gone already is no failure — the
+/// program may have exited between the last look and this kill — so the
+/// outcome is not reported. In the sandbox, killing bubblewrap ends every
+/// program inside it too (`--die-with-parent` and its own process
+/// namespace).
 fn stop(child: &mut std::process::Child) {
     let group = i32::try_from(child.id())
         .ok()
         .and_then(Pid::from_raw)
         .is_some_and(|group| kill_process_group(group, Signal::KILL).is_ok());
     if !group {
-        // Without a group of its own, as when the spawn itself failed, the
-        // child is all the app can end.
+        // Without a group of its own the child is all the app can end.
         let _ = child.kill();
     }
     let _ = child.wait();
@@ -495,7 +732,7 @@ fn stop(child: &mut std::process::Child) {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
+    use ox_core::entry::thumbnail_file;
 
     use super::*;
 
@@ -679,7 +916,9 @@ mod tests {
             modified: 1_700_000_000,
             flavor: ThumbnailFlavor::Normal,
         };
-        let catalogue = Catalogue::of(&dirs);
+        let catalogue = Catalogue::of(&dirs, || Some(Sandbox::Off));
+        // Without a sandbox that works here no program is kept at all.
+        assert!(Catalogue::of(&dirs, || None).thumbnailers.is_empty());
 
         let written = write_thumbnail(&job, &catalogue, &gio::Cancellable::new()).expect("a thumbnail");
 
@@ -753,11 +992,7 @@ mod tests {
         let written = write_thumbnail(&job, &slow, &cancellation);
 
         assert!(written.is_none(), "a cancelled request makes no thumbnail");
-        assert!(!thumbnail_file(&cache, &job.uri, ThumbnailFlavor::Normal).exists());
-        let left = fs::read_dir(cache.join("thumbnails").join(ThumbnailFlavor::Normal.as_str()))
-            .expect("the cache folder")
-            .count();
-        assert_eq!(left, 0, "and leaves nothing in the cache");
+        assert!(!cache.exists(), "and leaves nothing in the cache");
     }
 
     /// A request the user scrolled away from stops the programs its
@@ -862,11 +1097,14 @@ mod tests {
             modified: 1_700_000_000,
             flavor: ThumbnailFlavor::Normal,
         };
-        let on = Catalogue::of(&dirs);
-        let off = Catalogue::of(&Dirs {
-            disable_all: true,
-            ..dirs
-        });
+        let on = Catalogue::of(&dirs, || Some(Sandbox::Off));
+        let off = Catalogue::of(
+            &Dirs {
+                disable_all: true,
+                ..dirs
+            },
+            || panic!("no sandbox is looked for without a program to run"),
+        );
 
         assert_eq!(on.thumbnailers.len(), 1, "the entry a desktop installs");
         assert!(
@@ -983,32 +1221,105 @@ mod tests {
         }
     }
 
-    /// A picture a thumbnailer wrote for a run of the app that quit with it
-    /// is swept from the cache, while a running one and a thumbnail of the
-    /// cache are kept.
+    /// In bubblewrap a thumbnailer is given the item, read-only under a
+    /// name of the sandbox's own, and a private folder for its picture;
+    /// the user's other files are out of its sight. Runs where bubblewrap
+    /// can make its sandbox.
     ///
     /// parity: VIEW-057
     #[test]
-    fn the_pictures_of_a_killed_run_are_swept() {
+    fn a_sandboxed_thumbnailer_sees_only_its_item() {
+        let Some(sandbox) = Sandbox::find() else {
+            eprintln!("skipped: bubblewrap cannot make its sandbox here");
+            return;
+        };
         let folder = tempfile::tempdir().expect("a temporary folder");
-        let running = folder.path().join(format!(".1.{TEMPORARY}"));
-        let killed = folder.path().join(format!(".2.{TEMPORARY}"));
-        let thumbnail = folder.path().join("c4ca4238a0b923820dcc509a6f75849b.png");
-        for path in [&running, &killed, &thumbnail] {
-            fs::write(path, b"a picture").expect("the file");
-        }
-        let long_ago = SystemTime::now() - TIMEOUT * 4;
-        fs::OpenOptions::new()
-            .write(true)
-            .open(&killed)
-            .expect("the file")
-            .set_times(fs::FileTimes::new().set_modified(long_ago))
-            .expect("the time");
+        let secret = folder.path().join("secret.txt");
+        fs::write(&secret, b"another file of the user's").expect("a file");
+        let escaped = folder.path().join("escaped");
+        // The item is a picture, so the program can hand it back as its
+        // own: what the app gets proves the program read it.
+        let item = folder.path().join("Sprite.ab");
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 300, 200).expect("a picture");
+        pixbuf.fill(0x3366_99ff);
+        pixbuf.savev(&item, "png", &[]).expect("the item");
+        let script = folder.path().join("ox-sandboxed-thumbnailer");
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/sh
+                 test \"$1\" = /tmp/openxplorer-item.ab || exit 1
+                 test \"$2\" = file:///tmp/openxplorer-item.ab || exit 2
+                 test -e '{secret}' && exit 3
+                 touch '{escaped}' 2>/dev/null
+                 : 2>/dev/null > \"$1\" && exit 4
+                 cp \"$1\" \"$3\"
+",
+                secret = secret.display(),
+                escaped = escaped.display(),
+            ),
+        )
+        .expect("the script");
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("the mode");
+        let mut catalogue = Catalogue::for_test(vec![Thumbnailer::for_test(
+            &[script.to_str().expect("a path"), "%i", "%u", "%o", "%s"],
+            &[BUNDLE],
+        )]);
+        catalogue.sandbox = Some(sandbox);
+        let cache = folder.path().join("cache");
+        let job = Job {
+            cache_dir: cache.clone(),
+            uri: gio::File::for_path(&item).uri().to_string(),
+            content_type: BUNDLE.to_owned(),
+            modified: 1_700_000_000,
+            flavor: ThumbnailFlavor::Normal,
+        };
 
-        sweep(folder.path());
+        let written = write_thumbnail(&job, &catalogue, &gio::Cancellable::new())
+            .expect("a thumbnail made in the sandbox");
 
-        assert!(!killed.exists(), "a killed run's picture goes");
-        assert!(running.exists(), "a running request's picture stays");
-        assert!(thumbnail.exists(), "a thumbnail of the cache stays");
+        assert_eq!(written, thumbnail_file(&cache, &job.uri, ThumbnailFlavor::Normal));
+        let thumbnail = Pixbuf::from_file(&written).expect("a PNG");
+        assert_eq!((thumbnail.width(), thumbnail.height()), (128, 85));
+        assert!(!escaped.exists(), "the program wrote nothing outside its folder");
+        assert!(secret.exists() && item.exists());
+    }
+
+    /// What a thumbnailer leaves is read only when it is a picture file of
+    /// a sensible size: a link is not followed, and a pipe is not opened
+    /// for a read that would never end.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn only_a_picture_file_is_read_back() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let picture = folder.path().join("picture.png");
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 300, 200).expect("a picture");
+        pixbuf.fill(0x3366_99ff);
+        pixbuf.savev(&picture, "png", &[]).expect("the picture");
+        let link = folder.path().join("link.png");
+        std::os::unix::fs::symlink(&picture, &link).expect("the link");
+        let pipe = folder.path().join("pipe.png");
+        rustix::fs::mknodat(
+            rustix::fs::CWD,
+            &pipe,
+            rustix::fs::FileType::Fifo,
+            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+            0,
+        )
+        .expect("the pipe");
+        let large = folder.path().join("large.png");
+        fs::File::create(&large)
+            .and_then(|file| file.set_len(OUTPUT_SIZE_LIMIT + 1))
+            .expect("the large file");
+
+        let read = read_picture(&picture, 128).expect("a picture file is read");
+        assert_eq!((read.width(), read.height()), (128, 85));
+        assert!(read_picture(&link, 128).is_none(), "a link is not followed");
+        assert!(read_picture(&pipe, 128).is_none(), "a pipe is not read");
+        assert!(read_picture(&large, 128).is_none(), "a huge file is not read");
+        assert_eq!(extension_of(Path::new("/a/Clip.MP4")), ".MP4");
+        assert_eq!(extension_of(Path::new("/a/odd.p n g")), "");
+        assert_eq!(extension_of(Path::new("/a/none")), "");
     }
 }
