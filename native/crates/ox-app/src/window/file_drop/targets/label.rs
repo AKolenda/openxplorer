@@ -168,12 +168,10 @@ impl BrowserWindow {
         let action = match (&hover.run, &hover.destination) {
             (DropRun::Run(action), _) => *action,
             (DropRun::MoveWithinDrive, DropDestination::Folder(folder)) => {
-                // Recycle Bin items always move out, and items dropped back
-                // in their own folder stay: neither needs their drive.
-                let from_recycle_bin = dragged.iter().any(|uri| is_recycle_bin_item(uri));
-                let in_own_folder =
-                    !dragged.is_empty() && dragged.iter().all(|uri| is_in_folder(uri, folder));
-                if from_recycle_bin || in_own_folder {
+                // Recycle Bin items always move out, so need no drive. Items
+                // back in their own folder do: on a share a plain drop
+                // copies them there.
+                if dragged.iter().any(|uri| is_recycle_bin_item(uri)) {
                     DropAction::Move
                 } else {
                     let identity = hover.drop.upgrade()?;
