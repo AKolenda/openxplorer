@@ -85,7 +85,7 @@ impl BrowserWindow {
             source: TRASH_URI.to_owned(),
             destination,
         };
-        self.describe_operation(&context.cancel, Some(action));
+        self.describe_operation(&context.cancel, Some(action.clone()));
         let so_far = restore_free_items(&scan, context).await?;
         if so_far.cancelled() {
             return Ok(so_far.into_outcome());
@@ -96,13 +96,31 @@ impl BrowserWindow {
         let panel = self.panel_for_operation(&context.cancel);
         // One question per original folder, each naming its folder.
         let mut answers = vec![Resolution::Skip; scan.conflicts.len()];
+        let several = action.destination.is_none();
         for (question, indices) in restore_questions(&scan) {
+            if several {
+                let going = scan
+                    .items
+                    .iter()
+                    .filter(|item| item.destination_folder == question.destination_folder)
+                    .count();
+                // "Moving 2 items to Documents": the folder asked about.
+                let asked = Action {
+                    count: Some(u64::try_from(going).unwrap_or(u64::MAX)),
+                    destination: Some(question.destination_folder.clone()),
+                    ..action.clone()
+                };
+                self.describe_operation(&context.cancel, Some(asked));
+            }
             let Some(answered) = panel.ask_about_conflicts(&question).await else {
                 return Ok(so_far.into_outcome());
             };
             for (index, answer) in indices.into_iter().zip(answered) {
                 answers[index] = answer;
             }
+        }
+        if several {
+            self.describe_operation(&context.cancel, Some(action));
         }
         restore_answered_items(&scan, &answers, so_far, context).await
     }
