@@ -263,8 +263,6 @@ pub(crate) struct BrowserWindow {
     pub(super) muted_tooltips: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
-    /// The folder a file drag hovers over, and the timer that opens it.
-    pub(super) folder_hover: RefCell<Option<(String, glib::SourceId)>>,
     /// The scroll of a zone a file drag hovers near the edge of.
     pub(super) drag_scroll: RefCell<Option<super::file_drop::DragScroll>>,
     /// The crumb divider a file drag hovers over, and the timer that

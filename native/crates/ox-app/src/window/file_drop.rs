@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Dropping files and folders onto the window (DND-009 to DND-014,
-//! DND-017 to DND-021, DND-025, DND-026, TAB-018).
+//! DND-017 to DND-020, DND-025, DND-026, TAB-018).
 //!
 //! Ports `decode_uris` and `NativeFileDrop` of
 //! `v2.0.0:desktop/native_file_drop.py` and `receiveFileDrop` and
@@ -34,6 +34,7 @@ mod launcher;
 mod program;
 mod targets;
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use gtk::prelude::*;
@@ -58,8 +59,9 @@ pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
 pub(super) use targets::{scroll_step, DragScroll, DropZone, SCROLL_TICK};
 
-/// The most items one drop brings.
-const MAX_DROPPED_ITEMS: usize = 200;
+/// The most items one drop brings: as many as one transfer takes. Windows
+/// Explorer sets no limit of its own.
+const MAX_DROPPED_ITEMS: usize = ox_core::transfer::MAX_ITEMS;
 
 /// How long the window waits for a drop's items (`timeout_add_seconds(10,
 /// ...)` in `native_file_drop.py`).
@@ -110,9 +112,13 @@ impl DropDestination {
 /// Why a drop is refused, in the Python app's words.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum DropRefusal {
-    /// No items, or more than [`MAX_DROPPED_ITEMS`].
-    #[error("{}", ox_core::i18n::gettext("Drop between 1 and 200 files or folders."))]
+    /// No items, or more than [`MAX_DROPPED_ITEMS`], in a transfer's
+    /// words.
+    #[error("{}", ox_core::i18n::gettext("Select between 1 and 100,000 items."))]
     ItemCount,
+    /// No folders, or more than Quick access takes from one drop.
+    #[error("{}", ox_core::i18n::gettext("Drop between 1 and 200 files or folders."))]
+    PinCount,
     /// A link or text rather than local or SMB files.
     #[error(
         "{}",
@@ -198,10 +204,11 @@ pub(super) fn dropped_uris(uris: &[String]) -> Result<Vec<String>, DropRefusal> 
     if !uris.iter().all(|uri| is_file_location(uri)) {
         return Err(DropRefusal::NotFiles);
     }
+    let mut seen: HashSet<String> = HashSet::with_capacity(uris.len());
     let mut items: Vec<String> = Vec::with_capacity(uris.len());
     for uri in uris {
         let item = require_item_uri(uri)?;
-        if !items.contains(&item) {
+        if seen.insert(item.clone()) {
             items.push(item);
         }
     }
@@ -659,6 +666,10 @@ mod tests {
         assert_eq!(web, Err(DropRefusal::NotFiles));
         assert_eq!(too_many, Err(DropRefusal::ItemCount));
         assert_eq!(dropped_uris(&[]), Err(DropRefusal::ItemCount));
+        assert_eq!(
+            DropRefusal::ItemCount.to_string(),
+            "Select between 1 and 100,000 items."
+        );
         assert!(matches!(share, Err(DropRefusal::Location(_))), "{share:?}");
         assert_eq!(
             DropRefusal::NotFiles.to_string(),
