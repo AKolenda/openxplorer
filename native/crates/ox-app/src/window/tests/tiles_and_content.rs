@@ -48,9 +48,9 @@ fn cell_bounds(test: &TestWindow, position: u32) -> gtk::graphene::Rect {
 }
 
 /// View > Tiles (Ctrl+Shift+7) shows each item's type and, for a file, its
-/// size under its name; View > Content (Ctrl+Shift+8) shows the type under
-/// the name and the date modified and size at the right. A folder has no
-/// size.
+/// size under its name; View > Content (Ctrl+Shift+8) shows a file's type
+/// under its name and the date modified and size at the right. A folder
+/// has no size, and in Content no type.
 ///
 /// parity: VIEW-071
 #[gtk::test]
@@ -70,9 +70,15 @@ fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
         assert!(!lines.modified.is_empty(), "{view:?}: a date modified");
         let folder = cell_named(&test, "Documents").shown_item_lines();
         let folder = folder.unwrap_or_else(|| panic!("{view:?} shows the folder's lines"));
+        // Windows 11's Content rows give a folder its name alone.
+        let kind = if view == FolderView::Tiles {
+            "File folder"
+        } else {
+            ""
+        };
         assert_eq!(
             (folder.kind.as_str(), folder.size.as_str()),
-            ("File folder", ""),
+            (kind, ""),
             "{view:?}: a folder has no size"
         );
     }
@@ -199,6 +205,86 @@ fn each_folder_remembers_tiles_and_content() {
     test.window.go_history(Direction::Forward);
     test.wait_for_listing("Documents again");
     assert_eq!(test.window.folder_pane().view(), FolderView::Content);
+}
+
+/// The group headings the visible grid draws, top to bottom.
+fn grid_headings(test: &TestWindow) -> Vec<String> {
+    wait_for_frames(&test.window, 3);
+    let view = test.window.folder_pane().view_widget();
+    let mut headings: Vec<(f32, String)> = descendants::<FileCell>(&view)
+        .into_iter()
+        .filter(WidgetExt::is_mapped)
+        .filter_map(|cell| {
+            let text = cell.group_heading()?;
+            let bounds = cell.compute_bounds(&view)?;
+            Some((bounds.y(), text))
+        })
+        .collect();
+    headings.sort_by(|a, b| a.0.total_cmp(&b.0));
+    headings.into_iter().map(|(_, text)| text).collect()
+}
+
+/// The headings the details view draws, top to bottom.
+fn details_headings(test: &TestWindow) -> Vec<String> {
+    wait_for_frames(&test.window, 3);
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    let mut labels: Vec<(f32, String)> = descendants::<gtk::Label>(&column_view)
+        .into_iter()
+        .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+        .filter_map(|label| {
+            let point = label.compute_point(&column_view, &gtk::graphene::Point::new(0.0, 0.0))?;
+            Some((point.y(), label.text().to_string()))
+        })
+        .collect();
+    labels.sort_by(|a, b| a.0.total_cmp(&b.0));
+    labels.into_iter().map(|(_, text)| text).collect()
+}
+
+/// A grouped folder keeps its groups in Tiles and Content, as in Windows
+/// 11: each group starts a row under a heading with the title and count
+/// Details shows; a file added to a group counts in its heading; Group by
+/// (None) takes the headings away, and the items stay selectable and
+/// open as before.
+///
+/// parity: VIEW-071, VIEW-022
+#[gtk::test]
+fn tiles_and_content_keep_the_folders_groups_under_headings() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let expected = details_headings(&test);
+    assert_eq!(expected, ["File folder (1)", "Text Document (3)"]);
+    for view in [FolderView::Tiles, FolderView::Content] {
+        show(&test, view);
+        assert_eq!(grid_headings(&test), expected, "{view:?}");
+        let (folder, first_file) = (cell_bounds(&test, 0), cell_bounds(&test, 1));
+        assert!(
+            (folder.x() - first_file.x()).abs() < 1.0,
+            "{view:?}: the next group starts a row"
+        );
+        assert!(
+            first_file.y() > folder.y() + folder.height() + 16.0,
+            "{view:?}: under its own heading"
+        );
+        let pane = test.window.folder_pane();
+        assert_eq!(
+            pane.owners().position_of(&cell_named(&test, "Notes 2").upcast()),
+            Some(1)
+        );
+        pane.model().select_only(2);
+        assert_eq!(test.selected_names(), ["Notes 10.txt"], "{view:?}");
+    }
+    fixture.write("Notes 3.txt");
+    wait_until("the new file's heading count", || {
+        grid_headings(&test) == ["File folder (1)", "Text Document (4)"]
+    });
+    test.activate("group-by", Some("none"));
+    wait_until("the headings to go", || grid_headings(&test).is_empty());
+    let (first, next) = (cell_bounds(&test, 0), cell_bounds(&test, 1));
+    assert!(
+        (next.y() - (first.y() + first.height())).abs() < 1.0,
+        "with no headings each row follows the last"
+    );
 }
 
 /// Shows `view` in a folder with nothing to lay out.

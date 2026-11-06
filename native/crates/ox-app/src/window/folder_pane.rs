@@ -408,16 +408,15 @@ impl FolderPane {
         let parts = self.parts();
         let selection = parts.model.selection();
         let column_view = parts.details.column_view();
-        let grid = parts.icon_view.grid();
         match view.grid_layout() {
             None => {
-                grid.set_model(None::<&gtk::MultiSelection>);
+                parts.icon_view.set_model(None);
                 column_view.set_model(Some(selection));
             }
             Some(layout) => {
                 parts.icon_view.set_layout(layout);
                 column_view.set_model(None::<&gtk::MultiSelection>);
-                grid.set_model(Some(selection));
+                parts.icon_view.set_model(Some(selection));
                 parts.icon_view.fit_lines();
             }
         }
@@ -632,7 +631,7 @@ impl FolderPane {
                 .column_view()
                 .scroll_to(position, None, flags, scroll),
             _ => {
-                self.icon_view().grid().scroll_to(position, flags, scroll);
+                self.icon_view().scroll_to(position, flags, scroll);
             }
         }
     }

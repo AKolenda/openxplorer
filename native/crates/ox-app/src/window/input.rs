@@ -252,10 +252,19 @@ impl BrowserWindow {
                 self,
                 move |_, position| window.activate_from_view(position)
             ));
-            pane.icon_view().grid().connect_activate(glib::clone!(
+            let icons = pane.icon_view();
+            icons.grid().connect_activate(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, position| window.activate_from_view(position)
+                #[weak]
+                icons,
+                move |_, slot| {
+                    // Grouped Tiles and Content list headings among the
+                    // items (VIEW-071).
+                    if let Some(position) = icons.item_at(slot) {
+                        window.activate_from_view(position);
+                    }
+                }
             ));
         }
     }
@@ -461,6 +470,9 @@ impl BrowserWindow {
         self.imp().view_modifiers.set(Some(modifiers));
         if is_plain_tab(key, modifiers) && self.tab_to_other_pane() {
             return glib::Propagation::Stop;
+        }
+        if let Some(handled) = self.grouped_grid_key(key, modifiers) {
+            return handled;
         }
         let shortcut =
             gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK;

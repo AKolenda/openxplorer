@@ -23,7 +23,9 @@ gridview.files > child.file-drop-active,
 .sidebar list > row:focus-visible,
 .folder-tree listview > row:focus-visible,
 columnview.files > listview > row:focus-visible,
-gridview.files > child:focus-visible {
+gridview.files > child:focus-visible,
+gridview.files.tiles > child:focus-visible > .item-cell:not(.group-slot),
+gridview.files.content > child:focus-visible > .item-cell:not(.group-slot) {
   outline: 2px solid @ox_text;
   outline-offset: -2px;
   box-shadow: inset 0 0 0 3px @ox_bg;

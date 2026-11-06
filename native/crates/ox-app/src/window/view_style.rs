@@ -13,6 +13,8 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format::DateStyle;
+use std::rc::Rc;
+
 use ox_core::grouping::GroupBy;
 use ox_core::places::KnownFolder;
 use ox_core::settings::{
@@ -321,7 +323,8 @@ fn pane_sort_state(pane: &FolderPane) -> SortState {
 
 /// Changes one pane's sorting without touching window action state.
 /// Groups `pane`'s items by `grouping`, or stops grouping them with
-/// `None`, with the details view's group headings to match.
+/// `None`, with the details view's group headings to match, and the
+/// headings of Tiles and Content (VIEW-071).
 ///
 /// The headings come off before the items change and go back on after.
 /// GTK's list keeps a heading for each group it has shown; when its model
@@ -342,7 +345,10 @@ pub(super) fn group_pane(pane: &FolderPane, grouping: Option<Grouping>) {
     model.set_grouping(grouping);
     if grouping.is_some() {
         let titles: GroupTitle = model.group_titles();
-        details.show_group_headers(Some(titles));
+        details.show_group_headers(Some(Rc::clone(&titles)));
+        pane.icon_view().set_group_titles(Some(titles));
+    } else {
+        pane.icon_view().set_group_titles(None);
     }
 }
 

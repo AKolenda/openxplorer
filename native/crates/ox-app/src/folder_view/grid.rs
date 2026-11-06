@@ -12,18 +12,26 @@
 //! top to bottom and the view scrolls sideways. Tiles and Content
 //! (VIEW-071) are the same grid with other cells: Tiles in as many columns
 //! of 256-pixel tiles as fit, Content in one column of rows that span the
-//! width, both scrolling down. [`IconView`] is the widget;
-//! it keeps its layout and the text size, and fits its lines to its size.
+//! width, both scrolling down. A grouped folder's Tiles and Content keep
+//! its groups, each under a heading as in Details ([`GroupedSelection`]).
+//! [`IconView`] is the widget; it keeps its layout and the text size, and
+//! fits its lines to its size.
 
+mod grouped;
+
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::folder_view::cells::{self, CellLayout, CellOwners};
+pub(crate) use grouped::{GroupSlot, GroupedSelection, SlotKind};
+
+use crate::folder_view::cells::{self, CellLayout, CellOwners, PositionMap};
+use crate::folder_view::details::GroupTitle;
 pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
-use crate::folder_view::icon_size::{compact_row, tiles_cell, CONTENT_ICON, TILES_ICON};
+use crate::folder_view::icon_size::{compact_row, content_row, tiles_cell, CONTENT_ICON, TILES_ICON};
 use crate::text_size::TextSize;
 
 /// The icon edge of the compact layout (Explorer's List uses small icons).
@@ -53,11 +61,30 @@ pub(crate) enum GridLayout {
     Content,
 }
 
+impl GridLayout {
+    /// Whether the layout keeps a grouped folder's groups: Tiles and
+    /// Content do, as in Windows 11 (VIEW-071).
+    const fn shows_groups(self) -> bool {
+        matches!(self, GridLayout::Tiles | GridLayout::Content)
+    }
+}
+
+/// The grouped model the grid shows, if any, shared with the cells'
+/// [`PositionMap`].
+type SharedGrouping = Rc<RefCell<Option<GroupedSelection>>>;
+
 /// The registry the views' cells share, which every factory the icon view
 /// builds registers its cells in.
-#[derive(Debug)]
 struct TileRegistries {
     owners: Rc<CellOwners>,
+    /// Maps the grid's positions to the listing's.
+    positions: PositionMap,
+}
+
+impl std::fmt::Debug for TileRegistries {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("TileRegistries").finish_non_exhaustive()
+    }
 }
 
 impl TileRegistries {
@@ -70,23 +97,24 @@ impl TileRegistries {
             GridLayout::Tiles => (CellLayout::Tile, TILES_ICON),
             GridLayout::Content => (CellLayout::ContentRow, CONTENT_ICON),
         };
-        cells::connect_file_cells(&factory, cell_layout, icon_pixels, &self.owners);
+        let positions = Some(Rc::clone(&self.positions));
+        cells::connect_mapped_file_cells(&factory, cell_layout, icon_pixels, &self.owners, positions);
         factory
     }
 }
 
 mod imp {
-    use std::cell::{Cell, OnceCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{GridLayout, IconSize, TileRegistries};
+    use super::{GridLayout, IconSize, SharedGrouping, TileRegistries};
+    use crate::folder_view::details::GroupTitle;
     use crate::text_size::TextSize;
 
     /// Private state of [`super::IconView`].
-    #[derive(Debug)]
     pub(crate) struct IconView {
         /// Scrolls the grid; the view's only child. The grid must be the
         /// scroller's direct child: GTK then builds tiles only for the rows
@@ -102,6 +130,24 @@ mod imp {
         pub(super) icon_size: Cell<IconSize>,
         /// The text size, which sizes the cells too.
         pub(super) text_size: Cell<TextSize>,
+        /// The folder's selection model, while the view shows it.
+        pub(super) items: RefCell<Option<gtk::MultiSelection>>,
+        /// Names each item's group while the folder is grouped.
+        pub(super) group_title: RefCell<Option<GroupTitle>>,
+        /// The grid's model while it shows grouped Tiles or Content.
+        pub(super) grouping: SharedGrouping,
+    }
+
+    impl std::fmt::Debug for IconView {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("IconView")
+                .field("layout", &self.layout)
+                .field("icon_size", &self.icon_size)
+                .field("text_size", &self.text_size)
+                .field("grouped", &self.group_title.borrow().is_some())
+                .finish_non_exhaustive()
+        }
     }
 
     impl Default for IconView {
@@ -114,6 +160,9 @@ mod imp {
                 layout: Cell::new(GridLayout::Icons(IconSize::LARGE)),
                 icon_size: Cell::new(IconSize::LARGE),
                 text_size: Cell::new(TextSize::DEFAULT),
+                items: RefCell::default(),
+                group_title: RefCell::default(),
+                grouping: SharedGrouping::default(),
             }
         }
     }
@@ -164,8 +213,13 @@ impl IconView {
     /// view.
     pub(crate) fn new(owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
+        let grouping = Rc::clone(&view.imp().grouping);
         let registries = TileRegistries {
             owners: Rc::clone(owners),
+            positions: Rc::new(move |slot| match grouping.borrow().as_ref() {
+                Some(grouped) => grouped.item_at(slot),
+                None => Some(slot),
+            }),
         };
         view.imp()
             .registries
@@ -179,6 +233,98 @@ impl IconView {
     /// focus.
     pub(crate) fn grid(&self) -> &gtk::GridView {
         &self.imp().grid
+    }
+
+    /// Shows the folder's `items`, or nothing.
+    pub(crate) fn set_model(&self, items: Option<&gtk::MultiSelection>) {
+        let imp = self.imp();
+        if imp.items.borrow().as_ref() == items && imp.grid.model().is_some() == items.is_some() {
+            return;
+        }
+        imp.items.replace(items.cloned());
+        self.show_model();
+    }
+
+    /// Keeps a grouped folder's groups in Tiles and Content, each under a
+    /// heading `title` names, or shows no groups with `None` (VIEW-022).
+    pub(crate) fn set_group_titles(&self, title: Option<GroupTitle>) {
+        let grouped_now = title.is_some();
+        let was_grouped = self.imp().group_title.replace(title).is_some();
+        match self.grouped() {
+            // Grouped anew: the groups may have moved.
+            Some(grouped) if grouped_now => grouped.regroup(),
+            _ if was_grouped || grouped_now => self.show_model(),
+            _ => {}
+        }
+    }
+
+    /// The grouped model the grid shows, while it shows grouped Tiles or
+    /// Content.
+    pub(crate) fn grouped(&self) -> Option<GroupedSelection> {
+        self.imp().grouping.borrow().clone()
+    }
+
+    /// The listing position of the item the grid's `slot` shows.
+    pub(crate) fn item_at(&self, slot: u32) -> Option<u32> {
+        match self.grouped() {
+            Some(grouped) => grouped.item_at(slot),
+            None => Some(slot),
+        }
+    }
+
+    /// Moves to the item at the listing's `position` with `flags`,
+    /// scrolling as `scroll` allows.
+    pub(crate) fn scroll_to(
+        &self,
+        position: u32,
+        flags: gtk::ListScrollFlags,
+        scroll: Option<gtk::ScrollInfo>,
+    ) {
+        let slot = match self.grouped() {
+            Some(grouped) => grouped.slot_of(position),
+            None => Some(position),
+        };
+        if let Some(slot) = slot {
+            self.imp().grid.scroll_to(slot, flags, scroll);
+        }
+    }
+
+    /// How many rows of items a page of the view holds, for Page Up and
+    /// Page Down in grouped Tiles and Content.
+    pub(crate) fn rows_per_page(&self) -> u32 {
+        let text_size = self.imp().text_size.get();
+        let row = match self.layout() {
+            GridLayout::Content => content_row(text_size),
+            _ => tiles_cell(text_size).height,
+        };
+        let page = self.scroll_adjustment().page_size();
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a page holds few rows"
+        )]
+        let rows = (page / f64::from(row.max(1))).floor().max(1.0) as u32;
+        rows
+    }
+
+    /// Gives the grid the folder's items, grouped in Tiles and Content
+    /// while the folder is grouped.
+    fn show_model(&self) {
+        let imp = self.imp();
+        let items = imp.items.borrow().clone();
+        let title = imp.group_title.borrow().clone();
+        let grouped = match (items.as_ref(), title) {
+            (Some(items), Some(title)) if self.layout().shows_groups() => {
+                Some(GroupedSelection::new(items, title, imp.grid.max_columns()))
+            }
+            _ => None,
+        };
+        imp.grouping.replace(grouped.clone());
+        match (grouped, items) {
+            (Some(grouped), _) => imp.grid.set_model(Some(&grouped)),
+            (None, items) => imp.grid.set_model(items.as_ref()),
+        }
+        self.fit_lines();
     }
 
     /// The adjustment of the scroll position: the horizontal one in the
@@ -253,12 +399,22 @@ impl IconView {
         if imp.grid.max_columns() != lines {
             imp.grid.set_max_columns(lines);
         }
+        // Grouped, every row holds exactly as many slots as the groups are
+        // laid out for.
+        let grouped = self.grouped();
+        let min_columns = if grouped.is_some() { lines } else { 1 };
+        if imp.grid.min_columns() != min_columns {
+            imp.grid.set_min_columns(min_columns);
+        }
+        if let Some(grouped) = grouped {
+            grouped.set_columns(lines);
+        }
     }
 
     /// Gives the grid `layout`'s CSS classes, orientation and cells.
     fn apply_layout(&self, layout: GridLayout) {
         let imp = self.imp();
-        imp.layout.set(layout);
+        let regroups = imp.layout.replace(layout).shows_groups() != layout.shows_groups();
         for class in IconSize::css_classes().chain([COMPACT_CLASS, TILES_CLASS, CONTENT_CLASS]) {
             imp.grid.remove_css_class(class);
         }
@@ -278,6 +434,9 @@ impl IconView {
             .get()
             .expect("IconView::new sets the registries first");
         imp.grid.set_factory(Some(&registries.factory(layout)));
+        if regroups && imp.group_title.borrow().is_some() && imp.items.borrow().is_some() {
+            self.show_model();
+        }
     }
 
     /// Keeps the lines at what the view's size holds.
