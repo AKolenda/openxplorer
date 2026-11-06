@@ -6,7 +6,7 @@
 //! Matches the `.column-head` / `.file-row` grid in `v2.0.0:desktop/ui/style.css`
 //! and `renderRows` / `applyColumnLayout` in `v2.0.0:desktop/ui/app.js`. Columns
 //! start at the widths [`column_widths`] works out and sort by clicking
-//! their headers; sizes and the Size title are right-aligned.
+//! their headers; sizes are right-aligned under a left-aligned Size title.
 //! [`DetailsView`] is the widget; it keeps its titles' sort arrows in step
 //! with the sort order and reports the column widths once a resize
 //! settles. [`column_fit`] fits and nudges columns from their titles;
@@ -243,7 +243,7 @@ mod imp {
         pub(super) resize_timer: RefCell<Option<glib::SourceId>>,
         /// The column titles' sort arrows, in column order; set by
         /// [`super::DetailsView::new`].
-        pub(super) carets: OnceCell<Vec<gtk::Image>>,
+        pub(super) carets: OnceCell<Vec<gtk::Widget>>,
         /// The check box before the Name title that selects every item
         /// or none (SEL-014).
         pub(super) select_all: OnceCell<gtk::CheckButton>,
@@ -672,8 +672,8 @@ impl DetailsView {
         Some(SortOrder { column, direction })
     }
 
-    /// Gives the titles the current app's sort arrows, which follow the
-    /// view's sorter from now on.
+    /// Gives the titles Windows' sort chevrons, which follow the view's
+    /// sorter from now on.
     fn add_sort_carets(&self) {
         let carets = column_titles::style_titles(self.column_view());
         self.imp()
@@ -691,8 +691,8 @@ impl DetailsView {
         ));
     }
 
-    /// Shows the sorted column's arrow, pointing its way, and hides the
-    /// others.
+    /// Shows the sorted column's chevron, pointing its way, and clears
+    /// the others.
     fn show_sort_caret(&self) {
         if let Some(carets) = self.imp().carets.get() {
             column_titles::show_sort_caret(carets, self.primary_sort());
