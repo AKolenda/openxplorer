@@ -30,7 +30,7 @@ msgid "- Deleted items go to the Recycle Bin of their drive. Restore puts them b
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
+msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, \"New Text Document.txt\" (or \"New Text Document (2).txt\" when that name is taken), then renamed in place: type its name and press Enter.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -4432,8 +4432,12 @@ msgstr ""
 msgid "Ascending"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "CSV file"
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Bitmap image"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Compressed (zipped) Folder"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4456,10 +4460,6 @@ msgstr ""
 msgid "File name extensions"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "File…"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/folder_tree.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Folder tree"
 msgstr ""
@@ -4468,16 +4468,8 @@ msgstr ""
 msgid "Folders first"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "From template…"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Group by"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "HTML document"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4488,10 +4480,6 @@ msgstr ""
 msgid "Invert selection"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "JSON file"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Larger text"
 msgstr ""
@@ -4500,20 +4488,12 @@ msgstr ""
 msgid "Light appearance"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Link to file or folder…"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "List"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Map network drive"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "Markdown document"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/crumb_menus.rs
@@ -4553,11 +4533,19 @@ msgid "Reset text size"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Rich Text Document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Select items matching…"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Select none"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Shortcut"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -4576,8 +4564,8 @@ msgstr ""
 msgid "Terminal"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
-msgid "Text document"
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Text Document"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
@@ -5332,7 +5320,7 @@ msgstr ""
 msgid "A link opens the file or folder it points to. Leave the name empty to use the name of that item."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/template_dialog.rs
+#: crates/ox-app/src/window/file_ops/links.rs
 msgid "Create"
 msgstr ""
 
@@ -5391,7 +5379,35 @@ msgid "Use a name without slashes or control characters."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a bitmap image…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a compressed (zipped) folder…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a file…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a rich text document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
 msgid "Creating a text document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Bitmap image"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Compressed (zipped) Folder"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Rich Text Document"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs
@@ -5412,43 +5428,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/rename.rs
 msgid "The name was not changed."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid " · Your template"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "An empty .docx, .xlsx, .pdf, or .odt file is not a valid document. For those formats, place a real starter document in your Templates folder and choose it here. Templates are copied, never executed."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "Create a new copy without changing the template."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "Create an empty file with any filename and extension."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "File name"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "File type / template"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "New file"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "New from template"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "Templates folder: {display}"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/transfer.rs
@@ -7165,6 +7144,10 @@ msgstr ""
 msgid "PowerPoint presentation"
 msgstr ""
 
+#: crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
+msgid "Text document"
+msgstr ""
+
 #: crates/ox-core/src/entry/type_label.rs
 msgid "Word document"
 msgstr ""
@@ -8378,11 +8361,27 @@ msgid "The tab move timed out. The original tab was kept."
 msgstr ""
 
 #: crates/ox-core/src/ops/templates.rs
+msgid "CSV file"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
 msgid "Choose an available template or Empty file."
 msgstr ""
 
 #: crates/ox-core/src/ops/templates.rs
 msgid "Empty file"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
+msgid "HTML document"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
+msgid "JSON file"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
+msgid "Markdown document"
 msgstr ""
 
 #: crates/ox-core/src/ops/undo.rs
