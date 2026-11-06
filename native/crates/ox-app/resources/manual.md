@@ -22,7 +22,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 - New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, "New Text Document.txt" (or "New Text Document (2).txt" when that name is taken), then renamed in place: type its name and press Enter.
 - Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.
-- Rename with F2. Select several items to rename them together.
+- Rename with F2. Select several items to rename them together. As in Windows, \ / : * ? " < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.
 - Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.
 - When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.
 - Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.

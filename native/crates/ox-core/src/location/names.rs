@@ -26,6 +26,17 @@ pub fn is_reserved_device_name(name: &str) -> bool {
     RESERVED_DEVICE_NAMES.contains(&glib::casefold(base_name.trim_end_matches(' ')).as_str())
 }
 
+/// The characters Windows refuses in a file or folder name, in the order
+/// its "A file name can't contain any of the following characters" balloon
+/// lists them.
+pub const WINDOWS_FORBIDDEN_CHARACTERS: [char; 9] = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
+
+/// True when `text` has a character Windows refuses in a name
+/// ([`WINDOWS_FORBIDDEN_CHARACTERS`]).
+pub fn has_windows_forbidden_character(text: &str) -> bool {
+    text.contains(WINDOWS_FORBIDDEN_CHARACTERS)
+}
+
 /// True when Windows cannot keep `name` as it is: it drops a dot or a
 /// space at the end of a name.
 pub fn ends_like_windows_drops(name: &str) -> bool {
@@ -223,6 +234,24 @@ mod tests {
         }
         assert!(ends_like_windows_drops("notes.") && ends_like_windows_drops("notes "));
         assert!(!ends_like_windows_drops("notes.txt") && !ends_like_windows_drops(".hidden"));
+    }
+
+    /// parity: OPS-010
+    #[test]
+    fn the_characters_windows_refuses_in_names_are_found_anywhere() {
+        for refused in ["a\\b", "a/b", "10:30", "*", "why?", "\"quoted\"", "<b>", "a|b"] {
+            assert!(has_windows_forbidden_character(refused), "{refused}");
+        }
+        for accepted in [
+            "Notes (2).txt",
+            "Résumé.txt",
+            ".hidden",
+            "a - b",
+            "100%",
+            "#1 & co",
+        ] {
+            assert!(!has_windows_forbidden_character(accepted), "{accepted}");
+        }
     }
 
     /// parity: OPS-006

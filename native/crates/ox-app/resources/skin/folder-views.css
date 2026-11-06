@@ -307,6 +307,22 @@ window.ox .files entry.rename-field {
   box-shadow: inset 0 -1px @ox_accent;
 }
 
+/* Windows' balloon under that field when a typed or pasted character is
+   refused (OPS-010): the tooltip's look, with a tail pointing at the field. */
+popover.name-balloon > contents {
+  padding: 6px 9px 8px 9px;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 4px;
+  background-color: @ox_tooltip;
+  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+}
+popover.name-balloon > arrow {
+  background-color: @ox_tooltip;
+  border: 1px solid @ox_flyout_stroke;
+}
+popover.name-balloon label { color: @ox_text; }
+popover.name-balloon .name-balloon-characters { margin-left: 16px; }
+
 
 /* ---- Split view (VIEW-059) ---- */
 /* Each pane of a split tab says where it is above its items. The active
