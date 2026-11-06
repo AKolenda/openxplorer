@@ -154,8 +154,10 @@ fn scan_blocking(
         .collect::<Result<Vec<String>, _>>()?;
     let destination = normalise(destination_folder)?;
     let folder = GioNode::new(&destination);
-    // Inspected without following a link, as the Python bridge does.
-    if unless_cancelled(cancel, || folder.info(Some(cancel)))??.kind != NodeKind::Directory {
+    // Follows a link: a folder opened through a symbolic link is the
+    // folder, so it takes pasted items like the folder itself, and as the
+    // drop path already resolved its destination.
+    if !unless_cancelled(cancel, || folder.is_directory(Some(cancel)))?? {
         return Err(OpsError::failed(crate::i18n::gettext(
             "Open a destination folder before pasting.",
         )));

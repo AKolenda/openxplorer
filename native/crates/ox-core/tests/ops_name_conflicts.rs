@@ -209,6 +209,31 @@ fn a_check_needs_a_folder_and_reports_a_cancellation() {
     assert_eq!(check(&one, &destination, &cancelled), Err(OpsError::Cancelled));
 }
 
+/// A folder opened through a symbolic link is a folder for a paste: the
+/// items land in it, the scan reads the link's own listings, and the
+/// destination that stays planned is the link's address, the one the
+/// interface shows.
+///
+/// parity: OPS-027
+#[test]
+fn a_destination_through_a_symbolic_link_is_a_folder() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    let alias = dst.with_file_name("alias");
+    symlink(&dst, &alias).unwrap();
+    write(&src.join("free.txt"), b"incoming");
+    write(&src.join("taken.txt"), b"incoming too");
+    write(&dst.join("taken.txt"), b"existing");
+
+    let scan = scan(TransferMode::Copy, &src, &["free.txt", "taken.txt"], &alias);
+
+    assert_eq!(scan.destination_folder, file_uri(&alias));
+    assert_eq!(conflict_names(&scan, &src), ["taken.txt"]);
+    run(&scan, &[Resolution::Skip]);
+    assert_eq!(fs::read(dst.join("free.txt")).unwrap(), b"incoming");
+    assert_eq!(fs::read(dst.join("taken.txt")).unwrap(), b"existing");
+}
+
 /// "Skip N files with the same date and size" counts the conflicts whose
 /// two files have the same size and modification time.
 ///
