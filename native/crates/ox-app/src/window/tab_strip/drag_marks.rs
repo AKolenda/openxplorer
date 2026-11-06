@@ -19,7 +19,7 @@ use crate::window::session::TabId;
 use crate::window::widget_tree::toggle_class;
 
 /// The class of the tab being dragged (`.tab-drag-source`).
-const DRAGGED_CLASS: &str = "tab-drag-source";
+pub(super) const DRAGGED_CLASS: &str = "tab-drag-source";
 
 /// The class of the tab whose folder a file drop would go into (TAB-018).
 const FILE_DROP_CLASS: &str = "file-drop-active";

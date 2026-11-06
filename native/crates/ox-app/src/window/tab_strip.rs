@@ -16,11 +16,14 @@
 //!
 //! [`TabStrip`] is a widget subclass whose scroller and tab list are the
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
-//! shows while tabs and files are dragged is [`drag_marks`]'s.
+//! shows while tabs and files are dragged is [`drag_marks`]'s, and the
+//! separators between tabs and the curves at the foot of the tab in front,
+//! which a tab cannot show itself, are placed by [`edges`].
 
 mod carried_tab;
 mod drag_marks;
 mod edge_scroll;
+mod edges;
 mod live_drag;
 
 use std::cell::Cell;
@@ -109,6 +112,11 @@ mod imp {
         pub(super) layout: TemplateChild<TabLayout>,
         /// The tabs' context menu, built by `constructed`.
         pub(super) menu: OnceCell<MenuPopover>,
+        /// The list of open windows, shown below the tab in front.
+        pub(super) windows_menu: OnceCell<MenuPopover>,
+        /// The widgets the skin draws the separators and the curves at the
+        /// foot of the tab in front on, built by `constructed`.
+        pub(super) edges: OnceCell<super::edges::Edges>,
         /// Each tab shown and its widget, left to right.
         pub(super) shown: RefCell<Vec<(TabView, gtk::Box)>>,
         /// The tab last grabbed for a drag, and where along it.
@@ -160,17 +168,35 @@ mod imp {
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
             self.menu.set(menu).expect("constructed runs once per object");
+            let windows_menu = MenuPopover::new(Vec::new());
+            windows_menu.set_position(gtk::PositionType::Bottom);
+            windows_menu.set_parent(&*self.obj());
+            self.windows_menu
+                .set(windows_menu)
+                .expect("constructed runs once per object");
+            let edges = super::edges::Edges::new(&self.obj());
+            self.edges.set(edges).expect("constructed runs once per object");
         }
 
         fn dispose(&self) {
-            if let Some(menu) = self.menu.get() {
+            for menu in [self.menu.get(), self.windows_menu.get()].into_iter().flatten() {
                 menu.unparent();
+            }
+            if let Some(edges) = self.edges.get() {
+                edges.unparent();
             }
             self.dispose_template();
         }
     }
 
-    impl WidgetImpl for TabStrip {}
+    impl WidgetImpl for TabStrip {
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            // Not the parent's snapshot, which would also draw the edge
+            // widgets at the strip's top left: the tabs, then the edges.
+            self.obj().snapshot_child(&*self.scroller, snapshot);
+            self.obj().draw_edges(snapshot);
+        }
+    }
 }
 
 glib::wrapper! {
@@ -335,6 +361,30 @@ impl TabStrip {
         menu.popup();
     }
 
+    /// Opens the list of open windows `entries` below the tab in front,
+    /// or at the start of the strip when no tab is shown.
+    pub(super) fn show_windows_menu(&self, entries: Vec<MenuEntry>) {
+        let Some(menu) = self.imp().windows_menu.get() else {
+            return;
+        };
+        menu.set_entries(entries);
+        let front = self.front_widget().and_then(|front| front.compute_bounds(self));
+        #[expect(clippy::cast_possible_truncation, reason = "tab bounds are small")]
+        let target = front.map_or_else(
+            || gdk::Rectangle::new(0, 0, 1, self.height()),
+            |front| {
+                gdk::Rectangle::new(
+                    front.x() as i32,
+                    front.y() as i32,
+                    front.width() as i32,
+                    front.height() as i32,
+                )
+            },
+        );
+        menu.set_pointing_to(Some(&target));
+        menu.popup();
+    }
+
     /// The tab `step` leads to from the tab `widget`; `None` past either
     /// end.
     fn tab_beside(&self, widget: &gtk::Widget, step: TabStep) -> Option<TabId> {
@@ -355,6 +405,16 @@ impl TabStrip {
     #[cfg(test)]
     pub(in crate::window) fn tab_list(&self) -> gtk::Box {
         self.imp().tab_list.get()
+    }
+
+    /// The list of open windows, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn windows_menu(&self) -> super::menu_popover::MenuPopover {
+        self.imp()
+            .windows_menu
+            .get()
+            .expect("constructed builds the menu")
+            .clone()
     }
 
     /// The tabs' context menu, for tests.

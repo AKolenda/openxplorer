@@ -150,7 +150,7 @@ pub struct Entry {
     pub target_uri: Option<String>,
     /// `None` for folders and when the backend reports no size.
     pub size: Option<u64>,
-    /// Human-readable type, for example "File folder" or "PNG image".
+    /// Human-readable type, for example "File folder" or "PNG File".
     pub type_label: String,
     /// MIME type, when known.
     pub content_type: Option<String>,
@@ -209,7 +209,7 @@ impl Entry {
             Some(guessed.to_string())
         };
         let folder_type = is_dir.then_some(classify::FolderType::FileFolder);
-        let type_label = type_label::type_label(folder_type, content_type.as_deref());
+        let type_label = type_label::type_label(folder_type, content_type.as_deref(), &name);
         let serialized_icon = content_type
             .as_deref()
             .map(gio::content_type_get_icon)
@@ -255,6 +255,7 @@ impl Entry {
     pub fn network_computer(uri: String, name: String) -> Self {
         let folder_type = classify::FolderType::Computer;
         let serialized_icon = gio::prelude::IconExt::serialize(&gio::ThemedIcon::new("network-server"));
+        let type_label = type_label::type_label(Some(folder_type), None, &name);
         Self {
             target_uri: Some(uri.clone()),
             uri,
@@ -264,7 +265,7 @@ impl Entry {
             is_virtual: true,
             can_operate: false,
             size: None,
-            type_label: type_label::type_label(Some(folder_type), None),
+            type_label,
             content_type: None,
             modified: None,
             is_hidden: false,
