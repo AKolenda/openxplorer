@@ -21,7 +21,8 @@
 //!
 //! The commands the Python app did not have follow the nearest rule:
 //! Shift+Delete and Duplicate as Delete, Undo and Redo while no operation
-//! runs, and the Recycle Bin's Restore and Empty inside it. In the Recycle
+//! runs, and the Recycle Bin's Restore, Restore all items and Empty
+//! inside it, the last two while it holds items. In the Recycle
 //! Bin, Cut, Copy, Rename and Duplicate are off: its items can only be
 //! restored or deleted.
 
@@ -30,6 +31,7 @@ use ox_core::location::{is_archive_location, is_smb_share_root, same_location, L
 use ox_core::ops::JournalDirection;
 
 use crate::folder_view::item::FileItem;
+use crate::window::command_bar::RestoreTarget;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
@@ -60,6 +62,8 @@ pub(crate) enum FileCommand {
     Redo,
     /// Restore, in the Recycle Bin.
     Restore,
+    /// Restore all items, in the Recycle Bin.
+    RestoreAll,
     /// Empty Recycle Bin.
     EmptyRecycleBin,
     /// Cancel on the transfer panel.
@@ -68,7 +72,7 @@ pub(crate) enum FileCommand {
 
 impl FileCommand {
     /// Every command, for enabling them all at once.
-    pub(crate) const ALL: [FileCommand; 14] = [
+    pub(crate) const ALL: [FileCommand; 15] = [
         FileCommand::New,
         FileCommand::Cut,
         FileCommand::Copy,
@@ -81,6 +85,7 @@ impl FileCommand {
         FileCommand::Undo,
         FileCommand::Redo,
         FileCommand::Restore,
+        FileCommand::RestoreAll,
         FileCommand::EmptyRecycleBin,
         FileCommand::CancelOperation,
     ];
@@ -112,6 +117,7 @@ impl FileCommand {
             FileCommand::Undo => &[WindowAction::Undo],
             FileCommand::Redo => &[WindowAction::Redo],
             FileCommand::Restore => &[WindowAction::Restore],
+            FileCommand::RestoreAll => &[WindowAction::RestoreAllItems],
             FileCommand::EmptyRecycleBin => &[WindowAction::EmptyRecycleBin],
             FileCommand::CancelOperation => &[WindowAction::CancelOperation],
         }
@@ -200,7 +206,9 @@ impl CommandFacts {
             FileCommand::Undo => self.can_undo && !self.is_busy,
             FileCommand::Redo => self.can_redo && !self.is_busy,
             FileCommand::Restore => folder.is_recycle_bin && can_change,
-            FileCommand::EmptyRecycleBin => folder.is_recycle_bin && folder.has_items && !self.is_busy,
+            FileCommand::RestoreAll | FileCommand::EmptyRecycleBin => {
+                folder.is_recycle_bin && folder.has_items && !self.is_busy
+            }
             FileCommand::CancelOperation => self.is_busy,
         }
     }
@@ -220,13 +228,13 @@ impl CommandFacts {
             FileCommand::Paste | FileCommand::PasteInto if !self.has_file_clipboard => {
                 ox_core::i18n::gettext_static("Nothing to paste here.")
             }
-            FileCommand::Restore if !folder.is_recycle_bin => {
+            FileCommand::Restore | FileCommand::RestoreAll if !folder.is_recycle_bin => {
                 ox_core::i18n::gettext_static("Only items in the Recycle Bin can be restored.")
             }
             FileCommand::EmptyRecycleBin if !folder.is_recycle_bin => {
                 ox_core::i18n::gettext_static("This is not the Recycle Bin.")
             }
-            FileCommand::EmptyRecycleBin if !folder.has_items => {
+            FileCommand::RestoreAll | FileCommand::EmptyRecycleBin if !folder.has_items => {
                 ox_core::i18n::gettext_static("The Recycle Bin is empty.")
             }
             _ if self.is_busy => {
@@ -295,6 +303,20 @@ impl BrowserWindow {
         failed || self.folder_pane().shows_unavailable_page()
     }
 
+    /// What Restore in the command bar restores while the tab shows the
+    /// Recycle Bin: the selected items, else all of them; `None` elsewhere.
+    fn recycle_bin_restore_target(&self) -> Option<RestoreTarget> {
+        let facts = self.command_facts();
+        facts
+            .folder
+            .is_recycle_bin
+            .then_some(if facts.selection.count > 0 {
+                RestoreTarget::SelectedItems
+            } else {
+                RestoreTarget::AllItems
+            })
+    }
+
     /// The facts the rules read now.
     pub(crate) fn command_facts(&self) -> CommandFacts {
         let model = self.folder_pane().model();
@@ -352,6 +374,8 @@ impl BrowserWindow {
         }
         self.command_bar().set_new_enabled(self.allows(FileCommand::New));
         self.command_bar().show_delete_label(self.delete_label());
+        self.command_bar()
+            .show_recycle_bin_commands(self.recycle_bin_restore_target());
         // "…" lists Undo and Redo only while each can run.
         self.update_more_menu();
     }
@@ -534,9 +558,11 @@ mod tests {
                 FileCommand::Delete,
                 FileCommand::DeletePermanently,
                 FileCommand::Restore,
+                FileCommand::RestoreAll,
                 FileCommand::EmptyRecycleBin,
             ]
         );
         assert!(!empty.allows(FileCommand::EmptyRecycleBin));
+        assert!(!empty.allows(FileCommand::RestoreAll));
     }
 }

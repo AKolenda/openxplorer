@@ -13,13 +13,15 @@ use ox_core::ops::{list_recycle_bin, JournalDirection};
 use ox_core::settings::{PreferencesUpdate, Settings};
 use ox_core::transfer::Cancellation;
 
+use super::command_bar::command_bar_names;
 use super::file_ops_support::{
     dialog_over, is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
 };
 use crate::folder_view::details::shown_cell_text;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
-use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
+use crate::window::folder_pane::PanePage;
 
 /// Moves `path` to the Trash, as another file manager would.
 fn trash(path: &Path) {
@@ -30,11 +32,13 @@ fn trash(path: &Path) {
 
 /// Panics unless everything in the Recycle Bin came from this test run's
 /// temporary folders, so emptying it can delete nothing of the user's
-/// (the Trash of another mounted volume is listed too).
-fn require_only_test_items_in_the_recycle_bin() {
+/// (the Trash of another mounted volume is listed too). Returns how many
+/// items it holds.
+fn require_only_test_items_in_the_recycle_bin() -> usize {
     let items = glib::MainContext::default()
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
+    let count = items.len();
     let temp = std::env::temp_dir();
     for item in items {
         let from_test = item
@@ -46,6 +50,7 @@ fn require_only_test_items_in_the_recycle_bin() {
             "the Recycle Bin holds an item from outside the test: {item:?}"
         );
     }
+    count
 }
 
 /// parity: OPS-040, OPS-041
@@ -71,6 +76,80 @@ fn the_recycle_bin_lists_trashed_items_and_restore_puts_them_back() {
     assert_eq!(labels, ["Restore", "Delete permanently", "-", "Properties"]);
     wait_until("the file to be back", || original.is_file());
     super::file_ops_support::assert_ended_without_a_message(&test);
+}
+
+/// The command bar's Restore button.
+fn restore_button(test: &TestWindow) -> gtk::Button {
+    descendants::<gtk::Button>(test.window.command_bar())
+        .into_iter()
+        .find(|button| button.has_css_class("restore-command"))
+        .expect("the bar has Restore")
+}
+
+/// In the Recycle Bin, as in Windows 11, the command bar shows Empty
+/// Recycle Bin and Restore all items after View; Restore all items reads
+/// Restore the selected items while items are selected, and puts back
+/// every item.
+///
+/// parity: OPS-041, OPS-042
+#[gtk::test]
+fn the_command_bar_restores_all_items_or_the_selected_ones_in_the_recycle_bin() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let names = ["Restore me first.txt", "Restore me too.txt"];
+    for name in names {
+        fixture.write(name);
+        trash(&fixture.path(name));
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the folder");
+    let elsewhere = command_bar_names(&test);
+    test.activate("go-to", Some(TRASH_URI));
+    wait_until("the trashed files to be listed", || {
+        let shown = test.names();
+        names.iter().all(|name| shown.contains(&(*name).to_owned()))
+    });
+    let after_view = |test: &TestWindow| {
+        let shown = command_bar_names(test);
+        let view = shown
+            .iter()
+            .position(|name| name == "View")
+            .expect("the bar has View");
+        shown[view + 1..].to_vec()
+    };
+
+    assert!(
+        !elsewhere.contains(&"Empty Recycle Bin".to_owned()),
+        "{elsewhere:?}"
+    );
+    assert!(
+        !elsewhere.contains(&"Restore all items".to_owned()),
+        "{elsewhere:?}"
+    );
+    assert_eq!(
+        after_view(&test)[..4],
+        ["|", "Empty Recycle Bin", "Restore all items", "More options"]
+    );
+    select_names(&test, &["Restore me first.txt"]);
+    wait_until("the selected items' Restore", || {
+        after_view(&test).contains(&"Restore the selected items".to_owned())
+    });
+    assert_eq!(
+        restore_button(&test).action_name().as_deref(),
+        Some("win.restore")
+    );
+    select_names(&test, &[]);
+    wait_until("Restore all items again", || {
+        after_view(&test).contains(&"Restore all items".to_owned())
+    });
+    let restore = restore_button(&test);
+    assert_eq!(restore.action_name().as_deref(), Some("win.restore-all-items"));
+    assert!(restore.is_sensitive());
+    restore.emit_clicked();
+
+    wait_until("both files to be back", || {
+        names.iter().all(|name| fixture.path(name).is_file())
+    });
 }
 
 /// The Recycle Bin row counts a file trashed while the window is open:
@@ -191,16 +270,22 @@ fn delete_in_the_recycle_bin_deletes_only_the_chosen_items_for_good() {
     );
 }
 
+/// Empty Recycle Bin asks Windows' question, "Delete Multiple Items",
+/// with Yes and No, and the empty Recycle Bin then says "This folder is
+/// empty." as any empty folder does.
+///
 /// parity: OPS-040, OPS-042
 #[gtk::test]
 fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     require_private_trash();
     let fixture = Fixture::standard();
     fixture.write("Old draft.txt");
+    fixture.write("Old notes.txt");
     trash(&fixture.path("Old draft.txt"));
-    require_only_test_items_in_the_recycle_bin();
+    trash(&fixture.path("Old notes.txt"));
+    let count = require_only_test_items_in_the_recycle_bin();
     let test = TestWindow::open(TRASH_URI);
-    wait_until("the trashed file to be listed", || !test.names().is_empty());
+    wait_until("the trashed files to be listed", || test.names().len() == count);
 
     test.window.right_click(None);
     let labels = test.window.context_menu().row_labels();
@@ -209,13 +294,22 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     let dialog = open_dialog(&test);
 
     assert_eq!(labels, ["Empty Recycle Bin", "Refresh"]);
-    assert_eq!(dialog.title_text(), "Empty Recycle Bin?");
-    assert_eq!(dialog.button_labels(), ["Cancel", "Empty Recycle Bin"]);
-    dialog.press("Empty Recycle Bin");
+    assert_eq!(dialog.title_text(), "Delete Multiple Items");
+    assert_eq!(
+        dialog.message_text(),
+        format!("Are you sure you want to permanently delete these {count} items?")
+    );
+    assert_eq!(dialog.button_labels(), ["Yes", "No"]);
+    dialog.press("Yes");
     wait_until("the Recycle Bin to be empty", || test.names().is_empty());
-    wait_until("the empty Recycle Bin text", || {
-        test.window.folder_pane().empty_page().title() == "Recycle Bin is empty"
+    wait_until("the empty folder note", || {
+        test.window.folder_pane().shows_empty_note()
     });
+    assert_eq!(
+        test.window.folder_pane().page(),
+        Some(PanePage::Listing),
+        "no page of its own"
+    );
     let left = glib::MainContext::default()
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
@@ -285,7 +379,7 @@ fn the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere() {
     assert_eq!(labels[..3], ["Open", "Open in new tab", "Open in new window"]);
     assert!(empty.is_sensitive(), "something to empty");
     test.activate("empty-trash", None);
-    open_dialog(&test).press("Empty Recycle Bin");
+    open_dialog(&test).press("Yes");
 
     wait_until("the empty Recycle Bin", || bin_tooltip() == "Recycle Bin · Empty");
     assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the folder stays");

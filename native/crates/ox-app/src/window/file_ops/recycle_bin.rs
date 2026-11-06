@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The Recycle Bin's commands: Restore, Delete permanently and Empty
-//! Recycle Bin (OPS-040 to OPS-043).
+//! The Recycle Bin's commands: Restore, Restore all items, Delete
+//! permanently and Empty Recycle Bin (OPS-040 to OPS-043).
 //!
 //! New in the native app, from the Dolphin baseline; the Python app could
 //! only move items to the Trash. The window lists `trash:///` like any
@@ -8,18 +8,20 @@
 //! commands act on it through ox-core's Recycle Bin service, which never
 //! overwrites when it restores. Each runs as the window's one operation,
 //! with the transfer panel and Cancel, and deleting asks first unless the
-//! settings say not to (SET-010).
+//! settings say not to (SET-010). Empty Recycle Bin asks Windows'
+//! question: "Are you sure you want to permanently delete these N
+//! items?", with Yes and No.
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin,
-    starting_label, summarize, summarize_restore,
+    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, move_out_of_recycle_bin,
+    permanent_delete_confirmation, restore_from_recycle_bin, starting_label, summarize, summarize_restore,
+    DeleteItem,
 };
-use ox_core::transfer::TransferMode;
+use ox_core::transfer::{Cancellation, TransferMode};
 
 use super::running::FinishedOperation;
 use super::FileCommand;
-use crate::dialog::Dialog;
-use crate::window::{BrowserWindow, ButtonStyle};
+use crate::window::BrowserWindow;
 
 /// The panel's label while items are restored.
 const RESTORING: &str = crate::i18n::message_id("Restoring items…");
@@ -37,6 +39,31 @@ impl BrowserWindow {
             return;
         };
         let outcome = restore_from_recycle_bin(&uris, &context).await;
+        self.end_operation();
+        let finished = outcome.map(|outcome| FinishedOperation {
+            summary: summarize_restore(&outcome.result),
+            undo: outcome.undo,
+            select_after: outcome.created,
+        });
+        self.conclude_operation(finished).await;
+    }
+
+    /// Restore all items: puts every item in the Recycle Bin back where it
+    /// was deleted from, as Restore does (OPS-041).
+    pub(crate) async fn restore_all_items(&self) {
+        if !self.allows(FileCommand::RestoreAll) {
+            return;
+        }
+        let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RESTORING)) else {
+            return;
+        };
+        let outcome = match list_recycle_bin(&context.cancel).await {
+            Ok(items) => {
+                let uris: Vec<String> = items.into_iter().map(|item| item.uri).collect();
+                restore_from_recycle_bin(&uris, &context).await
+            }
+            Err(error) => Err(error),
+        };
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_restore(&outcome.result),
@@ -112,21 +139,27 @@ impl BrowserWindow {
         self.conclude_operation(finished).await;
     }
 
-    /// Asks Empty Recycle Bin's question with Cancel and its red button;
-    /// true when the user confirmed.
+    /// Asks about the items in the Recycle Bin as Windows Explorer does
+    /// when it empties it: "Delete Multiple Items", "Are you sure you want
+    /// to permanently delete these N items?" (one item is asked about as a
+    /// file or a folder, with its details), Yes and No. True for Yes, and
+    /// when the Recycle Bin cannot be listed, so that emptying it says
+    /// why; false for No, and when there is nothing to empty.
     async fn confirms_emptying(&self) -> bool {
-        let dialog = Dialog::new(
-            self,
-            "Empty Recycle Bin?",
-            &ox_core::i18n::gettext(
-                "Every item in the Recycle Bin is deleted permanently and cannot be recovered.",
-            ),
-        );
-        dialog.add_cancel_button();
-        dialog.add_button("Empty Recycle Bin", ButtonStyle::Danger);
-        dialog.open();
-        let answer = dialog.next_response().await;
-        dialog.finish();
-        answer.is_some()
+        let Ok(items) = list_recycle_bin(&Cancellation::new()).await else {
+            return true;
+        };
+        if items.is_empty() {
+            return false;
+        }
+        let items: Vec<DeleteItem> = items
+            .into_iter()
+            .map(|item| DeleteItem {
+                uri: item.uri,
+                name: item.name,
+                can_trash: None,
+            })
+            .collect();
+        self.confirm_deletion(&items, permanent_delete_confirmation).await
     }
 }
