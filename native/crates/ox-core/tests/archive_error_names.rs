@@ -137,8 +137,8 @@ fn a_compression_into_a_read_only_folder_names_the_new_archive() {
     assert_eq!(fs::read_dir(&locked).expect("list").count(), 0);
 }
 
-/// A compression whose staging cannot be removed after it failed names
-/// that staging exactly, so the user can find what was left behind.
+/// A compression whose incomplete archive cannot be removed after it
+/// failed names it exactly, so the user can find what was left behind.
 ///
 /// parity: ARC-023
 #[test]

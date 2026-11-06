@@ -288,7 +288,8 @@ fn the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one() 
 
 /// With the toast's Undo button gone, the folder menu is where Undo is
 /// found besides Ctrl+Z: as in Windows Explorer it names the step, "Undo
-/// Delete" after a Move to Trash, and Redo follows once it is undone.
+/// Delete" after a move to the Recycle Bin, and Redo follows once it is
+/// undone.
 ///
 /// parity: CMD-011, OPS-029, OPS-031
 #[gtk::test]
@@ -301,7 +302,6 @@ fn the_folder_menu_names_the_step_undo_and_redo_take_as_windows_does() {
     choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("trash", None);
-    open_dialog(&test).press("Move to Trash");
     wait_until("the file to go", || {
         !test.names().contains(&"Notes 2.txt".to_owned())
     });

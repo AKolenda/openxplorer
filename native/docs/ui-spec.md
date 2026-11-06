@@ -556,8 +556,8 @@ where it differs; ✓ means the target equals the current app.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Bar | 30 including a 1 px top border (min `max(29, ceil(15·s + 9))` + 1); padding `0 13 0 19`; gap 18; background `@ox_bg`; text **12** px (11) in `@ox_muted` | 12 px minimum (L-TYPE) | text visible, P2 |
-| Left | "N items", "N selected, size" as separate spans 18 apart (native joins them with " · "); type-to-select hint in `@ox_accent`, or `@ox_muted` when nothing matches; ellipsis at 48 % width | — | Keep; D-N13. |
-| Right | the free space and its bar; the update button 24 × 24 only while an update needs the user (the status mode, **12** px, is hidden: Explorer names no build there; 2026-11-02); then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
+| Left | "N items", then, while something is selected, a 1 × 14 `@ox_border` divider 10 px from each side and "1 item selected  19.0 KB" / "N items selected  1.23 MB" (the size, written as Explorer writes sizes, only when every selected item is a file); type-to-select hint in `@ox_accent`, or `@ox_muted` when nothing matches; ellipsis at 48 % width. No folder total, no name or type of the selected or hovered item, no free space (2026-11-05) | Windows 11 File Explorer's status bar: item count, divider, selection and its size | Keep; D-N13. |
+| Right | the update button 24 × 24 only while an update needs the user (the status mode, **12** px, is hidden: Explorer names no build there; 2026-11-02); then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph. No free space and no zoom slider (2026-11-05) | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
 
 ### 4.8 Details pane
 
@@ -1020,7 +1020,7 @@ are built, use these rules:
 | Split view | Two content panes separated by 1 px `@ox_border`. The inactive pane's header labels use `@ox_text_tertiary`; the active pane keeps them `@ox_muted`. No extra chrome. |
 | Filter bar | A strip below the column header, styled as the search-info bar (§4.15), with a 34 px field. |
 | Zoom | Ctrl + wheel and Ctrl + +/−, already mapped to text size (80–200 %) and icon size. There is no status-bar slider, because Explorer has none. |
-| Free space | "N GB free" at 12 px in the status bar's left group, after the selection text. |
+| Free space | Not in the status bar, as Explorer has none there: This PC's drive cards and a drive's Properties show it. |
 | Selection checkboxes | Optional 16 × 16 checkbox before the row icon, shown on hover and for selected rows (Explorer "Item check boxes", observed, unverified). |
 | Hidden files | View ▾ > Show > Hidden items toggle, as Windows 11 has it (2026-11-03; it was also in More options). Hidden entries at `opacity: .6`, like the cut style. |
 | Terminal panel | Bottom pane with the status-bar treatment: 1 px `@ox_border` top, `@ox_bg`. |
