@@ -408,16 +408,23 @@ impl ItemPages {
     /// Whether the name can be edited: an item in a local or shared folder,
     /// not a standard folder, a share or server, or inside a previous version.
     fn can_rename(&self, properties: &ItemProperties) -> bool {
-        let uri = &properties.entry.uri;
-        let is_share = is_smb_server(uri) || is_smb_share_root(uri);
-        let is_read_only = self.context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
-        let is_renamable_place = uri.starts_with("file:") || is_smb_location(uri);
-        self.target.known_folder.is_none()
-            && properties.parent_uri.is_some()
-            && !is_share
-            && !is_read_only
-            && is_renamable_place
+        can_rename(properties, &self.context, self.target.known_folder.is_some())
     }
+}
+
+/// Whether the item `properties` describes can be renamed, and so hidden
+/// (PROP-005): not a standard folder, a share, a page or anything inside a
+/// previous version.
+pub(super) fn can_rename(
+    properties: &ItemProperties,
+    context: &PropertiesContext,
+    is_standard_folder: bool,
+) -> bool {
+    let uri = &properties.entry.uri;
+    let is_share = is_smb_server(uri) || is_smb_share_root(uri);
+    let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+    let is_renamable_place = uri.starts_with("file:") || is_smb_location(uri);
+    !is_standard_folder && properties.parent_uri.is_some() && !is_share && !is_read_only && is_renamable_place
 }
 
 /// Reads the file type's default application again each time the window

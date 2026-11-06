@@ -221,22 +221,31 @@ mod tests {
     }
 
     /// Focused controls draw a 2px ring inside them; the file list draws
-    /// none around itself, only a 1px ring on the focused row or tile,
-    /// apart from the selection's fill.
+    /// none around itself. The focused row, tile or navigation pane entry
+    /// draws Windows 11's two-tone ring instead, 2px dark outside 1px
+    /// light, apart from the selection's fill.
     ///
     /// parity: ACC-009
     #[test]
     fn focus_rings_sit_on_controls_and_items_not_around_the_file_list() {
         let code = without_comments(RULES);
-        for rule in [
+        let item_ring = "{\n  outline: 2px solid @ox_item_focus_outer;\n  outline-offset: -2px;\n  \
+                         box-shadow: inset 0 0 0 3px @ox_item_focus_inner;\n}";
+        let item_rings = [
+            "columnview.files > listview > row",
+            "gridview.files > child",
+            ".sidebar list > row",
+            ".folder-tree listview > row",
+        ]
+        .map(|item| format!("{item}:focus-visible {item_ring}"));
+        let control_rings = [
             "window.ox button:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
             ".tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
-            "columnview.files > listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
-            "gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
-            ".sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
             "paned.workspace > separator.keyboard-focus",
-        ] {
-            assert!(code.contains(rule), "{rule}");
+        ]
+        .map(str::to_owned);
+        for rule in item_rings.iter().chain(&control_rings) {
+            assert!(code.contains(rule.as_str()), "{rule}");
         }
         assert!(
             !code.contains("columnview.files:focus"),
@@ -254,7 +263,8 @@ mod tests {
             ".sidebar list > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
             ".sidebar list > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
             ".tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }",
-            "box-shadow: inset 0 0 0 2px @ox_focus_outer;",
+            "box-shadow: inset 0 0 0 2px @ox_focus_outer; }",
+            "outline: 2px solid @ox_text;\n  outline-offset: -2px;\n  box-shadow: inset 0 0 0 3px @ox_bg;",
         ] {
             assert!(code.contains(rule), "{rule}");
         }

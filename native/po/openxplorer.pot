@@ -1356,8 +1356,25 @@ msgstr ""
 msgid "Sharing"
 msgstr ""
 
-#: crates/ox-app/src/properties/custom_icon.rs
+#: crates/ox-app/src/properties/change_icon.rs
+msgid "Browse..."
+msgstr ""
+
+#: crates/ox-app/src/properties/change_icon.rs
 msgid "Change Icon"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/change_icon.rs
+msgid "Change Icon for {folder} Folder"
+msgstr ""
+
+#: crates/ox-app/src/properties/change_icon.rs crates/ox-core/src/search/facets.rs
+msgid "Images"
+msgstr ""
+
+#: crates/ox-app/src/properties/change_icon.rs
+msgid "_Select an icon from the list below:"
 msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
@@ -1366,10 +1383,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
 msgid "Folder icons"
-msgstr ""
-
-#: crates/ox-app/src/properties/custom_icon.rs crates/ox-core/src/search/facets.rs
-msgid "Images"
 msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
@@ -1421,7 +1434,7 @@ msgstr ""
 msgid "Aperture priority"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs
 msgid "Attributes"
 msgstr ""
 
@@ -1919,7 +1932,7 @@ msgstr ""
 msgid "Created"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "Hidden"
 msgstr ""
 
@@ -1939,11 +1952,11 @@ msgstr ""
 msgid "Opens with"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "Read-only"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "Read-only (Only applies to files in folder)"
 msgstr ""
 
@@ -1955,7 +1968,7 @@ msgstr ""
 msgid "Target"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "The window that opened these properties is closed."
 msgstr ""
 
@@ -2340,11 +2353,11 @@ msgid "Multiple"
 msgstr ""
 
 #: crates/ox-app/src/properties/selection_view.rs
-msgid "Multiple locations"
+msgid "Multiple Types"
 msgstr ""
 
 #: crates/ox-app/src/properties/selection_view.rs
-msgid "Multiple types"
+msgid "Multiple locations"
 msgstr ""
 
 #: crates/ox-app/src/properties/selection_view.rs
@@ -2353,7 +2366,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/selection_view.rs
-msgid "{count} items Properties"
+msgid "{first}, {second} Properties"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/selection_view.rs
+msgid "{first}, {second}, ... Properties"
 msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
