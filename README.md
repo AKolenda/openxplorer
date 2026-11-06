@@ -10,7 +10,7 @@ Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with ta
 
 ![Two panes side by side showing the same fictional folder](apps/web/public/assets/screenshots/split-view.png)
 
-*The native GTK 4 app, captured in an isolated session with fictional files: the Details view, and split panes (F3). Network examples in these pictures do not establish live SMB compatibility.*
+*The native GTK 4 app, captured in an isolated session with fictional files: the Details view, and split panes. Network examples in these pictures do not establish live SMB compatibility.*
 
 ## Install
 

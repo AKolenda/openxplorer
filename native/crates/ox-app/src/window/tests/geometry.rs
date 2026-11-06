@@ -67,6 +67,15 @@ pub(super) fn laid_out(uri: &str) -> TestWindow {
     test
 }
 
+/// [`laid_out`] with the details pane open, which a new window has
+/// closed.
+pub(super) fn laid_out_with_details_pane(uri: &str) -> TestWindow {
+    let test = TestWindow::open(uri);
+    test.open_details_pane();
+    wait_for_frames(&test.window, 3);
+    test
+}
+
 /// The button in the window that runs `action`.
 pub(super) fn button_for(test: &TestWindow, action: &str) -> gtk::Button {
     descendants::<gtk::Button>(&test.window)
