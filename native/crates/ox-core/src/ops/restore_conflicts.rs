@@ -312,8 +312,7 @@ fn keep_both(
     let folder = existing.parent().ok_or_else(|| OpsError::failed(String::new()))?;
     let name = existing
         .path()
-        .map(|path| path_name(&path))
-        .unwrap_or_else(|| conflict.name());
+        .map_or_else(|| conflict.name(), |path| path_name(&path));
     let kind = if conflict.incoming.is_folder {
         ItemKind::Folder
     } else {
