@@ -119,18 +119,29 @@ fn the_dialog_names_the_server_and_preselects_remember() {
     assert_shows(
         &dialog,
         &[
-            "OpenXplorer Security",
             "Enter network credentials",
-            "Connect to nas",
-            "Enter the credentials for this computer or network storage.",
-            "Username",
+            "Enter your credentials to connect to: nas",
+            "User name",
             "Password",
             "Remember my credentials",
             "Saved in your system keyring for future sign-ins.",
             "Connect as guest",
             "Cancel",
-            "Connect",
+            "OK",
         ],
+    );
+    let texts = texts_of(&dialog);
+    assert!(
+        !texts.iter().any(|text| text.contains("OpenXplorer")),
+        "the caption bar names the dialog, not the app: {texts:?}"
+    );
+    assert_eq!(
+        texts
+            .iter()
+            .filter(|text| *text == "Enter network credentials")
+            .count(),
+        2,
+        "the caption bar and the heading"
     );
     let remember = descendants::<gtk::CheckButton>(&dialog);
     assert!(remember[0].is_active() && remember[0].is_sensitive());
@@ -190,11 +201,7 @@ fn a_refused_answer_keeps_the_dialog_open_with_the_reason() {
     );
     assert!(replies.borrow().is_empty(), "GVfs heard nothing yet");
     assert_eq!(fixture.queue.shown_dialog().as_ref(), Some(&dialog));
-    assert_eq!(
-        dialog.connect_label(),
-        ("Connect".to_owned(), true),
-        "Connect works again"
-    );
+    assert_eq!(dialog.connect_label(), ("OK".to_owned(), true), "OK works again");
     fixture.prompts.finish(&operation, MountOutcome::Failed);
 }
 
@@ -351,7 +358,7 @@ fn closing_the_dialog_aborts_its_mount() {
 #[gtk::test]
 fn the_dialog_opens_over_the_windows_own_dialog() {
     let fixture = PromptsFixture::new();
-    let map = Dialog::new(&fixture.window, "Map network location", "");
+    let map = Dialog::new(&fixture.window, "Map network drive", "");
     map.present();
     let (operation, _) = fixture.mount();
 
@@ -362,7 +369,7 @@ fn the_dialog_opens_over_the_windows_own_dialog() {
         Some(map.upcast_ref::<gtk::Window>())
     );
     fixture.prompts.finish(&operation, MountOutcome::Failed);
-    assert!(map.is_visible(), "Map network location stays open");
+    assert!(map.is_visible(), "Map network drive stays open");
     map.close();
 }
 
@@ -451,7 +458,7 @@ fn escape_cancels_the_shown_challenge() {
 }
 
 /// The text-size keys still reach the window while the dialog is open,
-/// through Map network location when the dialog sits on it; the dialog
+/// through Map network drive when the dialog sits on it; the dialog
 /// stays open.
 ///
 /// parity: NET-009
@@ -467,7 +474,7 @@ fn text_size_keys_reach_the_window_under_the_dialog() {
         window_actions.add_action(&action);
     }
     fixture.window.insert_action_group("win", Some(&window_actions));
-    let map = Dialog::new(&fixture.window, "Map network location", "");
+    let map = Dialog::new(&fixture.window, "Map network drive", "");
     map.present();
     let (operation, _) = fixture.mount();
     let dialog = fixture.ask_password(&operation, SIGN_IN_FLAGS);

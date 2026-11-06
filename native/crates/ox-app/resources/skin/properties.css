@@ -167,8 +167,16 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties .snapshot-warnings { margin-top: 6px; color: @ox_muted; }
 .ox-properties .snapshot-source-actions { border-spacing: 8px; margin-top: 16px; }
 
-/* Customize. */
+/* Customize, and its Change Icon dialog's grid of icons
+   (src/properties/change_icon.rs). */
 .ox-properties .properties-icon-preview { margin: 0 8px 4px 0; }
+.ox-properties flowbox.properties-icon-grid { padding: 4px; background-color: @ox_bg; }
+.ox-properties flowbox.properties-icon-grid > flowboxchild { padding: 6px; border-radius: 0; }
+.ox-properties flowbox.properties-icon-grid > flowboxchild:hover { background-color: @ox_hover; }
+.ox-properties flowbox.properties-icon-grid > flowboxchild:selected {
+  background-color: @ox_selected;
+  color: @ox_text;
+}
 
 /* Forms inside a tab or a Properties dialog (Snapshot source, Location,
    the mount assistant, Advanced Sharing, several items' Security): the

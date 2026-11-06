@@ -24,7 +24,7 @@ use ox_core::places::KnownFolder;
 /// picks by size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Icon {
-    /// `add_20_regular`: New, the new-tab "+", Map network location and
+    /// `add_20_regular`: New, the new-tab "+", Map network drive and
     /// Larger text.
     Add,
     /// Add a network location in This PC's "…": an original icon

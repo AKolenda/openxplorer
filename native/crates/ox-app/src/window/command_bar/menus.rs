@@ -380,9 +380,9 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// Quick access; Select all, Select none, Invert selection and the app's
 /// Select items matching…; then Properties, of the selection or the
 /// folder, and Options. In This PC and Network, in Windows' order: Add a
-/// network location (the Map network location dialog at a web address, as
-/// Windows' wizard adds websites and FTP sites), Map network drive (the
-/// same dialog) and Disconnect network drive, in place of Pin. Windows' Connect to a media
+/// network location (the connect dialog with a Type list, at a web
+/// address, as Windows' wizard adds websites and FTP sites), Map network
+/// drive (Windows' dialog) and Disconnect network drive, in place of Pin. Windows' Connect to a media
 /// server has no `GVfs` backend to run on Linux, so it is not offered.
 ///
 /// The rest of what "…" used to list moved where Windows has it (the
@@ -394,7 +394,7 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// appearances to Settings > Appearance; Show hidden files to View >
 /// Show > Hidden items; Keyboard shortcuts, Help, License & source and
 /// About this build to Settings > About, with F1 and Ctrl+? as before.
-/// Map network location also stays at the foot of the navigation pane.
+/// Map network drive also stays at the foot of the navigation pane.
 pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = match state.place {
         MorePlace::Folder => folder_commands(state),
