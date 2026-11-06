@@ -45,7 +45,8 @@ const NAME_FORMAT: &str = "%Y-%m-%d %H-%M-%S";
 /// Why Paste refuses a picture over [`MAX_BYTES`](super::MAX_BYTES): it is
 /// no data to the app, and saying so beats a paste that silently writes
 /// nothing.
-pub const TOO_LARGE_TO_PASTE: &str = crate::i18n::message_id("The picture on the clipboard is too large to paste.");
+pub const TOO_LARGE_TO_PASTE: &str =
+    crate::i18n::message_id("The picture on the clipboard is too large to paste.");
 
 /// The name used when the system clock cannot say what time it is, so a
 /// paste still writes one file under a name the app can number.
