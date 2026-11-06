@@ -118,17 +118,16 @@ impl BrowserWindow {
         Some(TabDropSpot::Strip { before })
     }
 
-    /// True for a point of the title bar from the first tab to the
-    /// open-windows button: the tabs, "+" and the empty drag area.
+    /// True for a point of the title bar from the first tab to the end of
+    /// the empty drag area, where the caption buttons start: the tabs, "+"
+    /// and the drag area.
     pub(super) fn is_in_tab_row(&self, point: graphene::Point) -> bool {
         let strip = self.tab_strip().compute_bounds(self);
-        let windows_button = self.imp().open_windows_button.compute_bounds(self);
-        let (Some(strip), Some(windows_button), Some(bottom)) =
-            (strip, windows_button, self.title_bar_bottom())
-        else {
+        let drag_area = self.imp().title_drag.compute_bounds(self);
+        let (Some(strip), Some(drag_area), Some(bottom)) = (strip, drag_area, self.title_bar_bottom()) else {
             return false;
         };
-        let is_across = point.x() >= strip.x() && point.x() < windows_button.x();
+        let is_across = point.x() >= strip.x() && point.x() < drag_area.x() + drag_area.width();
         let is_down = point.y() >= 0.0 && point.y() < bottom;
         is_across && is_down
     }

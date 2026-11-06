@@ -50,14 +50,14 @@ struct Surfaces {
 const SURFACES: [Surfaces; 2] = [
     Surfaces {
         theme: "light",
-        title: "#eff1f4",
+        title: "#f3f3f3",
         chrome: "#f9f9f9",
         sidebar: "#fafafa",
         content: "#ffffff",
     },
     Surfaces {
         theme: "dark",
-        title: "#191919",
+        title: "#202020",
         chrome: "#282828",
         sidebar: "#252525",
         content: "#202020",

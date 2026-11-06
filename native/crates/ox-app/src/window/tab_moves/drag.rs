@@ -13,7 +13,7 @@
 //! drag and drop takes over, carrying the tab itself, drawn as in its
 //! strip, and the tab beside it comes to the front, as in Chrome. Every window
 //! takes tab drops with one target over the whole window, which finds the
-//! spot itself: the title bar from the first tab to the open-windows button
+//! spot itself: the title bar from the first tab to the caption buttons
 //! places the tab where the tabs made room for it, and anywhere else in a
 //! window tears it out, as Chrome does. Back over its own strip the tab
 //! follows the pointer again, in front, and the carried tab hides; over
