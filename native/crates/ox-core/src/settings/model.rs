@@ -47,7 +47,7 @@ pub struct RecentEntry {
     pub uri: String,
     /// Display name, at most 512 characters when read back.
     pub name: String,
-    /// Human-readable type, for example "PDF document".
+    /// Human-readable type, for example "PDF Document".
     #[serde(rename = "type")]
     pub type_label: String,
     /// Always `false` when read back: only files are remembered.

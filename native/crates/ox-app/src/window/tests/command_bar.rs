@@ -1200,6 +1200,36 @@ fn view_show_opens_beside_the_view_menu_as_on_windows() {
     wait_until("the menus to close", || !view.is_visible() && !show.is_visible());
 }
 
+/// The View menu fades in sliding down out of its button, View > Show
+/// sideways out of its row, as Windows 11's menus open, and each opening
+/// starts the motion afresh.
+///
+/// parity: LOOK-019
+#[gtk::test]
+fn the_view_menu_slides_out_of_its_button_and_show_out_of_its_row_each_time() {
+    use crate::window::menu_popover::Slide;
+
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let view = menu_of(&test, "View");
+    view.popup();
+    wait_until("the View menu", || view.is_mapped());
+    assert_eq!(view.slide(), Some(Slide::Down));
+    let first = view.opening_class();
+    assert!(first.is_some(), "the opening names its animation");
+    let show = view.open_submenu_of("Show");
+    assert_eq!(show.slide(), Some(Slide::Right), "out of its row, at its left");
+    view.popdown();
+    wait_until("the menus to close", || !view.is_visible() && !show.is_visible());
+
+    view.popup();
+    wait_until("the View menu again", || view.is_mapped());
+    let second = view.opening_class();
+    assert!(second.is_some() && second != first, "the motion starts afresh");
+    view.popdown();
+    wait_until("the menu to close", || !view.is_visible());
+}
+
 /// View > Terminal and Ctrl+Shift+F4, Dolphin's Terminal panel keys, open
 /// the desktop's terminal in the folder shown: VTE, which Dolphin's panel
 /// would need, is not linked.

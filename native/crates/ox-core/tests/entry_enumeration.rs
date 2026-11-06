@@ -73,33 +73,33 @@ struct DocumentCase {
 
 /// Regression: the Documents folder showed GIO's raw descriptions ("Word
 /// 2007 document", "Excel 2007 spreadsheet", "Plain text document")
-/// instead of the interface's names. GIO reads the content type from each
+/// instead of the names Windows 11 gives these types. GIO reads the content type from each
 /// real file here, so the whole listing path is exercised, not only the
 /// label table.
 ///
 /// parity: VIEW-002
 #[test]
-fn documents_are_listed_with_the_interface_type_names() {
+fn documents_are_listed_with_the_windows_type_names() {
     let cases = [
         DocumentCase {
             name: "Meeting notes.docx",
-            type_label: "Word document",
+            type_label: "Microsoft Word Document",
         },
         DocumentCase {
             name: "Project budget.xlsx",
-            type_label: "Excel worksheet",
+            type_label: "Microsoft Excel Worksheet",
         },
         DocumentCase {
             name: "Q3 presentation.pptx",
-            type_label: "PowerPoint presentation",
+            type_label: "Microsoft PowerPoint Presentation",
         },
         DocumentCase {
             name: "Read me.txt",
-            type_label: "Text document",
+            type_label: "Text Document",
         },
         DocumentCase {
             name: "Website assets.zip",
-            type_label: "Compressed folder",
+            type_label: "Compressed (zipped) Folder",
         },
     ];
     // Empty files would all be `application/x-zerosize`, so each holds a
