@@ -13,6 +13,7 @@
     <file>scalable/actions/ox-add-20-symbolic.svg</file>
     <file>scalable/actions/ox-add-network-location-24-symbolic.svg</file>
     <file>scalable/actions/ox-apps-20-symbolic.svg</file>
+    <file>scalable/actions/ox-apps-list-detail-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-autofit-height-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-clockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-counterclockwise-20-symbolic.svg</file>
@@ -39,6 +40,7 @@
     <file>scalable/actions/ox-chevron-up-16-symbolic.svg</file>
     <file>scalable/actions/ox-clipboard-paste-20-symbolic.svg</file>
     <file>scalable/actions/ox-code-20-symbolic.svg</file>
+    <file>scalable/actions/ox-content-view-20-symbolic.svg</file>
     <file>scalable/actions/ox-copy-20-symbolic.svg</file>
     <file>scalable/actions/ox-cut-20-symbolic.svg</file>
     <file>scalable/actions/ox-delete-20-symbolic.svg</file>

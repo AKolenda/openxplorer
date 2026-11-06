@@ -157,7 +157,7 @@ fn group_item(group_by: GroupBy) -> MenuEntry {
 }
 
 /// The View menu's item for `view`. Windows 11's View menu shows no
-/// shortcut text, so neither does this one; Explorer's Ctrl+Shift+1 to 6
+/// shortcut text, so neither does this one; Explorer's Ctrl+Shift+1 to 8
 /// still choose the views (VIEW-009).
 fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
     MenuItem::choice(label, glyph, WindowAction::View, view.as_str()).into()
@@ -181,13 +181,12 @@ fn icon_size_glyph(size: IconSize) -> Icon {
 }
 
 /// The View menu, as Windows 11 File Explorer's: the icon sizes from the
-/// largest, List and Details; the Details pane, with a dot while it is
+/// largest, List, Details, Tiles and Content (VIEW-071); the Details pane, with a dot while it is
 /// open, and the Preview pane, which takes its place; Show, with the
 /// navigation pane, Compact view, item check boxes, File name extensions
 /// and Hidden items; then Dolphin's Split view, Folder tree and Terminal,
 /// at the top level where they were before Show existed; then the text
-/// size. Windows' Tiles and Content views are views the app does not
-/// have, so they are not listed.
+/// size.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = IconSize::NAMED
         .into_iter()
@@ -199,6 +198,8 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     entries.extend([
         view_item(&gettext("List"), Icon::TextColumnTwo, FolderView::Compact),
         view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details),
+        view_item(&gettext("Tiles"), Icon::AppsListDetail, FolderView::Tiles),
+        view_item(&gettext("Content"), Icon::ContentView, FolderView::Content),
         MenuEntry::Divider,
         // Windows 11 marks the open pane with a dot, as Details and its
         // Preview pane are one choice there.

@@ -33,6 +33,8 @@ pub(crate) enum Icon {
     AddNetworkLocation24,
     /// `apps_20_regular`: the Default apps settings.
     Apps,
+    /// `apps_list_detail_20_regular`: View > Tiles.
+    AppsListDetail,
     /// `arrow_autofit_height_20_regular`: View > Show > Compact view, as Windows 11 draws it.
     ArrowAutofitHeight,
     /// `arrow_clockwise_20_regular`: Refresh, Check for updates, and the
@@ -120,6 +122,8 @@ pub(crate) enum Icon {
     /// `code_24_color`: code, HTML and JSON files at larger sizes, the
     /// largest design of this picture.
     CodeColor24,
+    /// `content_view_20_regular`: View > Content.
+    ContentView,
     /// `copy_20_regular`: Copy, and the details pane's picture of several
     /// selected items.
     Copy,
@@ -344,6 +348,7 @@ impl Icon {
             Icon::Add => "ox-add-20-symbolic",
             Icon::AddNetworkLocation24 => "ox-add-network-location-24-symbolic",
             Icon::Apps => "ox-apps-20-symbolic",
+            Icon::AppsListDetail => "ox-apps-list-detail-20-symbolic",
             Icon::ArrowAutofitHeight => "ox-arrow-autofit-height-20-symbolic",
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
             Icon::ArrowCounterclockwise => "ox-arrow-counterclockwise-20-symbolic",
@@ -375,6 +380,7 @@ impl Icon {
             Icon::Code => "ox-code-20-symbolic",
             Icon::CodeColor20 => "ox-code-20-color",
             Icon::CodeColor24 => "ox-code-24-color",
+            Icon::ContentView => "ox-content-view-20-symbolic",
             Icon::Copy => "ox-copy-20-symbolic",
             Icon::Cut => "ox-cut-20-symbolic",
             Icon::Delete => "ox-delete-20-symbolic",
@@ -484,10 +490,11 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 121] = [
+pub(crate) const ALL_ICONS: [Icon; 123] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
+    Icon::AppsListDetail,
     Icon::ArrowAutofitHeight,
     Icon::ArrowClockwise,
     Icon::ArrowCounterclockwise,
@@ -519,6 +526,7 @@ pub(crate) const ALL_ICONS: [Icon; 121] = [
     Icon::Code,
     Icon::CodeColor20,
     Icon::CodeColor24,
+    Icon::ContentView,
     Icon::Copy,
     Icon::Cut,
     Icon::Delete,

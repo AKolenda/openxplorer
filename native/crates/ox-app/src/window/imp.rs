@@ -230,6 +230,9 @@ pub(crate) struct BrowserWindow {
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].
     pub(super) file_list_awaits_focus: Cell<bool>,
+    /// Folder Options' "Always search file names and contents" as the
+    /// window last followed it; `None` until it first did.
+    pub(super) searches_contents: Cell<Option<bool>>,
     /// Set while a pin request is being checked and saved; another waits
     /// its turn by being ignored, as `state.pinBusy` in app.js.
     pub(super) pinning: Cell<bool>,
