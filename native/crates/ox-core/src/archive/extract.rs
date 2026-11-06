@@ -45,6 +45,7 @@ pub use limits::ExtractionLimits;
 pub use output::{ExtractionOutput, GioExtractionOutput, OutputFile};
 pub use plan::ExtractionSummary;
 
+use super::progress::JobProgress;
 use super::source::{open_archive, ArchiveOpener};
 use super::worker::on_worker;
 use super::ArchiveError;
@@ -284,7 +285,11 @@ impl ZipExtractor {
             return Err(staging.discard(error.unless_cancelled(cancel)));
         }
         let files = plan.summary.file_count;
-        self.report(format!("Extracted {files} files into {name}"), 1.0);
+        let finished = JobProgress {
+            files_total: unpack::count(files),
+            ..JobProgress::default()
+        };
+        self.emit(finished.finished_report(format!("Extracted {files} files into {name}")));
         Ok(ExtractedFolder {
             uri: destination.new_folder.uri(),
             name,
@@ -371,7 +376,12 @@ impl ZipExtractor {
         }
     }
 
-    /// Reports progress to the transfer panel.
+    /// Sends `progress` to the transfer panel.
+    fn emit(&mut self, progress: Progress) {
+        (self.emit)(progress);
+    }
+
+    /// Reports a step without bytes to the transfer panel.
     fn report(&mut self, label: String, fraction: f64) {
         (self.emit)(Progress {
             label,

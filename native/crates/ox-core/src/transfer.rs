@@ -104,6 +104,7 @@ pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
 pub(crate) use staged_name::StagedName;
 pub(crate) use staging::{already_removed, clean_staging, STAGING_LEVELS};
+pub(crate) use types::progress_fraction;
 pub use types::{
     ByteProgress, ConflictPolicy, ItemCount, Landed, Operation, Progress, ProgressScope, TransferMode,
     TransferResult,
