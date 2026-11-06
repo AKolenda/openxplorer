@@ -24,7 +24,7 @@
 .commandbar .text-command image { margin-top: 1px; }
 .commandbar menubutton.new-command > button { padding: 0 10px 0 8px; }
 .commandbar .chevron { color: @ox_muted; margin-left: 4px; }
-.commandbar separator { min-height: 20px; min-width: 1px; background-color: @ox_border; margin: 0 10px; }
+.commandbar separator.vertical { min-height: 20px; min-width: 1px; background-color: @ox_border; margin: 0 10px; }
 .commandbar menubutton.theme-toggle > button { color: @ox_muted; margin-right: 6px; }
 .commandbar menubutton.theme-toggle > button:hover { color: @ox_text; }
 .commandbar button.settings-button { color: @ox_muted; margin-right: 3px; }

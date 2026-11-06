@@ -122,9 +122,7 @@ fn the_location_tab_moves_documents_and_offers_to_move_its_files() {
     let user_dirs = fs::read_to_string(folders.config.join("user-dirs.dirs")).expect("the new setting");
     assert!(user_dirs.contains(&folders.destination.display().to_string()));
     question.press("Move files");
-    let conflict = open_dialog(&test);
-    assert_eq!(conflict.title_text(), "Items already exist");
-    conflict.press("Skip duplicates");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
 
     let report = open_dialog(&test);
     assert_eq!(
@@ -209,7 +207,7 @@ fn read_only_reaches_the_files_before_location_moves_them() {
     window.ok_button().emit_clicked();
 
     open_dialog(&test).press("Move files");
-    open_dialog(&test).press("Skip duplicates");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
     open_dialog(&test).press("OK");
     wait_until("the window to close", || window.is_closed());
     let mode = |path: PathBuf| fs::metadata(path).expect("the file").permissions().mode() & 0o777;

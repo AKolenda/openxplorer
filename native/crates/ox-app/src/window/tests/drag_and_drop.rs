@@ -93,11 +93,8 @@ fn files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check() {
         Some(test.position_of("Documents")),
         DropAction::Copy,
     );
-    let dialog = open_dialog(&test);
-
     assert!(taken);
-    assert_eq!(dialog.title_text(), "Items already exist");
-    dialog.press("Keep both");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::KeepBoth);
     wait_until("the second copy", || {
         std::fs::read_dir(fixture.path("Documents"))
             .expect("the folder lists")

@@ -35,12 +35,12 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
 use super::folder_count::FolderCountRows;
-use super::metadata::{ItemProperties, MountFacts};
+use super::metadata::ItemProperties;
 use super::window::{divider, push_button, ApplyFuture, Pending, PropertiesWindow, Rows};
 use crate::icons::{Art, ArtImage};
 
 /// The size of the item's picture beside its name.
-const HEADER_ART_SIZE: i32 = 32;
+pub(super) const HEADER_ART_SIZE: i32 = 32;
 
 /// A file's Opens with row without a default application.
 const NO_DEFAULT_APP: &str = crate::i18n::message_id("No default application");
@@ -131,11 +131,6 @@ pub(super) fn general_tab(
     page.append(place.widget());
     page.append(&divider());
 
-    if let Some(mount) = &properties.mount {
-        page.append(mount_rows(mount).widget());
-        page.append(&divider());
-    }
-
     let dates = Rows::new();
     dates.add(
         &ox_core::i18n::gettext("Created"),
@@ -222,35 +217,6 @@ fn opens_with_row(
     });
     row.append(&change);
     (row, value)
-}
-
-/// Mounted on, Mounted from, File system and the free space with its bar,
-/// for a mount point (PROP-004).
-fn mount_rows(mount: &MountFacts) -> Rows {
-    let rows = Rows::new();
-    rows.add(&ox_core::i18n::gettext("Mounted on"), &mount.mounted_on);
-    rows.add(&ox_core::i18n::gettext("Mounted from"), &mount.mounted_from);
-    rows.add(&ox_core::i18n::gettext("File system"), &mount.filesystem);
-    if let Some((free, total)) = mount.space.filter(|(_, total)| *total > 0) {
-        let text = ox_core::i18n::format_message(
-            "{value1} free of {value2}",
-            &[
-                ("value1", &format::pretty_bytes(free)),
-                ("value2", &format::pretty_bytes(total)),
-            ],
-        );
-        rows.add(&ox_core::i18n::gettext("Free space"), &text);
-        let bar = gtk::LevelBar::builder()
-            .min_value(0.0)
-            .max_value(1.0)
-            .hexpand(true)
-            .build();
-        #[expect(clippy::cast_precision_loss, reason = "a bar's fraction needs no exact bytes")]
-        bar.set_value(1.0 - free as f64 / total as f64);
-        bar.update_property(&[gtk::accessible::Property::Label(&text)]);
-        rows.add_wide(&bar);
-    }
-    rows
 }
 
 /// The item's picture and its name: a field when it can be renamed,

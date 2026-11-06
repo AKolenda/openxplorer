@@ -381,11 +381,42 @@ pub(crate) fn restore_trashed_since(
     since: u64,
     context: &OperationContext,
 ) -> Result<TransferResult, OpsError> {
-    let items = listing_holding(original_paths, since, &context.cancel)?;
+    let found = find_trashed_since(original_paths, since, &context.cancel)?;
+    Ok(restore_found(original_paths, &found, context))
+}
+
+/// The Recycle Bin item, for each of `original_paths`, deleted from it
+/// most recently since `since`, or `None` when there is none. Undo of a
+/// Replace looks them up before it moves anything else to the Trash
+/// from the same paths, so it restores the replaced files, not those.
+///
+/// # Errors
+///
+/// When the Recycle Bin cannot be listed.
+pub(crate) fn find_trashed_since(
+    original_paths: &[PathBuf],
+    since: u64,
+    cancel: &Cancellation,
+) -> Result<Vec<Option<String>>, OpsError> {
+    let items = listing_holding(original_paths, since, cancel)?;
+    Ok(original_paths
+        .iter()
+        .map(|path| newest_trashed_from(&items, path, since).map(|item| item.uri.clone()))
+        .collect())
+}
+
+/// Restores each found Recycle Bin item (`found`, from
+/// [`find_trashed_since`]) to its path of `original_paths`, never
+/// overwriting.
+pub(crate) fn restore_found(
+    original_paths: &[PathBuf],
+    found: &[Option<String>],
+    context: &OperationContext,
+) -> TransferResult {
     let mut result = TransferResult::default();
-    for original_path in original_paths {
-        let restored = match newest_trashed_from(&items, original_path, since) {
-            Some(item) => put_back(&gio::File::for_uri(&item.uri), original_path, context),
+    for (original_path, item) in original_paths.iter().zip(found) {
+        let restored = match item {
+            Some(uri) => put_back(&gio::File::for_uri(uri), original_path, context),
             None => Err(OpsError::NotFound(crate::i18n::gettext(
                 "It is no longer in the Recycle Bin.",
             ))),
@@ -401,7 +432,7 @@ pub(crate) fn restore_trashed_since(
     if !result.done.is_empty() {
         forget_removed_items();
     }
-    Ok(result)
+    result
 }
 
 /// The Recycle Bin's items, listed again a few times while one of
