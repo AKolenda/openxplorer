@@ -406,27 +406,6 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
     [recent, recent_locations, bin]
 }
 
-/// Where a row sits in its section, which decides its spacing: the
-/// Quick access rows sit in a box of their own in app.js.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::window) struct SectionEdges {
-    /// The row is the first of its section.
-    pub first: bool,
-    /// The row is the last of its section.
-    pub last: bool,
-}
-
-/// The section edges of row `index` of `entries`.
-pub(in crate::window) fn section_edges(entries: &[SidebarEntry], index: usize) -> SectionEdges {
-    let section = entries.get(index).map(|entry| entry.section);
-    let before = index.checked_sub(1).and_then(|before| entries.get(before));
-    let after = entries.get(index + 1);
-    SectionEdges {
-        first: before.map(|entry| entry.section) != section,
-        last: after.map(|entry| entry.section) != section,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -723,45 +702,6 @@ mod tests {
         assert_eq!(tooltip_of(&connected), "\\\\nas\\media · Connected");
         assert_eq!(tooltip_of(&saved), "\\\\nas\\media · Saved · connect on open");
         assert_eq!(tooltip_of(&visited), "\\\\nas\\media · Opened this session");
-    }
-
-    /// Home, Quick access, This PC and Network are sections of their own,
-    /// which the sidebar separates.
-    ///
-    /// parity: SIDE-001
-    #[test]
-    fn a_section_knows_its_first_and_last_rows() {
-        let settings = SettingsData {
-            pins: vec![
-                Bookmark {
-                    uri: "file:///srv/work".into(),
-                    label: "Work".into(),
-                },
-                Bookmark {
-                    uri: "file:///srv/play".into(),
-                    label: "Play".into(),
-                },
-            ],
-            ..SettingsData::default()
-        };
-        let entries = entries_for(&settings, &[]);
-        assert_eq!(labels(&entries)[..4], ["Home", "Work", "Play", "This PC"]);
-        let alone = SectionEdges {
-            first: true,
-            last: true,
-        };
-        let starting = SectionEdges {
-            first: true,
-            last: false,
-        };
-        let ending = SectionEdges {
-            first: false,
-            last: true,
-        };
-        assert_eq!(section_edges(&entries, 0), alone, "Home is a section of its own");
-        assert_eq!(section_edges(&entries, 1), starting, "Work starts Quick access");
-        assert_eq!(section_edges(&entries, 2), ending, "Play ends Quick access");
-        assert_eq!(section_edges(&entries, 3), starting, "This PC starts a group");
     }
 
     /// A standard folder moved onto a CIFS mount keeps its glyph on the

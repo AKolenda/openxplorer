@@ -392,11 +392,12 @@ impl Sidebar {
         list.remove_all();
         let rows: Vec<gtk::ListBoxRow> = entries
             .iter()
-            .enumerate()
-            .map(|(index, entry)| {
-                let edges = entries::section_edges(&entries, index);
-                let collapsed = self.is_collapsed(entry.section);
-                row::sidebar_row(entry, edges, self.imp().icon_size.get(), collapsed)
+            .map(|entry| {
+                row::sidebar_row(
+                    entry,
+                    self.imp().icon_size.get(),
+                    self.is_collapsed(entry.section),
+                )
             })
             .collect();
         // The header function reads the entries as the rows are added.
@@ -439,13 +440,7 @@ impl Sidebar {
         let row = {
             let entries = imp.entries.borrow();
             let entry = &entries[index];
-            let edges = entries::section_edges(&entries, index);
-            row::sidebar_row(
-                entry,
-                edges,
-                imp.icon_size.get(),
-                self.is_collapsed(entry.section),
-            )
+            row::sidebar_row(entry, imp.icon_size.get(), self.is_collapsed(entry.section))
         };
         let hidden = imp.hidden_rows.borrow().get(index).copied().unwrap_or_default();
         if hidden != HiddenRow::Shown {
