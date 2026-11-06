@@ -159,17 +159,23 @@ fn scan_blocking(
         .collect::<Result<Vec<String>, _>>()?;
     let destination = normalise(destination_folder)?;
     let folder = GioNode::new(&destination);
+    let kind = unless_cancelled(cancel, || folder.info(Some(cancel)))??.kind;
     // Follows a link: a folder opened through a symbolic link is the
     // folder and takes pasted items like the folder itself, as a drop
     // onto it already did.
-    if !unless_cancelled(cancel, || folder.is_directory(Some(cancel)))?? {
+    let is_folder = match kind {
+        NodeKind::Directory => true,
+        NodeKind::Symlink => unless_cancelled(cancel, || folder.is_directory(Some(cancel)))??,
+        NodeKind::File | NodeKind::Special => false,
+    };
+    // The folder's own local path, with every link resolved, so the items
+    // already in it are recognised under any of its addresses.
+    let destination_path = resolved_path(&folder);
+    if !takes_items(is_folder, kind, destination_path.as_deref()) {
         return Err(OpsError::failed(crate::i18n::gettext(
             "Open a destination folder before pasting.",
         )));
     }
-    // The folder's own local path, with every link resolved, so the items
-    // already in it are recognised under any of its addresses.
-    let destination_path = resolved_path(&folder);
     let mut asked: HashMap<String, bool> = HashMap::new();
     let mut scan = ConflictScan {
         mode,
@@ -205,6 +211,16 @@ fn scan_blocking(
         .place(&source, &folder, 0)?;
     }
     Ok(scan)
+}
+
+/// True when a paste may go into a destination that is a folder (`is_folder`,
+/// asked following links) of `kind`, whose own local path, every link
+/// resolved, is `path`. A link takes items only where its own path resolves:
+/// an address that does not — a share's symbolic link, which no identity
+/// check can compare — may be the item's own folder under another name, and
+/// the merge planned into it would then remove it.
+fn takes_items(is_folder: bool, kind: NodeKind, path: Option<&Path>) -> bool {
+    is_folder && (kind != NodeKind::Symlink || path.is_some())
 }
 
 /// The local path of `node` with every link resolved. `None` for a location
@@ -327,6 +343,18 @@ mod tests {
             incoming,
             existing,
         }
+    }
+
+    /// A link is a destination only where its own path resolves, so the
+    /// items already in it are recognised under any of its addresses.
+    #[test]
+    fn a_link_destination_needs_its_own_path() {
+        let path = Path::new("/home/anna/Arcade");
+
+        assert!(takes_items(true, NodeKind::Directory, None));
+        assert!(takes_items(true, NodeKind::Symlink, Some(path)));
+        assert!(!takes_items(true, NodeKind::Symlink, None));
+        assert!(!takes_items(false, NodeKind::Directory, Some(path)));
     }
 
     /// parity: OPS-028
