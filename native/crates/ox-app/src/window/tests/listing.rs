@@ -314,6 +314,12 @@ fn a_missing_folder_says_it_is_unavailable_and_offers_try_again() {
     assert!(pane.shows_empty_note());
 }
 
+/// Whether the app's settings hold `shown` for hidden files, which every
+/// window takes up after each save.
+fn holds_hidden(test: &TestWindow, shown: bool) -> bool {
+    test.context.settings_data().preferences.show_hidden == shown
+}
+
 /// parity: SRCH-003, VIEW-023
 #[gtk::test]
 fn the_filter_and_hidden_files_change_what_is_listed_until_the_folder_changes() {
@@ -321,7 +327,13 @@ fn the_filter_and_hidden_files_change_what_is_listed_until_the_folder_changes() 
     let test = TestWindow::open(&fixture.uri());
     test.activate("hidden", None);
     assert!(test.names().contains(&".private".to_owned()));
+    // Every finished save has the windows take up the saved preferences,
+    // so the first toggle's save, finishing after the second toggle, would
+    // show hidden files again for a moment. Once each choice is held, no
+    // earlier save is left to finish.
+    wait_until("hidden files to be held", || holds_hidden(&test, true));
     test.activate("hidden", None);
+    wait_until("hidden files to be held off", || holds_hidden(&test, false));
     let search = test.window.search_box().entry();
     search.set_text("notes 10");
     wait_until("the name filter", || test.names() == ["Notes 10.txt"]);
