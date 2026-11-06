@@ -596,6 +596,8 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Submenu | a flyout beside its row, opening after the pointer rests on the row for 400 ms (Windows' MenuShowDelay) or at once on a click, Right or Enter; its first item level with the row, overlapping the menu by its border and padding; flipped left near the screen's edge; the row stays highlighted while it is open. It is a popup of the menu's surface without a grab of its own | same | Windows 11 cascades a flyout (SPI_GETMENUSHOWDELAY 400 ms) | Keep: only the first menu holds a Wayland popup grab |
 | Quick-action strip (Windows 11 style only) | — | five 34-high icon buttons at 20 % width each, 2 px gap and padding, above the list ✓ | Windows 11 context menu (observed, unverified) | Keep. |
 | Send to (classic item menu only) | a submenu row between dividers above Cut, as in Windows Explorer's classic menu; its rows in Windows' order: Bluetooth device, Compressed (zipped) folder, Desktop (create shortcut), Documents, Mail recipient, then the removable drives and saved network locations under their This PC names; rows the computer lacks are left out, rows that cannot run are disabled with the reason in their tooltip; Documents and Mail recipient show Fluent's colour art, as Windows shows colour glyphs, the others their Fluent glyphs, as Fluent has no colour art for them (CMD-038) | — (Windows 11's compact menu has no Send to) | Windows Explorer classic menu, Send To folder | Keep. |
+| Right-drag menu (DND-027) | opens at the drop point when a right-button drag is released: Copy here, Move here, Create shortcuts here, a separator, Cancel; only the entries the items allow; what a left drop would do is **bold** (the Item label at weight 700); **text only**: no glyph, the empty glyph column keeps the label where other menus put it; no tooltip of the window shows while it is open; the first item takes the keyboard, Up/Down/Enter choose, Escape closes it doing nothing; no third-party entries | same | Windows 11 right-drag menu (observed) | Keep. |
+| Right-click timing | the secondary-button press selects the item; the menu opens on release, so the press can start a right-button drag | same | Windows Explorer (observed) | Keep. |
 
 ### 4.10 Tooltips
 
@@ -604,6 +606,13 @@ radius 4; padding `6px 9px 8px 9px`; maximum width 320 (wrap with
 `max-width-chars: 48` in code); shadow E04. Sources: ToolTip font size 12,
 border 1, padding `9,6,9,8`, max width 320, ControlCornerRadius (TT#L29–33,
 TT#L52, TT#L76–77). Tag: safe.
+
+The balloon under a name being renamed in place, when a character Windows
+forbids is typed or pasted (OPS-010), has the tooltip's look with a tail
+pointing up at the field (`popover.name-balloon`, `skin/folder-views.css`):
+Windows' "A file name can't contain any of the following characters:" and,
+indented 16 px on the next line, `\ / : * ? " < > |`. It never takes the
+keyboard from the field and hides at the next key or after 5 s. Tag: visible.
 
 ### 4.11 Dialogs
 

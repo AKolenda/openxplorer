@@ -13,7 +13,7 @@ use gtk::subclass::prelude::*;
 use ox_core::location::{same_location, TRASH_URI};
 
 use super::DropZone;
-use crate::window::file_drag::is_draggable_location;
+use crate::window::file_drag::{is_being_dragged, is_draggable_location};
 use crate::window::file_drop::DropDestination;
 use crate::window::session::TabId;
 use crate::window::sidebar::SidebarDropSpot;
@@ -112,10 +112,16 @@ impl BrowserWindow {
 
     /// Where a drop on the item at `position` goes: into it when it is a
     /// folder that takes drops, to it when it is a program; `None` for any
-    /// other item, whose drop goes into the folder shown.
+    /// other item and for an item being dragged, whose drop goes into the
+    /// folder shown.
     pub(super) fn item_destination(&self, position: u32) -> Option<DropDestination> {
         let item = self.folder_pane().model().item(position)?;
         let entry = item.entry();
+        // A dragged item is no target: a drop on it goes to the folder
+        // shown, as in Windows Explorer (DND-027).
+        if is_being_dragged(&entry.uri) {
+            return None;
+        }
         if entry.is_dir && !entry.is_virtual {
             let folder = entry.navigation_uri().to_owned();
             return self
@@ -128,7 +134,7 @@ impl BrowserWindow {
     /// Where a drop on the folder view at `position` goes, for tests that
     /// drop without a pointer.
     #[cfg(test)]
-    pub(in crate::window::file_drop) fn folder_view_destination(
+    pub(in crate::window) fn folder_view_destination(
         &self,
         position: Option<u32>,
     ) -> Option<DropDestination> {

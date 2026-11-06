@@ -117,7 +117,11 @@ impl BrowserWindow {
                 self.open_subfolders_after_hover(x, y);
             }
             DropZone::CrumbMenu => self.keep_drag_crumb_menu(),
-            DropZone::FolderView | DropZone::Sidebar | DropZone::Tabs => self.close_drag_crumb_menu(),
+            DropZone::Sidebar => {
+                self.close_drag_crumb_menu();
+                self.hover_sidebar_during_drag(Some(y));
+            }
+            DropZone::FolderView | DropZone::Tabs => self.close_drag_crumb_menu(),
         }
         // Asked at every motion, even where nothing takes the drop, so the
         // first offer is remembered as the drag reaches the window.
@@ -153,7 +157,8 @@ impl BrowserWindow {
             DropZone::FolderView => self.forget_program_checks(),
             DropZone::Breadcrumbs => self.leave_crumbs_during_drag(),
             DropZone::CrumbMenu => self.close_drag_crumb_menu(),
-            DropZone::Sidebar | DropZone::Tabs => {}
+            DropZone::Sidebar => self.hover_sidebar_during_drag(None),
+            DropZone::Tabs => {}
         }
     }
 
@@ -192,6 +197,12 @@ impl BrowserWindow {
             }
         ));
         true
+    }
+
+    /// A drag is at `y` of the sidebar's list, or left it with `None`: a
+    /// collapsed section held under it expands.
+    pub(in crate::window) fn hover_sidebar_during_drag(&self, y: Option<f64>) {
+        self.sidebar().expand_after_drag_hover(y);
     }
 
     /// Keeps where a drop happened, in the folder pane's coordinates, for

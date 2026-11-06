@@ -15,7 +15,11 @@ use super::spring::folder_to_open;
 use super::DropZone;
 use crate::window::file_drop::DropDestination;
 use crate::window::session::TabId;
+use crate::window::sidebar::SidebarDropSpot;
 use crate::window::BrowserWindow;
+
+/// The hint while a drop on the sidebar would pin.
+const PIN_HINT: &str = crate::i18n::message_id("Pin to Quick access");
 
 /// How long a drag must stay over a tab before the tab is shown.
 const TAB_HOVER_DELAY: Duration = Duration::from_millis(800);
@@ -37,6 +41,10 @@ impl BrowserWindow {
                     _ => None,
                 };
                 self.sidebar().show_drop_spot(sidebar_spot);
+                // Windows Explorer's hint for a drop that pins (DND-014).
+                let pins = matches!(sidebar_spot, Some(SidebarDropSpot::Pin { .. }));
+                let hint = pins.then(|| ox_core::i18n::gettext_static(PIN_HINT));
+                self.folder_pane().show_drag_hint(hint);
             }
             DropZone::Breadcrumbs => {
                 let crumb = match spot {
