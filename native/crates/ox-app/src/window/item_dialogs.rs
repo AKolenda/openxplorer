@@ -157,6 +157,15 @@ impl BrowserWindow {
         self.named_target(entry.navigation_uri().to_owned(), entry.name.clone(), kind)
     }
 
+    /// Whether `uri` is a standard folder (Documents, Downloads and the
+    /// others), which keeps its name.
+    pub(crate) fn is_standard_folder(&self, uri: &str) -> bool {
+        self.context()
+            .known_folders()
+            .into_iter()
+            .any(|place| place.known_folder.is_some() && same_location(&place.uri, uri))
+    }
+
     /// A target titled with the standard folder's label when `uri` is one
     /// (`findKnownFolder`).
     fn named_target(&self, uri: String, name: String, kind: ItemKind) -> PropertiesTarget {
