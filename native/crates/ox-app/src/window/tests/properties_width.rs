@@ -81,8 +81,8 @@ fn properties_of_selection(test: &TestWindow, title: &str) -> PropertiesWindow {
 }
 
 /// A long name, a long location and several items with long names give a
-/// window as wide as a short name does, on every tab: Windows' fixed
-/// width. The name box keeps the width and scrolls its text; the title
+/// window as wide and as tall as short names do, on every tab: Windows'
+/// fixed size. The name box keeps the width and scrolls its text; the title
 /// ends in "…".
 ///
 /// parity: PROP-001
@@ -90,6 +90,7 @@ fn properties_of_selection(test: &TestWindow, title: &str) -> PropertiesWindow {
 fn a_long_name_or_location_never_widens_properties() {
     let fixture = Fixture::standard();
     fs::create_dir(fixture.path("Short")).expect("a folder");
+    fs::write(fixture.path("Short.txt"), "fictional").expect("a file");
     fs::create_dir(fixture.path(LONG_NAME)).expect("a folder");
     fs::write(fixture.path(&format!("{LONG_NAME}.txt")), "fictional").expect("a file");
     let deep = [LONG_NAME, LONG_NAME, LONG_NAME].join("/");
@@ -138,13 +139,31 @@ fn a_long_name_or_location_never_widens_properties() {
     assert_every_tab_keeps(&nested, width, "a long location");
     nested.close();
 
+    // Several items have tabs of their own, so they are compared with
+    // several items of short names.
     test.show(&fixture.uri());
     test.wait_for_listing("the fixture");
-    super::file_ops_support::select_names(&test, &[LONG_NAME, &file_name]);
+    let short_pair = properties_of_two(&test, "Short", "Short.txt");
+    let several_width = shown_width(&short_pair);
+    let several_height = short_pair.height();
+    short_pair.close();
+    let long_pair = properties_of_two(&test, LONG_NAME, &file_name);
+    assert_eq!(
+        shown_width(&long_pair),
+        several_width,
+        "several items with long names"
+    );
+    assert_eq!(long_pair.height(), several_height, "nor makes them taller");
+    assert_every_tab_keeps(&long_pair, several_width, "several items");
+    long_pair.close();
+}
+
+/// Opens Properties of the items named `first` and `second` in `test`.
+fn properties_of_two(test: &TestWindow, first: &str, second: &str) -> PropertiesWindow {
+    super::file_ops_support::select_names(test, &[first, second]);
     // Windows titles them by their two names, in the listing's order.
     let is_both = |title: &str| {
-        title == format!("{LONG_NAME}, {file_name} Properties")
-            || title == format!("{file_name}, {LONG_NAME} Properties")
+        title == format!("{first}, {second} Properties") || title == format!("{second}, {first} Properties")
     };
     test.activate("properties", None);
     crate::test_support::harness::wait_until("Properties of the two items", || {
@@ -153,16 +172,11 @@ fn a_long_name_or_location_never_widens_properties() {
             .iter()
             .any(|window| is_both(&window.title_text()))
     });
-    let several = test
-        .window
+    test.window
         .properties_windows()
         .into_iter()
         .find(|window| is_both(&window.title_text()))
-        .expect("Properties of the two items");
-    wait_for_frames(&several, 6);
-    assert_eq!(several.width(), width, "several items with long names");
-    assert_every_tab_keeps(&several, width, "several items");
-    several.close();
+        .expect("Properties of the two items")
 }
 
 /// General with a short and a very long fictional name, light and dark,
