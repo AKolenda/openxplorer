@@ -135,10 +135,15 @@ impl TabStrip {
     }
 
     /// Shows `piece`, one of the strip's edge widgets, with its top left at
-    /// (`x`, `y`) of the strip.
+    /// (`x`, `y`) of the strip. The piece is drawn from where it is laid
+    /// out, its start corner, which is the top right in a right-to-left
+    /// language, so that place is taken off.
     fn show_at(&self, snapshot: &gtk::Snapshot, piece: &gtk::Widget, x: f32, y: f32) {
+        let laid_out = piece
+            .compute_point(self, &graphene::Point::zero())
+            .unwrap_or_else(graphene::Point::zero);
         snapshot.save();
-        snapshot.translate(&graphene::Point::new(x, y));
+        snapshot.translate(&graphene::Point::new(x - laid_out.x(), y - laid_out.y()));
         self.snapshot_child(piece, snapshot);
         snapshot.restore();
     }
