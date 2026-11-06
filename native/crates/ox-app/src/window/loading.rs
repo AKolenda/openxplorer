@@ -146,11 +146,6 @@ impl BrowserWindow {
         } else {
             self.keep_watching(id, &start.uri);
         }
-        if is_active && mode == LoadMode::Navigate {
-            // The previous folder's free space is wrong here while a slow
-            // folder lists; the end of the listing reads it again.
-            self.refresh_free_space();
-        }
         self.redraw_pane(id);
         let listing = self.start_listing(id, &start, mode, MountRetry::Allowed);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
@@ -199,7 +194,6 @@ impl BrowserWindow {
         if page == Page::Network {
             self.discover_servers_once();
         }
-        self.refresh_free_space();
         self.render_landing();
         self.update_content();
     }
@@ -394,7 +388,6 @@ impl BrowserWindow {
         self.apply_measured_folder_sizes(id);
         if self.imp().session.borrow().is_active(id) {
             self.restore_selection(id);
-            self.refresh_free_space();
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
