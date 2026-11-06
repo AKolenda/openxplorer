@@ -262,3 +262,30 @@ jobs:
               --title "OpenXplorer $version" --notes-file "$RUNNER_TEMP/release-notes.md" \
               "${assets[@]}" dist/SHA256SUMS
           fi
+
+  # Keeps only the newest release packages. After this run publishes, deletes
+  # the release packages of earlier runs; the published versions stay on the
+  # Releases page. The production concurrency group keeps runs from
+  # overlapping, so no earlier run is still downloading them.
+  prune-artifacts:
+    if: github.ref == 'refs/heads/main'
+    name: Delete earlier release packages
+    needs: [release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete release packages from earlier runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq "
+            .artifacts[]
+            | select(.expired | not)
+            | select(.workflow_run.id < $GITHUB_RUN_ID)
+            | select(.name | startswith(\"release-\"))
+            | .id" |
+          while read -r id; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+          done
