@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Rubber-band selection: dragging from blank space, or from the empty part
-//! of an unselected details row, draws a rectangle that selects the items
-//! it touches while it moves (SEL-012).
+//! Rubber-band selection: dragging from blank space draws a rectangle that
+//! selects the items it touches while it moves (SEL-012). A press on a
+//! details row is on its item, as with Windows 11's full-row select, so a
+//! band starts only off the rows.
 //!
 //! Ports Dolphin's `KItemListRubberBand` and `KItemListController`'s band
 //! handling: a plain band selects exactly the items it touches, Shift adds
@@ -133,12 +134,6 @@ impl BrowserWindow {
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
                     drag.set_state(gtk::EventSequenceState::Denied);
                     return;
-                }
-                // On the empty part of a row the band takes the press at
-                // once: the row would otherwise select its item on release,
-                // or drag it.
-                if window.is_beside_item(&view, x, y) {
-                    drag.set_state(gtk::EventSequenceState::Claimed);
                 }
                 let mode = BandMode::from_modifiers(drag.current_event_state());
                 window.begin_band(&view, (x, y), mode);
