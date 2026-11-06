@@ -82,7 +82,7 @@ fn wait_for_operation_after(test: &TestWindow, before: &str) {
 }
 
 /// Send to is a named, focusable row of the classic menu; Right opens it
-/// in place, listing Windows' destinations this computer has, and
+/// beside the menu, listing Windows' destinations this computer has, and
 /// Documents copies the file there through the transfer engine, keeping
 /// it selected, which Undo reverses.
 ///
@@ -114,14 +114,12 @@ fn send_to_opens_from_the_keyboard_and_copies_to_documents_with_undo() {
     ));
     row.grab_focus();
     assert!(menu.press_in_list(gtk::gdk::Key::Right));
-    wait_until("the Send to submenu", || {
-        menu.row_labels()
-            .contains(&"Compressed (zipped) folder".to_owned())
-    });
-    let entries: Vec<String> = menu
+    let submenu = menu.open_submenu_menu().expect("Right opens Send to");
+    wait_until("the Send to submenu", || submenu.is_mapped());
+    let entries: Vec<String> = submenu
         .row_labels()
         .into_iter()
-        .filter(|label| label != "-" && label != "Send to")
+        .filter(|label| label != "-")
         .collect();
     // No Bluetooth adapter, Email portal or removable drive in the tests.
     assert_eq!(
@@ -132,7 +130,7 @@ fn send_to_opens_from_the_keyboard_and_copies_to_documents_with_undo() {
             "Documents"
         ]
     );
-    let documents = menu.row("Documents");
+    let documents = submenu.row("Documents");
     assert!(documents.is_focusable());
     assert!(gtk::test_accessible_has_property(
         &documents,
@@ -211,8 +209,8 @@ fn a_saved_share_that_is_not_connected_connects_first_then_copies() {
     let choose_share = || {
         test.window.right_click(Some(position_of(&test, "report.txt")));
         let menu = test.window.context_menu();
-        assert!(menu.open_submenu_labelled("Send to"));
-        let share = menu.row("Media (M:)");
+        let send_to = menu.open_submenu_of("Send to");
+        let share = send_to.row("Media (M:)");
         assert!(share.is_sensitive(), "enabled although not connected");
         share.emit_activate();
     };

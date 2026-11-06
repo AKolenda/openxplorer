@@ -4,7 +4,7 @@ Browse your network without losing your sense of place.
 
 ## Connect to a server
 
-Open Network and enter a server or share address. The address bar also accepts Linux paths, UNC paths and smb:// locations. Each breadcrumb is separately clickable.
+Type a server or share address in the address bar, or open Network to see the computers on your network and open one. The address bar also accepts Linux paths, UNC paths and smb:// locations. Each breadcrumb is separately clickable.
 
 Windows-style paths use backslashes, not backticks: \\studio-nas\Projects. You can also use smb://studio-nas/Projects. Click each breadcrumb to jump to an ancestor. The website walkthrough uses this exact interface; the website itself makes no SMB connections.
 
@@ -21,11 +21,13 @@ smb://nas/Projects
 
 ## Sign in, once per server when possible
 
-The in-app prompt accepts a username and password. Remember my credentials requests persistent system-keyring storage. When unchecked, reusable credentials are scoped to the Linux login session if the Secret Service session collection is available.
+The in-app prompt, Enter network credentials, asks for a user name and password, as Windows does. Remember my credentials requests persistent system-keyring storage. When unchecked, reusable credentials are scoped to the Linux login session if the Secret Service session collection is available.
 
 Accounts are scoped by server and port. Different host aliases, rejected credentials, or shares requiring another account may prompt again. A locked keyring can show an operating-system unlock dialog; it is not the SMB credential prompt.
 
 ## Keep a share in reach
+
+Map network drive, below the navigation pane or in the … menu of This PC and Network, asks for a drive letter and a folder such as \\studio-nas\Projects, as in Windows 11. Reconnect at sign-in saves the share beneath Network; on Linux the letter is only part of its name, such as Projects (Z:). Connect using different credentials asks for an account even when one is saved. Its link Connect to a Web site opens Add a network location, which also connects SFTP, FTP, WebDAV and NFS folders.
 
 Successfully browsed locations appear beneath Network for the session. Right-click a share and choose Keep in Network to save it. Pin a share or a nested folder into the sidebar for a direct route back. Green marks indicate network-backed locations, not guaranteed online status.
 
@@ -37,7 +39,7 @@ The picture shows the sidebar with the sample folder Launch planning pinned to Q
 
 ## Discover nearby servers
 
-Discover servers uses the installed GVfs discovery providers. Devices must advertise themselves and be reachable through your network and firewall. It does not scan every IP address or guarantee an exhaustive list.
+Network lists the computers and servers that advertise themselves on your network, as Windows 11 does, through the installed GVfs discovery providers. It looks each time you open it, and Refresh looks again. Devices must advertise themselves and be reachable through your network and firewall. It does not scan every IP address or guarantee an exhaustive list. If Network says that network discovery is turned off, the GVfs network services are missing; type the server's address instead.
 
 ## Bookmarks are not persistent mounts
 

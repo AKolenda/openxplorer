@@ -269,7 +269,7 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     use std::os::unix::fs::PermissionsExt;
     use std::sync::{Arc, Mutex};
 
-    use ox_core::transfer::{FailedItem, FailureAnswer};
+    use ox_core::transfer::{FailedItem, FailureAnswer, FailureCause};
 
     let fixture = Fixture::new();
     let names = ["a.txt", "b.txt", "c.txt", "d.txt"];
@@ -290,6 +290,12 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     let log = Arc::clone(&asked);
     let first = paths[0].clone();
     let mut engine = gio_engine().with_failure_question(move |item: &FailedItem| {
+        assert_eq!(
+            item.cause,
+            FailureCause::AccessDenied,
+            "an unreadable file: {item:?}"
+        );
+        assert!(item.uri.ends_with(&item.name), "the item's own URI: {item:?}");
         let mut asked = log.lock().expect("question log");
         asked.push(item.name.clone());
         if asked.len() == 1 {

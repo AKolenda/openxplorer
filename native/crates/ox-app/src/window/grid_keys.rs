@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Up and Down in the icon grid keep to one column across rows of
-//! different lengths (SEL-010).
+//! Up and Down in the icon grid and in Tiles keep to one column across
+//! rows of different lengths (SEL-010).
 //!
 //! GTK's grid moves Down into a shorter last row by clamping to its last
 //! item and then forgets the column, so the next Up lands elsewhere.
@@ -53,7 +53,7 @@ impl BrowserWindow {
             _ => return None,
         };
         let pane = self.folder_pane();
-        if !modifiers.is_empty() || !matches!(pane.view(), FolderView::Icons(_)) {
+        if !modifiers.is_empty() || !matches!(pane.view(), FolderView::Icons(_) | FolderView::Tiles) {
             return None;
         }
         let focus = GtkWindowExt::focus(self)?;

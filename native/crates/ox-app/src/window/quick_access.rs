@@ -39,11 +39,11 @@ const FOLDERS_ONLY: &str =
 ///
 /// # Errors
 ///
-/// [`DropRefusal::ItemCount`] for no items or more than 200, and
+/// [`DropRefusal::PinCount`] for no items or more than 200, and
 /// [`DropRefusal::NotPinnable`] for anything else (`receiveFileDrop`).
 fn pinnable_uris(uris: &[String]) -> Result<Vec<String>, DropRefusal> {
     if !(1..=MAX_DROPPED_PINS).contains(&uris.len()) {
-        return Err(DropRefusal::ItemCount);
+        return Err(DropRefusal::PinCount);
     }
     let mut pins: Vec<String> = Vec::with_capacity(uris.len());
     for uri in uris {

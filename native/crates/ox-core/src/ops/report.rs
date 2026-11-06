@@ -3,11 +3,13 @@
 //!
 //! Ports the end of `runOperation` in `v2.0.0:desktop/ui/app.js`: complete success
 //! is a short message, which the window does not show (Windows Explorer
-//! says nothing); errors or skipped items open the "Operation result"
-//! dialog listing each; a request refused before it started opens
-//! "Operation stopped" with the refusal. Unlike `app.js`, a cancelled
-//! operation says nothing, as in Windows Explorer, unless a failure was
-//! never shown or something needs recovery by hand.
+//! says nothing); errors open the "Operation result" dialog listing each;
+//! a request refused before it started opens "Operation stopped" with the
+//! refusal. Unlike `app.js`, and as in Windows Explorer, nothing is said
+//! afterwards about what the user already answered in a question: the
+//! failures a prompt showed (OPS-047) and the names Skip left alone
+//! (OPS-026). Only a failure no question showed, or something that needs
+//! recovery by hand, is still reported, after Cancel too.
 
 use super::journal::JournalDirection;
 use super::undo::UndoRecord;
@@ -26,9 +28,12 @@ pub enum OperationSummary {
     /// Every item succeeded: a message such as `3 item(s) copied.`, which
     /// the window does not show, as in Windows Explorer.
     Toast(String),
-    /// Something went wrong or was skipped: the [`RESULT_TITLE`] dialog
-    /// with one line per fact.
+    /// Something went wrong that no question showed: the [`RESULT_TITLE`]
+    /// dialog with one line per fact.
     Report(String),
+    /// Items failed or were skipped, but the user answered each in a
+    /// question: nothing more is said, as in Windows Explorer.
+    Answered,
     /// The user cancelled: nothing is said, as in Windows Explorer, also
     /// when items were skipped before or failed in the question the user
     /// answered. A failure no question showed, such as a Recycle Bin item
@@ -46,29 +51,45 @@ pub fn summarize(mode: TransferMode, result: &TransferResult) -> OperationSummar
         TransferMode::Delete => crate::i18n::message_id("{count} item(s) permanently deleted."),
         TransferMode::Trash => crate::i18n::message_id("{count} item(s) moved to the Recycle Bin."),
     };
-    summarize_items(message, result)
+    summarize_items(message, result, Skips::Answered)
 }
 
 /// The summary of Duplicate, which the Python app did not have:
 /// `2 item(s) duplicated.` in the wording of the other toasts.
 pub fn summarize_duplicate(result: &TransferResult) -> OperationSummary {
-    summarize_items(crate::i18n::message_id("{count} item(s) duplicated."), result)
+    summarize_items(
+        crate::i18n::message_id("{count} item(s) duplicated."),
+        result,
+        Skips::Answered,
+    )
 }
 
 /// The summary of Restore from the Recycle Bin: `2 item(s) restored.`
 pub fn summarize_restore(result: &TransferResult) -> OperationSummary {
-    summarize_items(crate::i18n::message_id("{count} item(s) restored."), result)
+    summarize_items(
+        crate::i18n::message_id("{count} item(s) restored."),
+        result,
+        Skips::Unasked,
+    )
 }
 
 /// The summary of Create links, which the Python app did not have:
 /// `2 item(s) linked.` in the wording of the other toasts.
 pub fn summarize_links(result: &TransferResult) -> OperationSummary {
-    summarize_items(crate::i18n::message_id("{count} item(s) linked."), result)
+    summarize_items(
+        crate::i18n::message_id("{count} item(s) linked."),
+        result,
+        Skips::Answered,
+    )
 }
 
 /// The summary of a batch rename (OPS-014): `3 item(s) renamed.`
 pub fn summarize_batch_rename(result: &TransferResult) -> OperationSummary {
-    summarize_items(crate::i18n::message_id("{count} item(s) renamed."), result)
+    summarize_items(
+        crate::i18n::message_id("{count} item(s) renamed."),
+        result,
+        Skips::Unasked,
+    )
 }
 
 /// The summary of an Undo: `Rename undone.` when every step succeeded,
@@ -80,14 +101,14 @@ pub fn summarize_undo(record: &UndoRecord, result: &TransferResult) -> Operation
 /// The summary of an Undo or Redo of the operation titled `title`:
 /// `Rename undone.` or `Rename redone.` when every step succeeded,
 /// otherwise the [`RESULT_TITLE`] report of what happened, or nothing
-/// once cancelled.
+/// when the user cancelled or answered every failure.
 pub fn summarize_journal_step(
     direction: JournalDirection,
     title: &str,
     result: &TransferResult,
 ) -> OperationSummary {
     if !is_complete_success(result) {
-        return problems(result);
+        return problems(result, Skips::Unasked);
     }
     let message = match direction {
         JournalDirection::Undo => crate::i18n::message_id("{title} undone."),
@@ -96,29 +117,56 @@ pub fn summarize_journal_step(
     OperationSummary::Toast(crate::i18n::format_message(message, &[("title", title)]))
 }
 
-/// `N item(s) <verb>.` when every item succeeded, otherwise the report,
-/// or nothing once cancelled.
-fn summarize_items(message: &str, result: &TransferResult) -> OperationSummary {
+/// `N item(s) <verb>.` when every item succeeded, otherwise the report of
+/// what no question showed, if anything.
+fn summarize_items(message: &str, result: &TransferResult, skips: Skips) -> OperationSummary {
     if is_complete_success(result) {
         return OperationSummary::Toast(crate::i18n::format_message(
             message,
             &[("count", &result.done.len().to_string())],
         ));
     }
-    problems(result)
+    problems(result, skips)
 }
 
-/// What is said about a run that did not fully succeed: once the user
-/// cancelled, only the failures no question showed and what needs
-/// recovery by hand, otherwise the report. Each presented message
-/// silences one failure, so of two failures with the same message the
-/// one never asked about is still reported.
-fn problems(result: &TransferResult) -> OperationSummary {
-    if !result.cancelled {
-        return OperationSummary::Report(report_lines(result));
+/// What is said about a run that did not fully succeed: only the failures
+/// no question showed and what needs recovery by hand, with the counts
+/// unless the user cancelled; nothing when the user answered every
+/// failure. Each presented message silences one failure, so of two
+/// failures with the same message the one never asked about is still
+/// reported.
+fn problems(result: &TransferResult, skips: Skips) -> OperationSummary {
+    let unsaid = unsaid_errors(result);
+    if result.cancelled {
+        if unsaid.is_empty() {
+            return OperationSummary::Cancelled;
+        }
+        return OperationSummary::Report(unsaid.join("\n"));
     }
+    let unsaid_skips = skips == Skips::Unasked && !result.skipped.is_empty();
+    if unsaid.is_empty() && !unsaid_skips {
+        return OperationSummary::Answered;
+    }
+    OperationSummary::Report(report_lines(result, &unsaid))
+}
+
+/// Whether the items a run skipped were the user's answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Skips {
+    /// Each skip answered a question, such as Skip for a taken name in a
+    /// copy or move (OPS-026) or for a name the destination cannot store
+    /// (XFER-028): nothing more is said about them.
+    Answered,
+    /// The run skipped items by itself, as Undo leaves a folder that is
+    /// not empty: they are counted in the report.
+    Unasked,
+}
+
+/// The errors of `result` no question showed, and those that need
+/// recovery by hand, in order.
+fn unsaid_errors(result: &TransferResult) -> Vec<&str> {
     let mut presented: Vec<&String> = result.presented.iter().collect();
-    let unsaid: Vec<&str> = result
+    result
         .errors
         .iter()
         .filter(|error| {
@@ -132,11 +180,7 @@ fn problems(result: &TransferResult) -> OperationSummary {
             false
         })
         .map(String::as_str)
-        .collect();
-    if unsaid.is_empty() {
-        return OperationSummary::Cancelled;
-    }
-    OperationSummary::Report(unsaid.join("\n"))
+        .collect()
 }
 
 /// True when nothing failed, nothing was skipped and nobody cancelled.
@@ -144,8 +188,9 @@ fn is_complete_success(result: &TransferResult) -> bool {
     result.errors.is_empty() && result.skipped.is_empty() && !result.cancelled
 }
 
-/// `N completed.`, then the skipped count and each error, one per line.
-fn report_lines(result: &TransferResult) -> String {
+/// `N completed.`, then the skipped count and each of `errors`, one per
+/// line.
+fn report_lines(result: &TransferResult, errors: &[&str]) -> String {
     let mut lines = vec![crate::i18n::format_message(
         "{count} completed.",
         &[("count", &(result.done.len()).to_string())],
@@ -156,7 +201,7 @@ fn report_lines(result: &TransferResult) -> String {
             &[("count", &(result.skipped.len()).to_string())],
         ));
     }
-    lines.extend(result.errors.iter().cloned());
+    lines.extend(errors.iter().map(|error| (*error).to_owned()));
     lines.join("\n")
 }
 
@@ -216,6 +261,39 @@ mod tests {
 
         let expected = "1 completed.\n2 skipped (name already exists).\nb.txt: Permission denied";
         assert_eq!(summary, OperationSummary::Report(expected.into()));
+    }
+
+    /// Windows Explorer says nothing after a copy whose failures the user
+    /// answered in its prompts, nor about the names Skip left alone; a
+    /// failure no prompt showed is still reported, alone.
+    ///
+    /// parity: OPS-023, OPS-047
+    #[test]
+    fn a_run_whose_failures_were_all_answered_says_nothing() {
+        let denied = "b.txt: Permission denied";
+        let unseen = "c.txt: Sockets, devices and other special files are not copied.";
+        let answered = TransferResult {
+            presented: vec![denied.to_owned()],
+            ..result(1, 2, &[denied], false)
+        };
+        let partly = TransferResult {
+            presented: vec![denied.to_owned()],
+            ..result(1, 0, &[denied, unseen], false)
+        };
+
+        assert_eq!(
+            summarize(TransferMode::Copy, &answered),
+            OperationSummary::Answered
+        );
+        assert_eq!(summarize_duplicate(&answered), OperationSummary::Answered);
+        assert_eq!(
+            summarize(TransferMode::Move, &result(1, 2, &[], false)),
+            OperationSummary::Answered
+        );
+        assert_eq!(
+            summarize(TransferMode::Copy, &partly),
+            OperationSummary::Report(format!("1 completed.\n{unseen}"))
+        );
     }
 
     /// Windows Explorer says nothing after Cancel, also when items were

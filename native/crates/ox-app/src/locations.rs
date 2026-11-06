@@ -19,19 +19,21 @@ use ox_core::location::{DeviceLabel, LocationContext, VirtualPlace};
 use crate::icons::Icon;
 use crate::volumes::{VolumeKind, VolumeRow};
 
-/// A place the window draws itself instead of a folder listing.
+/// A place of the app's own rather than a folder: no file command, pin,
+/// search or Properties applies to it.
 ///
-/// Only these of ox-core's [`VirtualPlace`]s have a page yet; the Recycle
-/// Bin and Recent arrive with their milestones. The legacy Home page is
-/// not one of them: as in the Python app, `home:` opens the home folder.
-/// This PC and Network are landing pages in the folder pane; Settings
-/// takes the place of the whole browsing area, as `.settings-open` does in
-/// `v2.0.0:desktop/ui/style.css`.
+/// Only these of ox-core's [`VirtualPlace`]s are pages; the Recycle Bin
+/// and the recent lists are listed folders. The legacy Home page is not
+/// one of them: as in the Python app, `home:` opens the home folder. This
+/// PC is a landing page in the folder pane; Settings takes the place of
+/// the whole browsing area, as `.settings-open` does in
+/// `v2.0.0:desktop/ui/style.css`. Network lists the computers found on the
+/// network like a folder, as Windows 11 does ([`Page::draws_itself`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Page {
     /// Quick access, devices and drives, and saved network locations.
     ThisPc,
-    /// Connected and saved network locations.
+    /// The computers found on the network, listed like a folder.
     Network,
     /// The Settings page.
     Settings,
@@ -66,6 +68,18 @@ impl Page {
         VirtualPlace::from_uri(uri).and_then(Self::from_place)
     }
 
+    /// Whether the window draws the page itself; Network is listed like a
+    /// folder instead, with its computers as items, as in Windows 11.
+    pub(crate) const fn draws_itself(self) -> bool {
+        !matches!(self, Page::Network)
+    }
+
+    /// The page at `uri` that the window draws itself: This PC or
+    /// Settings. `None` for Network and for folders, which are listed.
+    pub(crate) fn drawn_at(uri: &str) -> Option<Page> {
+        Self::from_uri(uri).filter(|page| page.draws_itself())
+    }
+
     /// The page whose title was typed into the address bar ("this pc").
     ///
     /// Settings is never typed by title: the address bar is hidden on it,
@@ -80,13 +94,12 @@ impl Page {
         self.place().title()
     }
 
-    /// The line under the heading (`renderLanding` and `renderNetwork`).
+    /// The line under the heading (`renderLanding`); Network, listed like
+    /// a folder, has no heading.
     pub(crate) fn subtitle(self) -> &'static str {
         match self {
             Page::ThisPc => ox_core::i18n::gettext_static("Folders, devices, and connected storage."),
-            Page::Network => ox_core::i18n::gettext_static(
-                "Find shared storage on your local network, or enter an address.",
-            ),
+            Page::Network => "",
             Page::Settings => ox_core::i18n::gettext_static("Your explorer, your way."),
         }
     }
@@ -173,6 +186,12 @@ mod tests {
         assert_eq!(Page::from_uri("pc:"), Some(Page::ThisPc));
         assert_eq!(Page::from_uri("file:///"), None);
         assert_eq!(Page::from_uri("trash:///"), None);
+        assert_eq!(Page::drawn_at("pc:"), Some(Page::ThisPc));
+        assert_eq!(
+            Page::drawn_at("network:"),
+            None,
+            "Network is listed like a folder"
+        );
     }
 
     #[test]

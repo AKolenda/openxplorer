@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The protocols Map network location connects with, and the address it
+//! The protocols Add a network location connects with, and the address it
 //! builds from the dialog's fields.
 //!
 //! SMB is what the Python app offered; SFTP, FTP, FTPS, WebDAV and NFS are
@@ -55,25 +55,6 @@ impl Protocol {
             Self::WebDav => ox_core::i18n::gettext_static("WebDAV"),
             Self::WebDavs => ox_core::i18n::gettext_static("Secure WebDAV (HTTPS)"),
             Self::Nfs => ox_core::i18n::gettext_static("NFS"),
-        }
-    }
-
-    /// The protocol of URI scheme `scheme`, aliases such as `ssh`
-    /// included; `None` for a scheme that is not a network protocol.
-    pub(crate) fn from_scheme(scheme: &str) -> Option<Self> {
-        let scheme = ox_core::location::canonical_remote_scheme(scheme);
-        Self::ALL.into_iter().find(|protocol| protocol.scheme() == scheme)
-    }
-
-    /// The short name a server card shows, such as "SFTP".
-    pub(crate) fn short_name(self) -> &'static str {
-        match self {
-            Self::Smb => "SMB",
-            Self::Sftp => "SFTP",
-            Self::Ftp => "FTP",
-            Self::Ftps => "FTPS",
-            Self::WebDav | Self::WebDavs => "WebDAV",
-            Self::Nfs => "NFS",
         }
     }
 

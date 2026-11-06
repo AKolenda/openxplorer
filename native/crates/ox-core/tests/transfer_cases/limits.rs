@@ -124,6 +124,72 @@ fn a_copy_that_does_not_fit_is_refused_before_anything_is_written() {
     assert!(list(&fixture.destination_folder).is_empty());
 }
 
+/// A copy that does not fit asks first, as Windows does: "There is not
+/// enough space", with what it needs; Try Again reads the free space
+/// again, so it copies once the user made room, and Cancel stops before
+/// anything is written.
+///
+/// parity: XFER-028, OPS-047
+#[test]
+fn a_copy_that_does_not_fit_asks_and_checks_again_on_try_again() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use ox_core::transfer::{FailedItem, FailureAnswer, FailureCause, TransferError};
+
+    /// A stick whose free space the test changes.
+    struct FillingStick(Arc<AtomicU64>);
+    impl Provider for FillingStick {
+        fn filesystem(&self, _node: &LocalNode) -> Option<FilesystemInfo> {
+            Some(FilesystemInfo {
+                kind: Some("msdos".into()),
+                free: Some(self.0.load(Ordering::SeqCst)),
+                id: None,
+            })
+        }
+    }
+
+    for room_made in [false, true] {
+        let fixture = Fixture::new();
+        let source = fixture.source_folder.join("video.mp4");
+        fs::write(&source, random_bytes(2048)).unwrap();
+        let free = Arc::new(AtomicU64::new(1024));
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&asked);
+        let room = Arc::clone(&free);
+        let mut engine = fixture
+            .engine(Arc::new(FillingStick(Arc::clone(&free))))
+            .with_failure_question(move |item: &FailedItem| {
+                let mut asked = log.lock().unwrap();
+                asked.push((item.cause, item.needed, item.destination_folder.is_some()));
+                if asked.len() == 1 {
+                    if room_made {
+                        room.store(1 << 20, Ordering::SeqCst);
+                    }
+                    FailureAnswer::Retry
+                } else {
+                    FailureAnswer::Cancel
+                }
+            });
+
+        let outcome = fixture.try_run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
+
+        let asked = asked.lock().unwrap().clone();
+        if room_made {
+            assert!(outcome.is_ok(), "{outcome:?}");
+            assert_eq!(asked, [(FailureCause::NoSpace, Some(2048), true)]);
+            assert_eq!(list(&fixture.destination_folder), ["video.mp4"]);
+        } else {
+            assert_eq!(outcome.unwrap_err(), TransferError::Cancelled);
+            assert_eq!(
+                asked,
+                [(FailureCause::NoSpace, Some(2048), true); 2],
+                "asked again"
+            );
+            assert!(list(&fixture.destination_folder).is_empty());
+        }
+    }
+}
+
 /// parity: XFER-028
 #[test]
 fn a_file_over_4_gib_is_refused_on_fat_with_a_message_that_says_why() {

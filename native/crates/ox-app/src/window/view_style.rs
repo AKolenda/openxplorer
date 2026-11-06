@@ -129,9 +129,9 @@ impl BrowserWindow {
         let mut style = ViewProperties {
             mode: view.style_mode().to_owned(),
             icon_size: match view {
-                FolderView::Icons(size) => u32::try_from(size.pixels()).unwrap_or(56),
-                FolderView::Details | FolderView::Compact => {
-                    u32::try_from(pane.icon_view().icon_size().pixels()).unwrap_or(56)
+                FolderView::Icons(size) => u32::try_from(size.pixels()).unwrap_or(96),
+                FolderView::Details | FolderView::Compact | FolderView::Tiles | FolderView::Content => {
+                    u32::try_from(pane.icon_view().icon_size().pixels()).unwrap_or(96)
                 }
             },
             sort: sort.by.as_str().to_owned(),
@@ -279,8 +279,8 @@ impl BrowserWindow {
 
     /// Follows the preferences of how items are shown: the date style
     /// (VIEW-004), redrawn if it changed, item check boxes (SEL-014), whether
-    /// they wait for Ctrl, expandable folders (VIEW-035) and hidden files
-    /// (VIEW-023).
+    /// they wait for Ctrl, expandable folders (VIEW-035), hidden files
+    /// (VIEW-023) and Folder Options' own choices (VIEW-021).
     pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
         self.show_item_check_boxes(preferences.selection_marker);
@@ -291,6 +291,7 @@ impl BrowserWindow {
         }
         self.follow_hidden_files(preferences.show_hidden);
         self.follow_file_name_extensions_preference();
+        self.follow_folder_options(&preferences);
         for (side, uri) in self.shown_panes() {
             let pane = self.pane_on(side);
             let style = preferences.view_for(&uri);

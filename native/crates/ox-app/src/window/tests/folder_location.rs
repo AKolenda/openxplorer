@@ -122,20 +122,16 @@ fn the_location_tab_moves_documents_and_offers_to_move_its_files() {
     let user_dirs = fs::read_to_string(folders.config.join("user-dirs.dirs")).expect("the new setting");
     assert!(user_dirs.contains(&folders.destination.display().to_string()));
     question.press("Move files");
-    let conflict = open_dialog(&test);
-    assert_eq!(conflict.title_text(), "Items already exist");
-    conflict.press("Skip duplicates");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
 
-    let report = open_dialog(&test);
-    assert_eq!(
-        report.title_text(),
-        "Operation result",
-        "the skipped name is reported"
-    );
-    report.press("OK");
+    // The user chose Skip: as in Windows, no report follows.
     wait_until("the status", || {
         panel.status_text().contains("Some items stayed in")
     });
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is reported about the skipped name"
+    );
     let read = |path: PathBuf| fs::read_to_string(path).expect("the file is kept");
     assert_eq!(read(folders.destination.join("Taxes").join("2025.txt")), "taxes");
     assert_eq!(read(folders.destination.join("notes.txt")), "new notes");
@@ -209,8 +205,7 @@ fn read_only_reaches_the_files_before_location_moves_them() {
     window.ok_button().emit_clicked();
 
     open_dialog(&test).press("Move files");
-    open_dialog(&test).press("Skip duplicates");
-    open_dialog(&test).press("OK");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
     wait_until("the window to close", || window.is_closed());
     let mode = |path: PathBuf| fs::metadata(path).expect("the file").permissions().mode() & 0o777;
     assert_eq!(mode(folders.destination.join("plan.txt")), 0o444);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Network shares and devices in the window: Discover servers on the
-//! Network page, Map network location, Sign out of server, Keep in
+//! Network shares and devices in the window: Network's discovered
+//! computers and info bar, Map network drive, Sign out of server, Keep in
 //! Network and Remove saved location, This PC's network and drive cards,
 //! and connecting and removing drives, against `renderNetwork`,
 //! `connectDialog`, `signOut`, `networkLocationMenu`, `mountVolume` and
@@ -23,12 +23,15 @@ use ox_core::network::{
 };
 
 use crate::folder_view::item::FileItem;
+use crate::icons::Art;
 use crate::locations::Page;
 use crate::network::Discoverer;
 use crate::test_support::file_entry;
 use crate::test_support::harness::{
     capture, capture_dialog, descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard,
 };
+use crate::window::activation::{activation_for, Activation};
+use crate::window::folder_pane::PanePage;
 use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
 use crate::window::Dialog;
@@ -149,14 +152,16 @@ fn closing_the_window_aborts_its_sign_ins() {
     assert_eq!(operation.password(), None, "no password stays on the operation");
 }
 
-/// The first visit of Network discovers servers, shows them with their
-/// count, and offers Stop while more passes follow.
+/// Network is listed like a folder, as in Windows 11: going there
+/// discovers computers, each an item of the type "Computer" with the
+/// server picture, which opens the server's shared folders; no info bar
+/// shows while discovery runs.
 ///
 /// Ported from `v2.0.0:desktop/tests/ui_release.py::Network discovery populates sample servers`
 ///
-/// parity: HOME-006, HOME-007, HOME-008, NET-024
+/// parity: HOME-007, HOME-008, NET-024
 #[gtk::test]
-fn the_network_page_discovers_servers_on_its_first_visit() {
+fn network_lists_the_discovered_computers_as_items() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let found = Discovery {
@@ -165,44 +170,71 @@ fn the_network_page_discovers_servers_on_its_first_visit() {
     };
     test.context.network().set_discoverer(Discoverer::finding(found));
 
-    test.window
-        .navigate(Page::Network.uri())
-        .expect("the Network page");
-    let landing = test.window.folder_pane().landing();
-    wait_until("the discovered server", || shows(landing, "SMB · Discovered"));
+    test.window.navigate(Page::Network.uri()).expect("Network");
+    test.wait_for_listing("Network");
 
-    for expected in [
-        "studio-nas",
-        "\\\\studio-nas\\",
-        "1",
-        "Stop",
-        "Listening for advertised SMB servers…",
-    ] {
-        assert!(shows(landing, expected), "{expected} in {:?}", texts_in(landing));
-    }
-    let card = descendants::<gtk::Button>(landing)
-        .into_iter()
-        .find(|button| button.has_css_class("discovered-server"))
-        .expect("the server's card");
-    let target = card
-        .action_target_value()
-        .and_then(|target| target.get::<String>());
+    assert_eq!(test.window.folder_pane().page(), Some(PanePage::Listing));
+    assert_eq!(test.names(), ["studio-nas"]);
+    let watches = test
+        .window
+        .imp()
+        .session
+        .borrow()
+        .active()
+        .map(|tab| tab.watch.is_some());
     assert_eq!(
-        target.as_deref(),
-        Some("smb://studio-nas/"),
-        "the card opens the server"
+        watches,
+        Some(false),
+        "the folder left behind is no longer watched"
     );
-    test.activate("stop-discovery", None);
-    assert!(shows(landing, "Discover servers"));
-    assert!(shows(landing, "Discover devices without scanning their files."));
-    assert!(shows(landing, "studio-nas"), "Stop keeps what was found");
+    let computer = test.window.folder_model().item(0).expect("the computer");
+    assert_eq!(computer.entry().type_label, "Computer");
+    assert_eq!(Art::for_entry(computer.entry()), Art::SERVER);
+    assert!(!test.window.network_info_bar().is_visible());
+    assert_eq!(
+        activation_for(computer.entry()),
+        Activation::Folder("smb://studio-nas/".into()),
+        "the computer opens its shared folders"
+    );
 }
 
-/// Map network location opens from every place that offers it; an
+/// Where the network browser cannot be read, Network says, as Windows
+/// does, that discovery is off, with GIO's reason as the tooltip; the bar
+/// opens Help, and leaves with Network.
+///
+/// parity: NET-024
+#[gtk::test]
+fn network_says_when_discovery_is_turned_off() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.context.network().set_discoverer(Discoverer::answering(|| {
+        let missing = gtk::glib::Error::new(gtk::gio::IOErrorEnum::NotSupported, "Location is not supported");
+        Err(NetworkError::Gio(missing))
+    }));
+
+    test.window.navigate(Page::Network.uri()).expect("Network");
+    test.wait_for_listing("Network");
+
+    let bar = test.window.network_info_bar();
+    assert!(bar.is_visible());
+    assert_eq!(
+        texts_in(bar),
+        ["Network discovery is turned off. Network computers and devices are not visible. Click to learn more..."]
+    );
+    assert_eq!(bar.tooltip_text().as_deref(), Some("Location is not supported"));
+    assert_eq!(bar.action_name().as_deref(), Some("win.help"));
+    assert!(test.names().is_empty());
+    capture(&test.window, "native-network-discovery-off.png");
+    test.window.navigate(&fixture.uri()).expect("the folder");
+    test.wait_for_listing("the folder");
+    assert!(!bar.is_visible(), "the bar belongs to Network");
+}
+
+/// Map network drive opens from every place that offers it; an
 /// address that is not a share is refused inside the dialog, which stays
 /// open for another try, and Cancel closes it.
 ///
-/// parity: NET-001, HOME-009
+/// parity: NET-001
 #[gtk::test]
 fn map_network_location_keeps_its_errors_inside_the_dialog() {
     let test = TestWindow::open(Page::Network.uri());
@@ -219,7 +251,7 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
     wait_until("the error", || dialog.error_text().is_some());
 
     assert!(dialog.is_visible());
-    assert!(dialog.can_press("Connect"), "Connect can be pressed again");
+    assert!(dialog.can_press("Finish"), "Finish can be pressed again");
     dialog.press("Cancel");
     wait_until("Cancel to close the dialog", || !dialog.is_visible());
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
@@ -228,22 +260,25 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
 /// "…" > Add a network location opens the connect dialog under Windows'
 /// title, at a web address type (Windows' wizard adds websites and FTP
 /// sites), and saves what it connects under Network locations; Map
-/// network drive opens it at a Windows share.
+/// network drive opens Windows' dialog at drive Z:, reconnecting at
+/// sign-in.
 ///
 /// parity: NET-001, NET-002, CMD-007
 #[gtk::test]
 fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
     let test = TestWindow::open(Page::ThisPc.uri());
-    for (action, title, kind) in [
+    for (action, title, first, keep) in [
         (
             "add-network-location",
             "Add a network location",
             "Secure WebDAV (HTTPS)",
+            "Save in the sidebar · reconnect when opened",
         ),
         (
             "map-network-location",
-            "Map network location",
-            "Windows share (SMB)",
+            "Map network drive",
+            "Z:",
+            "Reconnect at sign-in",
         ),
     ] {
         test.activate(action, None);
@@ -254,14 +289,10 @@ fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
             .and_then(gtk::DropDown::selected_item)
             .and_downcast::<gtk::StringObject>()
             .map(|chosen| chosen.string().to_string());
-        assert_eq!(chosen.as_deref(), Some(kind), "{action}");
+        assert_eq!(chosen.as_deref(), Some(first), "{action}");
         let save = descendants::<gtk::CheckButton>(&dialog)
             .into_iter()
-            .find(|check| {
-                check
-                    .label()
-                    .is_some_and(|label| label.starts_with("Save in the sidebar"))
-            })
+            .find(|check| check.label().is_some_and(|label| label == keep))
             .expect("the dialog saves the location");
         assert!(save.is_active(), "{action} saves it under Network locations");
         dialog.press("Cancel");
@@ -600,10 +631,10 @@ fn this_pc_lists_saved_locations_or_says_how_to_map_one() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
     let empty =
-        "No network locations saved. Use “Map network location” to connect to a share and add it to the \
+        "No network locations saved. Use “Map network drive” to connect to a share and add it to the \
                  sidebar.";
     assert!(shows(landing, empty));
-    assert!(shows(landing, "Map network location"));
+    assert!(shows(landing, "Map network drive"));
 
     test.save_share("smb://fileserver/backup", "Backup (S:)");
     // Named as Windows 11 names a mapped drive: its label, its server and
@@ -779,10 +810,9 @@ fn the_network_surfaces_are_captured() {
             shows(landing, "Studio NAS (\\\\studio-nas) (Z:)")
         });
         capture(&test.window, &format!("native-this-pc-saved-share-{theme}.png"));
-        test.window
-            .navigate(Page::Network.uri())
-            .expect("the Network page");
-        wait_until("the discovered server", || shows(landing, "SMB · Discovered"));
+        test.window.navigate(Page::Network.uri()).expect("Network");
+        test.wait_for_listing("Network");
+        wait_until("the discovered computer", || test.names() == ["studio-nas"]);
         capture(&test.window, &format!("native-network-discovered-{theme}.png"));
         capture_sign_in(&test, theme);
         for (action, target, name) in [

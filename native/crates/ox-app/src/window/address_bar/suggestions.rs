@@ -182,6 +182,18 @@ impl AddressBar {
         self.show_suggestions(completions);
     }
 
+    /// Forgets the typed history (Folder Options' Clear File Explorer
+    /// history).
+    pub(in crate::window) fn forget_typed_history(&self) {
+        self.imp().typed_history.borrow_mut().clear();
+    }
+
+    /// The typed history, newest first, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn typed_history(&self) -> Vec<String> {
+        self.imp().typed_history.borrow().clone()
+    }
+
     /// Edits the address with the typed history listed below it (F4 and
     /// the chevron).
     pub(in crate::window) fn show_history(&self) {

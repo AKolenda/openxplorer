@@ -4,7 +4,7 @@
 //! Ports `renderSidebar` and `.sidebar` in `v2.0.0:desktop/ui/app.js` and
 //! `style.css`: the rows of [`entries::sidebar_entries`], separated by
 //! list-row headers so keyboard and screen-reader users never land on an
-//! empty separator row, and the "Map network location" button pinned below
+//! empty separator row, and the "Map network drive" button pinned below
 //! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
 //! [`WindowAction::MountVolume`]; a middle-click or Ctrl+click opens a
 //! place in a tab, and the current location highlights the closest place
@@ -60,7 +60,7 @@ pub(super) enum HiddenRow {
 /// The class that dims a hidden row.
 const HIDDEN_ROW_CLASS: &str = "hidden-place";
 
-/// The "+" of Map network location.
+/// The "+" of Map network drive.
 const MAP_NETWORK_GLYPH: i32 = 17;
 
 mod imp {
@@ -92,6 +92,9 @@ mod imp {
         /// The sections collapsed with their chevron or the arrow keys
         /// (SIDE-033).
         pub(super) collapsed: RefCell<Vec<Section>>,
+        /// The collapsed section a drag is held over, and the wait before
+        /// it expands (DND-027).
+        pub(super) drag_expand: RefCell<Option<(Section, glib::SourceId)>>,
         /// The location last given to `select`, whose closest place is
         /// highlighted.
         pub(super) location: RefCell<Option<String>>,
@@ -290,9 +293,11 @@ impl Sidebar {
             .menu
             .set(menu)
             .expect("constructed runs once per object");
+        // The release opens the menu, as in Windows Explorer, so a
+        // right-button drag can start from the press (DND-027).
         let click = gtk::GestureClick::new();
         click.set_button(gdk::BUTTON_SECONDARY);
-        click.connect_pressed(glib::clone!(
+        click.connect_released(glib::clone!(
             #[weak(rename_to = sidebar)]
             self,
             move |gesture, _, x, y| {
@@ -324,8 +329,8 @@ impl Sidebar {
         true
     }
 
-    /// Right-clicks the row labelled `label` and returns the sidebar's
-    /// menu, for tests.
+    /// Right-clicks the row labelled `label`, pressing and releasing the
+    /// button, and returns the sidebar's menu, for tests.
     #[cfg(test)]
     pub(super) fn right_click_row(&self, label: &str) -> MenuPopover {
         let index = self
@@ -339,7 +344,16 @@ impl Sidebar {
             .expect("every entry has a row");
         let bounds = row.compute_bounds(self.list()).expect("a shown row has bounds");
         let middle = f64::from(bounds.y() + bounds.height() / 2.0);
-        self.show_menu(1.0, middle);
+        let right_click = self
+            .list()
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|click| click.button() == gdk::BUTTON_SECONDARY)
+            .expect("the sidebar takes right-clicks");
+        right_click.emit_by_name::<()>("pressed", &[&1_i32, &1.0_f64, &middle]);
+        right_click.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &middle]);
         self.imp()
             .menu
             .get()
@@ -548,17 +562,17 @@ fn section_separator() -> gtk::Separator {
     line
 }
 
-/// The "Map network location" button below the list (`#connect-sidebar`).
+/// The "Map network drive" button below the list (`#connect-sidebar`).
 fn map_network_button() -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
     content.append(&icons::image(Icon::Add, MAP_NETWORK_GLYPH));
     content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext(
-        "Map network location",
+        "Map network drive",
     ))));
     let button = gtk::Button::builder()
         .child(&content)
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(ox_core::i18n::gettext("Map network location"))
+        .tooltip_text(ox_core::i18n::gettext("Map network drive"))
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

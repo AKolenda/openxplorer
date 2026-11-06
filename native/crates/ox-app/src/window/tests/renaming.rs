@@ -4,6 +4,7 @@
 //! hides an item (OPS-013) and the warnings under a name field while the
 //! user types (OPS-007), as Dolphin has them.
 
+use std::fs;
 use std::time::Duration;
 
 use gtk::glib::translate::IntoGlib;
@@ -15,6 +16,7 @@ use super::file_ops_support::{
     wait_for_no_dialog,
 };
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
+use crate::test_support::pointer::{screen_point, Pointer};
 use crate::window::session::PaneSide;
 use crate::window::slow_click_rename::NamePress;
 
@@ -513,4 +515,155 @@ fn rename_selects_the_name_windows_selects_with_extensions_shown_and_hidden() {
     });
     assert!(dialog_over(&test).is_none(), "no question about the extension");
     assert!(fixture.path("Q3 figures").is_symlink());
+}
+
+/// The lines of the balloon under `editor`, while it shows.
+fn balloon_lines(editor: &gtk::Entry) -> Option<Vec<String>> {
+    descendants::<gtk::Popover>(editor)
+        .into_iter()
+        .find(|balloon| balloon.has_css_class("name-balloon") && balloon.is_visible())
+        .map(|balloon| {
+            let lines = descendants::<gtk::Label>(&balloon);
+            lines.iter().map(|line| line.text().to_string()).collect()
+        })
+}
+
+/// The balloon's lines, in Windows' words.
+fn windows_balloon() -> Vec<String> {
+    vec![
+        "A file name can't contain any of the following characters:".to_owned(),
+        "\\ / : * ? \" < > |".to_owned(),
+    ]
+}
+
+/// A character Windows forbids in names is refused as it is typed, with
+/// Windows' balloon under the field; the name and its selection stay,
+/// the rename goes on, and the next key hides the balloon. The key is a
+/// real one on the private display, so it goes through the field's input
+/// method as a typed key does, and Compose sequences keep working.
+///
+/// parity: OPS-010
+#[gtk::test]
+fn a_character_windows_forbids_is_refused_with_its_balloon() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    let mut pointer = Pointer::connect();
+    let middle = (f64::from(field.width()) / 2.0, f64::from(field.height()) / 2.0);
+    let (x, y) = screen_point(&mut pointer, &field, middle, (200, 200));
+    pointer.move_to(x, y);
+    let name_back = || field.text() == "Notes 2.txt" && field.selection_bounds() == Some((0, 7));
+
+    pointer.tap_key(gdk::Key::slash);
+    wait_until("the balloon and the name back", || {
+        balloon_lines(&field).is_some() && name_back()
+    });
+    let shown = balloon_lines(&field);
+    let mut position = 5;
+    field.insert_text("10:30", &mut position);
+    wait_for(Duration::from_millis(300));
+    let unchanged = name_back();
+    let still_renaming = is_renaming_in_place(&test);
+    pointer.tap_key(gdk::Key::End);
+    wait_until("the balloon to go", || balloon_lines(&field).is_none());
+
+    assert_eq!(shown, Some(windows_balloon()));
+    assert!(unchanged, "nothing was inserted and the stem stays selected");
+    assert!(still_renaming, "the balloon leaves the keyboard in the field");
+    press_in(&field, gdk::Key::Escape, gdk::ModifierType::empty());
+    wait_until("the rename to end", || !is_renaming_in_place(&test));
+}
+
+/// Pasting text with a character Windows forbids pastes nothing and
+/// shows the balloon, so the selected name is not lost; other text is
+/// pasted over the selection as usual.
+///
+/// parity: OPS-010
+#[gtk::test]
+fn pasting_a_forbidden_character_leaves_the_name_as_it_was() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    let text = field
+        .delegate()
+        .and_downcast::<gtk::Text>()
+        .expect("the field edits through a text");
+
+    field.clipboard().set_text("Plan: 2027");
+    text.emit_paste_clipboard();
+    wait_until("the balloon and the name back", || {
+        balloon_lines(&field).is_some() && field.text() == "Notes 2.txt"
+    });
+    let after_refusal = (field.text(), field.selection_bounds());
+    field.clipboard().set_text("Plan 2027");
+    text.emit_paste_clipboard();
+    wait_until("the paste", || field.text() == "Plan 2027.txt");
+
+    assert_eq!(after_refusal, ("Notes 2.txt".into(), Some((0, 7))));
+    press_in(&field, gdk::Key::Escape, gdk::ModifierType::empty());
+    wait_until("the rename to end", || !is_renaming_in_place(&test));
+    assert!(fixture.path("Notes 2.txt").is_file(), "Escape renamed nothing");
+}
+
+/// A file renamed to the name of another file asks Windows' "Rename
+/// File" question: No goes back to editing the typed name, Yes gives the
+/// file the first free numbered name, and nothing is overwritten.
+///
+/// parity: OPS-008, OPS-010
+#[gtk::test]
+fn a_file_renamed_to_a_taken_name_is_offered_the_next_free_number() {
+    let fixture = Fixture::standard();
+    fixture.write("Notes 10 (2).txt");
+    fs::write(fixture.path("Notes 2.txt"), b"renamed").expect("the renamed file");
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Notes 10.txt");
+    field.emit_activate();
+    let question = open_dialog(&test);
+    let (title, message) = (question.title_text(), question.message_text());
+    let (texts, buttons) = (question.texts(), question.button_labels());
+    question.press("No");
+    wait_for_no_dialog(&test);
+    wait_until("the field to come back", || field.is_sensitive());
+    let typed = field.text();
+    field.emit_activate();
+    open_dialog(&test).press("Yes");
+    wait_until("the numbered rename", || {
+        fixture.path("Notes 10 (3).txt").is_file() && !is_renaming_in_place(&test)
+    });
+
+    assert_eq!(title, "Rename File");
+    assert_eq!(
+        message,
+        "There is already a file with the same name in this location."
+    );
+    let asks = "Would you like to rename \"Notes 10.txt\" to \"Notes 10 (3).txt\"?";
+    assert!(texts.iter().any(|text| text == asks), "{texts:?}");
+    let sizes = texts.iter().filter(|text| text.starts_with("Size: ")).count();
+    let dates = texts
+        .iter()
+        .filter(|text| text.starts_with("Date modified: "))
+        .count();
+    assert_eq!((sizes, dates), (2, 2), "both files are described: {texts:?}");
+    assert_eq!(buttons, ["Yes", "No"]);
+    assert_eq!(typed, "Notes 10.txt", "No keeps the typed name for editing");
+    assert!(!fixture.path("Notes 2.txt").exists());
+    assert_eq!(
+        fs::read(fixture.path("Notes 10 (3).txt")).ok(),
+        Some(b"renamed".to_vec())
+    );
+    for kept in ["Notes 10.txt", "Notes 10 (2).txt"] {
+        let content = fs::read(fixture.path(kept)).ok();
+        assert_eq!(content, Some(b"Synthetic test data\n".to_vec()), "{kept} stays");
+    }
 }

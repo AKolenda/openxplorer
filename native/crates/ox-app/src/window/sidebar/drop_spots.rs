@@ -3,12 +3,16 @@
 //! (DND-009, DND-014).
 //!
 //! Ports the sidebar half of `publishFileDragLayout` and the pin half of
-//! `showFileDropHint` in `v2.0.0:desktop/ui/app.js`. Quick access always pins,
-//! also over a pinned folder: before the pin whose vertical middle is
-//! below the pointer, with an accent line above it, or after the last pin,
-//! with the line under it. Any other row that opens a location is that
-//! folder; the window decides whether the folder takes drops. A drive
-//! that still has to be mounted takes none.
+//! `showFileDropHint` in `v2.0.0:desktop/ui/app.js`, changed to Windows
+//! Explorer's navigation pane: a drop on a pinned folder goes into it, and
+//! only a drop between pins pins: on the top or bottom quarter of a
+//! pinned row, with an accent line above it or under the last pin, or on
+//! the "Pin to Quick access" row of an empty Quick access. The Python app
+//! pinned anywhere in Quick access, even over a pinned folder, so a drop
+//! could not go into one; pinning between pins keeps that behaviour. Any
+//! other row that opens a location is that folder; the window decides
+//! whether the folder takes drops. A drive that still has to be mounted
+//! is mounted first (DEV-010).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -16,6 +20,11 @@ use ox_core::location::RECENT_URI;
 
 use super::entries::{RowTarget, Section};
 use super::Sidebar;
+
+/// The share of a Quick access row's height, at its top and at its
+/// bottom, where a drop pins between pins instead of going into the
+/// folder.
+const PIN_EDGE: f64 = 0.25;
 
 /// The CSS class of the row whose folder a drop would go into.
 const FOLDER_DROP_CLASS: &str = "file-drop-active";
@@ -101,12 +110,22 @@ impl Sidebar {
                 uri: uri.clone(),
             });
         }
+        // As in Windows Explorer's navigation pane, the middle of a pinned
+        // folder's row is the folder; only its top and bottom edges, between
+        // pins, pin.
         let bounds = row.compute_bounds(self.list())?;
-        let middle = f64::from(bounds.y() + bounds.height() / 2.0);
-        if y < middle {
+        let edge = f64::from(bounds.height()) * PIN_EDGE;
+        let (top, bottom) = (f64::from(bounds.y()), f64::from(bounds.y() + bounds.height()));
+        if y < top + edge {
             return Some(SidebarDropSpot::Pin {
                 index,
                 before: Some(uri.clone()),
+            });
+        }
+        if y < bottom - edge {
+            return Some(SidebarDropSpot::Folder {
+                index,
+                uri: uri.clone(),
             });
         }
         let next = self.quick_access_pin(index + 1);
@@ -127,6 +146,14 @@ impl Sidebar {
             (RowTarget::Location(uri), Section::QuickAccess) => Some(uri.clone()),
             _ => None,
         }
+    }
+
+    /// The label of the row at `index`, which the drag's label names
+    /// (DND-028).
+    pub(in crate::window) fn row_label(&self, index: i32) -> Option<String> {
+        let entries = self.imp().entries.borrow();
+        let entry = entries.get(usize::try_from(index).ok()?)?;
+        Some(entry.label.clone())
     }
 
     /// Highlights `spot`, or nothing.
@@ -172,5 +199,22 @@ impl Sidebar {
             .expect("every entry has a row");
         let bounds = row.compute_bounds(self.list()).expect("a shown row has bounds");
         f64::from(bounds.y() + bounds.height() / 2.0)
+    }
+
+    /// A point just inside the top edge of the row labelled `label`, in
+    /// the list's coordinates, where a drop pins before it, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn top_edge_of(&self, label: &str) -> f64 {
+        let index = self
+            .labels()
+            .iter()
+            .position(|shown| shown == label)
+            .unwrap_or_else(|| panic!("the sidebar shows {label}"));
+        let row = i32::try_from(index)
+            .ok()
+            .and_then(|index| self.list().row_at_index(index))
+            .expect("every entry has a row");
+        let bounds = row.compute_bounds(self.list()).expect("a shown row has bounds");
+        f64::from(bounds.y()) + 1.0
     }
 }
