@@ -4603,8 +4603,9 @@ mod tests {
     /// A Save dialog shows Downloads in the style Downloads keeps, grouped
     /// by date modified, as Windows' dialog shows a folder as Explorer
     /// does: opened at the folder the application last used, at the
-    /// folder it passes or at its file, and still grouped after another
-    /// file type, Back and Forward, and Downloads in the navigation pane.
+    /// folder it passes or at its file, and still grouped with a file
+    /// selected, after another file type, Back and Forward, and Downloads
+    /// in the navigation pane.
     ///
     /// parity: INT-032, VIEW-022
     #[gtk::test]
@@ -4678,6 +4679,13 @@ mod tests {
             assert_eq!(grouping(), Some(GroupBy::Modified), "opened at its {start}");
             assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
 
+            assert!(window.select_named("scan 02.png"));
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(400));
+            assert_eq!(
+                grouping(),
+                Some(GroupBy::Modified),
+                "with a file selected, {start}"
+            );
             let types = window
                 .picker()
                 .expect("a picker")
