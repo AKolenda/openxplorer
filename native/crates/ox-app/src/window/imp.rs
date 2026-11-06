@@ -20,7 +20,7 @@ use super::command_bar::CommandBar;
 use super::connections::ExternalHandlers;
 use super::details_pane::DetailsPane;
 use super::file_drag::OutgoingDrag;
-use super::file_drop::{FirstOffer, PendingDrop, ProgramChecks};
+use super::file_drop::{DropLabels, FirstOffer, PendingDrop, ProgramChecks};
 use super::file_ops::FileOperations;
 use super::folder_pane::FolderPane;
 use super::menu_popover::MenuPopover;
@@ -195,6 +195,9 @@ pub(crate) struct BrowserWindow {
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// Counts the re-reads of changed text matches, so a late one never
+    /// removes what a newer one kept; see [`super::live_search`].
+    pub(super) content_recheck: Cell<u64>,
     /// Set while the window itself empties the search box, which then
     /// does not leave search results as the user emptying it does; see
     /// [`super::search_steps`].
@@ -254,6 +257,8 @@ pub(crate) struct BrowserWindow {
     pub(super) pending_drop: RefCell<Option<PendingDrop>>,
     /// What the drag over the window offered when it arrived.
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
+    /// What the label on the drag icon says over the window (DND-028).
+    pub(super) drop_labels: RefCell<DropLabels>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
     /// Why tooltips are off now: a drag of this window's items, and the

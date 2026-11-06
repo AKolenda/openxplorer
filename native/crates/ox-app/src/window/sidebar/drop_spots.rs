@@ -148,6 +148,14 @@ impl Sidebar {
         }
     }
 
+    /// The label of the row at `index`, which the drag's label names
+    /// (DND-028).
+    pub(in crate::window) fn row_label(&self, index: i32) -> Option<String> {
+        let entries = self.imp().entries.borrow();
+        let entry = entries.get(usize::try_from(index).ok()?)?;
+        Some(entry.label.clone())
+    }
+
     /// Highlights `spot`, or nothing.
     pub(in crate::window) fn show_drop_spot(&self, spot: Option<&SidebarDropSpot>) {
         let list = self.list();

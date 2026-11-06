@@ -83,6 +83,15 @@ pub(crate) enum Icon {
     Checkmark,
     /// `chevron_down_20_regular`: the menu carets of New, Sort and View.
     ChevronDown,
+    /// `chevron_double_left_16_regular`: the address bar's « button, which
+    /// lists the crumbs a long path hides (named by
+    /// `resources/skin/navigation.css`).
+    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
+    ChevronDoubleLeft16,
+    /// `chevron_double_right_16_regular`: the same button in a
+    /// right-to-left language.
+    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
+    ChevronDoubleRight16,
     /// `chevron_down_16_regular`: the small carets (the address bar's edit
     /// chevron, a column title's sort arrow, the sidebar's expanders and a
     /// settings drop-down).
@@ -355,6 +364,8 @@ impl Icon {
             Icon::Checkmark => "ox-checkmark-20-symbolic",
             Icon::ChevronDown => "ox-chevron-down-20-symbolic",
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
+            Icon::ChevronDoubleLeft16 => "ox-chevron-double-left-16-symbolic",
+            Icon::ChevronDoubleRight16 => "ox-chevron-double-right-16-symbolic",
             Icon::ChevronLeft16 => "ox-chevron-left-16-symbolic",
             Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
             Icon::ChevronUp16 => "ox-chevron-up-16-symbolic",
@@ -473,7 +484,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 119] = [
+pub(crate) const ALL_ICONS: [Icon; 121] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
@@ -496,6 +507,8 @@ pub(crate) const ALL_ICONS: [Icon; 119] = [
     Icon::CheckboxChecked,
     Icon::Checkmark,
     Icon::ChevronDown,
+    Icon::ChevronDoubleLeft16,
+    Icon::ChevronDoubleRight16,
     Icon::ChevronDown16,
     Icon::ChevronLeft16,
     Icon::ChevronRight16,

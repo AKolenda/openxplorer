@@ -127,7 +127,7 @@ impl BrowserWindow {
                 if state.generation.get() != generation {
                     return;
                 }
-                let entries = subfolder_menu(&folders, &folder, &shown, 0);
+                let entries = subfolder_menu(&folders, &shown);
                 window.close_drag_crumb_menu();
                 let Some(menu) = window.popup_crumb_menu(&folder, entries, false) else {
                     return;

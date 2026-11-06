@@ -501,7 +501,7 @@ fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWi
     test.activate("paste", None);
     let failed = open_dialog(&test);
     assert!(
-        failed.button_labels().contains(&"Retry".to_owned()),
+        failed.button_labels().contains(&"Try Again".to_owned()),
         "the failed-item dialog"
     );
     (test, failed)
