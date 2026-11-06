@@ -57,6 +57,7 @@ mod new_folder;
 mod new_text_document;
 mod opening;
 mod panes_layout;
+mod pointer_feedback;
 mod preview_pane;
 mod recycle_bin;
 mod renaming;

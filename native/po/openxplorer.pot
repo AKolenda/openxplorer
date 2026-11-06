@@ -5086,6 +5086,21 @@ msgstr ""
 msgid "This network item needs an app that supports SMB addresses. For a local-only editor, open it through an existing local mount."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drag/label.rs
+msgid "Copy to {place}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drag/label.rs
+msgid "Create link in {place}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drag/label.rs
+msgid "Move to {place}"
+msgstr ""
+
 #: crates/ox-app/src/window/file_drag/payload.rs
 msgid "Extract ZIP contents before dragging them."
 msgstr ""

@@ -475,6 +475,24 @@ impl FileCell {
         text.contains_point(&point)
     }
 
+    /// Whether `point`, in the cell's coordinates, is right of the end of
+    /// the name's text: on the empty part of a details row, whose icon and
+    /// name are the item (SEL-012). Never while the name is being renamed,
+    /// as the text field takes the whole cell, nor before the name is laid
+    /// out, when where it ends is not known yet.
+    pub(crate) fn is_past_name(&self, point: gtk::graphene::Point) -> bool {
+        let label = &self.imp().label;
+        if !label.is_mapped() || label.width() == 0 {
+            return false;
+        }
+        let Some(in_label) = self.compute_point(label, &point) else {
+            return false;
+        };
+        let (left, _) = label.layout_offsets();
+        let (width, _) = label.layout().pixel_size();
+        f64::from(in_label.x()) > f64::from(left + width)
+    }
+
     /// Shows the name again in place of the text field, if one shows.
     pub(crate) fn hide_name_editor(&self) {
         let imp = self.imp();
