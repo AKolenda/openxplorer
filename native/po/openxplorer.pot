@@ -134,7 +134,7 @@ msgid "File commands"
 msgstr ""
 
 #: crates/ox-app/resources/ui/details-pane.ui
-msgid "Select a single file to get more information and share your cloud content."
+msgid "Select a single file to get more information."
 msgstr ""
 
 #: crates/ox-app/resources/ui/network-sign-in.ui

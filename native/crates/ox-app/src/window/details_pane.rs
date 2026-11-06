@@ -468,6 +468,15 @@ impl DetailsPane {
         self.imp().hint_row.is_visible()
     }
 
+    /// The hint box's text, for tests.
+    #[cfg(test)]
+    pub(super) fn hint_text(&self) -> String {
+        crate::window::widget_tree::descendants::<gtk::Label>(&*self.imp().hint_row)
+            .iter()
+            .map(|label| label.text().to_string())
+            .collect()
+    }
+
     /// Whether the Properties button shows, for tests.
     #[cfg(test)]
     pub(super) fn shows_properties_button(&self) -> bool {

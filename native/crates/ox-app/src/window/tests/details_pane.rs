@@ -156,6 +156,11 @@ fn nothing_selected_shows_windows_hint_alone() {
         .unwrap_or_default();
     assert_eq!(pane.shown_name(), format!("{title} (4 items)"));
     assert!(pane.shows_hint());
+    assert_eq!(
+        pane.hint_text(),
+        "Select a single file to get more information.",
+        "Windows' hint without its cloud content, which the app has none of"
+    );
     assert!(!pane.shows_properties(), "no Details rows");
     assert!(!pane.shows_properties_button() && !pane.shows_share());
 

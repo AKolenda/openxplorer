@@ -25,7 +25,7 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("details-pane.ui", "details_heading", "label", false, "Details"),
     ("details-pane.ui", "i18n_1", "label", false, "Share"),
     ("details-pane.ui", "i18n_3", "label", false, "Properties"),
-    ("details-pane.ui", "i18n_4", "label", false, "Select a single file to get more information and share your cloud content."),
+    ("details-pane.ui", "i18n_4", "label", false, "Select a single file to get more information."),
     ("network-sign-in.ui", "cancel_button", "label", false, "Cancel"),
     ("network-sign-in.ui", "close_button", "label", true, "Cancel sign-in"),
     ("network-sign-in.ui", "close_button", "tooltip-text", false, "Cancel sign-in"),
