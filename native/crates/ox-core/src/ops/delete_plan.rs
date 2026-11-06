@@ -7,7 +7,9 @@
 //! `v2.0.0:desktop/ui/app.js`. Each item is decided by what GIO reports for the
 //! item itself (`access::can-trash`): where it can go to the Trash it goes
 //! there, elsewhere (SMB shares, most remote backends, tmpfs) it is deleted
-//! permanently, and the confirmation says which. GIO answers for an item
+//! permanently, and the confirmation says which, in Windows Explorer's
+//! words ("Delete File", "Are you sure you want to permanently delete this
+//! file?"). GIO answers for an item
 //! from the folder that holds it, so the folder is never asked about
 //! itself: that answer is about the folder's own parent, and a folder
 //! directly in the home folder, whose parent `/home` only root may change,
@@ -57,20 +59,50 @@ pub struct DeletePlan {
     pub to_trash: Vec<String>,
     /// Items in folders without a Trash.
     pub to_delete: Vec<String>,
-    /// The selection as the confirmation names it: one item's name or
-    /// `N selected items`.
-    selection_text: String,
 }
 
-/// The confirmation dialog for a [`DeletePlan`].
+/// What a delete confirmation asks about, which names its caption and its
+/// question as Windows Explorer does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteSubject {
+    /// One item that is not a folder: "Delete File".
+    File,
+    /// One folder: "Delete Folder".
+    Folder,
+    /// Several items, counted: "Delete Multiple Items".
+    Items(usize),
+}
+
+impl DeleteSubject {
+    /// The subject of `count` items: several are counted, and one is a
+    /// folder when `is_folder` says so, else a file.
+    pub fn of(count: usize, is_folder: bool) -> Self {
+        match count {
+            1 if is_folder => DeleteSubject::Folder,
+            1 => DeleteSubject::File,
+            count => DeleteSubject::Items(count),
+        }
+    }
+
+    /// The caption of the question: "Delete File", "Delete Folder" or
+    /// "Delete Multiple Items".
+    pub fn title(self) -> &'static str {
+        match self {
+            DeleteSubject::File => crate::i18n::gettext_static("Delete File"),
+            DeleteSubject::Folder => crate::i18n::gettext_static("Delete Folder"),
+            DeleteSubject::Items(_) => crate::i18n::gettext_static("Delete Multiple Items"),
+        }
+    }
+}
+
+/// A delete confirmation: Windows Explorer's caption and question, which
+/// the window asks with Yes and No.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeleteConfirmation {
-    /// The dialog title.
+    /// The caption.
     pub title: &'static str,
-    /// The message, naming the selection and what happens to it.
+    /// The question, saying what happens to the items.
     pub body: String,
-    /// The label of the red confirm button.
-    pub confirm_label: &'static str,
 }
 
 /// Decides what Delete does with each of `items`, by `access::can-trash`
@@ -146,7 +178,6 @@ fn plan_with(
     let mut plan = DeletePlan {
         to_trash: Vec::new(),
         to_delete: Vec::new(),
-        selection_text: selection_text(items),
     };
     for (index, (item, folder)) in items.iter().zip(&folders).enumerate() {
         cancel.check()?;
@@ -281,57 +312,68 @@ fn selected_answers(
     Ok(answers)
 }
 
-/// The confirmation of Shift+Delete, which deletes `items` permanently
-/// even where a Trash exists (OPS-016). It names the item, or counts
-/// several, as the Delete confirmation does.
-pub fn permanent_delete_confirmation(items: &[DeleteItem]) -> DeleteConfirmation {
-    let what = selection_text(items);
-    DeleteConfirmation {
-        title: crate::i18n::gettext_static("Delete permanently?"),
-        body: crate::i18n::format_message(
-            "{what}\n\nThe items are deleted permanently, without the Trash, and cannot be recovered.",
-            &[("what", &what)],
+/// The confirmation of a permanent delete, as Shift+Delete, Delete where
+/// there is no Recycle Bin and Delete in the Recycle Bin ask it (OPS-016):
+/// Windows Explorer's "Are you sure you want to permanently delete this
+/// file?", "...this folder?" or "...these N items?".
+pub fn permanent_delete_confirmation(subject: DeleteSubject) -> DeleteConfirmation {
+    let body = match subject {
+        DeleteSubject::File => crate::i18n::gettext("Are you sure you want to permanently delete this file?"),
+        DeleteSubject::Folder => {
+            crate::i18n::gettext("Are you sure you want to permanently delete this folder?")
+        }
+        DeleteSubject::Items(count) => crate::i18n::format_message(
+            "Are you sure you want to permanently delete these {count} items?",
+            &[("count", &crate::format::group_digits(count as u64))],
         ),
-        confirm_label: crate::i18n::gettext_static("Delete permanently"),
+    };
+    DeleteConfirmation {
+        title: subject.title(),
+        body,
     }
 }
 
-/// One item's name, or `N selected items`.
-fn selection_text(items: &[DeleteItem]) -> String {
-    match items {
-        [only] => only.name.clone(),
-        _ => crate::i18n::format_message("{count} selected items", &[("count", &(items.len()).to_string())]),
+/// The confirmation of a move to the Recycle Bin, asked only when the
+/// settings say so: Windows Explorer's "Are you sure you want to move this
+/// file to the Recycle Bin?", "...this folder..." or "...these N items...".
+fn recycle_confirmation(subject: DeleteSubject) -> DeleteConfirmation {
+    let body = match subject {
+        DeleteSubject::File => {
+            crate::i18n::gettext("Are you sure you want to move this file to the Recycle Bin?")
+        }
+        DeleteSubject::Folder => {
+            crate::i18n::gettext("Are you sure you want to move this folder to the Recycle Bin?")
+        }
+        DeleteSubject::Items(count) => crate::i18n::format_message(
+            "Are you sure you want to move these {count} items to the Recycle Bin?",
+            &[("count", &crate::format::group_digits(count as u64))],
+        ),
+    };
+    DeleteConfirmation {
+        title: subject.title(),
+        body,
     }
 }
 
 impl DeletePlan {
-    /// The confirmation for this plan, word for word as `app.js` asks it.
-    pub fn confirmation(&self) -> DeleteConfirmation {
-        let what = &self.selection_text;
+    /// The confirmation for this plan about `subject`, the items planned:
+    /// Windows Explorer's question for the Recycle Bin or for a permanent
+    /// delete, and for a mix, which Windows never meets in one folder, a
+    /// question that counts both.
+    pub fn confirmation(&self, subject: DeleteSubject) -> DeleteConfirmation {
         let trash_count = self.to_trash.len();
         let delete_count = self.to_delete.len();
         if trash_count > 0 && delete_count > 0 {
+            let count = crate::format::group_digits((trash_count + delete_count) as u64);
             return DeleteConfirmation {
-                title: crate::i18n::gettext_static("Delete items?"),
-                body: crate::i18n::format_message("{what}\n\n{trash_count} item(s) go to the Trash and can be restored from there.\n{delete_count} item(s) are on a location without Trash and are deleted permanently, without any way to recover them.", &[("what", what), ("trash_count", &(trash_count).to_string()), ("delete_count", &(delete_count).to_string())]),
-                confirm_label: crate::i18n::gettext_static("Delete items"),
+                title: subject.title(),
+                body: crate::i18n::format_message("Are you sure you want to delete these {count} items?\n\n{trash_count} item(s) go to the Recycle Bin and can be restored from there.\n{delete_count} item(s) are on a location without a Recycle Bin and are deleted permanently, without any way to recover them.", &[("count", &count), ("trash_count", &(trash_count).to_string()), ("delete_count", &(delete_count).to_string())]),
             };
         }
         if delete_count > 0 {
-            return DeleteConfirmation {
-                title: crate::i18n::gettext_static("Delete permanently?"),
-                body: crate::i18n::format_message("{what}\n\nThis location has no Trash. The items are deleted permanently and cannot be recovered.", &[("what", what)]),
-                confirm_label: crate::i18n::gettext_static("Delete permanently"),
-            };
+            return permanent_delete_confirmation(subject);
         }
-        DeleteConfirmation {
-            title: crate::i18n::gettext_static("Move to Trash?"),
-            body: crate::i18n::format_message(
-                "{what}\n\nItems go to the Trash and can be restored from there.",
-                &[("what", what)],
-            ),
-            confirm_label: crate::i18n::gettext_static("Move to Trash"),
-        }
+        recycle_confirmation(subject)
     }
 }
 
@@ -339,86 +381,104 @@ impl DeletePlan {
 mod tests {
     use super::*;
 
-    fn plan(to_trash: &[&str], to_delete: &[&str], selection_text: &str) -> DeletePlan {
+    fn plan(to_trash: &[&str], to_delete: &[&str]) -> DeletePlan {
         DeletePlan {
             to_trash: to_trash.iter().map(ToString::to_string).collect(),
             to_delete: to_delete.iter().map(ToString::to_string).collect(),
-            selection_text: selection_text.to_owned(),
         }
     }
 
-    /// One plan and the confirmation `app.js` shows for it.
+    /// One plan, what it is about and the question Windows Explorer asks.
     struct ConfirmationCase {
         plan: DeletePlan,
+        subject: DeleteSubject,
         title: &'static str,
         body: &'static str,
-        confirm_label: &'static str,
     }
 
+    /// parity: OPS-015
     #[test]
-    fn each_mix_of_trash_and_permanent_delete_has_its_confirmation() {
+    fn each_mix_of_trash_and_permanent_delete_has_windows_question() {
         let cases = [
             ConfirmationCase {
-                plan: plan(&["file:///a"], &[], "a"),
-                title: "Move to Trash?",
-                body: "a\n\nItems go to the Trash and can be restored from there.",
-                confirm_label: "Move to Trash",
+                plan: plan(&["file:///a"], &[]),
+                subject: DeleteSubject::File,
+                title: "Delete File",
+                body: "Are you sure you want to move this file to the Recycle Bin?",
             },
             ConfirmationCase {
-                plan: plan(&[], &["smb://nas/s/a", "smb://nas/s/b"], "2 selected items"),
-                title: "Delete permanently?",
-                body: "2 selected items\n\nThis location has no Trash. The items are deleted permanently \
-                       and cannot be recovered.",
-                confirm_label: "Delete permanently",
+                plan: plan(&["file:///a"], &[]),
+                subject: DeleteSubject::Folder,
+                title: "Delete Folder",
+                body: "Are you sure you want to move this folder to the Recycle Bin?",
             },
             ConfirmationCase {
-                plan: plan(&["file:///a"], &["smb://nas/s/b"], "2 selected items"),
-                title: "Delete items?",
-                body: "2 selected items\n\n1 item(s) go to the Trash and can be restored from there.\n\
-                       1 item(s) are on a location without Trash and are deleted permanently, without any \
-                       way to recover them.",
-                confirm_label: "Delete items",
+                plan: plan(&["file:///a", "file:///b", "file:///c"], &[]),
+                subject: DeleteSubject::Items(3),
+                title: "Delete Multiple Items",
+                body: "Are you sure you want to move these 3 items to the Recycle Bin?",
+            },
+            ConfirmationCase {
+                plan: plan(&[], &["smb://nas/s/a"]),
+                subject: DeleteSubject::File,
+                title: "Delete File",
+                body: "Are you sure you want to permanently delete this file?",
+            },
+            ConfirmationCase {
+                plan: plan(&[], &["smb://nas/s/a", "smb://nas/s/b"]),
+                subject: DeleteSubject::Items(2),
+                title: "Delete Multiple Items",
+                body: "Are you sure you want to permanently delete these 2 items?",
+            },
+            ConfirmationCase {
+                plan: plan(&["file:///a"], &["smb://nas/s/b"]),
+                subject: DeleteSubject::Items(2),
+                title: "Delete Multiple Items",
+                body: "Are you sure you want to delete these 2 items?\n\n1 item(s) go to the Recycle Bin and \
+                       can be restored from there.\n1 item(s) are on a location without a Recycle Bin and are \
+                       deleted permanently, without any way to recover them.",
             },
         ];
         for case in cases {
-            let confirmation = case.plan.confirmation();
+            let confirmation = case.plan.confirmation(case.subject);
 
             assert_eq!(confirmation.title, case.title);
             assert_eq!(confirmation.body, case.body);
-            assert_eq!(confirmation.confirm_label, case.confirm_label);
         }
     }
 
     #[test]
-    fn one_item_is_named_and_several_are_counted() {
-        let one = [DeleteItem {
-            uri: "file:///tmp/report.pdf".into(),
-            name: "report.pdf".into(),
-            can_trash: None,
-        }];
-        let two = [one[0].clone(), one[0].clone()];
-
-        assert_eq!(selection_text(&one), "report.pdf");
-        assert_eq!(selection_text(&two), "2 selected items");
+    fn one_item_is_a_file_or_a_folder_and_several_are_counted() {
+        assert_eq!(DeleteSubject::of(1, false), DeleteSubject::File);
+        assert_eq!(DeleteSubject::of(1, true), DeleteSubject::Folder);
+        assert_eq!(DeleteSubject::of(2, true), DeleteSubject::Items(2));
     }
 
     /// parity: OPS-016
     #[test]
-    fn shift_delete_asks_to_delete_the_named_items_permanently() {
-        let one = [DeleteItem {
-            uri: "file:///tmp/report.pdf".into(),
-            name: "report.pdf".into(),
-            can_trash: None,
-        }];
+    fn shift_delete_asks_windows_question_to_delete_permanently() {
+        let file = permanent_delete_confirmation(DeleteSubject::File);
+        let folder = permanent_delete_confirmation(DeleteSubject::Folder);
+        let many = permanent_delete_confirmation(DeleteSubject::Items(1234));
 
-        let confirmation = permanent_delete_confirmation(&one);
-
-        assert_eq!(confirmation.title, "Delete permanently?");
+        assert_eq!(file.title, "Delete File");
         assert_eq!(
-            confirmation.body,
-            "report.pdf\n\nThe items are deleted permanently, without the Trash, and cannot be recovered."
+            file.body,
+            "Are you sure you want to permanently delete this file?"
         );
-        assert_eq!(confirmation.confirm_label, "Delete permanently");
+        assert_eq!(folder.title, "Delete Folder");
+        assert_eq!(
+            folder.body,
+            "Are you sure you want to permanently delete this folder?"
+        );
+        assert_eq!(many.title, "Delete Multiple Items");
+        assert_eq!(
+            many.body,
+            format!(
+                "Are you sure you want to permanently delete these {} items?",
+                crate::format::group_digits(1234)
+            )
+        );
     }
 
     #[test]

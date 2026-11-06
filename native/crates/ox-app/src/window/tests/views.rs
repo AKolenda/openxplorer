@@ -2,8 +2,6 @@
 //! Views, sorting, the status-bar buttons, saved preferences, text size
 //! and appearance.
 
-use std::time::Duration;
-
 use gtk::prelude::*;
 use ox_core::settings::{Appearance, Theme, View};
 
@@ -13,7 +11,7 @@ use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::icons::{Art, FileType};
 use crate::test_support::harness::{
-    application, descendants, skin, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+    application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::text_size::Step;
 use crate::theme::Skin;
@@ -159,6 +157,7 @@ fn the_details_button_shows_whether_the_pane_is_open() {
 fn both_views_show_each_name_with_its_icon() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     for view in ["details", "large"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
@@ -188,6 +187,7 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
     let locked = std::fs::Permissions::from_mode(0o444);
     std::fs::set_permissions(fixture.path("Locked.txt"), locked).expect("make it read-only");
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     for view in ["details", "large"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
@@ -252,11 +252,6 @@ fn shows_one_item(test: &TestWindow) -> bool {
     details_texts(test).contains(&"1 item".to_owned())
 }
 
-/// What the status bar of `test` says about the selected or hovered item.
-fn described(test: &TestWindow) -> String {
-    test.window.status_bar().texts().1
-}
-
 /// Saves "Show the number of items in folders" as `on`, for every window.
 fn save_item_counts(test: &TestWindow, on: bool) {
     let mut options = test.context.settings_data().preferences.view_options;
@@ -278,9 +273,8 @@ fn save_item_counts(test: &TestWindow, on: bool) {
 }
 
 /// Turning "Show the number of items in folders" off empties a counted
-/// folder's Size at once in every open window, and the status bar's
-/// description of it, without reloading the folder; turning it back on
-/// shows the count kept from before.
+/// folder's Size at once in every open window, without reloading the
+/// folder; turning it back on shows the count kept from before.
 ///
 /// parity: VIEW-037
 #[gtk::test]
@@ -295,9 +289,6 @@ fn turning_item_counts_off_empties_counted_folder_sizes_at_once() {
     for window in [&test, &beside] {
         wait_until("the folder to be counted", || shows_one_item(window));
         window.select_named("Documents");
-        wait_until("the bar to give the count", || {
-            described(window) == "Documents · File folder · 1 item"
-        });
     }
     let folder = test.window.folder_model().selected_items()[0].clone();
 
@@ -305,83 +296,13 @@ fn turning_item_counts_off_empties_counted_folder_sizes_at_once() {
     for window in [&test, &beside] {
         wait_until("the count to go", || !shows_one_item(window));
         assert!(!window.window.folder_pane().owners().counts_items());
-        assert_eq!(described(window), "Documents · File folder");
     }
     assert_eq!(folder.item_count(), Some(1), "the count is kept for later");
 
     save_item_counts(&test, true);
     for window in [&test, &beside] {
         wait_until("the count to show again", || shows_one_item(window));
-        assert_eq!(described(window), "Documents · File folder · 1 item");
     }
-}
-
-/// A selected folder's description in the status bar gains its count once
-/// the folder is counted, though the selection stays as it was.
-///
-/// parity: VIEW-037
-#[gtk::test]
-fn a_selected_folder_is_described_with_its_count_once_counted() {
-    let fixture = Fixture::standard();
-    fixture.write("Documents/Plan.txt");
-    let test = TestWindow::without_tabs();
-    save_item_counts(&test, false);
-    test.show(&fixture.uri());
-    test.activate("view", Some("details"));
-    test.select_named("Documents");
-    wait_until("the folder to be described", || {
-        described(&test) == "Documents · File folder"
-    });
-    wait_for(Duration::from_millis(300));
-    let folder = test.window.folder_model().selected_items()[0].clone();
-    assert_eq!(folder.item_count(), None, "nothing counts the folder");
-
-    save_item_counts(&test, true);
-    wait_until("the folder to be counted", || shows_one_item(&test));
-    wait_until("the status bar to give the count", || {
-        described(&test) == "Documents · File folder · 1 item"
-    });
-}
-
-/// The status bar's description of the folder under the pointer follows
-/// "Show the number of items in folders" while the pointer stays still.
-///
-/// parity: VIEW-037, VIEW-052
-#[gtk::test]
-fn the_hovered_folders_description_follows_the_item_count_setting() {
-    let fixture = Fixture::standard();
-    fixture.write("Documents/Plan.txt");
-    let test = TestWindow::open(&fixture.uri());
-    test.activate("view", Some("details"));
-    save_item_counts(&test, true);
-    wait_until("the folder to be counted", || shows_one_item(&test));
-    let view = test.window.folder_pane().view_widget();
-    let position = test.position_of("Documents");
-    // The rows can still be moving while the list settles, so point at
-    // the row again until the bar describes it.
-    wait_until("the bar to describe the folder under the pointer", || {
-        let point = test
-            .window
-            .folder_pane()
-            .owners()
-            .widget_at(position)
-            .and_then(|row| row.compute_point(&view, &gtk::graphene::Point::new(2.0, 2.0)));
-        let Some(point) = point else {
-            return false;
-        };
-        test.window
-            .pointer_over_items(&view, Some((f64::from(point.x()), f64::from(point.y()))));
-        described(&test) == "Documents · File folder · 1 item"
-    });
-
-    save_item_counts(&test, false);
-    wait_until("the count to leave the description", || {
-        described(&test) == "Documents · File folder"
-    });
-    save_item_counts(&test, true);
-    wait_until("the count to come back", || {
-        described(&test) == "Documents · File folder · 1 item"
-    });
 }
 
 #[gtk::test]
@@ -640,7 +561,7 @@ fn a_chosen_view_starts_at_the_top_and_has_explorers_keys() {
     assert_eq!(keys("details"), ["<Shift><Control>6"]);
     assert_eq!(keys("extra-large"), ["<Shift><Control>1"]);
     let pane_keys = application().accels_for_action(&WindowAction::DetailsPane.detailed_name());
-    assert_eq!(pane_keys, ["<Shift><Alt>p", "<Alt>p"]);
+    assert_eq!(pane_keys, ["<Shift><Alt>p"]);
 }
 
 /// Ctrl+H shows hidden files wherever focus is, except in a text field,
@@ -754,9 +675,9 @@ fn text_size_keys_work_inside_dialogs() {
 
 /// Ctrl+wheel zooming changes the view, its menu state and the saved
 /// preference, as choosing the view does: past Details and List it steps
-/// through every icon size, which the status bar's slider shows and sets.
+/// through every icon size.
 ///
-/// parity: VIEW-010, VIEW-011, VIEW-012
+/// parity: VIEW-010, VIEW-011
 #[gtk::test]
 fn zooming_changes_and_saves_the_view() {
     let fixture = Fixture::standard();
@@ -774,8 +695,6 @@ fn zooming_changes_and_saves_the_view() {
         test.context.settings_data().preferences.view == View::Grid
     });
     assert_eq!(test.selected_names().len(), 1, "zooming keeps the selection");
-    let slider = test.window.status_bar().zoom_slider();
-    assert!(slider.is_visible());
-    slider.set_value(slider.value() + 1.0);
+    test.window.zoom_view(1);
     assert_eq!(test.window.folder_pane().view().as_str(), "icons-48");
 }

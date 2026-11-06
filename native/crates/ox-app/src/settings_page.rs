@@ -109,6 +109,7 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use super::indexed_folders::IndexedFolders;
+    use super::indexing::ThisFolder;
     use super::pages::{Category, SettingsView, Subpage};
     use super::row::PageWidth;
     use super::search::SearchQuery;
@@ -164,6 +165,8 @@ mod imp {
         pub(super) query: RefCell<SearchQuery>,
         /// The folders the search index keeps and can take.
         pub(super) indexed_folders: OnceCell<IndexedFolders>,
+        /// Search's "Cache this folder for search" and its folder.
+        pub(super) this_folder: OnceCell<ThisFolder>,
         /// The folder shown before Settings opened, where a typed folder
         /// to index starts.
         pub(super) index_origin: RefCell<Option<String>>,
@@ -366,6 +369,7 @@ impl SettingsPage {
         if let Some(folders) = imp.indexed_folders.get() {
             folders.show(candidates, roots, self);
         }
+        self.show_this_folder(candidates, roots, origin);
     }
 
     /// The folder shown before Settings opened, if any.

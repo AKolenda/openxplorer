@@ -7,7 +7,7 @@
 //! natural order, ties by name ascending, as `filtered()` in app.js) and one
 //! multi-selection shared by the details and icon views.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -37,8 +37,9 @@ pub(crate) struct SelectionSummary {
     pub count: u32,
     /// Total size of the selected files (folders count as 0).
     pub bytes: u64,
-    /// At least one selected item is a file with a known size.
-    pub has_files: bool,
+    /// Something is selected and every selected item is a file with a
+    /// known size, so Windows Explorer's status bar gives their size.
+    pub all_files: bool,
 }
 
 /// Filter, sort and selection over the active tab's store.
@@ -53,12 +54,6 @@ pub(crate) struct FolderModel {
     /// The sorted items with expanded folders' contents (VIEW-035).
     tree: FolderTree,
     selection: gtk::MultiSelection,
-    /// The total size of the files shown, once added up; forgotten when
-    /// the items shown change.
-    shown_bytes: Rc<Cell<Option<u64>>>,
-    /// Entries visited when computing totals, for complexity regressions.
-    #[cfg(test)]
-    shown_bytes_visits: Cell<u64>,
     sort_options: SharedOptions,
     folders_first: gtk::CustomSorter,
     role_sorter: gtk::CustomSorter,
@@ -82,9 +77,6 @@ impl FolderModel {
         let tree = FolderTree::new(&sort_model, &filter);
         let selection = gtk::MultiSelection::new(Some(tree.model().clone()));
         let sort_options = SharedOptions::default();
-        let shown_bytes = Rc::new(Cell::new(None));
-        let forget = Rc::clone(&shown_bytes);
-        filter_model.connect_items_changed(move |_, _, _, _| forget.set(None));
         Self {
             filter_state,
             filter,
@@ -92,35 +84,11 @@ impl FolderModel {
             sort_model,
             tree,
             selection,
-            shown_bytes,
-            #[cfg(test)]
-            shown_bytes_visits: Cell::new(0),
             folders_first: folders_first(&sort_options),
             role_sorter: role_sorter(&sort_options),
             group_sorter: group_sorter(&sort_options),
             sort_options,
         }
-    }
-
-    /// The total size of the files shown (VIEW-051), added up once per
-    /// change of the items shown.
-    pub(crate) fn shown_file_bytes(&self) -> u64 {
-        if let Some(bytes) = self.shown_bytes.get() {
-            return bytes;
-        }
-        #[cfg(test)]
-        self.shown_bytes_visits
-            .set(self.shown_bytes_visits.get() + u64::from(self.filter_model.n_items()));
-        let items = self.filter_model.iter::<glib::Object>().filter_map(Result::ok);
-        let bytes = items.filter_map(|item| as_item(&item).file_size()).sum();
-        self.shown_bytes.set(Some(bytes));
-        bytes
-    }
-
-    /// Takes the number of entries visited by total-size computations.
-    #[cfg(test)]
-    pub(crate) fn take_total_visits(&self) -> u64 {
-        self.shown_bytes_visits.replace(0)
     }
 
     /// Completes the sorter once the details view exists: folders first,
@@ -346,14 +314,18 @@ impl FolderModel {
 
     /// Count and size of the selection.
     pub(crate) fn summary(&self) -> SelectionSummary {
-        let mut summary = SelectionSummary::default();
+        let mut summary = SelectionSummary {
+            all_files: true,
+            ..SelectionSummary::default()
+        };
         for item in self.selected_items() {
             summary.count += 1;
-            if let Some(size) = item.file_size() {
-                summary.bytes += size;
-                summary.has_files = true;
+            match item.file_size() {
+                Some(size) => summary.bytes += size,
+                None => summary.all_files = false,
             }
         }
+        summary.all_files &= summary.count > 0;
         summary
     }
 

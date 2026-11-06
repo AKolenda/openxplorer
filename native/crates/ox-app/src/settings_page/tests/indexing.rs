@@ -20,7 +20,7 @@ use crate::test_support::harness::{descendants, wait_for, wait_until};
 
 impl SettingsTest {
     /// Settings on the standard fixture, with the search cache running.
-    fn with_search_cache() -> Self {
+    pub(super) fn with_search_cache() -> Self {
         let settings = Self::open();
         settings.test.start_search_cache();
         settings

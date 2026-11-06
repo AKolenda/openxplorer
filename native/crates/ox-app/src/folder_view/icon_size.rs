@@ -95,7 +95,8 @@ impl IconSize {
         (0..LEVELS.len()).map(IconSize)
     }
 
-    /// The largest level.
+    /// The largest level, for tests.
+    #[cfg(test)]
     pub(crate) const LARGEST: IconSize = IconSize(LEVELS.len() - 1);
 
     const fn level(self) -> &'static Level {
@@ -130,12 +131,9 @@ impl IconSize {
             .unwrap_or(IconSize::LARGE)
     }
 
-    /// The level's position from the smallest, for the zoom slider.
-    pub(crate) const fn index(self) -> usize {
-        self.0
-    }
-
-    /// The level at `index` from the smallest, clamped to the levels.
+    /// The level at `index` from the smallest, clamped to the levels, for
+    /// tests.
+    #[cfg(test)]
     pub(crate) fn at_index(index: usize) -> IconSize {
         IconSize(index.min(LEVELS.len() - 1))
     }

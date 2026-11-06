@@ -160,6 +160,9 @@ pub(crate) struct BrowserWindow {
     /// The folder shown before Settings and the places Settings offers
     /// the search index.
     pub(super) settings_tab: RefCell<SettingsTabState>,
+    /// What the command bar's "…" menu keeps of the places the sidebar
+    /// was last drawn from, until they are first drawn.
+    pub(super) more_menu_places: RefCell<Option<super::location_view::MoreMenuPlaces>>,
     /// What every window shares: the skin, settings and places. It
     /// comes from the application, so [`super::BrowserWindow::new`]
     /// sets it.
@@ -238,8 +241,6 @@ pub(crate) struct BrowserWindow {
     pub(super) closing_tabs_confirmed: Cell<bool>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
-    /// The item under the pointer that the status bar describes.
-    pub(super) hovered_item: RefCell<Option<crate::folder_view::item::FileItem>>,
     /// Until when clicks that open items are ignored, around a drag.
     pub(super) item_clicks_resume_at: Cell<Option<std::time::Instant>>,
     /// Which files under a drag are programs (DND-026).

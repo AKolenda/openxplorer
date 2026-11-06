@@ -24,6 +24,10 @@
    @ox_muted for the search box, which is darker in light). */
 @define-color ox_placeholder #757575;
 @define-color ox_text_disabled #a3a3a3;            /* C13 */
+/* Windows 11's command blue in the "…" menu: Undo, Redo and Pin, and the
+   blue parts of the custom icons: Windows' accent blue, as they are drawn;
+   the dark theme has the lighter one (CMD-007). */
+@define-color ox_command_blue #0078d4;
 @define-color ox_text_selection_bg #0078d4;        /* C31 */
 @define-color ox_text_selection_fg #ffffff;
 

@@ -33,6 +33,7 @@ use super::window_action::WindowAction;
 
 use menus::{appearance_items, more_menu};
 pub(super) use menus::{group_by_menu, new_menu, sort_menu, view_menu};
+pub(super) use menus::{FolderPin, MoreMenuState, MorePlace, NetworkDrive};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -166,6 +167,12 @@ mod imp {
         pub(super) delete_button: OnceCell<gtk::Button>,
         /// Extract all, shown inside a ZIP opened like a folder (ARC-026).
         pub(super) extract_button: OnceCell<gtk::Button>,
+        /// The "…" menu, which offers Map network location only in This
+        /// PC and Network.
+        pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
+        /// What the "…" menu shows now: Map network location or not, Pin
+        /// or Unpin.
+        pub(super) more_state: RefCell<super::MoreMenuState>,
     }
 
     #[glib::object_subclass]
@@ -256,7 +263,23 @@ impl CommandBar {
             "view-command",
             view_menu(),
         ));
-        group.append(&more_button());
+        let (more, menu) = more_button();
+        group.append(&more);
+        imp.more_menu.set(menu).expect("constructed runs once per object");
+    }
+
+    /// Shows `state` in "…": Map network location only in This PC and
+    /// Network, as Windows 11 File Explorer lists Map network drive, and
+    /// Pin to Quick access or Unpin from Quick access for the folder shown.
+    pub(super) fn show_more_menu(&self, state: MoreMenuState) {
+        let imp = self.imp();
+        if *imp.more_state.borrow() == state {
+            return;
+        }
+        if let Some(menu) = imp.more_menu.get() {
+            menu.set_entries(more_menu(&state));
+        }
+        imp.more_state.replace(state);
     }
 
     /// Gives Update, the appearance toggle, Settings and the Details
@@ -477,16 +500,18 @@ fn extract_all_button() -> gtk::Button {
     button
 }
 
-fn more_button() -> gtk::MenuButton {
+/// The "…" button and its menu.
+fn more_button() -> (gtk::MenuButton, MenuPopover) {
+    let menu = MenuPopover::new(more_menu(&MoreMenuState::default()));
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
         .tooltip_text(ox_core::i18n::gettext("More options"))
-        .popover(&MenuPopover::new(more_menu()))
+        .popover(&menu)
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
     name_menu_button(&button, &ox_core::i18n::gettext("More options"));
-    button
+    (button, menu)
 }
 
 #[cfg(test)]

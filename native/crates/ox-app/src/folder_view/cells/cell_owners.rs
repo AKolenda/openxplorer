@@ -29,6 +29,7 @@ use gtk::prelude::*;
 use super::row_tooltip::RowTooltip;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
+use crate::folder_view::shown_name::{shown_name, Extensions};
 use crate::thumbnails::PreviewPolicy;
 use crate::window::widget_tree::toggle_class;
 
@@ -103,19 +104,6 @@ fn item_widget(cell: &gtk::Widget) -> Option<gtk::Widget> {
         .find(|widget| ITEM_WIDGET_NAMES.contains(&widget.css_name().as_str()))
 }
 
-/// A callback told of a folder once its items are counted.
-type CountedCallback = Rc<dyn Fn(&FileItem)>;
-
-/// What is told of a folder once its items are counted.
-#[derive(Default)]
-struct ItemCounted(RefCell<Option<CountedCallback>>);
-
-impl std::fmt::Debug for ItemCounted {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("ItemCounted")
-    }
-}
-
 /// Maps cell widgets back to their list items, so a click position can be
 /// turned into a row, and styles rows by the state of their item.
 #[derive(Debug, Default)]
@@ -135,13 +123,13 @@ pub(crate) struct CellOwners {
     previews: Cell<PreviewPolicy>,
     /// Folders in the Size column say how many items they hold.
     counts_items: Cell<bool>,
-    /// Told of each folder once its items are counted.
-    item_counted: ItemCounted,
     /// Item check boxes are off (SEL-014); on by default, as in Windows 11.
     hides_item_checks: Cell<bool>,
     /// Item check boxes let clicks through to their rows: they wait for
     /// Ctrl and it is not held.
     item_checks_pass_clicks: Cell<bool>,
+    /// Whether names show the extensions of known types (VIEW-069).
+    extensions: Cell<Extensions>,
 }
 
 impl CellOwners {
@@ -209,21 +197,6 @@ impl CellOwners {
     /// Makes folders in the Size column count their items, or not.
     pub(crate) fn set_counts_items(&self, counts: bool) {
         self.counts_items.set(counts);
-    }
-
-    /// Calls `counted` with each folder once its items are counted, so
-    /// what describes it can say so.
-    pub(crate) fn connect_item_counted(&self, counted: impl Fn(&FileItem) + 'static) {
-        self.item_counted.0.replace(Some(Rc::new(counted)));
-    }
-
-    /// Tells the [`Self::connect_item_counted`] callback that `item` was
-    /// counted.
-    pub(crate) fn item_counted(&self, item: &FileItem) {
-        let counted = self.item_counted.0.borrow().clone();
-        if let Some(counted) = counted {
-            counted(item);
-        }
     }
 
     /// Which items show previews now.
@@ -413,6 +386,56 @@ impl CellOwners {
             }
         }
         shown
+    }
+
+    /// The name the cells show for `item`: its own, or without a known
+    /// type's extension while extensions are hidden.
+    pub(crate) fn shown_name(&self, item: &FileItem) -> String {
+        let entry = item.entry();
+        shown_name(&entry.name, entry.is_dir, self.extensions.get()).to_owned()
+    }
+
+    /// Shows names with or without the extensions of known types; a cell
+    /// bound later follows when it is bound.
+    pub(crate) fn set_extensions(&self, extensions: Extensions) {
+        if self.extensions.replace(extensions) == extensions {
+            return;
+        }
+        let bound: Vec<(gtk::ListItem, gtk::Widget, FileItem)> = self
+            .owners
+            .borrow()
+            .iter()
+            .filter_map(|owner| {
+                let (cell, item) = owner.bound_cell()?;
+                Some((owner.list_item.upgrade()?, cell, item))
+            })
+            .collect();
+        for (list_item, cell, item) in bound {
+            if let Some(cell) = cell.downcast_ref::<FileCell>() {
+                // The name a screen reader reads follows the one shown,
+                // as binding set them together.
+                let name = self.shown_name(&item);
+                list_item.set_accessible_label(&name);
+                cell.show_name(&name);
+            }
+        }
+    }
+
+    /// The accessible labels of the list items bound now, each once and
+    /// sorted, as a screen reader reads them.
+    #[cfg(test)]
+    pub(crate) fn bound_accessible_labels(&self) -> Vec<String> {
+        let mut labels: Vec<String> = self
+            .owners
+            .borrow()
+            .iter()
+            .filter_map(|owner| owner.list_item.upgrade())
+            .filter(|list_item| list_item.item().is_some())
+            .map(|list_item| list_item.accessible_label().to_string())
+            .collect();
+        labels.sort();
+        labels.dedup();
+        labels
     }
 
     /// Whether items have check boxes.

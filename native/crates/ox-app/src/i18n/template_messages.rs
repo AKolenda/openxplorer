@@ -85,8 +85,6 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("status-bar.ui", "icons_view_button", "label", true, "Large icons"),
     ("status-bar.ui", "icons_view_button", "tooltip-text", false, "Large icons"),
     ("status-bar.ui", "watch_state", "label", false, "Not updated live"),
-    ("status-bar.ui", "zoom_slider", "label", true, "Icon size"),
-    ("status-bar.ui", "zoom_slider", "tooltip-text", false, "Icon size"),
     ("tab-strip.ui", "tab_list", "label", true, "Folder tabs"),
     ("transfer-panel.ui", "cancel_button", "label", true, "Cancel"),
     ("transfer-panel.ui", "cancel_button", "tooltip-text", false, "Cancel"),

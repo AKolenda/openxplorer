@@ -37,6 +37,17 @@ use super::window_action::WindowAction;
 pub(super) use content::{pane_content, PaneFacts};
 use content::{PaneContent, Preview};
 
+/// What the pane at the right shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum PaneMode {
+    /// The Details pane: the preview, the name, Share, the Details rows
+    /// and Properties.
+    #[default]
+    Details,
+    /// The Preview pane: the preview alone.
+    Preview,
+}
+
 /// Width of the pane (`.details` in `v2.0.0:desktop/ui/style.css`).
 pub(super) const PANE_WIDTH: i32 = 262;
 
@@ -127,6 +138,12 @@ mod imp {
         pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
         /// The pane's options, as saved (PROP-010).
         pub(super) options: RefCell<DetailsPaneOptions>,
+        /// Whether the pane shows the details or only the preview.
+        pub(super) mode: Cell<super::PaneMode>,
+        /// What the pane shows can have Properties opened.
+        pub(super) has_properties: Cell<bool>,
+        /// The pane's accessible name: "Details pane" or "Preview pane".
+        pub(super) title: RefCell<String>,
         /// The item under the pointer, which the pane describes while it
         /// follows the pointer.
         pub(super) hovered: RefCell<Option<FileItem>>,
@@ -158,6 +175,7 @@ mod imp {
             pane.show_glyphs();
             pane.bind_actions();
             pane.show_placeholder();
+            pane.set_mode(super::PaneMode::Details);
             pane.attach_options_menu();
             // A pane shown again catches up with the selection, whose
             // preview was not read while it was hidden.
@@ -259,6 +277,56 @@ impl DetailsPane {
         following.then(|| self.imp().hovered.borrow().clone()).flatten()
     }
 
+    /// Shows the selection's details, or only its preview, as Windows 11's
+    /// Details pane and Preview pane do in the same place (VIEW-070).
+    /// Like Windows' panes, neither has a heading or a close button: its
+    /// accessible name says which pane it is.
+    pub(super) fn set_mode(&self, mode: PaneMode) {
+        let imp = self.imp();
+        imp.mode.set(mode);
+        let title = match mode {
+            PaneMode::Details => ox_core::i18n::gettext("Details pane"),
+            PaneMode::Preview => ox_core::i18n::gettext("Preview pane"),
+        };
+        self.update_property(&[gtk::accessible::Property::Label(&title)]);
+        imp.title.replace(title);
+        self.show_mode();
+    }
+
+    /// Hides everything under the preview while only the preview shows;
+    /// shows the icon and name, the Details heading and rows again
+    /// otherwise, and Share and Properties as the content allows.
+    fn show_mode(&self) {
+        let imp = self.imp();
+        let details = imp.mode.get() == PaneMode::Details;
+        let mut below = imp.preview_area.next_sibling();
+        while let Some(widget) = below {
+            below = widget.next_sibling();
+            widget.set_visible(details);
+        }
+        self.show_share();
+        imp.properties_button
+            .set_visible(details && imp.has_properties.get());
+    }
+
+    /// Whether the pane shows the Details rows, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_properties(&self) -> bool {
+        self.imp().properties.is_visible()
+    }
+
+    /// Whether the pane shows the preview, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_preview(&self) -> bool {
+        self.imp().preview_area.is_visible()
+    }
+
+    /// The pane's accessible name, for tests.
+    #[cfg(test)]
+    pub(super) fn title_text(&self) -> String {
+        self.imp().title.borrow().clone()
+    }
+
     /// Shows `content`.
     pub(super) fn set_content(&self, content: &PaneContent) {
         let imp = self.imp();
@@ -270,7 +338,9 @@ impl DetailsPane {
         imp.name.set_text(&content.name);
         imp.has_selection.set(content.has_selection);
         self.show_share();
-        imp.properties_button.set_visible(content.has_properties);
+        imp.has_properties.set(content.has_properties);
+        imp.properties_button
+            .set_visible(content.has_properties && imp.mode.get() == PaneMode::Details);
         imp.base_rows.replace(content.properties.clone());
         self.follow_metadata(content.metadata.as_ref());
         self.redraw_properties();
@@ -288,8 +358,9 @@ impl DetailsPane {
 
     fn show_share(&self) {
         let imp = self.imp();
+        let details = imp.mode.get() == PaneMode::Details;
         imp.share_button
-            .set_visible(imp.share_offered.get() && imp.has_selection.get());
+            .set_visible(details && imp.share_offered.get() && imp.has_selection.get());
     }
 
     /// Draws the Details rows again: the file rows, then the rows the

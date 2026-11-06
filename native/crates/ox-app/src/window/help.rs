@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Help: the offline user manual that F1 and More options > Help open,
+//! Help: the offline user manual that F1 and Settings > About > Help open,
 //! at the topic of what the window shows, and "Report an issue"
 //! (CMD-033).
 //!

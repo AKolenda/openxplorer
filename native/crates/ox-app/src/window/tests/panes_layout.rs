@@ -269,6 +269,7 @@ fn a_selected_tile_keeps_the_text_colour() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     test.activate("theme", Some("light"));
     test.activate("view", Some("large"));
     test.window.folder_model().select_only(1);

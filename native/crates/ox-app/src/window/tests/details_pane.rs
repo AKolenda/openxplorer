@@ -106,7 +106,7 @@ fn a_selection_moved_on_drops_the_photos_reading() {
     assert_eq!(value(&rows, "Camera maker"), None);
     assert_eq!(value(&rows, "Date taken"), None);
     assert!(!pane.reading_metadata(), "a text file has nothing to read");
-    assert_eq!(pane.shown_name(), "Notes 2.txt");
+    assert_eq!(pane.shown_name(), "Notes 2", "named as the file list names it");
 }
 
 /// Several items show "N items selected" and their total size; nothing

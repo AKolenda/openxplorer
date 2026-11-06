@@ -12,27 +12,17 @@
 
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin,
-    starting_label, summarize, summarize_restore, DeleteConfirmation,
+    starting_label, summarize, summarize_restore,
 };
 use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
 use super::FileCommand;
-use crate::window::BrowserWindow;
+use crate::dialog::Dialog;
+use crate::window::{BrowserWindow, ButtonStyle};
 
 /// The panel's label while items are restored.
 const RESTORING: &str = crate::i18n::message_id("Restoring items…");
-
-/// The question Empty Recycle Bin asks.
-fn empty_confirmation() -> DeleteConfirmation {
-    DeleteConfirmation {
-        title: "Empty Recycle Bin?",
-        body: ox_core::i18n::gettext(
-            "Every item in the Recycle Bin is deleted permanently and cannot be recovered.",
-        ),
-        confirm_label: "Empty Recycle Bin",
-    }
-}
 
 impl BrowserWindow {
     /// Restore: puts the selected items back where they were deleted from,
@@ -106,7 +96,7 @@ impl BrowserWindow {
     /// any folder: asks, then deletes everything in it for good.
     pub(crate) async fn empty_trash(&self) {
         let asks = self.context().settings_data().preferences.confirm_empty_trash;
-        if asks && !self.confirm_deletion(&empty_confirmation()).await {
+        if asks && !self.confirms_emptying().await {
             return;
         }
         let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
@@ -120,5 +110,23 @@ impl BrowserWindow {
             select_after: Vec::new(),
         });
         self.conclude_operation(finished).await;
+    }
+
+    /// Asks Empty Recycle Bin's question with Cancel and its red button;
+    /// true when the user confirmed.
+    async fn confirms_emptying(&self) -> bool {
+        let dialog = Dialog::new(
+            self,
+            "Empty Recycle Bin?",
+            &ox_core::i18n::gettext(
+                "Every item in the Recycle Bin is deleted permanently and cannot be recovered.",
+            ),
+        );
+        dialog.add_cancel_button();
+        dialog.add_button("Empty Recycle Bin", ButtonStyle::Danger);
+        dialog.open();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        answer.is_some()
     }
 }
