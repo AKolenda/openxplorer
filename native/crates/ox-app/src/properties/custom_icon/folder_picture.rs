@@ -17,7 +17,7 @@ use crate::folder_view::cells::folder_picture_of;
 use crate::folder_view::{icon_texture, FolderPicture, FOLDER_PICTURE};
 use crate::icons::{Art, ArtImage};
 
-/// The size of the preview: the folder as Extra large icons draw it.
+/// The size of the preview: the folder as Large icons draw it.
 const PREVIEW_SIZE: i32 = 96;
 
 /// The picture chosen, until OK or Apply.

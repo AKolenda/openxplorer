@@ -44,7 +44,7 @@ pub(crate) async fn folder_picture_of(uri: &str) -> Option<String> {
 
 /// The smallest icon that shows a folder's picture on the folder: Medium
 /// icons.
-pub(crate) const SMALLEST_PICTURE_ICON: i32 = 40;
+pub(crate) const SMALLEST_PICTURE_ICON: i32 = 48;
 
 /// The card on a folder icon of 32 units, centered across it: its top,
 /// width and height. It covers the top of the front panel (y 11 to 30 of
