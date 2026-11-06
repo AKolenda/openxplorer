@@ -102,12 +102,12 @@ pub(super) fn general_tab(
 
     let place = Rows::new();
     let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-    place.add(
+    place.add_line(
         &ox_core::i18n::gettext("Location"),
         &locations.display_location(container),
     );
     if let Some(target) = &properties.link_target {
-        place.add(&ox_core::i18n::gettext("Target"), target);
+        place.add_line(&ox_core::i18n::gettext("Target"), target);
     }
     let folder_rows = if is_folder {
         let size = place.add(&ox_core::i18n::gettext("Size"), "");
