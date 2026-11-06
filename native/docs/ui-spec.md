@@ -676,7 +676,7 @@ Keep the current metrics:
 - Quick cards 78 high, padding 12, radius **4** (6), glyph 43, hover `@ox_hover` with a `@ox_border` edge.
 - Drive cards min height 103 (native: 67), padding 18, radius 7 (R09), 1 px `@ox_border`, background `@ox_card`, glyph 46; capacity bar per C47.
 - This PC groups Devices and drives and Network locations as Windows 11 does: each drive shows its glyph, name, a capacity bar and "N free of M"; a saved share is named as Windows names a mapped drive, label, server and letter (`Backup (\\fileserver) (S:)`), with its own capacity bar and "N free of M" while it is mounted (measuring never mounts), its state line, and its address as the tooltip (2026-11-03, the user's screenshot). Quick access stays above them, as before.
-- Network banner padding 20, radius 7 (R09).
+- Network is no landing page: it is listed like a folder, as in Windows 11 (2026-11-06), its discovered computers as items of the type "Computer" with the server on the network bar, in the folder's view. Where the network browser cannot be read, Windows' info bar shows above the items, across the folder panes: "Network discovery is turned off. Network computers and devices are not visible. Click to learn more..." (Windows says "Click to change...": OpenXplorer cannot turn discovery on, so the bar opens Help at Network locations), padding `7 14`, the caution tokens of C35 (`ox_caution_bg`, `ox_caution_text`, a 1 px `ox_caution_border` below), GIO's reason as its tooltip.
 - Recent table: 12 px rows with 10 px padding and 1 px `@ox_border` dividers.
 - Settings: left navigation 244 wide on `@ox_sidebar`; sections max 1000 wide, radius **7** (9) (R09), padding 24.
 

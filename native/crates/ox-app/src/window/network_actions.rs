@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The window's network and device commands: Map network location, Keep
-//! in Network, Remove saved location, Open in new window, Discover
-//! servers, Sign out, Disconnect, Eject and Safely remove.
+//! in Network, Remove saved location, Open in new window, Sign out,
+//! Disconnect, Eject and Safely remove. Network discovers computers when
+//! it is listed ([`super::loading`]).
 //!
-//! Ports `connectDialog`, `removeBookmark`, the Keep in Network item of
-//! `networkLocationMenu` and `discoverNetwork` in `v2.0.0:desktop/ui/app.js`, and
+//! Ports `connectDialog`, `removeBookmark` and the Keep in Network item of
+//! `networkLocationMenu` in `v2.0.0:desktop/ui/app.js`, and
 //! `connect` and `after_connect` in `v2.0.0:desktop/winspace.py`. Sign out is in
 //! [`super::network_sign_out`], the device commands in
 //! [`super::mounting`].
@@ -77,8 +78,6 @@ impl BrowserWindow {
                 WindowAction::AddNetworkLocation,
                 BrowserWindow::open_network_location_dialog,
             ),
-            plain_action(WindowAction::DiscoverServers, BrowserWindow::discover_servers),
-            plain_action(WindowAction::StopDiscovery, BrowserWindow::stop_discovery),
             text_action(WindowAction::KeepInNetwork, BrowserWindow::keep_in_network),
             text_action(
                 WindowAction::RemoveSavedLocation,
@@ -225,34 +224,5 @@ impl BrowserWindow {
             return;
         }
         window.present_as_new_window();
-    }
-
-    /// Discover servers: looks for advertised SMB servers, redrawing the
-    /// Network page as they are found.
-    pub(super) fn discover_servers(&self) {
-        let discoverer = self.context().network().discoverer();
-        self.network().discovery().start(
-            discoverer,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move || window.render_landing()
-            ),
-        );
-        self.render_landing();
-    }
-
-    /// Starts discovery the first time the window shows the Network page
-    /// (`load` in app.js).
-    pub(super) fn discover_servers_once(&self) {
-        if !self.network().discovery().state().has_started {
-            self.discover_servers();
-        }
-    }
-
-    /// Stop: ends discovery and ignores what it would still find.
-    fn stop_discovery(&self) {
-        self.network().discovery().stop();
-        self.render_landing();
     }
 }

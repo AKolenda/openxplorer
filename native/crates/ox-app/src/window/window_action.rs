@@ -94,8 +94,6 @@ pub(crate) enum WindowAction {
     GoTo,
     /// Mounts the volume whose id is the string target, then opens it.
     MountVolume,
-    /// Opens the SMB server or share typed on the Network page.
-    OpenServerAddress,
     /// Opens the one selected item (Enter).
     Open,
     /// Selects every item (Ctrl+A).
@@ -302,10 +300,6 @@ pub(crate) enum WindowAction {
     /// Opens the connect dialog at a web address, as Windows 11's "Add a
     /// network location" (This PC's and Network's "…").
     AddNetworkLocation,
-    /// Looks for SMB servers that advertise themselves.
-    DiscoverServers,
-    /// Stops looking for servers.
-    StopDiscovery,
     /// Saves the network location in the string target under Network
     /// ("Keep in Network").
     KeepInNetwork,
@@ -498,7 +492,6 @@ impl WindowAction {
             WindowAction::Search => "search",
             WindowAction::GoTo => "go-to",
             WindowAction::MountVolume => "mount-volume",
-            WindowAction::OpenServerAddress => "open-server-address",
             WindowAction::Open => "open",
             WindowAction::SelectAll => "select-all",
             WindowAction::SelectNone => "select-none",
@@ -587,8 +580,6 @@ impl WindowAction {
             WindowAction::DropChoice => "drop-choice",
             WindowAction::MapNetworkLocation => "map-network-location",
             WindowAction::AddNetworkLocation => "add-network-location",
-            WindowAction::DiscoverServers => "discover-servers",
-            WindowAction::StopDiscovery => "stop-discovery",
             WindowAction::KeepInNetwork => "keep-in-network",
             WindowAction::RemoveSavedLocation => "remove-saved-location",
             WindowAction::SignOut => "sign-out",

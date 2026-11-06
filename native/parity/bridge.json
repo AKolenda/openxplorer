@@ -314,10 +314,11 @@
     },
     "discover": {
       "status": "native-tested",
-      "note": "The Network page discovers servers on its first visit in three passes, merges them, and stops on Stop; ox-core reads GVfs's network browser without passwords. The page's tests use a fixed answer.",
+      "note": "Every listing of Network discovers computers in three passes, each server once, and Stop drops the passes with the listing; ox-core reads GVfs's network browser without passwords. The tests use a fixed answer.",
       "evidence": [
-        "native/crates/ox-app/src/window/tests/network.rs::the_network_page_discovers_servers_on_its_first_visit",
-        "native/crates/ox-app/src/network/discovery.rs::stop_ends_the_passes_and_keeps_what_was_found",
+        "native/crates/ox-app/src/window/tests/network.rs::network_lists_the_discovered_computers_as_items",
+        "native/crates/ox-app/src/network/discovery.rs::passes_list_each_server_once_in_the_order_first_found",
+        "native/crates/ox-app/src/folder_view/loader.rs::a_discovery_pass_that_answers_after_stop_is_ignored",
         "native/crates/ox-core/src/network/discovery.rs::discovery_aborts_every_password_request"
       ]
     },

@@ -34,7 +34,7 @@ msgid "- New in the command bar creates a folder, a document from the built-in s
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -1271,31 +1271,11 @@ msgid "That application is not installed."
 msgstr ""
 
 #: crates/ox-app/src/locations.rs
-msgid "Find shared storage on your local network, or enter an address."
-msgstr ""
-
-#: crates/ox-app/src/locations.rs
 msgid "Folders, devices, and connected storage."
 msgstr ""
 
 #: crates/ox-app/src/locations.rs
 msgid "Your explorer, your way."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Discover devices without scanning their files."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Discovery can take a few seconds."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Listening for advertised SMB servers…"
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "No advertised SMB servers found yet. Discover again or enter an address above."
 msgstr ""
 
 #: crates/ox-app/src/properties.rs
@@ -5785,53 +5765,8 @@ msgstr ""
 msgid "Up to \"{place}\" (Alt + Up Arrow)"
 msgstr ""
 
-#: crates/ox-app/src/window/network_page.rs
-msgid "Computers & network storage"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Connected & saved locations"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discover servers"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discovered servers"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discovery depends on devices advertising themselves and on local firewall/network settings. It does not guarantee a list of every host."
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Enter a network server or shared folder."
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Map location"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Open address"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "SMB server address"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Stop"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "\\\\server or \\\\archive-nas"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/network_page.rs
-msgid "{protocol_name} · Discovered"
+#: crates/ox-app/src/window/network_info_bar.rs
+msgid "Network discovery is turned off. Network computers and devices are not visible. Click to learn more..."
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
@@ -7139,6 +7074,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/clipboard.rs
 msgid "Copy or cut between 1 and {max} items at a time."
+msgstr ""
+
+#: crates/ox-core/src/entry/classify.rs
+msgid "Computer"
 msgstr ""
 
 #: crates/ox-core/src/entry/classify.rs

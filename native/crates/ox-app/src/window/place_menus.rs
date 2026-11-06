@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The context menus of places: the drives and network locations of the
-//! sidebar, This PC and the Network page.
+//! sidebar and This PC.
 //!
 //! Ports `driveMenu`, `networkLocationMenu` and the menus of This PC's
 //! cards (`shares()` and the Devices and drives cards of `renderLanding`)
@@ -63,8 +63,7 @@ pub(super) enum PlaceMenu {
         /// What the mount allows.
         controls: MountControls,
     },
-    /// A network location in the sidebar or on the Network page
-    /// (`networkLocationMenu`).
+    /// A network location in the sidebar (`networkLocationMenu`).
     Network(NetworkLocation),
     /// A saved share's card on This PC (`shares()`).
     SavedShare {

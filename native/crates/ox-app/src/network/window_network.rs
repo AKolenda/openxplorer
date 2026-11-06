@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One window's network state: its sign-in prompts, the queue of dialogs
-//! that answers them, and its server discovery.
+//! that answers them, and why discovery could not run, if it could not.
 //!
 //! Ports what `v2.0.0:desktop/winspace.py` creates for each window (`MountPrompts`
 //! over the window's `SessionCredentials`) and the discovery state of
@@ -8,6 +8,7 @@
 //! over the keyring every window shares; closing the window wipes them
 //! (SAFE-011, TAB-050).
 
+use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -16,7 +17,6 @@ use std::sync::Arc;
 use gtk::prelude::*;
 use ox_core::network::{mount_location, MountPrompts, NetworkError, SessionCredentials, SignInPrompter};
 
-use super::discovery::ServerDiscovery;
 use super::services::NetworkServices;
 use super::sign_in_queue::SignInQueue;
 
@@ -33,8 +33,9 @@ pub(crate) struct WindowNetwork {
     prompts: MountPrompts,
     /// Shows the questions one dialog at a time.
     sign_in: Rc<SignInQueue>,
-    /// Discover servers on the Network page.
-    discovery: Rc<ServerDiscovery>,
+    /// Why the last listing of Network could not discover computers;
+    /// `None` when it could. Network's info bar shows it.
+    discovery_problem: RefCell<Option<String>>,
     /// Test safety: tests answer mounts themselves, and a test that does
     /// not is refused, so no test mounts a share.
     #[cfg(test)]
@@ -54,7 +55,7 @@ impl std::fmt::Debug for WindowNetwork {
             .debug_struct("WindowNetwork")
             .field("prompts", &self.prompts)
             .field("sign_in", &self.sign_in)
-            .field("discovery", &self.discovery)
+            .field("discovery_problem", &self.discovery_problem)
             .finish_non_exhaustive()
     }
 }
@@ -69,7 +70,7 @@ impl WindowNetwork {
         Self {
             prompts: MountPrompts::new(credentials, prompter),
             sign_in,
-            discovery: Rc::default(),
+            discovery_problem: RefCell::default(),
             #[cfg(test)]
             mount_answer: std::cell::RefCell::new(Some(Rc::new(refuse_test_mount))),
         }
@@ -108,16 +109,22 @@ impl WindowNetwork {
         &self.sign_in
     }
 
-    /// The window's server discovery.
-    pub(crate) fn discovery(&self) -> &Rc<ServerDiscovery> {
-        &self.discovery
+    /// Why the last listing of Network could not discover computers, or
+    /// `None` when it could.
+    pub(crate) fn discovery_problem(&self) -> Option<String> {
+        self.discovery_problem.borrow().clone()
+    }
+
+    /// Records how the last listing of Network went: `problem` says why
+    /// discovery could not run, or is `None` when it ran.
+    pub(crate) fn set_discovery_problem(&self, problem: Option<String>) {
+        self.discovery_problem.replace(problem);
     }
 
     /// The window closes: every open challenge is dismissed and its mount
-    /// aborted, the window's credentials are wiped from memory, and
-    /// discovery stops.
+    /// aborted, and the window's credentials are wiped from memory. A
+    /// listing of Network still running ends with its tab.
     pub(crate) fn close(&self) {
         self.prompts.close();
-        self.discovery.stop();
     }
 }

@@ -266,7 +266,7 @@ impl BrowserWindow {
     /// returns to; `None` on a landing page, which does not scroll.
     fn left_view(&self) -> Option<LeftView> {
         let uri = self.current_uri()?;
-        if Page::from_uri(&uri).is_some() {
+        if Page::drawn_at(&uri).is_some() {
             return None;
         }
         let pane = self.folder_pane();
