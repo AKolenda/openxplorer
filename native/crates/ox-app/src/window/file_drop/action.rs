@@ -348,10 +348,18 @@ impl DropMenuOffer {
         shortcuts: false,
         default: Some(DropAction::Copy),
     };
+
+    /// The offer for Recycle Bin items, which a drop moves out: Move here.
+    const MOVE_ONLY: Self = Self {
+        copies: false,
+        moves: true,
+        shortcuts: false,
+        default: Some(DropAction::Move),
+    };
 }
 
 /// How long the drop menu waits to learn what the items allow; past it,
-/// it offers a copy only.
+/// it offers a copy only, or Move here for Recycle Bin items.
 const OFFER_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// What the drop menu offers for `uris`, dragged from `origin`, dropped on
@@ -363,12 +371,7 @@ const OFFER_TIMEOUT: Duration = Duration::from_secs(2);
 /// bolds Copy here for read-only items.
 pub(crate) fn drop_menu_offer(uris: &[String], folder: &str, origin: DragOrigin) -> DropMenuOffer {
     if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
-        return DropMenuOffer {
-            copies: false,
-            moves: true,
-            shortcuts: false,
-            default: Some(DropAction::Move),
-        };
+        return DropMenuOffer::MOVE_ONLY;
     }
     // Dropped back in their own folder, as Windows Explorer does there:
     // Copy here makes copies beside them, a move would do nothing and is
@@ -443,7 +446,8 @@ fn takes_shortcuts(folder: &str) -> bool {
 fn drop_menu_entries(offer: DropMenuOffer) -> Vec<MenuEntry> {
     let choice = |label: &str, glyph: Icon, action: Option<DropAction>| {
         let target = action.map_or(CANCEL_CHOICE, DropAction::name);
-        let mut item = MenuItem::with_text_target(label, glyph, WindowAction::DropChoice, target).text_only();
+        let mut item =
+            MenuItem::with_text_target(label, glyph, WindowAction::DropChoice, target).without_glyph();
         item.emphasised = action.is_some() && action == offer.default;
         MenuEntry::from(item)
     };
@@ -549,12 +553,16 @@ impl BrowserWindow {
             self,
             async move {
                 let (uris, folder) = (pending.uris.clone(), pending.folder.clone());
-                let offer = answer_or(
-                    &DRIVE_PROBES,
-                    OFFER_TIMEOUT,
-                    DropMenuOffer::COPY_ONLY,
-                    move || drop_menu_offer(&uris, &folder, origin),
-                )
+                // Recycle Bin items only move out, even when the items
+                // could not be read in time.
+                let fallback = if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+                    DropMenuOffer::MOVE_ONLY
+                } else {
+                    DropMenuOffer::COPY_ONLY
+                };
+                let offer = answer_or(&DRIVE_PROBES, OFFER_TIMEOUT, fallback, move || {
+                    drop_menu_offer(&uris, &folder, origin)
+                })
                 .await;
                 let still_waiting = window.imp().pending_drop.borrow().as_ref() == Some(&pending);
                 if still_waiting {
