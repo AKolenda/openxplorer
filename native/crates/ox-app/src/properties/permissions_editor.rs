@@ -12,6 +12,7 @@
 mod advanced;
 pub(super) mod choices;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -294,7 +295,7 @@ fn apply_button(
     apply.set_sensitive(false);
     let change = Rc::new(EditorChange {
         controls: controls.clone(),
-        uris,
+        uris: RefCell::new(uris),
         versions,
         button: apply.downgrade(),
     });
@@ -317,7 +318,8 @@ fn apply_button(
 /// Apply make (PROP-002).
 pub(super) struct EditorChange {
     controls: Controls,
-    uris: Vec<String>,
+    /// The items' locations, which Hidden on General changes.
+    uris: RefCell<Vec<String>>,
     versions: Arc<PreviousVersions>,
     /// Apply permissions, greyed while there is nothing to apply.
     button: glib::WeakRef<gtk::Button>,
@@ -335,6 +337,14 @@ impl EditorChange {
         }
     }
 
+    /// Points the change at `to` for the item that was at `from`, once the
+    /// General tab renamed it.
+    pub(super) fn follow_rename(&self, from: &str, to: &str) {
+        for uri in self.uris.borrow_mut().iter_mut().filter(|uri| *uri == from) {
+            to.clone_into(uri);
+        }
+    }
+
     /// Applies the controls' change to every item in the background.
     ///
     /// # Errors
@@ -342,8 +352,8 @@ impl EditorChange {
     /// The refusal or the first error, to show in a message.
     async fn apply_now(&self) -> Result<(), String> {
         // Safety rule PROP-024: a previous version is never changed in place.
-        if let Some(refusal) = self
-            .uris
+        let uris = self.uris.borrow().clone();
+        if let Some(refusal) = uris
             .iter()
             .find_map(|uri| self.versions.check_writable(uri).err())
         {
@@ -365,8 +375,8 @@ impl EditorChange {
         }
         let request = self.controls.request();
         let mut result = Ok(());
-        for uri in &self.uris {
-            result = apply_in_background(uri.clone(), request, Cancellation::new()).await;
+        for uri in uris {
+            result = apply_in_background(uri, request, Cancellation::new()).await;
             if result.is_err() {
                 break;
             }
