@@ -3555,7 +3555,7 @@ msgstr ""
 msgid "Open new windows in split view"
 msgstr ""
 
-#: crates/ox-app/resources/ui/window.ui crates/ox-app/src/settings_page/general.rs crates/ox-app/src/window/title_bar.rs
+#: crates/ox-app/src/settings_page/general.rs
 msgid "Open windows"
 msgstr ""
 

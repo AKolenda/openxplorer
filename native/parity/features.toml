@@ -2438,7 +2438,7 @@ python_tests = [
 ]
 bridge = ["windows", "focusWindow", "newWindow", "quit"]
 native = "done"
-native_note = "The title bar's Open windows button, --windows and the launcher's app.windows open the menu built by open_windows_menu (native/crates/ox-app/src/window/title_bar.rs): every window by title with this one checked, a separator, New window (Ctrl+N) and Quit OpenXplorer. Test: title_bar.rs (the_windows_menu_lists_every_window_by_its_tab_title)."
+native_note = "The menu built by open_windows_menu (native/crates/ox-app/src/window/title_bar.rs): every window by title with this one checked, a separator, New window (Ctrl+N) and Quit OpenXplorer. Deliberately changed (2026-11-06): Windows 11's title bar has no open-windows button, so the title bar has none either; the tab menu's Open windows…, --windows and the launcher's app.windows open the menu below the tab in front (BrowserWindow::show_open_windows in native/crates/ox-app/src/window/tab_menu.rs), and Settings > General keeps its Open windows… button (SET-009). Tests: title_bar.rs (the_windows_menu_lists_every_window_by_its_tab_title), native/crates/ox-app/src/window/tests/chrome.rs (the_open_windows_menu_lists_every_window_then_new_window_and_quit)."
 
 [[feature]]
 id = "TAB-045"
@@ -14471,7 +14471,7 @@ sources = ["v2.0.0:desktop/ui/style.css:3-4"]
 python_tests = ["v2.0.0:desktop/tests/ui_release.py::Dark appearance is available"]
 bridge = []
 native = "done"
-native_note = "Tokens in resources/light.css and dark.css (native/docs/ui-spec.md §3), refined toward WinUI 3 where the spec says so (chrome #f9f9f9/#282828, text #1b1b1b, disabled text colour instead of 34% opacity). native/crates/ox-app/src/window/tests/look.rs (each_appearance_paints_the_surfaces_in_its_tokens) checks the painted title, bar, sidebar and content colours and both accents."
+native_note = "Tokens in resources/light.css and dark.css (native/docs/ui-spec.md §3), refined toward WinUI 3 where the spec says so (chrome #f9f9f9/#282828, the tab strip #f3f3f3/#202020 as a flat Mica Alt since 2026-11-06, text #1b1b1b, disabled text colour instead of 34% opacity). native/crates/ox-app/src/window/tests/look.rs (each_appearance_paints_the_surfaces_in_its_tokens) checks the painted title, bar, sidebar and content colours and both accents."
 
 [[feature]]
 id = "LOOK-003"
@@ -14623,7 +14623,7 @@ sources = ["v2.0.0:desktop/ui/style.css:5", "v2.0.0:desktop/ui/style.css:220"]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/chrome.rs: 42 px title bar and 215 x 35 active tab (the_active_tab_starts_9_pixels_in...), 38 x 34 new-tab button, 46 px caption buttons, 22 px tab close and the #c42b1c Close hover with a white glyph (the_tab_close_is_22_pixels_and_close_hovers_red). Heights grow with text size (theme/fonts.rs, VIEW-044)."
+native_note = "native/crates/ox-app/src/window/tests/chrome.rs: 42 px title bar and 215 x 35 active tab (the_active_tab_starts_9_pixels_in...), 38 x 34 new-tab button, 46 px caption buttons, 22 px tab close and the #c42b1c Close hover with a white glyph (the_tab_close_is_22_pixels_and_close_hovers_red). Heights grow with text size (theme/fonts.rs, VIEW-044). Since 2026-11-06 the strip is drawn as Windows 11's File Explorer draws it: a 1 x 19 px separator in the gap between two inactive tabs, hidden beside the tab in front or a hovered one, 4 px outward curves at the foot of the tab in front joining it to the navigation row, the Windows hover fill on inactive tabs, and the close button only on the tab in front, a hovered tab or one holding focus (native/crates/ox-app/src/window/tab_strip/edges.rs, skin/title-bar.css; chrome.rs tabs_are_separated_flared_and_show_close_as_in_windows_11)."
 
 [[feature]]
 id = "LOOK-010"
