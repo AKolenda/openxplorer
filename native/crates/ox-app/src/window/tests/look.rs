@@ -19,6 +19,7 @@ use crate::test_support::harness::{
     descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::test_support::window_font;
+use crate::window::input::KEYBOARD_IN_CLASS;
 use crate::window::BrowserWindow;
 
 /// Switches `test`'s window to `theme` and waits out the colour
@@ -611,5 +612,79 @@ fn items_take_windows_11s_fill_outline_and_ring_in_each_state() {
             &format!("{theme} keyboard navigation's two-tone ring"),
         );
         test.window.set_focus_visible(false);
+    }
+}
+
+/// After Up opens the parent, the folder left is selected (NAV-011). As in
+/// Windows 11 File Explorer, its row always draws the selection's fill,
+/// and draws the 1 pixel outline only while the list has the keyboard: not
+/// once the keyboard moves to the navigation pane or the address bar,
+/// whatever state GTK leaves on the row it last focused.
+///
+/// parity: ACC-009, NAV-011
+#[gtk::test]
+fn a_selected_row_keeps_its_fill_and_outlines_only_while_the_list_has_the_keyboard() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Documents/Letters")).expect("fixture subfolder");
+    let test = laid_out(&fixture.uri_of("Documents/Letters"));
+    for (theme, fill, outline) in [("light", "#cce8ff", "#1a1b1c"), ("dark", "#3d3d3d", "#ffffff")] {
+        show_theme(&test, theme);
+        test.window
+            .navigate(&fixture.uri_of("Documents/Letters"))
+            .expect("valid folder");
+        test.wait_for_listing("Letters");
+        test.activate("up", None);
+        test.wait_for_listing("Documents");
+        assert_eq!(
+            test.selected_names(),
+            ["Letters"],
+            "{theme}: the folder left is selected"
+        );
+        let position = test.position_of("Letters");
+        let view = test.window.folder_pane().view_widget();
+
+        let row = row_at(&test, position);
+        focus_row(&test, &row, false);
+        assert!(
+            view.has_css_class(KEYBOARD_IN_CLASS),
+            "{theme}: the list has the keyboard"
+        );
+        assert_row_paints(
+            &row,
+            &[(0, outline), (1, fill), (6, fill)],
+            &format!("{theme} selected row in the list with the keyboard"),
+        );
+
+        let sidebar_row = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
+            .into_iter()
+            .find(|row| row.is_visible() && row.is_focusable())
+            .expect("a navigation pane row");
+        sidebar_row.grab_focus();
+        wait_until("the keyboard to move to the navigation pane", || {
+            sidebar_row.has_focus()
+        });
+        wait_for_frames(&test.window, 2);
+        assert!(
+            !view.has_css_class(KEYBOARD_IN_CLASS),
+            "{theme}: the list lost the keyboard"
+        );
+        assert_row_paints(
+            &row_at(&test, position),
+            &[(0, fill), (1, fill), (6, fill)],
+            &format!("{theme} selected row while the navigation pane has the keyboard: fill, no outline"),
+        );
+
+        focus_out_of_the_list(&test);
+        wait_for_frames(&test.window, 2);
+        assert!(
+            !view.has_css_class(KEYBOARD_IN_CLASS),
+            "{theme}: the address bar has the keyboard"
+        );
+        assert_row_paints(
+            &row_at(&test, position),
+            &[(0, fill), (1, fill), (6, fill)],
+            &format!("{theme} selected row while the address bar has the keyboard: fill, no outline"),
+        );
     }
 }

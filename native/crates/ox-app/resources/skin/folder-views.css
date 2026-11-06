@@ -101,7 +101,8 @@ columnview.files > listview > row {
 }
 /* Windows 11 File Explorer's item colours: a pale tint under the pointer,
    a stronger filled highlight for the selection, which a press shows at
-   once. While the list has the keyboard, its focused item, selected or
+   once, whether the list has the keyboard or not. While the list has the
+   keyboard (.keyboard-in, window/input.rs), its focused item, selected or
    not, draws a 1px outline in the ring's outer colour (dark in light,
    white in dark), as Windows draws it after a click or Ctrl+click; an
    item under the pointer alone draws none. Keyboard navigation draws
@@ -116,7 +117,7 @@ columnview.files > listview > row:selected {
   color: @ox_text;
 }
 columnview.files > listview > row:selected:hover { background-color: @ox_item_selected_hover; }
-columnview.files > listview > row:focus { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
+columnview.files.keyboard-in > listview > row:focus:not(:focus-visible) { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
 columnview.files > listview > row:focus-visible {
   outline: 2px solid @ox_item_focus_outer;
   outline-offset: -2px;
@@ -274,7 +275,7 @@ gridview.files > child:selected {
   color: @ox_text;
 }
 gridview.files > child:selected:hover { background-color: @ox_item_selected_hover; }
-gridview.files > child:focus { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
+gridview.files.keyboard-in > child:focus:not(:focus-visible) { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
 gridview.files > child:focus-visible {
   outline: 2px solid @ox_item_focus_outer;
   outline-offset: -2px;
