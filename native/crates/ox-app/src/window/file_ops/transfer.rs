@@ -4,8 +4,8 @@
 //!
 //! Ports `paste` and `transferWithConflicts` of `v2.0.0:desktop/ui/app.js`.
 //! Paste reads the desktop's clipboard again first: its file list is
-//! copied or moved, and its text or an image is written as one new file
-//! (CLIP-015, [`BrowserWindow::paste_clipboard_data`]). The copy or move then
+//! copied or moved, and a picture is written as one new file (CLIP-015,
+//! [`BrowserWindow::paste_clipboard_image`]). The copy or move then
 //! takes its action in the progress window, and before anything is
 //! copied, the destination is checked for every incoming name, inside the
 //! folders it merges into too ([`scan_name_conflicts`]); without a
@@ -71,7 +71,7 @@ impl IncomingItems {
 
 impl BrowserWindow {
     /// Paste: reads the clipboard, then copies or moves its items, or
-    /// writes its text or image as one new file (CLIP-015), into `into`, a
+    /// writes its picture as one new file (CLIP-015), into `into`, a
     /// selected folder (Dolphin's "Paste into folder", CMD-019), or
     /// without one into the folder shown (`paste`).
     pub(crate) async fn paste(&self, into: Option<String>) {
@@ -102,19 +102,20 @@ impl BrowserWindow {
     }
 
     /// Puts what the clipboard holds into `destination_folder`: a file
-    /// list is copied or moved item by item, and text or an image becomes
-    /// one new file (CLIP-015).
+    /// list is copied or moved item by item, and a picture becomes one new
+    /// file (CLIP-015).
     async fn paste_content(&self, content: ClipboardContent, destination_folder: String) {
         match content {
-            // An empty clipboard has nothing to write; a payload over the
-            // size the app accepts says so rather than writing half of it.
+            // A clipboard without files or a picture has nothing to write;
+            // a picture over the size the app accepts says so rather than
+            // writing half of it.
             ClipboardContent::Nothing => {}
             ClipboardContent::TooLarge => {
                 self.show_message(ox_core::i18n::gettext_static(TOO_LARGE_TO_PASTE));
             }
-            ClipboardContent::Data(data) => {
+            ClipboardContent::Image(image) => {
                 if self.takes_pasted_items(&destination_folder) {
-                    self.paste_clipboard_data(data, destination_folder).await;
+                    self.paste_clipboard_image(image, destination_folder).await;
                 }
             }
             ClipboardContent::Files(files) => self.paste_files(files, destination_folder).await,

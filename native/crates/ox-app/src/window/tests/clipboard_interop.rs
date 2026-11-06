@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! What other applications put on the clipboard: a plain URI list, an
-//! image, text, nothing at all, empty file lists, a conversion that fails,
-//! an owner that changes during a read and payloads over the size the app
-//! accepts. Dolphin's cut is in the `clipboard` tests.
+//! What other applications put on the clipboard: a plain URI list, a
+//! picture, nothing at all, empty file lists, a conversion that fails, an
+//! owner that changes during a read and payloads over the size the app
+//! accepts. Dolphin's cut and plain text are in the `clipboard` tests.
 //!
 //! Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py`, against the
 //! display's clipboard instead of its fake GTK clipboard. GitHub issue #20 (1.1.4
 //! crashed on KDE Plasma when GTK returned selection data of length -1) is
 //! the reason every foreign clipboard here must leave the window running.
-//! A foreign clipboard with files enables Paste for those files, text or an
-//! image is pasted as one new file (CLIP-015), and one with neither is no
-//! data, which leaves Paste disabled (CLIP-016).
+//! A foreign clipboard with files enables Paste for those files, a picture
+//! is pasted as one new file (CLIP-015), and one with neither is no data,
+//! which leaves Paste disabled (CLIP-016).
 
 use std::fs;
 use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::clipboard::{GNOME, MAX_BYTES, TEXT_MIME_TYPE, URI_LIST};
+use ox_core::clipboard::{GNOME, MAX_BYTES, URI_LIST};
 
 use super::file_ops_support::is_enabled;
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
@@ -295,40 +295,37 @@ fn a_picture_on_the_clipboard_pastes_as_an_image_file() {
         names_ending(&fixture, "Documents", "txt").is_empty(),
         "a picture is no text"
     );
-}
-
-/// Text copied in another application becomes one `.txt` file holding the
-/// bytes as they were copied, CRLF and all, and the new file is selected
-/// as a new item is.
-///
-/// parity: CLIP-015
-#[gtk::test]
-fn text_on_the_clipboard_pastes_as_a_txt_file() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let copied = "Plan Q3\r\nShip it\r\n";
-
-    test.window.clipboard().set_text(copied);
-
-    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
-    test.activate("paste", None);
-    let names = pasted_names(&fixture, "Documents", "txt", 1);
-    let written = fs::read(fixture.path(&format!("Documents/{}", names[0]))).expect("the pasted text");
-
-    assert!(is_pasted_name(&names[0], "txt"), "{}", names[0]);
-    assert_eq!(
-        written,
-        copied.as_bytes(),
-        "the text is written as it was copied, line endings included"
-    );
     wait_until("the pasted file to be selected", || {
         test.selected_names() == names
     });
 }
 
+/// A picture offered in a format the app keeps is written from the owner's
+/// own bytes under that format's extension, never re-encoded.
+///
+/// parity: CLIP-015
+#[gtk::test]
+fn a_jpeg_on_the_clipboard_is_written_as_it_was_copied() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let jpeg = [0xff, 0xd8, 0xff, 0xe0, b'\r', b'\n', 0x00, 0xff, 0xd9];
+
+    take_clipboard(&test, &offering("image/jpeg", &jpeg));
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.window.paste_from_keyboard();
+    let names = pasted_names(&fixture, "Documents", "jpg", 1);
+
+    assert!(is_pasted_name(&names[0], "jpg"), "{}", names[0]);
+    assert_eq!(
+        fs::read(fixture.path(&format!("Documents/{}", names[0]))).expect("the pasted picture"),
+        jpeg,
+        "the owner's bytes, as they were copied"
+    );
+}
+
 /// A selection whose copy offers its paths as text beside the file formats
-/// is still a selection: the file list is read first, so Ctrl+C then Ctrl+V
-/// copies the files instead of writing a .txt.
+/// is still a selection: the file list is read first and the text is never
+/// one, so Ctrl+C then Ctrl+V copies the files and writes nothing else.
 ///
 /// parity: CLIP-004, CLIP-015
 #[gtk::test]
@@ -339,7 +336,7 @@ fn a_file_list_wins_over_the_text_paths_copied_beside_it() {
     let uri_list = format!("{item}\r\n");
     let both = gdk::ContentProvider::new_union(&[
         offering(URI_LIST, uri_list.as_bytes()),
-        offering(TEXT_MIME_TYPE, item.as_bytes()),
+        offering("text/plain;charset=utf-8", item.as_bytes()),
     ]);
 
     take_clipboard(&test, &both);
@@ -361,17 +358,17 @@ fn a_file_list_wins_over_the_text_paths_copied_beside_it() {
     );
 }
 
-/// Text over the size the app accepts is no data: Paste stays off, and
-/// Ctrl+V says why instead of writing half of it.
+/// A picture over the size the app accepts is no data: Paste stays off,
+/// and Ctrl+V says why instead of writing half of it.
 ///
 /// parity: CLIP-015
 #[gtk::test]
-fn text_over_the_size_limit_is_no_data_and_says_why() {
+fn a_picture_over_the_size_limit_is_no_data_and_says_why() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let huge = vec![b'a'; MAX_BYTES + 1];
+    let huge = vec![0x89; MAX_BYTES + 1];
     let owner = ScriptedOwner::new(
-        TEXT_MIME_TYPE,
+        "image/png",
         Script::Late {
             delay: Duration::from_millis(10),
             payload: huge,
@@ -388,18 +385,18 @@ fn text_over_the_size_limit_is_no_data_and_says_why() {
     wait_until("the refusal", || {
         test.window.shown_message() == ox_core::clipboard::TOO_LARGE_TO_PASTE
     });
-    assert!(names_ending(&fixture, "Documents", "txt").is_empty());
+    assert!(names_ending(&fixture, "Documents", "png").is_empty());
 }
 
-/// Text the owner refuses to convert is no data, never a crash (GitHub
-/// issue #20): nothing is pasted and nothing is written.
+/// A picture the owner refuses to convert is no data, never a crash
+/// (GitHub issue #20): nothing is pasted and nothing is written.
 ///
 /// parity: CLIP-015, CLIP-016
 #[gtk::test]
-fn a_text_conversion_the_owner_refuses_is_no_data() {
+fn a_picture_conversion_the_owner_refuses_is_no_data() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let refusing_owner = ScriptedOwner::new(TEXT_MIME_TYPE, Script::Fail);
+    let refusing_owner = ScriptedOwner::new("image/png", Script::Fail);
     let progress = refusing_owner.progress();
 
     take_clipboard(&test, &refusing_owner);
@@ -410,56 +407,58 @@ fn a_text_conversion_the_owner_refuses_is_no_data() {
     test.window.paste_from_keyboard();
     wait_for(Duration::from_millis(200));
     assert_eq!(test.window.shown_message(), "", "nothing is said");
-    assert!(names_ending(&fixture, "Documents", "txt").is_empty());
+    assert!(names_ending(&fixture, "Documents", "png").is_empty());
 }
 
-/// Two pastes of the same text in the same second make two files: the
+/// Two pastes of the same picture in the same second make two files: the
 /// second takes the next free number and never writes over the first.
 ///
 /// parity: CLIP-015
 #[gtk::test]
-fn pasting_the_same_text_twice_never_overwrites_the_first_file() {
+fn pasting_the_same_picture_twice_never_overwrites_the_first_file() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
 
-    test.window.clipboard().set_text("Quarterly plan");
+    take_clipboard(&test, &offering("image/png", &png));
     wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
     test.activate("paste", None);
-    pasted_names(&fixture, "Documents", "txt", 1);
+    pasted_names(&fixture, "Documents", "png", 1);
     test.window.paste_from_keyboard();
-    let names = pasted_names(&fixture, "Documents", "txt", 2);
+    let names = pasted_names(&fixture, "Documents", "png", 2);
 
     assert_ne!(names[0], names[1], "the second paste has a name of its own");
     for name in &names {
-        assert!(is_pasted_name(name, "txt"), "{name}");
+        assert!(is_pasted_name(name, "png"), "{name}");
         assert_eq!(
-            fs::read(fixture.path(&format!("Documents/{name}"))).expect("a pasted text"),
-            b"Quarterly plan",
-            "{name} holds the text the clipboard gave it"
+            fs::read(fixture.path(&format!("Documents/{name}"))).expect("a pasted picture"),
+            png,
+            "{name} holds the picture the clipboard gave it"
         );
     }
 }
 
-/// Paste into folder writes the clipboard's text into the selected folder,
-/// as pasting a file list there copies the items into it.
+/// Paste into folder writes the clipboard's picture into the selected
+/// folder, as pasting a file list there copies the items into it.
 ///
 /// parity: CLIP-015, CMD-019
 #[gtk::test]
-fn paste_into_a_folder_writes_the_text_there() {
+fn paste_into_a_folder_writes_the_picture_there() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::file_ops_support::select_names(&test, &["Documents"]);
+    let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
 
-    take_clipboard(&test, &offering(TEXT_MIME_TYPE, b"Plan Q3"));
+    take_clipboard(&test, &offering("image/png", &png));
     wait_until("Paste into folder to be enabled", || {
         is_enabled(&test, "paste-into")
     });
     test.activate("paste-into", Some(&fixture.uri_of("Documents")));
-    let names = pasted_names(&fixture, "Documents", "txt", 1);
+    let names = pasted_names(&fixture, "Documents", "png", 1);
 
     assert_eq!(
-        fs::read(fixture.path(&format!("Documents/{}", names[0]))).expect("the pasted text"),
-        b"Plan Q3"
+        fs::read(fixture.path(&format!("Documents/{}", names[0]))).expect("the pasted picture"),
+        png
     );
     // The file went into a folder that is not the one on screen, so this tab
     // keeps its own selection: reloading it would select an item it does not

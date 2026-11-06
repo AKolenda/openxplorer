@@ -15,7 +15,7 @@
 //!   takes several: F2 gives them one numbered name, as Windows Explorer
 //!   does (OPS-050), and Rename items… (the same command) opens the batch
 //!   rename (OPS-014).
-//! - Paste: a file clipboard, or text or an image to write as one new file
+//! - Paste: a file clipboard, or a picture to write as one new file
 //!   (CLIP-015), no search, no operation, every selected item operable, and
 //!   a writable folder.
 //! - New: no search, no operation, and a writable folder.
@@ -166,8 +166,8 @@ pub(crate) struct CommandFacts {
     pub(crate) folder: FolderFacts,
     /// An operation runs or a paste is being planned (`state.operation`).
     pub(crate) is_busy: bool,
-    /// What the desktop's clipboard holds: files, text, an image or
-    /// nothing (`state.clipboard`, CLIP-009, CLIP-015).
+    /// What the desktop's clipboard holds: files, a picture or nothing
+    /// (`state.clipboard`, CLIP-009, CLIP-015).
     pub(crate) clipboard: ClipboardKind,
     /// Undo has something to reverse.
     pub(crate) can_undo: bool,
@@ -223,8 +223,8 @@ impl CommandFacts {
             FileCommand::CancelOperation => ox_core::i18n::gettext_static("No file operation is running."),
             FileCommand::Undo if !self.can_undo => ox_core::i18n::gettext_static("Nothing to undo."),
             FileCommand::Redo if !self.can_redo => ox_core::i18n::gettext_static("Nothing to redo."),
-            // Text and an image are pasted as a file, which is why only
-            // an empty clipboard has nothing to paste (CLIP-015).
+            // A picture is pasted as a file (CLIP-015); text, as in
+            // Windows Explorer, is nothing to paste.
             FileCommand::Paste | FileCommand::PasteInto if self.clipboard == ClipboardKind::TooLarge => {
                 ox_core::i18n::gettext_static(ox_core::clipboard::TOO_LARGE_TO_PASTE)
             }
@@ -278,7 +278,7 @@ impl CommandFacts {
 /// Whether the jobs that run keep `command` waiting.
 ///
 /// A copy, a cut and a paste of a file list queue behind them, up to
-/// [`MAX_JOBS`](super::jobs::MAX_JOBS). Text or an image is written as the
+/// [`MAX_JOBS`](super::jobs::MAX_JOBS). A picture is written as the
 /// window's own quick write, which runs only while no job does, so such a
 /// paste waits for them instead: enabled, it would do nothing (CLIP-015).
 fn waits_for_running_jobs(command: FileCommand, clipboard: ClipboardKind, jobs: usize) -> bool {
@@ -538,7 +538,7 @@ mod tests {
     }
 
     /// A paste of a file list queues behind the jobs that run, as a copy does;
-    /// one of text or an image writes its file as the window's own quick write,
+    /// one of a picture writes its file as the window's own quick write,
     /// which runs only while no job does, so it waits for them (CLIP-015).
     #[test]
     fn a_paste_of_data_waits_for_the_jobs_that_run() {
@@ -553,16 +553,15 @@ mod tests {
             ClipboardKind::Files,
             max
         ));
-        for kind in [ClipboardKind::Text, ClipboardKind::Image] {
-            assert!(
-                waits_for_running_jobs(FileCommand::Paste, kind, 1),
-                "{kind:?} waits for the first job"
-            );
-            assert!(
-                waits_for_running_jobs(FileCommand::PasteInto, kind, 1),
-                "{kind:?}"
-            );
-        }
+        assert!(
+            waits_for_running_jobs(FileCommand::Paste, ClipboardKind::Image, 1),
+            "a picture waits for the first job"
+        );
+        assert!(waits_for_running_jobs(
+            FileCommand::PasteInto,
+            ClipboardKind::Image,
+            1
+        ));
         assert!(!waits_for_running_jobs(
             FileCommand::Copy,
             ClipboardKind::Files,
@@ -570,19 +569,19 @@ mod tests {
         ));
     }
 
-    /// Text and an image are pasted as one new file, so they enable Paste
-    /// as a file list does; only an empty clipboard has nothing to write.
+    /// A picture is pasted as one new file, so it enables Paste as a file
+    /// list does; a clipboard with neither has nothing to write.
     ///
     /// parity: CLIP-015, CLIP-016
     #[test]
-    fn paste_needs_files_text_or_an_image_on_the_clipboard() {
+    fn paste_needs_files_or_a_picture_on_the_clipboard() {
         let mut facts = selected(0);
         facts.clipboard = ClipboardKind::Empty;
 
         assert!(!facts.allows(FileCommand::Paste));
         assert!(!facts.allows(FileCommand::PasteInto));
         assert_eq!(facts.refusal(FileCommand::Paste), Some("Nothing to paste here."));
-        for kind in [ClipboardKind::Files, ClipboardKind::Text, ClipboardKind::Image] {
+        for kind in [ClipboardKind::Files, ClipboardKind::Image] {
             let mut holds = selected(0);
             holds.clipboard = kind;
             assert!(holds.allows(FileCommand::Paste), "{kind:?}");

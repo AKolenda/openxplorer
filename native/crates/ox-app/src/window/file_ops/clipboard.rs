@@ -12,11 +12,9 @@
 //! - Reading tries the app's own format, then GNOME's, then the URI
 //!   list with the KDE cut marker, each asynchronously, so a slow owner
 //!   never freezes the window. When none of them holds a file list, the
-//!   clipboard's picture is read, and then its text, which a paste writes
-//!   as one new file (CLIP-015). The file list always comes first: a
-//!   window of this app offers the copied paths as text beside the file
-//!   formats (CLIP-004), and text must never win, or Ctrl+C then Ctrl+V
-//!   would write a .txt instead of copying the files.
+//!   clipboard's picture is read, which a paste writes as one new file
+//!   (CLIP-015). Plain text is neither a file list nor a file: as in
+//!   Windows Explorer, it leaves Paste disabled.
 //! - An empty or failed conversion, an oversized payload or an owner
 //!   change during the read all mean "no data" (fail closed, CLIP-005,
 //!   CLIP-016).
@@ -36,8 +34,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::clipboard::{
-    decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedContent, IMAGE_MIME_TYPES, KDE_CUT,
-    MAX_BYTES, TEXTURE_EXTENSION, TEXT_MIME_TYPE,
+    decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, IMAGE_MIME_TYPES, KDE_CUT, MAX_BYTES,
+    TEXTURE_EXTENSION,
 };
 
 use crate::window::BrowserWindow;
@@ -53,56 +51,43 @@ const FILE_LIST_FORMATS: [FileListFormat<'static>; 3] = [
     FileListFormat::UriList { kde_cut_marker: None },
 ];
 
-/// The text targets a paste accepts, besides any format of type `text/*`.
-///
-/// GTK converts whichever of them an owner declares into
-/// `text/plain;charset=utf-8`, which is the one a read asks for, so an X11
-/// owner that offers only `STRING` is read too. They are checked first
-/// because an owner that offers no text at all is never asked for any: a
-/// clipboard that a slow or half-gone owner still holds would otherwise
-/// take a read it cannot answer, and hold up the next one.
-const TEXT_TARGETS: [&str; 4] = [TEXT_MIME_TYPE, "text/plain", "UTF8_STRING", "STRING"];
-
 /// What the desktop's clipboard offers Paste, as the window last read it:
 /// enough to enable the command without keeping the payload in memory.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum ClipboardKind {
-    /// No files, no text and no image: Paste has nothing to write
-    /// (CLIP-016).
+    /// No files and no picture: Paste has nothing to write, as Windows
+    /// Explorer has nothing to paste from text (CLIP-016).
     #[default]
     Empty,
     /// A file list, from this window, another window of this app, or
     /// another file manager.
     Files,
-    /// Text copied in another application, pasted as one `.txt` file
-    /// (CLIP-015).
-    Text,
-    /// An image copied in another application, pasted as one image file
+    /// A picture copied in another application, pasted as one image file
     /// (CLIP-015).
     Image,
-    /// Text or an image larger than [`MAX_BYTES`], which is no data
-    /// (CLIP-015); Paste says so, instead of doing nothing.
+    /// A picture larger than [`MAX_BYTES`], which is no data (CLIP-015);
+    /// Paste says so, instead of doing nothing.
     TooLarge,
 }
 
 impl ClipboardKind {
     /// Whether Paste has something to write.
     pub(crate) fn is_pasteable(self) -> bool {
-        matches!(self, Self::Files | Self::Text | Self::Image)
+        matches!(self, Self::Files | Self::Image)
     }
 }
 
 /// What the desktop's clipboard holds for a paste (CLIP-005, CLIP-015).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ClipboardContent {
-    /// Nothing a paste could write: no files, no text, no image.
+    /// Nothing a paste could write: no files and no picture.
     Nothing,
-    /// Text or an image over [`MAX_BYTES`], refused as no data.
+    /// A picture over [`MAX_BYTES`], refused as no data.
     TooLarge,
     /// A file list, which paste copies or moves item by item.
     Files(ClipboardFiles),
-    /// Text or an image, which paste writes as one new file (CLIP-015).
-    Data(PastedContent),
+    /// A picture, which paste writes as one new file (CLIP-015).
+    Image(PastedImage),
 }
 
 impl ClipboardContent {
@@ -112,8 +97,7 @@ impl ClipboardContent {
             Self::Nothing => ClipboardKind::Empty,
             Self::TooLarge => ClipboardKind::TooLarge,
             Self::Files(_) => ClipboardKind::Files,
-            Self::Data(PastedContent::Text(_)) => ClipboardKind::Text,
-            Self::Data(PastedContent::Image { .. }) => ClipboardKind::Image,
+            Self::Image(_) => ClipboardKind::Image,
         }
     }
 
@@ -138,35 +122,23 @@ enum Payload {
     Unavailable,
 }
 
-/// What one format read gave, in the order paste reads the formats.
-#[derive(Debug)]
-enum Found<Content> {
-    /// Something to paste.
-    Content(Content),
-    /// A payload over [`MAX_BYTES`], which is no data.
-    TooLarge,
-    /// Nothing in this format.
-    Nothing,
+impl Payload {
+    /// The bytes, when the read gave any within the limit.
+    fn bytes(self) -> Option<Vec<u8>> {
+        match self {
+            Self::Bytes(bytes) => Some(bytes),
+            Self::TooLarge | Self::Unavailable => None,
+        }
+    }
 }
 
 /// Reads the whole payload of `mime_type` from `clipboard`; `Unavailable`
-/// when the owner does not offer it, the conversion fails or the payload is
-/// larger than [`MAX_BYTES`].
+/// when the owner does not offer it or the conversion fails, and
+/// `TooLarge` when the payload is larger than [`MAX_BYTES`].
 async fn read_payload(clipboard: &gdk::Clipboard, mime_type: &str) -> Payload {
     if !clipboard.formats().contain_mime_type(mime_type) {
         return Payload::Unavailable;
     }
-    read_offered_payload(clipboard, mime_type).await
-}
-
-/// Reads `mime_type` from `clipboard` without asking whether it is offered.
-///
-/// Only text is read this way: GTK converts the text of any text target an
-/// owner publishes into `text/plain;charset=utf-8`, so asking for that one
-/// format reads a `text/plain` owner too, as `gdk_clipboard_read_text_async`
-/// does in Nautilus. A read of anything else is worth asking for only when
-/// the owner offers it, which [`read_payload`] checks.
-async fn read_offered_payload(clipboard: &gdk::Clipboard, mime_type: &str) -> Payload {
     let Ok((stream, _)) = clipboard.read_future(&[mime_type], glib::Priority::DEFAULT).await else {
         return Payload::Unavailable;
     };
@@ -189,87 +161,66 @@ async fn read_offered_payload(clipboard: &gdk::Clipboard, mime_type: &str) -> Pa
 }
 
 /// Reads `format` from `clipboard` and decodes it; a URI list is read
-/// with its KDE cut marker.
-async fn read_file_list(clipboard: &gdk::Clipboard, format: FileListFormat<'_>) -> Found<ClipboardFiles> {
-    let payload = match read_payload(clipboard, format.mime_type()).await {
-        Payload::Bytes(payload) => payload,
-        Payload::TooLarge => return Found::TooLarge,
-        Payload::Unavailable => return Found::Nothing,
+/// with its KDE cut marker. A payload over the limit is no file list.
+async fn read_file_list(clipboard: &gdk::Clipboard, format: FileListFormat<'_>) -> Option<ClipboardFiles> {
+    let payload = read_payload(clipboard, format.mime_type()).await.bytes()?;
+    if !matches!(format, FileListFormat::UriList { .. }) {
+        return decode(format, &payload);
+    }
+    let marker = read_payload(clipboard, KDE_CUT).await.bytes();
+    let with_marker = FileListFormat::UriList {
+        kde_cut_marker: marker.as_deref(),
     };
-    let decoded = match format {
-        FileListFormat::UriList { .. } => {
-            let marker = match read_payload(clipboard, KDE_CUT).await {
-                Payload::Bytes(marker) => Some(marker),
-                // The exact cut marker is `1`: a marker that is not there,
-                // or one past the limit, makes the list a copy.
-                Payload::TooLarge | Payload::Unavailable => None,
-            };
-            let with_marker = FileListFormat::UriList {
-                kde_cut_marker: marker.as_deref(),
-            };
-            decode(with_marker, &payload)
-        }
-        format => decode(format, &payload),
-    };
-    decoded.map_or(Found::Nothing, Found::Content)
+    decode(with_marker, &payload)
 }
 
 /// The file list on `clipboard`, in the first format that holds one.
-async fn read_files(clipboard: &gdk::Clipboard) -> Found<ClipboardFiles> {
-    let mut too_large = false;
+async fn read_files(clipboard: &gdk::Clipboard) -> Option<ClipboardFiles> {
     for format in FILE_LIST_FORMATS {
-        match read_file_list(clipboard, format).await {
-            Found::Content(files) => return Found::Content(files),
-            Found::TooLarge => too_large = true,
-            Found::Nothing => {}
+        if let Some(files) = read_file_list(clipboard, format).await {
+            return Some(files);
         }
     }
-    if too_large {
-        Found::TooLarge
-    } else {
-        Found::Nothing
-    }
+    None
 }
 
-/// The image on `clipboard`, as the file a paste writes (CLIP-015).
+/// The picture on `clipboard`, as the file a paste writes (CLIP-015).
 ///
 /// The owner's own encoding is written as it is (PNG, JPEG, WebP, GIF or
 /// BMP), under the extension of that format, so a pasted screenshot is the
-/// screenshot and nothing re-encodes it. An owner that offers no picture
-/// this app keeps is asked for a texture instead, which GTK encodes as
-/// PNG; that is also what a picture of a format outside
-/// [`IMAGE_MIME_TYPES`] becomes.
-async fn read_image(clipboard: &gdk::Clipboard) -> Found<PastedContent> {
+/// screenshot and nothing re-encodes it. An owner that offers another
+/// `image/*` format is asked for a texture instead, which GTK encodes as
+/// PNG.
+async fn read_image(clipboard: &gdk::Clipboard) -> ClipboardContent {
     let mut too_large = false;
     for (mime_type, extension) in IMAGE_MIME_TYPES {
         match read_payload(clipboard, mime_type).await {
             Payload::Bytes(bytes) if bytes.is_empty() => {}
-            Payload::Bytes(bytes) => return Found::Content(PastedContent::Image { extension, bytes }),
+            Payload::Bytes(bytes) => return ClipboardContent::Image(PastedImage { extension, bytes }),
             Payload::TooLarge => too_large = true,
             Payload::Unavailable => {}
         }
     }
     if too_large {
-        return Found::TooLarge;
+        return ClipboardContent::TooLarge;
     }
     if !offers_a_picture(clipboard) {
-        return Found::Nothing;
+        return ClipboardContent::Nothing;
     }
     let Ok(Some(texture)) = clipboard.read_texture_future().await else {
-        return Found::Nothing;
+        return ClipboardContent::Nothing;
     };
     let bytes = texture.save_to_png_bytes().to_vec();
     if bytes.is_empty() {
-        return Found::Nothing;
+        return ClipboardContent::Nothing;
     }
     // GTK's decoding is not bounded by the size of what the owner holds, so
     // the limit is enforced on what the paste would write: a picture of this
-    // branch is as much "too large" as one whose own bytes were over it, and
-    // a paste never writes a file it would refuse to read back.
+    // branch is as much "too large" as one whose own bytes were over it.
     if bytes.len() > MAX_BYTES {
-        return Found::TooLarge;
+        return ClipboardContent::TooLarge;
     }
-    Found::Content(PastedContent::Image {
+    ClipboardContent::Image(PastedImage {
         extension: TEXTURE_EXTENSION,
         bytes,
     })
@@ -286,66 +237,19 @@ fn offers_a_picture(clipboard: &gdk::Clipboard) -> bool {
         .any(|mime_type| mime_type.starts_with("image/"))
 }
 
-/// True when `clipboard` offers text in a form [`TEXT_MIME_TYPE`] can be
-/// converted from, so an owner without any text is not asked for one.
-fn offers_text(clipboard: &gdk::Clipboard) -> bool {
-    let formats = clipboard.formats();
-    TEXT_TARGETS
-        .iter()
-        .any(|target| formats.contain_mime_type(target))
-        || formats
-            .mime_types()
-            .iter()
-            .any(|mime_type| mime_type.starts_with("text/"))
-}
-
-/// The text on `clipboard`, as the UTF-8 file a paste writes (CLIP-015).
-///
-/// The bytes are written as GTK converted them, line endings included: a
-/// text copied with CRLF stays CRLF, so the file holds what was copied and
-/// no editor shows a line the user never typed.
-async fn read_text(clipboard: &gdk::Clipboard) -> Found<PastedContent> {
-    if !offers_text(clipboard) {
-        return Found::Nothing;
-    }
-    match read_offered_payload(clipboard, TEXT_MIME_TYPE).await {
-        Payload::Bytes(bytes) if bytes.is_empty() => Found::Nothing,
-        Payload::Bytes(bytes) => Found::Content(PastedContent::Text(bytes)),
-        Payload::TooLarge => Found::TooLarge,
-        Payload::Unavailable => Found::Nothing,
-    }
-}
-
 /// What `clipboard` holds that a paste could write, in the order a paste
-/// reads it: the file list first, then an image, then text (CLIP-005,
-/// CLIP-015).
+/// reads it: the file list first, then a picture (CLIP-005, CLIP-015).
+/// Text is neither: as in Windows Explorer, it leaves Paste disabled.
 async fn read_clipboard_content(clipboard: &gdk::Clipboard) -> ClipboardContent {
-    let mut too_large = false;
     match read_files(clipboard).await {
-        Found::Content(files) => return ClipboardContent::Files(files),
-        Found::TooLarge => too_large = true,
-        Found::Nothing => {}
-    }
-    match read_image(clipboard).await {
-        Found::Content(data) => return ClipboardContent::Data(data),
-        Found::TooLarge => too_large = true,
-        Found::Nothing => {}
-    }
-    match read_text(clipboard).await {
-        Found::Content(data) => return ClipboardContent::Data(data),
-        Found::TooLarge => too_large = true,
-        Found::Nothing => {}
-    }
-    if too_large {
-        ClipboardContent::TooLarge
-    } else {
-        ClipboardContent::Nothing
+        Some(files) => ClipboardContent::Files(files),
+        None => read_image(clipboard).await,
     }
 }
 
 /// The URIs of the items a cut put on the clipboard, which the views dim;
-/// none for a copy, and none for text or an image
-/// (`state.clipboard?.mode==='move'` in `renderRows`).
+/// none for a copy or a picture (`state.clipboard?.mode==='move'` in
+/// `renderRows`).
 fn cut_uris(files: Option<&ClipboardFiles>) -> HashSet<String> {
     match files {
         Some(files) if files.mode() == ClipboardMode::Cut => files.uris().iter().cloned().collect(),
@@ -518,8 +422,8 @@ impl BrowserWindow {
     }
 
     /// Reads the clipboard in the background, so opening, activating or
-    /// changing a clipboard with a large picture or a long text never
-    /// holds up the window.
+    /// changing a clipboard with a large picture never holds up the
+    /// window.
     fn schedule_clipboard_read(&self) {
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

@@ -20,9 +20,9 @@
 //! [`KDE_CUT`] marker of the same clipboard owner. [`FileListFormat`] names
 //! these three formats, and [`decode()`] reads one of them.
 //!
-//! Text and images are never a file list: text copied in another
-//! application may not claim to name files. They are pasted as one new
-//! file instead ([`PastedContent`], CLIP-015), and the file list is always
+//! Text and pictures are never a file list: text copied in another
+//! application may not claim to name files. A picture is pasted as one new
+//! file instead ([`PastedImage`], CLIP-015), and the file list is always
 //! read first, so a copy that offers both stays a copy.
 
 mod decode;
@@ -36,10 +36,7 @@ use serde::{Deserialize, Serialize};
 use crate::location::{require_item_uri, LocationError};
 
 pub use decode::{decode, FileListFormat};
-pub use pasted::{
-    image_extension, PastedContent, IMAGE_MIME_TYPES, TEXTURE_EXTENSION, TEXT_EXTENSION, TEXT_MIME_TYPE,
-    TOO_LARGE_TO_PASTE,
-};
+pub use pasted::{image_extension, PastedImage, IMAGE_MIME_TYPES, TEXTURE_EXTENSION, TOO_LARGE_TO_PASTE};
 
 /// The app's own cross-process format; the name is a compatibility
 /// contract with the Python app and older Winspace windows.

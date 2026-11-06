@@ -41,7 +41,7 @@
 //! | `create` | New folder and New file, and New folder under the next free name |
 //! | `templates` | The built-in and user templates New offers |
 //! | `new_from_template` | New from template, staged privately and published without overwriting, and New ▸ Text document under the next free name |
-//! | `pasted_file` | Clipboard text or an image pasted as a new file, with the free-space check (CLIP-015) |
+//! | `pasted_file` | A picture on the clipboard pasted as a new file, with the free-space check (CLIP-015) |
 //! | `rename` | Rename, and renaming back for Undo |
 //! | `batch_rename` | The "Rename items" dialog's `#` template for several items |
 //! | `numbered_rename` | F2 on several items: one name with (1), (2) as in Windows Explorer |

@@ -65,7 +65,7 @@ impl BrowserWindow {
     }
 
     /// Whether what the clipboard holds can be pasted into the folder `uri`
-    /// now: its files, or the text or image a paste writes as a new file
+    /// now: its files, or the picture a paste writes as a new file
     /// (CLIP-015).
     pub(in crate::window) fn can_paste_into(&self, uri: &str) -> bool {
         let facts = self.command_facts();

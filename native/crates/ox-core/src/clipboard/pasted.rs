@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Clipboard text and images written as a new file (CLIP-015).
+//! A picture on the clipboard written as a new file (CLIP-015).
 //!
-//! Dolphin's "Paste Clipboard Contents…" and Nautilus's paste of a
-//! screenshot turn data on the clipboard into one file. The data is never
-//! read as a file list ([`super::decode`] cannot even name plain text): it
-//! becomes a file of its own, under a name the app makes.
+//! Nautilus writes a pasted screenshot into the folder as a file, and
+//! Dolphin's "Paste Clipboard Contents…" does the same. A picture is never
+//! read as a file list ([`super::decode`] cannot name one): it becomes a
+//! file of its own, under a name the app makes.
+//!
+//! Text is not pasted as a file. Windows Explorer keeps Paste disabled
+//! while the clipboard holds no files, and text is on the clipboard nearly
+//! all the time, so a text paste would keep Paste on and make a stray
+//! Ctrl+V write a file.
 //!
 //! The name is the local time it was pasted, `2026-02-05 14-30-00.png`.
 //! Hyphens rather than the colons of a clock because a name is written to
@@ -14,13 +19,6 @@
 
 use glib::DateTime;
 
-/// The text format a paste reads and writes as UTF-8: what GTK converts
-/// every text target an owner declares into (Nautilus reads text the same
-/// way, with `gdk_clipboard_read_text_async`).
-pub const TEXT_MIME_TYPE: &str = "text/plain;charset=utf-8";
-/// The extension of pasted text.
-pub const TEXT_EXTENSION: &str = "txt";
-
 /// The image formats a paste writes from the owner's own bytes, in the
 /// order it prefers them, with the extension each is written under.
 ///
@@ -28,7 +26,7 @@ pub const TEXT_EXTENSION: &str = "txt";
 /// several encodings of it (a browser offers `image/png` beside
 /// `image/jpeg`), and PNG is the one that lost nothing on the way. The
 /// formats are written as they are, never re-encoded; a picture offered
-/// only as a texture goes through [`glib`]'s PNG encoder instead.
+/// only as a texture goes through GTK's PNG encoder instead.
 pub const IMAGE_MIME_TYPES: [(&str, &str); 5] = [
     ("image/png", "png"),
     ("image/jpeg", "jpg"),
@@ -44,15 +42,14 @@ pub const TEXTURE_EXTENSION: &str = "png";
 /// The name format of a pasted file: the local time, to the second.
 const NAME_FORMAT: &str = "%Y-%m-%d %H-%M-%S";
 
-/// Why Paste refuses text or an image over
-/// [`MAX_BYTES`](super::MAX_BYTES): it is no data to the app, and saying so
-/// beats a paste that silently writes nothing.
-pub const TOO_LARGE_TO_PASTE: &str =
-    crate::i18n::message_id("The clipboard's text or image is too large to paste as a file.");
+/// Why Paste refuses a picture over [`MAX_BYTES`](super::MAX_BYTES): it is
+/// no data to the app, and saying so beats a paste that silently writes
+/// nothing.
+pub const TOO_LARGE_TO_PASTE: &str = crate::i18n::message_id("The picture on the clipboard is too large to paste.");
 
 /// The name used when the system clock cannot say what time it is, so a
 /// paste still writes one file under a name the app can number.
-const UNTIMED_NAME: &str = "Clipboard";
+const UNTIMED_NAME: &str = "Picture";
 
 /// The extension an image offered as `mime_type` is written under, when
 /// the app keeps the owner's bytes.
@@ -63,46 +60,22 @@ pub fn image_extension(mime_type: &str) -> Option<&'static str> {
         .map(|(_, extension)| *extension)
 }
 
-/// What a paste turns clipboard data into: one file's content and the
-/// extension of its name.
+/// A picture a paste writes as one file: its bytes and the extension of
+/// its name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PastedContent {
-    /// Text copied in another application, written as UTF-8 under `.txt`.
-    ///
-    /// The bytes are the owner's text as GTK converted it into UTF-8, and
-    /// nothing else is changed: a line ending it kept is kept, so the file
-    /// holds what was copied and no editor finds text the user never saw.
-    Text(Vec<u8>),
-    /// An image, with the extension of the format it was copied in.
-    Image {
-        /// `png`, `jpg`, `webp`, `gif` or `bmp`.
-        extension: &'static str,
-        /// The image's own bytes, or GTK's PNG encoding of its texture.
-        bytes: Vec<u8>,
-    },
+pub struct PastedImage {
+    /// `png`, `jpg`, `webp`, `gif` or `bmp`.
+    pub extension: &'static str,
+    /// The image's own bytes, or GTK's PNG encoding of its texture.
+    pub bytes: Vec<u8>,
 }
 
-impl PastedContent {
-    /// The extension of the file this content is written as.
-    pub fn extension(&self) -> &'static str {
-        match self {
-            Self::Text(_) => TEXT_EXTENSION,
-            Self::Image { extension, .. } => extension,
-        }
-    }
-
-    /// The bytes the new file holds.
-    pub fn bytes(&self) -> &[u8] {
-        match self {
-            Self::Text(bytes) | Self::Image { bytes, .. } => bytes,
-        }
-    }
-
-    /// The name a paste of this content makes at `time`, such as
-    /// `2026-02-05 14-30-00.txt` on the 5th of February 2026 at 14:30.
+impl PastedImage {
+    /// The name a paste of this picture makes at `time`, such as
+    /// `2026-02-05 14-30-00.png` on the 5th of February 2026 at 14:30.
     pub fn file_name_at(&self, time: &DateTime) -> String {
         let stamp = time.format(NAME_FORMAT).unwrap_or_else(|_| UNTIMED_NAME.into());
-        format!("{stamp}.{}", self.extension())
+        format!("{stamp}.{}", self.extension)
     }
 
     /// [`Self::file_name_at`] at the local time now, which is the name a
@@ -112,7 +85,7 @@ impl PastedContent {
         // and a clock that cannot answer at all has a fixed name.
         match DateTime::now_local().or_else(|_| DateTime::now_utc()) {
             Ok(now) => self.file_name_at(&now),
-            Err(_) => format!("{UNTIMED_NAME}.{}", self.extension()),
+            Err(_) => format!("{UNTIMED_NAME}.{}", self.extension),
         }
     }
 }
@@ -138,30 +111,30 @@ mod tests {
     #[test]
     fn a_pasted_file_is_named_after_the_local_time() {
         let time = DateTime::from_local(2026, 2, 5, 14, 30, 0.0).expect("a valid local time");
-        let text = PastedContent::Text(b"plan\n".to_vec());
-        let image = PastedContent::Image {
+        let image = PastedImage {
             extension: "jpg",
             bytes: vec![0xff, 0xd8],
         };
 
-        assert_eq!(text.file_name_at(&time), "2026-02-05 14-30-00.txt");
         assert_eq!(image.file_name_at(&time), "2026-02-05 14-30-00.jpg");
         assert!(
-            !text.file_name_at(&time).contains(':'),
+            !image.file_name_at(&time).contains(':'),
             "a name FAT, NTFS and SMB accept"
         );
     }
 
     /// parity: CLIP-015
     #[test]
-    fn the_name_of_a_paste_now_is_the_local_time_and_the_contents_extension() {
-        let text = PastedContent::Text(b"".to_vec());
+    fn the_name_of_a_paste_now_is_the_local_time_and_the_pictures_extension() {
+        let image = PastedImage {
+            extension: "png",
+            bytes: Vec::new(),
+        };
 
-        let name = text.file_name_now();
+        let name = image.file_name_now();
         let (stamp, extension) = name.rsplit_once('.').expect("a name with an extension");
 
-        assert_eq!(extension, "txt", "{name}");
+        assert_eq!(extension, "png", "{name}");
         assert_eq!(stamp.len(), "2026-02-05 14-30-00".len(), "{name}");
-        assert_eq!(text.bytes(), b"");
     }
 }

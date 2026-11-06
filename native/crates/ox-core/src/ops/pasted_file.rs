@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Paste clipboard text or an image as a new file (CLIP-015).
+//! Paste a picture on the clipboard as a new file (CLIP-015).
 //!
-//! Dolphin's "Paste Clipboard Contents…" and Nautilus's paste of a
-//! screenshot write the data on the clipboard into the folder as one file.
-//! The bytes are those [`PastedContent`] carried, and the write is the one
+//! Nautilus's paste of a screenshot and Dolphin's "Paste Clipboard
+//! Contents…" write the picture on the clipboard into the folder as one
+//! file. The bytes are those [`PastedImage`] carried, and the write is the one
 //! New ▸ Text document uses: the content goes to a private stage file in
 //! the destination folder and is published under the new name by a
 //! same-folder rename that never overwrites, so a paste in a folder that
@@ -20,11 +20,11 @@ use super::context::{on_worker, OperationContext};
 use super::create::CreatedItem;
 use super::error::OpsError;
 use super::new_from_template::{create_file_blocking, first_free_name};
-use crate::clipboard::PastedContent;
+use crate::clipboard::PastedImage;
 use crate::gio_node::GioNode;
 use crate::transfer::payload_refusal;
 
-/// Writes `content` into the folder at `folder_uri` as the file `name`,
+/// Writes `image` into the folder at `folder_uri` as the file `name`,
 /// under the first free numbered name of it, and returns the item.
 ///
 /// # Errors
@@ -36,12 +36,12 @@ use crate::transfer::payload_refusal;
 pub async fn create_pasted_file(
     folder_uri: &str,
     name: &str,
-    content: &PastedContent,
+    image: &PastedImage,
     context: &OperationContext,
 ) -> Result<CreatedItem, OpsError> {
     let folder_uri = folder_uri.to_owned();
     let name = name.to_owned();
-    let bytes = content.bytes().to_vec();
+    let bytes = image.bytes.clone();
     let context = context.clone();
     on_worker(move || {
         // XFER-028 before the first byte: the payload is measured already.
@@ -78,24 +78,27 @@ mod tests {
     #[test]
     fn the_pasted_bytes_are_written_as_they_are() {
         let temp = tempfile::tempdir().expect("a temporary folder");
-        let content = PastedContent::Text("Plan\r\nQ3\r\n".as_bytes().to_vec());
+        let image = PastedImage {
+            extension: "jpg",
+            bytes: vec![0xff, 0xd8, 0xff, 0xe0, b'\r', b'\n', 0x00],
+        };
 
         let created = glib::MainContext::new().block_on(create_pasted_file(
             &folder_uri(temp.path()),
-            "2026-02-05 14-30-00.txt",
-            &content,
+            "2026-02-05 14-30-00.jpg",
+            &image,
             &OperationContext::default(),
         ));
 
         let created = created.expect("the file is written");
         assert_eq!(
             created.uri,
-            folder_uri(&temp.path().join("2026-02-05 14-30-00.txt"))
+            folder_uri(&temp.path().join("2026-02-05 14-30-00.jpg"))
         );
         assert_eq!(
-            fs::read(temp.path().join("2026-02-05 14-30-00.txt")).expect("the pasted file"),
-            "Plan\r\nQ3\r\n".as_bytes(),
-            "the text is kept byte for byte, line endings included"
+            fs::read(temp.path().join("2026-02-05 14-30-00.jpg")).expect("the pasted file"),
+            [0xff, 0xd8, 0xff, 0xe0, b'\r', b'\n', 0x00],
+            "the picture is kept byte for byte, never re-encoded"
         );
     }
 
@@ -105,7 +108,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("a temporary folder");
         let taken = temp.path().join("2026-02-05 14-30-00.png");
         fs::write(&taken, b"kept").expect("an existing item");
-        let image = PastedContent::Image {
+        let image = PastedImage {
             extension: "png",
             bytes: vec![0x89, b'P', b'N', b'G'],
         };
@@ -135,12 +138,15 @@ mod tests {
     fn a_folder_that_is_gone_refuses_the_paste_and_writes_nothing() {
         let temp = tempfile::tempdir().expect("a temporary folder");
         let gone = temp.path().join("gone");
-        let content = PastedContent::Text(b"plan".to_vec());
+        let image = PastedImage {
+            extension: "png",
+            bytes: vec![0x89, b'P', b'N', b'G'],
+        };
 
         let refused = glib::MainContext::new().block_on(create_pasted_file(
             &folder_uri(&gone),
-            "1.txt",
-            &content,
+            "1.png",
+            &image,
             &OperationContext::default(),
         ));
 
