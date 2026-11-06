@@ -4,21 +4,34 @@
 //! in `v2.0.0:desktop/tests/test_v05.py`.
 
 use super::*;
+use crate::location::DeviceLabel;
 
 /// The first file of the fixture selections; its name needs percent-encoding.
 const README_URI: &str = "file:///home/demo/Read%20me.txt";
 /// The second file of the fixture selections.
 const PLANNING_URI: &str = "file:///home/demo/Planning.pdf";
 
-/// A valid two-item selection with a fresh token.
-fn selection(mode: ClipboardMode) -> ClipboardFiles {
-    ClipboardFiles::new(mode, &[README_URI.into(), PLANNING_URI.into()]).expect("valid selection")
+/// The session facts of the fixtures: no device is mounted, so every device
+/// label is "Connected device".
+fn context() -> LocationContext {
+    LocationContext::default()
 }
 
-/// The bytes `files` publishes as `mime_type`.
+/// A valid two-item selection with a fresh token.
+fn selection(mode: ClipboardMode) -> ClipboardFiles {
+    ClipboardFiles::new(mode, &[README_URI.into(), PLANNING_URI.into()], &context()).expect("valid selection")
+}
+
+/// The bytes `files` publishes as `mime_type`, for a session like the
+/// fixtures'.
 fn published(files: &ClipboardFiles, mime_type: &str) -> Vec<u8> {
+    published_with(files, mime_type, &context())
+}
+
+/// The bytes `files` publishes as `mime_type` in `locations`' session.
+fn published_with(files: &ClipboardFiles, mime_type: &str, locations: &LocationContext) -> Vec<u8> {
     files
-        .encode()
+        .encode(locations)
         .into_iter()
         .find(|payload| payload.mime_type == mime_type)
         .unwrap_or_else(|| panic!("{mime_type} is published"))
@@ -42,7 +55,7 @@ fn gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items() {
     assert!(files.consume(again.token(), &[README_URI.into()]));
     assert_eq!(files.uris(), &[PLANNING_URI]);
     assert!(files.consume(again.token(), &[PLANNING_URI.into()]));
-    assert!(files.encode().is_empty());
+    assert!(files.encode(&context()).is_empty());
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_changed_external_payload_is_not_consumed_by_old_operation`
@@ -188,8 +201,10 @@ fn uri_list_discards_comments_and_deduplicates_canonical_addresses() {
 /// parity: CLIP-005, SAFE-010
 #[test]
 fn invalid_external_payloads_fail_closed() {
-    // Plain text is not a file-list format, so it is never decoded at all.
+    // Plain text is not a file-list format, so it is never decoded at all,
+    // not even the text this app publishes beside a file list.
     assert_eq!(FileListFormat::from_mime_type("text/plain"), None);
+    assert_eq!(FileListFormat::from_mime_type(TEXT), None);
     let cases = refused_uri_lists().into_iter().chain(refused_other_formats());
     for case in cases {
         let decoded = decode(case.format, &case.bytes);
@@ -319,8 +334,12 @@ fn every_advertised_format_round_trips() {
             FileListFormat::Gnome,
             uri_list(Some(&marker)),
         ];
-        let advertised: Vec<&str> = files.encode().iter().map(|payload| payload.mime_type).collect();
-        assert_eq!(advertised, [CUSTOM, GNOME, URI_LIST, KDE_CUT]);
+        let advertised: Vec<&str> = files
+            .encode(&context())
+            .iter()
+            .map(|payload| payload.mime_type)
+            .collect();
+        assert_eq!(advertised, [CUSTOM, GNOME, URI_LIST, TEXT, KDE_CUT]);
         for format in file_lists {
             let payload = published(&files, format.mime_type());
             let result = decode(format, &payload).expect("published format decodes");
@@ -382,12 +401,91 @@ fn published_file_lists_match_the_python_encoding() {
     assert_eq!(published(&files, URI_LIST), expected_uri_list.as_bytes());
 }
 
+/// The text payload is the paths, one per line, with no quotes and no
+/// trailing newline, as GTK's file-list text serializer writes them, so a
+/// terminal pastes exactly what a shell reads.
+///
+/// parity: CLIP-004
+#[test]
+fn copy_publishes_the_paths_as_text_one_per_line() {
+    let uris: Vec<String> = [
+        README_URI,
+        // 文档/Plan Q3.txt
+        "file:///home/demo/%E6%96%87%E6%A1%A3/Plan%20Q3.txt",
+        "file:///home/demo/100%25%20done.txt",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+
+    let files = ClipboardFiles::new(ClipboardMode::Copy, &uris, &context()).expect("valid selection");
+    let text = String::from_utf8(published(&files, TEXT)).expect("the text is UTF-8");
+
+    assert_eq!(
+        text,
+        "/home/demo/Read me.txt\n/home/demo/文档/Plan Q3.txt\n/home/demo/100% done.txt"
+    );
+    assert!(
+        !text.contains('"'),
+        "plain text is never quoted: Copy as path quotes"
+    );
+    assert!(!text.ends_with('\n'), "the last line ends without a newline");
+    assert_eq!(TEXT, "text/plain;charset=utf-8");
+}
+
+/// An SMB item's line is its UNC path, a phone's its device path, and an
+/// item with no local path keeps its address, as Copy as path writes them.
+///
+/// parity: CLIP-004
+#[test]
+fn text_shows_unc_device_and_address_only_items() {
+    let locations = LocationContext {
+        devices: vec![DeviceLabel {
+            uri: "mtp://[usb:001,010]/".to_owned(),
+            label: "Pixel 7".to_owned(),
+        }],
+        ..LocationContext::default()
+    };
+    let uris: Vec<String> = [
+        "smb://studio-nas/projects/Plan%20Q3.txt",
+        "mtp://[usb:001,010]/Internal%20storage/DCIM",
+        "sftp://ada@build/Q3%20plans/%C3%A9t%C3%A9%20%231",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+
+    let files = ClipboardFiles::new(ClipboardMode::Cut, &uris, &locations).expect("valid selection");
+    let text = String::from_utf8(published_with(&files, TEXT, &locations)).expect("the text is UTF-8");
+
+    assert_eq!(
+        text,
+        r"\\studio-nas\projects\Plan Q3.txt
+Pixel 7 / Internal storage/DCIM
+sftp://build/Q3 plans/été %231"
+    );
+}
+
+/// A share, a server and a device root never reach the text payload:
+/// [`ClipboardFiles::new`] refuses them, so nothing is published for them.
+///
+/// parity: CLIP-004, OPS-035
+#[test]
+fn share_and_device_roots_are_refused_before_any_text_is_published() {
+    for uri in ["smb://nas/", "smb://nas/share", "mtp://[usb:001,010]/"] {
+        assert!(
+            ClipboardFiles::new(ClipboardMode::Copy, &[uri.to_owned()], &context()).is_err(),
+            "{uri} is no item"
+        );
+    }
+}
+
 /// parity: CLIP-004
 #[test]
 fn selections_outside_one_to_a_hundred_thousand_items_are_refused_as_a_transfer_is() {
     let too_many = vec![README_URI.to_owned(); MAX_ITEMS + 1];
     for uris in [Vec::new(), too_many] {
-        let error = ClipboardFiles::new(ClipboardMode::Copy, &uris).expect_err("item count");
+        let error = ClipboardFiles::new(ClipboardMode::Copy, &uris, &context()).expect_err("item count");
         assert_eq!(error, ClipboardError::ItemCount);
         assert_eq!(error.to_string(), "Select between 1 and 100,000 items.");
     }
@@ -406,7 +504,7 @@ fn a_selection_too_large_to_paste_back_is_refused() {
         .map(|number| format!("file:///home/demo/{name}{number}"))
         .collect();
 
-    let error = ClipboardFiles::new(ClipboardMode::Copy, &uris).expect_err("over MAX_BYTES");
+    let error = ClipboardFiles::new(ClipboardMode::Copy, &uris, &context()).expect_err("over MAX_BYTES");
 
     assert_eq!(error, ClipboardError::TooLarge);
     assert_eq!(
@@ -415,10 +513,37 @@ fn a_selection_too_large_to_paste_back_is_refused() {
     );
 }
 
+/// The limit counts the text payload as well: a device label can make a
+/// path longer than the address it came from, so a selection whose paths
+/// alone a reader would refuse is refused before anything is published.
+///
+/// parity: CLIP-004
+#[test]
+fn a_selection_whose_text_is_over_the_size_limit_is_refused() {
+    // Every item's line is the device label and its path, so a label of over
+    // MAX_BYTES / MAX_ITEMS bytes takes the text over the limit while the
+    // addresses stay far below it.
+    let locations = LocationContext {
+        devices: vec![DeviceLabel {
+            uri: "mtp://[usb:001,010]/".to_owned(),
+            label: "x".repeat(MAX_BYTES / MAX_ITEMS + 32),
+        }],
+        ..LocationContext::default()
+    };
+    let uris: Vec<String> = (0..MAX_ITEMS)
+        .map(|number| format!("mtp://[usb:001,010]/item{number}"))
+        .collect();
+
+    let error = ClipboardFiles::new(ClipboardMode::Copy, &uris, &locations).expect_err("over MAX_BYTES");
+
+    assert_eq!(error, ClipboardError::TooLarge);
+}
+
 /// parity: CLIP-004, OPS-035
 #[test]
 fn share_roots_cannot_be_copied_and_keep_the_location_message() {
-    let error = ClipboardFiles::new(ClipboardMode::Cut, &["smb://nas/share".into()]).expect_err("share root");
+    let error = ClipboardFiles::new(ClipboardMode::Cut, &["smb://nas/share".into()], &context())
+        .expect_err("share root");
     let ClipboardError::Location(location_error) = &error else {
         panic!("expected a location error, got {error:?}");
     };

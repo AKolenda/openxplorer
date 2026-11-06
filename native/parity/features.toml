@@ -8534,8 +8534,8 @@ native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_pas
 [[feature]]
 id = "CLIP-004"
 area = "CLIP"
-title = "Copy and cut publish GNOME, KDE and URI-list formats"
-behaviour = "Copy or Cut of 1–100,000 items, as many as one transfer takes (Windows Explorer sets no limit of its own; 'Select between 1 and 100,000 items.'; a selection whose addresses are over the 32 MiB a paste reads is refused with 'This file selection is too large to copy or cut.', deduplicated, share and device roots refused) claims the system clipboard with application/x-winspace-files (JSON mode, uris, token), x-special/gnome-copied-files ('copy' or 'cut' then URIs), text/uri-list (CRLF) and x-kde-cutselection ('1' for cut, '0' for copy). Failure: 'The desktop clipboard could not be claimed.'"
+title = "Copy and cut publish GNOME, KDE, URI-list and text formats"
+behaviour = "Copy or Cut of 1–100,000 items, as many as one transfer takes (Windows Explorer sets no limit of its own; 'Select between 1 and 100,000 items.'; a selection whose addresses or paths are over the 32 MiB a paste reads is refused with 'This file selection is too large to copy or cut.', deduplicated, share and device roots refused) claims the system clipboard with application/x-winspace-files (JSON mode, uris, token), x-special/gnome-copied-files ('copy' or 'cut' then URIs), text/uri-list (CRLF), text/plain;charset=utf-8 and x-kde-cutselection ('1' for cut, '0' for copy). The text is each item's display path, one per line separated by LF with no trailing newline and no quotes, as GTK's file-list text serializer writes it, so a terminal or an editor pastes one path per item: a local path, an SMB \\\\server\\share\\… path, 'Pixel 7 / path' for a phone, and the address of an item without a local path; the quoted form is Copy as path's alone (CLIP-012). Failure: 'The desktop clipboard could not be claimed.'"
 origin = ["openxplorer", "gnome"]
 priority = "must"
 openxplorer = "has"
@@ -8552,6 +8552,7 @@ sources = [
   "v2.0.0:desktop/ui/app.js:187",
   "v2.0.0:desktop/ui/app.js:451-462",
   "v2.0.0:desktop/ui/app.js:479",
+  "gtk:gdk/gdkcontentserializer.c (file_text_serializer: a file list's text is each g_file_get_path(), else the URI, one per line, unquoted)",
 ]
 python_tests = [
   "v2.0.0:desktop/tests/test_v05.py::ClipboardTests::test_custom_copy_roundtrip",
@@ -8574,9 +8575,9 @@ python_tests = [
 ]
 bridge = ["clipboardSet", "clipboardGet", "clipboardConsume"]
 dolphin = "x-kde-cutselection; KIO paste (text/uri-list + application/x-kde-cutselection)"
-gnome = "x-special/gnome-copied-files + text/uri-list; GtkClipboard with x-special/gnome-copied-files; GdkClipboard / GdkContentProvider serialising x-special/gnome-copied-files (still used by Nautilus 46.4, verified in its binary) and text/uri-list; gdk_clipboard_store_async for persistence"
+gnome = "x-special/gnome-copied-files + text/uri-list; GtkClipboard with x-special/gnome-copied-files; GdkClipboard / GdkContentProvider serialising x-special/gnome-copied-files (still used by Nautilus 46.4, verified in its binary) and text/uri-list; text/plain;charset=utf-8 beside them, which is what GTK's file-list text serializer gives Nautilus' copies, so pasting files into a terminal there pastes their paths; gdk_clipboard_store_async for persistence"
 native = "done"
-native_note = "native/crates/ox-core/src/clipboard/tests.rs (the formats); native/crates/ox-app/src/window/tests/clipboard.rs (a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type) claims the display clipboard with all four."
+native_note = "native/crates/ox-core/src/clipboard/tests.rs (the formats; copy_publishes_the_paths_as_text_one_per_line, text_shows_unc_device_and_address_only_items, a_selection_whose_text_is_over_the_size_limit_is_refused); native/crates/ox-app/src/window/tests/clipboard.rs (a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type, a_copy_of_several_items_publishes_their_paths_one_per_line); native/crates/ox-app/src/window/tests/clipboard_interop.rs (a_text_reader_gets_the_copied_items_paths) claims the display clipboard with all five. Text is published only: it is never a file-list format, so paste still reads the three file-list formats in order and plain text stays nothing to paste (CLIP-005). The paths are LocationContext::copied_location's, unquoted, because Windows' quoted every-path form belongs to Copy as path (CLIP-012) and a shell reads the unquoted line as one argument."
 
 [[feature]]
 id = "CLIP-005"

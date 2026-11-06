@@ -10,7 +10,7 @@ use std::os::unix::net::UnixListener;
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, URI_LIST};
+use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, TEXT, URI_LIST};
 use ox_core::settings::ContextMenu;
 
 use super::context_menus::choose_menu_style;
@@ -326,6 +326,7 @@ fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
         "application/x-winspace-files",
         "x-special/gnome-copied-files",
         "text/uri-list",
+        "text/plain;charset=utf-8",
         "application/x-kde-cutselection",
     ] {
         assert!(formats.contain_mime_type(mime_type), "{mime_type}");
@@ -334,6 +335,32 @@ fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
     assert_eq!(clipboard_bytes(&test, KDE_CUT), b"1");
     let gnome = String::from_utf8(clipboard_bytes(&test, "x-special/gnome-copied-files")).expect("UTF-8");
     assert_eq!(gnome, format!("cut\n{}", fixture.uri_of("Notes 2.txt")));
+    // The text is the item's path unquoted, as Nautilus publishes it, so a
+    // terminal pastes a path a shell reads as one argument.
+    let text = String::from_utf8(clipboard_bytes(&test, TEXT)).expect("UTF-8");
+    let path = fixture.path("Notes 2.txt").to_string_lossy().into_owned();
+    assert_eq!(text, path);
+}
+
+/// Several items are one path per line in the text format, without quotes
+/// and without a trailing newline.
+///
+/// parity: CLIP-004
+#[gtk::test]
+fn a_copy_of_several_items_publishes_their_paths_one_per_line() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let names = ["Notes 2.txt", "Résumé.txt"];
+    select_names(&test, &names);
+
+    test.activate("copy", None);
+
+    let text = String::from_utf8(clipboard_bytes(&test, TEXT)).expect("UTF-8");
+    let paths: Vec<String> = names
+        .iter()
+        .map(|name| fixture.path(name).to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(text, paths.join("\n"));
 }
 
 /// parity: CLIP-005, CLIP-006, CLIP-007
@@ -480,7 +507,7 @@ fn every_published_format_is_offered_for_a_clipboard_manager_to_keep() {
     assert!(clipboard.is_local(), "the window owns the clipboard");
     let content = clipboard.content().expect("a local clipboard has content");
     let storable = content.storable_formats();
-    for mime_type in [CUSTOM, GNOME, URI_LIST, KDE_CUT] {
+    for mime_type in [CUSTOM, GNOME, URI_LIST, TEXT, KDE_CUT] {
         assert!(storable.contain_mime_type(mime_type), "{mime_type}");
     }
 }
