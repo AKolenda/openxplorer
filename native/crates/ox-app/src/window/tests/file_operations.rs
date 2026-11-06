@@ -18,9 +18,9 @@ use ox_core::transfer::{Cancellation, Progress, ProgressScope};
 
 use super::context_menus::choose_menu_style;
 use super::file_ops_support::{
-    assert_ended_without_a_message, dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog,
-    press_shortcut, press_shortcut_where_focused, require_private_trash, select_names, text_field,
-    wait_for_no_dialog,
+    ask_before_recycling, assert_ended_without_a_message, dialog_over, focused_button, is_enabled,
+    is_renaming_in_place, name_editor, open_dialog, press_shortcut, press_shortcut_where_focused,
+    require_private_trash, select_names, text_field, wait_for_no_dialog,
 };
 use crate::dialog::Dialog;
 use crate::locations::Page;
@@ -436,30 +436,23 @@ fn a_batch_name_that_adds_an_extension_asks_first() {
     );
 }
 
-/// Windows Explorer says nothing once the items are in the Recycle Bin;
-/// Ctrl+Z brings them back.
+/// As in Windows 11, Delete moves the items to the Recycle Bin without
+/// asking, and Windows Explorer says nothing once they are there; Ctrl+Z
+/// brings them back.
 ///
 /// parity: OPS-015, OPS-018, OPS-023, OPS-029
 #[gtk::test]
-fn delete_asks_then_moves_to_the_trash_silently_and_ctrl_z_restores() {
+fn delete_moves_to_the_recycle_bin_without_asking_and_ctrl_z_restores() {
     require_private_trash();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Résumé.txt"]);
 
     test.activate("trash", None);
-    let dialog = open_dialog(&test);
-
-    assert_eq!(dialog.title_text(), "Move to Trash?");
-    assert_eq!(
-        dialog.message_text(),
-        "Résumé.txt\n\nItems go to the Trash and can be restored from there."
-    );
-    assert_eq!(dialog.button_labels(), ["Cancel", "Move to Trash"]);
-    dialog.press("Move to Trash");
     wait_until("the file to leave the folder", || {
         !fixture.path("Résumé.txt").exists() && !test.names().contains(&"Résumé.txt".to_owned())
     });
+    assert!(dialog_over(&test).is_none(), "nothing asked");
     assert_ended_without_a_message(&test);
 
     press_shortcut(&test, gdk::Key::z, gdk::ModifierType::CONTROL_MASK);
@@ -470,7 +463,8 @@ fn delete_asks_then_moves_to_the_trash_silently_and_ctrl_z_restores() {
 /// Delete moves an item to the Trash wherever GIO says the item can go
 /// there, also when the folder shown could not itself be trashed, as for
 /// a file directly in the home folder, whose own folder `/home` only root
-/// may change: it asks "Move to Trash?", never "Delete permanently?".
+/// may change: asked first, it asks to move the file to the Recycle Bin,
+/// never to delete it permanently.
 ///
 /// parity: OPS-015, OPS-018
 #[gtk::test]
@@ -486,6 +480,7 @@ fn delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only() {
         fs::set_permissions(&holder, fs::Permissions::from_mode(mode)).expect("chmod the fixture's folder");
     };
     let test = TestWindow::open(&fixture.uri());
+    ask_before_recycling(&test);
     select_names(&test, &["Résumé.txt"]);
 
     set_holder_mode(0o555);
@@ -493,12 +488,13 @@ fn delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only() {
     let dialog = open_dialog(&test);
     set_holder_mode(0o755);
 
-    assert_eq!(dialog.title_text(), "Move to Trash?");
+    assert_eq!(dialog.title_text(), "Delete File");
     assert_eq!(
         dialog.message_text(),
-        "Résumé.txt\n\nItems go to the Trash and can be restored from there."
+        "Are you sure you want to move this file to the Recycle Bin?"
     );
-    dialog.press("Move to Trash");
+    assert_eq!(dialog.button_labels(), ["Yes", "No"]);
+    dialog.press("Yes");
     wait_until("the file to go to the Trash", || {
         !fixture.path("Résumé.txt").exists()
     });
@@ -523,22 +519,25 @@ fn delete_reads_delete_and_asks_only_for_items_without_a_trash() {
     let tooltip = delete_button(&test).tooltip_text();
     test.activate("trash", None);
     let dialog = open_dialog(&test);
-    let (title, message) = (dialog.title_text(), dialog.message_text());
-    dialog.press("Cancel");
+    let (title, message, texts) = (dialog.title_text(), dialog.message_text(), dialog.texts());
+    dialog.press("No");
     wait_for_no_dialog(&test);
     set_folder_mode(0o755);
 
     assert_eq!(tooltip.as_deref(), Some("Delete (Delete)"));
-    assert_eq!(title, "Delete permanently?");
-    assert_eq!(
-        message,
-        "Résumé.txt\n\nThis location has no Trash. The items are deleted permanently and cannot be recovered."
+    assert_eq!(title, "Delete File");
+    assert_eq!(message, "Are you sure you want to permanently delete this file?");
+    assert!(texts.iter().any(|text| text == "Résumé.txt"), "{texts:?}");
+    assert!(
+        texts.iter().any(|text| text.starts_with("Type: "))
+            && texts.iter().any(|text| text.starts_with("Size: ")),
+        "the file's details show, as in Windows: {texts:?}"
     );
     assert!(fixture.path("Résumé.txt").is_file());
 }
 
-/// With "Ask before moving items to the Recycle Bin" off, Delete trashes
-/// at once, and with "Ask before deleting permanently" off Shift+Delete
+/// With "Ask before moving items to the Recycle Bin" off, as by default,
+/// Delete trashes at once, and with "Ask before deleting permanently" off Shift+Delete
 /// deletes at once; with "Ask before closing a window with several tabs"
 /// on, closing a window with two tabs asks first, once however often it
 /// is asked, and "Close all tabs" closes it.
@@ -596,20 +595,25 @@ fn the_confirmation_settings_decide_what_asks() {
     wait_until("the window to close", || !test.window.is_visible());
 }
 
-/// parity: OPS-015
+/// With the confirmation turned on, Delete asks about several items as
+/// Windows does, "Delete Multiple Items", and No keeps them.
+///
+/// parity: OPS-015, SET-010
 #[gtk::test]
-fn cancelling_the_delete_confirmation_keeps_the_items() {
+fn answering_no_to_the_delete_confirmation_keeps_the_items() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    ask_before_recycling(&test);
     select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
 
     test.activate("trash", None);
     let dialog = open_dialog(&test);
-    let message = dialog.message_text();
-    dialog.press("Cancel");
+    let (title, labels) = (dialog.title_text(), dialog.button_labels());
+    dialog.press("No");
     wait_for_no_dialog(&test);
 
-    assert!(message.starts_with("2 selected items\n\n"), "{message}");
+    assert_eq!(title, "Delete Multiple Items");
+    assert_eq!(labels, ["Yes", "No"]);
     assert!(fixture.path("Notes 2.txt").is_file());
     assert!(fixture.path("Notes 10.txt").is_file());
 }
@@ -624,13 +628,19 @@ fn shift_delete_deletes_permanently_after_its_own_confirmation() {
     test.activate("delete-permanently", None);
     let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Delete permanently?");
+    assert_eq!(dialog.title_text(), "Delete Folder");
     assert_eq!(
         dialog.message_text(),
-        "Documents\n\nThe items are deleted permanently, without the Trash, and cannot be recovered."
+        "Are you sure you want to permanently delete this folder?"
     );
-    assert_eq!(dialog.button_labels(), ["Cancel", "Delete permanently"]);
-    dialog.press("Delete permanently");
+    assert!(dialog.texts().iter().any(|text| text == "Documents"));
+    assert_eq!(dialog.button_labels(), ["Yes", "No"]);
+    assert_eq!(
+        focused_button(&dialog).as_deref(),
+        Some("Yes"),
+        "Yes has focus, as in Windows"
+    );
+    dialog.press_primary();
     wait_until("the folder to be deleted", || !fixture.path("Documents").exists());
     wait_until("the next item to be selected", || {
         test.selected_names() == ["Notes 2.txt"]
@@ -661,15 +671,15 @@ fn shift_clicking_delete_in_the_bar_deletes_permanently_after_asking() {
     test.window.hold_shift_for_tests(false);
     let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Delete permanently?");
-    assert_eq!(dialog.button_labels(), ["Cancel", "Delete permanently"]);
-    dialog.press("Delete permanently");
+    assert_eq!(dialog.title_text(), "Delete File");
+    assert_eq!(dialog.button_labels(), ["Yes", "No"]);
+    dialog.press("Yes");
     wait_until("the file to be deleted", || !fixture.path("Notes 2.txt").exists());
     assert_ended_without_a_message(&test);
 }
 
 /// Choosing Delete in the right-click menu with Shift held asks to delete
-/// permanently; Cancel keeps the file.
+/// permanently; No keeps the file.
 ///
 /// parity: OPS-016
 #[gtk::test]
@@ -689,14 +699,14 @@ fn shift_choosing_delete_in_the_right_click_menu_asks_to_delete_permanently() {
     test.window.hold_shift_for_tests(false);
     let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Delete permanently?");
-    dialog.press("Cancel");
+    assert_eq!(dialog.title_text(), "Delete File");
+    dialog.press("No");
     wait_for_no_dialog(&test);
-    assert!(fixture.path("Notes 2.txt").is_file(), "Cancel keeps the file");
+    assert!(fixture.path("Notes 2.txt").is_file(), "No keeps the file");
 }
 
-/// The folder tree's Move to Trash with Shift held asks to delete the
-/// folder permanently.
+/// The folder tree's Delete with Shift held asks to delete the folder
+/// permanently.
 ///
 /// parity: OPS-016, SIDE-028
 #[gtk::test]
@@ -710,14 +720,14 @@ fn shift_with_the_folder_trees_move_to_trash_asks_to_delete_permanently() {
     test.window.hold_shift_for_tests(false);
     let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Delete permanently?");
-    dialog.press("Cancel");
+    assert_eq!(dialog.title_text(), "Delete Folder");
+    dialog.press("No");
     wait_for_no_dialog(&test);
-    assert!(fixture.path("Documents").is_dir(), "Cancel keeps the folder");
+    assert!(fixture.path("Documents").is_dir(), "No keeps the folder");
 }
 
 /// Without Shift, clicking Delete in the command bar still moves to the
-/// Trash.
+/// Recycle Bin, without asking.
 ///
 /// parity: OPS-015
 #[gtk::test]
@@ -728,11 +738,11 @@ fn clicking_delete_in_the_bar_without_shift_moves_to_the_trash() {
     select_names(&test, &["Notes 2.txt"]);
 
     delete_button(&test).emit_clicked();
-    let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Move to Trash?");
-    dialog.press("Cancel");
-    wait_for_no_dialog(&test);
+    wait_until("the file to go to the Recycle Bin", || {
+        !fixture.path("Notes 2.txt").exists()
+    });
+    assert!(dialog_over(&test).is_none(), "nothing asked");
 }
 
 /// parity: OPS-034, OPS-029

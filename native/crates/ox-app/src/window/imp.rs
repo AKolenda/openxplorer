@@ -239,8 +239,6 @@ pub(crate) struct BrowserWindow {
     pub(super) closing_tabs_confirmed: Cell<bool>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
-    /// The item under the pointer that the status bar describes.
-    pub(super) hovered_item: RefCell<Option<crate::folder_view::item::FileItem>>,
     /// Until when clicks that open items are ignored, around a drag.
     pub(super) item_clicks_resume_at: Cell<Option<std::time::Instant>>,
     /// Which files under a drag are programs (DND-026).

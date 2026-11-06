@@ -21,10 +21,11 @@ pub fn exact_size_text(bytes: u64) -> String {
     )
 }
 
-/// The size before the parenthesis: `912 bytes`, `1.50 KB`, `15.4 MB`,
-/// `314 KB`. A size from 1000 of a unit up is written in the next unit
-/// (`0.97 MB`), as Explorer writes it, so it never has four digits.
-fn short_size(bytes: u64) -> String {
+/// A size as Explorer writes it in Properties before the parenthesis and
+/// in its status bar: `912 bytes`, `1.50 KB`, `15.4 MB`, `314 KB`. A size
+/// from 1000 of a unit up is written in the next unit (`0.97 MB`), as
+/// Explorer writes it, so it never has four digits.
+pub fn short_size(bytes: u64) -> String {
     short_size_with(bytes, &Separators::current())
 }
 

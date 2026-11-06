@@ -333,3 +333,29 @@ fn cross_filesystem_move_is_refused_without_copying_or_removing_the_source() {
     assert_eq!(fs::read(source).expect("the file can be read"), b"original");
     assert!(!target.exists());
 }
+
+/// An item in a folder that cannot be searched is reported as unreadable,
+/// not as an item of no kind: GIO answers such a lookup with an info that
+/// holds no attributes, and reading its type would be a `GLib` critical.
+/// Skipped as root, which searches any folder.
+///
+/// parity: XFER-017
+#[test]
+fn an_item_in_a_folder_that_cannot_be_searched_is_reported_unreadable() {
+    let root = temporary_folder();
+    let folder = root.path().join("locked");
+    fs::create_dir(&folder).expect("the fixture folder is created");
+    fs::write(folder.join("notes.txt"), b"fictional notes").expect("the fixture file is written");
+    let _restore = RestoreOwnerAccess::new(&folder);
+    set_mode(&folder, 0o000);
+    if fs::read_dir(&folder).is_ok() {
+        return;
+    }
+
+    let result = node(&folder.join("notes.txt")).info(None);
+
+    set_mode(&folder, 0o755);
+    let error = result.expect_err("nothing is known about the item");
+    assert!(!error.is_not_found(), "{error}");
+    assert!(error.to_string().contains("notes.txt"), "{error}");
+}

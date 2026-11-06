@@ -192,7 +192,6 @@ pub(super) fn request_item_count(label: &gtk::Label, item: &FileItem, owners: &R
         let Some(owners) = owners.upgrade() else {
             return;
         };
-        owners.item_counted(&item);
         if let Some(label) = shows_item() {
             let counts_items = owners.counts_items();
             label.set_text(&shown_cell_text(

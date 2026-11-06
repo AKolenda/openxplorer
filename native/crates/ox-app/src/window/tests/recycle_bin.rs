@@ -175,8 +175,12 @@ fn delete_in_the_recycle_bin_deletes_only_the_chosen_items_for_good() {
     test.activate("trash", None);
     let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Delete permanently?");
-    dialog.press("Delete permanently");
+    assert_eq!(dialog.title_text(), "Delete File");
+    assert_eq!(
+        dialog.message_text(),
+        "Are you sure you want to permanently delete this file?"
+    );
+    dialog.press("Yes");
     wait_until("the item to leave the Recycle Bin", || {
         !is_listed("Delete me for good.txt")
     });
@@ -302,7 +306,6 @@ fn items_dropped_on_the_recycle_bin_go_to_the_trash() {
         DropAction::Copy,
     );
     assert!(taken, "{}", test.window.shown_message());
-    open_dialog(&test).press("Move to Trash");
 
     wait_until("the dropped file to be listed", || {
         test.names().contains(&"Drop me in the bin.txt".to_owned())

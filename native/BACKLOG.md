@@ -114,12 +114,11 @@ baseline and GNOME integration. Priority is from the inventory.
 | TAB-046 | partial | could | Optional full path in the window title |
 | TAB-051 | partial | could | Ask before closing a window with several tabs |
 
-#### VIEW: Views, columns, sorting and status bar (20)
+#### VIEW: Views, columns, sorting and status bar (19)
 
 | ID | Status | Priority | Behaviour |
 |---|---|---|---|
 | VIEW-010 | partial | should | Icon size zoom levels |
-| VIEW-012 | partial | could | Zoom slider in the status bar |
 | VIEW-016 | todo | could | Sort-order labels depend on the sort key |
 | VIEW-017 | partial | could | 'Folders First' and 'Hidden Files Last' toggles |
 | VIEW-018 | todo | could | Choice of sorting mode |

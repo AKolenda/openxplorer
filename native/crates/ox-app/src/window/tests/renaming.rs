@@ -134,7 +134,7 @@ fn a_command_cancels_a_pending_slow_click_rename() {
         test.activate(command, None);
         let edited = names_edited_during(&test, Duration::from_millis(1200));
         if let Some(question) = dialog_over(&test) {
-            question.press("Cancel");
+            question.press("No");
             wait_for_no_dialog(&test);
         }
 
