@@ -1468,7 +1468,7 @@ msgstr ""
 msgid "Conductors"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Content"
 msgstr ""
 
@@ -4634,7 +4634,7 @@ msgstr ""
 msgid "Text Document"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Tiles"
 msgstr ""
 
