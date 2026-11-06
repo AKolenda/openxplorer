@@ -492,10 +492,44 @@ impl CellOwners {
 
     /// The list item of the nearest widget from `picked` up to, but not
     /// including, `view` that holds a registered cell.
+    ///
+    /// When none of them does, the row that holds `picked` (the child of a
+    /// list) is searched for a registered cell among all its cells and
+    /// their children: how GTK nests a column view's row, its cells and
+    /// their content differs between GTK releases, and a press anywhere in
+    /// a row is on its item.
     fn owner_near(&self, view: &gtk::Widget, picked: gtk::Widget) -> Option<gtk::ListItem> {
-        std::iter::successors(Some(picked), WidgetExt::parent)
+        let ancestors: Vec<gtk::Widget> = std::iter::successors(Some(picked), WidgetExt::parent)
             .take_while(|widget| widget != view)
-            .find_map(|widget| self.owner_within(&widget))
+            .collect();
+        if let Some(owner) = ancestors.iter().find_map(|widget| self.owner_within(widget)) {
+            return Some(owner);
+        }
+        let row = ancestors
+            .iter()
+            .find(|widget| widget.parent().is_some_and(|parent| parent.is::<gtk::ListBase>()))?;
+        self.owner_in_row(row)
+    }
+
+    /// The list item of the first registered cell inside `row`, up to three
+    /// levels down.
+    fn owner_in_row(&self, row: &gtk::Widget) -> Option<gtk::ListItem> {
+        let mut level = vec![row.clone()];
+        for _ in 0..3 {
+            let mut next = Vec::new();
+            for widget in &level {
+                let mut child = widget.first_child();
+                while let Some(current) = child {
+                    if let Some(owner) = self.owner_of(&current) {
+                        return Some(owner);
+                    }
+                    child = current.next_sibling();
+                    next.push(current);
+                }
+            }
+            level = next;
+        }
+        None
     }
 
     /// The list item whose content widget is `widget`, its first child or
