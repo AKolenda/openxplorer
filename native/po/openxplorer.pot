@@ -7955,6 +7955,10 @@ msgstr ""
 msgid "Xfce Terminal"
 msgstr ""
 
+#: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "kitty"
+msgstr ""
+
 #: crates/ox-core/src/integration/terminal/error.rs
 msgid "No supported terminal is installed. On Zorin, install GNOME Terminal with: sudo apt install gnome-terminal"
 msgstr ""

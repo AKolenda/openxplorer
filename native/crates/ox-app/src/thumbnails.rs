@@ -7,18 +7,17 @@
 //! A request reads the cache through GIO (`thumbnail::path`,
 //! `thumbnail::is-valid`, `thumbnail::failed`) at low priority. A missing
 //! thumbnail is made by the session's thumbnailer service
-//! ([`service`]) when it has one and supports the type, else for the
-//! picture types gdk-pixbuf reads by the app itself ([`writer`]), which
-//! costs less than a program, else by a thumbnailer the desktop installs
-//! for the type ([`thumbnailers`], a program the app starts in a
-//! sandbox). The desktop's thumbnailer is asked for a picture only when
-//! the app cannot read it ([`writer::Failure::Unreadable`]): one the cache
-//! refuses would be
-//! refused for the program too, and a dropped request needs no picture at
-//! all. Only a few are decoded or made at a time ([`slots`]); a type that
-//! cannot be previewed, or a failed attempt, keeps its icon.
-//! [`PreviewPolicy`] says which items of a folder get previews, from the
-//! Settings the user chose (VIEW-058).
+//! ([`service`]) when it has one and supports the type, else, for a
+//! picture gdk-pixbuf may read ([`pixbuf_may_read`]), by the app itself
+//! ([`writer`]), which costs less than a program, else by a thumbnailer
+//! the desktop installs for the type ([`thumbnailers`], a program the app
+//! starts in a sandbox). The desktop's thumbnailer is asked for a picture
+//! only when the app cannot read it ([`writer::Failure::Unreadable`]): one
+//! the cache refuses would be refused for the program too, and a dropped
+//! request needs no picture at all. Only a few are decoded or made at a
+//! time ([`slots`]); a type that cannot be previewed, or a failed attempt,
+//! keeps its icon. [`PreviewPolicy`] says which items of a folder get
+//! previews, from the Settings the user chose (VIEW-058).
 
 mod service;
 mod slots;
@@ -144,12 +143,30 @@ thread_local! {
     static KEPT: RefCell<HashMap<PreviewKey, gdk::Texture>> = RefCell::new(HashMap::new());
     /// Item versions no thumbnail could be made of in this run.
     static FAILED: RefCell<HashSet<(String, Option<u64>)>> = RefCell::new(HashSet::new());
-    /// The picture types gdk-pixbuf reads.
+    /// The types gdk-pixbuf's loaders declare they read.
     static PIXBUF_TYPES: HashSet<String> = Pixbuf::formats()
         .iter()
         .flat_map(PixbufFormat::mime_types)
         .map(|mime| mime.to_string())
         .collect();
+}
+
+/// Whether gdk-pixbuf may be asked to decode the item of `content_type`,
+/// given the `declared` MIME types its loaders say they read.
+///
+/// Every picture qualifies, not only the types a loader declares: what a
+/// loader reads and what GIO names the file differ, gdk-pixbuf's dds
+/// loader declaring `image/x-dds` alone for the `image/vnd.ms-dds` files
+/// GIO reports, so matching the lists exactly would leave pictures
+/// without thumbnails. Decoding settles it instead: [`writer`] reads
+/// what a loader reads and answers [`writer::Failure::Unreadable`] for the
+/// rest, which leaves the item to a thumbnailer of the desktop's, or to
+/// its icon when there is none.
+fn pixbuf_may_read(content_type: &str, declared: &HashSet<String>) -> bool {
+    let is_picture = content_type
+        .split_once('/')
+        .is_some_and(|(kind, _)| kind == "image");
+    is_picture || declared.contains(content_type)
 }
 
 /// The preview `request` asks for, or `None` when the item keeps its icon.
@@ -261,10 +278,10 @@ async fn make_thumbnail(request: &PreviewRequest) -> Result<PathBuf, Missing> {
     make_thumbnail_with(request, &cache_dir, None, flavor, modified).await
 }
 
-/// The thumbnail `request` asks for: the app decodes a picture itself,
-/// which costs less than a program of the desktop's, and a program of the
-/// desktop's makes it when the type is not a picture or gdk-pixbuf cannot
-/// read it (a type without its loader). `catalogue` is the desktop's own
+/// The thumbnail `request` asks for: the app decodes a picture itself
+/// ([`pixbuf_may_read`]), which costs less than a program of the
+/// desktop's, and a program of the desktop's makes it when the type is not
+/// a picture or gdk-pixbuf cannot read it (a type without its loader). `catalogue` is the desktop's own
 /// list unless a test hands its own.
 async fn make_thumbnail_with(
     request: &PreviewRequest,
@@ -273,7 +290,7 @@ async fn make_thumbnail_with(
     flavor: ThumbnailFlavor,
     modified: u64,
 ) -> Result<PathBuf, Missing> {
-    if PIXBUF_TYPES.with(|types| types.contains(&request.content_type)) {
+    if PIXBUF_TYPES.with(|declared| pixbuf_may_read(&request.content_type, declared)) {
         match by_decoding(request, cache_dir, modified, flavor).await {
             Ok(path) => return Ok(path),
             // Only a picture the app cannot read leaves room for another
@@ -367,6 +384,29 @@ mod tests {
     use ox_core::entry::thumbnail_file;
 
     use super::*;
+
+    /// A picture whose type no loader declares is still decoded, and a
+    /// file that is no picture never reaches gdk-pixbuf.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn pictures_a_loader_does_not_declare_are_tried() {
+        // gdk-pixbuf's dds loader declares `image/x-dds` alone, while GIO
+        // names the same files `image/vnd.ms-dds`.
+        let declared: HashSet<String> = ["image/jpeg", "image/x-dds"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+
+        assert!(pixbuf_may_read("image/vnd.ms-dds", &declared));
+        assert!(pixbuf_may_read("image/jpeg", &declared));
+        assert!(!pixbuf_may_read("application/pdf", &declared));
+        assert!(!pixbuf_may_read("video/mp4", &declared));
+        assert!(!pixbuf_may_read("text/plain", &declared));
+        // A loader's own declaration counts too, whatever its kind.
+        let font = HashSet::from(["application/x-font-ttf".to_owned()]);
+        assert!(pixbuf_may_read("application/x-font-ttf", &font));
+    }
 
     /// Previews follow Settings: off, only in folders on this computer,
     /// and not for files over the limit.

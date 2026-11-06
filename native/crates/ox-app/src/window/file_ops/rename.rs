@@ -25,19 +25,41 @@ use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
 use super::name_dialog::{ask_for_name, stem_length, NameRequest, NameSelection};
 use super::FileCommand;
+use crate::folder_view::shown_name::shows_whole;
 use crate::window::BrowserWindow;
 
 /// The Rename dialog's line when the user keeps a name that would hide
 /// the item.
 pub(super) const NOT_RENAMED: &str = crate::i18n::message_id("The name was not changed.");
 
-/// How much of `entry`'s name a rename selects: a file's name before its
-/// extension, a folder's whole name.
-pub(super) fn selected_name_length(entry: &Entry) -> usize {
-    if entry.is_dir {
-        entry.name.chars().count()
+/// How much of `entry`'s name a rename selects, as in Windows 11: a
+/// file's name before its last extension ([`stem_length`]), the whole name
+/// of a folder or a shortcut. A shortcut here is a symbolic link with no
+/// known type's extension ([`Entry::is_shortcut`]), named as Explorer
+/// shows one, "Report.txt - Shortcut", with no hidden `.lnk`: Windows
+/// selects all of a shortcut's shown name, since its own extension is
+/// hidden, and so does this. A link named for a type ("photo.jpg") is
+/// renamed as a file, as Windows renames a symbolic link.
+pub(super) fn name_selection(entry: &Entry) -> NameSelection {
+    if shows_whole(entry) {
+        NameSelection::Whole
     } else {
-        stem_length(&entry.name)
+        NameSelection::Stem
+    }
+}
+
+/// Whether `entry`'s name has no extension for a rename to keep or ask
+/// about: a folder's or a shortcut's ([`name_selection`]).
+pub(super) fn has_no_extension(entry: &Entry) -> bool {
+    name_selection(entry) == NameSelection::Whole
+}
+
+/// How many characters of `entry`'s name a rename selects
+/// ([`name_selection`]).
+pub(super) fn selected_name_length(entry: &Entry) -> usize {
+    match name_selection(entry) {
+        NameSelection::Whole => entry.name.chars().count(),
+        NameSelection::Stem => stem_length(&entry.name),
     }
 }
 
@@ -168,11 +190,7 @@ impl BrowserWindow {
     /// Asks for `entry`'s new name in the Rename dialog and renames it;
     /// the renamed item, or `None` when the user cancelled.
     async fn ask_and_rename(&self, entry: &Entry) -> Option<RenamedItem> {
-        let selection = if entry.is_dir {
-            NameSelection::Whole
-        } else {
-            NameSelection::Stem
-        };
+        let selection = name_selection(entry);
         let folder = parent_location(&entry.uri).unwrap_or_default();
         let request = NameRequest {
             title: "Rename",
@@ -183,7 +201,9 @@ impl BrowserWindow {
         ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
             let old_name = entry.name.clone();
-            let is_folder = entry.is_dir;
+            // A shortcut's name, like a folder's, has no extension to ask
+            // about.
+            let has_no_extension = selection == NameSelection::Whole;
             let window = self.downgrade();
             async move {
                 let window = window
@@ -192,7 +212,9 @@ impl BrowserWindow {
                 // A name the backend refuses anyway is refused before
                 // anything is asked, with the message that says why.
                 ox_core::location::validate_name(&name).map_err(|error| error.to_string())?;
-                let confirmed = window.confirm_extension_change(&old_name, &name, is_folder).await
+                let confirmed = window
+                    .confirm_extension_change(&old_name, &name, has_no_extension)
+                    .await
                     && window.confirm_hiding_rename(&old_name, &name).await;
                 if !confirmed {
                     return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
@@ -259,5 +281,41 @@ impl BrowserWindow {
         if let Some(record) = renamed.undo_record() {
             self.context().record_operation(record);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// As in Windows 11, Rename selects a file's name before its last
+    /// extension and the whole name of a folder or a shortcut, the
+    /// symbolic link named as Explorer names one ("Report.txt -
+    /// Shortcut"), whose hidden `.lnk` Windows keeps out of the field. A
+    /// link named for a type is renamed as a file, as Windows renames a
+    /// symbolic link.
+    ///
+    /// parity: OPS-010
+    #[test]
+    fn rename_selects_a_files_name_before_its_extension_and_all_of_a_shortcut() {
+        let file = crate::test_support::file_entry("my.notes.txt");
+        let archive = crate::test_support::file_entry("archive.tar.gz");
+        let folder = crate::test_support::folder_entry("v1.2 release");
+        let mut shortcut = crate::test_support::file_entry("Report.txt - Shortcut");
+        shortcut.is_symlink = true;
+        let dotfile = crate::test_support::file_entry(".hidden");
+        let mut named_link = crate::test_support::file_entry("notes.txt");
+        named_link.is_symlink = true;
+
+        assert_eq!(name_selection(&file), NameSelection::Stem);
+        assert_eq!(selected_name_length(&file), 8, "my.notes");
+        assert_eq!(selected_name_length(&archive), 11, "archive.tar");
+        assert_eq!(name_selection(&folder), NameSelection::Whole);
+        assert_eq!(selected_name_length(&folder), 12);
+        assert_eq!(name_selection(&shortcut), NameSelection::Whole);
+        assert_eq!(selected_name_length(&shortcut), 21);
+        assert_eq!(selected_name_length(&dotfile), 7);
+        assert_eq!(name_selection(&named_link), NameSelection::Stem);
+        assert_eq!(selected_name_length(&named_link), 5, "notes");
     }
 }

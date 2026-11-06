@@ -82,7 +82,7 @@ Mail recipient opens a new message in your email app with the files attached, as
 
 Share in the command bar, between Rename and Delete as in Windows 11, opens a new message in your email app with the selected files attached. It goes through your desktop’s email portal (KDE Plasma’s, or GTK’s on GNOME), and nothing is sent until you send the message there. Share takes files, up to 16 at a time; folders, items in the Recycle Bin and items inside a ZIP cannot be shared. Where the desktop has no email portal, and in Open and Save dialogs, the button is hidden. If no email app is set up, the message at the bottom of the window says the email app could not be opened. A file whose name or folder has &, #, ?, % or a control character cannot be shared, as GNOME’s email portal could misread it, for example as an extra recipient; the message names the file, and renaming or moving it lets you share it.
 
-To copy an item’s path instead, right-click it and choose Copy as path, or press Ctrl+Shift+C.
+To copy an item’s path instead, right-click it and choose Copy as path, or press Ctrl+Shift+C. Copy as path puts each path in quotes on a line of its own, as Windows does. Copy (Ctrl+C) and Cut (Ctrl+X) also offer the items’ paths as plain text, one per line and unquoted, as GNOME Files does, so pasting them into a terminal or a text editor gives their paths; pasting into a folder still copies the files.
 
 ## Properties
 
@@ -142,7 +142,7 @@ Right-click a folder, sidebar pin or the file-list background and choose Open in
 
 A connected SMB location needs a usable local CIFS or GVfs-FUSE mount. The shell runs on your Linux computer, not on the NAS. No SSH session or remote command is created. Server listings, ZIP contents and protected snapshot views cannot be used as a terminal directory.
 
-The system terminal alternative is used when supported; otherwise an installed GNOME Terminal, Console, Xfce Terminal, Konsole or XTerm is selected. Paths are passed as literal arguments and working directories, not shell command strings. View → Terminal opens the configured external terminal; the website tour shows pictures and starts no program.
+The system terminal alternative is used when supported; otherwise an installed GNOME Terminal, Console, Xfce Terminal, Konsole, kitty or XTerm is selected. Paths are passed as literal arguments and working directories, not shell command strings. View → Terminal opens the configured external terminal; the website tour shows pictures and starts no program.
 
 ```sh
 sudo apt install gnome-terminal
