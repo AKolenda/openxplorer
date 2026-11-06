@@ -14,7 +14,7 @@ use ox_core::settings::ContextMenu;
 use super::context_menus::{choose_menu_style, position_of};
 use super::file_ops_support::open_dialog;
 use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
-use super::icons::{assert_same_colour, css_colour, painted, painted_colour, TRANSITION_TIME};
+use super::icons::{assert_same_colour, css_colour, painted, painted_colour, pixel_rows, TRANSITION_TIME};
 use crate::test_support::harness::{
     descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -461,62 +461,155 @@ fn the_toast_is_an_inverted_status_78_pixels_above_the_bottom() {
     }
 }
 
-/// The selected row of the file list in `test`'s window.
-fn selected_row(test: &TestWindow) -> gtk::Widget {
-    let details = test.window.folder_pane().details().column_view();
-    descendants::<gtk::Widget>(details)
-        .into_iter()
-        .find(|widget| widget.css_name() == "row" && widget.state_flags().contains(gtk::StateFlags::SELECTED))
-        .expect("a selected row")
+/// The row of the file list that shows the item at `position` in
+/// `test`'s window.
+fn row_at(test: &TestWindow, position: u32) -> gtk::Widget {
+    let content = test
+        .window
+        .folder_pane()
+        .owners()
+        .widget_at(position)
+        .expect("the row is shown");
+    std::iter::successors(Some(content), WidgetExt::parent)
+        .find(|widget| widget.css_name() == "row")
+        .expect("the item is in a row")
 }
 
-/// The file list selects as Windows 11 File Explorer does: a light blue
-/// fill in light and a neutral grey one in dark, with no edge, and the
-/// keyboard's row draws Windows' two-tone ring, 2 pixels dark outside 1
-/// pixel light (ui-spec.md §3.1 C19, C29, C30; §4.13).
+/// How opaque `widget` paints the pixel at (`x`, `y`), 0 to 255.
+fn painted_alpha(widget: &impl IsA<gtk::Widget>, x: i32, y: i32) -> u8 {
+    let rows = pixel_rows(&painted(widget));
+    let row = usize::try_from(y).expect("a point inside the widget");
+    let column = usize::try_from(x).expect("a point inside the widget");
+    rows[row][column][3]
+}
+
+/// Puts the keyboard in the address bar, out of the file list.
+fn focus_out_of_the_list(test: &TestWindow) {
+    test.activate("location", None);
+    wait_until("the keyboard to leave the list", || {
+        !test.window.folder_pane().view_has_focus()
+    });
+}
+
+/// Gives `row` the keyboard as a click or Ctrl+click does, without
+/// keyboard navigation's ring, or with it while `ring`.
+fn focus_row(test: &TestWindow, row: &gtk::Widget, ring: bool) {
+    row.grab_focus();
+    test.window.set_focus_visible(ring);
+    wait_until("the row to have the keyboard", || row.has_focus());
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
+}
+
+/// Shows `row` under the pointer, or not.
+fn hover(test: &TestWindow, row: &gtk::Widget, hovered: bool) {
+    if hovered {
+        row.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    } else {
+        row.unset_state_flags(gtk::StateFlags::PRELIGHT);
+    }
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
+}
+
+/// Asserts that `row` paints `expected` at each x, half way down.
+fn assert_row_paints(row: &gtk::Widget, expected: &[(i32, &str)], what: &str) {
+    let middle = row.height() / 2;
+    for (x, colour) in expected {
+        assert_same_colour(
+            painted_colour(row, *x, middle),
+            css_colour(colour),
+            &format!("{what} at {x}"),
+        );
+    }
+}
+
+/// The file list's items take Windows 11 File Explorer's colours in each
+/// state (ui-spec.md §3.1 C17, C19, C29, C30; §4.13): a light blue fill
+/// in light and a neutral grey one in dark for the selection, with no
+/// edge while the list does not have the keyboard; a 1 pixel outline,
+/// dark in light and white in dark, around the item that has it after a
+/// click, selected or not, and hovered too; a fainter fill without an
+/// outline under the pointer alone; and keyboard navigation's two-tone
+/// ring, 2 pixels dark outside 1 pixel light.
 ///
 /// parity: ACC-009
 #[gtk::test]
-fn selected_rows_and_the_keyboard_ring_take_windows_11s_colours() {
+fn items_take_windows_11s_fill_outline_and_ring_in_each_state() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    test.window.folder_model().select_only(1);
-    // The selection, then the ring on it: alpha(white, .7) over #cce8ff
-    // with alpha(black, .89) over that in light, alpha(black, .7) over
-    // #3d3d3d with white over that in dark.
-    for (theme, fill, outer, inner) in [
-        ("light", "#cce8ff", "#1a1b1c", "#f0f8ff"),
-        ("dark", "#3d3d3d", "#ffffff", "#121212"),
+    // alpha(black, .89) over #cce8ff in light, white in dark; the ring's
+    // inner alpha(white, .7) over #cce8ff in light, alpha(black, .7) over
+    // #3d3d3d in dark.
+    for (theme, fill, hovered, outline, outline_alone, outline_alpha, inner) in [
+        (
+            "light", "#cce8ff", "#e5f3ff", "#1a1b1c", "#000000", 227, "#f0f8ff",
+        ),
+        ("dark", "#3d3d3d", "#2d2d2d", "#ffffff", "#ffffff", 255, "#121212"),
     ] {
         show_theme(&test, theme);
+        test.window.folder_model().select_only(1);
+        let selected = row_at(&test, 1);
+        let pointed = row_at(&test, 3);
+
+        focus_out_of_the_list(&test);
+        wait_for_frames(&test.window, 2);
+        assert_row_paints(
+            &selected,
+            &[(0, fill), (2, fill), (6, fill)],
+            &format!("{theme} selection in a list without the keyboard, without an edge"),
+        );
+
+        focus_row(&test, &selected, false);
+        assert_row_paints(
+            &selected,
+            &[(0, outline), (1, fill), (6, fill)],
+            &format!("{theme} selection with the keyboard: fill and outline"),
+        );
+
+        hover(&test, &selected, true);
+        assert_row_paints(
+            &selected,
+            &[(0, outline), (1, fill), (6, fill)],
+            &format!("{theme} hovered selection with the keyboard: fill and outline"),
+        );
+        hover(&test, &selected, false);
+
+        // Ctrl+click on the selected item: it keeps the keyboard, unselected.
+        test.window.folder_model().select_none();
+        focus_row(&test, &selected, false);
+        let middle = selected.height() / 2;
+        assert_row_paints(
+            &selected,
+            &[(0, outline_alone)],
+            &format!("{theme} unselected item with the keyboard: outline"),
+        );
+        assert!(
+            painted_alpha(&selected, 0, middle) >= outline_alpha - 2,
+            "{theme} outline is opaque enough"
+        );
+        assert_eq!(
+            painted_alpha(&selected, 6, middle),
+            0,
+            "{theme} unselected item with the keyboard: no fill"
+        );
+
+        hover(&test, &pointed, true);
+        assert_row_paints(
+            &pointed,
+            &[(0, hovered), (1, hovered), (6, hovered)],
+            &format!("{theme} item under the pointer: fainter fill, no outline"),
+        );
+        hover(&test, &pointed, false);
+
+        test.window.folder_model().select_only(1);
+        focus_row(&test, &selected, true);
+        assert_row_paints(
+            &selected,
+            &[(0, outline), (1, outline), (2, inner), (6, fill)],
+            &format!("{theme} keyboard navigation's two-tone ring"),
+        );
         test.window.set_focus_visible(false);
-        wait_for_frames(&test.window, 2);
-        let row = selected_row(&test);
-        // Between the row's edge and its icon, where nothing else paints.
-        let middle = row.height() / 2;
-        for x in [0, 2, 6] {
-            assert_same_colour(
-                painted_colour(&row, x, middle),
-                css_colour(fill),
-                &format!("{theme} selection at {x}, without an edge"),
-            );
-        }
-        row.grab_focus();
-        test.window.set_focus_visible(true);
-        wait_for_frames(&test.window, 2);
-        assert!(row.has_focus(), "the selected row has the keyboard");
-        for (x, colour, what) in [
-            (0, outer, "outer ring"),
-            (1, outer, "outer ring"),
-            (2, inner, "inner ring"),
-            (6, fill, "selection"),
-        ] {
-            assert_same_colour(
-                painted_colour(&row, x, middle),
-                css_colour(colour),
-                &format!("{theme} {what} at {x}"),
-            );
-        }
     }
 }

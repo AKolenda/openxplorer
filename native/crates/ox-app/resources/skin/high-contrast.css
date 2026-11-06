@@ -4,7 +4,8 @@
    rules of style.css and ui-spec.md §4.13. The current location in the
    sidebar gets an accent outline, drop targets draw 3px instead of 2px
    (`.quick-access.pin-drop-active{border-width:2px}`), keyboard focus
-   inside menus draws 2px instead of 1px, and the two-tone ring of rows,
+   inside menus draws 2px instead of 1px, the focused row's or tile's
+   outline is 2px in the text colour, and the two-tone ring of rows,
    tiles and the navigation pane is drawn opaque in the text and
    background colours. */
 
@@ -17,6 +18,8 @@ columnview.files.file-drop-active > listview, gridview.files.file-drop-active,
 columnview.files > listview > row.file-drop-active,
 gridview.files > child.file-drop-active,
 .tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }
+columnview.files > listview > row:focus,
+gridview.files > child:focus { outline: 2px solid @ox_text; outline-offset: -2px; }
 .sidebar list > row:focus-visible,
 .folder-tree listview > row:focus-visible,
 columnview.files > listview > row:focus-visible,

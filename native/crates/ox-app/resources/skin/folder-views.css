@@ -100,11 +100,15 @@ columnview.files > listview > row {
   transition: background-color 83ms linear;
 }
 /* Windows 11 File Explorer's item colours: a pale tint under the pointer,
-   a stronger filled highlight without an edge for the selection, which a
-   press shows at once; keyboard focus draws Windows' two-tone ring, 2px
-   dark outside 1px light (ui-spec.md §4.5, §4.13). The dark ring is an
-   outline, as GTK 4 paints a later inset shadow over an earlier one
-   rather than under it, which would hide it under the light one. */
+   a stronger filled highlight for the selection, which a press shows at
+   once. While the list has the keyboard, its focused item, selected or
+   not, draws a 1px outline in the ring's outer colour (dark in light,
+   white in dark), as Windows draws it after a click or Ctrl+click; an
+   item under the pointer alone draws none. Keyboard navigation draws
+   Windows' two-tone ring instead, 2px dark outside 1px light (ui-spec.md
+   §4.5, §4.13). The dark ring is an outline, as GTK 4 paints a later
+   inset shadow over an earlier one rather than under it, which would
+   hide it under the light one. */
 columnview.files > listview > row:hover { background-color: @ox_item_hover; }
 columnview.files > listview > row:active { background-color: @ox_item_selected; }
 columnview.files > listview > row:selected {
@@ -112,6 +116,7 @@ columnview.files > listview > row:selected {
   color: @ox_text;
 }
 columnview.files > listview > row:selected:hover { background-color: @ox_item_selected_hover; }
+columnview.files > listview > row:focus { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
 columnview.files > listview > row:focus-visible {
   outline: 2px solid @ox_item_focus_outer;
   outline-offset: -2px;
@@ -261,7 +266,7 @@ gridview.files > child > box { margin: 0; border-spacing: 0; }
    multiplies the font's own line height, 17px for Noto Sans at 12px,
    not the font size (T15). */
 gridview.files > child label { line-height: 0.95; }
-/* Tiles take the rows' colours and focus ring. */
+/* Tiles take the rows' colours, focus outline and focus ring. */
 gridview.files > child:hover { background-color: @ox_item_hover; }
 gridview.files > child:active { background-color: @ox_item_selected; }
 gridview.files > child:selected {
@@ -269,6 +274,7 @@ gridview.files > child:selected {
   color: @ox_text;
 }
 gridview.files > child:selected:hover { background-color: @ox_item_selected_hover; }
+gridview.files > child:focus { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
 gridview.files > child:focus-visible {
   outline: 2px solid @ox_item_focus_outer;
   outline-offset: -2px;

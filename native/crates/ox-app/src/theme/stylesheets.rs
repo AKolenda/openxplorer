@@ -223,7 +223,9 @@ mod tests {
     /// Focused controls draw a 2px ring inside them; the file list draws
     /// none around itself. The focused row, tile or navigation pane entry
     /// draws Windows 11's two-tone ring instead, 2px dark outside 1px
-    /// light, apart from the selection's fill.
+    /// light, apart from the selection's fill, and the file list's focused
+    /// row or tile a 1px outline after a click, as Windows 11's Details
+    /// view does while the list has the keyboard.
     ///
     /// parity: ACC-009
     #[test]
@@ -238,13 +240,16 @@ mod tests {
             ".folder-tree listview > row",
         ]
         .map(|item| format!("{item}:focus-visible {item_ring}"));
+        let item_outlines = ["columnview.files > listview > row", "gridview.files > child"].map(|item| {
+            format!("{item}:focus {{ outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }}")
+        });
         let control_rings = [
             "window.ox button:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
             ".tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
             "paned.workspace > separator.keyboard-focus",
         ]
         .map(str::to_owned);
-        for rule in item_rings.iter().chain(&control_rings) {
+        for rule in item_rings.iter().chain(&item_outlines).chain(&control_rings) {
             assert!(code.contains(rule.as_str()), "{rule}");
         }
         assert!(
@@ -265,6 +270,7 @@ mod tests {
             ".tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }",
             "box-shadow: inset 0 0 0 2px @ox_focus_outer; }",
             "outline: 2px solid @ox_text;\n  outline-offset: -2px;\n  box-shadow: inset 0 0 0 3px @ox_bg;",
+            "gridview.files > child:focus { outline: 2px solid @ox_text; outline-offset: -2px; }",
         ] {
             assert!(code.contains(rule), "{rule}");
         }
