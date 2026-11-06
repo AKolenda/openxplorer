@@ -70,14 +70,30 @@ pub(in crate::window) enum MediaPreview {
     /// Another local document, shown by its cached thumbnail if it has
     /// one.
     Document { uri: String },
+    /// A local folder, shown by its own picture if it has one
+    /// ([`super::media`]'s `folder_picture`), else by its art.
+    Folder { uri: String },
 }
 
 impl MediaPreview {
-    /// The preview of `item`: only a local file has one.
+    /// Whether this is the preview of the item at `uri`.
+    pub(in crate::window) fn is_of(&self, uri: &str) -> bool {
+        match self {
+            Self::Image { path, .. } | Self::Recording { path, .. } => gio::File::for_path(path).uri() == uri,
+            Self::Document { uri: shown } | Self::Folder { uri: shown } => shown == uri,
+        }
+    }
+
+    /// The preview of `item`: only a local file or folder has one.
     fn of(item: &FileItem) -> Option<Self> {
         let entry = item.entry();
-        if entry.is_dir || entry.is_virtual {
+        if entry.is_virtual {
             return None;
+        }
+        if entry.is_dir {
+            return entry.uri.starts_with("file:").then(|| Self::Folder {
+                uri: entry.uri.clone(),
+            });
         }
         let path = gio::File::for_uri(&entry.uri)
             .path()
@@ -182,7 +198,8 @@ pub(in crate::window) struct PaneFacts<'a> {
     pub selection: &'a [FileItem],
     /// The folder or page the tab shows.
     pub folder_uri: &'a str,
-    /// Items the folder holds, hidden ones included.
+    /// Items the list shows: the folder's, hidden ones while they are
+    /// shown, or a search's results.
     pub folder_item_count: u32,
     /// Display names for devices and the home folder.
     pub locations: &'a LocationContext,
@@ -512,8 +529,15 @@ mod tests {
     #[test]
     fn a_folder_has_no_size_and_no_media_details() {
         let item = FileItem::new(folder_entry("Projects"));
+        let uri = item.entry().uri.clone();
         let content = content_for(&[item], "file:///tmp/ox-test");
         assert_eq!(property(&content, keys::SIZE), None, "Windows names no size");
+        assert_eq!(
+            content.media,
+            Some(MediaPreview::Folder { uri: uri.clone() }),
+            "a local folder's own picture is looked up"
+        );
+        assert!(content.media.as_ref().is_some_and(|media| media.is_of(&uri)));
         assert_eq!(content.metadata, None);
     }
 

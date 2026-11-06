@@ -19,6 +19,7 @@ use ox_core::entry::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
 
 use super::content::MediaPreview;
 use super::DetailsPane;
+use crate::folder_view::cells::CUSTOM_ICON;
 use crate::icons::{Art, ArtImage};
 
 /// Images larger than this are not decoded for the pane.
@@ -56,10 +57,11 @@ impl DetailsPane {
         };
         match media {
             MediaPreview::Image { path, size } if *size <= MAX_IMAGE_BYTES => {
-                self.load_picture(generation, Some(path.clone()), None);
+                self.load_picture(generation, Some(path.clone()), None, true);
             }
             MediaPreview::Image { .. } => {}
-            MediaPreview::Document { uri } => self.load_picture(generation, None, Some(uri.clone())),
+            MediaPreview::Document { uri } => self.load_picture(generation, None, Some(uri.clone()), false),
+            MediaPreview::Folder { uri } => self.load_folder_picture(generation, uri.clone()),
             MediaPreview::Recording { path, is_video, art } => self.show_player(path, *is_video, *art),
         }
     }
@@ -79,12 +81,49 @@ impl DetailsPane {
         crate::window::widget_tree::toggle_class(&*imp.preview_area, "has-picture", is_picture);
     }
 
+    /// Reads the picture of the folder at `uri` ([`folder_picture`]) and
+    /// shows it, if the selection is still `generation`'s; the folder
+    /// keeps its art without one.
+    fn load_folder_picture(&self, generation: u64, uri: String) {
+        let pane = self.downgrade();
+        glib::spawn_future_local(async move {
+            let picture = folder_picture(&uri).await;
+            let Some(pane) = pane.upgrade() else {
+                return;
+            };
+            let path = picture.and_then(|picture| local_picture_path(&picture));
+            if pane.imp().media_generation.get() == generation && path.is_some() {
+                pane.load_picture(generation, path, None, false);
+            }
+        });
+    }
+
+    /// Reads again the picture of the item at `uri`, if the pane shows
+    /// it: its custom icon or folder picture changed. True when it did.
+    pub(in crate::window) fn reread_picture_of(&self, uri: &str) -> bool {
+        let imp = self.imp();
+        let shown = imp.shown_media.borrow().clone();
+        let Some(media) = shown.filter(|media| media.is_of(uri)) else {
+            return false;
+        };
+        imp.shown_media.replace(None);
+        self.show_media(Some(&media));
+        true
+    }
+
     /// Decodes the image at `path`, or the cached thumbnail of the item at
     /// `uri`, scaled to the preview area, and shows it if the selection is
-    /// still `generation`'s. An image's own size comes from its header.
-    fn load_picture(&self, generation: u64, path: Option<PathBuf>, uri: Option<String>) {
+    /// still `generation`'s; an image's own size, from its header, joins
+    /// the rows when `names_dimensions`.
+    fn load_picture(
+        &self,
+        generation: u64,
+        path: Option<PathBuf>,
+        uri: Option<String>,
+        names_dimensions: bool,
+    ) {
         let pane = self.downgrade();
-        let is_image = path.is_some();
+        let is_image = names_dimensions;
         let scale = self.scale_factor().max(1);
         glib::spawn_future_local(async move {
             let decoded = gio::spawn_blocking(move || {
@@ -168,6 +207,38 @@ impl DetailsPane {
         self.imp().media_rows.borrow_mut().push((name, value));
         self.redraw_properties();
     }
+}
+
+/// The picture the pane shows for the local folder at `uri` in place of
+/// its art, as Windows' Details pane shows a customized folder: its
+/// custom icon (PROP-016, `metadata::custom-icon`, which the file list
+/// draws too), read at low priority.
+///
+/// Shared hook (PROP-037): the Customize tab's folder picture, read by
+/// `folder_view::cells::folder_picture_of` on the customize-tab branch,
+/// comes first once both branches are merged:
+/// `if let Some(picture) = folder_picture_of(uri).await { return Some(picture); }`.
+/// Both are announced the same way: OK or Apply on the Customize tab
+/// calls `BrowserWindow::refresh_item_icon` in every window, which has
+/// the pane read its picture again ([`DetailsPane::reread_picture_of`]).
+async fn folder_picture(uri: &str) -> Option<String> {
+    let info = gio::File::for_uri(uri)
+        .query_info_future(CUSTOM_ICON, gio::FileQueryInfoFlags::NONE, glib::Priority::LOW)
+        .await
+        .ok()?;
+    info.attribute_string(CUSTOM_ICON)
+        .filter(|picture| !picture.is_empty())
+        .map(|picture| picture.to_string())
+}
+
+/// The local file a picture's location names: a `file:` URI or a path.
+fn local_picture_path(picture: &str) -> Option<PathBuf> {
+    if picture.starts_with('/') {
+        return Some(PathBuf::from(picture));
+    }
+    gio::File::for_uri(picture)
+        .path()
+        .filter(|_| picture.starts_with("file:"))
 }
 
 /// The valid cached thumbnail of the item at `uri`.

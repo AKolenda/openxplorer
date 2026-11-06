@@ -201,3 +201,63 @@ fn the_panes_labels_are_no_tab_stops() {
     assert!(focus.is::<gtk::Button>(), "lands on a button: {focus:?}");
     assert!(focus.is_ancestor(pane));
 }
+
+/// With nothing selected in search results, the pane counts the results
+/// the list shows, as the status bar does and Windows' pane does, not the
+/// folder searched; leaving the search counts the folder again.
+///
+/// parity: PROP-009
+#[gtk::test]
+fn search_results_are_counted_as_the_list_shows_them() {
+    let fixture = Fixture::standard();
+    let test = window_with_pane(&fixture);
+    test.start_search_cache();
+    let pane = test.window.details_pane();
+    assert_eq!(pane.shown_name(), "4 items", "the folder");
+
+    test.search_for("notes");
+
+    assert_eq!(test.names().len(), 2);
+    wait_until("the pane to count the results", || pane.shown_name() == "2 items");
+    test.window.search_box().entry().set_text("");
+    wait_until("the folder counted again", || pane.shown_name() == "4 items");
+}
+
+/// A selected folder whose picture changes in Properties shows the new
+/// one in the pane at once, as the file list does: OK on the Customize
+/// tab calls `refresh_item_icon`, which the pane follows too.
+///
+/// parity: PROP-009, PROP-016
+#[gtk::test]
+fn a_folders_new_picture_shows_in_the_pane_at_once() {
+    let fixture = Fixture::standard();
+    let pixels = gtk::glib::Bytes::from_owned(vec![0x60_u8; 8 * 8 * 4]);
+    let texture = gtk::gdk::MemoryTexture::new(8, 8, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 32);
+    texture.save_to_png(fixture.path("Star.png")).expect("a picture");
+    let test = window_with_pane(&fixture);
+    let pane = test.window.details_pane();
+    test.select_named("Documents");
+    wait_for(Duration::from_millis(300));
+    assert!(
+        crate::test_support::harness::descendants::<gtk::Picture>(pane).is_empty(),
+        "a plain folder shows its art"
+    );
+
+    let folder = fixture.uri_of("Documents");
+    let done = std::rc::Rc::new(std::cell::Cell::new(false));
+    let finished = std::rc::Rc::clone(&done);
+    let (target, icon) = (folder.clone(), fixture.uri_of("Star.png"));
+    gtk::glib::spawn_future_local(async move {
+        crate::properties::set_custom_icon(&target, Some(icon))
+            .await
+            .expect("the metadata is stored");
+        finished.set(true);
+    });
+    wait_until("the change", || done.get());
+    test.window.refresh_item_icon(&folder);
+
+    wait_until("the new picture in the pane", || {
+        !crate::test_support::harness::descendants::<gtk::Picture>(pane).is_empty()
+    });
+    assert_eq!(test.selected_names(), ["Documents"], "without selecting again");
+}

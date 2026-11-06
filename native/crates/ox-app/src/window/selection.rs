@@ -77,6 +77,7 @@ impl BrowserWindow {
                 move |_, _, _, _| {
                     if window.is_active_pane(&pane) && !window.imp().changing_model.get() {
                         window.update_status();
+                        window.update_pane_count();
                     }
                 }
             ));
@@ -157,6 +158,31 @@ impl BrowserWindow {
         self.show_watch_state();
     }
 
+    /// The items the list shows, as the pane counts them with nothing
+    /// selected: a search's results while searching, as the status bar
+    /// counts them and Windows' pane does; else the folder's listed items.
+    fn shown_item_count(&self) -> u32 {
+        let model = self.folder_pane().model();
+        if let Some(count) = self.search_count(model.n_items()) {
+            return count.shown;
+        }
+        let active = self.imp().session.borrow().active_id();
+        let store = active.and_then(|id| self.tab_store(id));
+        store.map_or(0, |store| model.listed_count(&store))
+    }
+
+    /// Redraws the pane when what it counts changed: only while it is
+    /// open and shows the count, with nothing selected or under the
+    /// pointer, so a list that changes under a selection costs nothing.
+    fn update_pane_count(&self) {
+        let pane = self.details_pane();
+        let counting =
+            pane.is_visible() && pane.hovered().is_none() && self.folder_pane().model().summary().count == 0;
+        if counting {
+            self.update_details_pane();
+        }
+    }
+
     /// Shows the selection's properties, or the folder's, in the details
     /// pane.
     pub(super) fn update_details_pane(&self) {
@@ -168,10 +194,7 @@ impl BrowserWindow {
         let Some(folder_uri) = self.current_uri() else {
             return;
         };
-        let active = self.imp().session.borrow().active_id();
-        let store = active.and_then(|id| self.tab_store(id));
-        let model = self.folder_pane().model();
-        let folder_item_count = store.map_or(0, |store| model.listed_count(&store));
+        let folder_item_count = self.shown_item_count();
         // Only an SMB folder's picture needs the Network list, and the pane
         // follows every change of the selection.
         let network = if is_smb_location(&folder_uri) {
