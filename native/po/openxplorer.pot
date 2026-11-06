@@ -5621,6 +5621,10 @@ msgstr ""
 msgid "New folder"
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/pasted_content.rs
+msgid "Pasting a picture…"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/recycle_bin.rs
 msgid "Restoring items…"
 msgstr ""
@@ -7407,6 +7411,10 @@ msgstr ""
 
 #: crates/ox-core/src/clipboard.rs
 msgid "This file selection is too large to copy or cut."
+msgstr ""
+
+#: crates/ox-core/src/clipboard/pasted.rs
+msgid "The picture on the clipboard is too large to paste."
 msgstr ""
 
 #: crates/ox-core/src/entry/classify.rs

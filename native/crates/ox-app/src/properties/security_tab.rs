@@ -96,7 +96,7 @@ pub(super) fn fill_security(page: &gtk::Box, facts: &SecurityFacts, context: &Se
         page.remove(&child);
     }
     let object = Rows::new();
-    object.add(&ox_core::i18n::gettext("Object name"), &facts.object_name);
+    object.add_line(&ox_core::i18n::gettext("Object name"), &facts.object_name);
     page.append(object.widget());
     let names = NameList::new(facts);
     page.append(&caption(
@@ -242,7 +242,13 @@ impl PermissionGrid {
         let heading = gtk::Grid::builder()
             .css_classes(["properties-permission-heading"])
             .build();
-        let title = gtk::Label::builder().xalign(0.0).hexpand(true).build();
+        // A long user or group name ends in "…", with the whole heading as
+        // the tooltip, rather than widening the window.
+        let title = gtk::Label::builder()
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build();
         heading.attach(&title, 0, 0, 1, 1);
         for (column, text) in [
             (1, crate::i18n::message_id("Allow")),
@@ -321,10 +327,9 @@ impl PermissionGrid {
 
     /// Shows what `class`, called `name`, is allowed under `mode`.
     pub(super) fn show(&self, mode: u32, class: PermissionClass, name: &str) {
-        self.title.set_text(&ox_core::i18n::format_message(
-            "Permissions for {name}",
-            &[("name", name)],
-        ));
+        let title = ox_core::i18n::format_message("Permissions for {name}", &[("name", name)]);
+        self.title.set_text(&title);
+        self.title.set_tooltip_text(Some(&title));
         for (level, allow) in &self.rows {
             let allowed = level.is_allowed(mode, class, self.is_folder);
             if let Some(check) = allow.downcast_ref::<gtk::CheckButton>() {

@@ -138,7 +138,7 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
     panel.append(&divider());
     let kind = Rows::new();
     kind.add(&ox_core::i18n::gettext("Type"), &common_type(entries));
-    kind.add(
+    kind.add_line(
         &ox_core::i18n::gettext("Location"),
         &common_location(entries, context),
     );

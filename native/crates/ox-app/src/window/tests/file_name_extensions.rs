@@ -15,7 +15,7 @@ use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fix
 use crate::window::menu_popover::MenuPopover;
 
 /// The names the file list shows now.
-fn shown_names(test: &TestWindow) -> Vec<String> {
+pub(super) fn shown_names(test: &TestWindow) -> Vec<String> {
     wait_for_frames(&test.window, 2);
     let cells = descendants::<FileCell>(&test.window);
     let mut names: Vec<String> = cells
