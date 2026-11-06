@@ -318,11 +318,9 @@ impl BrowserWindow {
             model.select_uris(&beside.selected);
         });
         pane.restore_scroll_position(beside.scroll);
-        let preferences = self.context().settings_data().preferences;
-        if preferences.per_folder_views {
-            if let Some(uri) = self.beside_location() {
-                self.apply_style_to(pane, &preferences.view_for(&uri));
-            }
+        // Its folder's style, with the groups of Downloads (VIEW-022).
+        if let Some(uri) = self.beside_location() {
+            self.follow_folder_style_in(pane, &uri);
         }
         self.update_beside_pane();
         if beside.needs_listing {

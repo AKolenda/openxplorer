@@ -211,6 +211,32 @@ impl BrowserWindow {
         }
     }
 
+    /// Shows the folder at `uri` in `pane`, which is not the active one,
+    /// as [`Self::follow_folder_style`] shows the active pane's: in the
+    /// folder's own style when each folder keeps one, else keeping the
+    /// pane's style but for the groups of Downloads (VIEW-022). The pane
+    /// beside the active one of a split tab is shown this way whenever the
+    /// tab is shown, so Downloads there keeps its date groups.
+    pub(super) fn follow_folder_style_in(&self, pane: &FolderPane, uri: &str) {
+        let preferences = self.context().settings_data().preferences;
+        let downloads = self.downloads_location();
+        let style = preferences.view_in(uri, downloads.as_deref());
+        if preferences.per_folder_views {
+            self.apply_style_to(pane, &style);
+            return;
+        }
+        let shown = pane
+            .model()
+            .grouping()
+            .map_or(GroupBy::None, |grouping| grouping.by);
+        if shown != style.grouping() {
+            let applying = self.imp().applying_style.replace(true);
+            group_pane(pane, Grouping::of(style.grouping(), pane_sort_state(pane)));
+            self.update_expandability_for(pane);
+            self.imp().applying_style.set(applying);
+        }
+    }
+
     /// The Downloads folder's location, if the user has one.
     pub(super) fn downloads_location(&self) -> Option<String> {
         self.context()

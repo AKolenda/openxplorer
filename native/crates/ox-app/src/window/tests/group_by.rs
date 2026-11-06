@@ -1033,3 +1033,129 @@ fn downloads_grouped_by_the_user_stays_grouped_after_back_and_forward() {
         downloads_stays_grouped_across(&test, &home, how);
     }
 }
+
+/// Downloads beside the active pane of a split tab keeps its date groups:
+/// when the split opens, when the other pane goes elsewhere or becomes
+/// active, and when the tab is shown again after another tab. The pane
+/// beside was shown in the style of every other folder, so Downloads
+/// there lost its groups.
+///
+/// parity: VIEW-022, VIEW-059
+#[gtk::test]
+fn downloads_beside_the_active_pane_stays_grouped() {
+    use gtk::subclass::prelude::*;
+
+    use crate::window::session::PaneSide;
+
+    for shared in [false, true] {
+        let home = TestHome::new();
+        let downloads = home.downloads();
+        let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+        if shared {
+            test.share_one_view();
+        }
+        let grouping_on = |side: PaneSide| {
+            test.window
+                .pane_on(side)
+                .model()
+                .grouping()
+                .map(|grouping| grouping.by)
+        };
+        test.activate("split-view", None);
+        test.wait_for_listing("the second pane");
+        assert_eq!(test.window.active_side(), PaneSide::End);
+        assert_eq!(
+            grouping_on(PaneSide::Start),
+            Some(GroupBy::Modified),
+            "Downloads beside the new pane, one style for all: {shared}"
+        );
+
+        test.window
+            .navigate(&file_uri(&home.home))
+            .expect("the home folder");
+        test.wait_for_listing("the home folder");
+        assert_eq!(grouping_on(PaneSide::End), None, "the home folder is not grouped");
+        assert_eq!(
+            grouping_on(PaneSide::Start),
+            Some(GroupBy::Modified),
+            "Downloads beside the home folder, one style for all: {shared}"
+        );
+
+        let split = test
+            .window
+            .imp()
+            .session
+            .borrow()
+            .active_id()
+            .expect("the split tab");
+        test.window
+            .add_tab(&file_uri(&home.home))
+            .expect("a local folder");
+        test.wait_for_listing("the new tab");
+        test.window.switch_tab(split);
+        assert_eq!(
+            grouping_on(PaneSide::Start),
+            Some(GroupBy::Modified),
+            "Downloads beside, after another tab, one style for all: {shared}"
+        );
+
+        // Downloads becomes active, then the home folder again.
+        test.window.activate_pane(PaneSide::Start);
+        assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+        assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+        test.window.activate_pane(PaneSide::End);
+        assert_eq!(grouping_on(PaneSide::End), None, "the home folder is not grouped");
+        assert_eq!(
+            grouping_on(PaneSide::Start),
+            Some(GroupBy::Modified),
+            "Downloads beside the active home folder, one style for all: {shared}"
+        );
+    }
+}
+
+/// Another application saving into a grouped Downloads, as a Save As
+/// does, leaves it grouped with the same file selected: a file written
+/// under a temporary name and renamed into place, and one written in
+/// several steps. The folder follows both by itself, without F5.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn downloads_stays_grouped_while_another_app_saves_into_it() {
+    use std::io::Write;
+
+    use crate::test_support::harness::wait_for;
+
+    let home = TestHome::new();
+    let folder = home.home.join("Downloads");
+    for number in 0..30 {
+        fs::write(folder.join(format!("scan {number:02}.png")), "x").expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&home.downloads(), home.locations(), |_| {});
+    assert!(test.window.select_named("scan 10.png"));
+    assert_eq!(headings(&test).first().map(String::as_str), Some("Today (32)"));
+
+    let temporary = folder.join(".scan 30.png.tmp");
+    fs::write(&temporary, "x").expect("a temporary file");
+    wait_for(Duration::from_millis(300));
+    fs::rename(&temporary, folder.join("scan 30.png")).expect("the file is renamed into place");
+    let mut written = fs::File::create(folder.join("scan 31.pdf")).expect("a new file");
+    for _ in 0..5 {
+        written.write_all(&[0; 4096]).expect("the file grows");
+        written.flush().expect("the file grows");
+        wait_for(Duration::from_millis(150));
+    }
+    wait_until("both files", || {
+        let names = test.names();
+        names.contains(&"scan 30.png".to_owned()) && names.contains(&"scan 31.pdf".to_owned())
+    });
+    wait_for(Duration::from_millis(500));
+
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    assert_eq!(headings(&test).first().map(String::as_str), Some("Today (34)"));
+    assert!(!test.names().contains(&".scan 30.png.tmp".to_owned()));
+    assert_eq!(
+        test.selected_names(),
+        ["scan 10.png"],
+        "the selection stays on its file"
+    );
+}
