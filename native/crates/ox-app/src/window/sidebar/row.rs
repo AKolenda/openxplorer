@@ -2,7 +2,7 @@
 //! One sidebar row as a widget: the `.side-entry` button of `renderSidebar`
 //! in `v2.0.0:desktop/ui/app.js`, styled by `.side-entry` in `style.css`.
 //!
-//! A row is an expander chevron (This PC, Network), a 20-pixel icon box, the
+//! A row is an expander chevron (This PC, Network), a 16-pixel icon, the
 //! name (with a capacity bar under a drive's) and, on Quick access rows, the
 //! pin. The accent bar of the selected
 //! row (`.side-entry.selected:before`) is an overlay at the row's left
@@ -19,9 +19,10 @@ use crate::window::window_action::WindowAction;
 use super::super::saved_search::saved_search_target;
 use super::entries::{EjectButton, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 
-/// Glyph icons are 18 pixels (`.side-icon svg`), art 19 (`folderIcon(19)`).
-const GLYPH_SIZE: i32 = 18;
-const ART_SIZE: i32 = 19;
+/// Glyphs and art are 16 pixels, as Windows 11's navigation pane icons
+/// (owner decision 2026-11-06; the web's were 18 and 19).
+const GLYPH_SIZE: i32 = 16;
+const ART_SIZE: i32 = 16;
 
 /// The expander chevron of This PC and Network (`icon('down')` at 9px).
 const EXPANDER_SIZE: i32 = 9;

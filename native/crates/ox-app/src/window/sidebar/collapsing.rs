@@ -11,6 +11,10 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::entries::{RowLevel, Section, SidebarEntry};
+
+/// How long a drag must stay over a collapsed section's head before it
+/// expands (DND-027).
+const DRAG_EXPAND_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 use super::{row, Sidebar};
 
 impl Sidebar {
@@ -66,6 +70,69 @@ impl Sidebar {
             }
         }
         self.highlight_location();
+    }
+
+    /// A drag is at `y` of the list, or left it with `None`: held over the
+    /// head of a collapsed section for [`DRAG_EXPAND_DELAY`], the section
+    /// expands, as Windows Explorer's navigation pane expands a collapsed
+    /// node under a drag. Nothing in the sidebar opens in the folder view.
+    pub(in crate::window) fn expand_after_drag_hover(&self, y: Option<f64>) {
+        let section = y.and_then(|y| self.collapsed_head_at(y));
+        let waiting = self
+            .imp()
+            .drag_expand
+            .borrow()
+            .as_ref()
+            .map(|(section, _)| *section);
+        if waiting == section {
+            return;
+        }
+        if let Some((_, timer)) = self.imp().drag_expand.take() {
+            timer.remove();
+        }
+        let Some(section) = section else {
+            return;
+        };
+        let timer = glib::timeout_add_local_once(
+            DRAG_EXPAND_DELAY,
+            glib::clone!(
+                #[weak(rename_to = sidebar)]
+                self,
+                move || {
+                    sidebar.imp().drag_expand.replace(None);
+                    sidebar.collapse_section(section, false);
+                }
+            ),
+        );
+        self.imp().drag_expand.replace(Some((section, timer)));
+    }
+
+    /// The collapsed section whose head row is at `y` of the list.
+    fn collapsed_head_at(&self, y: f64) -> Option<Section> {
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let row = self.list().row_at_y(y as i32)?;
+        let index = usize::try_from(row.index()).ok()?;
+        let entries = self.imp().entries.borrow();
+        let entry = entries.get(index)?;
+        (entry.level == RowLevel::Group && self.is_collapsed(entry.section)).then_some(entry.section)
+    }
+
+    /// The labels of the rows shown, without those a collapsed section
+    /// hides, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn labels_shown(&self) -> Vec<String> {
+        let entries = self.imp().entries.borrow();
+        entries
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| {
+                i32::try_from(*index)
+                    .ok()
+                    .and_then(|index| self.list().row_at_index(index))
+                    .is_some_and(|row| row.is_visible())
+            })
+            .map(|(_, entry)| entry.label.clone())
+            .collect()
     }
 
     /// Left collapses This PC or Network while its head row has keyboard

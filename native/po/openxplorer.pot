@@ -22,7 +22,7 @@ msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
+msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected.\n- A search is a step of the tab's history, as in Windows: the tab and the address bar read Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box goes back to the folder too."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -30,11 +30,11 @@ msgid "- Deleted items go to the Recycle Bin of their drive. Restore puts them b
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, \"New Text Document.txt\" (or \"New Text Document (2).txt\" when that name is taken), then renamed in place: type its name and press Enter.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
+msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, \"New Text Document.txt\" (or \"New Text Document (2).txt\" when that name is taken), then renamed in place: type its name and press Enter.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together. As in Windows, \\ / : * ? \" < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -732,12 +732,12 @@ msgid "Date created: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
 msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
 msgid "Size: {size}"
 msgstr ""
 
@@ -1296,31 +1296,11 @@ msgid "That application is not installed."
 msgstr ""
 
 #: crates/ox-app/src/locations.rs
-msgid "Find shared storage on your local network, or enter an address."
-msgstr ""
-
-#: crates/ox-app/src/locations.rs
 msgid "Folders, devices, and connected storage."
 msgstr ""
 
 #: crates/ox-app/src/locations.rs
 msgid "Your explorer, your way."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Discover devices without scanning their files."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Discovery can take a few seconds."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Listening for advertised SMB servers…"
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "No advertised SMB servers found yet. Discover again or enter an address above."
 msgstr ""
 
 #: crates/ox-app/src/properties.rs
@@ -2476,7 +2456,7 @@ msgstr ""
 msgid "Read-only in OpenXplorer · Restore a copy to edit"
 msgstr ""
 
-#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/menu_popover.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Back"
 msgstr ""
 
@@ -4582,7 +4562,7 @@ msgstr ""
 msgid "Options"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Pin to Quick access"
 msgstr ""
 
@@ -4782,10 +4762,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Mount disk image"
-msgstr ""
-
-#: crates/ox-app/src/window/context_menu/entries.rs
-msgid "New…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -5079,7 +5055,11 @@ msgid "This network item needs an app that supports SMB addresses. For a local-o
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs
-msgid "Select up to 200 files or folders. Extract ZIP contents before dragging them."
+msgid "Extract ZIP contents before dragging them."
+msgstr ""
+
+#: crates/ox-app/src/window/file_drag/payload.rs crates/ox-app/src/window/file_drop.rs crates/ox-core/src/clipboard.rs crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
+msgid "Select between 1 and 100,000 items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs
@@ -5139,7 +5119,7 @@ msgid "Copy here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
-msgid "Create links here"
+msgid "Create shortcuts here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
@@ -5274,11 +5254,11 @@ msgstr ""
 msgid "The desktop clipboard could not be claimed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
 msgid "No"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
 msgid "Yes"
 msgstr ""
 
@@ -5386,6 +5366,10 @@ msgstr ""
 msgid "“{name}” cannot be moved directly to “{destination}”, which is on another drive, share or device. The items can be copied there and the originals removed once their copies are complete. An original that changes during the move is kept."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/name_balloon.rs
+msgid "A file name can't contain any of the following characters:"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/name_dialog.rs
 msgid "Names must not contain slashes."
 msgstr ""
@@ -5461,6 +5445,19 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/rename.rs
 msgid "The name was not changed."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "Rename File"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "There is already a file with the same name in this location."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "Would you like to rename \"{name}\" to \"{numbered}\"?"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/transfer.rs
@@ -5718,6 +5715,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/location_view.rs
+msgid "Search Results in {place}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/location_view.rs
 msgid "{place} — OpenXplorer"
 msgstr ""
 
@@ -5793,53 +5795,8 @@ msgstr ""
 msgid "Up to \"{place}\" (Alt + Up Arrow)"
 msgstr ""
 
-#: crates/ox-app/src/window/network_page.rs
-msgid "Computers & network storage"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Connected & saved locations"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discover servers"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discovered servers"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discovery depends on devices advertising themselves and on local firewall/network settings. It does not guarantee a list of every host."
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Enter a network server or shared folder."
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Map location"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Open address"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "SMB server address"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Stop"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "\\\\server or \\\\archive-nas"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/network_page.rs
-msgid "{protocol_name} · Discovered"
+#: crates/ox-app/src/window/network_info_bar.rs
+msgid "Network discovery is turned off. Network computers and devices are not visible. Click to learn more..."
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
@@ -6921,7 +6878,7 @@ msgstr ""
 msgid "An item changed while it was compressed. Nothing was created."
 msgstr ""
 
-#: crates/ox-core/src/archive/error.rs crates/ox-core/src/ops/links.rs
+#: crates/ox-core/src/archive/error.rs
 msgid "An item with this name already exists. Nothing was replaced."
 msgstr ""
 
@@ -7203,9 +7160,12 @@ msgstr ""
 msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/clipboard.rs
-msgid "Copy or cut between 1 and {max} items at a time."
+msgid "This file selection is too large to copy or cut."
+msgstr ""
+
+#: crates/ox-core/src/entry/classify.rs
+msgid "Computer"
 msgstr ""
 
 #: crates/ox-core/src/entry/classify.rs
@@ -8130,10 +8090,6 @@ msgstr ""
 
 #: crates/ox-core/src/ops/conflicts.rs
 msgid "Open a destination folder before pasting."
-msgstr ""
-
-#: crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
-msgid "Select between 1 and 100,000 items."
 msgstr ""
 
 #: crates/ox-core/src/ops/context.rs

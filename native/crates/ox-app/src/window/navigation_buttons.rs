@@ -168,9 +168,7 @@ impl BrowserWindow {
             else {
                 continue;
             };
-            let place = self
-                .navigation_target(command.action)
-                .map(|uri| self.imp().locations.borrow().title_for(&uri));
+            let place = self.navigation_title(command.action);
             button.set_tooltip_text(Some(&command.tooltip(place.as_deref())));
         }
     }

@@ -195,6 +195,10 @@ pub(crate) struct BrowserWindow {
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// Set while the window itself empties the search box, which then
+    /// does not leave search results as the user emptying it does; see
+    /// [`super::search_steps`].
+    pub(super) clears_search_box: Cell<bool>,
     /// In tests, a volume id and the root it mounts at, standing in for a
     /// drive the isolated session does not have.
     #[cfg(test)]
@@ -252,10 +256,13 @@ pub(crate) struct BrowserWindow {
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
+    /// Why tooltips are off now: a drag of this window's items, and the
+    /// drop menu, show none, as in Windows Explorer (DND-027).
+    pub(super) tooltips_off: Cell<super::quiet_tooltips::TooltipsOff>,
+    /// The widgets whose tooltips were turned off, to turn them on again.
+    pub(super) muted_tooltips: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
-    /// The folder a file drag hovers over, and the timer that opens it.
-    pub(super) folder_hover: RefCell<Option<(String, glib::SourceId)>>,
     /// The scroll of a zone a file drag hovers near the edge of.
     pub(super) drag_scroll: RefCell<Option<super::file_drop::DragScroll>>,
     /// The crumb divider a file drag hovers over, and the timer that
@@ -287,6 +294,8 @@ pub(crate) struct BrowserWindow {
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
+    /// Network's info bar, shown while discovery cannot run.
+    pub(super) network_info_bar: OnceCell<gtk::Button>,
     /// The rename a slow second click on a name scheduled (OPS-011).
     pub(super) slow_click_rename: super::slow_click_rename::SlowClickRename,
     /// Measured folder sizes and the running folder-size scan.

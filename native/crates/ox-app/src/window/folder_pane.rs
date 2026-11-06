@@ -43,7 +43,7 @@ pub(super) enum PanePage {
     Listing,
     /// The empty, filtered-out, loading or error state.
     Empty,
-    /// A landing page (This PC, Network).
+    /// A landing page (This PC).
     Landing,
 }
 

@@ -51,7 +51,7 @@
 //! | `resolved_transfer` | A copy or move with an answer per name conflict, inside merged folders too |
 //! | `duplicate` | Duplicate in place |
 //! | `links` | Symbolic links to dropped items, and New ▸ Link |
-//! | `shortcuts` | Shortcuts named as Windows names them, for Send to ▸ Desktop |
+//! | `shortcuts` | Shortcuts named as Windows names them, for Send to ▸ Desktop and dropped links |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |

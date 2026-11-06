@@ -31,7 +31,7 @@ fn is_disabled(menu: &PlaceMenu, label: &str) -> bool {
     item.availability == ItemAvailability::Disabled
 }
 
-/// parity: SIDE-020, HOME-010
+/// parity: SIDE-020
 #[test]
 fn a_network_share_can_be_kept_removed_and_signed_out_of() {
     let saved = studio_nas_mapped_drive();

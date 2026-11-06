@@ -243,7 +243,7 @@ fn refused_uri_lists() -> Vec<RefusedPayload> {
         RefusedPayload::uri_list("credentials", CUT_MARKER, b"smb://user:pass@nas/share/a".to_vec()),
         RefusedPayload::uri_list("an encoded line break", CUT_MARKER, b"file:///tmp/a%0Ab".to_vec()),
         RefusedPayload::uri_list("its size", CUT_MARKER, oversized_payload()),
-        RefusedPayload::uri_list("more than 200 items", None, too_many_items),
+        RefusedPayload::uri_list("more than 100,000 items", None, too_many_items),
     ]
 }
 
@@ -384,16 +384,35 @@ fn published_file_lists_match_the_python_encoding() {
 
 /// parity: CLIP-004
 #[test]
-fn selections_outside_one_to_two_hundred_items_are_refused_in_the_python_wording() {
+fn selections_outside_one_to_a_hundred_thousand_items_are_refused_as_a_transfer_is() {
     let too_many = vec![README_URI.to_owned(); MAX_ITEMS + 1];
     for uris in [Vec::new(), too_many] {
         let error = ClipboardFiles::new(ClipboardMode::Copy, &uris).expect_err("item count");
         assert_eq!(error, ClipboardError::ItemCount);
-        assert_eq!(
-            error.to_string(),
-            "Copy or cut between 1 and 200 items at a time."
-        );
+        assert_eq!(error.to_string(), "Select between 1 and 100,000 items.");
     }
+}
+
+/// 100,000 items with long names can be over [`MAX_BYTES`], which a
+/// paste would refuse to read: Copy and Cut refuse them instead of
+/// publishing a clipboard that pastes nothing.
+///
+/// parity: CLIP-004
+#[test]
+fn a_selection_too_large_to_paste_back_is_refused() {
+    // 40 CJK characters, nine encoded bytes each, make a 360-byte name.
+    let name = "%E6%96%87".repeat(40);
+    let uris: Vec<String> = (0..MAX_ITEMS)
+        .map(|number| format!("file:///home/demo/{name}{number}"))
+        .collect();
+
+    let error = ClipboardFiles::new(ClipboardMode::Copy, &uris).expect_err("over MAX_BYTES");
+
+    assert_eq!(error, ClipboardError::TooLarge);
+    assert_eq!(
+        error.to_string(),
+        "This file selection is too large to copy or cut."
+    );
 }
 
 /// parity: CLIP-004, OPS-035

@@ -111,9 +111,13 @@ fn only_the_folder_under_a_drag_is_highlighted() {
     );
 }
 
+/// As in Windows Explorer's navigation pane, a drop on a pinned folder
+/// goes into it, and only a drop between pins (the row's top or bottom
+/// edge, where the line shows) pins, saying "Pin to Quick access".
+///
 /// parity: DND-009, DND-011, DND-014
 #[gtk::test]
-fn sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows() {
+fn sidebar_folders_take_drops_and_quick_access_pins_only_between_pins() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let sidebar = test.window.sidebar();
@@ -122,23 +126,136 @@ fn sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows() {
     let this_pc = sidebar.middle_of("This PC");
 
     let on_home = test.window.sidebar_spot(home);
-    let above_documents = test.window.sidebar_spot(documents - 5.0);
+    let on_documents = test.window.sidebar_spot(documents);
+    let near_documents = test.window.sidebar_spot(documents - 5.0);
+    let above_documents = test.window.sidebar_spot(sidebar.top_edge_of("Documents"));
     test.window
         .show_drop_spot(DropZone::Sidebar, above_documents.as_ref());
     let line = sidebar.drop_highlight_of("Documents");
+    let hint = test.window.folder_pane().drag_hint();
+    test.window
+        .show_drop_spot(DropZone::Sidebar, on_documents.as_ref());
+    let into = sidebar.drop_highlight_of("Documents");
+    let hint_into = test.window.folder_pane().drag_hint();
     test.window.leave_drop_zone(DropZone::Sidebar);
 
     let home_uri = test.window.imp().locations.borrow().home_uri();
     let on_home = on_home.map(|spot| spot.destination());
     assert_eq!(on_home, Some(DropDestination::Folder(home_uri)));
+    let into_documents = on_documents.map(|spot| spot.destination());
+    assert!(
+        matches!(&into_documents, Some(DropDestination::Folder(folder)) if folder.ends_with("/Documents")),
+        "a drop on a pinned folder goes into it: {into_documents:?}"
+    );
+    assert_eq!(
+        near_documents.map(|spot| spot.destination()),
+        into_documents,
+        "most of the row is the folder"
+    );
     let pin_spot = above_documents.map(|spot| spot.destination());
     assert!(
         matches!(&pin_spot, Some(DropDestination::QuickAccess { before: Some(before) }) if before.ends_with("/Documents")),
         "{pin_spot:?}"
     );
     assert_eq!(line, Some("drop-before"));
+    assert_eq!(hint.as_deref(), Some("Pin to Quick access"));
+    assert_eq!(into, Some("file-drop-active"));
+    assert_eq!(hint_into, None);
     assert_eq!(sidebar.drop_highlight_of("Documents"), None);
+    assert_eq!(test.window.folder_pane().drag_hint(), None);
     assert_eq!(test.window.sidebar_spot(this_pc), None, "a page takes no drop");
+}
+
+/// As in Windows Explorer's navigation pane, a drag held over a sidebar
+/// folder never opens it in the folder view, and one held over a
+/// collapsed This PC expands it.
+///
+/// parity: DND-027, SIDE-033
+#[gtk::test]
+fn a_drag_held_over_the_sidebar_never_navigates_and_expands_a_collapsed_section() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    sidebar.toggle_section("thisPc");
+    wait_for_frames(&test.window, 2);
+    let collapsed = !sidebar.labels_shown().contains(&"Local Disk".to_owned());
+
+    let on_documents = test.window.sidebar_spot(sidebar.middle_of("Documents"));
+    test.window
+        .show_drop_spot(DropZone::Sidebar, on_documents.as_ref());
+    let this_pc = sidebar.middle_of("This PC");
+    test.window.hover_sidebar_during_drag(Some(this_pc));
+    wait_for(Duration::from_millis(1200));
+    let shown_after_hover = test.window.current_uri();
+    let expanded = sidebar.labels_shown().contains(&"Local Disk".to_owned());
+    test.window.leave_drop_zone(DropZone::Sidebar);
+
+    assert!(collapsed, "This PC starts collapsed");
+    assert_eq!(
+        shown_after_hover,
+        Some(fixture.uri()),
+        "the sidebar never navigates"
+    );
+    assert!(expanded, "a collapsed section held under the drag expands");
+}
+
+/// A drop on a pinned folder copies or moves into it as on any folder,
+/// and a drop between pins still pins.
+///
+/// parity: DND-014, DND-027
+#[gtk::test]
+fn a_drop_on_a_pinned_folder_goes_into_it_and_between_pins_pins() {
+    let source = Fixture::standard();
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Drop shelf")).expect("fixture subfolder");
+    let test = TestWindow::open(&fixture.uri_of("Drop shelf"));
+    test.activate("pin-folder", None);
+    let sidebar = test.window.sidebar();
+    wait_until("the pin", || sidebar.labels().contains(&"Drop shelf".to_owned()));
+    wait_for_frames(&test.window, 3);
+    let on_pin = test
+        .window
+        .sidebar_spot(sidebar.middle_of("Drop shelf"))
+        .map(|spot| spot.destination());
+    let between = test
+        .window
+        .sidebar_spot(sidebar.top_edge_of("Drop shelf"))
+        .map(|spot| spot.destination());
+
+    assert_eq!(
+        on_pin,
+        Some(DropDestination::Folder(fixture.uri_of("Drop shelf")))
+    );
+    let copied = test
+        .window
+        .complete_drop(&[source.uri_of("Notes 2.txt")], on_pin, DropAction::Copy);
+    wait_until("the copy", || fixture.path("Drop shelf/Notes 2.txt").is_file());
+    // A drop waits for the copy to end, as every drop does while an
+    // operation runs.
+    wait_until("the copy to end", || {
+        test.window.imp().file_operations.borrow().is_idle()
+    });
+    std::fs::create_dir(fixture.path("Pinned between")).expect("fixture subfolder");
+    let pinned = test.window.complete_drop(
+        &[fixture.uri_of("Pinned between")],
+        between.clone(),
+        DropAction::Copy,
+    );
+    wait_until("the second pin", || {
+        sidebar.labels().contains(&"Pinned between".to_owned())
+    });
+    test.window.unpin(&fixture.uri_of("Pinned between"));
+    test.window.unpin(&fixture.uri_of("Drop shelf"));
+
+    assert!(
+        matches!(&between, Some(DropDestination::QuickAccess { before: Some(before) }) if *before == fixture.uri_of("Drop shelf")),
+        "{between:?}"
+    );
+    assert!(copied && pinned);
+    assert!(
+        !fixture.path("Drop shelf/Pinned between").exists(),
+        "pinning copies nothing"
+    );
 }
 
 /// A drive still to be mounted takes a drop, which mounts it first
@@ -424,7 +541,7 @@ fn the_drop_highlights_the_program_hint_and_the_drop_menu_are_captured() {
         let on_folder = test.window.folder_view_spot(Some(test.position_of("Documents")));
         test.window
             .show_drop_spot(DropZone::FolderView, on_folder.as_ref());
-        let pin_line = test.window.sidebar_spot(sidebar.middle_of("Documents") - 5.0);
+        let pin_line = test.window.sidebar_spot(sidebar.top_edge_of("Documents"));
         test.window.show_drop_spot(DropZone::Sidebar, pin_line.as_ref());
         capture(&test.window, &format!("native-drop-targets-{theme}.png"));
         test.window.leave_drop_zone(DropZone::Sidebar);
@@ -437,8 +554,11 @@ fn the_drop_highlights_the_program_hint_and_the_drop_menu_are_captured() {
         test.window.leave_drop_zone(DropZone::FolderView);
         test.window
             .remember_drop_point(test.window.folder_pane().upcast_ref(), 300.0, 200.0);
-        test.window
-            .drop_files(&[source.uri_of("Notes 2.txt")], None, DropAction::Ask);
+        test.window.drop_files(
+            &[source.uri_of("Notes 2.txt")],
+            None,
+            DropAction::Ask(DragOrigin::ThisApp),
+        );
         let menu = test.window.drop_menu();
         wait_until("the drop menu", || menu.is_mapped());
         capture_popover(
@@ -451,45 +571,44 @@ fn the_drop_highlights_the_program_hint_and_the_drop_menu_are_captured() {
     }
 }
 
-/// parity: DND-021
+/// As in Windows Explorer, a drag held over a folder in the file list
+/// never opens it: the folder stays highlighted as the drop's target, and
+/// the folder shown stays where it is.
+///
+/// parity: DND-011
 #[gtk::test]
-fn a_drag_that_stays_over_a_folder_opens_it() {
+fn a_drag_held_over_a_folder_never_opens_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let documents = test
         .window
         .folder_view_spot(Some(test.position_of("Documents")))
         .expect("a folder takes drops");
-    let blank = test
+
+    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
+    wait_for(Duration::from_millis(1500));
+    let shown_after_hover = test.window.current_uri();
+    let highlighted = test
         .window
-        .folder_view_spot(None)
-        .expect("the folder shown takes drops");
-    assert_eq!(
-        super::spring::folder_to_open(&blank),
-        None,
-        "the folder shown is open already"
-    );
+        .folder_pane()
+        .owners()
+        .is_shown_drop_target(test.position_of("Documents"));
+    test.window.leave_drop_zone(DropZone::FolderView);
 
-    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
-    test.window.show_drop_spot(DropZone::FolderView, None);
-    wait_for(Duration::from_millis(900));
     assert_eq!(
-        test.window.current_uri(),
-        Some(fixture.uri()),
-        "leaving stops the wait"
+        documents.destination(),
+        DropDestination::Folder(fixture.uri_of("Documents")),
+        "Documents takes the drop"
     );
-
-    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
-    wait_until("the hovered folder to open", || {
-        test.window.current_uri() == Some(fixture.uri_of("Documents"))
-    });
+    assert_eq!(highlighted, Some(true), "Documents stays highlighted");
+    assert_eq!(shown_after_hover, Some(fixture.uri()), "the folder shown stays");
 }
 
 /// A drag held still near the bottom of the file list scrolls it, and
 /// the folder that was under the pointer does not open meanwhile;
 /// leaving stops the scroll.
 ///
-/// parity: DND-025, DND-021
+/// parity: DND-025
 #[gtk::test]
 fn a_drag_near_the_bottom_edge_scrolls_without_opening_the_folder_under_it() {
     let fixture = Fixture::standard();
@@ -676,6 +795,10 @@ impl OfferedDrop for FakeDrop {
 
     fn origin(&self) -> DragOrigin {
         self.origin
+    }
+
+    fn button(&self) -> crate::window::file_drag::DragButton {
+        crate::window::file_drag::DragButton::Primary
     }
 }
 

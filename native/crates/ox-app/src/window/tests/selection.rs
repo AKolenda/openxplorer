@@ -137,7 +137,9 @@ fn click_ctrl_click_and_shift_click_select_like_explorer() {
 fn a_click_on_blank_space_clears_the_selection_and_focuses_the_list() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    for view in ["details", "large"] {
+    // Large icons' 96-pixel tiles fill the window down to its bottom edge,
+    // so the icon view is tried with Medium icons, which leave space.
+    for view in ["details", "medium"] {
         show_view(&test, view);
         test.window.folder_model().select_only(1);
         test.window.search_box().focus();

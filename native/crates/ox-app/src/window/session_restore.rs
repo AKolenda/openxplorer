@@ -25,11 +25,10 @@ use super::session::{PaneSide, Tab, TabId};
 use super::BrowserWindow;
 
 /// The entries of `history` a saved session keeps: at most
-/// [`MAX_HISTORY_ENTRIES`] around the current one, and its position
-/// among them.
+/// [`MAX_HISTORY_ENTRIES`] locations around the current one, without its
+/// searches ([`History::saved_locations`]), and its position among them.
 fn bounded_history(history: &History) -> (Vec<String>, usize) {
-    let entries = history.entries();
-    let position = history.position();
+    let (entries, position) = history.saved_locations();
     let start = (position + 1).saturating_sub(MAX_HISTORY_ENTRIES);
     let end = (start + MAX_HISTORY_ENTRIES).min(entries.len());
     (entries[start..end].to_vec(), position - start)

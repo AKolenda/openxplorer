@@ -21,7 +21,8 @@
 //! places ([`environment`]), Quick access ([`quick_access`]), connecting
 //! and removing drives ([`mounting`]), network sign-in
 //! ([`network_session`]), the network commands ([`network_actions`],
-//! [`network_sign_out`]) and the places' menus ([`place_menus`]), the
+//! [`network_sign_out`]), Network's info bar ([`network_info_bar`]) and
+//! the places' menus ([`place_menus`]), the
 //! skin ([`appearance`]), activation, actions, input
 //! ([`type_to_select`]), the file operations and their [`dialog`]s
 //! ([`file_ops`]), dragging and dropping files ([`file_drag`],
@@ -114,7 +115,7 @@ mod mounting;
 mod navigation;
 mod navigation_buttons;
 mod network_actions;
-mod network_page;
+mod network_info_bar;
 mod network_session;
 mod network_sign_out;
 mod open_several;
@@ -125,6 +126,7 @@ mod place_menus;
 mod preferences;
 mod progress_window;
 mod quick_access;
+mod quiet_tooltips;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;
@@ -132,6 +134,7 @@ mod rubber_band;
 mod run_on_open;
 mod saved_search;
 mod search_box;
+mod search_steps;
 mod select_matching;
 mod selection;
 mod selection_keys;
@@ -233,6 +236,7 @@ impl BrowserWindow {
         window.install_split_view();
         window.install_size_scans();
         window.install_item_dialogs();
+        window.install_network_info_bar();
         window.install_archive_actions();
         window.install_send_to_actions();
         window.install_input();

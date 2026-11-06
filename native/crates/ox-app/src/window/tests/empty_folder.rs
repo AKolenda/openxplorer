@@ -84,10 +84,11 @@ fn right_clicking_an_empty_folder_opens_its_menu_and_paste_works() {
         .find(|gesture| gesture.button() == gdk::BUTTON_SECONDARY)
         .expect("the empty page takes a right-click");
     right_click.emit_by_name::<()>("pressed", &[&1_i32, &20.0_f64, &20.0_f64]);
+    right_click.emit_by_name::<()>("released", &[&1_i32, &20.0_f64, &20.0_f64]);
     let menu = menu_of(&page).expect("the empty page has the folder menu");
     wait_until("the menu", || menu.is_visible());
 
-    assert!(menu.row("New…").is_sensitive());
+    assert!(menu.row("New").is_sensitive());
     assert!(menu.row("Paste").is_sensitive());
     menu.row("Paste").emit_activate();
     wait_until("the pasted copy", || fixture.path("Empty/Notes 2.txt").is_file());
@@ -277,9 +278,10 @@ fn each_pane_of_a_split_tab_has_its_own_empty_page_menu() {
         .find(|gesture| gesture.button() == gdk::BUTTON_SECONDARY)
         .expect("the empty page takes a right-click");
     right_click.emit_by_name::<()>("pressed", &[&1_i32, &20.0_f64, &20.0_f64]);
+    right_click.emit_by_name::<()>("released", &[&1_i32, &20.0_f64, &20.0_f64]);
     let menu = menu_of(&page).expect("the page has the folder menu");
     wait_until("the menu", || menu.is_visible());
-    assert!(menu.row("New…").is_sensitive());
+    assert!(menu.row("New").is_sensitive());
 }
 
 /// An empty Recycle Bin says "This folder is empty." in its list, as any
@@ -307,7 +309,7 @@ fn an_empty_recycle_bin_says_so_as_a_folder_and_opens_its_own_menu() {
         !sensitive("Paste"),
         "nothing is pasted into the Recycle Bin: {labels:?}"
     );
-    assert!(!sensitive("New…"), "nor made there: {labels:?}");
+    assert!(!sensitive("New"), "nor made there: {labels:?}");
 }
 
 /// Space on Try again, under "This location is unavailable", reaches the
@@ -413,7 +415,7 @@ fn an_unavailable_location_offers_no_new_or_paste() {
     let menu = menu_of(&page).expect("the page has the folder menu");
     wait_until("the menu", || menu.is_visible());
 
-    assert!(!menu.row("New…").is_sensitive(), "New is off");
+    assert!(!menu.row("New").is_sensitive(), "New is off");
     assert!(!menu.row("Paste").is_sensitive(), "Paste is off");
 }
 

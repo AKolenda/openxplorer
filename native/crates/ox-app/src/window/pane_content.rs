@@ -36,7 +36,8 @@ enum Listing {
 pub(super) struct PaneState {
     /// The tab's location.
     uri: String,
-    /// The landing page at that location, if it is one.
+    /// The landing page at that location, if it is one; Network is
+    /// listed instead.
     page: Option<Page>,
     /// Whether, and how, its listing runs.
     listing: Listing,
@@ -53,7 +54,7 @@ impl PaneState {
     pub(super) fn of(tab: &Tab) -> Self {
         Self {
             uri: tab.uri().to_owned(),
-            page: Page::from_uri(tab.uri()),
+            page: Page::drawn_at(tab.uri()),
             listing: match (tab.listing_state.is_listing(), tab.reloading) {
                 (false, _) => Listing::Idle,
                 (true, false) => Listing::First,

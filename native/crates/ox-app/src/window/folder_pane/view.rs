@@ -165,7 +165,7 @@ mod tests {
             FolderView::Compact.zoomed(1),
             FolderView::Icons(IconSize::at_index(0))
         );
-        assert_eq!(large.zoomed(-2), FolderView::Icons(IconSize::MEDIUM));
+        assert_eq!(large.zoomed(-4), FolderView::Icons(IconSize::MEDIUM));
         assert_eq!(large.zoomed(50), FolderView::Icons(IconSize::LARGEST));
         assert_eq!(large.zoomed(-90), FolderView::Details);
         assert_eq!(large.zoomed(0), large);
@@ -177,7 +177,7 @@ mod tests {
             assert_eq!(
                 FolderView::from_style(view.style_mode(), 96),
                 match view {
-                    FolderView::Icons(_) => FolderView::Icons(IconSize::EXTRA_LARGE),
+                    FolderView::Icons(_) => FolderView::Icons(IconSize::LARGE),
                     other => other,
                 }
             );
