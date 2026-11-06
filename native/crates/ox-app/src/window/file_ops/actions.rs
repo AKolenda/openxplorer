@@ -208,6 +208,9 @@ impl BrowserWindow {
             task_action(WindowAction::Restore, |window| async move {
                 window.restore_selected_items().await;
             }),
+            task_action(WindowAction::RestoreAllItems, |window| async move {
+                window.restore_all_items().await;
+            }),
             task_action(WindowAction::EmptyRecycleBin, |window| async move {
                 window.empty_recycle_bin().await;
             }),
