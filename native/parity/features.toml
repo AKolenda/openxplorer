@@ -2839,7 +2839,7 @@ native_note = "Date modified shows the date and the clock time without seconds; 
 id = "VIEW-005"
 area = "VIEW"
 title = "Large icons view"
-behaviour = "Large icons view shows tiles with 56 px icons and names clamped to 2 lines. Tiles are laid out in as many columns as fit (tile width grows with text size), and row height scales with text size. Selection, cut dimming, middle-click, context menus and type-to-select behave as in Details."
+behaviour = "Large icons view shows tiles with 96 px icons, as Windows 11's (owner decision 2026-11-06; 56 px in the Python app), and names clamped to 2 lines. Tiles are laid out in as many columns as fit (tile width grows with text size), and row height scales with text size. Selection, cut dimming, middle-click, context menus and type-to-select behave as in Details."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -2862,7 +2862,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "Icons view mode"
 native = "done"
-native_note = "native/crates/ox-app/src/folder_view/grid.rs (icon_sizes_round_trip_and_shrink); native/crates/ox-app/src/window/tests/views.rs (a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows, switching_views_keeps_the_selection_and_shows_the_active_view): 56-pixel icons, two-line names, as many 135-pixel columns as fit. Selection, cut dimming, middle-click, the context menu and type-to-select use the same controllers in both views (native/crates/ox-app/src/window/input.rs). The native app adds Explorer's Extra large, Medium and Small icon sizes."
+native_note = "native/crates/ox-app/src/folder_view/grid.rs (icon_sizes_round_trip_and_shrink); native/crates/ox-app/src/window/tests/views.rs (a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows, switching_views_keeps_the_selection_and_shows_the_active_view): 96-pixel icons (Windows 11's Large icons, owner decision 2026-11-06; 56 in the Python app), two-line names, as many 175-pixel columns as fit (the web's 135-pixel cell widened by the 40 pixels the icon grew). Selection, cut dimming, middle-click, the context menu and type-to-select use the same controllers in both views (native/crates/ox-app/src/window/input.rs). The native app adds Explorer's Extra large (256), Medium (48) and Small (16) icon sizes, Windows 11's; a size saved before keeps its pixels."
 
 [[feature]]
 id = "VIEW-006"
@@ -2977,7 +2977,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
 native = "partial"
-native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the View menu's icon sizes; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
+native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the View menu's icon sizes, which are four of the levels: Small 16, Medium 48, Large 96 and Extra large 256, as in Windows 11 (owner decision 2026-11-06); each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
 
 [[feature]]
 id = "VIEW-011"
@@ -3704,7 +3704,7 @@ native_note = "native/crates/ox-app/src/text_size.rs (control_plus_minus_and_zer
 id = "VIEW-044"
 area = "VIEW"
 title = "Text size levels and scaling"
-behaviour = "Levels are 80, 90, 100 (default), 110, 125, 150, 175 and 200%; stepping stops at the ends and invalid values normalise to 100. Text size scales fonts through CSS (no page zoom and no desktop DPI change). Row height is max(38, ceil(24×scale+14)); grid rows and tile widths grow proportionally. Virtualised rows never overlap at any size."
+behaviour = "Levels are 80, 90, 100 (default), 110, 125, 150, 175 and 200%; stepping stops at the ends and invalid values normalise to 100. Text size scales fonts through CSS (no page zoom and no desktop DPI change). Row height is max(32, ceil(24×scale+8)), Windows 11's 32 px at 100% (owner decision 2026-11-06; max(38, ceil(24×scale+14)) in the Python app); grid rows and tile widths grow proportionally. Virtualised rows never overlap at any size."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -4213,7 +4213,7 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/compact_density.rs (compact_view_draws_closer_rows_and_is_saved: Details rows 24 px and sidebar rows 26 px at 100% instead of 36 and 35, saved as compactView, back to the usual heights when off; a_compact_view_saved_elsewhere_is_taken_up_at_once); native/crates/ox-app/src/settings_page/tests.rs (the_compact_view_switch_saves_the_choice); native/crates/ox-app/src/theme/fonts.rs (compact_view_rows_are_closer_and_grow_with_the_text; the_selection_bar_stays_centred_on_the_sidebar_row: the selected row's accent bar 5 px down a 26 px row); native/crates/ox-core/src/settings/preferences.rs (compact_view_is_off_by_default_and_stored_only_when_on). Inside the app this is the compact density (WindowAction::CompactDensity, Preferences::compact_density), as compact already names the List layout; the window class is compact-density; the folder tree's rows are 24 px in resources/skin/sidebar.css. The Icons and List layouts keep their spacing: the List layout counts its rows per column from its row height in code."
+native_note = "native/crates/ox-app/src/window/tests/compact_density.rs (compact_view_draws_closer_rows_and_is_saved: Details rows and sidebar rows 24 px at 100% instead of 30 and 31 (Windows 11's density, owner decision 2026-11-06; 26 px sidebar rows before), never lower, as the smallest pointer and touch target, saved as compactView, back to the usual heights when off; a_compact_view_saved_elsewhere_is_taken_up_at_once); native/crates/ox-app/src/settings_page/tests.rs (the_compact_view_switch_saves_the_choice); native/crates/ox-app/src/theme/fonts.rs (compact_view_rows_are_closer_and_grow_with_the_text; the_selection_bar_stays_centred_on_the_sidebar_row: the selected row's accent bar 4 px down a 24 px row); native/crates/ox-core/src/settings/preferences.rs (compact_view_is_off_by_default_and_stored_only_when_on). Inside the app this is the compact density (WindowAction::CompactDensity, Preferences::compact_density), as compact already names the List layout; the window class is compact-density; the folder tree's rows are 24 px in resources/skin/sidebar.css. The Icons and List layouts keep their spacing: the List layout counts its rows per column from its row height in code."
 
 [[feature]]
 id = "VIEW-068"
@@ -5462,7 +5462,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "PlacesPanelSettings::IconSize"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (the_icon_size_chosen_on_empty_space_redraws_the_rows_and_is_saved). The sidebar's empty-space menu offers Automatic icon size, Small icons (16), Medium (22), Large (32) and Huge (48) as a choice of win.sidebar-icon-size; the rows are redrawn at once, keeping the highlighted row, and the choice is saved as sidebarIconSize (only when not automatic) and applied to new windows. GTK's menus have no submenus here, so the sizes are a group of choices after 'Add entry…' rather than Dolphin's Icon Size submenu."
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (the_icon_size_chosen_on_empty_space_redraws_the_rows_and_is_saved). The sidebar's empty-space menu offers Automatic icon size (16 px, Windows 11's, owner decision 2026-11-06; 18 and 19 before), Small icons (16), Medium (22), Large (32) and Huge (48) as a choice of win.sidebar-icon-size; the rows are redrawn at once, keeping the highlighted row, and the choice is saved as sidebarIconSize (only when not automatic) and applied to new windows. GTK's menus have no submenus here, so the sizes are a group of choices after 'Add entry…' rather than Dolphin's Icon Size submenu."
 
 [[feature]]
 id = "SIDE-013"
@@ -14388,7 +14388,7 @@ sources = ["v2.0.0:desktop/ui/index.html", "v2.0.0:desktop/ui/style.css:3", "v2.
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/look.rs (the_bars_and_panes_stack_as_in_explorer_in_the_apps_font): tab strip 42 px, navigation row 62, command bar 55, sidebar 210 beside the file list and details pane, 30 px status bar, font stack at 13 px, measured against the reference captures. Accent tokens in each_appearance_paints_the_surfaces_in_its_tokens."
+native_note = "native/crates/ox-app/src/window/tests/look.rs (the_bars_and_panes_stack_as_in_explorer_in_the_apps_font): tab strip 42 px, navigation row 48 and command bar 48 (Windows 11's, owner decision 2026-11-06; 62 and 55 in the Python app), sidebar 210 beside the file list and details pane, 30 px status bar, font stack at 13 px, measured against the reference captures. Accent tokens in each_appearance_paints_the_surfaces_in_its_tokens."
 
 [[feature]]
 id = "LOOK-002"
@@ -14630,7 +14630,7 @@ native_note = "resources/ui/window.ui sets 1320 x 810 and a 670 x 470 minimum; n
 id = "LOOK-012"
 area = "LOOK"
 title = "Navigation bar, address and search box styling"
-behaviour = "The navigation bar is 62 px. Address and search boxes are 34 px tall with a 1 px border, darker bottom border and 5 px radius; the focused box gets a 2 px accent bottom border. The search box is 235 px with the icon on the right."
+behaviour = "The navigation bar is 48 px, as Windows 11's (owner decision 2026-11-06; 62 px in the Python app). Address and search boxes are 34 px tall with a 1 px border, darker bottom border and 5 px radius; the focused box gets a 2 px accent bottom border. The search box is 235 px with the icon on the right."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14638,13 +14638,13 @@ sources = ["v2.0.0:desktop/ui/style.css:6"]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "window/tests/chrome.rs (the_address_and_search_boxes_are_34_pixels_tall...: 34 px fields, 235 px search box); native/crates/ox-app/src/window/tests/look.rs (the_bars_and_panes_stack...: 62 px row; the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line). Corners are 4 px (WinUI refinement of the web 5 px)."
+native_note = "window/tests/chrome.rs (the_address_and_search_boxes_are_34_pixels_tall...: 34 px fields, 235 px search box); native/crates/ox-app/src/window/tests/look.rs (the_bars_and_panes_stack...: 48 px row; the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line). Corners are 4 px (WinUI refinement of the web 5 px)."
 
 [[feature]]
 id = "LOOK-013"
 area = "LOOK"
 title = "Command bar styling"
-behaviour = "The command bar is 55 px with text commands (icon, label, small chevron) for New/Sort/View, icon buttons, vertical separators and a spacer that pushes Appearance/Settings/Details right. Toggled Details uses the selected background. It scrolls horizontally rather than clipping at large text sizes."
+behaviour = "The command bar is 48 px, as Windows 11's (owner decision 2026-11-06; 55 px in the Python app), with text commands (icon, label, small chevron) for New/Sort/View, icon buttons, vertical separators and a spacer that pushes Appearance/Settings/Details right. Toggled Details uses the selected background. It scrolls horizontally rather than clipping at large text sizes."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14652,13 +14652,13 @@ sources = ["v2.0.0:desktop/ui/style.css:7", "v2.0.0:desktop/ui/style.css:216-217
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/look.rs (the_command_bar_keeps_its_right_group_and_shows_details_as_selected): 55 px bar, Details at the right end, file commands in a sideways-scrolling area, switched-on Details in the selected colour. Order of controls: window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order)."
+native_note = "native/crates/ox-app/src/window/tests/look.rs (the_command_bar_keeps_its_right_group_and_shows_details_as_selected): 48 px bar, Details at the right end, file commands in a sideways-scrolling area, switched-on Details in the selected colour. Order of controls: window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order)."
 
 [[feature]]
 id = "LOOK-014"
 area = "LOOK"
 title = "File list and sidebar row styling"
-behaviour = "Detail rows are 38 px with 4 px radius, hover background and a selected background with a subtle blue outline. Grid tiles are about 122 px with 6 px radius. Sidebar entries are 35 px with 12 px gap and 4 px radius; the selected entry is marked by its fill, without the Python app's accent pill, as in Windows 11 Explorer. Cut items are at 50% opacity."
+behaviour = "Detail rows are 32 px apart, as Windows 11's (owner decision 2026-11-06; 38 px in the Python app), with 4 px radius, hover background and a selected background with a subtle blue outline. Grid tiles are about 122 px with 6 px radius. Sidebar entries are 32 px apart with 16 px icons, as Windows 11's navigation pane (owner decision 2026-11-06; 35 px in the Python app), with 4 px radius; the selected entry is marked by its fill, without the Python app's accent pill, as in Windows 11 Explorer. Cut items are at 50% opacity."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14666,7 +14666,7 @@ sources = ["v2.0.0:desktop/ui/style.css:8-9", "v2.0.0:desktop/ui/style.css:208"]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "Rows on a 38 px pitch with 4 px corners inset 12 px (window/tests/panes_layout.rs rows_are_inset...), tiles as renderRows places them (window/tests/views.rs a_window_that_opens_in_the_icon_view...), sidebar rows on a 35 px pitch with the accent pill (window/tests/sidebar_layout.rs), cut items dimmed (window/tests/clipboard.rs a_cut_dims..., .cut opacity .5). Tile corners are 4 px, the WinUI radius, instead of the web 6 px."
+native_note = "Rows on a 32 px pitch (owner decision 2026-11-06) with 16 px icons and 4 px corners inset 12 px (window/tests/panes_layout.rs rows_are_inset...), tiles as renderRows places them (window/tests/views.rs a_window_that_opens_in_the_icon_view...), sidebar rows 31 px high on a 32 px pitch with the accent pill's room (window/tests/sidebar_layout.rs), cut items dimmed (window/tests/clipboard.rs a_cut_dims..., .cut opacity .5). Tile corners are 4 px, the WinUI radius, instead of the web 6 px."
 
 [[feature]]
 id = "LOOK-015"

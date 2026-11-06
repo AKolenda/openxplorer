@@ -5,7 +5,9 @@
 .commandbar {
   background-color: @ox_chrome;
   border-bottom: 1px solid @ox_border;
-  min-height: 54px;
+  /* 47px plus its line, as Windows 11's command bar (owner decision
+     2026-11-06); text sizes above 100% grow it (theme/fonts.rs). */
+  min-height: 47px;
   padding: 0 15px;
 }
 .commandbar, .commandbar .command-group { border-spacing: 4px; }
