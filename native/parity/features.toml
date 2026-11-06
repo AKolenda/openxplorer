@@ -3056,7 +3056,7 @@ python_tests = ["v2.0.0:desktop/tests/ui_v06.py::Resizing does not change sort"]
 bridge = []
 dolphin = "KItemListHeaderWidget sort on click"
 native = "done"
-native_note = "native/crates/ox-app/src/folder_view/details.rs (the_sort_order_reads_back_and_one_arrow_shows_it); native/crates/ox-app/src/window/tests/views.rs (sorting_by_a_header_updates_the_sort_menu, only_the_sorted_column_shows_the_apps_arrow). A title click sorts ascending, a second click reverses it, only the sorted title shows the app's arrow and GTK reports the sort to screen readers; resizing never sorts. Sort is not persisted, as in the Python app (VIEW-020)."
+native_note = "native/crates/ox-app/src/folder_view/details.rs (the_sort_order_reads_back_and_one_arrow_shows_it); native/crates/ox-app/src/window/tests/views.rs (sorting_by_a_header_updates_the_sort_menu, only_the_sorted_column_shows_the_apps_arrow); native/crates/ox-app/src/window/tests/panes_layout.rs (titles_are_left_aligned_and_the_sorted_one_has_a_chevron_on_its_top_edge). A title click sorts ascending, a second click reverses it, only the sorted title shows an arrow and GTK reports the sort to screen readers; resizing never sorts. As in Windows 11 File Explorer, the arrow is a small chevron centred over the column on the title's top edge, up while ascending and down while descending, rather than after the label, and every title is left-aligned, Size's too, while the sizes stay right-aligned. The dividers between titles show only while the pointer is over them. Sort is not persisted, as in the Python app (VIEW-020)."
 
 [[feature]]
 id = "VIEW-015"
@@ -14902,7 +14902,7 @@ bridge = ["environment"]
 dolphin = "KDE accent colour (kdeglobals AccentColor)"
 gnome = "Zorin 18 / GNOME 46 has no accent-color key: derive it from the Zorin theme variant in gtk-theme (ZorinBlue/Green/Orange/Red/Purple/Grey) or the theme's @accent_bg_color; on GNOME 47+ use org.gnome.desktop.interface accent-color, the Settings portal accent-color, or AdwStyleManager:accent-color"
 native = "done"
-native_note = "native/crates/ox-app/src/theme/accent.rs and theme/accent/setting.rs: the skin follows the desktop accent live through a fourth CSS layer over the palette (theme/providers.rs) that redefines ox_accent and the selection fill and edges tinted with it, so selection, focus rings, primary buttons, progress bars and the sidebar bar change together. Sources, in order: on the host GNOME 47+'s org.gnome.desktop.interface accent-color when it names an accent other than blue, else the Zorin OS theme variant in gtk-theme (ZorinBlue/Green/Orange/Red/Purple/Grey, which Zorin 18 / GNOME 46 uses as its accent); without the schema and inside Flatpak the Settings portal's org.freedesktop.appearance accent-color (an RGB value mapped to the nearest GNOME accent) and the gtk-theme that GNOME-based portals serve, both followed through SettingChanged. Blue keeps the Windows #0067c0 / #74beff; every other accent has a light and a dark shade checked for at least 4.5:1 under the text the palettes put on it. Tests: theme/accent.rs (gnome_accents_have_a_readable_shade_in_each_appearance), theme/accent/setting.rs (a_changed_desktop_accent_is_followed_at_once on the in-memory GSettings backend, the_portal_accent_is_followed_without_the_schema with a fake portal) and theme.rs (the_desktop_accent_replaces_the_windows_blue). A theme's own @accent_bg_color is not read."
+native_note = "native/crates/ox-app/src/theme/accent.rs and theme/accent/setting.rs: the skin follows the desktop accent live through a fourth CSS layer over the palette (theme/providers.rs) that redefines ox_accent and the selection fill and edge tinted with it, so selection, focus rings, primary buttons, progress bars and the sidebar bar change together. The file list's and navigation pane's items take the accent's tint in light (hover and selection, in place of Windows' light blue) and keep Windows 11 File Explorer's neutral greys in dark whatever the accent, as Windows does; their keyboard ring is Windows' black and white one, not the accent. Sources, in order: on the host GNOME 47+'s org.gnome.desktop.interface accent-color when it names an accent other than blue, else the Zorin OS theme variant in gtk-theme (ZorinBlue/Green/Orange/Red/Purple/Grey, which Zorin 18 / GNOME 46 uses as its accent); without the schema and inside Flatpak the Settings portal's org.freedesktop.appearance accent-color (an RGB value mapped to the nearest GNOME accent) and the gtk-theme that GNOME-based portals serve, both followed through SettingChanged. Blue keeps the Windows #0067c0 / #74beff; every other accent has a light and a dark shade checked for at least 4.5:1 under the text the palettes put on it. Tests: theme/accent.rs (gnome_accents_have_a_readable_shade_in_each_appearance), theme/accent/setting.rs (a_changed_desktop_accent_is_followed_at_once on the in-memory GSettings backend, the_portal_accent_is_followed_without_the_schema with a fake portal) and theme.rs (the_desktop_accent_replaces_the_windows_blue). A theme's own @accent_bg_color is not read."
 
 [[feature]]
 id = "LOOK-025"
@@ -16641,7 +16641,7 @@ native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_arrow
 id = "ACC-009"
 area = "ACC"
 title = "Visible focus without a pane-wide outline"
-behaviour = "Focused buttons and focusable elements get a 2 px accent outline (inset). The file pane itself shows no outline when focused. Instead the selected row or tile gets a 1 px accent outline while the pane has keyboard focus."
+behaviour = "Focused buttons and focusable elements get a 2 px accent outline (inset). The file pane itself shows no outline when focused. Instead the focused row or tile, like a focused navigation pane entry, gets Windows 11 File Explorer's two-tone ring while the pane has keyboard focus: 2 px dark outside 1 px light in the light theme, white outside black in the dark theme."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -16659,7 +16659,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list). Focused buttons and tabs draw a 2 px ring inside them; the file list draws none around itself; the focused row or tile draws a 1 px ring (ui-spec.md §4.13's focus colour rather than the accent), apart from the selection's fill."
+native_note = "native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list); native/crates/ox-app/src/window/tests/look.rs (selected_rows_and_the_keyboard_ring_take_windows_11s_colours). Focused buttons and tabs draw a 2 px ring inside them; the file list draws none around itself; the focused row or tile, a focused navigation pane entry and a focused folder tree row draw Windows 11's two-tone ring inside them (ui-spec.md §4.13: alpha(black, .89) outside alpha(white, .7) in light, white outside alpha(black, .7) in dark), over the selection's fill, which has no edge (§3.1 C19 items)."
 
 [[feature]]
 id = "ACC-010"
@@ -16694,7 +16694,7 @@ bridge = []
 dolphin = "KDE high-contrast colour schemes"
 gnome = "org.gnome.desktop.a11y.interface high-contrast; org.gnome.desktop.a11y.interface high-contrast (AdwStyleManager:high-contrast; Settings portal contrast)"
 native = "done"
-native_note = "native/crates/ox-app/src/theme/stylesheets.rs (higher_contrast_thickens_drop_outlines_and_outlines_the_open_place, every_stylesheet_parses_without_errors). While GNOME's high-contrast setting is on (src/theme/contrast.rs), resources/skin/high-contrast.css outlines the open place in the sidebar, draws drop targets 3 px instead of 2 px, draws keyboard focus in rows, tiles and menus 2 px instead of 1 px, and draws place glyphs and Settings frames in the text colour."
+native_note = "native/crates/ox-app/src/theme/stylesheets.rs (higher_contrast_thickens_drop_outlines_and_outlines_the_open_place, every_stylesheet_parses_without_errors). While GNOME's high-contrast setting is on (src/theme/contrast.rs), resources/skin/high-contrast.css outlines the open place in the sidebar, draws drop targets 3 px instead of 2 px, draws keyboard focus in menus 2 px instead of 1 px and the two-tone ring of rows, tiles and navigation pane entries opaque in the text and background colours, and draws place glyphs and Settings frames in the text colour."
 
 [[feature]]
 id = "ACC-012"
