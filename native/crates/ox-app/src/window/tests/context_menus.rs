@@ -390,9 +390,9 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_beside_it() {
 
 /// In a folder the user may not write to (no write permission, on a
 /// writable drive), the folder menu's New and Paste stay on, empty
-/// folder or not, as in Windows Explorer: the user tries, and the
-/// system's error says why. Paste asks about the item that failed, New
-/// says why in the toast, and nothing is made. Tests run as a normal
+/// folder or not, as in Windows Explorer: the user tries, and is told
+/// why. Paste asks Windows' "Destination Folder Access Denied", New says
+/// the system's error in the toast, and nothing is made. Tests run as a normal
 /// user: root ignores the permission.
 ///
 /// parity: CMD-011, CMD-031, OPS-001, OPS-047
@@ -448,13 +448,19 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
     let dialog = open_dialog(&test);
     assert_eq!(
         dialog.title().unwrap_or_default(),
-        "Error while copying “Notes 2.txt”"
+        "Destination Folder Access Denied",
+        "Windows' question about a folder that may not be written to"
+    );
+    assert_eq!(
+        dialog.message_text(),
+        "You'll need to provide administrator permission to copy to this folder"
     );
     assert!(
-        dialog.message_text().contains("Permission denied"),
-        "the system's error: {}",
-        dialog.message_text()
+        dialog.texts().iter().any(|text| text == "Locked"),
+        "it names the folder: {:?}",
+        dialog.texts()
     );
+    assert_eq!(dialog.button_labels(), ["Try Again", "Skip", "Cancel"]);
     dialog.press("Cancel");
     // Whether a result follows Cancel is not this test's concern: one that
     // shows is closed.

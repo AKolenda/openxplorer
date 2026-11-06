@@ -543,7 +543,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/src/dialog/window.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/item_dialogs.rs
+#: crates/ox-app/src/dialog/window.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -727,22 +727,22 @@ msgid "Select"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Date created: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
 msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
 msgid "Size: {size}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Type: {type}"
 msgstr ""
 
@@ -1781,7 +1781,7 @@ msgstr ""
 msgid "{width} x {height}"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Details"
 msgstr ""
 
@@ -1802,7 +1802,7 @@ msgstr ""
 msgid "CD Drive"
 msgstr ""
 
-#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Local Disk"
 msgstr ""
 
@@ -5294,21 +5294,134 @@ msgstr ""
 msgid "If you change a file name extension, the file might become unusable. Are you sure you want to change it?"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Error while {doing} “{name}”"
+msgid "An unexpected error is keeping you from copying the file. If you continue to receive this error, you can use the error code to search for help with this problem."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Retry"
+msgid "An unexpected error is keeping you from copying the folder. If you continue to receive this error, you can use the error code to search for help with this problem."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "An unexpected error is keeping you from deleting the file. If you continue to receive this error, you can use the error code to search for help with this problem."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "An unexpected error is keeping you from deleting the folder. If you continue to receive this error, you can use the error code to search for help with this problem."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "An unexpected error is keeping you from moving the file. If you continue to receive this error, you can use the error code to search for help with this problem."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "An unexpected error is keeping you from moving the folder. If you continue to receive this error, you can use the error code to search for help with this problem."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Close the file and try again."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Close the folder or file and try again."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Could not find this item"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Delete or move files so you have enough space."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Destination Folder Access Denied"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Do this for all current items"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "File Access Denied"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "File In Use"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Folder Access Denied"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Folder In Use"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Interrupted Action"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Item Not Found"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "Skip"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Skip all"
+msgid "Space free: {size}"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "The action can't be completed because the file is open in another program"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "The action can't be completed because the folder or a file in it is open in another program"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "There is not enough space on {drive}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "This is no longer located in {folder}. Verify the item's location and try again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Total size: {size}"
+msgstr ""
+
+#: crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Try Again"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You need permission to perform this action"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You'll need to provide administrator permission to copy to this folder"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You'll need to provide administrator permission to move to this folder"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "{size} is needed to copy this item."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "{size} is needed to move this item."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/hide_confirm.rs
@@ -5724,6 +5837,15 @@ msgstr ""
 msgid "“{name}” is not a link."
 msgstr ""
 
+#: crates/ox-app/src/window/loading/denied_folder.rs
+msgid "Location is not available"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/loading/denied_folder.rs
+msgid "{path} is not accessible.\n\nAccess is denied."
+msgstr ""
+
 #: crates/ox-app/src/window/loading/disconnected.rs
 msgid "The drive or network share that holds this folder was disconnected."
 msgstr ""
@@ -5990,6 +6112,13 @@ msgstr ""
 #: crates/ox-app/src/window/progress_window.rs
 msgid "Replace or Skip Files"
 msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/progress_window.rs
+msgid "{count} Interrupted Action"
+msgid_plural "{count} Interrupted Actions"
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/progress_window.rs

@@ -175,6 +175,58 @@
       </object>
     </child>
     <child>
+      <object class="GtkBox" id="space_question">
+        <property name="orientation">vertical</property>
+        <property name="spacing">4</property>
+        <property name="visible">false</property>
+        <style>
+          <class name="space-question"/>
+        </style>
+        <child>
+          <object class="GtkLabel" id="space_label">
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <property name="wrap-mode">word-char</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="space_drive_label">
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <property name="wrap-mode">word-char</property>
+            <style>
+              <class name="space-drive"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="halign">end</property>
+            <property name="spacing">8</property>
+            <property name="margin-top">8</property>
+            <child>
+              <object class="GtkButton" id="space_retry_button">
+                <property name="label" translatable="yes">Try Again</property>
+                <style>
+                  <class name="accent"/>
+                  <class name="file-conflicts-button"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="space_cancel_button">
+                <property name="label" translatable="yes">Cancel</property>
+                <style>
+                  <class name="bordered"/>
+                  <class name="file-conflicts-button"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
       <object class="GtkProgressBar" id="progress_bar">
         <accessibility>
           <property name="label" translatable="yes">Operation progress</property>

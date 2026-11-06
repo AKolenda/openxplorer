@@ -58,6 +58,7 @@ use gtk::subclass::prelude::*;
 use ox_core::transfer::{Cancellation, Progress, ProgressScope};
 
 pub(crate) use action::{location_name, Action, Verb};
+pub(crate) use question::SpaceTexts;
 
 use crate::icons::{self, Icon};
 use crate::operation_session::OperationSession;
@@ -144,6 +145,18 @@ mod imp {
         pub(super) decide_icon: TemplateChild<gtk::Image>,
         #[template_child]
         pub(super) decide_label: TemplateChild<gtk::Label>,
+        /// "There is not enough space on …": what is needed, the drive's
+        /// space, Try Again and Cancel.
+        #[template_child]
+        pub(super) space_question: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub(super) space_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub(super) space_drive_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub(super) space_retry_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub(super) space_cancel_button: TemplateChild<gtk::Button>,
         /// How far the action is, while the details are hidden.
         #[template_child]
         pub(super) progress_bar: TemplateChild<gtk::ProgressBar>,
@@ -200,6 +213,9 @@ mod imp {
         pub(super) window: glib::WeakRef<ProgressWindow>,
         /// Receives the row chosen while the action asks.
         pub(super) question_answer: RefCell<Option<async_channel::Sender<Option<Row>>>>,
+        /// Receives Try Again (true) or Cancel while the action asks
+        /// about a full drive.
+        pub(super) space_answer: RefCell<Option<async_channel::Sender<bool>>>,
         /// The File Conflict window the question opened, while it shows.
         pub(super) conflict_window: glib::WeakRef<FileConflictWindow>,
     }
