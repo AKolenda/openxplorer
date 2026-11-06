@@ -4,7 +4,7 @@ Make the workspace fit the way you work.
 
 ## Your workspace, your widths
 
-Resize the sidebar and column edges. Double-click an edge to reset or fit it, depending on the control. Width preferences survive restarts. Local and SMB ancestors remain individual breadcrumb buttons.
+Resize the sidebar and column edges. Double-click an edge to reset or fit it, depending on the control. Width preferences survive restarts. Local and SMB ancestors remain individual breadcrumb buttons. As in Windows 11, the arrow before the first one lists Home, This PC, Network and the Recycle Bin, the arrow after each one lists all of its subfolders, and on a long path the first ones fold into a « button that lists them.
 
 ![Historical directory in an amber-badged Previous version tab, with a read-only banner](../apps/web/public/assets/screenshots/snapshot-tab.png)
 

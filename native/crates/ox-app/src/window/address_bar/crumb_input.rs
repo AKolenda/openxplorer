@@ -43,7 +43,9 @@ impl AddressBar {
         if modifiers.intersects(shortcut) {
             return glib::Propagation::Proceed;
         }
-        let crumbs = self.crumb_buttons();
+        let mut crumbs = self.crumb_buttons();
+        // The crumbs the « hides take no focus.
+        crumbs.retain(WidgetExt::is_child_visible);
         let Some(focused) = crumbs.iter().position(WidgetExt::has_focus) else {
             return glib::Propagation::Proceed;
         };
