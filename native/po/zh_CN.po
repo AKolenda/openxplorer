@@ -3826,6 +3826,9 @@ msgstr "设置"
 msgid "Show hidden files"
 msgstr "显示隐藏文件"
 
+msgid "Hidden items"
+msgstr "隐藏的项目"
+
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Smaller text"
 msgstr "缩小文字"
