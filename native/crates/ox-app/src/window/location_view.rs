@@ -57,6 +57,29 @@ pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     }
 }
 
+/// The title of a history step at `uri`, as its tab, the window and the
+/// Back and Forward menus name it: the location's title, or for a search
+/// there "Search Results in Documents", as Windows 11 File Explorer names
+/// it.
+pub(super) fn step_title(locations: &LocationContext, uri: &str, is_search: bool) -> String {
+    let place = locations.title_for(uri);
+    if is_search {
+        ox_core::i18n::format_message("Search Results in {place}", &[("place", &place)])
+    } else {
+        place
+    }
+}
+
+/// The address-bar icon of a history step at `uri`: the magnifier for a
+/// search, as Windows 11 File Explorer shows it, else [`address_icon`].
+pub(super) fn step_icon(uri: &str, home_uri: &str, is_search: bool) -> Icon {
+    if is_search {
+        Icon::Search
+    } else {
+        address_icon(uri, home_uri)
+    }
+}
+
 /// The crumbs the address bar shows for `uri`, divided as
 /// `renderNavigation` divides them. Inside the home folder they start at
 /// it, as "Home › Documents" in Dolphin and Explorer, unless `full_path`
@@ -82,8 +105,22 @@ pub(super) fn crumb_buttons(locations: &LocationContext, uri: &str, full_path: b
                 .then(|| location::crumb_divider(uri, index + skipped))
                 .flatten(),
             crumb,
+            refreshes: false,
         })
         .collect()
+}
+
+/// The crumb a search of `uri` adds after the folder's, as Windows 11
+/// File Explorer shows "Documents › Search Results in Documents";
+/// clicking it runs the search again, as Refresh does.
+fn search_crumb(locations: &LocationContext, uri: &str) -> CrumbButton {
+    CrumbButton {
+        crumb: ox_core::location::Crumb::new(step_title(locations, uri, true), uri),
+        address: locations.display_location(uri),
+        // Past the first crumbs, which a local path draws without one.
+        divider_before: location::crumb_divider(uri, 2),
+        refreshes: true,
+    }
 }
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on
@@ -117,6 +154,7 @@ fn tab_view(
     network: &[NetworkLocation],
 ) -> TabView {
     let uri = tab.uri();
+    let is_search = tab.history.current_search().is_some();
     let mut tooltip = locations.display_location(uri);
     if locations.is_network_location(uri) {
         tooltip.push_str(" · Network location");
@@ -124,9 +162,13 @@ fn tab_view(
     TabView {
         id: tab.id,
         uri: uri.to_owned(),
-        title: locations.title_for(uri),
+        title: step_title(locations, uri, is_search),
         tooltip,
-        icon: tab_icon(uri, locations, network),
+        icon: if is_search {
+            Art::Glyph(Icon::Search)
+        } else {
+            tab_icon(uri, locations, network)
+        },
         active: session.is_active(tab.id),
         previous_version: None,
     }
@@ -265,8 +307,11 @@ impl BrowserWindow {
             return;
         };
         let full_path = self.context().settings_data().preferences.full_path_in_title;
+        let is_search = self.shows_search_step();
         let locations = self.imp().locations.borrow();
-        let place = if full_path && Page::from_uri(&uri).is_none() {
+        let place = if is_search {
+            step_title(&locations, &uri, true)
+        } else if full_path && Page::from_uri(&uri).is_none() {
             locations.display_location(&uri)
         } else {
             locations.title_for(&uri)
@@ -296,11 +341,16 @@ impl BrowserWindow {
     /// Draws the crumbs and the address of `uri`. The crumb of an opened
     /// archive is a file's name, so it hides a known extension while
     /// names do, as Windows' does for a ZIP folder; folders keep theirs.
+    /// Search results add their own crumb and icon.
     pub(super) fn render_address_of(&self, uri: &str) {
         let full_path = self.shows_full_path();
         let extensions = self.file_name_extensions();
+        let is_search = self.current_uri().as_deref() == Some(uri) && self.shows_search_step();
         let locations = self.imp().locations.borrow();
         let mut crumbs = crumb_buttons(&locations, uri, full_path);
+        if is_search {
+            crumbs.push(search_crumb(&locations, uri));
+        }
         if let Some(archive) = crumbs
             .iter_mut()
             .find(|crumb| is_archive_location(&crumb.crumb.uri))
@@ -309,7 +359,7 @@ impl BrowserWindow {
             archive.crumb.label = shown;
         }
         let address = locations.display_location(uri);
-        let icon = address_icon(uri, &locations.home_uri());
+        let icon = step_icon(uri, &locations.home_uri(), is_search);
         self.address_bar().show_location(&crumbs, &address, icon);
     }
 

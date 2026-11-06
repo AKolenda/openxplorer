@@ -14,6 +14,7 @@ use ox_core::i18n::{format_message, gettext};
 
 use super::{LoadMode, LoadRun};
 use crate::dialog::Dialog;
+use crate::locations::Page;
 use crate::window::listing_state::ListingEnd;
 use crate::window::{BrowserWindow, ButtonStyle};
 
@@ -32,9 +33,15 @@ fn denied_message(path: &str) -> String {
 impl BrowserWindow {
     /// Whether `run`, a listing that was refused, may leave its folder:
     /// the tab in front went to a folder on this computer just now, so it
-    /// has a folder to stay in.
+    /// has a folder to stay in, and no other dialog is up. Network, This
+    /// PC, shares (`GVfs`'s FUSE folders too) and every other location keep
+    /// the unavailable page.
     pub(super) fn may_leave_denied_folder(&self, run: &LoadRun) -> bool {
-        if run.mode != LoadMode::Navigate || !run.uri.starts_with("file://") {
+        let local = run.uri.starts_with("file://") && !run.uri.contains("/gvfs/");
+        if run.mode != LoadMode::Navigate || !local || Page::from_uri(&run.uri).is_some() {
+            return false;
+        }
+        if self.has_open_dialog() {
             return false;
         }
         let session = self.imp().session.borrow();

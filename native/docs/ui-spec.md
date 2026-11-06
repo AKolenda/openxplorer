@@ -488,6 +488,7 @@ where it differs; ✓ means the target equals the current app.
 | History chevron | 22 × 24, glyph 12, `@ox_muted`, right end | — | Keep. |
 | Edit mode | an entry replaces the crumbs; 13 px; all text selected on entry; selection `@ox_text_selection_bg` / `_fg` | CT#L328 | safe |
 | Search box | 235 × 34 (195 at ≤ 1190, 175 at ≤ 960, hidden at ≤ 680); radius 4; padding `0 35 0 12`; 12 px; placeholder "Search *folder*" in `@ox_muted`; search glyph 15 in `@ox_muted`, **11 px from the right edge**; focus as the address box | placeholder TextFillColorSecondary (TB#L142); Explorer puts the glyph at the right end (observed, unverified) | Keep. |
+| Search results | once a search runs, a step of the tab's history titled "Search Results in *folder*" in the tab, the window title and the Back and Forward tooltips and menus; the address bar shows the folder's crumbs, then a "Search Results in *folder*" crumb that runs the search again, with the search glyph (`ox-search-20-symbolic`) as the location icon and the tab icon; Back returns to the folder with the box empty | Windows 11 File Explorer's search location ("Documents › Search Results in Documents") | gain |
 
 ### 4.3 Command bar
 

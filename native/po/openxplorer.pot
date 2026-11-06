@@ -22,7 +22,7 @@ msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
+msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected.\n- A search is a step of the tab's history, as in Windows: the tab and the address bar read Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box goes back to the folder too."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -5829,6 +5829,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/loading/removed_folder.rs
 msgid "Current location changed, {path} is no longer accessible."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/location_view.rs
+msgid "Search Results in {place}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

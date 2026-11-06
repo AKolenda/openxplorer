@@ -6,7 +6,8 @@
 //! scroll position; moving to another location forgets the selection and
 //! the scroll position, and showing another tab puts its own back. As in
 //! Dolphin, Back and Forward return to where the view was, and going up
-//! selects the folder just left.
+//! selects the folder just left. Search results are a step of the
+//! history too ([`super::search_steps`]).
 //! [`super::location_view`] draws the result into the frame.
 
 use gtk::prelude::*;
@@ -32,6 +33,15 @@ pub(super) enum FocusOnShow {
     /// Nowhere: a click or a focus change in a split tab's other pane made
     /// it active, and focus is going there already.
     Keep,
+}
+
+/// What leaving a location does to the search shown there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LeftSearch {
+    /// It ends, unless the strip's pin keeps it (SRCH-005).
+    MayKeep,
+    /// It ends.
+    End,
 }
 
 /// What a tab needs to be put back on screen.
@@ -214,7 +224,7 @@ impl BrowserWindow {
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
         };
-        self.leave_location();
+        self.leave_location(LeftSearch::MayKeep);
         self.render_navigation();
         if let Some(child) = left.as_deref().and_then(|left| child_toward(&uri, left)) {
             self.reveal_when_listed(id, child);
@@ -264,7 +274,7 @@ impl BrowserWindow {
 
     /// Where the view is in the active tab's folder: what Back or Forward
     /// returns to; `None` on a landing page, which does not scroll.
-    fn left_view(&self) -> Option<LeftView> {
+    pub(super) fn left_view(&self) -> Option<LeftView> {
         let uri = self.current_uri()?;
         if Page::drawn_at(&uri).is_some() {
             return None;
@@ -288,10 +298,15 @@ impl BrowserWindow {
     }
 
     /// Clears what belonged to the folder the active tab leaves: the
-    /// filter, the selection and the type-to-select prefix.
-    fn leave_location(&self) {
+    /// filter, the selection and the type-to-select prefix. A search the
+    /// strip's pin keeps goes on in the folder opened, unless `search`
+    /// ends it: Back and Forward show each step's own search (SRCH-042).
+    fn leave_location(&self, search: LeftSearch) {
         self.change_model(|| {
-            self.leave_search();
+            match search {
+                LeftSearch::MayKeep => self.leave_search(),
+                LeftSearch::End => self.end_search(),
+            }
             self.folder_pane().model().select_none();
         });
         self.reset_typeahead();
@@ -350,7 +365,7 @@ impl BrowserWindow {
         }
         self.change_model(|| {
             let model = self.folder_pane().model();
-            self.search_box().clear();
+            self.clear_search_box_quietly();
             model.set_query("");
             model.set_store(Some(&view.store));
             model.select_uris(&view.selected);
@@ -368,6 +383,8 @@ impl BrowserWindow {
                 pane.focus_item_later(uri);
             }
         }
+        // A tab on search results shows them again (SRCH-042).
+        self.show_step_search();
         if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);
         } else if view.changed_while_hidden {
@@ -494,9 +511,11 @@ impl BrowserWindow {
         let Some(id) = self.step_history(steps) else {
             return;
         };
-        self.leave_location();
+        self.leave_location(LeftSearch::End);
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
+        // Search results the step showed run again there (SRCH-042).
+        self.show_step_search();
         self.focus_files_after_navigation();
     }
 

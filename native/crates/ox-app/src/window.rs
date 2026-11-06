@@ -134,6 +134,7 @@ mod rubber_band;
 mod run_on_open;
 mod saved_search;
 mod search_box;
+mod search_steps;
 mod select_matching;
 mod selection;
 mod selection_keys;
