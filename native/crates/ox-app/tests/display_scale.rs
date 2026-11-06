@@ -22,18 +22,18 @@ const HEIGHT: i32 = 480;
 
 /// The navigation row and the command bar, where their lines and fills
 /// run the whole width (from `the_bars_and_panes_stack_as_in_explorer`).
-const BARS: std::ops::Range<i32> = 42..159;
+const BARS: std::ops::Range<i32> = 42..138;
 
 /// How far a channel may stray between the two pictures.
 const CHANNEL_TOLERANCE: u8 = 2;
 
 /// The edge of a details row's icon in logical pixels
 /// (`ROW_ICON_SIZE` in `src/folder_view/details.rs`).
-const ROW_ICON: i32 = 21;
+const ROW_ICON: i32 = 16;
 
 /// Where the file list's rows start, in logical pixels: below the column
 /// headers and right of the sidebar.
-const ROWS_TOP: i32 = 200;
+const ROWS_TOP: i32 = 172;
 const ROWS_LEFT: i32 = 220;
 
 /// Whether the test runs in `native/tools/check.py`'s isolation: temporary
@@ -143,7 +143,7 @@ fn same(first: [u8; 4], second: [u8; 4]) -> bool {
 /// them into their neighbours.
 ///
 /// The folder artwork of the first row is checked the same way: at twice
-/// the scale it is the vector file drawn at 42 device pixels.
+/// the scale it is the vector file drawn at 32 device pixels.
 ///
 /// parity: LOOK-028
 #[test]
@@ -183,8 +183,8 @@ fn twice_the_scale_draws_the_bars_on_whole_device_pixels() {
 }
 
 /// The folder of the first row, at twice the scale, is the bundled vector
-/// artwork drawn at 42 device pixels, pixel for pixel: drawn at the
-/// device's resolution, not the 21-pixel picture enlarged, which would
+/// artwork drawn at 32 device pixels, pixel for pixel: drawn at the
+/// device's resolution, not the 16-pixel picture enlarged, which would
 /// blur its edges.
 fn folder_artwork_is_drawn_from_its_vector_at_twice_the_scale(double: &(Vec<u8>, usize)) {
     let edge = 2 * ROW_ICON;

@@ -22,7 +22,9 @@ columnview.files > header > button {
   color: @ox_muted;
   font-weight: normal;
   padding: 0 12px;
-  min-height: 37px;
+  /* 31px plus the header's line, as Windows 11's column header (owner
+     decision 2026-11-06); theme/fonts.rs grows it with the text. */
+  min-height: 31px;
   box-shadow: none;
 }
 columnview.files > header > button:hover { background-color: @ox_hover; }
