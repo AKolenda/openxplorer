@@ -284,7 +284,18 @@ gridview.files > child.file-drop-active { background-color: @ox_selected; }
   box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
 }
 /* The picture that follows the pointer: the first item's art and, for
-   several items, their number on an accent badge. */
+   several items, their number on an accent badge; under them, over this
+   app's drop targets, Windows 11's label that says what a release would
+   do ("→ Move to Documents"): a small light box with a thin border, the
+   glyph in the accent colour (DND-028). */
+.drag-icon .drag-label {
+  padding: 3px 8px;
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  background-color: @ox_chrome;
+  color: @ox_text;
+}
+.drag-icon .drag-label image { color: @ox_accent; }
 .drag-icon .drag-count {
   min-width: 20px;
   min-height: 20px;

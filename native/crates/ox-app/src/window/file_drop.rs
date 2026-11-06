@@ -57,7 +57,7 @@ pub(in crate::window) use action::DropRun;
 use action::{drop_run_action, is_in_folder};
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
-pub(super) use targets::{scroll_step, DragScroll, DropZone, SCROLL_TICK};
+pub(super) use targets::{scroll_step, DragScroll, DropLabels, DropZone, SCROLL_TICK};
 
 /// The most items one drop brings: as many as one transfer takes. Windows
 /// Explorer sets no limit of its own.
