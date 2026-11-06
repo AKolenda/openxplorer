@@ -13,9 +13,9 @@
 //! shows them over its tabs where the tabs are drawn, which keeps them in
 //! place while tabs slide during a drag.
 
+use gtk::graphene;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::graphene;
 
 use super::drag_marks::DRAGGED_CLASS;
 use super::TabStrip;

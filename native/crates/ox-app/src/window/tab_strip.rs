@@ -175,9 +175,7 @@ mod imp {
                 .set(windows_menu)
                 .expect("constructed runs once per object");
             let edges = super::edges::Edges::new(&self.obj());
-            self.edges
-                .set(edges)
-                .expect("constructed runs once per object");
+            self.edges.set(edges).expect("constructed runs once per object");
         }
 
         fn dispose(&self) {
