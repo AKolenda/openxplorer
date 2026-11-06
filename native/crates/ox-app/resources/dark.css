@@ -7,7 +7,7 @@
    light.css defines the same names. */
 
 /* Surfaces */
-@define-color ox_title #191919;                    /* C01 tab strip */
+@define-color ox_title #202020;                    /* C01 tab strip: Mica Alt, flat */
 @define-color ox_title_backdrop @ox_title;         /* C02 */
 @define-color ox_chrome #282828;                   /* C04 active tab, bars */
 @define-color ox_bg #202020;                       /* C05 content */
@@ -61,8 +61,9 @@
 /* The tab strip's own states (§4.1, §4.14) */
 @define-color ox_title_hover alpha(white, .06);    /* C03, D-A03: caption, +, windows */
 @define-color ox_title_pressed alpha(white, .04);  /* §4.14 */
-@define-color ox_tab_hover alpha(white, .05);      /* C03 visible for tabs: alpha(white, .06) */
+@define-color ox_tab_hover alpha(white, .06);     /* C03 for tabs: LayerOnMicaBaseAltFillColorSecondary */
 @define-color ox_tab_text_inactive @ox_muted;      /* C37: TabViewItemHeaderForeground, secondary */
+@define-color ox_tab_separator alpha(white, .08);  /* C38: TabViewItemSeparator, DividerStrokeColorDefault */
 
 /* Lines and strokes */
 @define-color ox_border #373737;                   /* C22 */
@@ -115,10 +116,10 @@
 @define-color ox_category_confirmations #c4314b;
 @define-color ox_category_about @ox_muted;
 /* The theme cards show each palette's own surfaces in both themes */
-@define-color ox_preview_light_title #eff1f4;
+@define-color ox_preview_light_title #f3f3f3;
 @define-color ox_preview_light_sidebar #fafafa;
 @define-color ox_preview_light_content #ffffff;
-@define-color ox_preview_dark_title #191919;
+@define-color ox_preview_dark_title #202020;
 @define-color ox_preview_dark_sidebar #252525;
 @define-color ox_preview_dark_content #202020;
 @define-color ox_preview_accent #0067c0;

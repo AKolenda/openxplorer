@@ -295,7 +295,7 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
     let general = general(&window);
     assert_eq!(
         value_after(&general, "Type of file:").as_deref(),
-        Some("Text document (.txt)")
+        Some("Text Document (.txt)")
     );
     assert!(value_after(&general, "Opens with:").is_some());
     assert!(button(&general, "Change...").is_visible());
@@ -1100,6 +1100,43 @@ fn a_link_to_a_folder_is_renamed_in_properties_without_the_extension_question() 
     wait_until("the window to close", || window.is_closed());
 }
 
+/// A shortcut (a symbolic link named as Explorer names one) is of type
+/// "Shortcut" in the list and in Properties, as in Windows, and renaming
+/// it in Properties never asks about its extension: Windows keeps a
+/// shortcut's hidden `.lnk`.
+///
+/// parity: PROP-005, OPS-049, VIEW-002
+#[gtk::test]
+fn a_shortcut_is_typed_shortcut_and_renamed_in_properties_without_the_extension_question() {
+    let fixture = Fixture::standard();
+    fixture.write("Report.txt");
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Report.txt - Shortcut");
+    let model = test.window.folder_model();
+    let listed = model
+        .item(model.first_selected().expect("the shortcut is selected"))
+        .expect("the shortcut is listed")
+        .entry()
+        .type_label
+        .clone();
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Report.txt - Shortcut Properties");
+    let type_of_file = value_after(&general(&window), "Type of file:");
+
+    name_field(&window).set_text("Q3 figures");
+    window.ok_button().emit_clicked();
+    wait_until("the rename", || {
+        fixture.path("Q3 figures").is_symlink() || extension_questions(&window) > 0
+    });
+
+    assert_eq!(listed, "Shortcut");
+    assert_eq!(type_of_file.as_deref(), Some("Shortcut"));
+    assert_eq!(extension_questions(&window), 0, "no extension question");
+    wait_until("the window to close", || window.is_closed());
+}
+
 /// The Security tab names the owner, the group and others, shows what the
 /// one selected may do in Windows' words, and Edit... and Advanced change
 /// the Linux permissions behind them.
@@ -1277,7 +1314,7 @@ fn several_items_attributes_show_mixed_and_apply_to_every_item() {
     let general = tab(&window, "general");
     assert_eq!(
         value_after(&general, "Type:").as_deref(),
-        Some("All of type Text document")
+        Some("All of type Text Document")
     );
     let (read_only, hidden) = (check(&general, "Read-only"), check(&general, "Hidden"));
     wait_until("the items read", || {

@@ -166,7 +166,7 @@ fn a_closed_tab_reopens_where_it_was_with_its_history() {
 
 /// The "Reopen" items of the windows menu, with their shortcuts.
 fn reopen_items(test: &TestWindow) -> Vec<(String, Option<String>)> {
-    let entries = open_windows_menu(&test.window.imp().open_windows_button);
+    let entries = open_windows_menu(&test.window);
     entries
         .into_iter()
         .filter_map(|entry| match entry {

@@ -9,8 +9,8 @@
 use gio::prelude::*;
 
 use super::attributes::{optional_boolean, path_attribute, string_attribute, time_attribute};
-use super::classify::{classify_entry, Classification, ItemMetadata};
-use super::type_label::type_label;
+use super::classify::{classify_entry, Classification, FolderType, ItemMetadata};
+use super::type_label::{shortcut_label, type_label};
 use super::{Entry, EntryKind, EntryMeta};
 use crate::location::{is_virtual_location, normalise, scheme};
 
@@ -36,13 +36,24 @@ pub(super) fn build_entry(
     let kind = file_kind(info);
     let content_type = string_attribute(info, "standard::content-type");
     let classification = classify_info(uri, info, kind, content_type.as_deref());
-    let type_label = type_label(classification.folder_type, content_type.as_deref());
+    let name = display_name(uri, info, fallback_name);
+    let is_symlink = info.boolean("standard::is-symlink");
+    let type_label = if is_shortcut(uri, &name, is_symlink, &classification) {
+        shortcut_label()
+    } else if is_symlink && content_type.as_deref() == Some("inode/symlink") {
+        // A link read without following it (Properties) is typed by its
+        // name's extension, as Windows types a symbolic link.
+        let (guessed, _) = gio::content_type_guess(Some(name.as_str()), None::<&[u8]>);
+        type_label(classification.folder_type, Some(guessed.as_str()), &name)
+    } else {
+        type_label(classification.folder_type, content_type.as_deref(), &name)
+    };
     let is_dir = classification.is_dir();
     // A folder's own size is not the size of its contents, so none is shown.
     let size = if is_dir { None } else { reported_size(info) };
     Entry {
         uri: uri.to_owned(),
-        name: display_name(uri, info, fallback_name),
+        name,
         kind,
         is_dir,
         is_virtual: classification.is_virtual,
@@ -53,7 +64,7 @@ pub(super) fn build_entry(
         content_type,
         modified: time_attribute(info, "time::modified"),
         is_hidden: info.boolean("standard::is-hidden"),
-        is_symlink: info.boolean("standard::is-symlink"),
+        is_symlink,
         trash_orig_path: path_attribute(info, "trash::orig-path"),
         trash_deletion_date: deletion_date(info),
         can_rename: optional_boolean(info, "access::can-rename"),
@@ -66,6 +77,14 @@ pub(super) fn build_entry(
             ..EntryMeta::from_info(info)
         }),
     }
+}
+
+/// Whether the item named `name` at `uri` is a shortcut to a file or a
+/// folder ([`super::is_shortcut`]), typed "Shortcut" as in Windows
+/// Explorer.
+fn is_shortcut(uri: &str, name: &str, is_symlink: bool, classification: &Classification) -> bool {
+    let is_file_or_folder = matches!(classification.folder_type, None | Some(FolderType::FileFolder));
+    is_file_or_folder && super::is_shortcut(uri, name, is_symlink, classification.is_virtual)
 }
 
 /// The file the Recently used files row at `uri` stands for, when `info`
@@ -231,6 +250,54 @@ mod tests {
         assert_eq!(date_text(file.modified), "—");
     }
 
+    /// A symbolic link named with no known type's extension is the app's
+    /// shortcut, and its Type is "Shortcut", as Windows Explorer's is,
+    /// whether it points to a file or a folder; one named for a type is
+    /// typed by it, as Windows types a symbolic link.
+    ///
+    /// parity: VIEW-002
+    #[test]
+    fn a_symbolic_link_with_no_known_extension_is_typed_shortcut() {
+        let file_link = file_info(
+            gio::FileType::Regular,
+            "Report.txt - Shortcut",
+            Some("text/plain"),
+        );
+        file_link.set_is_symlink(true);
+        let folder_link = file_info(
+            gio::FileType::Directory,
+            "Reports - Shortcut",
+            Some(FOLDER_MIME_TYPE),
+        );
+        folder_link.set_is_symlink(true);
+        let plain = file_info(gio::FileType::Regular, "Report.txt", Some("text/plain"));
+        let named_link = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        named_link.set_is_symlink(true);
+        let unfollowed_link = file_info(gio::FileType::SymbolicLink, "notes.txt", Some("inode/symlink"));
+        unfollowed_link.set_is_symlink(true);
+
+        let file = entry_for_uri("file:///tmp/Report.txt%20-%20Shortcut", &file_link);
+        let folder = entry_for_uri("file:///tmp/Reports%20-%20Shortcut", &folder_link);
+        let original = entry_for_uri("file:///tmp/Report.txt", &plain);
+        let named = entry_for_uri("file:///tmp/notes.txt", &named_link);
+        let unfollowed = entry_for_uri("file:///tmp/notes.txt", &unfollowed_link);
+
+        assert_eq!(file.type_label, "Shortcut");
+        assert!(file.is_symlink);
+        assert_eq!(folder.type_label, "Shortcut");
+        assert!(folder.is_dir, "a link to a folder still opens as one");
+        assert_eq!(original.type_label, "Text Document");
+        assert_eq!(
+            named.type_label, "Text Document",
+            "a link named for a type is typed by it, as Windows types a symbolic link"
+        );
+        assert!(!named.is_shortcut());
+        assert_eq!(
+            unfollowed.type_label, "Text Document",
+            "read without following it, as Properties reads it"
+        );
+    }
+
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`
     ///
     /// parity: VIEW-002
@@ -241,7 +308,7 @@ mod tests {
         let file = entry_for_uri("smb://nas/work/README", &info);
         assert!(!file.is_dir);
         assert_eq!(file.size, Some(0));
-        assert_eq!(file.type_label, "Text document");
+        assert_eq!(file.type_label, "Text Document");
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`
