@@ -47,10 +47,14 @@ pub const URI_LIST: &str = "text/uri-list";
 /// `x-kde-cutselection`, without the `application/` prefix, which KDE never
 /// offers or asks for, so its cuts become copies in Dolphin and back.
 pub const KDE_CUT: &str = "application/x-kde-cutselection";
-/// Maximum size accepted from an external clipboard.
-pub const MAX_BYTES: usize = 1024 * 1024;
-/// Maximum number of items per copy or cut, before deduplication.
-pub const MAX_ITEMS: usize = 200;
+/// Maximum size accepted from an external clipboard: room for
+/// [`MAX_ITEMS`] addresses of about 330 bytes each, so a paste of the
+/// largest selection this app copies is never refused for its size.
+pub const MAX_BYTES: usize = 32 * 1024 * 1024;
+/// Maximum number of items per copy or cut, before deduplication: as many
+/// as one transfer takes ([`crate::transfer::MAX_ITEMS`]). Windows
+/// Explorer sets no limit of its own.
+pub const MAX_ITEMS: usize = crate::transfer::MAX_ITEMS;
 
 /// Whether pasting copies the items or moves them after confirmation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,7 +107,7 @@ impl ClipboardMode {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ClipboardError {
     /// The selection is empty or has more than [`MAX_ITEMS`] items.
-    #[error("{}", crate::i18n::format_message("Copy or cut between 1 and {max} items at a time.", &[("max", &MAX_ITEMS.to_string())]))]
+    #[error("{}", crate::i18n::gettext("Select between 1 and 100,000 items."))]
     ItemCount,
     /// An item is not a file or folder that can be copied: a share or
     /// device root, a foreign scheme or an address with credentials.
@@ -200,8 +204,9 @@ impl ClipboardFiles {
         if self.mode != ClipboardMode::Cut || self.token != token {
             return false;
         }
+        let moved: HashSet<&str> = moved.iter().map(String::as_str).collect();
         let original_len = self.uris.len();
-        self.uris.retain(|uri| !moved.contains(uri));
+        self.uris.retain(|uri| !moved.contains(uri.as_str()));
         self.uris.len() != original_len
     }
 

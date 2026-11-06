@@ -243,7 +243,7 @@ fn refused_uri_lists() -> Vec<RefusedPayload> {
         RefusedPayload::uri_list("credentials", CUT_MARKER, b"smb://user:pass@nas/share/a".to_vec()),
         RefusedPayload::uri_list("an encoded line break", CUT_MARKER, b"file:///tmp/a%0Ab".to_vec()),
         RefusedPayload::uri_list("its size", CUT_MARKER, oversized_payload()),
-        RefusedPayload::uri_list("more than 200 items", None, too_many_items),
+        RefusedPayload::uri_list("more than 100,000 items", None, too_many_items),
     ]
 }
 
@@ -384,15 +384,12 @@ fn published_file_lists_match_the_python_encoding() {
 
 /// parity: CLIP-004
 #[test]
-fn selections_outside_one_to_two_hundred_items_are_refused_in_the_python_wording() {
+fn selections_outside_one_to_a_hundred_thousand_items_are_refused_as_a_transfer_is() {
     let too_many = vec![README_URI.to_owned(); MAX_ITEMS + 1];
     for uris in [Vec::new(), too_many] {
         let error = ClipboardFiles::new(ClipboardMode::Copy, &uris).expect_err("item count");
         assert_eq!(error, ClipboardError::ItemCount);
-        assert_eq!(
-            error.to_string(),
-            "Copy or cut between 1 and 200 items at a time."
-        );
+        assert_eq!(error.to_string(), "Select between 1 and 100,000 items.");
     }
 }
 

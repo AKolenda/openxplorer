@@ -4170,8 +4170,8 @@ msgid "This network item needs an app that supports SMB addresses. For a local-o
 msgstr "此网络项目需要支持 SMB 地址的应用。对于仅支持本地访问的编辑器，请通过已有的本地挂载点打开它。"
 
 #: crates/ox-app/src/window/file_drag/payload.rs
-msgid "Select up to 200 files or folders. Extract ZIP contents before dragging them."
-msgstr "最多可选择 200 个文件或文件夹。拖动前请先解压 ZIP 内容。"
+msgid "Extract ZIP contents before dragging them."
+msgstr "拖动前请先解压 ZIP 内容。"
 
 #: crates/ox-app/src/window/file_drag/payload.rs
 msgid "This file selection is too large to drag."

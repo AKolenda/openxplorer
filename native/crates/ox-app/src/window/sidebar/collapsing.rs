@@ -13,7 +13,7 @@ use gtk::{gdk, glib};
 use super::entries::{RowLevel, Section, SidebarEntry};
 
 /// How long a drag must stay over a collapsed section's head before it
-/// expands, as long as a folder in the folder view takes to open (DND-021).
+/// expands (DND-027).
 const DRAG_EXPAND_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 use super::{row, Sidebar};
 
