@@ -40,6 +40,11 @@ pub(super) fn build_entry(
     let is_symlink = info.boolean("standard::is-symlink");
     let type_label = if is_shortcut(uri, &name, is_symlink, &classification) {
         shortcut_label()
+    } else if is_symlink && content_type.as_deref() == Some("inode/symlink") {
+        // A link read without following it (Properties) is typed by its
+        // name's extension, as Windows types a symbolic link.
+        let (guessed, _) = gio::content_type_guess(Some(name.as_str()), None::<&[u8]>);
+        type_label(classification.folder_type, Some(guessed.as_str()))
     } else {
         type_label(classification.folder_type, content_type.as_deref())
     };
@@ -268,11 +273,14 @@ mod tests {
         let plain = file_info(gio::FileType::Regular, "Report.txt", Some("text/plain"));
         let named_link = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
         named_link.set_is_symlink(true);
+        let unfollowed_link = file_info(gio::FileType::SymbolicLink, "notes.txt", Some("inode/symlink"));
+        unfollowed_link.set_is_symlink(true);
 
         let file = entry_for_uri("file:///tmp/Report.txt%20-%20Shortcut", &file_link);
         let folder = entry_for_uri("file:///tmp/Reports%20-%20Shortcut", &folder_link);
         let original = entry_for_uri("file:///tmp/Report.txt", &plain);
         let named = entry_for_uri("file:///tmp/notes.txt", &named_link);
+        let unfollowed = entry_for_uri("file:///tmp/notes.txt", &unfollowed_link);
 
         assert_eq!(file.type_label, "Shortcut");
         assert!(file.is_symlink);
@@ -284,6 +292,10 @@ mod tests {
             "a link named for a type is typed by it, as Windows types a symbolic link"
         );
         assert!(!named.is_shortcut());
+        assert_eq!(
+            unfollowed.type_label, "Text document",
+            "read without following it, as Properties reads it"
+        );
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`

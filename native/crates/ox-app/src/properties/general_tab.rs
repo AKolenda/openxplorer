@@ -256,9 +256,12 @@ pub(super) struct GeneralEdits {
     original_name: RefCell<String>,
     is_folder: bool,
     /// Renaming asks about a changed extension, except for a link to a
-    /// folder or any other shortcut, whose name has none: Windows keeps a
-    /// shortcut's hidden `.lnk` and never asks (OPS-049).
-    is_shortcut: bool,
+    /// folder, whose name has none (OPS-049).
+    links_to_folder: bool,
+    /// A symbolic link: while its name has no known type's extension it
+    /// is a shortcut, whose name has none either, as Windows keeps a
+    /// shortcut's hidden `.lnk` and never asks ([`Entry::is_shortcut`]).
+    is_link: bool,
     name: gtk::Entry,
     read_only: gtk::CheckButton,
     /// Whether the item is read-only now; `None` for a folder, whose box
@@ -309,7 +312,8 @@ impl GeneralEdits {
             uri,
             original_name: RefCell::new(entry.name.clone()),
             is_folder: entry.is_dir,
-            is_shortcut: entry.is_shortcut() || properties.links_to_folder,
+            links_to_folder: properties.links_to_folder,
+            is_link: entry.is_symlink,
             name,
             read_only,
             read_only_now: Cell::new(read_only_now),
@@ -478,7 +482,11 @@ impl GeneralEdits {
                 ));
             };
             let uri = self.uri.borrow().clone();
-            let has_no_extension = self.is_folder || self.is_shortcut;
+            // Asked of the current name: a rename can give a link a known
+            // type's extension, or take it away.
+            let has_no_extension = self.is_folder
+                || self.links_to_folder
+                || (self.is_link && ox_core::entry::known_extension(&original).is_none());
             let parent = window.as_ref().map_or_else(
                 || opener.clone().upcast::<gtk::Window>(),
                 |window| window.clone().upcast(),
