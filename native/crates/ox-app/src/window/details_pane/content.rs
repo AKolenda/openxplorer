@@ -170,6 +170,16 @@ impl Property {
     }
 }
 
+/// What the pane describes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::window) enum Subject {
+    /// Nothing is selected: the folder, with Windows' hint box and
+    /// nothing to share.
+    Folder,
+    /// One or more selected items, which may be shared.
+    Selection,
+}
+
 /// Everything the pane shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::window) struct PaneContent {
@@ -181,11 +191,9 @@ pub(in crate::window) struct PaneContent {
     /// The small icon shows beside the name: for a file, or several
     /// items; Windows shows a folder's name alone.
     pub small_icon: bool,
-    /// Nothing is selected: Windows' hint box takes the Details rows'
-    /// place.
-    pub hint: bool,
-    /// Some item is selected: Share may be offered for it.
-    pub has_selection: bool,
+    /// What the pane describes: with nothing selected, Windows' hint box
+    /// takes the Details rows' place; a selection may be shared.
+    pub subject: Subject,
     /// Properties can open for what the pane shows: not on a landing
     /// page with nothing selected.
     pub has_properties: bool,
@@ -257,8 +265,7 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
         preview: Preview::Art(item.art()),
         name: entry.name.clone(),
         small_icon: !entry.is_dir,
-        hint: false,
-        has_selection: true,
+        subject: Subject::Selection,
         // Items inside a ZIP have no file of their own to describe.
         has_properties: !ox_core::location::is_archive_location(facts.folder_uri),
         properties,
@@ -299,8 +306,7 @@ fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
         preview: Preview::Several,
         name,
         small_icon: true,
-        hint: false,
-        has_selection: true,
+        subject: Subject::Selection,
         has_properties: !ox_core::location::is_archive_location(facts.folder_uri),
         properties,
         media: None,
@@ -325,8 +331,7 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
         preview: Preview::Art(folder_art(facts)),
         name,
         small_icon: false,
-        hint: true,
-        has_selection: false,
+        subject: Subject::Folder,
         has_properties: false,
         properties: Vec::new(),
         media: None,
@@ -469,7 +474,7 @@ mod tests {
             "the day and the time, as the Date modified column"
         );
         assert_eq!(property(&content, keys::LOCATION), Some("/tmp/ox-test"));
-        assert!(content.has_selection && content.has_properties);
+        assert!(content.subject == Subject::Selection && content.has_properties);
         assert_eq!(content.metadata, None, "a text file has no media details");
     }
 
@@ -573,9 +578,8 @@ mod tests {
         let content = content_for(&[], "file:///home/demo");
         assert_eq!(content.name, "Home (7 items)");
         assert_eq!(content.preview, Preview::Art(Art::Folder));
-        assert!(content.hint && !content.small_icon);
+        assert!(content.subject == Subject::Folder && !content.small_icon);
         assert!(content.properties.is_empty(), "no Details rows");
-        assert!(!content.has_selection, "nothing to share");
         assert!(!content.has_properties, "no Properties button");
     }
 

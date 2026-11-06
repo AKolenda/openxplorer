@@ -375,10 +375,11 @@ impl DetailsPane {
         }
         imp.small_art.set_art(content.preview.art(), SMALL_ART);
         imp.name.set_text(&content.name);
-        imp.has_selection.set(content.has_selection);
+        imp.has_selection
+            .set(content.subject == content::Subject::Selection);
         imp.has_properties.set(content.has_properties);
         imp.small_icon.set(content.small_icon);
-        imp.shows_hint.set(content.hint);
+        imp.shows_hint.set(content.subject == content::Subject::Folder);
         self.show_mode();
         imp.base_rows.replace(content.properties.clone());
         self.follow_metadata(content.metadata.as_ref());
