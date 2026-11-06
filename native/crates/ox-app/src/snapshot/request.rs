@@ -102,9 +102,12 @@ impl SnapshotRequest {
         let theme = parse_variable(&lookup, THEME_VARIABLE, "light, dark or system", |value| {
             Theme::from_key(value)
         })?;
-        let view = parse_variable(&lookup, VIEW_VARIABLE, "details, compact, tiles, content or an icon size", |value| {
-            FolderView::from_key(value)
-        })?;
+        let view = parse_variable(
+            &lookup,
+            VIEW_VARIABLE,
+            "details, compact, tiles, content or an icon size",
+            FolderView::from_key,
+        )?;
         let size = parse_variable(&lookup, SIZE_VARIABLE, "<width>x<height>", WindowSize::parse)?;
         let settings = parse_variable(
             &lookup,
