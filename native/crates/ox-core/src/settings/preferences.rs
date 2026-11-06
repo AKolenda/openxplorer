@@ -314,11 +314,13 @@ pub struct Preferences {
     /// (Dolphin's `ShowFullPathInTitlebar`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub full_path_in_title: bool,
-    /// Ask before moving items to the Trash. On by default, as the Python
-    /// app always asked; this and the next two are stored only when off.
-    #[serde(skip_serializing_if = "is_true")]
+    /// Ask before moving items to the Recycle Bin (Windows' "Display
+    /// delete confirmation dialog"). Off by default, as in Windows 11, so
+    /// stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub confirm_trash: bool,
-    /// Ask before deleting items permanently.
+    /// Ask before deleting items permanently; this and the next one are
+    /// stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub confirm_delete: bool,
     /// Ask before emptying the Recycle Bin.
@@ -429,6 +431,18 @@ pub struct Preferences {
     /// Windows. Stored as `compactView`, only when on.
     #[serde(rename = "compactView", skip_serializing_if = "std::ops::Not::not")]
     pub compact_density: bool,
+    /// Names show the extension of a known file type (View > Show > File
+    /// name extensions). Off by default, as in Windows, where "Hide
+    /// extensions for known file types" is on. Stored as `showExtensions`,
+    /// only when on.
+    #[serde(rename = "showExtensions", skip_serializing_if = "std::ops::Not::not")]
+    pub show_extensions: bool,
+    /// The pane at the right shows the selection's preview alone (View >
+    /// Preview pane) rather than its details. Off by default. Stored as
+    /// `previewPane`, only when on; the pane is open while this or
+    /// `show_details_pane` is.
+    #[serde(rename = "previewPane", skip_serializing_if = "std::ops::Not::not")]
+    pub preview_pane: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -510,7 +524,7 @@ impl Default for Preferences {
             details_pane_options: DetailsPaneOptions::default(),
             view_options: ViewOptions::default(),
             full_path_in_title: false,
-            confirm_trash: true,
+            confirm_trash: false,
             confirm_delete: true,
             confirm_empty_trash: true,
             confirm_close_tabs: false,
@@ -535,6 +549,8 @@ impl Default for Preferences {
             item_checks_on_ctrl: true,
             expandable_folders: false,
             compact_density: false,
+            show_extensions: false,
+            preview_pane: false,
             view_defaults: None,
             folder_views: Vec::new(),
             downloads_group_by: None,
@@ -559,6 +575,14 @@ impl Preferences {
 
     /// The questions asked before trashing, deleting, emptying the Trash,
     /// closing several tabs and running programs (SET-010).
+    /// Compact view (VIEW-067), file name extensions (VIEW-069) and the
+    /// Preview pane (VIEW-070).
+    fn apply_names_and_panes(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.compact_density, update.compact_density);
+        replace_if_some(&mut self.show_extensions, update.show_extensions);
+        replace_if_some(&mut self.preview_pane, update.preview_pane);
+    }
+
     fn apply_confirmations(&mut self, update: &PreferencesUpdate) {
         replace_if_some(&mut self.confirm_trash, update.confirm_trash);
         replace_if_some(&mut self.confirm_delete, update.confirm_delete);
@@ -685,7 +709,7 @@ impl Preferences {
         replace_if_some(&mut self.selection_marker, update.selection_marker);
         replace_if_some(&mut self.item_checks_on_ctrl, update.item_checks_on_ctrl);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
-        replace_if_some(&mut self.compact_density, update.compact_density);
+        self.apply_names_and_panes(update);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
@@ -864,6 +888,10 @@ pub struct PreferencesUpdate {
     pub expandable_folders: Option<bool>,
     /// Turn Compact view on or off.
     pub compact_density: Option<bool>,
+    /// See [`Preferences::show_extensions`].
+    pub show_extensions: Option<bool>,
+    /// See [`Preferences::preview_pane`].
+    pub preview_pane: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
@@ -948,6 +976,8 @@ impl PreferencesUpdate {
             item_checks_on_ctrl: flag("itemChecksOnCtrl"),
             expandable_folders: flag("expandableFolders"),
             compact_density: flag("compactView"),
+            show_extensions: flag("showExtensions"),
+            preview_pane: flag("previewPane"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
             downloads_group_by: values
@@ -1271,18 +1301,23 @@ mod tests {
 
     /// parity: SET-010
     #[test]
-    fn the_confirmations_ask_by_default_and_are_stored_only_when_changed() {
+    fn the_confirmations_ask_as_windows_does_by_default_and_are_stored_only_when_changed() {
         let mut preferences = Preferences::default();
-        assert!(preferences.confirm_trash && preferences.confirm_delete && preferences.confirm_empty_trash);
+        assert!(!preferences.confirm_trash, "Windows 11 recycles without asking");
+        assert!(preferences.confirm_delete && preferences.confirm_empty_trash);
         assert!(!preferences.confirm_close_tabs);
-        let values = json!({"confirmTrash": false, "confirmCloseTabs": true, "confirmDelete": 0});
+        assert!(serde_json::to_value(&preferences)
+            .unwrap()
+            .get("confirmTrash")
+            .is_none());
+        let values = json!({"confirmTrash": true, "confirmCloseTabs": true, "confirmDelete": 0});
 
         preferences.apply(&PreferencesUpdate::from_json(&values).unwrap());
 
-        assert!(!preferences.confirm_trash && preferences.confirm_close_tabs);
+        assert!(preferences.confirm_trash && preferences.confirm_close_tabs);
         assert!(preferences.confirm_delete, "only a JSON boolean counts");
         let stored = serde_json::to_value(&preferences).unwrap();
-        assert_eq!(stored["confirmTrash"], json!(false));
+        assert_eq!(stored["confirmTrash"], json!(true));
         assert_eq!(stored["confirmCloseTabs"], json!(true));
         assert!(stored.get("confirmDelete").is_none() && stored.get("fullPathInTitle").is_none());
     }
@@ -1349,6 +1384,36 @@ mod tests {
         });
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         assert!(stored.get("compactView").is_none(), "off again, not stored");
+    }
+
+    /// File name extensions are hidden by default for known types, as in
+    /// Windows, and not stored then; once shown they are saved as
+    /// `showExtensions` and read back, and hiding them again takes the key
+    /// away.
+    ///
+    /// parity: VIEW-069
+    #[test]
+    fn file_name_extensions_are_hidden_by_default_and_stored_only_when_shown() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.show_extensions, "hidden by default, as in Windows");
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("showExtensions").is_none(), "not stored while hidden");
+
+        let shown =
+            PreferencesUpdate::from_json(&json!({ "showExtensions": true })).expect("a valid preference");
+        preferences.apply(&shown);
+        assert!(preferences.show_extensions);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["showExtensions"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.show_extensions, Some(true));
+
+        preferences.apply(&PreferencesUpdate {
+            show_extensions: Some(false),
+            ..PreferencesUpdate::default()
+        });
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("showExtensions").is_none(), "hidden again, not stored");
     }
 
     /// The item check boxes wait for Ctrl by default and the choice is not

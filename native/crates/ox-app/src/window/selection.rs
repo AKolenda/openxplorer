@@ -13,10 +13,11 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::is_smb_location;
 
+use crate::folder_view::shown_name::shown_name;
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
-use super::status_bar::{self, StatusSubject};
+use super::status_bar::StatusSubject;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -148,22 +149,11 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
-                bytes: self.folder_pane().model().shown_file_bytes(),
                 loading: self.is_busy() && self.is_slow(),
             }
         };
-        let model = self.folder_pane().model();
-        let selected = model.summary();
-        let counts_items = self.folder_pane().details().counts_items();
-        let single = (selected.count == 1)
-            .then(|| {
-                model
-                    .selected_items()
-                    .first()
-                    .map(|item| status_bar::item_text(item, counts_items))
-            })
-            .flatten();
-        self.status_bar().set_counts(subject, selected, single);
+        let selected = self.folder_pane().model().summary();
+        self.status_bar().set_counts(subject, selected);
         self.show_watch_state();
     }
 
@@ -190,7 +180,7 @@ impl BrowserWindow {
             Vec::new()
         };
         let locations = self.imp().locations.borrow();
-        let content = details_pane::pane_content(&PaneFacts {
+        let mut content = details_pane::pane_content(&PaneFacts {
             selection: &selection,
             folder_uri: &folder_uri,
             folder_item_count,
@@ -198,6 +188,14 @@ impl BrowserWindow {
             network: &network,
             condensed_dates: pane.options().condensed_dates,
         });
+        // One item is named as the file list names it (VIEW-069).
+        if let [item] = selection.as_slice() {
+            let entry = item.entry();
+            if content.name == entry.name {
+                let extensions = self.file_name_extensions();
+                shown_name(&entry.name, entry.is_dir, extensions).clone_into(&mut content.name);
+            }
+        }
         pane.set_content(&content);
     }
 }
@@ -206,10 +204,10 @@ impl BrowserWindow {
 mod tests {
     use super::*;
 
-    /// A reload changes every file's metadata. Its intermediate splices
-    /// must not each scan the entire folder for the status bar's total.
+    /// A reload changes every file's metadata in place, keeping the
+    /// selection, and an explicit selection afterwards still saves at once.
     #[gtk::test]
-    fn a_large_metadata_reload_computes_totals_once_after_reconciliation() {
+    fn a_large_metadata_reload_keeps_the_selection() {
         use crate::folder_view::{item::FileItem, reconcile};
         use crate::test_support::harness::{Fixture, TestWindow};
 
@@ -228,20 +226,12 @@ mod tests {
                 entry
             })
             .collect();
-        let expected: u64 = entries.iter().filter_map(|entry| entry.size).sum();
-        model.take_total_visits();
 
         test.window.change_model(|| {
             reconcile::update_in_place(&store, entries);
             test.window.change_model(|| model.select_uris(&selected));
         });
 
-        assert_eq!(model.shown_file_bytes(), expected);
-        let visited = model.take_total_visits();
-        assert!(
-            visited <= 2048,
-            "a 1024-row refresh visited {visited} rows for totals"
-        );
         assert_eq!(model.selected_uris(), selected);
         model.select_only(1);
         assert_eq!(

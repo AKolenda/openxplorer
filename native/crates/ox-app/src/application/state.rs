@@ -272,7 +272,7 @@ impl AppState {
     /// folder, else at home (app.js `newWindow`). New windows are refused
     /// while an update installs and until its restart (TAB-043).
     pub(super) fn new_window(&self, app: &gtk::Application) {
-        // New window in a file dialog's More menu opens nothing. Only the
+        // Ctrl+N in a file dialog opens nothing. Only the
         // dialog the user is in counts: the launcher's New window quick
         // action runs this from outside.
         let from_dialog = app

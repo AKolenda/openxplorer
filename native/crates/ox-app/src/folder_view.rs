@@ -29,6 +29,7 @@ pub(crate) mod loader;
 pub(crate) mod model;
 pub(crate) mod recent_locations;
 pub(crate) mod reconcile;
+pub(crate) mod shown_name;
 pub(crate) mod sort_roles;
 pub(crate) mod sorting;
 pub(crate) mod tree;

@@ -15,6 +15,7 @@ use ox_core::settings::{PreferencesUpdate, Theme, SIDEBAR_ICON_SIZES};
 use crate::application::AppAction;
 use crate::text_size::Step;
 
+use super::details_pane::PaneMode;
 use super::folder_pane::FolderView;
 use super::preferences::Preference;
 use super::session::{Direction, TabId, TabPlacement};
@@ -132,6 +133,7 @@ impl BrowserWindow {
         self.install_navigation_actions();
         self.install_address_actions();
         self.install_compact_density_action();
+        self.install_file_name_extensions_action();
         self.install_item_check_boxes_action();
         self.install_ctrl_for_item_checks();
         self.install_crumb_actions();
@@ -272,6 +274,9 @@ impl BrowserWindow {
     fn install_view_actions(&self) {
         let preferences = self.context().settings_data().preferences;
         let view = FolderView::from_setting(preferences.view);
+        if preferences.preview_pane {
+            self.details_pane().set_mode(PaneMode::Preview);
+        }
         self.add_action_entries([
             choice_action(WindowAction::View, view.as_str(), |window, key| {
                 let Some(view) = FolderView::from_key(key) else {
@@ -285,12 +290,22 @@ impl BrowserWindow {
                 preferences.show_hidden,
                 BrowserWindow::set_hidden_files_shown,
             ),
+            // The Details pane and the Preview pane share the pane: one
+            // is open at most, as in Windows (VIEW-070).
             toggle_action(
                 WindowAction::DetailsPane,
-                preferences.show_details_pane,
+                preferences.show_details_pane && !preferences.preview_pane,
                 |window, shown| {
-                    window.fit_details_pane();
+                    window.open_pane(PaneMode::Details, shown);
                     window.save_preference(Preference::DetailsPane(shown));
+                },
+            ),
+            toggle_action(
+                WindowAction::PreviewPane,
+                preferences.preview_pane,
+                |window, shown| {
+                    window.open_pane(PaneMode::Preview, shown);
+                    window.save_preference(Preference::PreviewPane(shown));
                 },
             ),
             toggle_action(
@@ -317,7 +332,8 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Show hidden files (Ctrl+H, View and More options): one setting for
+    /// Show hidden files (Ctrl+H, View > Show > Hidden items and Folder
+    /// Options): one setting for
     /// every folder, as in Windows. Shows the choice here at once and
     /// saves it, after which every other window follows.
     fn set_hidden_files_shown(&self, shown: bool) {
@@ -407,7 +423,7 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 13] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
@@ -415,7 +431,10 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 13] = [
     (WindowAction::Search, &["<Primary>f", "<Primary>e"]),
     // Explorer's Alt+P shows its Preview pane, which is the details pane
     // here, as it previews the selection too (VIEW-063).
-    (WindowAction::DetailsPane, &["<Alt><Shift>p", "<Alt>p"]),
+    // Windows' keys: Alt+Shift+P for the Details pane, Alt+P for the
+    // Preview pane (VIEW-063, VIEW-070).
+    (WindowAction::DetailsPane, &["<Alt><Shift>p"]),
+    (WindowAction::PreviewPane, &["<Alt>p"]),
     // Explorer's Full screen (CMD-036).
     (WindowAction::FullScreen, &["F11"]),
     (WindowAction::Settings, &["<Primary>comma"]),

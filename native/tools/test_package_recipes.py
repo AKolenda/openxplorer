@@ -171,6 +171,18 @@ class RecipeBuildTests(unittest.TestCase):
                 self.assertIn('--package ox-core --bin openxplorer-admin-delete', text)
                 self.assertIn('--admin-delete', text)
 
+    def test_the_recipes_name_the_exif_readers_licence(self) -> None:
+        # kamadak-exif and mutate_once, which the Details tab of Properties
+        # links, are BSD-2-Clause only, so the package's licence names it.
+        spec = re.search(r'^License:\s+(.+)$', SPEC.read_text(encoding='utf-8'), re.MULTILINE)
+        pkgbuild = re.search(r"^license=\('([^']+)'\)$", PKGBUILD.read_text(encoding='utf-8'),
+                             re.MULTILINE)
+        for recipe, found in ((SPEC, spec), (PKGBUILD, pkgbuild)):
+            with self.subTest(recipe=recipe.name):
+                self.assertIsNotNone(found)
+                assert found is not None
+                self.assertIn('BSD-2-Clause', found.group(1).split(' AND '))
+
     def test_python_is_only_a_build_tool(self) -> None:
         spec = SPEC.read_text(encoding='utf-8')
         pkgbuild = PKGBUILD.read_text(encoding='utf-8')

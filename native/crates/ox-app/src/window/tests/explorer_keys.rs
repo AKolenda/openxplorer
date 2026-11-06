@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::file_ops_support::{
-    dialog_over, is_enabled, name_editor, open_dialog, press_shortcut, press_shortcut_where_focused,
+    dialog_over, is_enabled, name_editor, press_shortcut, press_shortcut_where_focused,
     require_private_trash, select_names,
 };
 use crate::test_support::harness::{application, settle, wait_until, Fixture, TestWindow};
@@ -35,7 +35,12 @@ fn explorers_further_keys_sit_beside_the_ones_they_match() {
     let keys = |action: WindowAction| app.accels_for_action(&action.detailed_name());
 
     assert_eq!(keys(WindowAction::Search), ["<Control>f", "<Control>e"]);
-    assert_eq!(keys(WindowAction::DetailsPane), ["<Shift><Alt>p", "<Alt>p"]);
+    assert_eq!(keys(WindowAction::DetailsPane), ["<Shift><Alt>p"]);
+    assert_eq!(
+        keys(WindowAction::PreviewPane),
+        ["<Alt>p"],
+        "Alt+P is Windows' Preview pane"
+    );
     assert_eq!(keys(WindowAction::FullScreen), ["F11"]);
     assert_eq!(keys(WindowAction::SplitView), ["F3"], "F3 keeps Split view");
     for key in ["<Primary>e", "<Alt>p", "F11"] {
@@ -73,8 +78,8 @@ fn ctrl_e_moves_to_the_search_box_and_selects_its_text() {
     assert!(focus_is_in_search(&test), "Ctrl+E works from the address bar too");
 }
 
-/// Ctrl+D asks and moves the selection to the Recycle Bin exactly as
-/// Delete does, and Ctrl+Z brings it back: the same Undo step.
+/// Ctrl+D moves the selection to the Recycle Bin exactly as Delete does,
+/// without asking, and Ctrl+Z brings it back: the same Undo step.
 ///
 /// parity: CMD-036, OPS-015
 #[gtk::test]
@@ -85,14 +90,11 @@ fn ctrl_d_moves_the_selection_to_the_recycle_bin_as_delete_does() {
     select_names(&test, &["Résumé.txt"]);
 
     press_shortcut(&test, gdk::Key::d, gdk::ModifierType::CONTROL_MASK);
-    let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Move to Trash?");
-    assert_eq!(dialog.button_labels(), ["Cancel", "Move to Trash"]);
-    dialog.press("Move to Trash");
     wait_until("the file to leave the folder", || {
         !fixture.path("Résumé.txt").exists()
     });
+    assert!(dialog_over(&test).is_none(), "nothing asked");
     wait_until("Undo to be offered", || is_enabled(&test, "undo"));
     press_shortcut(&test, gdk::Key::z, gdk::ModifierType::CONTROL_MASK);
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
@@ -135,42 +137,51 @@ fn ctrl_d_leaves_text_fields_and_the_settings_page_alone() {
     assert!(fixture.path("Résumé.txt").is_file());
 }
 
-/// Alt+P toggles the details pane, which also previews the selection
-/// here, as Alt+Shift+P does, and saves the choice the same way.
+/// Alt+P toggles the Preview pane and Alt+Shift+P the Details pane, as in
+/// Windows: the two share the pane, so each key switches from the other,
+/// and each saves the choice.
 ///
-/// parity: VIEW-063
+/// parity: VIEW-063, VIEW-070
 #[gtk::test]
-fn alt_p_toggles_the_details_pane_as_alt_shift_p_does() {
+fn alt_p_toggles_the_preview_pane_and_alt_shift_p_the_details_pane() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let shown = || {
+    let state = |action: WindowAction| {
         test.window
-            .window_action_state(WindowAction::DetailsPane)
+            .window_action_state(action)
             .and_then(|state| state.get::<bool>())
-            .expect("the details pane action has a state")
+            .expect("the pane actions have a state")
     };
-    let before = shown();
     test.window.folder_pane().focus_view();
+    assert!(
+        state(WindowAction::DetailsPane),
+        "the Details pane is open by default"
+    );
 
     assert!(press_shortcut_where_focused(
         &test,
         gdk::Key::p,
         gdk::ModifierType::ALT_MASK
     ));
-    let after_alt_p = shown();
+    assert!(state(WindowAction::PreviewPane), "Alt+P opens the Preview pane");
+    assert!(!state(WindowAction::DetailsPane), "in place of the Details pane");
     wait_until("Alt+P's choice to be saved", || {
-        test.context.settings_data().preferences.show_details_pane == after_alt_p
+        test.context.settings_data().preferences.preview_pane
     });
+
     assert!(press_shortcut_where_focused(
         &test,
         gdk::Key::p,
         gdk::ModifierType::ALT_MASK | gdk::ModifierType::SHIFT_MASK
     ));
-
-    assert_ne!(after_alt_p, before, "Alt+P toggles the pane");
-    assert_eq!(shown(), before, "Alt+Shift+P toggles it back");
+    assert!(
+        state(WindowAction::DetailsPane),
+        "Alt+Shift+P opens the Details pane"
+    );
+    assert!(!state(WindowAction::PreviewPane));
     wait_until("Alt+Shift+P's choice to be saved", || {
-        test.context.settings_data().preferences.show_details_pane == before
+        let saved = test.context.settings_data().preferences;
+        saved.show_details_pane && !saved.preview_pane
     });
 }
 

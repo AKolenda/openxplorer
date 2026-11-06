@@ -84,26 +84,41 @@ fn this_pc_lists_quick_access_devices_and_network_locations() {
     );
 }
 
+/// The status bar reads as Windows 11 Explorer's: "4 items", then, past
+/// a divider shown only with a selection, "1 item selected  20 bytes",
+/// the size only while every selected item is a file.
+///
+/// parity: VIEW-050
 #[gtk::test]
 fn the_status_bar_says_ready_on_a_page_and_counts_a_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(Page::ThisPc.uri());
-    assert_eq!(
-        test.window.status_bar().texts(),
-        ("Ready".to_owned(), String::new())
-    );
+    let status_bar = test.window.status_bar();
+    assert_eq!(status_bar.texts(), ("Ready".to_owned(), String::new()));
+    assert!(!status_bar.shows_selection_divider());
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");
-    test.window.folder_model().select_only(0);
-    let (count, selection) = test.window.status_bar().texts();
-    assert!(
-        count.starts_with("4 items  "),
-        "the files' size follows the count: {count:?}"
+    assert_eq!(status_bar.texts(), ("4 items".to_owned(), String::new()));
+    assert!(!status_bar.shows_selection_divider(), "nothing is selected");
+    let model = test.window.folder_model();
+    assert_eq!(model.name_at(1).as_deref(), Some("Notes 2.txt"));
+    model.select_only(1);
+    assert_eq!(
+        status_bar.texts(),
+        ("4 items".to_owned(), "1 item selected  20 bytes".to_owned())
     );
-    let first = test.window.folder_model().name_at(0).expect("a first item");
-    assert!(
-        selection.starts_with(&first),
-        "the one selected item is described: {selection:?}"
+    assert!(status_bar.shows_selection_divider());
+    model.select_only(0);
+    assert_eq!(
+        status_bar.texts().1,
+        "1 item selected",
+        "a folder has no size here"
+    );
+    model.select_all();
+    assert_eq!(
+        status_bar.texts().1,
+        "4 items selected",
+        "nor has a selection with a folder"
     );
 }
 
@@ -246,6 +261,7 @@ fn the_details_pane_previews_an_image_and_names_its_dimensions() {
 fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     let pane = test.window.details_pane();
     for label in ["Show the item under the pointer", "Size"] {
         let menu = pane.show_options_menu(1.0, 1.0);

@@ -75,7 +75,7 @@ pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
 use shortcut_backend::ShortcutBackend;
 pub(crate) use status::{DefaultsReport, IntegrationStatus};
 pub(crate) use terminal::open_terminal;
-pub(crate) use tools::{installed_application, Tool};
+pub(crate) use tools::{installed_application, system_information, Tool};
 pub(crate) use type_associations::{
     change_type, other_applications, type_applications, TypeApplication, TypeChange,
 };

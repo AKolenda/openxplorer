@@ -286,7 +286,10 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
     let window = test.wait_for_properties("Notes 2.txt Properties");
     assert!(!window.is_modal(), "Properties blocks nothing");
     assert_eq!(window.transient_for(), None, "a window of its own");
-    assert_eq!(window.tab_labels(), ["General", "Security", "Previous Versions"]);
+    assert_eq!(
+        window.tab_labels(),
+        ["General", "Security", "Details", "Previous Versions"]
+    );
     assert_eq!(window.button_labels(), ["OK", "Cancel", "Apply"]);
     assert!(!window.apply_button().is_sensitive(), "nothing to apply yet");
     let general = general(&window);

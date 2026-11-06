@@ -9,7 +9,7 @@ use gtk::{gdk, glib};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
 use crate::icons::{Art, ArtImage};
-use crate::test_support::harness::{descendants, TestWindow};
+use crate::test_support::harness::{descendants, wait_until, TestWindow};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::session::TabId;
 use crate::window::window_action::WindowAction;
@@ -131,4 +131,58 @@ pub(super) fn art_image_showing(widget: &impl IsA<gtk::Widget>, art: Art) -> Opt
     descendants::<ArtImage>(widget)
         .into_iter()
         .find(|image| image.art() == Some(art))
+}
+
+/// Shows file name extensions in `test`'s window, for a test of renaming
+/// or of what the views draw that types or reads whole names; extensions
+/// of known types are hidden by default, as in Windows (VIEW-069).
+pub(super) fn show_file_name_extensions(test: &TestWindow) {
+    test.activate("file-name-extensions", None);
+    let shown = test
+        .window
+        .window_action_state(crate::window::WindowAction::FileNameExtensions)
+        .and_then(|state| state.get::<bool>());
+    assert_eq!(shown, Some(true), "extensions shown");
+}
+
+/// A desktop entry a test added, which is taken away again when it is
+/// dropped, also when the test fails, so later tests in the same session
+/// do not see it.
+#[must_use = "the entry goes away when this is dropped"]
+pub(super) struct TestApplication {
+    path: std::path::PathBuf,
+    desktop_id: String,
+}
+
+impl Drop for TestApplication {
+    fn drop(&mut self) {
+        if std::fs::remove_file(&self.path).is_ok() {
+            wait_until("GIO to forget the application", || {
+                crate::integration::installed_application(&self.desktop_id).is_none()
+            });
+        }
+    }
+}
+
+/// Adds a desktop entry `desktop_id` to the private data folder the tests
+/// run with (native/tools/check.py), so a tool is installed whatever the
+/// host has, and waits until GIO lists it.
+pub(super) fn install_test_application(desktop_id: &str) -> TestApplication {
+    let data = glib::user_data_dir();
+    assert!(
+        data.starts_with(std::env::temp_dir()),
+        "tests add applications only to a private data folder"
+    );
+    let folder = data.join("applications");
+    std::fs::create_dir_all(&folder).expect("the data folder is writable");
+    let entry = "[Desktop Entry]\nType=Application\nName=Test tool\nExec=true %U\nNoDisplay=true\n";
+    let path = folder.join(desktop_id);
+    std::fs::write(&path, entry).expect("the data folder is writable");
+    wait_until("GIO to list the application", || {
+        crate::integration::installed_application(desktop_id).is_some()
+    });
+    TestApplication {
+        path,
+        desktop_id: desktop_id.to_owned(),
+    }
 }

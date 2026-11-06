@@ -379,6 +379,31 @@ fn apply_to_folders_is_unavailable_without_a_folder() {
     close_folder_options(&test, &options, "Cancel");
 }
 
+/// Folder Options' General tab has "More settings…", which opens
+/// Settings: Settings left "…" for it, as the rest of the app's options
+/// are there. Choices made first are kept, as OK keeps them, and the
+/// keyboard reaches the button.
+///
+/// parity: VIEW-020, CMD-007
+#[gtk::test]
+fn more_settings_in_folder_options_opens_settings_and_keeps_the_choices() {
+    const FULL_PATH: &str = "Display the full path in the title bar";
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    option_check(&options, "View", FULL_PATH).set_active(true);
+    let more = tab_button(&options, "General", "More settings…");
+    assert!(more.is_focusable() && more.is_sensitive());
+
+    more.emit_clicked();
+
+    wait_for_no_dialog(&test);
+    wait_until("Settings to open", || test.window.shows_settings());
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.full_path_in_title
+    });
+}
+
 /// Folder Options' advanced settings that Windows has and the app has
 /// too: a change takes effect with Apply or OK, Cancel drops it, and
 /// Restore Defaults sets the boxes back to their defaults.
@@ -447,7 +472,11 @@ fn options_tab(options: &crate::dialog::Dialog, title: &str) -> gtk::Widget {
 }
 
 /// The check box labelled `label` on the tab `tab` of `options`.
-fn option_check(options: &crate::dialog::Dialog, tab: &str, label: &str) -> gtk::CheckButton {
+pub(in crate::window) fn option_check(
+    options: &crate::dialog::Dialog,
+    tab: &str,
+    label: &str,
+) -> gtk::CheckButton {
     descendants::<gtk::CheckButton>(&options_tab(options, tab))
         .into_iter()
         .find(|check| check.label().as_deref() == Some(label))
@@ -504,6 +533,7 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
         [
             ICONS_ONLY,
             "Display the full path in the title bar",
+            "Hide extensions for known file types",
             REMEMBER_VIEWS,
             "Restore previous folder windows at logon",
             SHOW_HIDDEN,

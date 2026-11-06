@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The folder tree's context menu (SIDE-028), as Dolphin's
 //! `TreeViewContextMenu` offers it: open the folder in a tab or a window,
-//! Cut, Copy, Paste into it, Rename…, Move to Trash, Delete permanently,
+//! Cut, Copy, Paste into it, Rename…, Delete, Delete permanently,
 //! Open in Terminal and Properties, each acting on the folder clicked;
 //! then the tree's own options with check marks: Show hidden folders,
 //! Limit to home folder and Scroll to the folder shown.
@@ -104,7 +104,7 @@ fn entries(uri: &str, facts: FolderFacts, options: FolderTreeOptions) -> Vec<Men
             facts.changeable,
         ),
         folder_item(
-            &gettext("Move to Trash"),
+            &gettext("Delete"),
             Icon::Delete,
             WindowAction::TrashFolder,
             uri,

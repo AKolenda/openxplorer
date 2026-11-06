@@ -55,12 +55,13 @@ and how the release that replaces the Python app moves existing users over.
 ## Build and run
 
 Needs Rust 1.92+ (the minimum required by the locked GTK/GIO crates), GTK
-4.14, SQLite and libsoup 3 development files (libsoup is the updater's HTTPS
-client), and Python 3.11+ for the parity checks and the compatibility
+4.14, SQLite, libsoup 3 and GStreamer development files (libsoup is the
+updater's HTTPS client, GStreamer's discoverer reads videos and audio files
+for the Details tab of Properties), and Python 3.11+ for the parity checks and the compatibility
 tests:
 
 ```sh
-sudo apt install libgtk-4-dev libsqlite3-dev libsoup-3.0-dev
+sudo apt install libgtk-4-dev libsqlite3-dev libsoup-3.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 cargo build --release --locked --manifest-path native/Cargo.toml
 ./native/target/release/openxplorer-native
 ```
@@ -78,7 +79,7 @@ the check driver fails while the template is out of date.
 Run the check driver from the repository root:
 
 ```sh
-sudo apt install libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1
+sudo apt install libgtk-4-dev libsqlite3-dev libsoup-3.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1
 python3 native/tools/check.py
 ```
 
