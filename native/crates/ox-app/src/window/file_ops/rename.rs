@@ -25,6 +25,7 @@ use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
 use super::name_dialog::{ask_for_name, stem_length, NameRequest, NameSelection};
 use super::FileCommand;
+use crate::folder_view::shown_name::shows_whole;
 use crate::window::BrowserWindow;
 
 /// The Rename dialog's line when the user keeps a name that would hide
@@ -38,7 +39,7 @@ pub(super) const NOT_RENAMED: &str = crate::i18n::message_id("The name was not c
 /// `.lnk`: Windows selects all of a shortcut's shown name, since its own
 /// extension is hidden, and so does this.
 pub(super) fn name_selection(entry: &Entry) -> NameSelection {
-    if entry.is_dir || entry.is_symlink {
+    if shows_whole(entry) {
         NameSelection::Whole
     } else {
         NameSelection::Stem

@@ -39,7 +39,7 @@ use super::numbered_rename::numbered_batch_for;
 use super::rename::{has_no_extension, selected_name_length};
 use super::rename_conflict::TakenNameAnswer;
 use crate::folder_view::cells::FileCell;
-use crate::folder_view::shown_name::{hidden_extension, shown_name};
+use crate::folder_view::shown_name::{hidden_extension, shown_name, shows_whole};
 use crate::window::folder_pane::FolderView;
 use crate::window::BrowserWindow;
 
@@ -91,8 +91,8 @@ impl BrowserWindow {
     /// selected items in the order shown, the typed name goes to them all.
     pub(super) fn rename_in_place(&self, cell: &FileCell, entry: &Entry, several: Option<Vec<Entry>>) {
         let hidden_extension =
-            hidden_extension(&entry.name, entry.is_dir, self.file_name_extensions()).map(str::to_owned);
-        let shown = shown_name(&entry.name, entry.is_dir, self.file_name_extensions());
+            hidden_extension(&entry.name, shows_whole(entry), self.file_name_extensions()).map(str::to_owned);
+        let shown = shown_name(&entry.name, shows_whole(entry), self.file_name_extensions());
         let editor = gtk::Entry::builder()
             .text(shown)
             .hexpand(true)

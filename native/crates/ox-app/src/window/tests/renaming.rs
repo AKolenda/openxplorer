@@ -667,3 +667,71 @@ fn a_file_renamed_to_a_taken_name_is_offered_the_next_free_number() {
         assert_eq!(content, Some(b"Synthetic test data\n".to_vec()), "{kept} stays");
     }
 }
+
+/// With extensions hidden, a shortcut still shows and edits its whole
+/// name, as Windows hides only a shortcut's `.lnk`: "notes.txt" is not
+/// shown as "notes", F2 selects all of it, and the typed name is the
+/// whole new name, with nothing added back.
+///
+/// parity: OPS-010, VIEW-069
+#[gtk::test]
+fn a_shortcut_keeps_its_whole_name_while_extensions_are_hidden() {
+    let fixture = Fixture::empty();
+    fixture.write("Report.txt");
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("notes.txt"))
+        .expect("the shortcut is made");
+    let test = super::geometry::laid_out(&fixture.uri());
+    wait_until("the listing", || test.names().contains(&"notes.txt".to_owned()));
+    let shown = super::file_name_extensions::shown_names(&test);
+    select_names(&test, &["notes.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    let (text, selected) = (field.text().to_string(), field.selection_bounds());
+    field.set_text("Plan");
+    field.emit_activate();
+    wait_until("the rename", || {
+        fixture.path("Plan").is_symlink() || fixture.path("Plan.txt").exists()
+    });
+
+    assert_eq!(
+        shown,
+        ["Report", "notes.txt"],
+        "the shortcut shows its whole name"
+    );
+    assert_eq!(text, "notes.txt");
+    assert_eq!(selected, Some((0, 9)));
+    assert!(fixture.path("Plan").is_symlink(), "nothing is added back");
+    assert!(!fixture.path("Plan.txt").exists());
+}
+
+/// A shortcut renamed in place to a taken name is offered the next free
+/// number after its whole name, as Windows numbers a shortcut, whose
+/// `.lnk` is hidden: "Q3.v1 (2)", not "Q3 (2).v1".
+///
+/// parity: OPS-008, OPS-010
+#[gtk::test]
+fn a_shortcut_renamed_to_a_taken_name_is_numbered_after_its_whole_name() {
+    let fixture = Fixture::empty();
+    fixture.write("Report.txt");
+    fixture.write("Q3.v1");
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    select_names(&test, &["Report.txt - Shortcut"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    field.set_text("Q3.v1");
+    field.emit_activate();
+    let question = open_dialog(&test);
+    let texts = question.texts();
+    question.press("Yes");
+    wait_until("the numbered rename", || {
+        fixture.path("Q3.v1 (2)").is_symlink() && !is_renaming_in_place(&test)
+    });
+
+    let asks = "Would you like to rename \"Q3.v1\" to \"Q3.v1 (2)\"?";
+    assert!(texts.iter().any(|text| text == asks), "{texts:?}");
+    assert!(!fixture.path("Q3 (2).v1").exists());
+    assert!(fixture.path("Q3.v1").is_file(), "the other file stays");
+}

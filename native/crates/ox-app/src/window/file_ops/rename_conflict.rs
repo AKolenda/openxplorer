@@ -48,9 +48,17 @@ pub(super) enum TakenNameAnswer {
 }
 
 /// `name` with the `number` Windows gives a renamed file whose name is
-/// taken, before its extension: `x (2).txt`, `archive.tar (3).gz`.
-fn numbered_name(name: &str, number: u32) -> Option<String> {
-    name_with_copy_marker(name, &format!(" ({number})"), ItemKind::File).ok()
+/// taken, before its extension: `x (2).txt`, `archive.tar (3).gz`. A
+/// shortcut's name has no extension (its `.lnk` is hidden in Windows, and
+/// a link here has none), so its number goes at the end: `Report.txt -
+/// Shortcut (2)`.
+fn numbered_name(name: &str, number: u32, is_shortcut: bool) -> Option<String> {
+    let kind = if is_shortcut {
+        ItemKind::Folder
+    } else {
+        ItemKind::File
+    };
+    name_with_copy_marker(name, &format!(" ({number})"), kind).ok()
 }
 
 /// The item at `file`, or `None` when it cannot be read.
@@ -75,11 +83,17 @@ async fn is_free(folder: &gio::File, name: &str) -> bool {
         .is_err()
 }
 
-/// The first numbered `name` free in `folder`, from `(2)` on; the file's
-/// own name, `own_name`, counts as free.
-async fn first_free_numbered_name(folder: &gio::File, name: &str, own_name: &str) -> Option<String> {
+/// The first numbered `name` free in `folder`, from `(2)` on, numbered
+/// as a shortcut's name when `is_shortcut`; the file's own name,
+/// `own_name`, counts as free.
+async fn first_free_numbered_name(
+    folder: &gio::File,
+    name: &str,
+    own_name: &str,
+    is_shortcut: bool,
+) -> Option<String> {
     for number in 2..=MAX_NUMBERED_NAMES {
-        let candidate = numbered_name(name, number)?;
+        let candidate = numbered_name(name, number, is_shortcut)?;
         if candidate == own_name || is_free(folder, &candidate).await {
             return Some(candidate);
         }
@@ -142,7 +156,8 @@ impl BrowserWindow {
         if renamed.is_dir || existing.is_dir {
             return TakenNameAnswer::NotAsked;
         }
-        let Some(numbered) = first_free_numbered_name(&folder, name, &renamed.name).await else {
+        let Some(numbered) = first_free_numbered_name(&folder, name, &renamed.name, renamed.is_symlink).await
+        else {
             return TakenNameAnswer::NotAsked;
         };
         let dialog = Dialog::new(
@@ -179,16 +194,22 @@ mod tests {
     /// parity: OPS-008
     #[test]
     fn a_taken_name_is_numbered_before_its_extension_as_in_windows() {
-        assert_eq!(numbered_name("x.txt", 2).as_deref(), Some("x (2).txt"));
+        assert_eq!(numbered_name("x.txt", 2, false).as_deref(), Some("x (2).txt"));
         assert_eq!(
-            numbered_name("Notes 10.txt", 3).as_deref(),
+            numbered_name("Notes 10.txt", 3, false).as_deref(),
             Some("Notes 10 (3).txt")
         );
         assert_eq!(
-            numbered_name("archive.tar.gz", 2).as_deref(),
+            numbered_name("archive.tar.gz", 2, false).as_deref(),
             Some("archive.tar (2).gz")
         );
-        assert_eq!(numbered_name("README", 2).as_deref(), Some("README (2)"));
+        assert_eq!(numbered_name("README", 2, false).as_deref(), Some("README (2)"));
+        assert_eq!(
+            numbered_name("Report.txt - Shortcut", 2, true).as_deref(),
+            Some("Report.txt - Shortcut (2)"),
+            "a shortcut's whole name is its name"
+        );
+        assert_eq!(numbered_name("Q3.v1", 2, true).as_deref(), Some("Q3.v1 (2)"));
         assert_eq!(
             question("x.txt", "x (2).txt"),
             "Would you like to rename \"x.txt\" to \"x (2).txt\"?"

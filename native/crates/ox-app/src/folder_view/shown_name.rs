@@ -14,6 +14,7 @@
 //! `backup.tar.gz` shows as `backup.tar`, as in Windows.
 
 use gtk::gio;
+use ox_core::entry::Entry;
 
 /// Whether names show their extensions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -25,8 +26,17 @@ pub(crate) enum Extensions {
     Shown,
 }
 
+/// Whether `entry`'s name always shows whole: a folder's, or a
+/// shortcut's (a symbolic link, the app's shortcut), whose name is all
+/// Windows shows of it. Windows hides only a shortcut's `.lnk`, which a
+/// link here does not have, so "notes.txt" stays "notes.txt".
+pub(crate) fn shows_whole(entry: &Entry) -> bool {
+    entry.is_dir || entry.is_symlink
+}
+
 /// The extension a view hides of `name`, with its dot, or `None` when the
-/// name shows whole.
+/// name shows whole; `is_folder` is true for a name that always shows
+/// whole ([`shows_whole`]).
 pub(crate) fn hidden_extension(name: &str, is_folder: bool, extensions: Extensions) -> Option<&str> {
     if is_folder || extensions == Extensions::Shown {
         return None;

@@ -29,7 +29,7 @@ use gtk::prelude::*;
 use super::row_tooltip::RowTooltip;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
-use crate::folder_view::shown_name::{shown_name, Extensions};
+use crate::folder_view::shown_name::{shown_name, shows_whole, Extensions};
 use crate::thumbnails::PreviewPolicy;
 use crate::window::widget_tree::toggle_class;
 
@@ -405,7 +405,7 @@ impl CellOwners {
     /// type's extension while extensions are hidden.
     pub(crate) fn shown_name(&self, item: &FileItem) -> String {
         let entry = item.entry();
-        shown_name(&entry.name, entry.is_dir, self.extensions.get()).to_owned()
+        shown_name(&entry.name, shows_whole(entry), self.extensions.get()).to_owned()
     }
 
     /// Shows names with or without the extensions of known types; a cell
