@@ -123,6 +123,9 @@ mod imp {
         pub(super) style: Cell<MenuStyle>,
         /// The submenu open beside a row, and that row's item index.
         pub(super) submenu: RefCell<Option<(super::MenuPopover, usize)>>,
+        /// While the open submenu waits for its row to be laid out before
+        /// it shows, whether the keyboard opened it.
+        pub(super) submenu_waits: Cell<Option<bool>>,
         /// The row the pointer rests on, and the timer that opens or closes
         /// a submenu once it has rested there for `SUBMENU_DELAY`.
         pub(super) hover: RefCell<(Option<usize>, Option<SourceId>)>,
@@ -208,7 +211,8 @@ mod imp {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
             // A submenu opened before the menu laid its rows out, as Right
-            // can just after the menu opens, points at its row once it has.
+            // can just after the menu opens, shows beside its row once it
+            // has; one already shown follows its row.
             self.obj().point_submenu_at_its_row();
         }
 
@@ -682,7 +686,9 @@ impl MenuPopover {
             .open_submenu_menu()
             .filter(|_| self.open_submenu_index() == Some(index));
         if let Some(open) = open {
-            if keyboard {
+            if let Some(waiting_keyboard) = self.imp().submenu_waits.get() {
+                self.imp().submenu_waits.set(Some(waiting_keyboard || keyboard));
+            } else if keyboard {
                 open.focus_first_item();
             }
             return;
@@ -697,9 +703,6 @@ impl MenuPopover {
         };
         let menu = MenuPopover::new_submenu(item.submenu.clone(), self.imp().style.get());
         menu.set_parent(self);
-        if let Some(area) = row_area(self, &row) {
-            menu.set_pointing_to(Some(&area));
-        }
         // Escape, or GTK closing it otherwise, lets go of it once GTK is
         // done closing it.
         menu.connect_closed(glib::clone!(
@@ -724,9 +727,13 @@ impl MenuPopover {
         row.add_css_class(SUBMENU_OPEN);
         row.update_state(&[gtk::accessible::State::Expanded(Some(true))]);
         self.imp().submenu.replace(Some((menu.clone(), index)));
-        menu.popup();
-        if keyboard {
-            menu.focus_first_item();
+        match row_area(self, &row) {
+            Some(area) => show_submenu(&menu, &area, keyboard),
+            // Not before the row has a place: GTK 4.14 then finds no
+            // monitor to place the submenu on (a critical in
+            // gdk_x11_surface_layout_popup). The menu shows it once it has
+            // laid the row out.
+            None => self.imp().submenu_waits.set(Some(keyboard)),
         }
     }
 
@@ -752,7 +759,8 @@ impl MenuPopover {
     }
 
     /// Points the open submenu at its row where the menu has laid it out,
-    /// if it points elsewhere.
+    /// if it points elsewhere, or shows one that waited for its row, after
+    /// the menu's allocation.
     fn point_submenu_at_its_row(&self) {
         let Some((menu, index)) = self.imp().submenu.borrow().clone() else {
             return;
@@ -760,6 +768,21 @@ impl MenuPopover {
         let Some(area) = self.row_at(index).and_then(|row| row_area(self, &row)) else {
             return;
         };
+        if let Some(keyboard) = self.imp().submenu_waits.take() {
+            glib::idle_add_local_once(glib::clone!(
+                #[weak(rename_to = popover)]
+                self,
+                #[weak]
+                menu,
+                move || {
+                    let area = popover.row_at(index).and_then(|row| row_area(&popover, &row));
+                    if let (true, Some(area)) = (popover.open_submenu_menu().as_ref() == Some(&menu), area) {
+                        show_submenu(&menu, &area, keyboard);
+                    }
+                }
+            ));
+            return;
+        }
         let (points, pointing) = menu.pointing_to();
         if !points || pointing != area {
             menu.set_pointing_to(Some(&area));
@@ -778,6 +801,7 @@ impl MenuPopover {
         let Some((menu, index)) = self.imp().submenu.take() else {
             return;
         };
+        self.imp().submenu_waits.set(None);
         let root = self.root();
         let focus = root.as_ref().and_then(gtk::prelude::RootExt::focus);
         let had_keyboard = focus.is_some_and(|focus| focus.is_ancestor(&menu));
@@ -943,6 +967,16 @@ fn collect_menus(widget: &gtk::Widget, menus: &mut Vec<MenuPopover>) {
         }
         collect_menus(&current, menus);
         child = current.next_sibling();
+    }
+}
+
+/// Shows `submenu` beside `row_area`, its row's place in the menu it opens
+/// from, with the keyboard on its first item if `keyboard` opened it.
+fn show_submenu(submenu: &MenuPopover, row_area: &gdk::Rectangle, keyboard: bool) {
+    submenu.set_pointing_to(Some(row_area));
+    submenu.popup();
+    if keyboard {
+        submenu.focus_first_item();
     }
 }
 

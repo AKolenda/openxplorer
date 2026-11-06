@@ -190,7 +190,6 @@ fn row_glyphs(menu: &MenuPopover) -> Vec<(String, String)> {
         Icon::CircleSmallFilled.name(),
         Icon::Checkmark.name(),
         Icon::ChevronRight16.name(),
-        Icon::ArrowLeft.name(),
     ];
     menu.rows()
         .into_iter()
@@ -263,13 +262,13 @@ fn the_sort_menu_has_no_glyphs_and_dots_its_choices_as_windows_does() {
         "the choices are dotted: {marks:?}"
     );
     for submenu in ["More", "Group by"] {
-        sort.row(submenu).emit_activate();
+        let opened = sort.open_submenu_of(submenu);
         wait_for_frames(&test.window, 2);
-        assert_eq!(row_glyphs(&sort), Vec::<(String, String)>::new(), "{submenu}");
-        let marks = row_marks(&sort);
+        assert_eq!(row_glyphs(&opened), Vec::<(String, String)>::new(), "{submenu}");
+        let marks = row_marks(&opened);
         assert!(marks.iter().all(|(_, mark)| *mark == dot), "{submenu}: {marks:?}");
-        sort.rows()[0].emit_activate();
-        wait_for_frames(&test.window, 2);
+        assert!(opened.press_in_list(gdk::Key::Left), "Left closes {submenu}");
+        wait_until("the submenu to close", || !opened.is_visible());
     }
     sort.popdown();
 }
@@ -1008,7 +1007,11 @@ fn menu_marks_are_dots_for_choices_and_checks_for_toggles_beside_the_glyph() {
         row_glyph(&view.row("Details")).as_deref(),
         Some(Icon::TextBulletList.name())
     );
-    assert_eq!(mark_in(&view, "Large icons"), None, "an unchosen view has no mark");
+    assert_eq!(
+        mark_in(&view, "Large icons"),
+        None,
+        "an unchosen view has no mark"
+    );
     let show = view.open_submenu_of("Show");
     if test.window.is_action_enabled(WindowAction::Sidebar.name()) {
         assert_eq!(
@@ -1119,11 +1122,10 @@ fn the_more_and_view_menus_show_windows_glyphs() {
     );
 }
 
-/// View > Show holds what Windows 11's does, in its order: the navigation
-/// pane, Compact view, then the item check boxes and hidden items, each
-/// with its check mark in a column at the left and its glyph after it.
-/// Show sits below a divider with its chevron at the far right, without a
-/// glyph of its own.
+/// View > Show opens beside the View menu, as on Windows 11: Show has its
+/// chevron at the far right, tells screen readers it opens a submenu,
+/// stays highlighted while its submenu is open, and the submenu's first
+/// item is level with it.
 ///
 /// parity: CMD-006
 #[gtk::test]
@@ -1139,9 +1141,6 @@ fn view_show_opens_beside_the_view_menu_as_on_windows() {
     let view = menu_of(&test, "View");
     view.popup();
     wait_until("the View menu", || view.is_mapped());
-    let labels = view.row_labels();
-    let show_at = labels.iter().position(|label| label == "Show").expect("Show");
-    assert_eq!(labels[show_at - 1], "-", "Show follows a divider");
     let row = view.row("Show");
     let content = row.child().expect("content");
     let parts: Vec<gtk::Widget> = crate::window::widget_tree::children(&content).collect();
@@ -1161,33 +1160,12 @@ fn view_show_opens_beside_the_view_menu_as_on_windows() {
     ));
 
     let show = view.open_submenu_of("Show");
-    assert_eq!(
-        show.row_labels(),
-        [
-            "Navigation pane",
-            "-",
-            "Compact view",
-            "-",
-            "Item check boxes",
-            "Hidden items"
-        ]
-    );
+    assert_eq!(show.row_labels(), SHOW_MENU);
     assert_eq!(
         show.checked_labels().contains(&"Navigation pane".to_owned()),
         on("sidebar") == Some(true),
         "{:?}",
         show.checked_labels()
-    );
-    let first = show.row("Navigation pane");
-    let content = first.child().expect("content");
-    let mut parts = crate::window::widget_tree::children(&content);
-    let mark = parts.next().expect("a check mark column");
-    assert!(mark.has_css_class("check-mark"));
-    assert!(
-        parts
-            .next()
-            .is_some_and(|glyph| glyph.downcast_ref::<gtk::Image>().is_some()),
-        "the glyph after it"
     );
     assert!(row.has_css_class("submenu-open"), "Show stays highlighted");
     // Beside Show, its first item level with Show.
@@ -1472,11 +1450,11 @@ fn nested_submenus_open_beside_each_other() {
     let letters = menu.open_submenu_menu().expect("Right opens Letters");
     assert!(letters.press_in_list(gdk::Key::Return));
     let work = letters.open_submenu_menu().expect("Enter opens Work");
-    assert_eq!(
-        gtk::prelude::GtkWindowExt::focus(&test.window).and_downcast::<gtk::ListBoxRow>(),
-        Some(work.row("Name")),
-        "the keyboard is on Work's first item"
-    );
+    // Once Letters has laid out Work's row, beside which Work shows.
+    wait_until("the keyboard on Work's first item", || {
+        gtk::prelude::GtkWindowExt::focus(&test.window).and_downcast::<gtk::ListBoxRow>()
+            == Some(work.row("Name"))
+    });
     work.click_row("Size");
     assert_eq!(test.action_state("sort").as_deref(), Some("size"));
     wait_until("the menu to close", || !menu.is_visible());
