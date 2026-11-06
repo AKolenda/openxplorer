@@ -341,6 +341,18 @@ impl TestWindow {
             .expect("the window has the action");
     }
 
+    /// Opens the details pane, which a new window has closed, as Windows
+    /// 11 Explorer's; does nothing while it is switched on.
+    pub(crate) fn open_details_pane(&self) {
+        let state = self
+            .window
+            .lookup_action("details-pane")
+            .and_then(|action| action.state());
+        if state.and_then(|state| state.get::<bool>()) != Some(true) {
+            self.activate("details-pane", None);
+        }
+    }
+
     /// The string state of the window action `name`.
     pub(crate) fn action_state(&self, name: &str) -> Option<String> {
         let state = self.window.lookup_action(name)?.state()?;

@@ -557,13 +557,14 @@ where it differs; ✓ means the target equals the current app.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Bar | 30 including a 1 px top border (min `max(29, ceil(15·s + 9))` + 1); padding `0 13 0 19`; gap 18; background `@ox_bg`; text **12** px (11) in `@ox_muted` | 12 px minimum (L-TYPE) | text visible, P2 |
-| Left | "N items", "N selected, size" as separate spans 18 apart (native joins them with " · "); type-to-select hint in `@ox_accent`, or `@ox_muted` when nothing matches; ellipsis at 48 % width | — | Keep; D-N13. |
-| Right | the free space and its bar; the update button 24 × 24 only while an update needs the user (the status mode, **12** px, is hidden: Explorer names no build there; 2026-11-02); then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
+| Left | "N items", then, while something is selected, a 1 × 14 `@ox_border` divider 10 px from each side and "1 item selected  19.0 KB" / "N items selected  1.23 MB" (the size, written as Explorer writes sizes, only when every selected item is a file); type-to-select hint in `@ox_accent`, or `@ox_muted` when nothing matches; ellipsis at 48 % width. No folder total, no name or type of the selected or hovered item, no free space (2026-11-05) | Windows 11 File Explorer's status bar: item count, divider, selection and its size | Keep; D-N13. |
+| Right | the update button 24 × 24 only while an update needs the user (the status mode, **12** px, is hidden: Explorer names no build there; 2026-11-02); then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph. No free space and no zoom slider (2026-11-05) | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
 
 ### 4.8 Details pane
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
+| Default | Closed for a new user; Details or Alt+Shift+P opens it, and the choice is saved | Windows 11 Explorer opens with the Details and Preview panes closed | Keep. |
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
 | Header | "Details" at 13 px; close button 24 × 24, glyph 12; 20 px below | — | Keep. |
 | Preview | min height 148; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); icon 83 with `drop-shadow(0 4px 4px alpha(black, .04))`; 18 px below; thumbnails when available (gain) | — | safe |
@@ -594,6 +595,7 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Submenu arrow | chevron 12 `@ox_muted`, right end | same | chevron margin 24 (MF#L257) | Keep. |
 | Submenu | shown in the same popup, in place of the menu's items, under a back row (arrow-left 16 and the submenu's name) and a separator | same | GTK's sliding PopoverMenu submenus; Windows cascades a second flyout | deviation: one popup, so no nested Wayland popup grab |
 | Quick-action strip (Windows 11 style only) | — | five 34-high icon buttons at 20 % width each, 2 px gap and padding, above the list ✓ | Windows 11 context menu (observed, unverified) | Keep. |
+| Send to (classic item menu only) | a submenu row between dividers above Cut, as in Windows Explorer's classic menu; its rows in Windows' order: Bluetooth device, Compressed (zipped) folder, Desktop (create shortcut), Documents, Mail recipient, then the removable drives and saved network locations under their This PC names; rows the computer lacks are left out, rows that cannot run are disabled with the reason in their tooltip; Documents and Mail recipient show Fluent's colour art, as Windows shows colour glyphs, the others their Fluent glyphs, as Fluent has no colour art for them (CMD-038) | — (Windows 11's compact menu has no Send to) | Windows Explorer classic menu, Send To folder | Keep. |
 
 ### 4.10 Tooltips
 
@@ -691,7 +693,7 @@ all copy jobs). Templates: `resources/ui/progress-window.ui` and
 |---|---|---|
 | Window | Content 460 wide; not resizable, as the Windows window is not: it takes its natural height each time More details opens or closes and each time an action comes or goes, up to 560 for the list, which then scrolls. No parent, no position, not modal: the desktop places it (Wayland). Background `@ox_bg`. | Width: measured from screenshots, not a source. Fixed size: Windows. No placement: Wayland. |
 | Title | One action: its percentage, "44% complete". Several: "2 Running Actions". | UX-PROG ("66% Complete" for a modeless progress window); the plural form from Windows screenshots. |
-| When it shows | After an action has run for 1 s, without taking the focus; never for an operation that ends sooner. An action that already waited before it started (a slow New ▸ Text document) shows at once. No widget has focus and no focus ring shows when it opens; Tab reaches the folder links, whose ring the keyboard shows. | UX-PROG ("two seconds or longer" need feedback; "Don't steal input focus"). The 1 s value is not from a source. |
+| When it shows | After an action has run for 1 s, without taking the focus; never for an operation that ends sooner. An action that already waited before it started (a slow New ▸ Text Document or another file from New) shows at once. No widget has focus and no focus ring shows when it opens; Tab reaches the folder links, whose ring the keyboard shows. | UX-PROG ("two seconds or longer" need feedback; "Don't steal input focus"). The 1 s value is not from a source. |
 | When it closes | When its last action ends. Closing it cancels every action; finished items stay. | Observed Windows behaviour, not a source. |
 | Action | Padding `14 20`; actions divided by 1 px `@ox_border`. Line 1, 12 px: "Copying 1,718 items from Downloads to Backup", each folder a link in `@ox_accent` that opens it in a new window. Line 2: "44% complete", 18 px, with Pause (Play while paused) and Cancel as 28 × 28 flat icon buttons (Fluent `pause_16`, `play_16`, `dismiss_16`), named "Pause", "Resume" and "Cancel". Bar: 14 px trough `@ox_chrome` with a 1 px `@ox_border` edge, fill `@ox_accent`. | Verbs: SH-ACT (Copying, Moving, Recycling, Deleting); Extracting and Compressing are not Shell actions. Links and per-job pause/stop: B8-COPY. Sizes: not a source. |
 | Paused | Bar fill, the graph's area, part done and speed line `@ox_caution`, all on the next frame, with details open or closed, and back on Resume; no fade. Pause becomes Resume. | UX-PROG ("Turn the progress bar yellow … If the user has paused, change the Pause button label to Resume"). |
@@ -1020,7 +1022,7 @@ are built, use these rules:
 | Split view | Two content panes separated by 1 px `@ox_border`. The inactive pane's header labels use `@ox_text_tertiary`; the active pane keeps them `@ox_muted`. No extra chrome. |
 | Filter bar | A strip below the column header, styled as the search-info bar (§4.15), with a 34 px field. |
 | Zoom | Ctrl + wheel and Ctrl + +/−, already mapped to text size (80–200 %) and icon size. There is no status-bar slider, because Explorer has none. |
-| Free space | "N GB free" at 12 px in the status bar's left group, after the selection text. |
+| Free space | Not in the status bar, as Explorer has none there: This PC's drive cards and a drive's Properties show it. |
 | Selection checkboxes | Optional 16 × 16 checkbox before the row icon, shown on hover and for selected rows (Explorer "Item check boxes", observed, unverified). |
 | Hidden files | View ▾ > Show > Hidden items toggle, as Windows 11 has it (2026-11-03; it was also in More options). Hidden entries at `opacity: .6`, like the cut style. |
 | Terminal panel | Bottom pane with the status-bar treatment: 1 px `@ox_border` top, `@ox_bg`. |

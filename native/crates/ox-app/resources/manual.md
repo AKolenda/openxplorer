@@ -20,7 +20,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Files and folders
 
-- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.
+- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, "New Text Document.txt" (or "New Text Document (2).txt" when that name is taken), then renamed in place: type its name and press Enter.
 - Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.
 - Rename with F2. Select several items to rename them together.
 - Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.
@@ -32,7 +32,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 ## Views and sorting
 
 - View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.
-- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
+- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
 - View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.
 - Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
@@ -44,7 +44,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Search
 
-- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.
+- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.
 - Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
 

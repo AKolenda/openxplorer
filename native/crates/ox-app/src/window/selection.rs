@@ -17,7 +17,7 @@ use crate::folder_view::shown_name::shown_name;
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
-use super::status_bar::{self, StatusSubject};
+use super::status_bar::StatusSubject;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -95,7 +95,6 @@ impl BrowserWindow {
     fn update_selection_state(&self) {
         self.update_status();
         self.update_details_pane();
-        self.follow_quick_look();
         let selected = self.folder_pane().model().summary().count;
         self.set_action_enabled(WindowAction::Open, selected >= 1);
         self.set_action_enabled(WindowAction::PinSelected, selected == 1);
@@ -106,6 +105,7 @@ impl BrowserWindow {
         self.update_size_actions();
         self.update_archive_actions();
         self.update_share_command();
+        self.update_send_to_actions();
         self.picker_selection_changed();
     }
 
@@ -149,22 +149,11 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
-                bytes: self.folder_pane().model().shown_file_bytes(),
                 loading: self.is_busy() && self.is_slow(),
             }
         };
-        let model = self.folder_pane().model();
-        let selected = model.summary();
-        let counts_items = self.folder_pane().details().counts_items();
-        let single = (selected.count == 1)
-            .then(|| {
-                model
-                    .selected_items()
-                    .first()
-                    .map(|item| status_bar::item_text(item, counts_items))
-            })
-            .flatten();
-        self.status_bar().set_counts(subject, selected, single);
+        let selected = self.folder_pane().model().summary();
+        self.status_bar().set_counts(subject, selected);
         self.show_watch_state();
     }
 
@@ -215,10 +204,10 @@ impl BrowserWindow {
 mod tests {
     use super::*;
 
-    /// A reload changes every file's metadata. Its intermediate splices
-    /// must not each scan the entire folder for the status bar's total.
+    /// A reload changes every file's metadata in place, keeping the
+    /// selection, and an explicit selection afterwards still saves at once.
     #[gtk::test]
-    fn a_large_metadata_reload_computes_totals_once_after_reconciliation() {
+    fn a_large_metadata_reload_keeps_the_selection() {
         use crate::folder_view::{item::FileItem, reconcile};
         use crate::test_support::harness::{Fixture, TestWindow};
 
@@ -237,20 +226,12 @@ mod tests {
                 entry
             })
             .collect();
-        let expected: u64 = entries.iter().filter_map(|entry| entry.size).sum();
-        model.take_total_visits();
 
         test.window.change_model(|| {
             reconcile::update_in_place(&store, entries);
             test.window.change_model(|| model.select_uris(&selected));
         });
 
-        assert_eq!(model.shown_file_bytes(), expected);
-        let visited = model.take_total_visits();
-        assert!(
-            visited <= 2048,
-            "a 1024-row refresh visited {visited} rows for totals"
-        );
         assert_eq!(model.selected_uris(), selected);
         model.select_only(1);
         assert_eq!(

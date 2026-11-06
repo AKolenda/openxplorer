@@ -63,6 +63,7 @@ mod renaming_several;
 mod search;
 mod search_options;
 mod selection;
+mod send_to;
 mod settings;
 mod share;
 mod sidebar;

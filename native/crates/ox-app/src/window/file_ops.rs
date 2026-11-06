@@ -31,8 +31,7 @@
 //! | `delete_label` | The name of Delete: "Delete", or "Delete permanently" in the Recycle Bin |
 //! | `names` | The name check of the name dialogs (`validateName`) |
 //! | `name_dialog` | The dialog that asks for a name (`nameDialog`) |
-//! | `new_items` | New folder, and New file from a template |
-//! | `template_dialog` | The New file and New from template dialog |
+//! | `new_items` | New folder, and the New menu's documents and templates, made in place |
 //! | `template_menu` | The user's templates in the New menu, subfolders as submenus |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
@@ -80,7 +79,6 @@ mod recycle_bin;
 mod rename;
 mod running;
 mod shortcuts;
-mod template_dialog;
 mod template_menu;
 mod transfer;
 mod unfinished;
@@ -92,6 +90,7 @@ use ox_core::ops::TemplateList;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+pub(super) use jobs::MAX_JOBS;
 pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
 
@@ -128,9 +127,14 @@ impl FileOperations {
         self.running.is_some()
     }
 
+    /// How many transfers run now, each with its own panel.
+    pub(crate) fn job_count(&self) -> usize {
+        self.jobs.len()
+    }
+
     /// True while an exclusive operation runs or a paste is being planned:
     /// no new file operation may start.
-    fn is_busy(&self) -> bool {
+    pub(crate) fn is_busy(&self) -> bool {
         self.is_running() || self.planning
     }
 

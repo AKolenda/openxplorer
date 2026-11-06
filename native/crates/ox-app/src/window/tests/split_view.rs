@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Split view and how folders open into tabs: F3, the two panes, a folder
+//! Split view and how folders open into tabs: View > Split view, the two
+//! panes, a folder
 //! opened with modifiers held, and folders dropped beside the tabs.
 
 use gtk::prelude::*;
@@ -10,9 +11,9 @@ use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWin
 use crate::window::session::{PaneSide, TabId};
 use crate::window::WindowAction;
 
-/// F3 opens a second pane at the same folder, in front; each pane keeps
-/// its own folder, the address follows the active one, and F3 again
-/// closes the active pane.
+/// Split view opens a second pane at the same folder, in front; each
+/// pane keeps its own folder, the address follows the active one, and
+/// Split view again closes the active pane.
 ///
 /// parity: VIEW-059
 #[gtk::test]

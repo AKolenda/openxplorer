@@ -57,7 +57,7 @@ schema = 1
 id = "NAV-001"
 area = "NAV"
 title = "Back and Forward buttons walk per-tab history"
-behaviour = "Back (tooltip 'Back (Alt+Left)') and Forward (tooltip 'Forward (Alt+Right)') move one step in the active tab's own history without adding entries. Back is disabled at index 0, Forward at the last entry. Each tab has independent history."
+behaviour = "Back and Forward move one step in the active tab's own history without adding entries. Back is disabled at index 0, Forward at the last entry. Each tab has independent history. As in Windows 11 File Explorer, their tooltips name where they lead, by the title its tab would have: 'Back to Downloads (Alt + Left Arrow)', 'Forward to Documents (Alt + Right Arrow)'; where they lead nowhere, 'Back (Alt + Left Arrow)' and 'Forward (Alt + Right Arrow)'."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -90,7 +90,7 @@ bridge = ["list"]
 dolphin = "Go > Back/Forward; Dolphin Back/Forward toolbar buttons with history dropdown on long-press/right-click.; Back/Forward, Alt+Left/Alt+Right; go_back: Alt+Left, Back key, Backspace; go_forward: Alt+Right, Forward key"
 gnome = "GtkButton in header; per-tab history model"
 native = "done"
-native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_say_their_keys_and_follow_each_tabs_own_history): the buttons' tooltips, their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
+native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_say_their_keys_and_follow_each_tabs_own_history): the buttons' tooltips naming where they lead or only their key (native/crates/ox-app/src/window/navigation_buttons.rs, show_navigation_tooltips, run whenever the location is rendered), their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
 
 [[feature]]
 id = "NAV-002"
@@ -181,7 +181,7 @@ native_note = "native/crates/ox-app/src/history.rs (navigating_after_back_drops_
 id = "NAV-006"
 area = "NAV"
 title = "Back/Forward history drop-down lists"
-behaviour = "A delayed press or right-click on Back or Forward opens a menu of up to 12 history entries with icons and place-relative names such as 'Home/Documents'. Choosing an entry jumps straight there and skips the intermediate steps."
+behaviour = "A delayed press or right-click on Back or Forward opens a menu of up to 12 history entries with icons, each named by its display name as its tab is titled ('Documents'), as Windows 11 File Explorer's menus are. Choosing an entry jumps straight there and skips the intermediate steps."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -194,7 +194,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "go_back/go_forward KToolBarPopupAction (DelayedPopup)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/history_menu.rs: a right-click or long press on Back or Forward opens a menu of up to 12 history steps, nearest first, with the address icon and names relative to the home folder ('Home/Documents'); choosing one runs win.go-history with the step count, so the intermediate steps are skipped. Tested in history_menu.rs unit tests and native/crates/ox-app/src/window/tests/history.rs (the_back_menu_lists_the_history_and_jumps_straight_to_an_entry)."
+native_note = "native/crates/ox-app/src/window/history_menu.rs: a right-click or long press on Back or Forward opens a menu of up to 12 history steps, nearest first, with the address icon and each location's tab title (LocationContext::title_for: 'Documents', 'Home', 'This PC'); choosing one runs win.go-history with the step count, so the intermediate steps are skipped. Tested in history_menu.rs unit tests and native/crates/ox-app/src/window/tests/history.rs (the_back_menu_lists_the_history_and_jumps_straight_to_an_entry, which checks the folders' names)."
 
 [[feature]]
 id = "NAV-007"
@@ -260,7 +260,7 @@ native_note = "Native navigation never keeps a redirecting location as its own s
 id = "NAV-010"
 area = "NAV"
 title = "Up button and Alt+Up go to the parent folder"
-behaviour = "The Up button ('Up (Alt+Up)') and Alt+ArrowUp navigate to the parent location: local folder to its parent, SMB folder to its share, share to the server (smb://host/), device folder to the device root. Up is disabled on Home/This PC/Network/Settings pages and at any root (/, SMB server, device root)."
+behaviour = "The Up button (tooltip 'Up to \"Desktop\" (Alt + Up Arrow)', naming the parent as Windows 11 File Explorer does, or 'Up (Alt + Up Arrow)' where Up is disabled) and Alt+ArrowUp navigate to the parent location: local folder to its parent, SMB folder to its share, share to the server (smb://host/), device folder to the device root. Up is disabled on Home/This PC/Network/Settings pages and at any root (/, SMB server, device root)."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -280,7 +280,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin: Alt+Up goes up.; Go > Up (Alt+Up); Up, Alt+Up; go_up: Alt+Up"
 native = "done"
-native_note = "Parents: native/crates/ox-core/src/location/display.rs and native/crates/ox-core/tests/location_javascript.rs (parent_locations_match_app_js). native/crates/ox-app/src/window/tests/history.rs (up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots): the 'Up (Alt+Up)' tooltip, Alt+Up from the file list, and Up disabled on This PC, Network and at /."
+native_note = "Parents: native/crates/ox-core/src/location/display.rs and native/crates/ox-core/tests/location_javascript.rs (parent_locations_match_app_js). native/crates/ox-app/src/window/tests/history.rs (up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots): the tooltip naming the parent, and 'Up (Alt + Up Arrow)' at /, Alt+Up from the file list, and Up disabled on This PC, Network and at /."
 
 [[feature]]
 id = "NAV-011"
@@ -325,7 +325,7 @@ native_note = "native/crates/ox-app/src/window/navigation_buttons.rs binds Alt+H
 id = "NAV-013"
 area = "NAV"
 title = "Refresh button, F5 and Ctrl+R reload the folder"
-behaviour = "Refresh (tooltip 'Refresh (F5)') refreshes the environment (sidebar, mounts) and reloads the active listing without clearing it first. F5 and Ctrl+R reload the listing and work even while focus is in a text field. During a search, F5/Ctrl+R instead asks the backend to refresh the first cache root covering the folder and re-runs the search."
+behaviour = "Refresh (tooltip 'Refresh \"Documents\" (F5)', naming the folder as Windows 11 File Explorer does) refreshes the environment (sidebar, mounts) and reloads the active listing without clearing it first. F5 and Ctrl+R reload the listing and work even while focus is in a text field. During a search, F5/Ctrl+R instead asks the backend to refresh the first cache root covering the folder and re-runs the search."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -562,8 +562,8 @@ sources = ["kio:src/filewidgets/kurlnavigatorbutton.cpp:374-383", "v2.0.0:deskto
 python_tests = []
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton::wheelEvent"
-native = "done"
-native_note = "native/crates/ox-app/src/window/crumb_menus.rs: each whole wheel notch over a crumb goes to the previous or next folder beside it (win.crumb-sibling, hidden folders skipped unless shown) while the crumbs fit the bar; the controller is discrete, so a high-resolution wheel's fractions add up to notches, and touchpad scrolling is ignored so one swipe cannot skip through folders. When the crumbs overflow, the wheel scrolls them sideways. Tested in crumb_menus.rs (the_wheel_steps_to_the_folder_beside_and_stops_at_either_end) and native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it, which emits scroll on the crumb's controller: 0.1 does nothing, 1.0 steps, overflowing crumbs pass the wheel on)."
+native = "n-a"
+native_note = "Windows 11 File Explorer's address bar does nothing on the wheel over a crumb, and the product goal is that it feels exactly like Explorer, so the native app drops Dolphin's sibling switching. The wheel over the crumbs only scrolls them sideways when they overflow the bar (native/crates/ox-app/src/window/address_bar.rs). Test: native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_never_switches_folders). Folders beside a crumb stay one click away in the subfolder menu of the crumb before it (NAV-020)."
 
 [[feature]]
 id = "NAV-023"
@@ -2977,7 +2977,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
 native = "partial"
-native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the status-bar slider; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
+native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the View menu's icon sizes; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
 
 [[feature]]
 id = "VIEW-011"
@@ -3012,8 +3012,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "ShowZoomSlider"
-native = "partial"
-native_note = "The native status bar has an icon-size slider, visible in Icons mode, which steps through the 16-256 px levels and updates the view and saved size. Test: native/crates/ox-app/src/window/tests/views.rs (zooming_changes_and_saves_the_view). Missing: a Show zoom slider preference and a tooltip that reports the current pixel size; the tooltip currently says Icon size."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar has no zoom slider, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the slider shown in the icon view is gone. The icon size still zooms with Ctrl+wheel (VIEW-011) and the View menu's icon sizes (VIEW-005, VIEW-010)."
 
 [[feature]]
 id = "VIEW-013"
@@ -3312,7 +3312,7 @@ native_note = "Hidden items shown with Show hidden files are drawn at 60% opacit
 id = "VIEW-027"
 area = "VIEW"
 title = "Details pane toggle"
-behaviour = "The command-bar 'Details' button (highlighted when on), View > 'Details pane' (checked when on) and the pane's own close button toggle the right-hand details pane. The state is saved as a preference."
+behaviour = "The command-bar 'Details' button (highlighted when on), View > 'Details pane' (checked when on) and the pane's own close button toggle the right-hand details pane. The state is saved as a preference. A new user's windows open with it closed, as Windows 11 Explorer opens with its Details and Preview panes closed."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -3332,7 +3332,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "F11 Information panel; Information panel (F11)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved. native/crates/ox-app/src/window/tests/focus.rs (closing_the_details_pane_puts_the_keyboard_in_the_folder): the folder takes the keyboard from a button of the pane that hides."
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved. native/crates/ox-app/src/window/tests/focus.rs (closing_the_details_pane_puts_the_keyboard_in_the_folder): the folder takes the keyboard from a button of the pane that hides. Closed by default, as in Windows 11, where the Python app had it open (native/crates/ox-core/src/settings/preferences.rs: defaults_match_the_python_app); details is stored whatever its value, so a settings file that has it keeps the pane as it was."
 
 [[feature]]
 id = "VIEW-028"
@@ -3547,7 +3547,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "DirectorySizeCount=true (Number of items)"
 native = "done"
-native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off. The status bar's description of a folder uses the count too."
+native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off."
 
 [[feature]]
 id = "VIEW-038"
@@ -3874,7 +3874,7 @@ python_tests = []
 bridge = []
 dolphin = "Dolphin status bar: 'N Folders, M Files (size)' and selection summary."
 native = "done"
-native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/window/tests/listing.rs (a_slow_listing_shows_the_line_and_says_loading); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Deliberate change (owner request): 'N items · Loading…' shows only once a location has taken 300 ms to look up and list (window/slow_delay.rs, VIEW-068), so fast listings never flash it. The selection also shows the selected files' total size, as Windows does."
+native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/window/tests/listing.rs (a_slow_listing_shows_the_line_and_says_loading); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Deliberate change (owner request): 'N items · Loading…' shows only once a location has taken 300 ms to look up and list (window/slow_delay.rs, VIEW-068), so fast listings never flash it. As in Windows 11 File Explorer, a thin divider follows the count while something is selected, and the selection reads '1 item selected' or 'N items selected', followed by the selected files' size as Explorer writes sizes ('1 item selected  19.0 KB', 'N items selected  1.23 MB') only while every selected item is a file (status_bar.rs the_selection_shows_its_count_and_file_size; window/tests/environment.rs the_status_bar_says_ready_on_a_page_and_counts_a_folder)."
 
 [[feature]]
 id = "VIEW-051"
@@ -3893,8 +3893,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::requestStatusBarText"
-native = "done"
-native_note = "The status bar adds the total size of the files shown to the item count ('12 items  4.2 MB', summed once per change of the items shown) and the selection keeps its count and files' size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_count_adds_the_files_size_and_one_item_is_described; folder_view/model.rs shown_file_bytes). Folder sizes are never measured by themselves: Calculate folder size(s) measures on request, with Cancel scan (PROP-026, PROP-029), so remote folders are only measured when the user asks."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar gives no total size for the folder, only the size of the selection, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the count is 'N items' alone. The selected files' size stays, as Windows shows it (VIEW-050). A folder's size is in its Properties and in Calculate folder size(s) (PROP-026, PROP-029)."
 
 [[feature]]
 id = "VIEW-052"
@@ -3911,8 +3911,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KFileItem::getStatusBarInfo"
-native = "done"
-native_note = "One selected item is described in the status bar by name, type and size (or item count, or measured size), and the item under the pointer is described the same way until the pointer leaves the items, then the selection again (native/crates/ox-app/src/window/status_bar.rs item_text and show_hovered, window/details_hover.rs; the_count_adds_the_files_size_and_one_item_is_described)."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar names neither the selected item nor the one under the pointer, only '1 item selected' and its size (VIEW-050), and OpenXplorer's status bar follows it (owner request, 2026-11-05). The details pane still describes the selected item, and the item under the pointer while it follows the pointer (PROP-010); the Details view's Type and Size columns give an item's type and size."
 
 [[feature]]
 id = "VIEW-053"
@@ -3933,8 +3933,8 @@ python_tests = []
 bridge = ["properties", "list"]
 dolphin = "ShowSpaceInfo (default true); Status bar space info (ShowSpaceInfo, on by default)"
 gnome = "g_file_query_filesystem_info_async(filesystem::free)"
-native = "done"
-native_note = "The status bar shows '<X> free' with a 3-pixel capacity bar (red from 90% used) and the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown, hidden on landing pages (native/crates/ox-app/src/window/free_space.rs the_status_bar_says_how_much_room_is_left, status_bar.rs). A click on it, or a secondary click on the status bar, offers Analyse disk usage when an analyser is installed (window/disk_tools.rs, the_status_bar_offers_the_analyser_for_a_local_folder)."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar shows no free space, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the '<X> free' text and its capacity bar are gone. Free space stays where Windows shows it: the drive cards of This PC, with their used-space bar and '<free> free of <total>' (HOME-004), and a drive's Properties. A secondary click on the status bar still offers Analyse disk usage when an analyser is installed (PROP-015)."
 
 [[feature]]
 id = "VIEW-054"
@@ -4066,7 +4066,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "split_view: F3"
 native = "done"
-native_note = "Split view (F3, View ▸ Split view): the tab shows two folder panes side by side, each a tab of the session of its own with its own location, history, selection and listing; the active pane stands in the strip for its tab, so the address bar, history buttons, status bar, details pane, commands and Sort/View menus follow it. A click, keyboard focus, Ctrl+wheel or a drag entering the other pane makes it active; the active pane's caption has the accent underline and the other pane is dimmed. F3 again closes the active pane (Dolphin's default). Settings ▸ General ▸ Windows and tabs: 'Open new windows in split view' and 'Tab key switches between split panes'. Split tabs are saved with the session (TAB-053). F3 was free: Explorer's F3 search is Ctrl+F here. Moving a split tab to another window or reopening a closed one takes its active pane only. (native/crates/ox-app/src/window/split_view.rs, window/session/split.rs, window/pane_content.rs). Tests: native/crates/ox-app/src/window/tests/split_view.rs (each_pane_keeps_its_folder_and_the_window_follows_the_active_one), window/session/split.rs (each_pane_of_a_split_tab_keeps_its_own_history). A split measures the same height for any width, also before its first layout, since the empty page scrolls (window/tests/split_view.rs: a_split_measures_the_same_height_whatever_width_it_is_given). Each pane's empty page opens the folder menu of its own folder (window/tests/empty_folder.rs: each_pane_of_a_split_tab_has_its_own_empty_page_menu)."
+native_note = "Split view (View ▸ Split view): the tab shows two folder panes side by side, each a tab of the session of its own with its own location, history, selection and listing; the active pane stands in the strip for its tab, so the address bar, history buttons, status bar, details pane, commands and Sort/View menus follow it. A click, keyboard focus, Ctrl+wheel or a drag entering the other pane makes it active; the active pane's caption has the accent underline and the other pane is dimmed. Split view again closes the active pane (Dolphin's default). Settings ▸ General ▸ Windows and tabs: 'Open new windows in split view' and 'Tab key switches between split panes'. Split tabs are saved with the session (TAB-053). Split view has no key: F3 is Windows Explorer's search key, which moves to the search box here too (CMD-036), so Dolphin's F3 is not kept. Moving a split tab to another window or reopening a closed one takes its active pane only. (native/crates/ox-app/src/window/split_view.rs, window/session/split.rs, window/pane_content.rs). Tests: native/crates/ox-app/src/window/tests/split_view.rs (each_pane_keeps_its_folder_and_the_window_follows_the_active_one), window/session/split.rs (each_pane_of_a_split_tab_keeps_its_own_history). A split measures the same height for any width, also before its first layout, since the empty page scrolls (window/tests/split_view.rs: a_split_measures_the_same_height_whatever_width_it_is_given). Each pane's empty page opens the folder menu of its own folder (window/tests/empty_folder.rs: each_pane_of_a_split_tab_has_its_own_empty_page_menu)."
 
 [[feature]]
 id = "VIEW-060"
@@ -5974,7 +5974,7 @@ native_note = "Changed to match Windows Explorer: Delete is named plainly \"Dele
 id = "CMD-004"
 area = "CMD"
 title = "New menu"
-behaviour = "The New command and background 'New…' open a menu: 'Folder' (shortcut Ctrl+Shift+N), 'Text document', 'File…', separator, 'Markdown document', 'CSV file', 'JSON file', 'HTML document', separator, 'From template…'. From the command bar it opens under the button; from the background menu it opens at the same point."
+behaviour = "The New command and background 'New…' open a menu laid out as Windows 11's: 'Folder' (shortcut Ctrl+Shift+N), 'Shortcut', separator, 'Bitmap image', 'Rich Text Document', 'Text Document', 'Compressed (zipped) Folder', then, after a separator, the user's templates (OPS-003). From the command bar it opens under the button; from the background menu it opens at the same point. (Before 2026-11-06 it was app.js's: 'Folder', 'Text document', 'File…', separator, 'Markdown document', 'CSV file', 'JSON file', 'HTML document', separator, 'From template…'.)"
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -5989,7 +5989,7 @@ python_tests = [
 bridge = ["templates"]
 dolphin = "Create New submenu"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place); native/crates/ox-app/src/window/tests/file_operations.rs."
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place); native/crates/ox-app/src/window/tests/command_bar.rs (the_menus_list_the_current_items_between_the_same_dividers); native/crates/ox-app/src/window/tests/new_text_document.rs (the_other_new_files_are_made_at_once_and_renamed_in_place). Windows 11's New menu on a stock system (no Office): Folder and Shortcut, then the registered types Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder; the XDG Templates folder is Linux's counterpart of further registered types. Every item but Folder and Shortcut makes its file at once and renames it in place (OPS-002, OPS-003); Shortcut keeps the link dialog (OPS-004). 'File…', the Markdown, CSV, JSON and HTML starters and 'From template…' left with the New from template dialog, which Windows 11 does not have (see OPS-002)."
 
 [[feature]]
 id = "CMD-005"
@@ -6241,7 +6241,7 @@ native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_cli
 id = "CMD-016"
 area = "CMD"
 title = "Shortcut hints in menus and tooltips"
-behaviour = "Menu items show their keys: Open 'Enter', Cut 'Ctrl+X', Copy 'Ctrl+C', Paste 'Ctrl+V', Rename 'F2', Delete/Move to Trash 'Delete', Properties 'Alt+Enter', Refresh 'F5', Folder 'Ctrl+Shift+N', New window 'Ctrl+N', Larger text 'Ctrl++', Smaller text 'Ctrl+−', Reset text size 'Ctrl+0', Show more options 'Shift+F10'. Button tooltips: 'Back (Alt+Left)', 'Forward (Alt+Right)', 'Up (Alt+Up)', 'Refresh (F5)', 'New tab (Ctrl+T)', 'Cut (Ctrl+X)', 'Copy (Ctrl+C)', 'Paste files (Ctrl+V)', 'Rename (F2)', 'Move to Trash (Delete)' or 'Delete permanently (Delete)', 'Settings (Ctrl+,)'."
+behaviour = "Menu items show their keys: Open 'Enter', Cut 'Ctrl+X', Copy 'Ctrl+C', Paste 'Ctrl+V', Rename 'F2', Delete/Move to Trash 'Delete', Properties 'Alt+Enter', Refresh 'F5', Folder 'Ctrl+Shift+N', New window 'Ctrl+N', Larger text 'Ctrl++', Smaller text 'Ctrl+−', Reset text size 'Ctrl+0', Show more options 'Shift+F10'. Button tooltips: Windows 11 File Explorer's 'Back to <folder> (Alt + Left Arrow)', 'Forward to <folder> (Alt + Right Arrow)', 'Up to \"<folder>\" (Alt + Up Arrow)', 'Refresh \"<folder>\" (F5)' (NAV-001, NAV-010, NAV-013), 'New tab (Ctrl+T)', 'Cut (Ctrl+X)', 'Copy (Ctrl+C)', 'Paste files (Ctrl+V)', 'Rename (F2)', 'Move to Trash (Delete)' or 'Delete permanently (Delete)', 'Settings (Ctrl+,)'."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -6608,7 +6608,7 @@ native_note = "Every letter shortcut (Ctrl+A, C, X, V, F, H, L, N, R, T, W, Z, C
 id = "CMD-036"
 area = "CMD"
 title = "Windows Explorer's Ctrl+E, Ctrl+D and F11"
-behaviour = "As in Windows 11 File Explorer: Ctrl+E moves keyboard focus to the search box and selects its text, exactly as Ctrl+F does, from any focus (the Settings tab's search on Settings). Ctrl+D moves the selection to the Recycle Bin exactly as Delete does: the same confirmation settings, the same permanent delete after asking where a location has no Recycle Bin, the same Undo step; like Delete it does nothing in a text field (the search box, the address being typed, a name being renamed), on a breadcrumb or on the Settings page, where the field keeps the key. F11 shows the window full screen and, pressed again, gives it back the size and maximized state it had; full screen is never saved as the next window's size, and a file dialog (picker) keeps its size. F3 stays Split view (VIEW-059). The keyboard shortcuts window (CMD-032) lists all three and Alt+P (VIEW-063)."
+behaviour = "As in Windows 11 File Explorer: Ctrl+E and F3 move keyboard focus to the search box and select its text, exactly as Ctrl+F does, from any focus (the Settings tab's search on Settings). Ctrl+D moves the selection to the Recycle Bin exactly as Delete does: the same confirmation settings, the same permanent delete after asking where a location has no Recycle Bin, the same Undo step; like Delete it does nothing in a text field (the search box, the address being typed, a name being renamed), on a breadcrumb or on the Settings page, where the field keeps the key. F11 shows the window full screen and, pressed again, gives it back the size and maximized state it had; full screen is never saved as the next window's size, and a file dialog (picker) keeps its size. Split view (VIEW-059) therefore has no key, only View > Split view. The keyboard shortcuts window (CMD-032) lists them and Alt+P (VIEW-063)."
 origin = ["openxplorer"]
 priority = "should"
 openxplorer = "missing"
@@ -6618,7 +6618,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "Ctrl+E is a second application accelerator of win.search and F11 the accelerator of win.full-screen (native/crates/ox-app/src/window/actions.rs, WINDOW_ACCELERATORS), so both work from text fields as Ctrl+F does; Ctrl+D is a second trigger of win.trash in the bubble-phase file keys (native/crates/ox-app/src/window/file_ops/shortcuts.rs), which a text field, a crumb, the splitter and the Settings page keep. native/crates/ox-app/src/window/full_screen.rs toggles gtk_window_fullscreen and follows the fullscreened property when the desktop ends full screen itself; window_size.rs saves nothing while full screen, as GTK calls a full-screen window not maximized. The picker turns win.full-screen off (DISABLED_ACTIONS). No GTK, KDE Plasma or app default binds Ctrl+E, Ctrl+D, F11 or Alt+P. Tests: native/crates/ox-app/src/window/tests/explorer_keys.rs; picker.rs (a_dialog_does_not_go_full_screen); shortcuts_window.rs (the_shortcuts_window_lists_explorers_further_keys). The private Xvfb display has no window manager, so the tests check what F11 asks for, not the desktop's full screen."
+native_note = "Ctrl+E and F3 are further application accelerators of win.search and F11 the accelerator of win.full-screen (native/crates/ox-app/src/window/actions.rs, WINDOW_ACCELERATORS), so both work from text fields as Ctrl+F does; Ctrl+D is a second trigger of win.trash in the bubble-phase file keys (native/crates/ox-app/src/window/file_ops/shortcuts.rs), which a text field, a crumb, the splitter and the Settings page keep. native/crates/ox-app/src/window/full_screen.rs toggles gtk_window_fullscreen and follows the fullscreened property when the desktop ends full screen itself; window_size.rs saves nothing while full screen, as GTK calls a full-screen window not maximized. The picker turns win.full-screen off (DISABLED_ACTIONS). No GTK, KDE Plasma or app default binds Ctrl+E, Ctrl+D, F11 or Alt+P; F3 was Dolphin's Split view here until it became Explorer's search key. Tests: native/crates/ox-app/src/window/tests/explorer_keys.rs; picker.rs (a_dialog_does_not_go_full_screen); shortcuts_window.rs (the_shortcuts_window_lists_explorers_further_keys). The private Xvfb display has no window manager, so the tests check what F11 asks for, not the desktop's full screen."
 
 [[feature]]
 id = "CMD-037"
@@ -6639,6 +6639,28 @@ bridge = []
 dolphin = "Share (Purpose share menu, which includes email)"
 native = "done"
 native_note = "The desktops have no portal for a share menu, and KDE's Purpose share menu has no D-Bus or command-line entry point a GTK app can call, so Share uses the Email portal, the one share target every portal-based desktop offers. Tests: native/crates/ox-app/src/window/tests/share.rs (a fake Email portal on the private session bus), native/crates/ox-app/src/window/share.rs (share_needs_files_outside_the_recycle_bin_and_zips), native/crates/ox-app/src/window/picker.rs (the_dialog_has_no_share) and native/crates/ox-core/src/integration/email_portal.rs."
+
+[[feature]]
+id = "CMD-038"
+area = "CMD"
+title = "Send to in the classic menu, as Windows Explorer has it"
+behaviour = "The classic file and folder menu (Show more options, Shift+F10) has a 'Send to' submenu in a group of its own above Cut and Copy, as Windows Explorer's classic menu has it; the compact menu has none, as in Windows 11. It lists, in Windows' order: 'Bluetooth device', only when the computer has a Bluetooth adapter (an hci device under /sys/class/bluetooth) and the desktop has a Bluetooth sender (GNOME Bluetooth's bluetooth-sendto, Blueman's blueman-sendto or KDE BlueDevil's bluedevil-sendfile, in that order), which it starts with the selected files' paths, the sender asking for the device; 'Compressed (zipped) folder', Compress to ZIP file; 'Desktop (create shortcut)', only when the desktop has a Desktop folder; 'Documents', only when it has a Documents folder, which gets a copy; 'Mail recipient', only where the desktop's Email portal can attach files, which is Share (CMD-037); then each mounted removable drive and each saved network location, under the name This PC shows (for example 'Backup (\\\\fileserver) (S:)'), which gets a copy. Documents and Mail recipient show Fluent's colour art (document_20_color, mail_20_color), as Windows shows colour glyphs there; Fluent has no colour art for Bluetooth, the zipped folder, the Desktop or drives, which keep their Fluent glyphs. Fixed disks are not listed, as Windows lists none, and no other application adds entries (Windows' third-party entries are left out). A Recent row sends the file it stands for. Copies run through the transfer engine as a paste into that folder does, with the name-conflict dialog, progress and Undo, and afterwards the sent items stay selected, as in Windows; a read-only destination says 'This folder is read-only.'. Desktop (create shortcut) makes a symbolic link on the Desktop to each item, named as Windows names a new shortcut, the template '%s - Shortcut' filled with the item's whole name ('report.txt - Shortcut', 'Reports - Shortcut'), numbered '(2)', '(3)' when the name is taken by anything, a broken link included; a name too long for that within 255 bytes loses whole characters before its extension, as copies' names do, so the extension and the number are kept; it never replaces anything, Undo moves the shortcuts to the Recycle Bin, and a location without symbolic links (an SMB share through GVfs, a FAT drive) says 'Shortcuts cannot be created here: this location does not support symbolic links.'. ox-core's create_shortcut(target, folder) is the one function that makes such a shortcut. Every entry is a keyboard-reachable menu item named by its label; one that cannot run is disabled with its reason in its tooltip and accessible description: Bluetooth device for a folder ('Only files can be sent to a Bluetooth device.'), Mail recipient as Share is ('Only files can be attached to an email.'), Desktop (create shortcut) in a previous version ('Items in a previous version are read-only.'), Compressed (zipped) folder in a read-only folder ('This folder is read-only.'), Documents, the drives and the network locations while no transfer can start ('Wait for the running file operation to finish.', or 'Four file operations are already running. Wait for one to finish.' while every transfer slot is taken), and Desktop (create shortcut) while any file operation runs; Bluetooth device and Mail recipient use no transfer slot and keep their own rules. A saved network location that is not connected is enabled, as Windows offers a mapped drive that is not connected: choosing it connects it through the window's usual mount and sign-in dialog, and the copy starts only once that succeeds, so no write is replayed after a mount (NET-004); a failed connection is reported and nothing is copied."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/310/270.HTM (Microsoft KB 310270: the Send To folder and its Compressed (zipped) Folder, Desktop (create shortcut) and Mail Recipient entries)",
+  "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-pathyetanothermakeuniquename (the shell's numbering of a taken name)",
+  "https://www.elevenforum.com/t/change-shortcut-name-extension-in-windows-11.3040/ (the NamingTemplates ShortcutNameTemplate default '%s - Shortcut.lnk')",
+  "https://www.elevenforum.com/t/add-or-remove-items-in-send-to-context-menu-in-windows-11.4984/ (Windows 11's default Send to entries)",
+  "gnome-bluetooth:sendto/main.c (bluetooth-sendto [--device] FILE…)",
+  "blueman:apps/blueman-sendto.in (blueman-sendto [-d DEVICE] FILE…)",
+  "bluedevil:src/sendfile/main.cpp (bluedevil-sendfile -f FILE…)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "Tests: native/crates/ox-app/src/window/context_menu/entries.rs (send_to_lists_windows_destinations_in_windows_order, send_to_leaves_out_what_the_computer_lacks, send_to_disables_what_cannot_run_and_says_why, a_folder_classic_menu_keeps_the_python_order_and_shortcuts), native/crates/ox-core/src/ops/shortcuts.rs (the naming, numbering, never-replace, unsupported-location and Undo tests), native/crates/ox-core/src/integration/bluetooth_sender.rs (adapter and sender detection, argument lists) and native/crates/ox-app/src/window/tests/send_to.rs (the submenu from the keyboard, a copy to Documents with Undo, the Desktop shortcut, a saved share that is not connected connecting first). Windows cascades the submenu; here it opens in place like every submenu (ui-spec 4.9). Windows puts a hidden .lnk on a shortcut; a symbolic link has none, so the name is exactly what Explorer shows. Mail recipient uses the Email portal rather than xdg-email: the portal is the desktop's own way, already used by Share, and passes the files as descriptors."
 
 [[feature]]
 id = "OPS-001"
@@ -6673,7 +6695,7 @@ native_note = "native/crates/ox-app/src/window/tests/new_folder.rs (new_folder_m
 id = "OPS-002"
 area = "OPS"
 title = "New file from built-in or user templates"
-behaviour = "New > 'Text document' creates the file in the current location at once, as Windows Explorer does, counting as the window's running file operation while it is written (closing and Quit treat it as one, and after a second it becomes an action of the progress window, with Cancel, which shows at once rather than waiting another second), with the Text document starter's content: 'New Text Document.txt', or 'New Text Document (2).txt', '(3)' and so on when that name is taken, never overwriting anything, including an item that takes the name while the file is published. The file is then selected and renamed in place with only the name before '.txt' selected: Enter keeps the typed name, Escape keeps 'New Text Document.txt', and leaving the field commits as any rename in place does. Undo moves it to the Trash. A file that cannot be created says why in the toast. New > 'File…' opens 'New file' ('Create an empty file with any filename and extension.'). 'Markdown document', 'CSV file', 'JSON file', 'HTML document' and 'From template…' open 'New from template' ('Create a new copy without changing the template.'). The dialog has a 'File name' field prefilled with the template's suggested name and a 'File type / template' select listing built-in templates and user templates (suffix ' · Your template'); changing the select resets the suggested name. A note warns that empty .docx/.xlsx/.pdf/.odt files are invalid and that templates are copied, never executed. The line 'Templates folder: <dir>' follows. 'Create' is disabled while running, and the listing reloads on success. An existing name is never overwritten."
+behaviour = "New > 'Text Document', 'Bitmap image', 'Rich Text Document' and 'Compressed (zipped) Folder' create the file in the current location at once, as Windows 11 File Explorer does, counting as the window's running file operation while it is written (closing and Quit treat it as one, and after a second it becomes an action of the progress window, with Cancel, which shows at once rather than waiting another second): 'New Text Document.txt' (empty), 'New Bitmap image.bmp' (a blank 1 × 1 white 24-bit bitmap, so image programs open it), 'New Rich Text Document.rtf' (a minimal RTF with no text) or 'New Compressed (zipped) Folder.zip' (an empty ZIP, the 22-byte end of central directory record Windows writes), or the name with ' (2)', ' (3)' and so on before the extension when that name is taken, never overwriting anything, including an item that takes the name while the file is published. The file is then selected and renamed in place with only the name before the extension selected: Enter keeps the typed name, Escape keeps the name it was made with, and leaving the field commits as any rename in place does. Undo moves it to the Trash. A file that cannot be created says why in the toast. No dialog asks first. (Before 2026-11-06, a port of app.js newTemplateDialog: 'File…' opened 'New file' ('Create an empty file with any filename and extension.'), and 'Markdown document', 'CSV file', 'JSON file', 'HTML document' and 'From template…' opened 'New from template' with a 'File name' field and a 'File type / template' select. Windows 11 has no such dialog: a file of any name and extension is a new Text Document renamed in place, and starter documents of other types come from the Templates folder, OPS-003.)"
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -6702,7 +6724,7 @@ bridge = ["templates", "createTemplate", "list", "create"]
 dolphin = "Create New > templates (~/Templates); new_menu (KNewFileMenu)"
 gnome = "XDG_TEMPLATES_DIR; XDG_TEMPLATES_DIR (xdg-user-dir TEMPLATES), as Nautilus's 'New Document' uses"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (a_new_menu_file_starts_from_its_template_and_is_created_from_it); native/crates/ox-app/src/window/file_ops/template_dialog.rs (each_new_menu_item_starts_with_its_own_template_and_title, user_templates_are_marked_in_the_list); the template rules are OPS-048. The new file is selected afterwards. Text document: native/crates/ox-app/src/window/tests/new_text_document.rs (new_text_document_makes_the_file_at_once_and_renames_its_name_in_place, taken_names_give_the_next_numbered_text_documents, escape_keeps_the_name_new_text_document, leaving_the_field_keeps_the_typed_name, a_listing_that_arrives_during_the_rename_keeps_the_field, undo_takes_the_new_text_document_away, the_other_new_items_still_open_their_dialogs, closing_during_a_slow_create_asks_and_cancels_it, cancelling_a_slow_create_leaves_no_file_and_says_nothing, a_create_that_ends_in_another_tab_leaves_that_tab_alone, a_create_that_ends_after_navigating_away_leaves_the_new_folder_alone, a_create_that_ends_back_in_its_own_tab_renames_there, a_slow_create_shows_the_cancellable_panel_after_a_moment, a_quick_create_never_shows_the_panel, going_back_to_the_tab_shows_a_file_created_while_away, a_search_started_during_the_create_is_left_alone, a_selection_made_during_the_create_is_left_alone, typing_an_address_during_the_create_keeps_the_keyboard, new_text_document_waits_while_an_archive_runs, a_slow_create_never_takes_or_ends_another_writes_panel, a_slow_creates_panel_is_its_own_until_it_ends, properties_opened_during_the_create_is_left_alone, scrolling_during_the_create_is_left_alone, a_slow_create_shows_its_panel_once_another_write_lets_it_go, another_window_taking_focus_during_the_create_keeps_it, the_archive_commands_come_back_once_a_background_create_ends, the_archive_commands_wait_while_a_slow_create_writes); native/crates/ox-core/tests/ops_create.rs (a_numbered_starter_takes_the_next_free_name_before_the_extension, a_numbered_starter_never_goes_to_a_server_listing, a_cancelled_numbered_starter_leaves_nothing); native/crates/ox-core/src/ops/new_from_template.rs (create_numbered_starter publishes the starter through create_from_template under the first free numbered name). While the file is made it is the window's running operation: other file commands wait, closing or Quit asks or waits as for any running operation, and after a second it becomes an action of the progress window with Cancel, the window showing at once since the create already waited (native/crates/ox-app/src/window/tests/new_text_document.rs: a_slow_creates_progress_window_shows_with_its_action), which stops it without a message or a partial file; a quick create shows nothing. It does not start while any other write runs, an extraction or compression included, and it never takes or hides another write's panel; it shows its own once that panel is free. The file is renamed in place only when the user did nothing in the window meanwhile (no key press, mouse button press or scroll), it is still the active window, which it is not while a Properties window has the focus, no dialog is in front, and the same tab is still in front on the same folder without a search. Otherwise the file stays, nothing is selected or renamed, and the folder, when a tab still shows it, is listed again: at once on screen, else when that tab is shown. Before, Text document opened the New from template dialog, a port of app.js newTemplateDialog."
+native_note = "As Windows 11's New menu (2026-11-06): Bitmap image, Rich Text Document and Compressed (zipped) Folder are made at once and renamed in place as Text Document is (native/crates/ox-app/src/window/tests/new_text_document.rs: the_other_new_files_are_made_at_once_and_renamed_in_place; native/crates/ox-core/tests/ops_create.rs: each_new_document_is_made_under_its_windows_name_with_its_content, which also lists the empty ZIP as an empty archive; native/crates/ox-core/src/ops/templates.rs: the_new_bitmap_is_a_valid_blank_bmp). The New file and New from template dialog left with 'File…', the four starters and 'From template…'; ox_core::ops::create_from_template and the six starters of list_templates stay for the bridge (OPS-048). Text Document: native/crates/ox-app/src/window/tests/new_text_document.rs (new_text_document_makes_the_file_at_once_and_renames_its_name_in_place, taken_names_give_the_next_numbered_text_documents, escape_keeps_the_name_new_text_document, leaving_the_field_keeps_the_typed_name, a_listing_that_arrives_during_the_rename_keeps_the_field, undo_takes_the_new_text_document_away, closing_during_a_slow_create_asks_and_cancels_it, cancelling_a_slow_create_leaves_no_file_and_says_nothing, a_create_that_ends_in_another_tab_leaves_that_tab_alone, a_create_that_ends_after_navigating_away_leaves_the_new_folder_alone, a_create_that_ends_back_in_its_own_tab_renames_there, a_slow_create_shows_the_cancellable_panel_after_a_moment, a_quick_create_never_shows_the_panel, going_back_to_the_tab_shows_a_file_created_while_away, a_search_started_during_the_create_is_left_alone, a_selection_made_during_the_create_is_left_alone, typing_an_address_during_the_create_keeps_the_keyboard, new_text_document_waits_while_an_archive_runs, a_slow_create_never_takes_or_ends_another_writes_panel, a_slow_creates_panel_is_its_own_until_it_ends, properties_opened_during_the_create_is_left_alone, scrolling_during_the_create_is_left_alone, a_slow_create_shows_its_panel_once_another_write_lets_it_go, another_window_taking_focus_during_the_create_keeps_it, the_archive_commands_come_back_once_a_background_create_ends, the_archive_commands_wait_while_a_slow_create_writes); native/crates/ox-core/tests/ops_create.rs (a_numbered_document_takes_the_next_free_name_before_the_extension, a_numbered_document_never_goes_to_a_server_listing, a_cancelled_numbered_document_leaves_nothing); native/crates/ox-core/src/ops/new_from_template.rs (create_numbered_document publishes the document under the first free numbered name, through the checks and the no-replace publication of create_from_template). While the file is made it is the window's running operation: other file commands wait, closing or Quit asks or waits as for any running operation, and after a second it becomes an action of the progress window with Cancel, the window showing at once since the create already waited (native/crates/ox-app/src/window/tests/new_text_document.rs: a_slow_creates_progress_window_shows_with_its_action), which stops it without a message or a partial file; a quick create shows nothing. It does not start while any other write runs, an extraction or compression included, and it never takes or hides another write's panel; it shows its own once that panel is free. The file is renamed in place only when the user did nothing in the window meanwhile (no key press, mouse button press or scroll), it is still the active window, which it is not while a Properties window has the focus, no dialog is in front, and the same tab is still in front on the same folder without a search. Otherwise the file stays, nothing is selected or renamed, and the folder, when a tab still shows it, is listed again: at once on screen, else when that tab is shown. Before, Text document opened the New from template dialog, a port of app.js newTemplateDialog."
 
 [[feature]]
 id = "OPS-003"
@@ -6724,7 +6746,7 @@ bridge = ["templates", "createTemplate"]
 dolphin = "KNewFileMenu “Create New” (~/Templates and ~/.local/share/templates/*.desktop)"
 gnome = "XDG TEMPLATES directory (Nautilus “New Document” submenu, subfolders shown as submenus)"
 native = "done"
-native_note = "native/crates/ox-core/src/ops/templates.rs lists the user templates of the XDG Templates folder and of its subfolders (not hidden, not links, three levels deep, each folder in name order, 100 templates at most), a nested one by its path such as Office/Letter.odt; new_from_template.rs opens it one component at a time with openat(O_NOFOLLOW) from the Templates folder, so a folder swapped for a link is refused, and publishes without overwriting (OPS-048 unchanged). native/crates/ox-app/src/window/file_ops/template_menu.rs puts every template directly in the New menu (command bar and the folder menu's New…), named by its file name without the extension, with each subfolder as a submenu that opens in place (menu_popover MenuItem::submenu, with a chevron); choosing one opens the New from template dialog with it chosen. The list is read when the window opens and whenever a New menu opens. The built-in starters and From template… stay. Tests: native/crates/ox-core/tests/ops_create.rs (templates_in_subfolders_are_listed_by_path_and_copied_without_overwriting); template_menu.rs (templates_are_listed_directly_with_subfolders_as_submenus); window/tests/command_bar.rs (nested_submenus_show_one_level_at_a_time_in_one_popup: a subfolder's submenu shows in the New menu's own popup under a back row, as every submenu does)."
+native_note = "native/crates/ox-core/src/ops/templates.rs lists the user templates of the XDG Templates folder and of its subfolders (not hidden, not links, three levels deep, each folder in name order, 100 templates at most), a nested one by its path such as Office/Letter.odt; new_from_template.rs opens it one component at a time with openat(O_NOFOLLOW) from the Templates folder, so a folder swapped for a link is refused, and publishes without overwriting (OPS-048 unchanged). native/crates/ox-app/src/window/file_ops/template_menu.rs puts every template directly in the New menu (command bar and the folder menu's New…), named by its file name without the extension, with each subfolder as a submenu that opens in place (menu_popover MenuItem::submenu, with a chevron); choosing one copies it into the folder at once under its file name, or the next free numbered one ('Letter (2).odt'), then selects it and renames it in place, as New's documents are (native/crates/ox-app/src/window/tests/new_text_document.rs: the_other_new_files_are_made_at_once_and_renamed_in_place; native/crates/ox-core/tests/ops_create.rs: a_numbered_template_copy_takes_the_next_free_name, which also refuses a template the fresh list no longer offers). The list is read when the window opens and whenever a New menu opens. The templates follow Windows 11's four documents after a divider, as further registered types would. Tests: native/crates/ox-core/tests/ops_create.rs (templates_in_subfolders_are_listed_by_path_and_copied_without_overwriting); template_menu.rs (templates_are_listed_directly_with_subfolders_as_submenus); window/tests/command_bar.rs (nested_submenus_show_one_level_at_a_time_in_one_popup: a subfolder's submenu shows in the New menu's own popup under a back row, as every submenu does)."
 
 [[feature]]
 id = "OPS-004"
@@ -6745,7 +6767,7 @@ bridge = ["create"]
 dolphin = "KNewFileMenu 'Link to File or Directory…'; Create New → “Basic Link to File or Directory…”; drop menu “Link Here”"
 gnome = "Gio.File.make_symbolic_link; g_file_make_symbolic_link (Nautilus “Make Link”, Ctrl+M, show-create-link)"
 native = "done"
-native_note = "native/crates/ox-core/src/ops/links.rs (new_link_points_to_the_typed_path_and_is_named_after_it_by_default); native/crates/ox-app/src/window/tests/file_operations.rs (new_link_asks_for_the_path_and_selects_the_new_link). New ▸ 'Link to file or folder…' asks 'New link' for 'Link to' (an absolute path, ~/…, a path relative to the folder or a file: URI) and 'Name' (empty uses the target's name). The target must exist; the link never replaces anything (a taken name stays in the dialog as 'An item named “X” already exists. Nothing was overwritten.'), the folder must be local and pass the write protection. The new link is selected and Undo moves it to the Trash ('Undo Link'). Drops make links with Ctrl+Shift or the drop menu (DND-019)."
+native_note = "native/crates/ox-core/src/ops/links.rs (new_link_points_to_the_typed_path_and_is_named_after_it_by_default); native/crates/ox-app/src/window/tests/file_operations.rs (new_link_asks_for_the_path_and_selects_the_new_link). New ▸ 'Shortcut' (Windows 11's name for it; 'Link to file or folder…' before 2026-11-06) asks 'New link' for 'Link to' (an absolute path, ~/…, a path relative to the folder or a file: URI) and 'Name' (empty uses the target's name). The target must exist; the link never replaces anything (a taken name stays in the dialog as 'An item named “X” already exists. Nothing was overwritten.'), the folder must be local and pass the write protection. The new link is selected and Undo moves it to the Trash ('Undo Link'). Drops make links with Ctrl+Shift or the drop menu (DND-019)."
 
 [[feature]]
 id = "OPS-005"
@@ -11742,7 +11764,7 @@ native_note = "The file list's activate signal and win.open open the selected it
 id = "OPEN-003"
 area = "OPEN"
 title = "Open several selected items at once"
-behaviour = "With several items selected, Enter opens all of them: folders in new tabs (Shift: new windows) and files with their preferred applications, one launch per application where supported. Opening more than 5 items asks 'Are you sure you want to open <n> items?'"
+behaviour = "With several items selected, Enter opens all of them: folders in new tabs (Shift: new windows) and files with their preferred applications, one launch per application where supported. Opening 15 or more items asks 'Are you sure you want to open <n> items?', as Windows File Explorer asks from its MultipleInvokePromptMinimum of 15 (Dolphin asks above 5)."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -11756,7 +11778,7 @@ python_tests = []
 bridge = ["activateItem", "open"]
 dolphin = "itemsActivated / runPreferredApplications"
 native = "done"
-native_note = "Enter (the list's activate signal, window/input.rs connect_view_activation), Open and the item menu's Open act on every selected item (native/crates/ox-app/src/window/open_several.rs): one item opens as a double-click does; with several, each folder and each .desktop link to a folder opens in a background tab in the order of the view, and each file or archive in its default application (an archive is not browsed, since the archive browser is a dialog and several would stack), one launch per file; an item outside a selection of several is never opened; more than five ask 'Are you sure you want to open <n> items?' first (Cancel / Open all). Shift+Enter does not open new windows. Test: native/crates/ox-app/src/window/tests/opening.rs (enter_on_several_items_opens_each_and_asks_for_many). Porting notes: OpenXplorer's Enter opened only when exactly one item was selected."
+native_note = "Enter (the list's activate signal, window/input.rs connect_view_activation), Open and the item menu's Open act on every selected item (native/crates/ox-app/src/window/open_several.rs): one item opens as a double-click does; with several, each folder and each .desktop link to a folder opens in a background tab in the order of the view, and each file or archive in its default application (an archive is not browsed, since the archive browser is a dialog and several would stack), one launch per file; an item outside a selection of several is never opened; 15 or more ask 'Are you sure you want to open <n> items?' first (Cancel / Open all), as Windows File Explorer does, and 14 open without asking. Shift+Enter does not open new windows. Test: native/crates/ox-app/src/window/tests/opening.rs (enter_on_several_items_opens_each_and_asks_for_many). Porting notes: OpenXplorer's Enter opened only when exactly one item was selected."
 
 [[feature]]
 id = "OPEN-004"
@@ -13351,8 +13373,8 @@ python_tests = []
 bridge = []
 dolphin = "n/a (Information panel)"
 gnome = "org.gnome.NautilusPreviewer2 ShowFile (gnome-sushi 46 installed, org.gnome.NautilusPreviewer.service)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/quick_look.rs; native/crates/ox-app/src/window/tests/input.rs (space_previews_the_selected_file_with_the_gnome_previewer). Each window follows GNOME Sushi through an asynchronous gio::DBusProxy for org.gnome.NautilusPreviewer2 made when the window is built (no D-Bus call blocks a key press): when Sushi runs or is D-Bus activatable, Space on one selected file (no typed prefix) calls ShowFile, moving the selection while the preview is open shows the newly selected file, the arrow keys pressed in Sushi's window (SelectionEvent) move the selection, and Space or Escape calls Close. When Sushi closes its window itself (its Visible property turns false after being true) or quits, the window stops following the selection, so the next Space opens a new preview. Without Sushi, or with a folder or several items selected, Space toggles the selection as before, and a typed prefix keeps its space. The Flatpak manifests allow talking to org.gnome.NautilusPreviewer. Missing: the preview is not transient for the OpenXplorer window, because the window handle needs the GDK X11/Wayland bindings (gdk4-x11, gdk4-wayland), which the app does not link. Porting notes: Must not break type-ahead, where Space can be part of a name prefix."
+native = "n-a"
+native_note = "In Windows 11 File Explorer Space only selects the focused item and never opens a previewer, and the product goal is that it feels exactly like Explorer, so the native app no longer asks GNOME Sushi to preview on Space, and the Flatpak no longer talks to org.gnome.NautilusPreviewer. Space selects the current item (SEL-036); Explorer's preview of the selection is its Preview pane, Alt+P (VIEW-070)."
 
 [[feature]]
 id = "PROP-013"
@@ -14294,7 +14316,7 @@ native_note = "A preference change reaches every window through the shared AppCo
 id = "SET-016"
 area = "SET"
 title = "Preference defaults and allowed values"
-behaviour = "Defaults: theme 'system', view 'details', details pane on, showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away; a stored 'win10' that older releases and the Python app wrote as their default loads as 'win11' once, and choosing the classic menu stores 'classicMenuChosen': true so it stays), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
+behaviour = "Defaults: theme 'system', view 'details', details pane off (closed, as Windows 11 Explorer opens; the Python app had it on, and a stored value stays), showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away; a stored 'win10' that older releases and the Python app wrote as their default loads as 'win11' once, and choosing the classic menu stores 'classicMenuChosen': true so it stays), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14872,7 +14894,7 @@ native_note = "native/crates/ox-app/src/theme/desktop_text.rs: the skin reads th
 id = "LOOK-026"
 area = "LOOK"
 title = "Dates and times follow locale and the desktop clock format"
-behaviour = "Dates use the user's locale, as today. Times in Properties timestamps follow GNOME's 12/24-hour clock setting."
+behaviour = "Dates use the user's locale, as today; in en_US the month and day have no leading zero, as Windows' short date M/d/yyyy writes them (9/13/2026 3:05 PM). Times in Properties timestamps follow GNOME's 12/24-hour clock setting."
 origin = ["gnome"]
 priority = "could"
 openxplorer = "partial"
@@ -14882,7 +14904,7 @@ bridge = []
 dolphin = "KDE regional settings (QLocale)"
 gnome = "org.gnome.desktop.interface clock-format; GDateTime locale formatting"
 native = "done"
-native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it (properties_timestamps_follow_the_desktop_clock_format), live, through native/crates/ox-app/src/application/clock_format.rs (the_desktop_clock_format_is_followed_at_once: unset keeps the locale's clock although the schema default is 24h, 12h and 24h apply at once, a reset returns to the locale). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
+native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); en_US alone drops the leading zero of the month and day, as Windows' en-US short date does, and only when the C library really formats in en_US, so a process left in the C locale keeps 09/13/2026 (only_en_us_drops_the_leading_zero_of_the_month_and_day); other locales keep their two-digit fields, as Windows' en-GB, de-DE and fr-FR short dates have them; Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it (properties_timestamps_follow_the_desktop_clock_format), live, through native/crates/ox-app/src/application/clock_format.rs (the_desktop_clock_format_is_followed_at_once: unset keeps the locale's clock although the schema default is 24h, 12h and 24h apply at once, a reset returns to the locale). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
 
 [[feature]]
 id = "LOOK-027"

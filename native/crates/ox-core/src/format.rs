@@ -9,8 +9,10 @@
 //! with a four-digit year and two-digit month and day. The order and
 //! separators come from the C library; see `format/locale_pattern.rs`. In
 //! most locales that is exactly the web UI's Date modified text
-//! (`09/21/2026` in `en_US`, `21.09.2026` in `de_DE`). Where the C library
-//! separates the fields differently from the browser, its separators win
+//! (`21.09.2026` in `de_DE`). In `en_US` the month and day have no leading
+//! zero, as Windows' short date `M/d/yyyy` writes them (`9/21/2026`, where
+//! the web UI wrote `09/21/2026`). Where the C library separates the
+//! fields differently from the browser, its separators win
 //! (`2026年09月21日` in `ja_JP`, where the browser wrote `2026/09/21`).
 //!
 //! The locale's patterns are read on the first call and kept for the life
@@ -26,7 +28,7 @@
 //! day period their own way (`p.m.` in `en-CA`). `glib::DateTime` and the C
 //! library have no CLDR data, so [`date_time_text`] shows the Date modified
 //! text, a comma and the locale's clock time instead:
-//! `09/21/2026, 2:13:20 PM`. The Properties dialog and the file list then
+//! `9/21/2026, 2:13:20 PM`. The Properties dialog and the file list then
 //! show a date the same way. Matching the browser exactly would need CLDR
 //! data from ICU.
 
@@ -39,7 +41,7 @@ use std::sync::OnceLock;
 
 use glib::DateTime;
 
-pub use explorer_text::{contents_text, exact_size_text, grouped};
+pub use explorer_text::{contents_text, exact_size_text, grouped, short_size};
 pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
 pub use relative_date::DateStyle;
@@ -281,7 +283,7 @@ fn round_half_up(numerator: u128, denominator: u128) -> u128 {
     (2 * numerator + denominator) / (2 * denominator)
 }
 
-/// Local date for the Date modified column, for example `09/26/2026` in
+/// Local date for the Date modified column, for example `9/26/2026` in
 /// the US, `26.09.2026` in Germany or `2026年09月26日` in Japan; `—` when
 /// the time is unknown (`None`) or out of range.
 pub fn date_text(unix_seconds: Option<u64>) -> String {
@@ -293,7 +295,7 @@ pub fn date_text(unix_seconds: Option<u64>) -> String {
 
 /// Local date and time for the Properties dialog's Created, Modified and
 /// Accessed rows: the [`date_text`] date and the locale's clock time, for
-/// example `09/26/2026, 7:35:35 PM` in the US or `26.09.2026, 19:35:35` in
+/// example `9/26/2026, 7:35:35 PM` in the US or `26.09.2026, 19:35:35` in
 /// Germany; `Not provided` when the time is unknown (`None`) or out of
 /// range. See the module documentation for how this differs from the web
 /// UI.
@@ -306,7 +308,7 @@ pub fn date_time_text(unix_seconds: Option<u64>) -> String {
 
 /// Local date and short clock time for the Date modified column, as
 /// Windows Explorer and Dolphin show it: the [`date_text`] date and the
-/// locale's clock time without seconds, for example `09/26/2026 7:35 PM`
+/// locale's clock time without seconds, for example `9/26/2026 7:35 PM`
 /// in the US or `26.09.2026 19:35` in Germany; `—` when unknown.
 pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
     unix_seconds
@@ -468,8 +470,9 @@ mod tests {
         time_sample: &'static str,
         /// `%p`.
         day_period: &'static str,
-        /// The web UI's `dateText` for this locale, from Node.js 24.21
-        /// (ICU 78.3, CLDR 48): the Date modified column.
+        /// The Date modified column: the web UI's `dateText` for this
+        /// locale, from Node.js 24.21 (ICU 78.3, CLDR 48), but for
+        /// `en_US`, where it is Windows' short date.
         column: &'static str,
         /// [`date_time_text`]. The comment above each case has the web
         /// UI's `timestamp`, from the same Node.js.
@@ -484,19 +487,21 @@ mod tests {
                 time: self.time_sample.to_string(),
                 day_period: self.day_period.to_string(),
                 zone: "UTC".to_string(),
+                locale: format!("{}.UTF-8", self.locale),
             })
         }
     }
 
     const LOCALE_CASES: [LocaleCase; 5] = [
-        // Web UI: 9/21/2026, 2:13:20 PM
+        // Web UI: 9/21/2026, 2:13:20 PM. Its Date modified column wrote
+        // 09/21/2026; this is Windows' M/d/yyyy.
         LocaleCase {
             locale: "en_US",
             date_sample: "11/22/2033",
             time_sample: "01:44:55 PM",
             day_period: "PM",
-            column: "09/21/2026",
-            properties: "09/21/2026, 2:13:20 PM",
+            column: "9/21/2026",
+            properties: "9/21/2026, 2:13:20 PM",
         },
         // Web UI: 2026-09-21, 2:13:20 p.m.
         LocaleCase {
@@ -615,7 +620,8 @@ mod tests {
         assert_eq!(format_date_time(&time).as_deref(), Some("09/06/2026, 19:05:07"));
     }
 
-    /// The Date modified column shows what the web UI's `dateText` showed.
+    /// The Date modified column shows what the web UI's `dateText` showed,
+    /// but for `en_US`'s Windows short date.
     ///
     /// parity: VIEW-001, LOOK-026
     #[test]
@@ -627,23 +633,19 @@ mod tests {
     }
 
     /// The Date modified column shows the date and the clock time without
-    /// seconds, as Windows Explorer does.
+    /// seconds, as Windows Explorer does: `9/6/2026 7:05 PM` in the US.
     ///
     /// parity: VIEW-004
     #[test]
     fn column_dates_show_the_time_without_seconds() {
-        let us = LocalePatterns {
-            date: "%m/%d/%Y".to_owned(),
-            time: "%-I:%M:%S %p".to_owned(),
-            has_day_period: true,
-        };
+        let us = LOCALE_CASES[0].patterns();
         let time = DateTime::from_utc(2026, 9, 6, 19, 5, 7.0).expect("valid date");
         let text = format_date_short_time_with(&time, &us, ClockFormat::Locale);
-        assert_eq!(text.as_deref(), Some("09/06/2026 7:05 PM"));
+        assert_eq!(text.as_deref(), Some("9/6/2026 7:05 PM"));
         let on_24_hours = format_date_short_time_with(&time, &us, ClockFormat::TwentyFourHour);
         assert_eq!(
             on_24_hours.as_deref(),
-            Some("09/06/2026 19:05"),
+            Some("9/6/2026 19:05"),
             "the desktop's clock"
         );
         assert_eq!(without_seconds("%H:%M:%S"), "%H:%M");
@@ -678,11 +680,11 @@ mod tests {
         };
         assert_eq!(
             on_clock("en_US", ClockFormat::TwentyFourHour),
-            "09/21/2026, 14:13:20"
+            "9/21/2026, 14:13:20"
         );
         assert_eq!(
             on_clock("en_US", ClockFormat::TwelveHour),
-            "09/21/2026, 2:13:20 PM"
+            "9/21/2026, 2:13:20 PM"
         );
         assert_eq!(
             on_clock("en_GB", ClockFormat::TwentyFourHour),

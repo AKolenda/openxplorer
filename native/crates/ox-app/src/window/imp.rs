@@ -193,8 +193,6 @@ pub(crate) struct BrowserWindow {
     /// The column Up and Down keep to in the icon grid, across rows of
     /// different lengths; see [`super::grid_keys`].
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
-    /// The link to GNOME's previewer (PROP-012).
-    pub(super) quick_look: super::quick_look::QuickLook,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
     /// In tests, a volume id and the root it mounts at, standing in for a
@@ -241,8 +239,6 @@ pub(crate) struct BrowserWindow {
     pub(super) closing_tabs_confirmed: Cell<bool>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
-    /// The item under the pointer that the status bar describes.
-    pub(super) hovered_item: RefCell<Option<crate::folder_view::item::FileItem>>,
     /// Until when clicks that open items are ignored, around a drag.
     pub(super) item_clicks_resume_at: Cell<Option<std::time::Instant>>,
     /// Which files under a drag are programs (DND-026).
@@ -335,7 +331,6 @@ impl ObjectImpl for BrowserWindow {
         let window = self.obj();
         window.finish_title_bar();
         window.add_navigation_buttons();
-        window.watch_quick_look();
         self.transfer_panel
             .set(TransferPanel::for_window(&window))
             .expect("constructed runs once per object");

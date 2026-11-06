@@ -22,7 +22,7 @@ msgid "- Ctrl+, or the gear in the command bar opens Settings, which has its own
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
+msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -30,7 +30,7 @@ msgid "- Deleted items go to the Recycle Bin of their drive. Restore puts them b
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
+msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, \"New Text Document.txt\" (or \"New Text Document (2).txt\" when that name is taken), then renamed in place: type its name and press Enter.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -54,7 +54,7 @@ msgid "- This PC lists drives, USB sticks and connected phones. Click one to ope
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
+msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -255,10 +255,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/status-bar.ui
 msgid "Details view"
-msgstr ""
-
-#: crates/ox-app/resources/ui/status-bar.ui
-msgid "Icon size"
 msgstr ""
 
 #: crates/ox-app/resources/ui/status-bar.ui
@@ -3443,7 +3439,7 @@ msgid "New windows show the address as text you can type in instead of breadcrum
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "New windows show two folders side by side. F3 splits or unsplits a tab."
+msgid "New windows show two folders side by side. View > Split view splits or unsplits a tab."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3543,7 +3539,7 @@ msgid "show full path in the title bar window title taskbar caption path"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "split view dual pane two panes side by side f3 commander"
+msgid "split view dual pane two panes side by side commander"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3700,7 +3696,7 @@ msgid "Index {label}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs crates/ox-app/src/window/status_bar.rs
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
 msgid "{count} selected"
 msgstr ""
 
@@ -3911,7 +3907,7 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/history_menu.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
@@ -4448,8 +4444,12 @@ msgstr ""
 msgid "Ascending"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "CSV file"
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Bitmap image"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Compressed (zipped) Folder"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4472,10 +4472,6 @@ msgstr ""
 msgid "File name extensions"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "File…"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/folder_tree.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Folder tree"
 msgstr ""
@@ -4484,16 +4480,8 @@ msgstr ""
 msgid "Folders first"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "From template…"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Group by"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "HTML document"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4504,10 +4492,6 @@ msgstr ""
 msgid "Invert selection"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "JSON file"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Larger text"
 msgstr ""
@@ -4516,20 +4500,12 @@ msgstr ""
 msgid "Light appearance"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Link to file or folder…"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "List"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Map network drive"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
-msgid "Markdown document"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/crumb_menus.rs
@@ -4569,11 +4545,19 @@ msgid "Reset text size"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Rich Text Document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Select items matching…"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Select none"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Shortcut"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -4592,8 +4576,8 @@ msgstr ""
 msgid "Terminal"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
-msgid "Text document"
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Text Document"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
@@ -4629,6 +4613,10 @@ msgid "Analyse disk usage"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Bluetooth device"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Calculate folder size"
 msgstr ""
 
@@ -4648,12 +4636,24 @@ msgstr ""
 msgid "Compress to…"
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Compressed (zipped) folder"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Copy as path"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Delete permanently"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Desktop (create shortcut)"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
+msgid "Documents"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
@@ -4669,11 +4669,19 @@ msgid "Items in a previous version are read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Mail recipient"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Mount disk image"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "New…"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Only files can be sent to a Bluetooth device."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -4736,6 +4744,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Select only one item for this command."
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Send to"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4838,6 +4850,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
 msgid "Only a search result has a file location to open."
+msgstr ""
+
+#: crates/ox-app/src/window/disabled_reasons.rs
+msgid "Only files can be attached to an email."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
@@ -5109,7 +5125,7 @@ msgstr ""
 msgid "The Recycle Bin is empty."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/file_ops/transfer.rs
+#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/file_ops/transfer.rs crates/ox-app/src/window/send_to.rs
 msgid "This folder is read-only."
 msgstr ""
 
@@ -5117,7 +5133,7 @@ msgstr ""
 msgid "This is not the Recycle Bin."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs
+#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/send_to.rs
 msgid "Wait for the running file operation to finish."
 msgstr ""
 
@@ -5138,7 +5154,7 @@ msgstr ""
 msgid "Renaming items…"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/clipboard.rs
+#: crates/ox-app/src/window/file_ops/clipboard.rs crates/ox-app/src/window/send_to.rs
 msgid "Open the share first, then select its files or folders."
 msgstr ""
 
@@ -5308,7 +5324,7 @@ msgstr ""
 msgid "A link opens the file or folder it points to. Leave the name empty to use the name of that item."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/template_dialog.rs
+#: crates/ox-app/src/window/file_ops/links.rs
 msgid "Create"
 msgstr ""
 
@@ -5367,7 +5383,35 @@ msgid "Use a name without slashes or control characters."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a bitmap image…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a compressed (zipped) folder…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a file…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a rich text document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
 msgid "Creating a text document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Bitmap image"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Compressed (zipped) Folder"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Rich Text Document"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs
@@ -5384,43 +5428,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/rename.rs
 msgid "The name was not changed."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid " · Your template"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "An empty .docx, .xlsx, .pdf, or .odt file is not a valid document. For those formats, place a real starter document in your Templates folder and choose it here. Templates are copied, never executed."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "Create a new copy without changing the template."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "Create an empty file with any filename and extension."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "File name"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "File type / template"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "New file"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "New from template"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/template_dialog.rs
-msgid "Templates folder: {display}"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/transfer.rs
@@ -5578,16 +5585,6 @@ msgstr ""
 msgid "Show hidden folders"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/free_space.rs
-msgid "{free} free out of {size} ({used}% used)"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/free_space.rs
-msgid "{value1} free"
-msgstr ""
-
 #: crates/ox-app/resources/manual.md crates/ox-app/src/window/help.rs
 msgid "Getting started"
 msgstr ""
@@ -5728,7 +5725,12 @@ msgid "Finish the current operation before disconnecting."
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Back (Alt+Left)"
+msgid "Back (Alt + Left Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Back to {place} (Alt + Left Arrow)"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -5736,7 +5738,17 @@ msgid "Forward"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Forward (Alt+Right)"
+msgid "Forward (Alt + Right Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Forward to {place} (Alt + Right Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Refresh \"{place}\" (F5)"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
@@ -5744,7 +5756,12 @@ msgid "Refresh (F5)"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Up (Alt+Up)"
+msgid "Up (Alt + Up Arrow)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Up to \"{place}\" (Alt + Up Arrow)"
 msgstr ""
 
 #: crates/ox-app/src/window/network_page.rs
@@ -6044,6 +6061,18 @@ msgstr ""
 msgid "Use * for any characters and ? for one character, such as *.pdf."
 msgstr ""
 
+#: crates/ox-app/src/window/send_to.rs
+msgid "Four file operations are already running. Wait for one to finish."
+msgstr ""
+
+#: crates/ox-app/src/window/send_to.rs
+msgid "Only files on this computer or on a mounted share can be sent by Bluetooth."
+msgstr ""
+
+#: crates/ox-app/src/window/send_to.rs
+msgid "The Bluetooth sender could not be started."
+msgstr ""
+
 #: crates/ox-app/src/window/service_actions.rs
 msgid "Configure service actions…"
 msgstr ""
@@ -6324,6 +6353,13 @@ msgstr ""
 #: crates/ox-app/src/window/status_bar.rs
 msgid "{count} item"
 msgid_plural "{count} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/status_bar.rs
+msgid "{count} item selected"
+msgid_plural "{count} items selected"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -7106,6 +7142,10 @@ msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
 msgid "PowerPoint presentation"
+msgstr ""
+
+#: crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
+msgid "Text document"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
@@ -8009,7 +8049,7 @@ msgstr ""
 msgid "Open a destination folder before pasting."
 msgstr ""
 
-#: crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/transfer/request.rs
+#: crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
 msgid "Select between 1 and 100,000 items."
 msgstr ""
 
@@ -8257,6 +8297,28 @@ msgstr ""
 msgid "Open a network share before pasting files."
 msgstr ""
 
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "A shortcut can only point to an item on this computer or on a mounted share."
+msgstr ""
+
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "Every name for this shortcut is taken. Nothing was replaced."
+msgstr ""
+
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "Shortcuts cannot be created here: this location does not support symbolic links."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "{name} - Shortcut"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "{name} - Shortcut ({number})"
+msgstr ""
+
 #: crates/ox-core/src/ops/tab_transfer/messages.rs
 msgid "A window closed before the tab move finished."
 msgstr ""
@@ -8299,11 +8361,27 @@ msgid "The tab move timed out. The original tab was kept."
 msgstr ""
 
 #: crates/ox-core/src/ops/templates.rs
+msgid "CSV file"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
 msgid "Choose an available template or Empty file."
 msgstr ""
 
 #: crates/ox-core/src/ops/templates.rs
 msgid "Empty file"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
+msgid "HTML document"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
+msgid "JSON file"
+msgstr ""
+
+#: crates/ox-core/src/ops/templates.rs
+msgid "Markdown document"
 msgstr ""
 
 #: crates/ox-core/src/ops/undo.rs
@@ -8416,10 +8494,6 @@ msgstr ""
 
 #: crates/ox-core/src/places/known_folders.rs
 msgid "Desktop"
-msgstr ""
-
-#: crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
-msgid "Documents"
 msgstr ""
 
 #: crates/ox-core/src/places/known_folders.rs

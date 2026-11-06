@@ -136,9 +136,6 @@ impl BrowserWindow {
             pane.details()
                 .set_counts_items(options.count_folder_items && !is_remote);
         }
-        // The status bar describes a folder by its count only while counted.
-        self.update_status();
-        self.describe_hovered();
     }
 
     /// Whether `uri` is reached over a network or a device link: a

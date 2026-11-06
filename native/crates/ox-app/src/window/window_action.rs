@@ -88,9 +88,6 @@ pub(crate) enum WindowAction {
     /// Opens the subfolder menu of a crumb; the target is the folder, the
     /// subfolder shown in bold and the first one listed (NAV-020).
     CrumbSubfolders,
-    /// Goes to the folder beside a crumb's; the target is the folder and
-    /// the step (NAV-022).
-    CrumbSibling,
     /// Moves keyboard focus to the search box (Ctrl+F).
     Search,
     /// Moves the active tab to the location in the string target.
@@ -148,8 +145,8 @@ pub(crate) enum WindowAction {
     Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
-    /// Splits the tab into two panes, or closes its active pane (F3,
-    /// VIEW-059).
+    /// Splits the tab into two panes, or closes its active pane (View >
+    /// Split view, VIEW-059).
     SplitView,
     /// Windows Explorer's Full screen: makes the window fill the screen,
     /// or gives it back its size (F11, CMD-036).
@@ -197,26 +194,20 @@ pub(crate) enum WindowAction {
     ResetLayout,
     /// New ▸ Folder (Ctrl+Shift+N).
     NewFolder,
-    /// New ▸ Text document.
-    NewTextDocument,
-    /// New ▸ File….
-    NewFile,
-    /// New ▸ Markdown document.
-    NewMarkdownDocument,
-    /// New ▸ CSV file.
-    NewCsvFile,
-    /// New ▸ JSON file.
-    NewJsonFile,
-    /// New ▸ HTML document.
-    NewHtmlDocument,
-    /// New ▸ From template….
-    NewFromTemplate,
-    /// Opens the New from template dialog with the template whose id is
-    /// the string target chosen: a user template listed in the New menu
-    /// (OPS-003).
-    NewFromUserTemplate,
-    /// New ▸ Link to file or folder… (OPS-004).
+    /// New ▸ Shortcut: the link dialog (OPS-004).
     NewLink,
+    /// New ▸ Bitmap image.
+    NewBitmapImage,
+    /// New ▸ Rich Text Document.
+    NewRichTextDocument,
+    /// New ▸ Text Document.
+    NewTextDocument,
+    /// New ▸ Compressed (zipped) Folder.
+    NewCompressedFolder,
+    /// Copies the user template whose id is the string target into the
+    /// folder and renames the copy in place: a template the New menu
+    /// lists (OPS-003).
+    NewFromUserTemplate,
     /// Cut (Ctrl+X).
     Cut,
     /// Copy (Ctrl+C).
@@ -415,6 +406,15 @@ pub(crate) enum WindowAction {
     /// Compress to…: asks for the new archive's name and format first
     /// (ARC-023).
     CompressTo,
+    /// Send to ▸ a folder (Documents, a drive or a network location),
+    /// with its URI: copies the selection there (CMD-038).
+    SendTo,
+    /// Send to ▸ Desktop (create shortcut): a shortcut to each selected
+    /// item on the Desktop.
+    SendToDesktop,
+    /// Send to ▸ Bluetooth device: the desktop's Bluetooth sender with the
+    /// selected files.
+    SendToBluetooth,
     /// Open with…: the Open with dialog for the one selected item, or the
     /// folder.
     OpenWith,
@@ -492,7 +492,6 @@ impl WindowAction {
             WindowAction::CompactDensity => "compact-density",
             WindowAction::ItemCheckBoxes => "item-check-boxes",
             WindowAction::CrumbSubfolders => "crumb-subfolders",
-            WindowAction::CrumbSibling => "crumb-sibling",
             WindowAction::Search => "search",
             WindowAction::GoTo => "go-to",
             WindowAction::MountVolume => "mount-volume",
@@ -539,15 +538,12 @@ impl WindowAction {
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",
             WindowAction::NewFolder => "new-folder",
-            WindowAction::NewTextDocument => "new-text-document",
-            WindowAction::NewFile => "new-file",
-            WindowAction::NewMarkdownDocument => "new-markdown-document",
-            WindowAction::NewCsvFile => "new-csv-file",
-            WindowAction::NewJsonFile => "new-json-file",
-            WindowAction::NewHtmlDocument => "new-html-document",
-            WindowAction::NewFromTemplate => "new-from-template",
-            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::NewLink => "new-link",
+            WindowAction::NewBitmapImage => "new-bitmap-image",
+            WindowAction::NewRichTextDocument => "new-rich-text-document",
+            WindowAction::NewTextDocument => "new-text-document",
+            WindowAction::NewCompressedFolder => "new-compressed-folder",
+            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",
@@ -629,6 +625,9 @@ impl WindowAction {
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
             WindowAction::CompressTo => "compress-to",
+            WindowAction::SendTo => "send-to",
+            WindowAction::SendToDesktop => "send-to-desktop",
+            WindowAction::SendToBluetooth => "send-to-bluetooth",
             WindowAction::OpenWith => "open-with",
             WindowAction::ChangeApp => "change-app",
             WindowAction::OpenWithOf => "open-with-of",

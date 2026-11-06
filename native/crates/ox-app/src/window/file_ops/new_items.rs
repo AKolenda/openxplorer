@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! New folder (Ctrl+Shift+N), and the New menu's files (OPS-001,
-//! OPS-002, CMD-004).
+//! OPS-002, OPS-003, CMD-004).
 //!
 //! New folder makes the folder at once, as Windows Explorer does: "New
 //! folder", or "New folder (2)" and so on when that is taken, each made
@@ -9,20 +9,25 @@
 //! (OPS-010): Enter keeps the typed name, Escape keeps "New folder". Undo
 //! moves it to the Trash (OPS-029). This replaces the port of `newItem` in
 //! `v2.0.0:desktop/ui/app.js`, which asked for the name in a dialog first.
-//! New ▸ Text document works the same way with the Text document starter:
-//! "New Text Document.txt", or "New Text Document (2).txt" and so on,
-//! published without overwriting, then renamed in place with the name
-//! before ".txt" selected. Every other file of the New menu opens the
-//! template dialog ([`super::template_dialog`]) with its template chosen.
+//! The New menu's documents work the same way, as Windows 11's do: New ▸
+//! Text Document makes "New Text Document.txt", or "New Text Document
+//! (2).txt" and so on, published without overwriting, then renamed in
+//! place with the name before ".txt" selected; Bitmap image, Rich Text
+//! Document and Compressed (zipped) Folder make "New Bitmap image.bmp",
+//! "New Rich Text Document.rtf" and "New Compressed (zipped) Folder.zip".
+//! A template from the user's Templates folder is copied under its own
+//! file name, "Letter.odt" or "Letter (2).odt", and renamed in place too.
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::same_location;
 use ox_core::ops::{
-    create_numbered_folder, create_numbered_starter, BuiltinTemplate, CreatedItem, OpsError, TemplateId,
+    create_numbered_document, create_numbered_folder, create_numbered_from_template, CreatedItem,
+    NewDocument, OpsError,
 };
 
+use super::template_menu::templates_folder;
 use super::FileCommand;
 use crate::search::changed_folders;
 use crate::window::session::TabId;
@@ -31,28 +36,51 @@ use crate::window::BrowserWindow;
 /// The name a new folder starts with, as Windows names it.
 const NEW_FOLDER_NAME: &str = crate::i18n::message_id("New folder");
 
-/// What the panel of a slow New ▸ Text document says.
-const CREATING_TEXT_DOCUMENT: &str = crate::i18n::message_id("Creating a text document…");
-
 /// The name of the controllers that count the window's input.
 const INPUT_WATCH: &str = "input-generation";
 
-/// The name, before ".txt", a new text document starts with, as Windows
-/// names it.
-const NEW_TEXT_DOCUMENT_NAME: &str = crate::i18n::message_id("New Text Document");
-
-/// The template a New menu item starts its dialog with.
+/// What a New menu item makes in place.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum NewFileKind {
-    /// "File…": an empty file with any name (`newTemplateDialog('empty')`).
-    Empty,
-    /// One of the built-in starters, such as "Markdown document".
-    Starter(BuiltinTemplate),
-    /// "From template…": the first template, to choose another
-    /// (`newTemplateDialog(null)`).
-    AnyTemplate,
-    /// A user template the New menu lists (OPS-003).
-    Template(TemplateId),
+pub(crate) enum NewFile {
+    /// One of Windows' documents, such as Text Document.
+    Document(NewDocument),
+    /// A copy of the user template at this path below Templates
+    /// (OPS-003).
+    Template(String),
+}
+
+impl NewFile {
+    /// What the panel of a slow create says.
+    fn creating_label(&self) -> &'static str {
+        let label = match self {
+            NewFile::Document(NewDocument::BitmapImage) => {
+                crate::i18n::message_id("Creating a bitmap image…")
+            }
+            NewFile::Document(NewDocument::RichTextDocument) => {
+                crate::i18n::message_id("Creating a rich text document…")
+            }
+            NewFile::Document(NewDocument::TextDocument) => {
+                crate::i18n::message_id("Creating a text document…")
+            }
+            NewFile::Document(NewDocument::CompressedFolder) => {
+                crate::i18n::message_id("Creating a compressed (zipped) folder…")
+            }
+            NewFile::Template(_) => crate::i18n::message_id("Creating a file…"),
+        };
+        ox_core::i18n::gettext_static(label)
+    }
+}
+
+/// The name, before its extension, a new `document` starts with, as
+/// Windows 11 names it.
+fn document_base_name(document: NewDocument) -> &'static str {
+    let name = match document {
+        NewDocument::BitmapImage => crate::i18n::message_id("New Bitmap image"),
+        NewDocument::RichTextDocument => crate::i18n::message_id("New Rich Text Document"),
+        NewDocument::TextDocument => crate::i18n::message_id("New Text Document"),
+        NewDocument::CompressedFolder => crate::i18n::message_id("New Compressed (zipped) Folder"),
+    };
+    ox_core::i18n::gettext_static(name)
 }
 
 impl BrowserWindow {
@@ -80,16 +108,16 @@ impl BrowserWindow {
         self.rename_created(create_numbered_folder(&folder, name, &context).await);
     }
 
-    /// New ▸ Text document: makes "New Text Document.txt" (or the next
-    /// free numbered name) from the Text document starter at once, then
-    /// selects it and renames it in place, as Windows Explorer does.
-    /// Does nothing where New is disabled, as New folder; a file that
-    /// cannot be made says why in the toast. While the file is made, on a
-    /// slow share or phone, it is the window's running operation, with no
-    /// panel; a cancelled one says nothing. When it ends after the user
-    /// went to another tab or folder, the file stays and what is shown
-    /// is left alone, as in Windows.
-    pub(crate) async fn create_text_document(&self) {
+    /// A New menu document or template: makes `file` (under the next
+    /// free numbered name) at once, then selects it and renames it in
+    /// place, as Windows Explorer does. Does nothing where New is
+    /// disabled, as New folder; a file that cannot be made says why in the
+    /// toast. While the file is made, on a slow share or phone, it is the
+    /// window's running operation, with no panel; a cancelled one says
+    /// nothing. When it ends after the user went to another tab or
+    /// folder, the file stays and what is shown is left alone, as in
+    /// Windows.
+    pub(crate) async fn create_new_file(&self, file: NewFile) {
         if !self.allows(FileCommand::New) {
             return;
         }
@@ -107,14 +135,23 @@ impl BrowserWindow {
                 return;
             }
         };
-        let label = ox_core::i18n::gettext_static(CREATING_TEXT_DOCUMENT);
-        let Some(write) = self.begin_quick_write(label, &context.cancel) else {
+        let Some(write) = self.begin_quick_write(file.creating_label(), &context.cancel) else {
             return;
         };
         #[cfg(test)]
         self.wait_at_text_document_gate().await;
-        let name = format!("{}.txt", ox_core::i18n::gettext_static(NEW_TEXT_DOCUMENT_NAME));
-        let created = create_numbered_starter(&folder, &name, BuiltinTemplate::Text, &context).await;
+        let created = match &file {
+            NewFile::Document(document) => {
+                let base_name = document_base_name(*document);
+                create_numbered_document(&folder, base_name, *document, &context).await
+            }
+            NewFile::Template(path) => {
+                // Without a Templates folder the template is refused as
+                // unavailable.
+                let templates = templates_folder().await.unwrap_or_default();
+                create_numbered_from_template(&folder, path, &templates, &context).await
+            }
+        };
         self.end_quick_write(write, &context.cancel);
         match created {
             Err(error) if error.is_cancelled() => {}
@@ -218,7 +255,7 @@ impl BrowserWindow {
         }
     }
 
-    /// Holds New ▸ Text document before it creates the file until the
+    /// Holds the next New menu file before it is created until the
     /// gate's sender sends or is dropped, as a slow location would.
     /// Returns the sender that releases it.
     #[cfg(test)]
@@ -228,7 +265,7 @@ impl BrowserWindow {
         release
     }
 
-    /// Whether New ▸ Text document has reached the gate of
+    /// Whether a New menu file has reached the gate of
     /// [`Self::hold_text_documents`].
     #[cfg(test)]
     pub(crate) fn reached_text_document_gate(&self) -> bool {
@@ -245,7 +282,7 @@ impl BrowserWindow {
         }
     }
 
-    /// Remembers the item New folder or New ▸ Text document made for
+    /// Remembers the item New folder or a New menu file made for
     /// Undo, then lists the folder with it selected and renamed in place;
     /// a failure says why in the toast.
     fn rename_created(&self, created: Result<CreatedItem, OpsError>) {
@@ -261,12 +298,5 @@ impl BrowserWindow {
             }
             Err(error) => self.show_message(&error.to_string()),
         }
-    }
-
-    /// Remembers a created item for Undo, then lists the folder with the
-    /// item selected.
-    pub(super) fn finish_creation(&self, created: CreatedItem) {
-        self.context().record_operation(created.undo_record());
-        self.reload_selecting(vec![created.uri]);
     }
 }
