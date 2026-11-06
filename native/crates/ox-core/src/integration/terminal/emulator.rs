@@ -3,7 +3,8 @@
 //!
 //! Ports `TERMINALS`, `SYSTEM_PATH`, `Terminal` and `find_terminal` in
 //! `v2.0.0:desktop/terminal_integration.py` (OPEN-018, OPEN-020), with the
-//! desktop's configured terminal first (OPEN-019).
+//! desktop's configured terminal first (OPEN-019). kitty is a native
+//! addition to the ported list.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -41,6 +42,8 @@ pub enum TerminalKind {
     XfceTerminal,
     /// Konsole (`konsole`).
     Konsole,
+    /// kitty (`kitty`).
+    Kitty,
     /// `XTerm` (`xterm`).
     XTerm,
     /// `XTerm` with Unicode (`uxterm`).
@@ -49,11 +52,12 @@ pub enum TerminalKind {
 
 impl TerminalKind {
     /// Every terminal, in the order they are preferred.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::GnomeTerminal,
         Self::Console,
         Self::XfceTerminal,
         Self::Konsole,
+        Self::Kitty,
         Self::XTerm,
         Self::UXTerm,
     ];
@@ -65,6 +69,7 @@ impl TerminalKind {
             Self::Console => "kgx",
             Self::XfceTerminal => "xfce4-terminal",
             Self::Konsole => "konsole",
+            Self::Kitty => "kitty",
             Self::XTerm => "xterm",
             Self::UXTerm => "uxterm",
         }
@@ -77,6 +82,7 @@ impl TerminalKind {
             Self::Console => crate::i18n::gettext_static("Console"),
             Self::XfceTerminal => crate::i18n::gettext_static("Xfce Terminal"),
             Self::Konsole => crate::i18n::gettext_static("Konsole"),
+            Self::Kitty => crate::i18n::gettext_static("kitty"),
             Self::XTerm => crate::i18n::gettext_static("XTerm"),
             Self::UXTerm => crate::i18n::gettext_static("UXTerm"),
         }
@@ -88,17 +94,20 @@ impl TerminalKind {
         match self {
             Self::GnomeTerminal | Self::Console | Self::XfceTerminal => Some("--working-directory="),
             Self::Konsole => Some("--workdir="),
+            Self::Kitty => Some("--directory="),
             Self::XTerm | Self::UXTerm => None,
         }
     }
 
     /// The option after which the terminal runs the rest of its arguments
-    /// as a command.
-    pub fn command_option(self) -> &'static str {
+    /// as a command; `None` for kitty, which takes the program to run as
+    /// its trailing arguments.
+    pub fn command_option(self) -> Option<&'static str> {
         match self {
-            Self::GnomeTerminal | Self::Console => "--",
-            Self::XfceTerminal => "-x",
-            Self::Konsole | Self::XTerm | Self::UXTerm => "-e",
+            Self::GnomeTerminal | Self::Console => Some("--"),
+            Self::XfceTerminal => Some("-x"),
+            Self::Konsole | Self::XTerm | Self::UXTerm => Some("-e"),
+            Self::Kitty => None,
         }
     }
 
