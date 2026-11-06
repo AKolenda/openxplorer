@@ -216,13 +216,16 @@ fn ctrl_z_undoes_from_the_tree_and_a_split_pane_but_not_in_a_text_field() {
     assert!(!fixture.path("Budget.txt").exists());
 }
 
+/// A folder renamed to a taken name is refused in the toast, as Windows'
+/// "Rename File" question is only for two files (see `renaming.rs`).
+///
 /// parity: OPS-006, OPS-008, OPS-010
 #[gtk::test]
 fn a_refused_name_in_place_keeps_the_field_for_another_try() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    select_names(&test, &["Notes 2.txt"]);
+    select_names(&test, &["Documents"]);
     test.activate("rename", None);
     let field = name_editor(&test);
 
@@ -231,17 +234,19 @@ fn a_refused_name_in_place_keeps_the_field_for_another_try() {
     let taken = "An item named “Notes 10.txt” already exists. Nothing was overwritten.";
     wait_until("the refusal", || test.window.shown_message() == taken);
     wait_until("the field to come back", || field.is_sensitive());
-    field.set_text("a/b");
+    let asked = dialog_over(&test).map(|dialog| dialog.title_text());
+    field.set_text("..");
     field.emit_activate();
     let invalid = test.window.shown_message();
-    field.set_text("Notes 2.txt");
+    field.set_text("Documents");
     field.emit_activate();
 
     wait_until("the unchanged name to end the rename", || {
         !is_renaming_in_place(&test)
     });
+    assert_eq!(asked, None, "a folder is not offered a numbered name");
     assert_eq!(invalid, "Use a name without slashes or control characters.");
-    assert!(fixture.path("Notes 2.txt").is_file());
+    assert!(fixture.path("Documents").is_dir());
     let kept = fs::read(fixture.path("Notes 10.txt")).expect("the other file stays");
     assert_eq!(kept, b"Synthetic test data\n");
 }

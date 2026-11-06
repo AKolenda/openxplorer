@@ -22,7 +22,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 - New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, "New Text Document.txt" (or "New Text Document (2).txt" when that name is taken), then renamed in place: type its name and press Enter.
 - Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.
-- Rename with F2. Select several items to rename them together.
+- Rename with F2. Select several items to rename them together. As in Windows, \ / : * ? " < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.
 - Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.
 - When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.
 - Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.
@@ -50,7 +50,8 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Network locations
 
-- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.
+- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\server\share or smb://server/share in the address bar.
+- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.
 - Map network location, below the navigation pane, or Map network drive in the "…" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.
 - OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.
 - Right-click a share or server and choose Sign out of server to disconnect and forget a session.

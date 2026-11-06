@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* What the integration dialogs add to the dialog frame (dialogs.css):
-   the Open with list (style.css .app-choice-list, .app-choice,
-   .apps-empty) and the Brave dialog's buttons and check boxes
+   the Open with lists (style.css .app-choice-list, .app-choice,
+   .apps-empty) in Windows 11's sections and the Brave dialog's buttons and check boxes
    (.brave-profile-list), refined to WinUI's list items (ui-spec.md
    §4.11). src/integration/open_with_dialog.rs and brave_dialog.rs. */
 
@@ -27,6 +27,17 @@ window.ox.ox-dialog .app-choice:selected {
 window.ox.ox-dialog .app-choice .app-note { color: @ox_muted; }
 window.ox.ox-dialog .app-choice:disabled { opacity: .55; }
 window.ox.ox-dialog .apps-empty { color: @ox_muted; padding: 12px; }
+/* Open with's sections, as Windows 11's app chooser heads them: "Current
+   default", "Suggested apps", and the "More apps" expander. */
+window.ox.ox-dialog .app-section,
+window.ox.ox-dialog .app-more > box > title {
+  color: @ox_muted;
+  font-weight: 600;
+  padding: 8px 12px 2px 12px;
+}
+window.ox.ox-dialog .app-more > box > title { padding-bottom: 8px; }
+/* The links under the list: "Choose an app on your PC". */
+window.ox.ox-dialog .dialog-content button.link-button { padding: 4px 8px; min-height: 0; }
 /* Buttons inside the dialog's body, such as "Recheck profiles". */
 window.ox.ox-dialog .dialog-content button.bordered {
   min-height: 30px;

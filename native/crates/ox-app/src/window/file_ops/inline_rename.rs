@@ -16,6 +16,12 @@
 //! selected, the field edits one of them and Enter gives the typed name to
 //! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab and
 //! the arrows are then the field's own keys.
+//!
+//! As in Windows, a character Windows forbids in names is refused as it
+//! is typed or pasted, with Windows' balloon ([`super::name_balloon`]),
+//! and a file renamed to the name of another file in its folder asks
+//! Windows' "Rename File" question, which offers the first free numbered
+//! name ([`super::rename_conflict`]).
 
 use std::rc::Rc;
 
@@ -23,11 +29,13 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::entry::Entry;
-use ox_core::ops::rename_item;
+use ox_core::ops::{rename_item, OpsError, RenamedItem};
 
+use super::name_balloon::refuse_forbidden_characters;
 use super::names::check_typed_name;
 use super::numbered_rename::numbered_batch_for;
 use super::rename::selected_name_length;
+use super::rename_conflict::TakenNameAnswer;
 use crate::folder_view::cells::FileCell;
 use crate::folder_view::shown_name::{hidden_extension, shown_name};
 use crate::window::folder_pane::FolderView;
@@ -95,6 +103,8 @@ impl BrowserWindow {
             hidden_extension: hidden_extension.clone(),
         };
         self.connect_name_editor(cell, &editor, &target);
+        // Added last, its key handler runs before the field's other ones.
+        refuse_forbidden_characters(&editor);
         cell.show_name_editor(&editor);
         editor.grab_focus();
         // With the extension left out, the whole name shown is selected.
@@ -337,17 +347,10 @@ impl BrowserWindow {
             editor.grab_focus();
             return;
         }
-        // A drive may have started formatting during the questions.
-        let (context, _writing) = match self.admit_write() {
-            Ok(admitted) => admitted,
-            Err(refusal) => {
-                self.take_rename_next();
-                self.close_name_editor(cell);
-                self.show_message(&refusal);
-                return;
-            }
+        let Some(renamed) = self.rename_or_offer_number(cell, editor, target, name).await else {
+            return;
         };
-        match rename_item(&target.uri, name, &context).await {
+        match renamed {
             Ok(renamed) => {
                 // Before the folder is listed again, which rebinds the cell.
                 self.close_name_editor(cell);
@@ -363,6 +366,55 @@ impl BrowserWindow {
                 self.show_message(&error.to_string());
             }
         }
+    }
+
+    /// Renames the item to `name`; when another file has that name, asks
+    /// Windows' "Rename File" question and, on Yes, renames it to the
+    /// numbered name it offered. `None` when nothing is left to report:
+    /// the write was refused, or No gave the field back for another try.
+    async fn rename_or_offer_number(
+        &self,
+        cell: &FileCell,
+        editor: &gtk::Entry,
+        target: &RenameTarget,
+        name: &str,
+    ) -> Option<Result<RenamedItem, OpsError>> {
+        // A drive may have started formatting during the questions.
+        let refusal = match self.admitted_rename(cell, &target.uri, name).await? {
+            Err(OpsError::Exists(refusal)) if !target.is_folder => refusal,
+            renamed => return Some(renamed),
+        };
+        match self.ask_about_taken_name(&target.uri, name).await {
+            TakenNameAnswer::Rename(numbered) => self.admitted_rename(cell, &target.uri, &numbered).await,
+            TakenNameAnswer::KeepEditing => {
+                self.take_rename_next();
+                editor.set_sensitive(true);
+                editor.grab_focus();
+                None
+            }
+            TakenNameAnswer::NotAsked => Some(Err(OpsError::Exists(refusal))),
+        }
+    }
+
+    /// Renames the item at `uri` to `name` once the window admits a write;
+    /// `None`, with the field closed and the refusal in the toast, when it
+    /// does not, as when a drive started formatting during a question.
+    async fn admitted_rename(
+        &self,
+        cell: &FileCell,
+        uri: &str,
+        name: &str,
+    ) -> Option<Result<RenamedItem, OpsError>> {
+        let (context, _writing) = match self.admit_write() {
+            Ok(admitted) => admitted,
+            Err(refusal) => {
+                self.take_rename_next();
+                self.close_name_editor(cell);
+                self.show_message(&refusal);
+                return None;
+            }
+        };
+        Some(rename_item(uri, name, &context).await)
     }
 
     /// Gives every item of `several` the name typed for the edited one,

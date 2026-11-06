@@ -62,6 +62,20 @@ impl Default for StorageRules {
     }
 }
 
+/// True when the file system GIO names `kind` can hold symbolic links:
+/// not FAT or exFAT ([`StorageRules`]), and not a kernel mount of an SMB
+/// share, which makes them only with server extensions or mount options a
+/// file manager cannot see.
+pub fn stores_symbolic_links(kind: Option<&str>) -> bool {
+    let is_smb_mount = kind.is_some_and(|kind| {
+        matches!(
+            kind.to_ascii_lowercase().as_str(),
+            "cifs" | "smb3" | "smbfs" | "smb2"
+        )
+    });
+    StorageRules::of(kind).stores_links && !is_smb_mount
+}
+
 impl StorageRules {
     /// The rules of the file system GIO names `kind`. `fuseblk` is any
     /// FUSE block file system: NTFS through ntfs-3g in practice, which
@@ -301,6 +315,8 @@ mod tests {
         assert!(!fat.forbids_name(OsStr::new("Holiday (2026).jpg")));
         assert!(!ext4.forbids_name(OsStr::new("a:b.txt")));
         assert!(!fat.stores_links && !exfat.stores_links && ntfs.stores_links && ext4.stores_links);
+        assert!(stores_symbolic_links(Some("ext4")) && stores_symbolic_links(None));
+        assert!(!stores_symbolic_links(Some("vfat")) && !stores_symbolic_links(Some("CIFS")));
         assert!(fat.check_file_size("big.iso", FAT_MAX_FILE_SIZE).is_ok());
         let refused = fat.check_file_size("big.iso", FAT_MAX_FILE_SIZE + 1).unwrap_err();
         assert_eq!(

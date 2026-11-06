@@ -4433,33 +4433,152 @@ mod tests {
     }
 
     /// The command bar's Sort menu in a Save dialog, as Chrome opens one
-    /// through the portal: Group by shows its choices in the same popup,
-    /// so there is only ever one menu on screen, and a choice there groups
-    /// the dialog's list and closes the menu. More works the same way.
+    /// through the portal: Group by and More open beside the menu, and the
+    /// compositor only ever sees one popup holding a grab, the Sort menu,
+    /// as for a menu without submenus. Each submenu is a popup of the Sort
+    /// menu's surface without a grab of its own (`gdk_popup_get_autohide`,
+    /// what GDK sends `xdg_popup.grab` for), one opens only once the other
+    /// has left the screen, and a submenu leaves the screen before the
+    /// menu. Side menus that each took a second, nested grab once froze
+    /// the KDE Plasma Wayland session in this dialog.
     ///
     /// parity: VIEW-022, INT-032
     #[gtk::test]
-    fn the_sort_menu_of_a_save_dialog_keeps_one_popup() {
-        sort_menu_keeps_one_popup("SaveFile", vec![("current_name", "page.html".to_variant())]);
+    fn the_sort_menu_of_a_save_dialog_keeps_one_grabbing_popup() {
+        sort_menu_keeps_one_grab("SaveFile", vec![("current_name", "page.html".to_variant())]);
     }
 
     /// The same in an Open dialog.
     ///
     /// parity: VIEW-022, INT-032
     #[gtk::test]
-    fn the_sort_menu_of_an_open_dialog_keeps_one_popup() {
-        sort_menu_keeps_one_popup("OpenFile", Vec::new());
+    fn the_sort_menu_of_an_open_dialog_keeps_one_grabbing_popup() {
+        sort_menu_keeps_one_grab("OpenFile", Vec::new());
+    }
+
+    /// A row the pointer rests on in a Save dialog's Sort menu shows the
+    /// hover's gray, as in a browsing window, even right after a key: the
+    /// release of the Ctrl+S that opened the dialog, or a Tab to its name,
+    /// turns the window's focus-visible on, and the row the pointer moves
+    /// the keyboard to drew in the keyboard's blue.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn a_menu_row_the_pointer_rests_on_shows_the_hover_after_a_key() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "page.html".to_variant())],
+        );
+        let window = portal.test.window.clone();
+        let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(&window)
+            .into_iter()
+            .find(|button| button.has_css_class("sort-command"))
+            .expect("the dialog's command bar has Sort");
+        let menu = sort
+            .popover()
+            .and_downcast::<crate::window::menu_popover::MenuPopover>()
+            .expect("an app menu");
+        sort.popup();
+        wait_until("the Sort menu", || menu.is_mapped());
+        // As a key released after the focus moved leaves it.
+        window.set_focus_visible(true);
+
+        menu.hover_row(Some("Date modified"));
+
+        let row = menu.row("Date modified");
+        assert!(
+            row.has_focus(),
+            "the keyboard goes on from the row the pointer is on"
+        );
+        assert!(!window.gets_focus_visible());
+        assert!(
+            !row.state_flags().contains(gtk::StateFlags::FOCUS_VISIBLE),
+            "the row draws as hovered, not as keyboard-focused"
+        );
+        menu.popdown();
+    }
+
+    /// The dividers of a menu that opens from the command bar keep the
+    /// menu's own side margins in a narrow window, such as a dialog
+    /// narrower than 1190 pixels, as in a wide one: the command bar's
+    /// narrow-window rule for its own dividers once reached them too.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn menu_dividers_in_a_narrow_dialog_keep_the_menu_s_margins() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "page.html".to_variant())],
+        );
+        let window = portal.test.window.clone();
+        window.set_default_size(900, 600);
+        wait_until("a narrow dialog", || window.has_css_class("max-1190"));
+        let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(&window)
+            .into_iter()
+            .find(|button| button.has_css_class("sort-command"))
+            .expect("the dialog's command bar has Sort");
+        let menu = sort
+            .popover()
+            .and_downcast::<crate::window::menu_popover::MenuPopover>()
+            .expect("an app menu");
+        sort.popup();
+        wait_until("the Sort menu", || menu.is_mapped());
+        let list = menu.row_list();
+        let dividers: Vec<gtk::Separator> = crate::window::widget_tree::descendants::<gtk::Separator>(&list);
+        wait_until("the menu laid out", || {
+            dividers.iter().all(|divider| divider.width() > 0)
+        });
+        assert!(!dividers.is_empty(), "the Sort menu has dividers");
+        for divider in &dividers {
+            assert_eq!(
+                list.width() - divider.width(),
+                10,
+                "5 pixels at either side (menus.css), not the command bar's 6"
+            );
+        }
+        // And 4 pixels above and below, not none: a divider asks for its
+        // 1-pixel line and its margins. This reads what it asks for rather
+        // than where the list placed it.
+        for divider in &dividers {
+            let (height, _, _, _) = divider.measure(gtk::Orientation::Vertical, -1);
+            assert_eq!(height, 1 + 4 + 4, "4 pixels above and below a divider");
+        }
+        menu.popdown();
+    }
+
+    /// The popups of `window`'s menus on screen, each with whether it
+    /// holds a pointer grab.
+    fn shown_popups(window: &gtk::Widget) -> Vec<(crate::window::menu_popover::MenuPopover, bool)> {
+        crate::window::widget_tree::descendants::<crate::window::menu_popover::MenuPopover>(window)
+            .into_iter()
+            .filter(WidgetExt::is_mapped)
+            .map(|menu| {
+                let popup = gtk::prelude::NativeExt::surface(&menu).and_downcast::<gdk::Popup>();
+                let grabs = popup.is_some_and(|popup| popup.is_autohide());
+                (menu, grabs)
+            })
+            .collect()
     }
 
     /// Opens a `method` dialog with `entries` and goes through its Sort
-    /// menu's Group by and More, checking one popup shows at a time.
-    fn sort_menu_keeps_one_popup(method: &str, entries: Vec<(&str, glib::Variant)>) {
+    /// menu's Group by and More, checking only the Sort menu grabs.
+    fn sort_menu_keeps_one_grab(method: &str, entries: Vec<(&str, glib::Variant)>) {
         let fixture = Fixture::empty();
         fixture.write("notes.txt");
         let portal = Portal::new();
         let _answer = dialog_on(&portal, &fixture, method, entries);
         let test = &portal.test;
-        let window = &test.window;
+        let window: &gtk::Widget = test.window.upcast_ref();
         let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(window)
             .into_iter()
             .find(|button| button.has_css_class("sort-command"))
@@ -4468,42 +4587,90 @@ mod tests {
             .popover()
             .and_downcast::<crate::window::menu_popover::MenuPopover>()
             .expect("an app menu");
-        let shown_menus = || {
-            crate::window::widget_tree::descendants::<crate::window::menu_popover::MenuPopover>(window)
+        let grabbing = || -> Vec<crate::window::menu_popover::MenuPopover> {
+            shown_popups(window)
                 .into_iter()
-                .filter(|menu| menu.is_visible() || menu.is_mapped())
-                .count()
+                .filter_map(|(menu, grabs)| grabs.then_some(menu))
+                .collect()
         };
+        // Every submenu that comes on screen: whether the menu was on screen
+        // as it went, and whether another submenu was.
+        let unmapped: Rc<RefCell<Vec<&'static str>>> = Rc::default();
 
         sort.popup();
-        wait_until("the Sort menu", || menu.is_visible());
-        menu.row("Group by").emit_activate();
-        wait_until("Group by's choices", || {
-            menu.row_labels().contains(&"Same as sort".to_owned())
+        wait_until("the Sort menu", || menu.is_mapped());
+        assert_eq!(grabbing(), std::slice::from_ref(&menu), "the Sort menu grabs");
+        let menu_surface = gtk::prelude::NativeExt::surface(&menu).expect("on screen");
+
+        // The pointer rests on More, then on Group by.
+        menu.hover_row(Some("More"));
+        wait_until("More", || {
+            menu.open_submenu_menu().is_some_and(|more| more.is_mapped())
         });
-        settle();
-        assert_eq!(shown_menus(), 1, "Group by opens no second popup");
-        assert!(menu.is_visible(), "the Sort menu shows Group by");
-        menu.row("Type").emit_activate();
-        assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
-        wait_until("the menu to close", || !menu.is_visible());
-        settle();
-        assert_eq!(shown_menus(), 0, "no menu is left on screen");
-
-        sort.popup();
-        wait_until("the Sort menu again", || menu.is_visible());
-        assert!(
-            menu.row_labels().contains(&"Group by".to_owned())
-                && menu.row_labels().contains(&"Ascending".to_owned()),
-            "it opens at its top level: {:?}",
-            menu.row_labels()
+        let more = menu.open_submenu_menu().expect("More");
+        let more_surface = gtk::prelude::NativeExt::surface(&more).expect("on screen");
+        let order = Rc::clone(&unmapped);
+        more_surface.connect_mapped_notify(move |surface| {
+            if !surface.is_mapped() {
+                order.borrow_mut().push("More");
+            }
+        });
+        menu.hover_row(Some("Group by"));
+        wait_until("Group by", || {
+            menu.open_submenu_menu()
+                .is_some_and(|group_by| group_by != more && group_by.is_mapped())
+        });
+        let group_by = menu.open_submenu_menu().expect("Group by");
+        assert_eq!(
+            *unmapped.borrow(),
+            ["More"],
+            "More left the screen before Group by came"
         );
-        menu.row("More").emit_activate();
-        wait_until("More's choices", || {
-            menu.row_labels().contains(&"Size".to_owned())
-        });
-        assert_eq!(shown_menus(), 1, "More opens no second popup");
-        menu.row("Size").emit_activate();
+        settle();
+        let popup = gtk::prelude::NativeExt::surface(&group_by)
+            .and_downcast::<gdk::Popup>()
+            .expect("a popup");
+        assert!(!popup.is_autohide(), "a submenu takes no grab of its own");
+        assert_eq!(
+            popup.parent().as_ref(),
+            Some(&menu_surface),
+            "a popup of the Sort menu's"
+        );
+        assert_eq!(
+            grabbing(),
+            std::slice::from_ref(&menu),
+            "still only the Sort menu grabs"
+        );
+        assert_eq!(shown_popups(window).len(), 2, "the Sort menu and Group by");
+
+        // Choosing Type groups the list and closes both, Group by first.
+        let group_by_surface = gtk::prelude::NativeExt::surface(&group_by).expect("on screen");
+        for (surface, name) in [(&group_by_surface, "Group by"), (&menu_surface, "Sort")] {
+            let order = Rc::clone(&unmapped);
+            surface.connect_mapped_notify(move |surface| {
+                if !surface.is_mapped() {
+                    order.borrow_mut().push(name);
+                }
+            });
+        }
+        group_by.row("Type").emit_activate();
+        assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
+        wait_until("the menus to close", || !menu.is_visible());
+        settle();
+        assert_eq!(*unmapped.borrow(), ["More", "Group by", "Sort"]);
+        assert!(shown_popups(window).is_empty(), "no menu is left on screen");
+
+        // The keyboard: Right on More opens it with no further grab, and a
+        // choice there sorts.
+        sort.popup();
+        wait_until("the Sort menu again", || menu.is_mapped());
+        assert!(menu.open_submenu_menu().is_none(), "it opens without a submenu");
+        menu.row("More").grab_focus();
+        assert!(menu.press_in_list(gdk::Key::Right));
+        let more = menu.open_submenu_menu().expect("Right opens More");
+        wait_until("More", || more.is_mapped());
+        assert_eq!(grabbing(), std::slice::from_ref(&menu));
+        more.row("Size").emit_activate();
         assert_eq!(test.action_state("sort").as_deref(), Some("size"));
         wait_until("the menu to close", || !menu.is_visible());
     }

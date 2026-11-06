@@ -278,7 +278,11 @@ fn a_drag_offers_copies_made_when_the_drop_asks() {
     );
     let every_modifier = gdk::ModifierType::SHIFT_MASK | gdk::ModifierType::CONTROL_MASK;
     assert_eq!(
-        crate::window::file_drag::drag_actions(&content, every_modifier),
+        crate::window::file_drag::drag_actions(
+            &content,
+            crate::window::file_drag::DragButton::Primary,
+            every_modifier,
+        ),
         gdk::DragAction::COPY,
         "never a link to a copy that lasts a day, nor the menu that offers one"
     );

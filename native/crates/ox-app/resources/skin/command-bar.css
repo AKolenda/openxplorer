@@ -5,7 +5,9 @@
 .commandbar {
   background-color: @ox_chrome;
   border-bottom: 1px solid @ox_border;
-  min-height: 54px;
+  /* 47px plus its line, as Windows 11's command bar (owner decision
+     2026-11-06); text sizes above 100% grow it (theme/fonts.rs). */
+  min-height: 47px;
   padding: 0 15px;
 }
 .commandbar, .commandbar .command-group { border-spacing: 4px; }
@@ -22,7 +24,7 @@
 .commandbar .text-command image { margin-top: 1px; }
 .commandbar menubutton.new-command > button { padding: 0 10px 0 8px; }
 .commandbar .chevron { color: @ox_muted; margin-left: 4px; }
-.commandbar separator { min-height: 20px; min-width: 1px; background-color: @ox_border; margin: 0 10px; }
+.commandbar separator.vertical { min-height: 20px; min-width: 1px; background-color: @ox_border; margin: 0 10px; }
 .commandbar menubutton.theme-toggle > button { color: @ox_muted; margin-right: 6px; }
 .commandbar menubutton.theme-toggle > button:hover { color: @ox_text; }
 .commandbar button.settings-button { color: @ox_muted; margin-right: 3px; }

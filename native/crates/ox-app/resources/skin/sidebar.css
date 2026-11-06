@@ -2,17 +2,18 @@
 /* The sidebar and its resizer (ui-spec.md §4.4; style.css .sidebar,
    .side-entry, .quick-access, .sidebar-resizer). */
 
-/* Web rows are 35px with 1px margins that collapse to one pixel between
-   rows (a 36px pitch) and into the separators' 12px. GTK margins do not
-   collapse, so rows keep only the top one and separators give back a
-   pixel below. Quick access rows sit in a box of their own, inset 4px
+/* Rows are 31px, 32px apart with their 1px top margin, as Windows 11's
+   navigation pane rows (owner decision 2026-11-06; the web's were 35px
+   with 1px margins that collapse to one pixel between rows and into the
+   separators' 12px). GTK margins do not collapse, so rows keep only the
+   top one and separators give back a pixel below. Quick access rows sit in a box of their own, inset 4px
    (3px margin, 1px border) with no row margins and 4px below the last.
    The pane keeps the web's 13px 7px padding: the spec's 12px 8px (§4.4)
    would move every row a pixel, off the current app's pixels. */
 .sidebar { background-color: @ox_sidebar; }
 .sidebar list { background: none; padding: 13px 7px 0 7px; color: @ox_text; }
 .sidebar list > row {
-  min-height: 35px;
+  min-height: 31px;
   border-radius: 4px;
   margin: 1px 0 0 0;
   padding: 0;
@@ -49,9 +50,9 @@
 .sidebar list > row.quick-drop-tail:hover { background-color: transparent; }
 /* The row's parts sit 12px apart (`gap:12px`), as margins because the
    web row pulls its chevron into the padding with negative margins,
-   which a GTK box cannot do. The icon box (.side-icon) is 20px around
-   an 18px glyph or 19px art; the glyph is centred on a half pixel, which
-   Chromium draws one pixel down. */
+   which a GTK box cannot do. Glyphs and art are 16px, as Windows 11's
+   navigation pane icons (owner decision 2026-11-06; the web's were 18px
+   and 19px in a 20px box), and the names keep their place. */
 .sidebar .side-entry { padding: 0 11px; }
 /* Rows inside This PC and Network (.side-entry.indent). */
 .sidebar list > row.indent .side-entry { padding-left: 32px; }
@@ -73,8 +74,7 @@ window.ox .sidebar button.side-expander {
   color: @ox_text;
 }
 window.ox .sidebar button.side-expander:hover { background-color: @ox_pressed; }
-.sidebar .side-glyph { margin: 1px 13px 0 1px; }
-.sidebar .side-art { margin: 0 12px 0 1px; }
+.sidebar .side-glyph, .sidebar .side-art { margin: 0 14px 0 2px; }
 .sidebar .pin { color: @ox_text_tertiary; margin-left: 12px; }
 /* The eject button of a removable drive (DEV-007): a subtle 24px button
    at the row's end, as GNOME's places sidebar shows it. */

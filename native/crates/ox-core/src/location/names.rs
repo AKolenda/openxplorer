@@ -26,6 +26,17 @@ pub fn is_reserved_device_name(name: &str) -> bool {
     RESERVED_DEVICE_NAMES.contains(&glib::casefold(base_name.trim_end_matches(' ')).as_str())
 }
 
+/// The characters Windows refuses in a file or folder name, in the order
+/// its "A file name can't contain any of the following characters" balloon
+/// lists them.
+pub const WINDOWS_FORBIDDEN_CHARACTERS: [char; 9] = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
+
+/// True when `text` has a character Windows refuses in a name
+/// ([`WINDOWS_FORBIDDEN_CHARACTERS`]).
+pub fn has_windows_forbidden_character(text: &str) -> bool {
+    text.contains(WINDOWS_FORBIDDEN_CHARACTERS)
+}
+
 /// True when Windows cannot keep `name` as it is: it drops a dot or a
 /// space at the end of a name.
 pub fn ends_like_windows_drops(name: &str) -> bool {
@@ -91,6 +102,19 @@ pub fn validate_name(name: &str) -> Result<&str, LocationError> {
 /// beyond recognition.
 pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, LocationError> {
     name_with_copy_marker(name, &copy_marker(number), kind)
+}
+
+/// The name the copied item gets when the user keeps both versions in
+/// Windows' File Conflict window: "If you select both versions, the
+/// copied file will have a number added to its name", `report (2).png`,
+/// then `report (3).png`. `number` starts at 2; the number goes where
+/// [`new_copy_name`] puts its marker.
+///
+/// # Errors
+///
+/// As [`new_copy_name`].
+pub fn kept_both_name(name: &str, number: u32, kind: ItemKind) -> Result<String, LocationError> {
+    name_with_copy_marker(name, &format!(" ({number})"), kind)
 }
 
 /// The marker of the `number`th copy: ` - Copy`, then ` - Copy (2)`.
@@ -212,6 +236,24 @@ mod tests {
         assert!(!ends_like_windows_drops("notes.txt") && !ends_like_windows_drops(".hidden"));
     }
 
+    /// parity: OPS-010
+    #[test]
+    fn the_characters_windows_refuses_in_names_are_found_anywhere() {
+        for refused in ["a\\b", "a/b", "10:30", "*", "why?", "\"quoted\"", "<b>", "a|b"] {
+            assert!(has_windows_forbidden_character(refused), "{refused}");
+        }
+        for accepted in [
+            "Notes (2).txt",
+            "Résumé.txt",
+            ".hidden",
+            "a - b",
+            "100%",
+            "#1 & co",
+        ] {
+            assert!(!has_windows_forbidden_character(accepted), "{accepted}");
+        }
+    }
+
     /// parity: OPS-006
     #[test]
     fn names_are_validated_like_python() {
@@ -267,6 +309,23 @@ mod tests {
             copy_name("file - Copy.txt", 1, ItemKind::File),
             "file - Copy - Copy.txt"
         );
+    }
+
+    /// Keeping both versions in the File Conflict window numbers the
+    /// copied file as Windows does: "report (2).png", then "(3)".
+    ///
+    /// parity: OPS-028
+    #[test]
+    fn kept_both_names_follow_windows_file_conflicts() {
+        let kept = |name: &str, number: u32, kind: ItemKind| {
+            kept_both_name(name, number, kind).expect("a valid name with room for the number")
+        };
+        assert_eq!(kept("report.png", 2, ItemKind::File), "report (2).png");
+        assert_eq!(kept("report.png", 3, ItemKind::File), "report (3).png");
+        assert_eq!(kept("Photos", 2, ItemKind::Folder), "Photos (2)");
+        assert_eq!(kept(".profile", 2, ItemKind::File), ".profile (2)");
+        assert_eq!(kept("archive.tar.gz", 2, ItemKind::File), "archive.tar (2).gz");
+        assert!(kept_both_name("a/b", 2, ItemKind::File).is_err());
     }
 
     /// parity: XFER-008

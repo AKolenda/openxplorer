@@ -9,7 +9,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -441,9 +441,9 @@ fn back_to_a_grouped_folder_keeps_its_scroll_position() {
 }
 
 /// The Sort menu's submenus: More holds Size and the further keys, and
-/// Group by Explorer's choices, "Same as sort" and (None). A submenu
-/// shows in the same popup as the Sort menu, under a row that goes back;
-/// choosing one of its items groups the folder.
+/// Group by Explorer's choices, "Same as sort" and (None). A submenu opens
+/// beside the Sort menu, as Windows 11's do, and choosing one of its items
+/// closes both and groups the folder.
 ///
 /// parity: VIEW-022
 #[gtk::test]
@@ -452,19 +452,15 @@ fn the_sort_menu_has_more_and_group_by_submenus() {
     let test = TestWindow::open(&fixture.uri());
     test.window.right_click(None);
     let menu = test.window.context_menu();
-    menu.row("Sort by").emit_activate();
-    wait_until("the Sort menu", || {
-        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
-    });
-    capture_popover(&test.window, menu.upcast_ref(), "native-sort-menu.png");
-    let sort_rows = menu.row_labels();
-    // Clicking Group by shows its choices in the same menu.
-    menu.row("Group by").emit_activate();
+    let sort = menu.open_submenu_of("Sort by");
+    assert!(sort.row_labels().contains(&"Group by".to_owned()));
+    capture_popover(&test.window, sort.upcast_ref(), "native-sort-menu.png");
+    let sort_rows = sort.row_labels();
+    // Clicking Group by opens its choices beside the Sort submenu.
+    let group_by = sort.open_submenu_of("Group by");
     assert_eq!(
-        menu.row_labels(),
+        group_by.row_labels(),
         [
-            "Group by",
-            "-",
             "Name",
             "Date modified",
             "Type",
@@ -474,27 +470,29 @@ fn the_sort_menu_has_more_and_group_by_submenus() {
             "(None)"
         ]
     );
-    assert!(menu.is_visible(), "the menu stays open");
-    assert_eq!(open_menus(&test).len(), 1, "one popup only");
-    capture_popover(&test.window, menu.upcast_ref(), "native-group-by-menu.png");
+    assert_eq!(sort.row_labels(), sort_rows, "the Sort submenu stays as it was");
+    assert!(menu.is_visible() && sort.is_visible(), "the menus stay open");
+    assert_eq!(open_menus(&test).len(), 3, "the menu and two submenus");
+    capture_popover(&test.window, group_by.upcast_ref(), "native-group-by-menu.png");
 
-    // Left goes back to the Sort menu, on Group by; Right opens it again.
-    assert!(menu.press_in_list(gtk::gdk::Key::Left));
-    assert_eq!(menu.row_labels(), sort_rows);
-    assert_eq!(focused_row_label(&menu).as_deref(), Some("Group by"));
-    assert!(menu.press_in_list(gtk::gdk::Key::Right));
-    assert_eq!(menu.row_labels().first().map(String::as_str), Some("Group by"));
-    // The back row goes back too.
-    menu.rows()[0].emit_activate();
-    assert_eq!(menu.row_labels(), sort_rows);
+    // Left closes only Group by, the keyboard back on its row; Right opens
+    // it again, the keyboard on its first item.
+    assert!(group_by.press_in_list(gtk::gdk::Key::Left));
+    assert!(sort.open_submenu_menu().is_none());
+    assert!(sort.is_visible());
+    assert_eq!(focused_row_label(&sort).as_deref(), Some("Group by"));
+    assert!(sort.press_in_list(gtk::gdk::Key::Right));
+    let group_by = sort.open_submenu_menu().expect("Right opens Group by");
+    assert_eq!(focused_row_label(&group_by).as_deref(), Some("Name"));
+    // Escape closes only Group by too.
+    assert!(group_by.press_in_list(gtk::gdk::Key::Escape));
+    assert!(sort.open_submenu_menu().is_none() && sort.is_visible());
 
     // More holds Size and the further keys.
-    menu.row("More").emit_activate();
+    let more = sort.open_submenu_of("More");
     assert_eq!(
-        menu.row_labels(),
+        more.row_labels(),
         [
-            "More",
-            "-",
             "Size",
             "Date created",
             "Date accessed",
@@ -505,21 +503,24 @@ fn the_sort_menu_has_more_and_group_by_submenus() {
             "Link destination"
         ]
     );
-    menu.rows()[0].emit_activate();
 
-    // Choosing in a submenu closes the menu, then groups.
-    menu.row("Group by").emit_activate();
-    menu.row("Date modified").emit_activate();
+    // Opening Group by closes More; choosing in it closes every menu,
+    // then groups.
+    let group_by = sort.open_submenu_of("Group by");
+    assert!(!more.is_visible(), "one submenu open beside a menu");
+    group_by.row("Date modified").emit_activate();
     assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
-    wait_until("the menu to close", || !menu.is_visible());
+    wait_until("the menus to close", || !menu.is_visible());
+    assert_eq!(open_menus(&test), Vec::<String>::new());
 }
 
-/// Resting the pointer on Group by opens nothing: a submenu opens on a
-/// click, Enter or Right only, so no timer ever opens or closes a menu.
+/// Resting the pointer on Group by opens it after Windows' menu show delay,
+/// 400 ms, and not before; resting on another row as long closes it. The
+/// keyboard stays in the Sort menu.
 ///
 /// parity: VIEW-022
 #[gtk::test]
-fn a_submenu_opens_only_when_chosen() {
+fn a_submenu_opens_when_the_pointer_rests_on_its_row() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let sort = sort_button(&test);
@@ -529,34 +530,79 @@ fn a_submenu_opens_only_when_chosen() {
         .expect("an app menu");
     sort.popup();
     wait_until("the Sort menu", || menu.is_visible());
-    let sort_rows = menu.row_labels();
-    // The pointer comes onto Group by and rests there.
-    let row = menu.row("Group by");
-    row.grab_focus();
-    let list = menu.row_list();
-    let y = row
-        .compute_point(&list, &gtk::graphene::Point::new(4.0, 4.0))
-        .map_or(0.0, |point| f64::from(point.y()));
-    for controller in list
-        .observe_controllers()
-        .iter::<glib::Object>()
-        .filter_map(Result::ok)
-    {
-        if let Ok(motion) = controller.downcast::<gtk::EventControllerMotion>() {
-            motion.emit_by_name::<()>("enter", &[&4.0_f64, &y]);
-            motion.emit_by_name::<()>("motion", &[&4.0_f64, &y]);
-        }
+    assert_eq!(
+        crate::window::menu_popover::SUBMENU_DELAY,
+        Duration::from_millis(400),
+        "Windows' MenuShowDelay"
+    );
+    let rested = Instant::now();
+    menu.hover_row(Some("Group by"));
+    // Without waiting for frames, which a slow machine may take long
+    // enough to draw that the delay passes.
+    let waited = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&waited);
+    glib::timeout_add_local_once(Duration::from_millis(250), move || done.set(true));
+    wait_until("a moment", || waited.get());
+    if rested.elapsed() < crate::window::menu_popover::SUBMENU_DELAY {
+        assert!(menu.open_submenu_menu().is_none(), "not before the delay");
     }
-    wait_past_the_submenu_delay(&test);
-    assert_eq!(menu.row_labels(), sort_rows, "focus or hover opens nothing");
-    assert_eq!(open_menus(&test).len(), 1);
+    wait_until("Group by to open", || menu.open_submenu_menu().is_some());
+    assert!(rested.elapsed() >= Duration::from_millis(400));
+    let group_by = menu.open_submenu_menu().expect("Group by");
+    assert!(group_by.row_labels().contains(&"Same as sort".to_owned()));
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    assert!(
+        focus.is_none_or(|focus| !focus.is_ancestor(&group_by)),
+        "the pointer opening a submenu leaves the keyboard where it was"
+    );
+
+    // Resting on Name closes it once the delay passes.
+    menu.hover_row(Some("Name"));
+    assert!(menu.open_submenu_menu().is_some(), "not at once");
+    wait_until("Group by to close", || menu.open_submenu_menu().is_none());
+    assert!(!group_by.is_visible());
+    assert!(menu.is_visible(), "the Sort menu stays open");
 }
 
-/// A menu closed inside a submenu opens again at its top level.
+/// Moving the pointer diagonally from Group by towards its open submenu
+/// crosses other rows of the Sort menu; the submenu stays open, as on
+/// Windows, once the pointer reaches it before the delay passes. Leaving
+/// the menus keeps it open too.
 ///
 /// parity: VIEW-022
 #[gtk::test]
-fn a_menu_closed_in_a_submenu_reopens_at_its_top() {
+fn moving_towards_an_open_submenu_keeps_it_open() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sort = sort_button(&test);
+    let menu = sort
+        .popover()
+        .and_downcast::<crate::window::menu_popover::MenuPopover>()
+        .expect("an app menu");
+    sort.popup();
+    wait_until("the Sort menu", || menu.is_visible());
+    let group_by = menu.open_submenu_of("Group by");
+    // On the way, the pointer crosses Folders first, below Group by.
+    // It reaches the submenu well within the delay.
+    menu.hover_row(Some("Folders first"));
+    group_by.pointer_enters();
+    group_by.hover_row(Some("Type"));
+    wait_past_the_submenu_delay(&test);
+    assert_eq!(menu.open_submenu_menu().as_ref(), Some(&group_by), "still open");
+    assert!(group_by.is_visible());
+    // The pointer leaves both menus.
+    group_by.hover_row(None);
+    menu.hover_row(None);
+    wait_past_the_submenu_delay(&test);
+    assert!(group_by.is_visible(), "leaving the menus closes nothing");
+}
+
+/// A menu closed with a submenu open closes the submenu first, and opens
+/// again without it.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_menu_closed_with_a_submenu_open_reopens_without_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let sort = sort_button(&test);
@@ -567,13 +613,26 @@ fn a_menu_closed_in_a_submenu_reopens_at_its_top() {
     sort.popup();
     wait_until("the Sort menu", || menu.is_visible());
     let sort_rows = menu.row_labels();
-    menu.row("Group by").emit_activate();
-    assert_ne!(menu.row_labels(), sort_rows);
+    let group_by = menu.open_submenu_of("Group by");
+    // Which popup leaves the screen first.
+    let order: std::rc::Rc<std::cell::RefCell<Vec<&str>>> = std::rc::Rc::default();
+    for (popover, name) in [(&group_by, "Group by"), (&menu, "Sort")] {
+        let surface = gtk::prelude::NativeExt::surface(popover).expect("on screen");
+        let order = std::rc::Rc::clone(&order);
+        surface.connect_mapped_notify(move |surface| {
+            if !surface.is_mapped() {
+                order.borrow_mut().push(name);
+            }
+        });
+    }
     menu.popdown();
     wait_until("the menu to close", || !menu.is_visible());
+    assert_eq!(*order.borrow(), ["Group by", "Sort"], "a submenu closes first");
+    assert!(menu.open_submenu_menu().is_none());
     sort.popup();
     wait_until("the Sort menu again", || menu.is_visible());
     assert_eq!(menu.row_labels(), sort_rows);
+    assert!(menu.open_submenu_menu().is_none(), "no submenu opens with it");
 }
 
 /// The Sort menu's submenus hold what Explorer's do.
@@ -820,13 +879,21 @@ fn sort_button(test: &TestWindow) -> gtk::MenuButton {
         .expect("the command bar has Sort")
 }
 
-/// Waits a while, longer than a submenu took to open or close on a
-/// timer before submenus opened only when chosen, letting the window draw.
+/// Waits longer than a submenu takes to open or close on its timer,
+/// letting the window draw.
 fn wait_past_the_submenu_delay(test: &TestWindow) {
+    wait_for(
+        test,
+        crate::window::menu_popover::SUBMENU_DELAY + Duration::from_millis(300),
+    );
+}
+
+/// Waits `pause`, letting the window draw.
+fn wait_for(test: &TestWindow, pause: Duration) {
     let waited = std::rc::Rc::new(std::cell::Cell::new(false));
     let done = std::rc::Rc::clone(&waited);
-    glib::timeout_add_local_once(Duration::from_millis(700), move || done.set(true));
-    wait_until("the submenu delay to pass", || waited.get());
+    glib::timeout_add_local_once(pause, move || done.set(true));
+    wait_until("the time to pass", || waited.get());
     wait_for_frames(&test.window, 3);
 }
 
@@ -854,10 +921,10 @@ fn choosing_in_the_group_by_submenu_of_the_sort_button_closes_every_menu() {
         .expect("an app menu");
     sort.popup();
     wait_until("the Sort menu", || menu.is_visible());
-    menu.row("Group by").emit_activate();
-    assert_eq!(open_menus(&test).len(), 1, "one popup only");
+    let group_by = menu.open_submenu_of("Group by");
+    assert_eq!(open_menus(&test).len(), 2, "the menu and Group by");
 
-    menu.row("Date modified").emit_activate();
+    group_by.row("Date modified").emit_activate();
 
     assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
     wait_past_the_submenu_delay(&test);
@@ -883,12 +950,18 @@ fn a_press_in_the_window_closes_every_menu_and_a_press_on_a_menu_none() {
         .expect("an app menu");
     sort.popup();
     wait_until("the Sort menu", || menu.is_visible());
-    menu.row("Group by").emit_activate();
+    let group_by = menu.open_submenu_of("Group by");
     let window: &gtk::Widget = test.window.upcast_ref();
 
     let surface = gtk::prelude::NativeExt::surface(&menu);
     crate::window::menu_popover::close_menus_in(window, surface.as_ref());
     assert!(menu.is_visible(), "a press on the menu");
+    let surface = gtk::prelude::NativeExt::surface(&group_by);
+    crate::window::menu_popover::close_menus_in(window, surface.as_ref());
+    assert!(
+        menu.is_visible() && group_by.is_visible(),
+        "a press on the submenu"
+    );
 
     let window_surface = gtk::prelude::NativeExt::surface(&test.window);
     crate::window::menu_popover::close_menus_in(window, window_surface.as_ref());

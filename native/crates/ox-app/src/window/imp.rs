@@ -252,6 +252,11 @@ pub(crate) struct BrowserWindow {
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
+    /// Why tooltips are off now: a drag of this window's items, and the
+    /// drop menu, show none, as in Windows Explorer (DND-027).
+    pub(super) tooltips_off: Cell<super::quiet_tooltips::TooltipsOff>,
+    /// The widgets whose tooltips were turned off, to turn them on again.
+    pub(super) muted_tooltips: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
     /// The folder a file drag hovers over, and the timer that opens it.
@@ -287,6 +292,8 @@ pub(crate) struct BrowserWindow {
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
+    /// Network's info bar, shown while discovery cannot run.
+    pub(super) network_info_bar: OnceCell<gtk::Button>,
     /// The rename a slow second click on a name scheduled (OPS-011).
     pub(super) slow_click_rename: super::slow_click_rename::SlowClickRename,
     /// Measured folder sizes and the running folder-size scan.
