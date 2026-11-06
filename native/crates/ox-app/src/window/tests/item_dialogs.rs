@@ -1391,6 +1391,39 @@ fn a_mount_point_reached_as_a_folder_shows_as_a_folder() {
     window.close();
 }
 
+/// A mount point reached as a folder and the root reached as a drive,
+/// light and dark, for review with `OX_NATIVE_CAPTURE_DIR` (and
+/// `GDK_SCALE=2`): `mount-point-{folder,drive}-{light,dark}.png`.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_mount_point_and_a_drive_are_captured() {
+    let _theme = ThemeGuard::keep();
+    let Some(name) = ["dev", "proc"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let test = TestWindow::open("file:///");
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.select_named(name);
+        test.activate("properties", None);
+        let folder = test.wait_for_properties(&format!("{name} Properties"));
+        general(&folder);
+        capture_dialog(&folder, &format!("mount-point-folder-{theme}.png"));
+        folder.close();
+        test.activate("properties-of", Some("file:///"));
+        let drive = test.wait_for_properties("Local Disk Properties");
+        let page = tab(&drive, "general");
+        wait_until("the drive's details", || value_after(&page, "Type:").is_some());
+        capture_dialog(&drive, &format!("mount-point-drive-{theme}.png"));
+        drive.close();
+    }
+}
+
 /// A link says where it points. A drive, the root among them, has
 /// Windows' drive General tab: its type, file system, used and free
 /// space and capacity in bytes and short, and the ring, with nothing on
