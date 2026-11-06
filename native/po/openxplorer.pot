@@ -4375,6 +4375,10 @@ msgstr ""
 msgid "Delete (Delete)"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/place_menus.rs
+msgid "Empty Recycle Bin"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Extract all"
 msgstr ""
@@ -4405,6 +4409,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Rename (F2)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Restore all items"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Restore the selected items"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -4646,10 +4658,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
 msgid "Duplicate"
-msgstr ""
-
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/place_menus.rs
-msgid "Empty Recycle Bin"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -4921,10 +4929,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
 msgid "No shared folders found"
-msgstr ""
-
-#: crates/ox-app/src/window/empty_page.rs
-msgid "Recycle Bin is empty"
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -5416,10 +5420,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "New folder"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/recycle_bin.rs
-msgid "Every item in the Recycle Bin is deleted permanently and cannot be recovered."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/recycle_bin.rs

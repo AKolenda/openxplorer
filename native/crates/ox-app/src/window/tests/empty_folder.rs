@@ -282,21 +282,20 @@ fn each_pane_of_a_split_tab_has_its_own_empty_page_menu() {
     assert!(menu.row("New…").is_sensitive());
 }
 
-/// An empty Recycle Bin shows "Recycle Bin is empty" and its page opens
+/// An empty Recycle Bin says "This folder is empty." in its list, as any
+/// empty folder does in Windows 11, with no page of its own, and opens
 /// the Recycle Bin's own folder menu, with no Paste or New.
 ///
 /// parity: OPS-040, CMD-011
 #[gtk::test]
-fn an_empty_recycle_bin_opens_its_own_menu() {
+fn an_empty_recycle_bin_says_so_as_a_folder_and_opens_its_own_menu() {
     super::file_ops_support::require_private_trash();
     let trash = glib::user_data_dir().join("Trash");
     let _ = std::fs::remove_dir_all(&trash);
-    let test = TestWindow::open(ox_core::location::TRASH_URI);
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
     choose_menu_style(&test, ContextMenu::Win10);
-    wait_until("the empty Recycle Bin", || {
-        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
-    });
-    let page = shown_empty_page(&test);
+    let page = go_to_empty_folder(&test, ox_core::location::TRASH_URI);
 
     test.window.open_context_menu_from_keyboard();
     let menu = menu_of(&page).expect("the page has the folder menu");
