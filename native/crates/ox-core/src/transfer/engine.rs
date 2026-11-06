@@ -351,17 +351,11 @@ impl TransferEngine {
     ) -> Result<TransferResult, TransferError> {
         let folder = destination_folder(&self.factory, folder_uri, cancel)?;
         // XFER-028: what the destination's file system can hold.
-        let filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
+        let mut filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
         self.unstorable.start_run(
             StorageRules::of(filesystem.kind.as_deref()),
             filesystem.id.clone(),
         );
-        let incoming = Incoming {
-            mode,
-            policy,
-            folder: folder.as_ref(),
-            filesystem: &filesystem,
-        };
         // Walking folders on a share can take a while: say so once, as
         // Dolphin shows its examining phase.
         let mut announced = false;
@@ -379,6 +373,12 @@ impl TransferEngine {
             }
         };
         let measured = loop {
+            let incoming = Incoming {
+                mode,
+                policy,
+                folder: folder.as_ref(),
+                filesystem: &filesystem,
+            };
             let shortfall = match incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)? {
                 FreeSpace::Fits(measured) => break measured,
                 FreeSpace::Short(shortfall) => shortfall,
@@ -395,7 +395,11 @@ impl TransferEngine {
                 ..FailedItem::new(mode, folder.display_name(), "", Some(folder_uri), &error)
             };
             match self.failures.answer(&question) {
-                Some(FailureAnswer::Retry) => {}
+                // The user may have made room meanwhile: read the free
+                // space again.
+                Some(FailureAnswer::Retry) => {
+                    filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
+                }
                 Some(FailureAnswer::Cancel) => return Err(TransferError::Cancelled),
                 _ => return Err(error),
             }
