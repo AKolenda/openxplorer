@@ -155,11 +155,12 @@ fn create_folder(folder: &Path) -> Option<()> {
         .ok()
 }
 
-/// The picture in `bytes`, decoded to fit `edge` pixels square as
+/// The PNG in `bytes`, decoded to fit `edge` pixels square as
 /// [`scaled_picture`] decodes a file: a desktop thumbnailer's picture,
-/// which the app read into memory itself (see [`super::thumbnailers`]).
-pub(super) fn scaled_bytes(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
-    let loader = scaling_loader(edge);
+/// which the app read into memory itself and checked the size of (see
+/// [`super::thumbnailers`]). Only gdk-pixbuf's PNG loader reads it.
+pub(super) fn scaled_png(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
+    let loader = scaling(PixbufLoader::with_type("png").ok()?, edge);
     for chunk in bytes.chunks(READ_CHUNK) {
         if loader.write(chunk).is_err() {
             let _ = loader.close();
@@ -174,7 +175,7 @@ pub(super) fn scaled_bytes(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
 /// in memory at full size.
 fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Option<Pixbuf> {
     let stream = gio::File::for_uri(uri).read(Some(cancellation)).ok()?;
-    let loader = scaling_loader(edge);
+    let loader = scaling(PixbufLoader::new(), edge);
     let mut buffer = vec![0; READ_CHUNK];
     loop {
         let Ok(read) = stream.read(&mut buffer, Some(cancellation)) else {
@@ -192,10 +193,9 @@ fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Opti
     finish(&loader)
 }
 
-/// A loader that decodes its picture to fit `edge` pixels square, or at
-/// its own size when smaller.
-fn scaling_loader(edge: i32) -> PixbufLoader {
-    let loader = PixbufLoader::new();
+/// `loader`, made to decode its picture to fit `edge` pixels square, or
+/// at its own size when smaller.
+fn scaling(loader: PixbufLoader, edge: i32) -> PixbufLoader {
     loader.connect_size_prepared(move |loader, width, height| {
         if width > edge || height > edge {
             let (width, height) = fit(width, height, edge);

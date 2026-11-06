@@ -314,9 +314,19 @@ async fn by_thumbnailer(
         .with(Rc::clone)
         .blocking(move |cancel| {
             // The desktop's entries are files, read in the worker rather
-            // than on the thread that asked, and once per run; a test hands
-            // its own instead.
-            let installed = catalogue.unwrap_or_else(thumbnailers::installed);
+            // than on the thread that asked, and once per run; what the
+            // user turned off is read for each request, so a change takes
+            // effect at once, and with every program off the entries are
+            // not even read. A test hands its own, with nothing off.
+            let installed = if let Some(catalogue) = catalogue {
+                catalogue
+            } else {
+                let disabled = thumbnailers::Disabled::of_session();
+                if disabled.all {
+                    return None;
+                }
+                Arc::new(thumbnailers::installed().with_disabled(disabled))
+            };
             thumbnailers::write_thumbnail(&job, &installed, cancel)
         })
         .await

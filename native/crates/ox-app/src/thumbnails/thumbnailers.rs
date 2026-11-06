@@ -84,6 +84,20 @@ const OUTPUT: &str = "openxplorer-thumbnail.png";
 /// hundred pixels square.
 const OUTPUT_SIZE_LIMIT: u64 = 32 * 1024 * 1024;
 
+/// The longest side of a thumbnailer's picture the app decodes.
+const OUTPUT_SIDE_LIMIT: u32 = 16_384;
+
+/// The most pixels of a thumbnailer's picture the app decodes: a frame of
+/// an 8K video, which a program that ignores `%s` may hand back. A small
+/// PNG may declare far more, and gdk-pixbuf would allocate them all.
+const OUTPUT_PIXEL_LIMIT: u64 = 7680 * 4320;
+
+/// The start of every PNG file.
+const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+
+/// The `PATH` a thumbnailer runs with.
+const PROGRAM_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
+
 /// The system folders every program needs, shown read-only in the
 /// sandbox: each is a folder of its own, or a link into `/usr`.
 const SYSTEM_FOLDERS: [&str; 5] = ["/bin", "/sbin", "/lib", "/lib32", "/lib64"];
@@ -125,31 +139,45 @@ pub(super) struct Job {
     pub flavor: ThumbnailFlavor,
 }
 
-/// Where the desktop's thumbnailers are read, and what the user turned
-/// off.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Dirs {
-    /// The data folders, the user's first.
-    pub folders: Vec<PathBuf>,
-    /// The MIME types `disable` names no external thumbnailer is started
-    /// for.
-    pub disabled_types: Vec<String>,
-    /// `disable-all` is set: no external thumbnailer is started at all.
-    pub disable_all: bool,
+/// What the user turned external thumbnailers off for in
+/// `org.gnome.desktop.thumbnailers`, read for each request so that a
+/// change takes effect at once.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct Disabled {
+    /// The MIME types `disable` names no program is started for.
+    pub types: Vec<String>,
+    /// `disable-all` is set: no program is started for any type.
+    pub all: bool,
 }
 
-impl Dirs {
-    /// The folders of this session, and what the desktop turned off.
-    #[cfg_attr(test, allow(dead_code))]
-    fn of_session() -> Self {
-        let mut folders = vec![glib::user_data_dir()];
-        folders.extend(glib::system_data_dirs());
-        let (disabled_types, disable_all) = disabled();
-        Self {
-            folders,
-            disabled_types,
-            disable_all,
-        }
+impl Disabled {
+    /// What this session's settings turn off. A session without the
+    /// schema turns none off.
+    pub(super) fn of_session() -> Self {
+        let Some(schema) =
+            gio::SettingsSchemaSource::default().and_then(|source| source.lookup(DISABLE_SCHEMA, true))
+        else {
+            return Self::default();
+        };
+        let settings = gio::Settings::new(DISABLE_SCHEMA);
+        let types = if schema.has_key(DISABLE_KEY) {
+            settings
+                .strv(DISABLE_KEY)
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let all = schema.has_key(DISABLE_ALL_KEY) && settings.boolean(DISABLE_ALL_KEY);
+        Self { types, all }
+    }
+
+    /// Whether no program may be started for `content_type`: `disable`
+    /// names types, and a type it names takes the kinds of it along, as an
+    /// entry naming a parent type does.
+    fn covers(&self, content_type: &str) -> bool {
+        self.all || self.types.iter().any(|declared| covers(content_type, declared))
     }
 }
 
@@ -158,29 +186,26 @@ impl Dirs {
 pub(super) struct Catalogue {
     /// The thumbnailers installed, in the order they are tried.
     thumbnailers: Vec<Thumbnailer>,
-    /// The MIME types `disable` names no program for.
-    disabled_types: Vec<String>,
-    /// `disable-all` is set: no program is started for any type.
-    disable_all: bool,
+    /// What the user turned off.
+    disabled: Disabled,
     /// How the programs run; `None` runs none.
     sandbox: Option<Sandbox>,
 }
 
 impl Catalogue {
-    /// The thumbnailers `dirs` holds, run in the sandbox `sandbox` finds:
-    /// a desktop with every external thumbnailer turned off has none read,
-    /// and one without a working sandbox keeps none, so the sandbox is
-    /// looked for only when there is a program to run in it.
-    fn of(dirs: &Dirs, sandbox: impl FnOnce() -> Option<Sandbox>) -> Self {
-        let mut thumbnailers = if dirs.disable_all { Vec::new() } else { read(dirs) };
+    /// The thumbnailers the data folders `folders` hold, run in the
+    /// sandbox `sandbox` finds: one without a working sandbox keeps none,
+    /// and the sandbox is looked for only when there is a program to run
+    /// in it.
+    fn of(folders: &[PathBuf], sandbox: impl FnOnce() -> Option<Sandbox>) -> Self {
+        let mut thumbnailers = read(folders);
         let sandbox = if thumbnailers.is_empty() { None } else { sandbox() };
         if sandbox.is_none() {
             thumbnailers.clear();
         }
         Self {
             thumbnailers,
-            disabled_types: dirs.disabled_types.clone(),
-            disable_all: dirs.disable_all,
+            disabled: Disabled::default(),
             sandbox,
         }
     }
@@ -191,30 +216,28 @@ impl Catalogue {
     pub(super) fn for_test(thumbnailers: Vec<Thumbnailer>) -> Self {
         Self {
             thumbnailers,
-            disabled_types: Vec::new(),
-            disable_all: false,
+            disabled: Disabled::default(),
             sandbox: Some(Sandbox::Off),
+        }
+    }
+
+    /// These thumbnailers with what `disabled` turns off.
+    pub(super) fn with_disabled(&self, disabled: Disabled) -> Self {
+        Self {
+            disabled,
+            ..self.clone()
         }
     }
 
     /// The thumbnailer that makes `content_type`, unless the user turned
     /// external thumbnailers off for the type or for every type.
     fn for_type(&self, content_type: &str) -> Option<&Thumbnailer> {
-        if self.disable_all || self.disables(content_type) {
+        if self.disabled.covers(content_type) {
             return None;
         }
         self.thumbnailers
             .iter()
             .find(|thumbnailer| thumbnailer.handles(content_type))
-    }
-
-    /// Whether the user turned external thumbnailers off for
-    /// `content_type`: `disable` names types, and a type it names takes the
-    /// kinds of it along, as an entry naming a parent type does.
-    fn disables(&self, content_type: &str) -> bool {
-        self.disabled_types
-            .iter()
-            .any(|declared| covers(content_type, declared))
     }
 }
 
@@ -332,9 +355,10 @@ fn expand(word: &str, values: &[(u8, &OsStr)]) -> OsString {
     OsString::from_vec(expanded)
 }
 
-/// The thumbnailers this desktop installs and what its user turned off,
-/// read the first time a thumbnail has to be made and once per run
-/// (`thumbnailers/` holds a handful of small files).
+/// The thumbnailers this desktop installs, read the first time a
+/// thumbnail has to be made and once per run (`thumbnailers/` holds a
+/// handful of small files); what the user turns off is not kept here but
+/// read for each request ([`Disabled::of_session`]).
 pub(super) fn installed() -> Arc<Catalogue> {
     Arc::clone(INSTALLED.get_or_init(|| Arc::new(session_catalogue())))
 }
@@ -342,7 +366,9 @@ pub(super) fn installed() -> Arc<Catalogue> {
 /// The desktop's thumbnailers, in the sandbox this computer offers.
 #[cfg(not(test))]
 fn session_catalogue() -> Catalogue {
-    Catalogue::of(&Dirs::of_session(), Sandbox::find)
+    let mut folders = vec![glib::user_data_dir()];
+    folders.extend(glib::system_data_dirs());
+    Catalogue::of(&folders, Sandbox::find)
 }
 
 /// None in a test: a window test never starts the programs of the
@@ -352,12 +378,12 @@ fn session_catalogue() -> Catalogue {
     Catalogue::for_test(Vec::new())
 }
 
-/// The thumbnailers `dirs` holds, the user's folders before the system
-/// ones and each folder's files by name, which is the order Files tries
-/// them in.
-fn read(dirs: &Dirs) -> Vec<Thumbnailer> {
+/// The thumbnailers the data folders `folders` hold, the user's folders
+/// before the system ones and each folder's files by name, which is the
+/// order Files tries them in.
+fn read(folders: &[PathBuf]) -> Vec<Thumbnailer> {
     let mut thumbnailers = Vec::new();
-    for folder in &dirs.folders {
+    for folder in folders {
         for file in entries(&folder.join(FOLDER)) {
             let Some(text) = read_entry(&file) else {
                 continue;
@@ -408,31 +434,6 @@ fn installed_program(program: &str) -> bool {
         return metadata.is_file() && metadata.permissions().mode() & 0o111 != 0;
     }
     glib::find_program_in_path(program).is_some()
-}
-
-/// What the user turned external thumbnailers off for in
-/// `org.gnome.desktop.thumbnailers`: the MIME types `disable` names, and
-/// whether `disable-all` turns every one of them off. A session without
-/// the schema turns none off.
-#[cfg_attr(test, allow(dead_code))]
-fn disabled() -> (Vec<String>, bool) {
-    let Some(schema) =
-        gio::SettingsSchemaSource::default().and_then(|source| source.lookup(DISABLE_SCHEMA, true))
-    else {
-        return (Vec::new(), false);
-    };
-    let settings = gio::Settings::new(DISABLE_SCHEMA);
-    let types = if schema.has_key(DISABLE_KEY) {
-        settings
-            .strv(DISABLE_KEY)
-            .iter()
-            .map(ToString::to_string)
-            .collect()
-    } else {
-        Vec::new()
-    };
-    let all = schema.has_key(DISABLE_ALL_KEY) && settings.boolean(DISABLE_ALL_KEY);
-    (types, all)
 }
 
 /// Makes the thumbnail of `job` with the thumbnailer of `catalogue` that
@@ -542,13 +543,20 @@ impl Sandbox {
                 let inside = Path::new(INSIDE);
                 let inside_item = inside.join(format!("{INPUT}{}", extension_of(item)));
                 let inside_uri = format!("file://{}", inside_item.display());
-                let program = thumbnailer.command(&inside_item, &inside_uri, &inside.join(OUTPUT), pixels);
+                let mut program =
+                    thumbnailer.command(&inside_item, &inside_uri, &inside.join(OUTPUT), pixels);
+                // The program is named by its full path, since the sandbox's
+                // `PATH` holds only the system's folders.
+                let resolved = program.first().and_then(|name| program_path(name));
+                if let (Some(first), Some(resolved)) = (program.first_mut(), &resolved) {
+                    resolved.as_os_str().clone_into(first);
+                }
                 let mut command = vec![bwrap.as_os_str().to_owned()];
                 command.extend(sandbox_arguments(
                     workspace,
                     item,
                     &inside_item,
-                    program.first().map(OsString::as_os_str),
+                    resolved.as_deref(),
                     *proc,
                 ));
                 command.push("--".into());
@@ -588,7 +596,7 @@ fn sandbox_arguments(
     workspace: &Path,
     item: &Path,
     inside_item: &Path,
-    program: Option<&OsStr>,
+    program: Option<&Path>,
     proc: bool,
 ) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = Vec::new();
@@ -607,7 +615,7 @@ fn sandbox_arguments(
     }
     // A program installed outside the system's folders, such as one in
     // the user's own `bin` folder, is shown read-only where it is.
-    if let Some(program) = program.and_then(program_path) {
+    if let Some(program) = program {
         let in_system = std::iter::once("/usr")
             .chain(SYSTEM_FOLDERS)
             .any(|folder| program.starts_with(folder));
@@ -626,6 +634,12 @@ fn sandbox_arguments(
         word("--setenv"),
         word("GIO_USE_VFS"),
         word("local"),
+        word("--setenv"),
+        word("HOME"),
+        word(INSIDE),
+        word("--setenv"),
+        word("TMPDIR"),
+        word(INSIDE),
         word("--unshare-all"),
         word("--die-with-parent"),
         word("--new-session"),
@@ -698,7 +712,26 @@ fn read_picture(path: &Path, edge: i32) -> Option<Pixbuf> {
     }
     let mut bytes = Vec::new();
     file.take(OUTPUT_SIZE_LIMIT).read_to_end(&mut bytes).ok()?;
-    writer::scaled_bytes(&bytes, edge).filter(|picture| picture.width() > 0 && picture.height() > 0)
+    let (width, height) = png_size(&bytes)?;
+    let fits = (1..=OUTPUT_SIDE_LIMIT).contains(&width)
+        && (1..=OUTPUT_SIDE_LIMIT).contains(&height)
+        && u64::from(width) * u64::from(height) <= OUTPUT_PIXEL_LIMIT;
+    if !fits {
+        return None;
+    }
+    writer::scaled_png(&bytes, edge).filter(|picture| picture.width() > 0 && picture.height() > 0)
+}
+
+/// The width and height a PNG declares in its header, or `None` when
+/// `bytes` are no PNG: a thumbnailer writes PNG, and only a PNG's size can
+/// be checked before gdk-pixbuf allocates it.
+fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let header = bytes.get(..24)?;
+    if !header.starts_with(PNG_SIGNATURE) || &header[12..16] != b"IHDR" {
+        return None;
+    }
+    let side = |at: usize| header.get(at..at + 4)?.try_into().ok().map(u32::from_be_bytes);
+    Some((side(16)?, side(20)?))
 }
 
 /// Runs `command` with nothing of its output shown, and returns how it
@@ -715,9 +748,16 @@ fn run(command: &[OsString], cancellation: &gio::Cancellable) -> Option<ExitStat
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        // The program shows nothing: it is given no display to reach.
-        .env_remove("DISPLAY")
-        .env_remove("WAYLAND_DISPLAY")
+        // The program reads an untrusted file, so it is handed none of the
+        // app's environment, which may hold tokens or the addresses of the
+        // display and the session bus: only the system's `PATH` and the
+        // user's language.
+        .env_clear()
+        .env("PATH", PROGRAM_PATH)
+        .envs(std::env::vars_os().filter(|(name, _)| {
+            name.to_str()
+                .is_some_and(|name| name == "LANG" || name == "LANGUAGE" || name.starts_with("LC_"))
+        }))
         // The thumbnailer gets a process group of its own, so stopping it
         // stops the programs it started too: a wrapper script's `cp`, or
         // ffmpeg, would otherwise keep writing the picture the app deletes.
@@ -767,7 +807,7 @@ mod tests {
     const BUNDLE: &str = "application/x-unity-assetbundle";
 
     /// A data folder with `entries` written as `(file name, text)`.
-    fn data_dir(entries: &[(&str, &str)]) -> (tempfile::TempDir, Dirs) {
+    fn data_dir(entries: &[(&str, &str)]) -> (tempfile::TempDir, Vec<PathBuf>) {
         let folder = tempfile::tempdir().expect("a temporary folder");
         let data = folder.path().join("share");
         for (name, text) in entries {
@@ -775,12 +815,7 @@ mod tests {
             fs::create_dir_all(path.parent().expect("a folder")).expect("the folder");
             fs::write(&path, text).expect("the entry");
         }
-        let dirs = Dirs {
-            folders: vec![data],
-            disabled_types: Vec::new(),
-            disable_all: false,
-        };
-        (folder, dirs)
+        (folder, vec![data])
     }
 
     /// The entry a desktop installs names the types it makes thumbnails of
@@ -944,8 +979,12 @@ mod tests {
             flavor: ThumbnailFlavor::Normal,
         };
         let catalogue = Catalogue::of(&dirs, || Some(Sandbox::Off));
-        // Without a sandbox that works here no program is kept at all.
+        // Without a sandbox that works here no program is kept at all, and
+        // without an entry no sandbox is looked for.
         assert!(Catalogue::of(&dirs, || None).thumbnailers.is_empty());
+        let (_none, no_entries) = data_dir(&[]);
+        let empty = Catalogue::of(&no_entries, || panic!("no sandbox is looked for"));
+        assert!(empty.thumbnailers.is_empty());
 
         let written = write_thumbnail(&job, &catalogue, &gio::Cancellable::new()).expect("a thumbnail");
 
@@ -1082,7 +1121,7 @@ mod tests {
         let video = Thumbnailer::for_test(&[script, "%i", "%o", "%s"], &["video/mp4"]);
         let mut catalogue = Catalogue::for_test(vec![picture, video]);
         // The user's `disable` names MIME types, not files.
-        catalogue.disabled_types = vec!["image/png".to_owned()];
+        catalogue.disabled.types = vec!["image/png".to_owned()];
         let (png, mp4) = (folder.path().join("photo.png"), folder.path().join("clip.mp4"));
         fs::write(&png, b"not a picture").expect("the item");
         fs::write(&mp4, b"not a video").expect("the item");
@@ -1100,8 +1139,9 @@ mod tests {
         assert!(started.exists(), "another type still gets its thumbnailer");
     }
 
-    /// A desktop with `disable-all` set reads none of its thumbnailer files
-    /// and starts no program.
+    /// A desktop with `disable-all` set starts no program, and one where
+    /// the user turned it back off again starts them at once: the setting
+    /// is read for each request, the entries once.
     ///
     /// parity: VIEW-057
     #[test]
@@ -1125,19 +1165,12 @@ mod tests {
             flavor: ThumbnailFlavor::Normal,
         };
         let on = Catalogue::of(&dirs, || Some(Sandbox::Off));
-        let off = Catalogue::of(
-            &Dirs {
-                disable_all: true,
-                ..dirs
-            },
-            || panic!("no sandbox is looked for without a program to run"),
-        );
+        let off = on.with_disabled(Disabled {
+            types: Vec::new(),
+            all: true,
+        });
 
         assert_eq!(on.thumbnailers.len(), 1, "the entry a desktop installs");
-        assert!(
-            off.thumbnailers.is_empty(),
-            "with every thumbnailer off, none is read"
-        );
         assert!(write_thumbnail(&job, &off, &gio::Cancellable::new()).is_none());
         assert!(!started.exists(), "no program ran");
         assert!(write_thumbnail(&job, &on, &gio::Cancellable::new()).is_some());
@@ -1344,6 +1377,20 @@ mod tests {
         assert!(read_picture(&link, 128).is_none(), "a link is not followed");
         assert!(read_picture(&pipe, 128).is_none(), "a pipe is not read");
         assert!(read_picture(&large, 128).is_none(), "a huge file is not read");
+        // A PNG declaring a picture far larger than any thumbnail is not
+        // decoded, nor is a file of another kind.
+        let declared = folder.path().join("declared.png");
+        let mut header = PNG_SIGNATURE.to_vec();
+        header.extend_from_slice(&13_u32.to_be_bytes());
+        header.extend_from_slice(b"IHDR");
+        header.extend_from_slice(&100_000_u32.to_be_bytes());
+        header.extend_from_slice(&100_000_u32.to_be_bytes());
+        header.extend_from_slice(&[8, 2, 0, 0, 0, 0, 0, 0, 0]);
+        fs::write(&declared, &header).expect("the header");
+        assert!(read_picture(&declared, 128).is_none(), "a bomb is not decoded");
+        let other = folder.path().join("other.png");
+        fs::write(&other, b"GIF89a, not a PNG at all").expect("the file");
+        assert!(read_picture(&other, 128).is_none(), "only a PNG is read");
         assert_eq!(extension_of(Path::new("/a/Clip.MP4")), ".MP4");
         assert_eq!(extension_of(Path::new("/a/odd.p n g")), "");
         assert_eq!(extension_of(Path::new("/a/none")), "");
