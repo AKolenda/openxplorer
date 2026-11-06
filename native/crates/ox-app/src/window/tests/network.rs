@@ -175,6 +175,18 @@ fn network_lists_the_discovered_computers_as_items() {
 
     assert_eq!(test.window.folder_pane().page(), Some(PanePage::Listing));
     assert_eq!(test.names(), ["studio-nas"]);
+    let watches = test
+        .window
+        .imp()
+        .session
+        .borrow()
+        .active()
+        .map(|tab| tab.watch.is_some());
+    assert_eq!(
+        watches,
+        Some(false),
+        "the folder left behind is no longer watched"
+    );
     let computer = test.window.folder_model().item(0).expect("the computer");
     assert_eq!(computer.entry().type_label, "Computer");
     assert_eq!(Art::for_entry(computer.entry()), Art::SERVER);

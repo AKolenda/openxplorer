@@ -209,8 +209,15 @@ impl BrowserWindow {
     /// made during a first listing are seen too.
     fn keep_watching(&self, id: TabId, uri: &str) {
         // Recent locations and Network are no folders to watch; F5 lists
-        // them again.
-        if uri == RECENT_LOCATIONS_URI || Page::from_uri(uri) == Some(Page::Network) {
+        // them again. Network drops the watch of the folder the tab left,
+        // whose changes would otherwise list Network again.
+        if Page::from_uri(uri) == Some(Page::Network) {
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.watch = None;
+            }
+            return;
+        }
+        if uri == RECENT_LOCATIONS_URI {
             return;
         }
         let watched = self
