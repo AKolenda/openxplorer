@@ -48,6 +48,35 @@ impl AppContext {
         app.launch(&files, Some(&context))
     }
 
+    /// Starts `app` with no files, as This PC's Properties starts the
+    /// system information app.
+    ///
+    /// # Errors
+    ///
+    /// GIO's, when the application cannot be started.
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::unused_self,
+            reason = "tests record the launch on the context instead"
+        )
+    )]
+    pub(crate) fn launch_application(
+        &self,
+        app: &gio::AppInfo,
+        window: &gtk::Window,
+    ) -> Result<(), glib::Error> {
+        // Test safety: tests record the launch, by desktop ID, instead of
+        // starting a real application on the developer's desktop.
+        #[cfg(test)]
+        if let Some(launches) = self.imp().recorded_launches.borrow_mut().as_mut() {
+            launches.push(format!("app:{}", app.id().unwrap_or_default()));
+            return Ok(());
+        }
+        let context = WidgetExt::display(window).app_launch_context();
+        app.launch(&[], Some(&context))
+    }
+
     /// Opens `uri` in the desktop's default application for its type.
     /// `on_error` hears GIO's reason when it could not be opened.
     #[cfg_attr(

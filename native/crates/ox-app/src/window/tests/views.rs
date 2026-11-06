@@ -158,6 +158,7 @@ fn the_details_button_shows_whether_the_pane_is_open() {
 fn both_views_show_each_name_with_its_icon() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     for view in ["details", "large"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
@@ -187,6 +188,7 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
     let locked = std::fs::Permissions::from_mode(0o444);
     std::fs::set_permissions(fixture.path("Locked.txt"), locked).expect("make it read-only");
     let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
     for view in ["details", "large"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
@@ -639,7 +641,7 @@ fn a_chosen_view_starts_at_the_top_and_has_explorers_keys() {
     assert_eq!(keys("details"), ["<Shift><Control>6"]);
     assert_eq!(keys("extra-large"), ["<Shift><Control>1"]);
     let pane_keys = application().accels_for_action(&WindowAction::DetailsPane.detailed_name());
-    assert_eq!(pane_keys, ["<Shift><Alt>p", "<Alt>p"]);
+    assert_eq!(pane_keys, ["<Shift><Alt>p"]);
 }
 
 /// Ctrl+H shows hidden files wherever focus is, except in a text field,

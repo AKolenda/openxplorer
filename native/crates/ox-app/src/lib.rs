@@ -29,6 +29,7 @@ mod icons;
 mod integration;
 mod launcher_progress;
 mod locations;
+mod media_details;
 mod modal;
 mod network;
 mod operation_session;

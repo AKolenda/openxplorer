@@ -19,6 +19,14 @@ gdk-wayland.workspace = true
 gio.workspace = true
 glib.workspace = true
 ox-core.workspace = true
+gstreamer.workspace = true
+gstreamer-pbutils.workspace = true
+kamadak-exif.workspace = true
+# The Details tab's reader writes what it read as JSON to the app.
+serde.workspace = true
+serde_json.workspace = true
+# The Details tab's reader limits its own processor time.
+rustix = { workspace = true, features = ["process"] }
 thiserror.workspace = true
 
 [lints]

@@ -4,11 +4,15 @@
 //! Ports the "`OpenXplorer` · License & source" section of
 //! `renderSettingsPage` in `v2.0.0:desktop/ui/app.js` (SET-009, UPD-016) and the
 //! status bar's "Check for updates" (UPD-001). "About this build" runs the
-//! window's `win.about`, as the More menu does; "Check for updates" runs
+//! window's `win.about`; "Check for updates" runs
 //! `win.check-updates`, the Software updates dialog, and its row says what
 //! the last check in any window found. "Check for updates automatically"
 //! turns the daily check at launch on or off. "Read license & source
-//! information" runs `win.license`, the licence dialog.
+//! information" runs `win.license`, the licence dialog. "Keyboard
+//! shortcuts" and "Help" run `win.keyboard-shortcuts` (Ctrl+?) and
+//! `win.help` (F1): they, the licence and the build left the command
+//! bar's "…" menu for this page (CMD-007), as Windows 11 File Explorer's
+//! "…" has none of them.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -70,6 +74,36 @@ const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
     action: WindowAction::License,
 };
 
+const KEYBOARD_SHORTCUTS: ActionRow = ActionRow {
+    text: RowText {
+        title: "Keyboard shortcuts",
+        description: "Every key OpenXplorer has, grouped by task. Ctrl+? opens them too.",
+        keywords: "keys keyboard shortcuts hotkeys accelerators bindings list ctrl+? cheat sheet",
+    },
+    button: crate::i18n::message_id("Show keyboard shortcuts"),
+    action: WindowAction::KeyboardShortcuts,
+};
+
+const HELP: ActionRow = ActionRow {
+    text: RowText {
+        title: "Help",
+        description: "The OpenXplorer manual, which needs no network connection. F1 opens it too.",
+        keywords: "help manual guide documentation f1 how to user manual offline",
+    },
+    button: crate::i18n::message_id("Open the manual"),
+    action: WindowAction::Help,
+};
+
+/// A row whose button runs a window action.
+struct ActionRow {
+    /// The row's text.
+    text: RowText,
+    /// The button's label.
+    button: &'static str,
+    /// What the button runs.
+    action: WindowAction,
+}
+
 /// The About page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::About;
@@ -79,8 +113,18 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     updates.add_row(&automatic_checks_row(page));
     about.append_group(&updates);
     follow_updates(page, &updates_row);
+    about.append_group(&help_group());
     about.append_group(&action_group(&LICENSE_AND_SOURCE).0);
     about
+}
+
+/// "Help": the keyboard shortcuts and the manual.
+fn help_group() -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Help"));
+    for spec in [&KEYBOARD_SHORTCUTS, &HELP] {
+        group.add_row(&action_row(spec.text, spec.button, spec.action));
+    }
+    group
 }
 
 /// The build's name and description, with "About this build".
@@ -116,12 +160,18 @@ fn automatic_checks_row(page: &SettingsPage) -> SettingRow {
 /// The group `spec` describes, and its row.
 fn action_group(spec: &ActionGroup) -> (SettingsGroup, SettingRow) {
     let group = SettingsGroup::new(&ox_core::i18n::gettext(spec.heading));
-    let row = SettingRow::new(spec.text);
-    let button = parts::button(&ox_core::i18n::gettext(spec.button), ButtonStyle::Bordered);
-    spec.action.assign_to(&button);
-    row.add_control(&button, ControlName::OwnLabel);
+    let row = action_row(spec.text, spec.button, spec.action);
     group.add_row(&row);
     (group, row)
+}
+
+/// A row saying `text` whose button, labelled `button`, runs `action`.
+fn action_row(text: RowText, button: &str, action: WindowAction) -> SettingRow {
+    let row = SettingRow::new(text);
+    let button = parts::button(&ox_core::i18n::gettext(button), ButtonStyle::Bordered);
+    action.assign_to(&button);
+    row.add_control(&button, ControlName::OwnLabel);
+    row
 }
 
 /// Keeps the Check for updates row saying what the application knows

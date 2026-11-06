@@ -5,7 +5,10 @@
 //! and only the options the app has are there.
 //!
 //! General: "Open File Explorer to", the start places the app has (Home,
-//! This PC, or a folder chosen in Settings).
+//! This PC, or a folder chosen in Settings), and "More settings…", which
+//! keeps the choices made, as OK does, and opens Settings: Settings left
+//! the "…" menu for it (CMD-007), as Windows 11 keeps File Explorer's
+//! options here and the rest in Settings.
 //!
 //! View: Folder views gives every folder the view of the folder Folder
 //! Options was opened from (Apply to Folders: layout, icon size, columns,
@@ -49,7 +52,7 @@ struct AdvancedSetting {
 }
 
 /// The advanced settings, in Windows' order.
-fn advanced_settings() -> [AdvancedSetting; 6] {
+fn advanced_settings() -> [AdvancedSetting; 7] {
     [
         // The opposite of Settings' "Show previews".
         AdvancedSetting {
@@ -65,6 +68,13 @@ fn advanced_settings() -> [AdvancedSetting; 6] {
             label: message_id("Display the full path in the title bar"),
             read: |preferences| preferences.full_path_in_title,
             write: |update, _, on| update.full_path_in_title = Some(on),
+        },
+        // The opposite of View > Show > File name extensions (VIEW-069),
+        // checked by default as in Windows.
+        AdvancedSetting {
+            label: message_id("Hide extensions for known file types"),
+            read: |preferences| !preferences.show_extensions,
+            write: |update, _, on| update.show_extensions = Some(!on),
         },
         AdvancedSetting {
             label: message_id("Remember each folder's view settings"),
@@ -125,6 +135,8 @@ struct OptionsForm {
     start: gtk::DropDown,
     places: Vec<Option<String>>,
     saved_start: Cell<u32>,
+    /// "More settings…" on the General tab, which opens Settings.
+    more_settings: gtk::Button,
 }
 
 impl OptionsForm {
@@ -155,7 +167,8 @@ impl OptionsForm {
         open_to.append(&start);
         general.append(&open_to);
         let restore_general = restore_defaults_button();
-        general.append(&restore_general);
+        let more_settings = tab_button(&gettext("More settings…"));
+        general.append(&general_footer(&more_settings, &restore_general));
 
         let caption = gtk::Label::builder()
             .label(gettext("Advanced settings:"))
@@ -183,6 +196,7 @@ impl OptionsForm {
             saved_start: Cell::new(start.selected()),
             start,
             places,
+            more_settings,
         });
         restore_general.connect_clicked(glib::clone!(
             #[weak]
@@ -280,6 +294,22 @@ fn restore_defaults_button() -> gtk::Button {
     button
 }
 
+/// The foot of the General tab: "More settings…" at the left, which
+/// opens the rest of the app's settings, and Restore Defaults at the
+/// right, at the bottom of the tab.
+fn general_footer(more_settings: &gtk::Button, restore: &gtk::Button) -> gtk::Box {
+    let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    footer.set_valign(gtk::Align::End);
+    footer.set_vexpand(true);
+    more_settings.set_halign(gtk::Align::Start);
+    more_settings.set_hexpand(true);
+    more_settings.set_tooltip_text(Some(&gettext("Open OpenXplorer's Settings")));
+    restore.set_vexpand(false);
+    footer.append(more_settings);
+    footer.append(restore);
+    footer
+}
+
 /// A tab's page.
 fn tab_page() -> gtk::Box {
     let page = gtk::Box::new(gtk::Orientation::Vertical, 12);
@@ -318,6 +348,7 @@ impl BrowserWindow {
         options.add_cancel_button();
         let apply = options.add_button(&gettext("Apply"), ButtonStyle::Bordered);
         form.follow_with(&options, apply);
+        self.open_settings_from(&options, &form);
         options.open();
         while let Some(answer) = options.next_response().await {
             let preferences = self.context().settings_data().preferences;
@@ -331,6 +362,30 @@ impl BrowserWindow {
             }
             options.set_button_sensitive(apply, false);
         }
+    }
+
+    /// Makes `form`'s "More settings…" keep the choices made, as OK does,
+    /// close Folder Options and open Settings. Settings left the "…" menu
+    /// for this button (CMD-007); Ctrl+, opens it too.
+    fn open_settings_from(&self, options: &Dialog, form: &Rc<OptionsForm>) {
+        form.more_settings.connect_clicked(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            options,
+            #[weak]
+            form,
+            move |_| {
+                let preferences = window.context().settings_data().preferences;
+                if let Some(update) = form.take_change(&preferences) {
+                    window
+                        .context()
+                        .update_preferences(update, window.preference_failure_reply());
+                }
+                options.close();
+                window.open_settings(None);
+            }
+        ));
     }
 
     /// Adds the Folder views box to `view`, whose Apply to Folders can be

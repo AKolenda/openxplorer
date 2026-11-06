@@ -49,6 +49,7 @@ impl<W: Write> TarXzWriter<W> {
 
     /// Adds the file `name`, modified and with the `rwx` bits as
     /// `(modified, mode)` say, with the `size` bytes `content` holds.
+    /// `progress` is told the bytes of it written so far after each block.
     ///
     /// # Errors
     ///
@@ -62,6 +63,7 @@ impl<W: Write> TarXzWriter<W> {
         size: u64,
         content: &mut dyn Read,
         cancel: &Cancellation,
+        progress: &mut dyn FnMut(u64),
     ) -> Result<(), ArchiveError> {
         self.write_header(name, b'0', mode & 0o777, size, modified)?;
         let mut left = size;
@@ -75,6 +77,7 @@ impl<W: Write> TarXzWriter<W> {
             }
             self.output.write_all(&block[..count])?;
             left -= count as u64;
+            progress(size - left);
         }
         // A file that grew since it was measured would be cut short.
         if content.read(&mut block[..1])? != 0 {

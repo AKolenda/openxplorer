@@ -6,17 +6,18 @@ use std::cell::RefCell;
 use std::fs;
 use std::rc::Rc;
 
+use gtk::gio;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 
 use ox_core::settings::{PreferencesUpdate, Settings};
 
-use crate::integration::{installed_application, Tool};
+use crate::integration::Tool;
 use crate::locations::Page;
 use crate::test_support::harness::{application, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::session::{Tab, TabPlacement};
 use crate::window::tests::file_ops_support::{open_dialog, select_names};
+use crate::window::tests::support::install_test_application;
 
 fn can_go_back(test: &TestWindow) -> bool {
     let session = test.window.imp().session.borrow();
@@ -499,7 +500,7 @@ fn compare_files_hands_two_files_to_the_comparison_tool() {
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
 
-    install_test_application("org.gnome.Meld.desktop");
+    let _meld = install_test_application("org.gnome.Meld.desktop");
 
     test.activate("compare-files", None);
 
@@ -522,7 +523,7 @@ fn ctrl_shift_f_opens_the_search_tool_at_the_folder() {
     let test = TestWindow::open(&fixture.uri());
     let keys = application().accels_for_action("win.search-tool");
     assert_eq!(keys, ["<Shift><Control>f"]);
-    install_test_application("org.kde.kfind.desktop");
+    let _kfind = install_test_application("org.kde.kfind.desktop");
 
     test.activate("search-tool", None);
 
@@ -540,7 +541,7 @@ fn a_file_without_an_application_offers_a_search_in_software() {
     let mut entry = crate::test_support::file_entry("scene.blend");
     entry.content_type = Some("application/x-blender".to_owned());
     let reason = ox_core::integration::OpenError::NoApplication.to_string();
-    install_test_application("org.gnome.Software.desktop");
+    let _software = install_test_application("org.gnome.Software.desktop");
     let software = FakeSoftware::start();
 
     test.window.report_open_failure(&reason, &entry);
@@ -551,24 +552,6 @@ fn a_file_without_an_application_offers_a_search_in_software() {
     wait_until("Software to be asked", || !software.calls.borrow().is_empty());
     let search = ("search".to_owned(), vec!["application/x-blender".to_owned()]);
     assert_eq!(*software.calls.borrow(), [search]);
-}
-
-/// Adds a desktop entry `desktop_id` to the private data folder the tests
-/// run with (native/tools/check.py), so a tool is installed whatever the
-/// host has, and waits until GIO lists it.
-fn install_test_application(desktop_id: &str) {
-    let data = glib::user_data_dir();
-    assert!(
-        data.starts_with(std::env::temp_dir()),
-        "tests add applications only to a private data folder"
-    );
-    let folder = data.join("applications");
-    fs::create_dir_all(&folder).expect("the data folder is writable");
-    let entry = "[Desktop Entry]\nType=Application\nName=Test tool\nExec=true %U\nNoDisplay=true\n";
-    fs::write(folder.join(desktop_id), entry).expect("the data folder is writable");
-    wait_until("GIO to list the application", || {
-        installed_application(desktop_id).is_some()
-    });
 }
 
 /// An action and its string parameters.

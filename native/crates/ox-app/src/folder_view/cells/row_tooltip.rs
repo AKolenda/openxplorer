@@ -99,7 +99,7 @@ pub(crate) fn show_row_tooltip(
         let Some(item) = owners.item_of(cell) else {
             return false;
         };
-        let cut_short = cut_short_text(cell.upcast_ref(), &item);
+        let cut_short = cut_short_text(cell.upcast_ref(), &owners.shown_name(&item));
         let Some(text) = tooltip_text(owners.row_tooltip(), kind, &item, own_tooltip(&item), cut_short)
         else {
             return false;
@@ -135,10 +135,10 @@ fn tooltip_text(
 }
 
 /// The full text `cell` cuts short with an ellipsis, if it does: the
-/// item's name, or a column's text.
-fn cut_short_text(cell: &gtk::Widget, item: &FileItem) -> Option<String> {
+/// item's name as it shows (`shown_name`), or a column's text.
+fn cut_short_text(cell: &gtk::Widget, shown_name: &str) -> Option<String> {
     if let Some(file_cell) = cell.downcast_ref::<super::FileCell>() {
-        return file_cell.name_is_elided().then(|| item.entry().name.clone());
+        return file_cell.name_is_elided().then(|| shown_name.to_owned());
     }
     let label = cell.downcast_ref::<gtk::Label>()?;
     label.layout().is_ellipsized().then(|| label.text().to_string())

@@ -21,7 +21,7 @@ use gtk::subclass::prelude::*;
 use crate::folder_view::details::DetailsColumns;
 use crate::settings_page::PageWidth;
 
-use super::details_pane::PANE_WIDTH;
+use super::details_pane::{PaneMode, PANE_WIDTH};
 use super::tab_layout::TAB_WIDTH;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -201,10 +201,15 @@ impl BrowserWindow {
     /// has room for it. Hiding it for lack of room leaves the action, and
     /// so the saved preference, as it is.
     pub(super) fn fit_details_pane(&self) {
-        let switched_on = self
-            .window_action_state(WindowAction::DetailsPane)
-            .and_then(|state| state.get::<bool>())
-            .unwrap_or(true);
+        let is_on = |action: WindowAction| {
+            self.window_action_state(action)
+                .and_then(|state| state.get::<bool>())
+        };
+        // Before the actions exist, the pane shows, as by default.
+        let switched_on = match (is_on(WindowAction::DetailsPane), is_on(WindowAction::PreviewPane)) {
+            (None, None) => true,
+            (details, preview) => details.unwrap_or(false) || preview.unwrap_or(false),
+        };
         let room = self.window_width().has_room_for_details();
         let shown = switched_on && room;
         // A button of the pane may hold the keyboard (its close button, say):
@@ -216,6 +221,22 @@ impl BrowserWindow {
             self.folder_pane().focus_view();
         }
         self.details_pane().set_visible(shown);
+    }
+
+    /// Opens the pane at the right as `mode` says, closing the other kind,
+    /// or closes it, as Windows' Details pane and Preview pane share one
+    /// place (VIEW-070).
+    pub(super) fn open_pane(&self, mode: PaneMode, shown: bool) {
+        if shown {
+            let other = match mode {
+                PaneMode::Details => WindowAction::PreviewPane,
+                PaneMode::Preview => WindowAction::DetailsPane,
+            };
+            self.set_action_state(other, &false.to_variant());
+            self.details_pane().set_mode(mode);
+            self.update_details_pane();
+        }
+        self.fit_details_pane();
     }
 }
 

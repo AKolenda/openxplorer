@@ -6,14 +6,14 @@ Read [README.md](README.md), [AGENTS.md](AGENTS.md), [native/README.md](native/R
 
 ## Local development
 
-The app is the Rust and GTK 4 program in `native/` (crates `ox-core` for the GIO services and `ox-app` for the interface). It needs Rust 1.92 or newer (`rust-version` in `native/Cargo.toml`), GTK 4.14 or newer, SQLite and libsoup 3 development files, and Python 3.11+ for the check driver and parity tools. The distribution packages below are the ones CI installs in `native/packaging/ci/prepare-container.sh`, including the test tools:
+The app is the Rust and GTK 4 program in `native/` (crates `ox-core` for the GIO services and `ox-app` for the interface). It needs Rust 1.92 or newer (`rust-version` in `native/Cargo.toml`), GTK 4.14 or newer, SQLite, libsoup 3 and GStreamer (core and base) development files, and Python 3.11+ for the check driver and parity tools. The distribution packages below are the ones CI installs in `native/packaging/ci/prepare-container.sh`, including the test tools:
 
 | Distribution | Packages |
 |---|---|
-| Ubuntu 24.04+, Zorin OS 18, Debian 13 | `build-essential pkg-config libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1 nodejs` |
-| Fedora | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' xvfb-run xorg-x11-server-Xvfb xauth gvfs gvfs-smb python3-gobject gnome-keyring libsecret nodejs` |
-| openSUSE Tumbleweed | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' glib2-tools xvfb-run xorg-x11-server-Xvfb xauth dbus-1 gvfs gvfs-backends gvfs-backend-samba python3-gobject typelib-1_0-Secret-1 gnome-keyring nodejs` |
-| Arch Linux | `base-devel rustup gtk4 sqlite libsoup3 xorg-server-xvfb xorg-xauth gvfs gvfs-smb python-gobject gnome-keyring libsecret nodejs` |
+| Ubuntu 24.04+, Zorin OS 18, Debian 13 | `build-essential pkg-config libgtk-4-dev libsqlite3-dev libsoup-3.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1 nodejs` |
+| Fedora | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' 'pkgconfig(gstreamer-pbutils-1.0)' gstreamer1-plugins-base xvfb-run xorg-x11-server-Xvfb xauth gvfs gvfs-smb python3-gobject gnome-keyring libsecret nodejs` |
+| openSUSE Tumbleweed | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' 'pkgconfig(gstreamer-pbutils-1.0)' gstreamer-plugins-base glib2-tools xvfb-run xorg-x11-server-Xvfb xauth dbus-1 gvfs gvfs-backends gvfs-backend-samba python3-gobject typelib-1_0-Secret-1 gnome-keyring nodejs` |
+| Arch Linux | `base-devel rustup gtk4 sqlite libsoup3 gstreamer gst-plugins-base xorg-server-xvfb xorg-xauth gvfs gvfs-smb python-gobject gnome-keyring libsecret nodejs` |
 
 Install Rust with rustup, then build and run the development build:
 

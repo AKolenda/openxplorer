@@ -808,6 +808,91 @@ mod tests {
         panel.finish();
     }
 
+    /// Compressing one large file moves the bar, the "N% complete" title,
+    /// the speed and the details block by block, as a copy does, rather
+    /// than staying at 0 % until the ZIP is finished.
+    ///
+    /// parity: ARC-023, OPS-021
+    #[gtk::test]
+    fn compressing_one_large_file_moves_the_bar_and_fills_the_details() {
+        use std::sync::{Arc, Mutex};
+
+        use ox_core::archive::{CompressionRequest, ZipCompressor};
+
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("harbour-survey.iso");
+        // Bytes that do not compress well, in many 64 KiB blocks.
+        let mut state = 0x9e37_79b9_u32;
+        let data: Vec<u8> = (0..2_000_000)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state.to_le_bytes()[0]
+            })
+            .collect();
+        std::fs::write(&file, data).unwrap();
+        let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
+        let collected = Arc::clone(&reports);
+        ZipCompressor::new()
+            .with_progress(move |progress| collected.lock().unwrap().push(progress))
+            .compress(
+                &CompressionRequest {
+                    uris: vec![gio::File::for_path(&file).uri().to_string()],
+                    destination_uri: gio::File::for_path(root.path()).uri().to_string(),
+                    archive_name: "harbour-survey.zip".to_owned(),
+                },
+                &Cancellation::new(),
+            )
+            .unwrap();
+        let reports = reports.lock().unwrap();
+        let panel: TransferPanel = glib::Object::new();
+        panel.start(
+            TransferKind::Archive,
+            "Preparing compression…",
+            Cancellation::new(),
+        );
+        panel.show_details(true);
+        let imp = panel.imp();
+
+        let (first_half, second_half) = reports.split_at(reports.len() / 2);
+        let first_bytes = first_half
+            .iter()
+            .position(|report| report.bytes.is_some())
+            .expect("byte reports in the first half");
+        let (before, after) = first_half.split_at(first_bytes + 1);
+        for report in before {
+            panel.show_progress(report);
+        }
+        // The speed is known once a quarter of a second has passed.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        for report in after {
+            panel.show_progress(report);
+        }
+
+        let halfway = panel.percent_text();
+        assert_ne!(halfway, "0% complete");
+        assert_ne!(halfway, "100% complete");
+        assert_eq!(imp.name_label.text(), "Name: harbour-survey.iso");
+        let items = imp.items_label.text().to_string();
+        assert!(
+            imp.items_label.is_visible() && items.starts_with("Items remaining: 1 ("),
+            "{items}"
+        );
+        assert!(imp.time_label.is_visible(), "the time remaining");
+        let (graphed, speed) = imp.graph.shown();
+        assert!(
+            graphed > 0.0 && speed.is_some_and(|speed| speed > 0),
+            "the speed graph"
+        );
+        for report in second_half {
+            panel.show_progress(report);
+        }
+        assert_eq!(panel.percent_text(), "100% complete");
+        assert_eq!(imp.items_label.text(), "Items remaining: 0 (0 bytes)");
+        panel.finish();
+    }
+
     /// An action without a byte total, such as a same-drive move, moves
     /// on with its items rather than staying at 0 % until it ends.
     ///

@@ -20,7 +20,7 @@ use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
-use ox_core::location::{is_server_location, LocationContext};
+use ox_core::location::{is_server_location, is_smb_location, split_location, LocationContext};
 use ox_core::places::{NetworkKind, Place, SavedShare};
 
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
@@ -273,15 +273,31 @@ fn devices_and_drives(body: &gtk::Box, places: &Places, locations: &LocationCont
     body.append(&cards);
 }
 
+/// A saved share's card, as Windows 11 draws a mapped drive in This PC:
+/// its name with its server and letter, and, while it is connected, how
+/// full it is; whether it is mounted or connects on open, as before. Its
+/// address is the card's tooltip.
 fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::Button {
     let bookmark = &share.bookmark;
     let address = locations.display_location(&bookmark.uri);
-    let texts = card_texts(&bookmark.label, &address);
+    let texts = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    texts.set_hexpand(true);
+    texts.set_valign(gtk::Align::Center);
+    texts.add_css_class("drive-info");
+    texts.append(&label(
+        &share_card_name(&bookmark.label, &bookmark.uri),
+        "card-name",
+    ));
     texts.append(&share_state(share));
+    // Measuring never mounts: only a share that is mounted is asked.
+    if share.is_connected {
+        show_capacity(&texts, &bookmark.uri, true);
+    }
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&ArtImage::new(saved_share_art(share), DRIVE_CARD_ICON));
     content.append(&texts);
     let card = location_card("drive-card", &bookmark.uri, &content);
+    card.set_tooltip_text(Some(&address));
     let menu = PlaceMenu::SavedShare {
         uri: bookmark.uri.clone(),
     };
@@ -327,6 +343,42 @@ fn map_network_button() -> gtk::Button {
         .hexpand(true)
         .halign(gtk::Align::End)
         .build()
+}
+
+/// A saved share's card name, as Windows 11 names a mapped drive in This
+/// PC: its label, then its server, before the drive letter the label ends
+/// with, if any, such as `Backup (\\fileserver) (S:)`. An SMB server is
+/// written `\\server`, any other by its host name; a label that already
+/// names the server is kept as it is.
+pub(super) fn share_card_name(label: &str, uri: &str) -> String {
+    let Some(host) = split_location(uri).ok().and_then(|parts| parts.hostname()) else {
+        return label.to_owned();
+    };
+    let server = if is_smb_location(uri) {
+        format!("\\\\{host}")
+    } else {
+        host
+    };
+    if label.contains(&format!("({server})")) {
+        return label.to_owned();
+    }
+    let letter = label
+        .strip_suffix(')')
+        .and_then(|rest| rest.rsplit_once(" ("))
+        .filter(|(_, letter)| is_drive_letter(letter));
+    match letter {
+        Some((name, letter)) => format!("{name} ({server}) ({letter})"),
+        None => format!("{label} ({server})"),
+    }
+}
+
+/// Whether `text` is a drive letter as a label writes it, such as `S:`.
+fn is_drive_letter(text: &str) -> bool {
+    let mut characters = text.chars();
+    matches!(
+        (characters.next(), characters.next(), characters.next()),
+        (Some(letter), Some(':'), None) if letter.is_ascii_alphabetic()
+    )
 }
 
 /// The saved network locations with their state (`shares()` in app.js).

@@ -332,7 +332,8 @@ pub enum ArchiveError {
     ArchiveLeftBehind {
         /// Why the compression stopped.
         cause: Box<ArchiveError>,
-        /// Where the staging file is.
+        /// Where the incomplete archive is: under its final name, or its
+        /// staging name on a share or device.
         staging_uri: String,
         /// Why it could not be removed.
         cleanup: TransferError,

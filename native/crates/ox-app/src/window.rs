@@ -83,6 +83,7 @@ mod external_requests;
 mod extract_into;
 mod file_drag;
 mod file_drop;
+mod file_name_extensions;
 mod file_ops;
 mod focus_regions;
 mod folder_options;
