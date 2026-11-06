@@ -47,11 +47,11 @@ fn shows_stop(test: &TestWindow) -> bool {
     refresh_or_stop(test) == ("win.stop".to_owned(), "Stop".to_owned())
 }
 
-/// Whether the button before the address bar is Refresh, saying so and
-/// its key.
+/// Whether the button before the address bar is Refresh, saying so
+/// without its key, as Windows 11 Explorer does.
 fn shows_refresh(test: &TestWindow) -> bool {
     let (action, tooltip) = refresh_or_stop(test);
-    action == "win.refresh" && tooltip.starts_with("Refresh") && tooltip.ends_with(" (F5)")
+    action == "win.refresh" && tooltip.starts_with("Refresh") && !tooltip.contains("F5")
 }
 
 /// Whether the address bar shows that a location is being opened.

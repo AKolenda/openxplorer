@@ -64,19 +64,20 @@ fn navigation_button(test: &TestWindow, action: &str) -> gtk::Button {
 
 const ALT: gdk::ModifierType = gdk::ModifierType::ALT_MASK;
 
-/// Back and Forward name where they lead, as Windows Explorer's do, and
-/// only their key where they lead nowhere.
+/// Back and Forward name where they lead, as Windows 11 Explorer's do,
+/// without a keyboard shortcut, and only their name where they lead
+/// nowhere.
 ///
 /// parity: NAV-001
 #[gtk::test]
-fn back_and_forward_say_their_keys_and_follow_each_tabs_own_history() {
+fn back_and_forward_name_where_they_lead_and_follow_each_tabs_own_history() {
     let fixture = Fixture::standard();
     let test = window_one_step_in(&fixture);
     let back = navigation_button(&test, "back");
     let forward = navigation_button(&test, "forward");
     let root = root_title(&fixture);
-    assert_eq!(tooltip(&back), format!("Back to {root} (Alt + Left Arrow)"));
-    assert_eq!(tooltip(&forward), "Forward (Alt + Right Arrow)");
+    assert_eq!(tooltip(&back), format!("Back to {root}"));
+    assert_eq!(tooltip(&forward), "Forward");
     assert!(back.is_sensitive() && !forward.is_sensitive());
 
     test.window.add_tab(&fixture.uri()).expect("valid folder");
@@ -89,8 +90,8 @@ fn back_and_forward_say_their_keys_and_follow_each_tabs_own_history() {
     test.wait_for_listing("the folder before");
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
     assert!(!back.is_sensitive() && forward.is_sensitive());
-    assert_eq!(tooltip(&back), "Back (Alt + Left Arrow)");
-    assert_eq!(tooltip(&forward), "Forward to Documents (Alt + Right Arrow)");
+    assert_eq!(tooltip(&back), "Back");
+    assert_eq!(tooltip(&forward), "Forward to Documents");
 }
 
 /// parity: NAV-002
@@ -183,7 +184,7 @@ fn up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots() {
     let test = window_one_step_in(&fixture);
     let up = navigation_button(&test, "up");
     let root = root_title(&fixture);
-    assert_eq!(tooltip(&up), format!("Up to \"{root}\" (Alt + Up Arrow)"));
+    assert_eq!(tooltip(&up), format!("Up to \"{root}\""));
     test.window.folder_pane().focus_view();
 
     assert!(press_shortcut_where_focused(&test, gdk::Key::Up, ALT));
@@ -198,7 +199,7 @@ fn up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots() {
     test.window.navigate("file:///").expect("the root folder");
     test.wait_for_listing("the root folder");
     assert!(!up.is_sensitive(), "/ has no parent");
-    assert_eq!(tooltip(&up), "Up (Alt + Up Arrow)");
+    assert_eq!(tooltip(&up), "Up");
 }
 
 /// parity: NAV-011
@@ -312,12 +313,12 @@ fn a_middle_click_on_back_or_up_opens_its_target_in_a_background_tab() {
 
 /// parity: NAV-013
 #[gtk::test]
-fn refresh_says_f5_and_f5_and_ctrl_r_work_even_from_text_fields() {
+fn refresh_names_its_folder_and_f5_and_ctrl_r_work_even_from_text_fields() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let refresh = navigation_button(&test, "refresh");
     let root = root_title(&fixture);
-    assert_eq!(tooltip(&refresh), format!("Refresh \"{root}\" (F5)"));
+    assert_eq!(tooltip(&refresh), format!("Refresh \"{root}\""));
 
     let keys = application().accels_for_action("win.refresh");
 
