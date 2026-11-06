@@ -169,6 +169,8 @@ mod imp {
         pub(super) applications: RefCell<Option<ApplicationList>>,
         /// The applications are being listed.
         pub(super) loading: Cell<bool>,
+        /// Counts the listings started: only the latest one is shown.
+        pub(super) listing: Cell<u32>,
         /// The last list holds every installed application.
         pub(super) listed_all: Cell<bool>,
         /// The desktop IDs of the rows of each section, in row order.
@@ -325,7 +327,7 @@ impl OpenWithDialog {
         imp.custom_command_button.connect_clicked(glib::clone!(
             #[weak(rename_to = dialog)]
             self,
-            move |_| dialog.show_command(None)
+            move |_| dialog.show_command("")
         ));
         imp.command_entry.connect_changed(glib::clone!(
             #[weak(rename_to = dialog)]
@@ -377,13 +379,18 @@ impl OpenWithDialog {
         } else {
             ApplicationScope::Recommended
         };
+        let listing = imp.listing.get().wrapping_add(1);
+        imp.listing.set(listing);
         let uri = self.subject().uri.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = dialog)]
             self,
             async move {
                 let listed = list_applications_in_background(uri, scope).await;
-                dialog.show_list(listed, scope);
+                // A listing started later, such as for More apps, wins.
+                if dialog.imp().listing.get() == listing {
+                    dialog.show_list(listed, scope);
+                }
             }
         ));
     }
@@ -526,17 +533,15 @@ impl OpenWithDialog {
         self.update_buttons();
     }
 
-    /// Opens the command line with `text`, or as it was, instead of an
-    /// application, and puts the keyboard there.
-    fn show_command(&self, text: Option<&str>) {
+    /// Opens the command line with `text` instead of an application, and
+    /// puts the keyboard there.
+    fn show_command(&self, text: &str) {
         let imp = self.imp();
         imp.chosen.replace(None);
         for section in Section::ALL {
             self.list(section).unselect_all();
         }
-        if let Some(text) = text {
-            imp.command_entry.set_text(text);
-        }
+        imp.command_entry.set_text(text);
         imp.command_box.set_visible(true);
         imp.command_entry.grab_focus();
         imp.command_entry.set_position(-1);
@@ -595,7 +600,7 @@ impl OpenWithDialog {
             Err(message) => self.set_status(Some(&message)),
             Ok(ProgramFile::Command(command)) => {
                 self.set_status(None);
-                self.show_command(Some(&command));
+                self.show_command(&command);
             }
             Ok(ProgramFile::Installed(id)) => {
                 self.set_status(None);
