@@ -95,7 +95,7 @@ pub use engine::TransferEngine;
 pub use error::TransferError;
 pub use guard::MAX_DEPTH;
 pub(crate) use guard::{check_write_tree, nesting_error, SourceChange};
-pub use item_failure::{FailedItem, FailureAnswer, FailureQuestion};
+pub use item_failure::{FailedItem, FailureAnswer, FailureCause, FailureQuestion};
 pub use limits::{storable_name, stores_symbolic_links, FilesystemInfo, FAT_MAX_FILE_SIZE};
 pub(crate) use modes::{secure_local_staging, PRIVATE_DIRECTORY_MODE};
 pub use move_by_copying::{MoveByCopyingItem, MoveByCopyingQuestion};

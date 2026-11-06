@@ -406,7 +406,7 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
         .any(|button| {
             button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
         });
-    assert!(sidebar_maps, "the sidebar keeps Map network location");
+    assert!(sidebar_maps, "the sidebar keeps Map network drive");
 }
 
 /// Disconnect network drive lists each network mount once, by the root
@@ -922,16 +922,18 @@ fn escape_or_left_closes_only_a_submenu_the_pointer_opened() {
 }
 
 /// The View menu, as Windows 11 File Explorer's: the views from the
-/// largest icons to Details, the Details pane, Show, then Dolphin's split
-/// view, folder tree and terminal where they were before Show, and the
-/// text size. Windows' Tiles and Content are views the app does not have.
-const VIEW_MENU: [&str; 18] = [
+/// largest icons to Details, Tiles and Content, the Details pane, Show,
+/// then Dolphin's split view, folder tree and terminal where they were
+/// before Show, and the text size.
+const VIEW_MENU: [&str; 20] = [
     "Extra large icons",
     "Large icons",
     "Medium icons",
     "Small icons",
     "List",
     "Details",
+    "Tiles",
+    "Content",
     "-",
     "Details pane",
     "Preview pane",
@@ -1105,6 +1107,8 @@ fn the_more_and_view_menus_show_windows_glyphs() {
         ("Small icons", Icon::Grid),
         ("List", Icon::TextColumnTwo),
         ("Details", Icon::TextBulletList),
+        ("Tiles", Icon::AppsListDetail),
+        ("Content", Icon::ContentView),
         ("Details pane", Icon::PanelRight),
     ] {
         assert_eq!(glyph_of(&view, label), glyph, "{label}");
@@ -1194,6 +1198,36 @@ fn view_show_opens_beside_the_view_menu_as_on_windows() {
     show.row("Compact view").emit_activate();
     assert_eq!(on("compact-density"), compact.map(|was| !was));
     wait_until("the menus to close", || !view.is_visible() && !show.is_visible());
+}
+
+/// The View menu fades in sliding down out of its button, View > Show
+/// sideways out of its row, as Windows 11's menus open, and each opening
+/// starts the motion afresh.
+///
+/// parity: LOOK-019
+#[gtk::test]
+fn the_view_menu_slides_out_of_its_button_and_show_out_of_its_row_each_time() {
+    use crate::window::menu_popover::Slide;
+
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let view = menu_of(&test, "View");
+    view.popup();
+    wait_until("the View menu", || view.is_mapped());
+    assert_eq!(view.slide(), Some(Slide::Down));
+    let first = view.opening_class();
+    assert!(first.is_some(), "the opening names its animation");
+    let show = view.open_submenu_of("Show");
+    assert_eq!(show.slide(), Some(Slide::Right), "out of its row, at its left");
+    view.popdown();
+    wait_until("the menus to close", || !view.is_visible() && !show.is_visible());
+
+    view.popup();
+    wait_until("the View menu again", || view.is_mapped());
+    let second = view.opening_class();
+    assert!(second.is_some() && second != first, "the motion starts afresh");
+    view.popdown();
+    wait_until("the menu to close", || !view.is_visible());
 }
 
 /// View > Terminal and Ctrl+Shift+F4, Dolphin's Terminal panel keys, open

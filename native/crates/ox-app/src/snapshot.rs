@@ -61,7 +61,7 @@ pub(crate) use render::{render_png, save_png};
 pub(crate) use request::{SnapshotRequest, WindowSize};
 
 /// Frames drawn after the listing, so late layout changes (column widths,
-/// scrolled crumbs, icons) are in the picture.
+/// collapsed crumbs, icons) are in the picture.
 const SETTLE_FRAMES: u32 = 6;
 
 /// How long the first listing may take before the window is saved anyway.

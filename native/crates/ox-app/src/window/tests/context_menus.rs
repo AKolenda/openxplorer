@@ -124,6 +124,53 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
+/// The classic menu is drawn as Windows 11 draws "Show more options":
+/// no row shows shortcut text, Open is in bold, and a row Windows draws
+/// as text alone, such as Open or Cut, keeps the glyph's column empty, so
+/// its text lines up with the rows that keep a glyph, such as Properties.
+///
+/// parity: LOOK-019, CMD-008
+#[gtk::test]
+fn the_classic_menu_shows_no_shortcut_text_bolds_open_and_lines_up_text_only_rows() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win10);
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    assert_eq!(menu.style(), MenuStyle::Classic);
+    let label_of = |row: &gtk::ListBoxRow| {
+        crate::window::widget_tree::descendants::<gtk::Label>(row)
+            .into_iter()
+            .next()
+            .expect("a label")
+    };
+    let shortcuts: Vec<String> = menu
+        .rows()
+        .iter()
+        .flat_map(crate::window::widget_tree::descendants::<gtk::Label>)
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect();
+    assert_eq!(shortcuts, Vec::<String>::new(), "no shortcut text");
+    assert_eq!(menu.emphasised_labels(), ["Open"]);
+    let images = |label: &str| crate::window::widget_tree::descendants::<gtk::Image>(&menu.row(label)).len();
+    assert_eq!(images("Open"), 0, "Open is text alone");
+    assert_eq!(images("Cut"), 0, "Cut is text alone");
+    assert_eq!(images("Properties"), 1, "Properties keeps its glyph");
+    let left = |label: &str| {
+        let row = menu.row(label);
+        let text = label_of(&row);
+        text.compute_point(&row, &gtk::graphene::Point::zero())
+            .map(|point| point.x())
+    };
+    wait_until("the rows laid out", || {
+        menu.row("Open").width() > 0 && left("Open").is_some_and(|x| x > 0.0)
+    });
+    assert_eq!(left("Open"), left("Properties"), "the text lines up");
+    assert_eq!(left("Cut"), left("Properties"));
+    menu.popdown();
+}
+
 /// Windows 11's compact menu is the default: the edit commands in its
 /// strip and "Show more options" last, with nothing added after it.
 ///
@@ -390,9 +437,9 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_beside_it() {
 
 /// In a folder the user may not write to (no write permission, on a
 /// writable drive), the folder menu's New and Paste stay on, empty
-/// folder or not, as in Windows Explorer: the user tries, and the
-/// system's error says why. Paste asks about the item that failed, New
-/// says why in the toast, and nothing is made. Tests run as a normal
+/// folder or not, as in Windows Explorer: the user tries, and is told
+/// why. Paste asks Windows' "Destination Folder Access Denied", New says
+/// the system's error in the toast, and nothing is made. Tests run as a normal
 /// user: root ignores the permission.
 ///
 /// parity: CMD-011, CMD-031, OPS-001, OPS-047
@@ -448,13 +495,19 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
     let dialog = open_dialog(&test);
     assert_eq!(
         dialog.title().unwrap_or_default(),
-        "Error while copying “Notes 2.txt”"
+        "Destination Folder Access Denied",
+        "Windows' question about a folder that may not be written to"
+    );
+    assert_eq!(
+        dialog.message_text(),
+        "You'll need to provide administrator permission to copy to this folder"
     );
     assert!(
-        dialog.message_text().contains("Permission denied"),
-        "the system's error: {}",
-        dialog.message_text()
+        dialog.texts().iter().any(|text| text == "Locked"),
+        "it names the folder: {:?}",
+        dialog.texts()
     );
+    assert_eq!(dialog.button_labels(), ["Try Again", "Skip", "Cancel"]);
     dialog.press("Cancel");
     // Whether a result follows Cancel is not this test's concern: one that
     // shows is closed.

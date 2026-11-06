@@ -63,7 +63,7 @@ pub struct ListedItem {
     pub size: Option<u64>,
     /// Modification time in seconds since the epoch.
     pub modified: Option<u64>,
-    /// The Type column text, for example "PDF document".
+    /// The Type column text, for example "PDF Document".
     pub type_label: String,
 }
 

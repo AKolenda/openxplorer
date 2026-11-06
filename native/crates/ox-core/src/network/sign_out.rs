@@ -30,7 +30,7 @@ use super::credential_store::ForgetScope;
 use super::error::NetworkError;
 use super::keyring::{KeyringError, SecretAttributes};
 use super::mounting::{PromptedOperation, WriteActivity};
-use super::prompts::MountPrompts;
+use super::prompts::{CredentialChoice, MountPrompts};
 use super::server::smb_host;
 use super::session_credentials::SessionCredentials;
 use crate::location::{is_smb_location, normalise};
@@ -246,7 +246,7 @@ async fn disconnect(prompts: &MountPrompts, mount: &gio::Mount) -> Result<(), Ne
     }
     let root = mount.root().uri();
     // Unmounting saves no credentials, so the outcome stays Failed.
-    let prompted = PromptedOperation::new(prompts, &root)?;
+    let prompted = PromptedOperation::new(prompts, &root, CredentialChoice::Known)?;
     mount
         .unmount_with_operation_future(gio::MountUnmountFlags::NONE, Some(&prompted.operation))
         .await?;

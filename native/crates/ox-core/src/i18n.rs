@@ -210,6 +210,30 @@ pub fn gettext_static(msgid: &'static str) -> &'static str {
         .unwrap_or(msgid)
 }
 
+/// The translation of `msgid` in the interface's language; `None` while
+/// the interface is in English or when its catalogue lacks the message.
+pub fn translation(msgid: &'static str) -> Option<&'static str> {
+    INSTALLED.get().and_then(|catalog| catalog.lookup(msgid, 0))
+}
+
+/// Whether the desktop's first language is English, or the C locale's
+/// untranslated text; GIO's type descriptions are then English too.
+pub fn desktop_language_is_english() -> bool {
+    static IS_ENGLISH: OnceLock<bool> = OnceLock::new();
+    *IS_ENGLISH.get_or_init(|| {
+        glib::language_names()
+            .first()
+            .is_none_or(|name| is_english_name(name))
+    })
+}
+
+/// Whether the language name `name` (`en_GB.UTF-8`, `C`) is English or the
+/// C locale.
+fn is_english_name(name: &str) -> bool {
+    let language = name.split(['_', '.', '@']).next().unwrap_or_default();
+    matches!(language, "en" | "C" | "POSIX")
+}
+
 /// Translates a message, then substitutes named `{placeholders}` once.
 /// Names omitted from `values` remain visible; inserted filenames and other
 /// values are never translated or interpreted as another placeholder.

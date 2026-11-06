@@ -85,8 +85,8 @@ pub(crate) enum WindowAction {
     /// Windows 11's Item check boxes: a check box on each item, and one
     /// that selects all in the Details header (SEL-014).
     ItemCheckBoxes,
-    /// Opens the subfolder menu of a crumb; the target is the folder, the
-    /// subfolder shown in bold and the first one listed (NAV-020).
+    /// Opens the subfolder menu of a crumb; the target is the folder and
+    /// the subfolder shown in bold (NAV-020).
     CrumbSubfolders,
     /// Moves keyboard focus to the search box (Ctrl+F).
     Search,

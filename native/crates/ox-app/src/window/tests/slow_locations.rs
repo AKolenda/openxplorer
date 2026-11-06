@@ -65,6 +65,15 @@ fn says_working(test: &TestWindow) -> bool {
     pane.shown_note_text().as_deref() == Some(WORKING) && (pane.rows_hidden() || pane.model().n_items() == 0)
 }
 
+/// Waits until the tab in front says "Working on it...", step by step, so
+/// a failure on a busy runner names the step that never came: the tab
+/// going to its location, the delay passing, or the file area saying so.
+fn wait_for_working(test: &TestWindow) {
+    wait_until("the tab to be busy", || test.window.is_busy());
+    wait_until("the location to count as slow", || test.window.is_slow());
+    wait_until("Working on it...", || says_working(test));
+}
+
 /// Types `path` into the address bar and presses Enter.
 fn enter_address(test: &TestWindow, path: &str) {
     test.activate("location", None);
@@ -99,7 +108,7 @@ fn a_slow_typed_address_shows_progress_stop_and_working_on_it() {
         "the address bar shows progress at once"
     );
     assert!(!says_working(&test), "no message before the delay");
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
     assert!(started.elapsed() >= APPEARANCE_DELAY, "the message waited");
     assert!(
         test.window.folder_pane().rows_hidden() || test.names().is_empty(),
@@ -132,7 +141,7 @@ fn a_slow_folder_opened_from_the_list_shows_progress_and_working_on_it() {
 
     assert!(shows_stop(&test), "Refresh turns into Stop at once");
     assert!(address_shows_progress(&test));
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
 
     drop(hold);
     wait_until("the opened folder", || {
@@ -153,7 +162,7 @@ fn stop_cancels_a_slow_address_and_its_late_answer_lands_nowhere() {
     test.wait_for_listing("the first folder");
     let hold = held::hold(&fixture.uri_of("Documents"));
     enter_address(&test, &fixture.path("Documents").display().to_string());
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
 
     test.activate("stop", None);
     settle();
@@ -352,7 +361,7 @@ fn a_slow_first_mount_shows_working_on_it_and_stop_cancels_it() {
     wait_until("the mount to wait", || held::waits(&held::mount_key(share)) == 1);
     assert!(shows_stop(&test));
     assert!(address_shows_progress(&test));
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
     assert!(test.window.load_error().is_none(), "no error while it mounts");
 
     test.activate("stop", None);
@@ -369,7 +378,7 @@ fn a_slow_first_mount_shows_working_on_it_and_stop_cancels_it() {
     // message left.
     let hold = held::hold_mount(share);
     test.window.navigate(share).expect("an SMB share");
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
     drop(hold);
     wait_until("the failed mount", || test.window.load_error().is_some());
     settle();
@@ -391,7 +400,7 @@ fn switching_tabs_while_a_slow_address_opens_keeps_each_tabs_state() {
     let documents = fixture.uri_of("Documents");
     let hold = held::hold(&documents);
     enter_address(&test, &fixture.path("Documents").display().to_string());
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
 
     test.window
         .open_tab(&fixture.uri(), TabPlacement::Foreground)
@@ -437,7 +446,7 @@ fn only_the_address_bar_shows_progress_while_a_location_loads() {
     // A typed address, looked up and then listed.
     let hold = held::hold(&documents);
     enter_address(&test, &fixture.path("Documents").display().to_string());
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
     assert!(address_shows_progress(&test));
     assert_eq!(visible_progress_over_the_items(&test), 0, "a typed address");
     drop(hold);
@@ -462,7 +471,7 @@ fn only_the_address_bar_shows_progress_while_a_location_loads() {
     test.wait_for_listing("the fixture folder");
     let hold = held::hold(&documents);
     test.window.activate_item(test.position_of("Documents"));
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
     assert_eq!(visible_progress_over_the_items(&test), 0, "a folder click");
     drop(hold);
     wait_until("the opened folder", || {
@@ -519,21 +528,40 @@ fn working_on_it_carries_over_from_the_lookup_to_the_listing() {
     let started = Instant::now();
     enter_address(&test, &fixture.path("Documents").display().to_string());
     wait_for(phase);
-    assert!(!says_working(&test), "not before the delay");
+    // However late a busy runner checks, it can only say so once the
+    // delay has passed since Enter.
+    assert!(
+        !says_working(&test) || started.elapsed() >= APPEARANCE_DELAY,
+        "not before the delay"
+    );
+    let lookup_answered = Instant::now();
     drop(lookup);
-    let mut first_said = None;
-    while started.elapsed() < phase * 2 {
+    wait_until("the listing to run", || {
+        held::waits(&held::listing_key(&documents)) == 1
+    });
+    // The listing goes on from the lookup's time, not its own.
+    let since = test
+        .window
+        .imp()
+        .session
+        .borrow()
+        .active()
+        .and_then(|tab| tab.busy_clock.since());
+    assert!(
+        since.is_some_and(|since| since < lookup_answered),
+        "the time runs on from Enter"
+    );
+    wait_for_working(&test);
+    assert!(started.elapsed() >= APPEARANCE_DELAY, "it waited for the delay");
+    let shown = Instant::now();
+    while shown.elapsed() < phase {
         settle();
-        if says_working(&test) {
-            first_said.get_or_insert(started.elapsed());
-        } else if first_said.is_some() {
-            panic!("Working on it... went away while the folder was still listed");
-        }
+        assert!(
+            says_working(&test),
+            "Working on it... went away while the folder was still listed"
+        );
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    assert_eq!(held::waits(&held::listing_key(&documents)), 1, "the listing ran");
-    let first_said = first_said.expect("Working on it... showed during the two short phases");
-    assert!(first_said >= APPEARANCE_DELAY, "it waited for the delay");
     drop(listing);
     wait_until("the folder", || {
         test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
@@ -560,7 +588,7 @@ fn each_tab_keeps_its_own_slow_state() {
     let documents = fixture.uri_of("Documents");
     let hold = held::hold(&held::listing_key(&documents));
     test.window.navigate(&documents).expect("a folder");
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
     let slow_tab = test.active_tab().expect("a tab");
 
     test.window
@@ -640,7 +668,7 @@ fn a_slow_lookup_says_loading_in_the_status_bar() {
 
     enter_address(&test, &fixture.path("Documents").display().to_string());
     assert!(!status_says_loading(&test), "not before the delay");
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
 
     assert!(status_says_loading(&test));
     drop(hold);
@@ -838,7 +866,7 @@ fn the_list_keeps_the_keyboard_across_a_slow_opening() {
     );
 
     test.window.activate_item(test.position_of("Documents"));
-    wait_until("Working on it...", || says_working(&test));
+    wait_for_working(&test);
     drop(hold);
     wait_until("the opened folder", || {
         test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()

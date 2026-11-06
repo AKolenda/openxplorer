@@ -13,13 +13,13 @@ use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button, Pointer};
 
 /// Where the pointer first looks for the window.
-const PROBE: (i32, i32) = (8, 8);
+pub(super) const PROBE: (i32, i32) = (8, 8);
 
 /// How long the pointer rests so GTK's drag catches up.
-const HOLD: Duration = Duration::from_millis(300);
+pub(super) const HOLD: Duration = Duration::from_millis(300);
 
 /// The screen point of the middle of the name of the item `name`.
-fn item_on_screen(pointer: &mut Pointer, test: &TestWindow, name: &str) -> (i32, i32) {
+pub(super) fn item_on_screen(pointer: &mut Pointer, test: &TestWindow, name: &str) -> (i32, i32) {
     let view = test.window.folder_pane().input_widget();
     let position = test.position_of(name);
     let cell = test
@@ -37,7 +37,7 @@ fn item_on_screen(pointer: &mut Pointer, test: &TestWindow, name: &str) -> (i32,
 }
 
 /// The screen point near the bottom of the folder view, on blank space.
-fn blank_on_screen(pointer: &mut Pointer, test: &TestWindow) -> (i32, i32) {
+pub(super) fn blank_on_screen(pointer: &mut Pointer, test: &TestWindow) -> (i32, i32) {
     let view = test.window.folder_pane().input_widget();
     let point = (60.0, f64::from(view.height()) - 30.0);
     screen_point(pointer, &view, point, PROBE)

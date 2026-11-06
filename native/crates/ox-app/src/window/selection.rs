@@ -13,7 +13,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::is_smb_location;
 
-use crate::folder_view::shown_name::shown_name;
+use crate::folder_view::shown_name::{shown_name, shows_whole};
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
@@ -193,7 +193,7 @@ impl BrowserWindow {
             let entry = item.entry();
             if content.name == entry.name {
                 let extensions = self.file_name_extensions();
-                shown_name(&entry.name, entry.is_dir, extensions).clone_into(&mut content.name);
+                shown_name(&entry.name, shows_whole(entry), extensions).clone_into(&mut content.name);
             }
         }
         pane.set_content(&content);

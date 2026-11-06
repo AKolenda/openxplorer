@@ -157,7 +157,7 @@ fn both_views_show_each_name_with_its_icon() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
@@ -187,7 +187,7 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
     std::fs::set_permissions(fixture.path("Locked.txt"), locked).expect("make it read-only");
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
@@ -206,18 +206,19 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
 
 /// Regression: after a merge the Documents folder's Type column read
 /// GIO's "Word 2007 document", "Excel 2007 spreadsheet" and "Plain text
-/// document". The files are real, so GIO names their types, the app's
-/// loader lists them and the details view draws the cells read here.
+/// document"; it shows the names Windows 11 gives these types. The files
+/// are real, so GIO names their types, the app's loader lists them and
+/// the details view draws the cells read here.
 ///
 /// parity: VIEW-002
 #[gtk::test]
-fn the_type_column_shows_the_interface_names_for_documents() {
+fn the_type_column_shows_the_windows_names_for_documents() {
     let fixture = Fixture::standard();
     let documents = [
-        ("Meeting notes.docx", "Word document"),
-        ("Project budget.xlsx", "Excel worksheet"),
-        ("Q3 presentation.pptx", "PowerPoint presentation"),
-        ("Website assets.zip", "Compressed folder"),
+        ("Meeting notes.docx", "Microsoft Word Document"),
+        ("Project budget.xlsx", "Microsoft Excel Worksheet"),
+        ("Q3 presentation.pptx", "Microsoft PowerPoint Presentation"),
+        ("Website assets.zip", "Compressed (zipped) Folder"),
     ];
     for (name, _) in documents {
         fixture.write(name);
@@ -230,13 +231,13 @@ fn the_type_column_shows_the_interface_names_for_documents() {
         labels.iter().map(|label| label.text().into()).collect()
     };
     wait_until("the Type cells to be bound", || {
-        shown_texts().iter().any(|text| text == "Word document")
+        shown_texts().iter().any(|text| text == "Microsoft Word Document")
     });
     let texts = shown_texts();
     for (name, type_label) in documents {
         assert!(texts.iter().any(|text| text == type_label), "{name}: {texts:?}");
     }
-    assert!(texts.iter().any(|text| text == "Text document"), "{texts:?}");
+    assert!(texts.iter().any(|text| text == "Text Document"), "{texts:?}");
 }
 
 /// The labels the details view of `test` shows, in its rows and titles.

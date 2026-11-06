@@ -17,7 +17,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
 
-use super::content::MediaPreview;
+use super::content::{Field, MediaPreview};
 use super::DetailsPane;
 use crate::icons::{Art, ArtImage};
 
@@ -38,9 +38,9 @@ impl DetailsPane {
         let imp = self.imp();
         let media = media.filter(|_| self.is_visible());
         if imp.shown_media.borrow().as_ref() == media {
-            // The Properties rows were drawn again without the media's.
-            for (name, value) in imp.media_rows.borrow().iter() {
-                self.add_property(name, value);
+            // The rows were drawn again without the media's.
+            for (field, value) in imp.media_rows.borrow().iter() {
+                self.add_property(*field, value);
             }
             return;
         }
@@ -64,7 +64,7 @@ impl DetailsPane {
 
     /// Puts `widget` in the preview area in place of the art, or the art
     /// back for `None`.
-    fn set_preview_widget(&self, widget: Option<&gtk::Widget>) {
+    pub(super) fn set_preview_widget(&self, widget: Option<&gtk::Widget>) {
         let imp = self.imp();
         let art = imp.preview.upcast_ref::<gtk::Widget>();
         let widget = widget.unwrap_or(art);
@@ -106,7 +106,7 @@ impl DetailsPane {
             pane.set_preview_widget(Some(picture.upcast_ref()));
             if let Some((width, height)) = size.filter(|_| is_image) {
                 pane.add_media_property(
-                    "Dimensions",
+                    Field::Dimensions,
                     ox_core::i18n::format_message(
                         "{width} × {height} pixels",
                         &[("width", &width.to_string()), ("height", &height.to_string())],
@@ -144,18 +144,18 @@ impl DetailsPane {
             };
             let micros = stream.duration();
             if pane.imp().media_generation.get() == generation && stream.is_prepared() && micros > 0 {
-                pane.add_media_property("Length", length_text(micros));
+                pane.add_media_property(Field::Length, length_text(micros));
             }
         });
     }
 }
 
 impl DetailsPane {
-    /// Adds the row `name` that the media shown says, and keeps it for
+    /// Adds the row of `field` that the media shown says, and keeps it for
     /// when the rows are drawn again.
-    fn add_media_property(&self, name: &'static str, value: String) {
-        self.add_property(name, &value);
-        self.imp().media_rows.borrow_mut().push((name, value));
+    fn add_media_property(&self, field: Field, value: String) {
+        self.add_property(field, &value);
+        self.imp().media_rows.borrow_mut().push((field, value));
     }
 }
 

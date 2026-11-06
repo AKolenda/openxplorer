@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Properties of several selected items (PROP-002), as Windows 11's
-//! Properties of a multiple selection show them: a General tab with how
-//! many files and folders are selected, their common type and folder, and
-//! their combined size, size on disk and content, counting up as the
-//! folders are measured; and a Security tab whose change applies to all of
-//! them, when the user owns every one, and keeps every bit the user did
-//! not change.
+//! Properties of a multiple selection show them: titled with the first two
+//! names (`a.txt, b.txt, ... Properties`), a General tab with how many
+//! files and folders are selected, their common type and folder, their
+//! combined size, size on disk and content, counting up as the folders are
+//! measured, and their Read-only and Hidden attributes
+//! ([`super::selection_attributes`]); and a Security tab whose change
+//! applies to all of them, when the user owns every one, and keeps every
+//! bit the user did not change.
+
+use std::rc::Rc;
+use std::sync::Arc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
@@ -16,9 +21,10 @@ use ox_core::permissions::Account;
 use ox_core::transfer::Cancellation;
 
 use super::folder_count::{count_folders, FolderCountRows, Totals};
-use super::item_window::{can_edit_permissions, PropertiesContext};
+use super::item_window::{can_edit_permissions, can_rename, PropertiesContext};
 use super::metadata::{read_properties, ItemProperties};
 use super::permissions_editor::{permissions_editor, EditedItems};
+use super::selection_attributes::SelectionAttributes;
 use super::window::{divider, page, PropertiesWindow, Rows};
 use super::{PropertiesTab, READING};
 use crate::dialog::{note, quiet_text, PropertyGrid};
@@ -31,12 +37,18 @@ const NOT_EDITABLE: &str = crate::i18n::message_id(
                             versions and shares.",
 );
 
-/// The title of a selection's Properties: `<count> items Properties`.
-pub(crate) fn selection_title(count: usize) -> String {
-    ox_core::i18n::format_message(
-        "{count} items Properties",
-        &[("count", &ox_core::format::group_digits(count as u64))],
-    )
+/// The title of a selection's Properties, as Windows 11 writes it: the
+/// first two names, then `, ...` when more are selected
+/// (`a.txt, b.txt, ... Properties`).
+pub(crate) fn selection_title(names: &[String]) -> String {
+    let first = names.first().map_or("", String::as_str);
+    let second = names.get(1).map_or("", String::as_str);
+    let arguments = [("first", first), ("second", second)];
+    if names.len() > 2 {
+        ox_core::i18n::format_message("{first}, {second}, ... Properties", &arguments)
+    } else {
+        ox_core::i18n::format_message("{first}, {second} Properties", &arguments)
+    }
 }
 
 /// Opens the Properties of `entries`, which are at least two, on General
@@ -49,7 +61,8 @@ pub(crate) fn open_selection_properties(
     initial: PropertiesTab,
 ) -> PropertiesWindow {
     let art = entries.first().map(Art::for_entry);
-    let window = PropertiesWindow::new(&selection_title(entries.len()), art, Some(opener));
+    let names: Vec<String> = entries.iter().map(|entry| entry.name.clone()).collect();
+    let window = PropertiesWindow::new(&selection_title(&names), art, Some(opener));
     let general = page();
     let security = page();
     window.add_tab(
@@ -67,9 +80,39 @@ pub(crate) fn open_selection_properties(
     window.track_work(cancel.clone());
     let rows = fill_general(&general, &entries, context);
     measure(&entries, &rows, &cancel);
+    // Read-only and Hidden change the items after Security's change, which
+    // acts on their names before Hidden renames them.
+    let attributes = SelectionAttributes::new(&window, &entries, Arc::clone(&context.versions));
+    general.append(&divider());
+    let row = Rows::new();
+    row.add_control(&ox_core::i18n::gettext("Attributes"), &attributes.widget());
+    general.append(row.widget());
+    window.add_pending_last(Rc::<SelectionAttributes>::clone(&attributes));
     security.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
-    read_permissions(&security, entries, context.clone(), window.downgrade());
+    let standard_folders = entries
+        .iter()
+        .map(|entry| opener.is_standard_folder(entry.navigation_uri()))
+        .collect();
+    let read = ReadItems {
+        entries,
+        standard_folders,
+        context: context.clone(),
+        window: window.downgrade(),
+        attributes,
+    };
+    read_permissions(&security, read);
     window
+}
+
+/// What the items' permissions are read for.
+struct ReadItems {
+    entries: Vec<Entry>,
+    /// Which entries are standard folders, which keep their names.
+    standard_folders: Vec<bool>,
+    context: PropertiesContext,
+    window: glib::WeakRef<PropertiesWindow>,
+    /// The General tab's Read-only and Hidden.
+    attributes: Rc<SelectionAttributes>,
 }
 
 /// Fills the General tab and returns its Size, Size on disk and Contains
@@ -113,7 +156,8 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
     }
 }
 
-/// The items' type when they share one, else "Multiple types".
+/// The items' type when they share one, else "Multiple Types", as
+/// Windows writes it.
 fn common_type(entries: &[Entry]) -> String {
     let first = entries
         .first()
@@ -122,7 +166,7 @@ fn common_type(entries: &[Entry]) -> String {
     if entries.iter().all(|entry| entry.type_label == first) {
         ox_core::i18n::format_message("All of type {first}", &[("first", first)])
     } else {
-        ox_core::i18n::gettext_static("Multiple types").to_owned()
+        ox_core::i18n::gettext_static("Multiple Types").to_owned()
     }
 }
 
@@ -195,15 +239,18 @@ async fn size_on_disk(uri: &str, cancel: &Cancellation) -> Option<u64> {
 
 /// Reads every item's permissions, then fills the Security tab: the
 /// items' owner and group, and the editor when every item can be
-/// changed here.
-fn read_permissions(
-    panel: &gtk::Box,
-    entries: Vec<Entry>,
-    context: PropertiesContext,
-    window: glib::WeakRef<PropertiesWindow>,
-) {
+/// changed here; and lets the General tab's Read-only and Hidden be
+/// changed where every item allows it.
+fn read_permissions(panel: &gtk::Box, read: ReadItems) {
     let panel = panel.downgrade();
     glib::spawn_future_local(async move {
+        let ReadItems {
+            entries,
+            standard_folders,
+            context,
+            window,
+            attributes,
+        } = read;
         let mut items: Vec<ItemProperties> = Vec::new();
         for entry in entries {
             let Ok(properties) = read_properties(entry.navigation_uri().to_owned()).await else {
@@ -222,6 +269,12 @@ fn read_permissions(
             panel.append(&note(ox_core::i18n::gettext_static(NOT_EDITABLE)));
             return;
         };
+        let can_change_permissions = items.iter().all(|item| can_edit_permissions(item, &context));
+        let can_rename_all = items
+            .iter()
+            .zip(&standard_folders)
+            .all(|(item, standard)| can_rename(item, &context, *standard));
+        attributes.fill(&items, can_change_permissions, can_rename_all);
         let grid = PropertyGrid::new();
         let same = |value: fn(&ItemProperties) -> Option<&str>| {
             let first = value(first);
@@ -240,7 +293,7 @@ fn read_permissions(
             &same(|item| item.group.as_deref()),
         );
         panel.append(grid.widget());
-        if !items.iter().all(|item| can_edit_permissions(item, &context)) {
+        if !can_change_permissions {
             panel.append(&note(ox_core::i18n::gettext_static(NOT_EDITABLE)));
             return;
         }
@@ -257,8 +310,16 @@ fn read_permissions(
             owner: shared(ItemProperties::owner_account),
             group: shared(ItemProperties::group_account),
         };
-        let (editor, change) = permissions_editor(edited, std::sync::Arc::clone(&context.versions));
+        let (editor, change) = permissions_editor(edited, Arc::clone(&context.versions));
         panel.append(&editor);
+        // Hidden renames the items after the editor's change is made; a
+        // later change follows them.
+        let follows = Rc::downgrade(&change);
+        attributes.connect_renamed(move |from, to| {
+            if let Some(change) = follows.upgrade() {
+                change.follow_rename(from, to);
+            }
+        });
         // The window's OK and Apply make the editor's change too.
         if let Some(window) = window.upgrade() {
             window.add_pending(change);

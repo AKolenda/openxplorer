@@ -460,7 +460,7 @@ fn folder_options_advanced_settings_apply_with_ok_or_apply() {
 }
 
 /// The page of the Folder Options tab labelled `title`.
-fn options_tab(options: &crate::dialog::Dialog, title: &str) -> gtk::Widget {
+pub(in crate::window) fn options_tab(options: &crate::dialog::Dialog, title: &str) -> gtk::Widget {
     let notebook = descendants::<gtk::Notebook>(options)
         .into_iter()
         .next()
@@ -484,7 +484,7 @@ pub(in crate::window) fn option_check(
 }
 
 /// The button labelled `label` on the tab `tab` of `options`.
-fn tab_button(options: &crate::dialog::Dialog, tab: &str, label: &str) -> gtk::Button {
+pub(in crate::window) fn tab_button(options: &crate::dialog::Dialog, tab: &str, label: &str) -> gtk::Button {
     descendants::<gtk::Button>(&options_tab(options, tab))
         .into_iter()
         .find(|button| button.label().as_deref() == Some(label))
@@ -497,15 +497,16 @@ fn hidden_state(test: &TestWindow) -> Option<bool> {
 }
 
 const SHOW_HIDDEN: &str = "Show hidden files, folders, and drives";
+const DONT_SHOW_HIDDEN: &str = "Don't show hidden files, folders, or drives";
 const ICONS_ONLY: &str = "Always show icons, never thumbnails";
 const REMEMBER_VIEWS: &str = "Remember each folder's view settings";
 
-/// Folder Options has Windows' General and View tabs, each option on
-/// the tab Windows puts it on.
+/// Folder Options has Windows' General, View and Search tabs, each
+/// option on the tab Windows puts it on, in Windows' order.
 ///
 /// parity: VIEW-020
 #[gtk::test]
-fn folder_options_has_the_general_and_view_tabs_of_windows() {
+fn folder_options_has_the_general_view_and_search_tabs_of_windows() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let options = open_folder_options(&test);
@@ -514,7 +515,7 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
         .filter_map(|index| notebook.nth_page(Some(index)))
         .filter_map(|page| notebook.tab_label_text(&page).map(String::from))
         .collect();
-    assert_eq!(titles, ["General", "View"]);
+    assert_eq!(titles, ["General", "View", "Search"]);
     let general = options_tab(&options, "General");
     assert_eq!(
         descendants::<gtk::DropDown>(&general).len(),
@@ -533,12 +534,43 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
         [
             ICONS_ONLY,
             "Display the full path in the title bar",
+            DONT_SHOW_HIDDEN,
+            SHOW_HIDDEN,
             "Hide extensions for known file types",
             REMEMBER_VIEWS,
             "Restore previous folder windows at logon",
-            SHOW_HIDDEN,
+            "Show pop-up description for folder and desktop items",
+            "Show preview handlers in preview pane",
+            "Show status bar",
             "Use check boxes to select items",
+            "Automatically type into the Search Box",
+            "Select the typed item in the view",
         ]
+    );
+    let general_checks: Vec<String> = descendants::<gtk::CheckButton>(&general)
+        .iter()
+        .filter_map(|check| check.label().map(String::from))
+        .collect();
+    assert_eq!(
+        general_checks,
+        [
+            "Open each folder in the same window",
+            "Open each folder in its own window",
+            "Single-click to open an item (point to select)",
+            "Underline icon titles consistent with my browser",
+            "Underline icon titles only when I point at them",
+            "Double-click to open an item (single-click to select)",
+            "Show recently used files",
+            "Show frequently used folders",
+        ]
+    );
+    let search_checks: Vec<String> = descendants::<gtk::CheckButton>(&options_tab(&options, "Search"))
+        .iter()
+        .filter_map(|check| check.label().map(String::from))
+        .collect();
+    assert_eq!(
+        search_checks,
+        ["Always search file names and contents (this might take several minutes)"]
     );
     // Push buttons drawn as the dialog's own Cancel and Apply, not links.
     for (tab, label) in [
@@ -546,6 +578,8 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
         ("View", "Reset Folders"),
         ("View", "Restore Defaults"),
         ("General", "Restore Defaults"),
+        ("General", "Clear"),
+        ("Search", "Restore Defaults"),
     ] {
         let button = tab_button(&options, tab, label);
         assert!(
@@ -600,9 +634,8 @@ fn hidden_files_are_one_setting_for_every_folder_and_window() {
     assert_eq!(hidden_state(&beside), Some(true));
 
     let options = open_folder_options(&test);
-    let check = option_check(&options, "View", SHOW_HIDDEN);
-    assert!(check.is_active());
-    check.set_active(false);
+    assert!(option_check(&options, "View", SHOW_HIDDEN).is_active());
+    option_check(&options, "View", DONT_SHOW_HIDDEN).set_active(true);
     close_folder_options(&test, &options, "OK");
     wait_until("hidden files off everywhere", || {
         !test.context.settings_data().preferences.show_hidden

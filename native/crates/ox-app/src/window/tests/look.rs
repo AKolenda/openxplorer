@@ -50,14 +50,14 @@ struct Surfaces {
 const SURFACES: [Surfaces; 2] = [
     Surfaces {
         theme: "light",
-        title: "#eff1f4",
+        title: "#f3f3f3",
         chrome: "#f9f9f9",
         sidebar: "#fafafa",
         content: "#ffffff",
     },
     Surfaces {
         theme: "dark",
-        title: "#191919",
+        title: "#202020",
         chrome: "#282828",
         sidebar: "#252525",
         content: "#202020",
@@ -306,8 +306,8 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
     assert_same_colour(colour, css_colour("#e8f1fb"), "the selected colour");
 }
 
-/// Classic menus are 264 pixels with 33-pixel rows at 100% text; the
-/// compact menu is 276 pixels with the 34-pixel icon strip.
+/// Classic menus are 264 pixels with Windows 11's 32-pixel rows at 100%
+/// text; the compact menu is 276 pixels with the 34-pixel icon strip.
 ///
 /// parity: LOOK-019
 #[gtk::test]
@@ -324,7 +324,7 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     // The contents box, inside 3 pixels of padding and a 1-pixel border.
     assert_eq!(contents.width() + 2 * (3 + 1), 264, "the classic width");
     let row = menu.rows().into_iter().next().expect("a row");
-    assert_eq!(row.height(), 33, "the classic row");
+    assert_eq!(row.height(), 32, "the classic row");
     menu.popdown();
 
     choose_menu_style(&test, ContextMenu::Win11);
@@ -365,6 +365,8 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
         test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
         let menu = test.window.context_menu();
         wait_until("the menu to be drawn", || menu.is_mapped() && menu.width() > 0);
+        // Once it has faded in.
+        wait_for(crate::window::MENU_OPENING_MOTION);
         wait_for_frames(&test.window, 2);
         let contents = menu.child().expect("the menu has contents");
         let place = bounds_in(&contents, &menu);
@@ -458,5 +460,65 @@ fn the_toast_is_an_inverted_status_78_pixels_above_the_bottom() {
         assert!((centre - test.window.width() / 2).abs() <= 1, "{place:?}");
         let background = painted_colour(&surface, 4, place.height / 2);
         assert_same_colour(background, css_colour(inverted), &format!("{theme} toast"));
+    }
+}
+
+/// The selected row of the file list in `test`'s window.
+fn selected_row(test: &TestWindow) -> gtk::Widget {
+    let details = test.window.folder_pane().details().column_view();
+    descendants::<gtk::Widget>(details)
+        .into_iter()
+        .find(|widget| widget.css_name() == "row" && widget.state_flags().contains(gtk::StateFlags::SELECTED))
+        .expect("a selected row")
+}
+
+/// The file list selects as Windows 11 File Explorer does: a light blue
+/// fill in light and a neutral grey one in dark, with no edge, and the
+/// keyboard's row draws Windows' two-tone ring, 2 pixels dark outside 1
+/// pixel light (ui-spec.md §3.1 C19, C29, C30; §4.13).
+///
+/// parity: ACC-009
+#[gtk::test]
+fn selected_rows_and_the_keyboard_ring_take_windows_11s_colours() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.window.folder_model().select_only(1);
+    // The selection, then the ring on it: alpha(white, .7) over #cce8ff
+    // with alpha(black, .89) over that in light, alpha(black, .7) over
+    // #3d3d3d with white over that in dark.
+    for (theme, fill, outer, inner) in [
+        ("light", "#cce8ff", "#1a1b1c", "#f0f8ff"),
+        ("dark", "#3d3d3d", "#ffffff", "#121212"),
+    ] {
+        show_theme(&test, theme);
+        test.window.set_focus_visible(false);
+        wait_for_frames(&test.window, 2);
+        let row = selected_row(&test);
+        // Between the row's edge and its icon, where nothing else paints.
+        let middle = row.height() / 2;
+        for x in [0, 2, 6] {
+            assert_same_colour(
+                painted_colour(&row, x, middle),
+                css_colour(fill),
+                &format!("{theme} selection at {x}, without an edge"),
+            );
+        }
+        row.grab_focus();
+        test.window.set_focus_visible(true);
+        wait_for_frames(&test.window, 2);
+        assert!(row.has_focus(), "the selected row has the keyboard");
+        for (x, colour, what) in [
+            (0, outer, "outer ring"),
+            (1, outer, "outer ring"),
+            (2, inner, "inner ring"),
+            (6, fill, "selection"),
+        ] {
+            assert_same_colour(
+                painted_colour(&row, x, middle),
+                css_colour(colour),
+                &format!("{theme} {what} at {x}"),
+            );
+        }
     }
 }

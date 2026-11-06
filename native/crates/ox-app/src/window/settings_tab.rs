@@ -172,8 +172,8 @@ impl BrowserWindow {
         let imp = self.imp();
         imp.navigation_row.set_visible(browsing);
         self.command_bar().set_visible(browsing);
-        self.status_bar().set_visible(browsing);
         imp.surfaces.set_visible_child_name(surface.name());
+        self.fit_status_bar();
         // Address editing is inert on the Settings tab (SET-001).
         self.set_action_enabled(WindowAction::Location, browsing);
         self.set_action_enabled(WindowAction::AddressHistory, browsing);
