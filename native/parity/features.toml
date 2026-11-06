@@ -2977,7 +2977,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
 native = "partial"
-native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the status-bar slider; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
+native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the View menu's icon sizes; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
 
 [[feature]]
 id = "VIEW-011"
@@ -3012,8 +3012,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "ShowZoomSlider"
-native = "partial"
-native_note = "The native status bar has an icon-size slider, visible in Icons mode, which steps through the 16-256 px levels and updates the view and saved size. Test: native/crates/ox-app/src/window/tests/views.rs (zooming_changes_and_saves_the_view). Missing: a Show zoom slider preference and a tooltip that reports the current pixel size; the tooltip currently says Icon size."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar has no zoom slider, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the slider shown in the icon view is gone. The icon size still zooms with Ctrl+wheel (VIEW-011) and the View menu's icon sizes (VIEW-005, VIEW-010)."
 
 [[feature]]
 id = "VIEW-013"
@@ -3547,7 +3547,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "DirectorySizeCount=true (Number of items)"
 native = "done"
-native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off. The status bar's description of a folder uses the count too."
+native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off."
 
 [[feature]]
 id = "VIEW-038"
@@ -3874,7 +3874,7 @@ python_tests = []
 bridge = []
 dolphin = "Dolphin status bar: 'N Folders, M Files (size)' and selection summary."
 native = "done"
-native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/window/tests/listing.rs (a_slow_listing_shows_the_line_and_says_loading); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Deliberate change (owner request): 'N items · Loading…' shows only once a location has taken 300 ms to look up and list (window/slow_delay.rs, VIEW-068), so fast listings never flash it. The selection also shows the selected files' total size, as Windows does."
+native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/window/tests/listing.rs (a_slow_listing_shows_the_line_and_says_loading); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Deliberate change (owner request): 'N items · Loading…' shows only once a location has taken 300 ms to look up and list (window/slow_delay.rs, VIEW-068), so fast listings never flash it. As in Windows 11 File Explorer, a thin divider follows the count while something is selected, and the selection reads '1 item selected' or 'N items selected', followed by the selected files' size as Explorer writes sizes ('1 item selected  19.0 KB', 'N items selected  1.23 MB') only while every selected item is a file (status_bar.rs the_selection_shows_its_count_and_file_size; window/tests/environment.rs the_status_bar_says_ready_on_a_page_and_counts_a_folder)."
 
 [[feature]]
 id = "VIEW-051"
@@ -3893,8 +3893,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::requestStatusBarText"
-native = "done"
-native_note = "The status bar adds the total size of the files shown to the item count ('12 items  4.2 MB', summed once per change of the items shown) and the selection keeps its count and files' size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_count_adds_the_files_size_and_one_item_is_described; folder_view/model.rs shown_file_bytes). Folder sizes are never measured by themselves: Calculate folder size(s) measures on request, with Cancel scan (PROP-026, PROP-029), so remote folders are only measured when the user asks."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar gives no total size for the folder, only the size of the selection, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the count is 'N items' alone. The selected files' size stays, as Windows shows it (VIEW-050). A folder's size is in its Properties and in Calculate folder size(s) (PROP-026, PROP-029)."
 
 [[feature]]
 id = "VIEW-052"
@@ -3911,8 +3911,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KFileItem::getStatusBarInfo"
-native = "done"
-native_note = "One selected item is described in the status bar by name, type and size (or item count, or measured size), and the item under the pointer is described the same way until the pointer leaves the items, then the selection again (native/crates/ox-app/src/window/status_bar.rs item_text and show_hovered, window/details_hover.rs; the_count_adds_the_files_size_and_one_item_is_described)."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar names neither the selected item nor the one under the pointer, only '1 item selected' and its size (VIEW-050), and OpenXplorer's status bar follows it (owner request, 2026-11-05). The details pane still describes the selected item, and the item under the pointer while it follows the pointer (PROP-010); the Details view's Type and Size columns give an item's type and size."
 
 [[feature]]
 id = "VIEW-053"
@@ -3933,8 +3933,8 @@ python_tests = []
 bridge = ["properties", "list"]
 dolphin = "ShowSpaceInfo (default true); Status bar space info (ShowSpaceInfo, on by default)"
 gnome = "g_file_query_filesystem_info_async(filesystem::free)"
-native = "done"
-native_note = "The status bar shows '<X> free' with a 3-pixel capacity bar (red from 90% used) and the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown, hidden on landing pages (native/crates/ox-app/src/window/free_space.rs the_status_bar_says_how_much_room_is_left, status_bar.rs). A click on it, or a secondary click on the status bar, offers Analyse disk usage when an analyser is installed (window/disk_tools.rs, the_status_bar_offers_the_analyser_for_a_local_folder)."
+native = "n-a"
+native_note = "Removed: Windows 11 File Explorer's status bar shows no free space, and OpenXplorer's status bar follows it (owner request, 2026-11-05), so the '<X> free' text and its capacity bar are gone. Free space stays where Windows shows it: the drive cards of This PC, with their used-space bar and '<free> free of <total>' (HOME-004), and a drive's Properties. A secondary click on the status bar still offers Analyse disk usage when an analyser is installed (PROP-015)."
 
 [[feature]]
 id = "VIEW-054"
@@ -5813,7 +5813,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "show_folders_panel: F7"
 native = "done"
-native_note = "View > Folder tree and F7 (Dolphin's key) show a tree of folders in the navigation pane below the places, split from them by a draggable divider; the choice and the tree's options are saved for every window (folderTree). It starts at the home folder while the folder shown is inside it (Limit to home folder, on by default), else at the top of the folder's file system or server; it follows the active tab, opening the folders on the way, selecting the folder shown and scrolling to it (Scroll to the folder shown). A folder's subfolders are read only when its row is expanded, through a monitored GtkDirectoryList, so the tree updates itself. Click opens a folder, Ctrl+click or middle-click opens it in a tab (Shift: in front), Enter opens the focused one, Right and Left open and close a folder or move to its first subfolder or its parent, and the chevron opens and closes it. The context menu has Open in new tab, Open in new window, Cut, Copy, Paste (into the folder), Rename…, Move to Trash, Delete permanently, Open in Terminal, Properties and the three options with check marks (Show hidden folders off by default); the file commands act on the folder clicked with the usual confirmations and Undo (renaming the folder shown, or one it is in, moves the tab with it); Cut, Rename…, Move to Trash and Delete permanently are off for the tree's top, and every file command but Paste is off for share roots and virtual places. Explorer's Ctrl+Shift+E (expand to the current folder) is what the tree always does. Test: window/tests/folder_tree.rs."
+native_note = "View > Folder tree and F7 (Dolphin's key) show a tree of folders in the navigation pane below the places, split from them by a draggable divider; the choice and the tree's options are saved for every window (folderTree). It starts at the home folder while the folder shown is inside it (Limit to home folder, on by default), else at the top of the folder's file system or server; it follows the active tab, opening the folders on the way, selecting the folder shown and scrolling to it (Scroll to the folder shown). A folder's subfolders are read only when its row is expanded, through a monitored GtkDirectoryList, so the tree updates itself. Click opens a folder, Ctrl+click or middle-click opens it in a tab (Shift: in front), Enter opens the focused one, Right and Left open and close a folder or move to its first subfolder or its parent, and the chevron opens and closes it. The context menu has Open in new tab, Open in new window, Cut, Copy, Paste (into the folder), Rename…, Delete (to the Recycle Bin, as Windows Explorer names it), Delete permanently, Open in Terminal, Properties and the three options with check marks (Show hidden folders off by default); the file commands act on the folder clicked with the usual confirmations and Undo (renaming the folder shown, or one it is in, moves the tab with it); Cut, Rename…, Delete and Delete permanently are off for the tree's top, and every file command but Paste is off for share roots and virtual places. Explorer's Ctrl+Shift+E (expand to the current folder) is what the tree always does. Test: window/tests/folder_tree.rs."
 
 [[feature]]
 id = "SIDE-029"
@@ -6990,7 +6990,7 @@ bridge = ["trashSupport", "operate"]
 dolphin = "Move to Trash / Delete with confirmation; Dolphin: Delete moves to Trash without confirming by default; Shift+Delete deletes permanently.; Del → Trash, Shift+Del → delete; movetotrash: Delete; delete_shortcut (Delete mapped to delete when trash unavailable)"
 gnome = "g_file_trash / access::can-trash"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_silently_and_ctrl_z_restores, cancelling_the_delete_confirmation_keeps_the_items, delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only); the wording of all three confirmations is tested in native/crates/ox-core/src/ops/delete_plan.rs. Each item goes to the Trash wherever GIO says the item itself can, as in Windows Explorer, also directly in the home folder and at the top of a USB drive."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_moves_to_the_recycle_bin_without_asking_and_ctrl_z_restores, answering_no_to_the_delete_confirmation_keeps_the_items, delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only, delete_reads_delete_and_asks_only_for_items_without_a_trash); the wording is tested in native/crates/ox-core/src/ops/delete_plan.rs (each_mix_of_trash_and_permanent_delete_has_windows_question). Changed to match Windows 11: Delete moves items to the Recycle Bin without asking unless Settings > Confirmations turns the question on (SET-010), and the questions are Windows Explorer's, asked with Yes (focused, Enter) and No instead of a red button: 'Delete File', 'Delete Folder' or 'Delete Multiple Items', 'Are you sure you want to move this file to the Recycle Bin?' (this folder, these N items), and where items have no Trash 'Are you sure you want to permanently delete this file?' (this folder, these N items), with one item's picture, name, Type, Size and Date modified (a folder's Date created) under it. A selection where some items have a Trash and others not, which Windows never meets in one folder, keeps a question that counts both. Each item goes to the Trash wherever GIO says the item itself can, as in Windows Explorer, also directly in the home folder and at the top of a USB drive."
 
 [[feature]]
 id = "OPS-016"
@@ -7015,7 +7015,7 @@ bridge = ["operate"]
 dolphin = "deletefile: Shift+Delete; Shift+Delete (KStandardAction::deleteFile)"
 gnome = "Nautilus Shift+Delete"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (shift_delete_deletes_permanently_after_its_own_confirmation); native/crates/ox-core/src/ops/delete_plan.rs words the confirmation. As in Windows Explorer, Delete clicked with Shift held, in the command bar, the right-click menu or the folder tree's menu, deletes permanently after the same confirmation (shift_clicking_delete_in_the_bar_deletes_permanently_after_asking, shift_choosing_delete_in_the_right_click_menu_asks_to_delete_permanently, shift_with_the_folder_trees_move_to_trash_asks_to_delete_permanently; without Shift, clicking_delete_in_the_bar_without_shift_moves_to_the_trash)."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (shift_delete_deletes_permanently_after_its_own_confirmation); native/crates/ox-core/src/ops/delete_plan.rs (shift_delete_asks_windows_question_to_delete_permanently) words the confirmation as Windows Explorer does: 'Delete File' / 'Are you sure you want to permanently delete this file?', 'Delete Folder' / '...this folder?', 'Delete Multiple Items' / '...these N items?', with Yes and No. As in Windows Explorer, Delete clicked with Shift held, in the command bar, the right-click menu or the folder tree's menu, deletes permanently after the same confirmation (shift_clicking_delete_in_the_bar_deletes_permanently_after_asking, shift_choosing_delete_in_the_right_click_menu_asks_to_delete_permanently, shift_with_the_folder_trees_move_to_trash_asks_to_delete_permanently; without Shift, clicking_delete_in_the_bar_without_shift_moves_to_the_trash)."
 
 [[feature]]
 id = "OPS-017"
@@ -7056,7 +7056,7 @@ bridge = ["operate", "trashSupport"]
 dolphin = "KIO::trash (kio_trash implements the freedesktop Trash spec)"
 gnome = "g_file_trash + access::can-trash"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_silently_and_ctrl_z_restores) trashes through GIO into the freedesktop Trash; Delete is named plainly (CMD-003) and the engine never falls back to a delete (XFER-014)."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_moves_to_the_recycle_bin_without_asking_and_ctrl_z_restores) trashes through GIO into the freedesktop Trash; Delete is named plainly (CMD-003) and the engine never falls back to a delete (XFER-014)."
 
 [[feature]]
 id = "OPS-019"
@@ -7383,7 +7383,7 @@ bridge = ["operate"]
 dolphin = "Edit → Undo (Dolphin shows no toast)"
 gnome = "Nautilus 46 AdwToast with “Undo” button"
 native = "n-a"
-native_note = "Removed: Windows Explorer, which the native app follows, shows no message and no Undo button after a delete, copy, move or rename, so the completion toast and its Undo button (added earlier, after GNOME Files) are gone, with the rename toast 'Renamed to “<name>”.'. Undo stays on Ctrl+Z and the empty-space right-click menu's 'Undo <step>' (OPS-029), and Redo on Ctrl+Y and the same menu (OPS-031). native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_silently_and_ctrl_z_restores) checks that a Move to Trash ends without a message and that Ctrl+Z restores the item."
+native_note = "Removed: Windows Explorer, which the native app follows, shows no message and no Undo button after a delete, copy, move or rename, so the completion toast and its Undo button (added earlier, after GNOME Files) are gone, with the rename toast 'Renamed to “<name>”.'. Undo stays on Ctrl+Z and the empty-space right-click menu's 'Undo <step>' (OPS-029), and Redo on Ctrl+Y and the same menu (OPS-031). native/crates/ox-app/src/window/tests/file_operations.rs (delete_moves_to_the_recycle_bin_without_asking_and_ctrl_z_restores) checks that a Move to Trash ends without a message and that Ctrl+Z restores the item."
 
 [[feature]]
 id = "OPS-033"
@@ -7625,7 +7625,7 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "DropJob trashing branch"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dropped_on_the_recycle_bin_go_to_the_trash); native/crates/ox-app/src/window/file_drop.rs (DropDestination::RecycleBin). Files dropped on the Recycle Bin, shown in the folder view, in a tab or as a crumb, go to the Trash through Delete's plan and confirmation (Move to Trash, or the permanent-delete question where a folder has no Trash), whatever the drop's modifiers. No sidebar entry for the Recycle Bin exists yet (OPS-040)."
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dropped_on_the_recycle_bin_go_to_the_trash); native/crates/ox-app/src/window/file_drop.rs (DropDestination::RecycleBin). Files dropped on the Recycle Bin, shown in the folder view, in a tab or as a crumb, go to the Recycle Bin through Delete's plan, without asking unless the settings say to (or after the permanent-delete question where a folder has no Trash), whatever the drop's modifiers. No sidebar entry for the Recycle Bin exists yet (OPS-040)."
 
 [[feature]]
 id = "OPS-046"
@@ -14183,7 +14183,7 @@ bridge = ["preferences"]
 dolphin = "Settings › General › Confirmations; ConfirmTrash (kiorc, default false); Settings → Confirmations (kiorc ConfirmTrash/ConfirmDelete)"
 gnome = "App preference (Nautilus never confirms Trash and offers Undo instead)"
 native = "done"
-native_note = "Settings > Confirmations has its switches (native/crates/ox-app/src/settings_page/windows_tabs.rs), saved in the preferences (confirmTrash, confirmDelete, confirmEmptyTrash, confirmCloseTabs in native/crates/ox-core/src/settings/preferences.rs): 'Ask before moving items to the Recycle Bin' (on), 'Ask before deleting permanently' (on; Shift+Delete, Delete where a drive has no Trash, Delete in the Recycle Bin), 'Ask before emptying the Recycle Bin' (on) and 'Ask before closing a window with several tabs' (off; 'Close all tabs?' with Cancel / Close all tabs, one question per window however often it is closed, window/closing.rs; Quit asks once for every window with several tabs, 'Quit OpenXplorer?' with Cancel / Quit, then quits, application/requests.rs). The defaults keep OpenXplorer's behaviour: it always asked before deleting and never before closing. The choices are OpenXplorer's own, not KDE's desktop-wide kiorc, and there is no terminal panel to ask about (OPEN-022). Tests: native/crates/ox-core/src/settings/preferences.rs (the_confirmations_ask_by_default_and_are_stored_only_when_changed), native/crates/ox-app/src/window/tests/file_operations.rs (the_confirmation_settings_decide_what_asks), native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_nothing_when_the_settings_say_so), native/crates/ox-app/src/application/state.rs (quit_asks_once_about_the_tabs_of_every_window)."
+native_note = "Settings > Confirmations has its switches (native/crates/ox-app/src/settings_page/windows_tabs.rs), saved in the preferences (confirmTrash, confirmDelete, confirmEmptyTrash, confirmCloseTabs in native/crates/ox-core/src/settings/preferences.rs): 'Ask before moving items to the Recycle Bin' (off, as Windows 11's \"Display delete confirmation dialog\" is off by default; stored only when on), 'Ask before deleting permanently' (on; Shift+Delete, Delete where a drive has no Trash, Delete in the Recycle Bin), 'Ask before emptying the Recycle Bin' (on) and 'Ask before closing a window with several tabs' (off; 'Close all tabs?' with Cancel / Close all tabs, one question per window however often it is closed, window/closing.rs; Quit asks once for every window with several tabs, 'Quit OpenXplorer?' with Cancel / Quit, then quits, application/requests.rs). The defaults follow Windows 11: Delete moves to the Recycle Bin without asking, a permanent delete asks, and closing never asks. The choices are OpenXplorer's own, not KDE's desktop-wide kiorc, and there is no terminal panel to ask about (OPEN-022). Tests: native/crates/ox-core/src/settings/preferences.rs (the_confirmations_ask_as_windows_does_by_default_and_are_stored_only_when_changed), native/crates/ox-app/src/window/tests/file_operations.rs (the_confirmation_settings_decide_what_asks), native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_nothing_when_the_settings_say_so), native/crates/ox-app/src/application/state.rs (quit_asks_once_about_the_tabs_of_every_window)."
 
 [[feature]]
 id = "SET-011"

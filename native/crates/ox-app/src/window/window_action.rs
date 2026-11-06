@@ -231,8 +231,8 @@ pub(crate) enum WindowAction {
     /// Rename items…: renames several selected items with the "Rename
     /// items" dialog's `#` template (OPS-014).
     RenameItems,
-    /// Delete: Move to Trash, or Delete permanently where the folder has
-    /// no Trash, after asking.
+    /// Delete: moves the selection to the Recycle Bin, or deletes it
+    /// permanently after asking where the folder has no Trash.
     Trash,
     /// Shift+Delete: deletes the selection permanently, after asking.
     DeletePermanently,
@@ -246,7 +246,8 @@ pub(crate) enum WindowAction {
     PasteIntoFolder,
     /// Asks for a new name for the folder in the string target.
     RenameFolder,
-    /// Moves the folder in the string target to the Trash, after asking.
+    /// Moves the folder in the string target to the Recycle Bin, as
+    /// Delete does.
     TrashFolder,
     /// Deletes the folder in the string target permanently, after asking.
     DeleteFolder,

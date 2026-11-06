@@ -146,10 +146,10 @@ fn the_file_keys_keep_working_beside_a_properties_window() {
         std::slice::from_ref(&window),
         "Alt+Enter brings the same Properties back"
     );
-    press_shortcut(&test, gdk::Key::Delete, gdk::ModifierType::empty());
+    press_shortcut(&test, gdk::Key::Delete, gdk::ModifierType::SHIFT_MASK);
     let question = open_dialog(&test);
-    assert_eq!(question.title_text(), "Move to Trash?");
-    question.press("Cancel");
+    assert_eq!(question.title_text(), "Delete File");
+    question.press("No");
     wait_for_no_dialog(&test);
     assert!(fixture.path("Résumé.txt").is_file());
     assert!(!window.is_closed(), "Properties stays open");
@@ -209,7 +209,7 @@ fn the_file_keys_wait_for_a_dialog_window_in_front() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
-    press_shortcut(&test, gdk::Key::Delete, gdk::ModifierType::empty());
+    press_shortcut(&test, gdk::Key::Delete, gdk::ModifierType::SHIFT_MASK);
     let question = open_dialog(&test);
 
     assert!(!test.window.file_keys_apply());
@@ -227,7 +227,7 @@ fn the_file_keys_wait_for_a_dialog_window_in_front() {
         .count();
     assert_eq!(questions, 1, "one question");
 
-    question.press("Cancel");
+    question.press("No");
     wait_for_no_dialog(&test);
     test.window.folder_pane().focus_view();
     assert!(

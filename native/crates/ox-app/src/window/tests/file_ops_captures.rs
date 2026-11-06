@@ -51,10 +51,10 @@ fn the_delete_dialog_is_captured_light_and_dark() {
     for theme in THEMES {
         test.activate("theme", Some(theme));
         select_names(&test, &["Notes 2.txt"]);
-        test.activate("trash", None);
+        test.activate("delete-permanently", None);
         let delete = open_dialog(&test);
         capture_dialog(&test, &delete, &format!("native-dialog-delete-{theme}.png"));
-        delete.press("Cancel");
+        delete.press("No");
         wait_for_no_dialog(&test);
     }
 }

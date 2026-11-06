@@ -314,11 +314,13 @@ pub struct Preferences {
     /// (Dolphin's `ShowFullPathInTitlebar`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub full_path_in_title: bool,
-    /// Ask before moving items to the Trash. On by default, as the Python
-    /// app always asked; this and the next two are stored only when off.
-    #[serde(skip_serializing_if = "is_true")]
+    /// Ask before moving items to the Recycle Bin (Windows' "Display
+    /// delete confirmation dialog"). Off by default, as in Windows 11, so
+    /// stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub confirm_trash: bool,
-    /// Ask before deleting items permanently.
+    /// Ask before deleting items permanently; this and the next one are
+    /// stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub confirm_delete: bool,
     /// Ask before emptying the Recycle Bin.
@@ -522,7 +524,7 @@ impl Default for Preferences {
             details_pane_options: DetailsPaneOptions::default(),
             view_options: ViewOptions::default(),
             full_path_in_title: false,
-            confirm_trash: true,
+            confirm_trash: false,
             confirm_delete: true,
             confirm_empty_trash: true,
             confirm_close_tabs: false,
@@ -1298,18 +1300,23 @@ mod tests {
 
     /// parity: SET-010
     #[test]
-    fn the_confirmations_ask_by_default_and_are_stored_only_when_changed() {
+    fn the_confirmations_ask_as_windows_does_by_default_and_are_stored_only_when_changed() {
         let mut preferences = Preferences::default();
-        assert!(preferences.confirm_trash && preferences.confirm_delete && preferences.confirm_empty_trash);
+        assert!(!preferences.confirm_trash, "Windows 11 recycles without asking");
+        assert!(preferences.confirm_delete && preferences.confirm_empty_trash);
         assert!(!preferences.confirm_close_tabs);
-        let values = json!({"confirmTrash": false, "confirmCloseTabs": true, "confirmDelete": 0});
+        assert!(serde_json::to_value(&preferences)
+            .unwrap()
+            .get("confirmTrash")
+            .is_none());
+        let values = json!({"confirmTrash": true, "confirmCloseTabs": true, "confirmDelete": 0});
 
         preferences.apply(&PreferencesUpdate::from_json(&values).unwrap());
 
-        assert!(!preferences.confirm_trash && preferences.confirm_close_tabs);
+        assert!(preferences.confirm_trash && preferences.confirm_close_tabs);
         assert!(preferences.confirm_delete, "only a JSON boolean counts");
         let stored = serde_json::to_value(&preferences).unwrap();
-        assert_eq!(stored["confirmTrash"], json!(false));
+        assert_eq!(stored["confirmTrash"], json!(true));
         assert_eq!(stored["confirmCloseTabs"], json!(true));
         assert!(stored.get("confirmDelete").is_none() && stored.get("fullPathInTitle").is_none());
     }

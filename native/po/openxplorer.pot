@@ -258,10 +258,6 @@ msgid "Details view"
 msgstr ""
 
 #: crates/ox-app/resources/ui/status-bar.ui
-msgid "Icon size"
-msgstr ""
-
-#: crates/ox-app/resources/ui/status-bar.ui
 msgid "Not updated live"
 msgstr ""
 
@@ -723,22 +719,22 @@ msgid "Select"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
 msgid "Date created: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
 msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
 msgid "Size: {size}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs
 msgid "Type: {type}"
 msgstr ""
 
@@ -3700,7 +3696,7 @@ msgid "Index {label}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs crates/ox-app/src/window/status_bar.rs
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
 msgid "{count} selected"
 msgstr ""
 
@@ -4371,7 +4367,7 @@ msgstr ""
 msgid "Cut (Ctrl+X)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Delete"
 msgstr ""
 
@@ -4690,7 +4686,7 @@ msgstr ""
 msgid "Copy as path"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/delete_plan.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Delete permanently"
 msgstr ""
 
@@ -5196,6 +5192,14 @@ msgstr ""
 msgid "The desktop clipboard could not be claimed."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/folder_options.rs
+msgid "No"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/folder_options.rs
+msgid "Yes"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/extension_confirm.rs
 msgid "Change extension"
 msgstr ""
@@ -5474,10 +5478,6 @@ msgid "More settings…"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "No"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
 msgid "Open File Explorer to:"
 msgstr ""
 
@@ -5510,10 +5510,6 @@ msgid "Use check boxes to select items"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Yes"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
 msgid "You can apply this view (such as Details or Icons) to all folders."
 msgstr ""
 
@@ -5541,10 +5537,6 @@ msgstr ""
 msgid "Limit to home folder"
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs crates/ox-core/src/ops/delete_plan.rs
-msgid "Move to Trash"
-msgstr ""
-
 #: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Rename…"
 msgstr ""
@@ -5555,16 +5547,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Show hidden folders"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/free_space.rs
-msgid "{free} free out of {size} ({used}% used)"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/free_space.rs
-msgid "{value1} free"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md crates/ox-app/src/window/help.rs
@@ -6307,6 +6289,13 @@ msgstr ""
 #: crates/ox-app/src/window/status_bar.rs
 msgid "{count} item"
 msgid_plural "{count} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/status_bar.rs
+msgid "{count} item selected"
+msgid_plural "{count} items selected"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -8059,45 +8048,47 @@ msgstr ""
 msgid "Type a name for the new folder."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/delete_plan.rs
-msgid "Delete items"
-msgstr ""
-
-#: crates/ox-core/src/ops/delete_plan.rs
-msgid "Delete items?"
-msgstr ""
-
-#: crates/ox-core/src/ops/delete_plan.rs
-msgid "Delete permanently?"
-msgstr ""
-
-#: crates/ox-core/src/ops/delete_plan.rs
-msgid "Move to Trash?"
+msgid "Are you sure you want to delete these {count} items?\n\n{trash_count} item(s) go to the Recycle Bin and can be restored from there.\n{delete_count} item(s) are on a location without a Recycle Bin and are deleted permanently, without any way to recover them."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/delete_plan.rs
-msgid "{count} selected items"
+msgid "Are you sure you want to move these {count} items to the Recycle Bin?"
+msgstr ""
+
+#: crates/ox-core/src/ops/delete_plan.rs
+msgid "Are you sure you want to move this file to the Recycle Bin?"
+msgstr ""
+
+#: crates/ox-core/src/ops/delete_plan.rs
+msgid "Are you sure you want to move this folder to the Recycle Bin?"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/delete_plan.rs
-msgid "{what}\n\nItems go to the Trash and can be restored from there."
+msgid "Are you sure you want to permanently delete these {count} items?"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/delete_plan.rs
-msgid "{what}\n\nThe items are deleted permanently, without the Trash, and cannot be recovered."
+msgid "Are you sure you want to permanently delete this file?"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/delete_plan.rs
-msgid "{what}\n\nThis location has no Trash. The items are deleted permanently and cannot be recovered."
+msgid "Are you sure you want to permanently delete this folder?"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/delete_plan.rs
-msgid "{what}\n\n{trash_count} item(s) go to the Trash and can be restored from there.\n{delete_count} item(s) are on a location without Trash and are deleted permanently, without any way to recover them."
+msgid "Delete File"
+msgstr ""
+
+#: crates/ox-core/src/ops/delete_plan.rs
+msgid "Delete Folder"
+msgstr ""
+
+#: crates/ox-core/src/ops/delete_plan.rs
+msgid "Delete Multiple Items"
 msgstr ""
 
 #: crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/transfer/engine.rs
@@ -8169,7 +8160,7 @@ msgid "Moving items…"
 msgstr ""
 
 #: crates/ox-core/src/ops/progress.rs
-msgid "Moving to Trash…"
+msgid "Recycling…"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8233,6 +8224,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/report.rs
+msgid "{count} item(s) moved to the Recycle Bin."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/report.rs
 msgid "{count} item(s) moved."
 msgstr ""
 
@@ -8249,11 +8245,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/report.rs
 msgid "{count} item(s) restored."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) sent to Trash."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8843,7 +8834,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/transfer/labels.rs
-msgid "Trash: {name} ({position}/{total})"
+msgid "Recycle: {name} ({position}/{total})"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
