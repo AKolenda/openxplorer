@@ -21,6 +21,7 @@ use ox_core::integration::{
     OBJECT_PATH,
 };
 
+use super::open_with_dialog::Section;
 use super::{
     BraveDialog, DefaultChoice, DesktopIntegration, IntegrationFolders, LaunchTarget, MimeBackend,
     OpenWithDialog, OpenWithError, OpenWithSubject, PreparedLaunch,
@@ -233,10 +234,20 @@ fn recording_launcher(launches: &Launches) -> super::Launcher {
     })
 }
 
+/// What a launcher was asked to start, and whether to make it the default.
+type LaunchChoices = Rc<RefCell<Vec<(String, DefaultChoice)>>>;
+
+fn choice_recording_launcher(launches: &LaunchChoices) -> super::Launcher {
+    let launches = Rc::clone(launches);
+    Box::new(move |app_id, _prepared, default| {
+        launches.borrow_mut().push((app_id.to_owned(), default));
+        Ok("Opened with the selected application.")
+    })
+}
+
 /// Open with lists the installed applications for a file, chooses the
 /// default or the first available one, filters by name, and launches the
-/// chosen one after checking it again. "Always use this app" is offered
-/// for files.
+/// chosen one after checking it again. "Always" is offered for files.
 ///
 /// parity: OPEN-011, OPEN-012
 #[gtk::test]
@@ -260,15 +271,13 @@ fn open_with_lists_filters_and_launches_the_chosen_application() {
         },
     );
 
-    wait_until("the list", || {
-        dialog.status() == "Choose an installed application."
-    });
-    let (offers_default, _) = dialog.controls_state();
-    assert!(offers_default, "Always use this app is offered for a file");
+    wait_until("the list", || dialog.is_listed());
+    let (offers_default, _, _) = dialog.controls_state();
+    assert!(offers_default, "Always is offered for a file");
     capture_dialog(&dialog, "native-open-with.png");
     let names = dialog.shown_names();
     if let Some(chosen) = dialog.chosen() {
-        dialog.click_open();
+        dialog.click_just_once();
         wait_until("the launch", || !launches.borrow().is_empty());
         assert_eq!(*launches.borrow(), [chosen]);
         assert_eq!(*reports.borrow(), ["Opened with the selected application."]);
@@ -280,6 +289,130 @@ fn open_with_lists_filters_and_launches_the_chosen_application() {
         dialog.type_filter("no such application");
         assert!(dialog.shown_names().is_empty());
         dialog.close();
+    }
+}
+
+/// Open with is laid out as Windows 11's app chooser: the heading names
+/// the file's extension, the current default comes first, then the
+/// suggested apps registered for the type, and every other application
+/// only under More apps. A double-click opens just once; Always makes the
+/// choice the default.
+///
+/// parity: OPEN-011, OPEN-012
+#[gtk::test]
+fn open_with_sorts_apps_like_windows_and_opens_just_once_or_always() {
+    const ENTRIES: [(&str, &str, &str); 3] = [
+        (
+            "io.winspace.ChooserViewer.desktop",
+            "Chooser Viewer",
+            "MimeType=text/plain;\n",
+        ),
+        (
+            "io.winspace.ChooserEditor.desktop",
+            "Chooser Editor",
+            "MimeType=text/plain;\n",
+        ),
+        ("io.winspace.ChooserTool.desktop", "Chooser Tool", ""),
+    ];
+    let applications = glib::user_data_dir().join("applications");
+    assert!(
+        applications.starts_with(std::env::temp_dir())
+            && glib::user_config_dir().starts_with(std::env::temp_dir()),
+        "tests run with private XDG folders"
+    );
+    std::fs::create_dir_all(&applications).expect("the private data folder");
+    for (id, name, types) in ENTRIES {
+        let entry = format!("[Desktop Entry]\nType=Application\nName={name}\nExec=true %F\n{types}");
+        std::fs::write(applications.join(id), entry).expect("the fixture entry");
+    }
+    wait_until("GIO to read the entries", || {
+        ENTRIES
+            .iter()
+            .all(|(id, _, _)| super::installed_application(id).is_some())
+    });
+    // GIO lists a fresh entry for a type only once the user associates
+    // them, as in the_menu_offers_other_applications_up_to_its_limit.
+    for (id, _, _) in &ENTRIES[..2] {
+        super::installed_application(id)
+            .expect("installed")
+            .add_supports_type("text/plain")
+            .expect("the private config folder is writable");
+    }
+    super::installed_application(ENTRIES[0].0)
+        .expect("installed")
+        .set_as_default_for_type("text/plain")
+        .expect("the private config folder is writable");
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let subject = || OpenWithSubject {
+        uri: fixture.uri_of("Notes 2.txt"),
+        name: "Notes 2.txt".to_owned(),
+        is_folder: false,
+    };
+    let launches: LaunchChoices = Rc::default();
+
+    let dialog = OpenWithDialog::present_for(
+        &test.window,
+        subject(),
+        choice_recording_launcher(&launches),
+        |_| {},
+    );
+    wait_until("the list", || dialog.is_listed());
+    assert_eq!(dialog.heading_text(), "Select an app to open this .txt file");
+    assert_eq!(dialog.section_names(Section::Default), ["Chooser Viewer"]);
+    let suggested = dialog.section_names(Section::Suggested);
+    assert!(
+        suggested.iter().any(|name| name == "Chooser Editor"),
+        "{suggested:?}"
+    );
+    assert!(!dialog.shown_names().iter().any(|name| name == "Chooser Tool"));
+    assert_eq!(
+        dialog.chosen().as_deref(),
+        Some(ENTRIES[0].0),
+        "the default is chosen"
+    );
+    assert_eq!(dialog.controls_state(), (true, true, true));
+    assert_eq!(
+        dialog.focused_name().as_deref(),
+        Some("Chooser Viewer"),
+        "the keyboard starts on the chosen app"
+    );
+    dialog.expand_more_apps(true);
+    wait_until("More apps", || {
+        dialog.is_listed()
+            && dialog
+                .section_names(Section::More)
+                .iter()
+                .any(|name| name == "Chooser Tool")
+    });
+    assert_eq!(dialog.chosen().as_deref(), Some(ENTRIES[0].0), "the choice stays");
+    settle();
+    capture_dialog(&dialog, "native-open-with-more-apps.png");
+    dialog.activate_named("Chooser Editor");
+    wait_until("the launch", || !launches.borrow().is_empty());
+    assert_eq!(
+        *launches.borrow(),
+        [(ENTRIES[1].0.to_owned(), DefaultChoice::Keep)]
+    );
+
+    let dialog = OpenWithDialog::present_for(
+        &test.window,
+        subject(),
+        choice_recording_launcher(&launches),
+        |_| {},
+    );
+    wait_until("the list", || dialog.is_listed());
+    dialog.select_named("Chooser Editor");
+    dialog.click_always();
+    wait_until("the launch", || launches.borrow().len() == 2);
+    assert_eq!(
+        launches.borrow()[1],
+        (ENTRIES[1].0.to_owned(), DefaultChoice::MakeDefault)
+    );
+
+    gio::AppInfo::reset_type_associations("text/plain");
+    for (id, _, _) in ENTRIES {
+        std::fs::remove_file(applications.join(id)).expect("the fixture entry");
     }
 }
 
@@ -407,7 +540,9 @@ fn open_with_runs_a_typed_command_with_the_item() {
     let copy = fixture.path("copy of the résumé.txt");
 
     dialog.type_command(&format!("cp %f '{}'", copy.display()));
-    dialog.click_open();
+    let (_, just_once, always) = dialog.controls_state();
+    assert!(just_once && !always, "a command runs just once");
+    dialog.click_just_once();
 
     wait_until("the command to copy the file", || copy.is_file());
     assert_eq!(*reports.borrow(), ["Ran the command."]);
@@ -451,10 +586,10 @@ fn open_folder_with_never_offers_to_change_the_default() {
     };
     let dialog = OpenWithDialog::present_for(&test.window, subject, recording_launcher(&launches), |_| {});
 
-    wait_until("the list", || {
-        dialog.status() == "Choose an installed application."
-    });
-    let (offers_default, _) = dialog.controls_state();
+    wait_until("the list", || dialog.is_listed());
+    assert_eq!(dialog.heading_text(), "Select an app to open this folder");
+    assert_eq!(dialog.status(), "", "the status line is hidden once listed");
+    let (offers_default, _, _) = dialog.controls_state();
     assert!(!offers_default, "a folder's default is changed only in Settings");
     dialog.type_filter("no such application");
     assert!(dialog.shown_names().is_empty());
