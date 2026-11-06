@@ -30,7 +30,7 @@ View → Folder tree (F7) shows a tree of folders below the navigation places. E
 
 ## Templates, shortcuts and help
 
-Your Templates folder supplies entries directly in New, with its subfolders as submenus. Choose a template and a new name; creating from a template never overwrites an existing file.
+New lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder. Each new item is made at once, as “New Text Document.txt” for example, or “New Text Document (2).txt” when that name is taken, and renamed in place. Your Templates folder adds its files after them, with its subfolders as submenus; a template is copied under its own name the same way. Creating never overwrites an existing file.
 
 Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys; Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E and F3 move to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
 
