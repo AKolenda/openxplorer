@@ -141,7 +141,25 @@ fn a_long_name_or_location_never_widens_properties() {
     test.show(&fixture.uri());
     test.wait_for_listing("the fixture");
     super::file_ops_support::select_names(&test, &[LONG_NAME, &file_name]);
-    let several = properties_of_selection(&test, "2 items Properties");
+    // Windows titles them by their two names, in the selection's order.
+    let is_both = |title: &str| {
+        title.contains(&format!("{LONG_NAME}, "))
+            && title.contains(&file_name)
+            && title.ends_with(" Properties")
+    };
+    test.activate("properties", None);
+    crate::test_support::harness::wait_until("Properties of the two items", || {
+        test.window
+            .properties_windows()
+            .iter()
+            .any(|window| is_both(&window.title_text()))
+    });
+    let several = test
+        .window
+        .properties_windows()
+        .into_iter()
+        .find(|window| is_both(&window.title_text()))
+        .expect("Properties of the two items");
     wait_for_frames(&several, 6);
     assert_eq!(several.width(), width, "several items with long names");
     assert_every_tab_keeps(&several, width, "several items");
