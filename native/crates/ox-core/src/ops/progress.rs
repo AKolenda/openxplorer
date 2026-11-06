@@ -20,7 +20,7 @@ pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(80);
 /// progress report arrives.
 pub fn starting_label(mode: TransferMode) -> &'static str {
     match mode {
-        TransferMode::Trash => crate::i18n::gettext_static("Moving to Trash…"),
+        TransferMode::Trash => crate::i18n::gettext_static("Recycling…"),
         TransferMode::Delete => crate::i18n::gettext_static("Deleting items…"),
         TransferMode::Move => crate::i18n::gettext_static("Moving items…"),
         TransferMode::Copy => crate::i18n::gettext_static("Preparing copy…"),
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn the_panel_names_the_operation_before_the_first_report() {
-        assert_eq!(starting_label(TransferMode::Trash), "Moving to Trash…");
+        assert_eq!(starting_label(TransferMode::Trash), "Recycling…");
         assert_eq!(starting_label(TransferMode::Delete), "Deleting items…");
         assert_eq!(starting_label(TransferMode::Move), "Moving items…");
         assert_eq!(starting_label(TransferMode::Copy), "Preparing copy…");

@@ -358,7 +358,6 @@ impl BrowserWindow {
         self.render_navigation();
         self.update_content();
         self.update_details_pane();
-        self.refresh_free_space();
         self.show_pane_view_state();
         self.show_beside_pane();
         let pane = self.folder_pane();
