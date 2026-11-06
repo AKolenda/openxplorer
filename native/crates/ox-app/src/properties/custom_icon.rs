@@ -90,7 +90,7 @@ impl Pending for IconChoice {
                 .map_err(|error| error.to_string())?;
             self.current.replace(icon);
             if let Some(opener) = self.window.upgrade().and_then(|window| window.opener()) {
-                opener.refresh_item_icon(&uri);
+                opener.announce_item_icon(&uri);
             }
             Ok(())
         })

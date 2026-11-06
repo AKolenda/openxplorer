@@ -27,7 +27,7 @@ use gtk::{glib, pango};
 pub(crate) use cell_owners::CellOwners;
 pub(crate) use custom_icon::{icon_texture, CUSTOM_ICON};
 pub(crate) use expander::connect_expanders;
-pub(crate) use folder_picture::{FolderPicture, FOLDER_PICTURE};
+pub(crate) use folder_picture::{folder_picture_of, FolderPicture, FOLDER_PICTURE};
 pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip, TooltipCell};
 
 use crate::folder_view::item::FileItem;

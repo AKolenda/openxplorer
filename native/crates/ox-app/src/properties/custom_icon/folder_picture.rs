@@ -8,11 +8,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use gtk::glib;
 use gtk::prelude::*;
-use gtk::{gio, glib};
 
 use super::super::window::{group, paragraph, push_button, ApplyFuture, Pending, PropertiesWindow};
 use super::{choose_picture, set_metadata};
+use crate::folder_view::cells::folder_picture_of;
 use crate::folder_view::{icon_texture, FolderPicture, FOLDER_PICTURE};
 use crate::icons::{Art, ArtImage};
 
@@ -88,7 +89,7 @@ impl Pending for PictureChoice {
                 .map_err(|error| error.to_string())?;
             self.current.replace(picture);
             if let Some(opener) = self.window.upgrade().and_then(|window| window.opener()) {
-                opener.refresh_item_icon(&uri);
+                opener.announce_item_icon(&uri);
             }
             Ok(())
         })
@@ -154,20 +155,10 @@ pub(super) fn folder_picture_group(window: &PropertiesWindow, uri: &Rc<RefCell<S
 
 /// Reads the folder's picture off the main thread.
 fn read_folder_picture(choice: &Rc<PictureChoice>) {
-    let file = gio::File::for_uri(&choice.uri.borrow());
+    let uri = choice.uri.borrow().clone();
     let choice = Rc::downgrade(choice);
     glib::spawn_future_local(async move {
-        let picture = file
-            .query_info_future(
-                FOLDER_PICTURE,
-                gio::FileQueryInfoFlags::NONE,
-                glib::Priority::DEFAULT,
-            )
-            .await
-            .ok()
-            .and_then(|info| info.attribute_string(FOLDER_PICTURE))
-            .filter(|picture| !picture.is_empty())
-            .map(|picture| picture.to_string());
+        let picture = folder_picture_of(&uri).await;
         if let Some(choice) = choice.upgrade() {
             choice.found(picture);
         }

@@ -4,21 +4,46 @@
 //! icon views. It is kept as `GVfs` metadata ([`FOLDER_PICTURE`]) in the
 //! user's metadata store, never as a `desktop.ini` or `folder.jpg` in the
 //! folder itself. The picture sits on the folder's front, filling a card
-//! with a light edge, at Medium icons and larger; Details, List and Small
-//! icons show the plain folder, and a custom icon (PROP-016) replaces the
-//! whole folder, picture and all, as Windows' Change Icon... does.
+//! with a light edge, at Medium icons and larger; in Details, List and
+//! Small icons the picture itself takes the small icon's place, as
+//! Windows 11 draws it there. A custom icon (PROP-016) replaces the whole
+//! folder, picture and all, as Windows' Change Icon... does.
+//!
+//! [`folder_picture_of`] is the hook for the details pane, whose preview
+//! shows a folder's picture large, as Windows' Details pane does.
 
 use std::cell::RefCell;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib, graphene};
+use gtk::{gdk, gio, glib, graphene};
 
 /// The metadata key the folder's picture is kept under: the app's own,
 /// as Files has no such key.
 pub(crate) const FOLDER_PICTURE: &str = "metadata::openxplorer-folder-picture";
 
-/// The smallest icon that shows a folder's picture: Medium icons.
+/// The picture chosen for the local folder at `uri` on its Customize
+/// tab, as a location, or `None` when it has none or is not local. Read
+/// off the main thread at low priority; the caller decodes the picture.
+///
+/// The details pane calls this for a selected folder, so its preview
+/// shows the picture large and centered in place of the folder art, as
+/// Windows' Details pane does (PROP-037).
+pub(crate) async fn folder_picture_of(uri: &str) -> Option<String> {
+    if !uri.starts_with("file:") {
+        return None;
+    }
+    let info = gio::File::for_uri(uri)
+        .query_info_future(FOLDER_PICTURE, gio::FileQueryInfoFlags::NONE, glib::Priority::LOW)
+        .await
+        .ok()?;
+    info.attribute_string(FOLDER_PICTURE)
+        .filter(|picture| !picture.is_empty())
+        .map(|picture| picture.to_string())
+}
+
+/// The smallest icon that shows a folder's picture on the folder: Medium
+/// icons.
 pub(crate) const SMALLEST_PICTURE_ICON: i32 = 40;
 
 /// The card on a folder icon of 32 units, centered across it: its top,

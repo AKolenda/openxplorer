@@ -396,6 +396,24 @@ impl BrowserWindow {
             .customize_folder(uri.to_owned(), template, subfolders, reply);
     }
 
+    /// Shows the new icon or folder picture of the item at `uri` in every
+    /// browser window of the application at once, as OK or Apply on the
+    /// Customize tab does in Windows (PROP-016, PROP-037).
+    pub(crate) fn announce_item_icon(&self, uri: &str) {
+        let windows = self.application().map(|app| app.windows()).unwrap_or_default();
+        let mut reached_self = false;
+        for window in windows
+            .iter()
+            .filter_map(|window| window.downcast_ref::<BrowserWindow>())
+        {
+            reached_self |= window == self;
+            window.refresh_item_icon(uri);
+        }
+        if !reached_self {
+            self.refresh_item_icon(uri);
+        }
+    }
+
     /// Shows the new icon of the item at `uri` in the folder view
     /// (PROP-016).
     pub(crate) fn refresh_item_icon(&self, uri: &str) {
