@@ -36,13 +36,14 @@ pub(super) fn build_entry(
     let kind = file_kind(info);
     let content_type = string_attribute(info, "standard::content-type");
     let classification = classify_info(uri, info, kind, content_type.as_deref());
-    let type_label = type_label(classification.folder_type, content_type.as_deref());
+    let name = display_name(uri, info, fallback_name);
+    let type_label = type_label(classification.folder_type, content_type.as_deref(), &name);
     let is_dir = classification.is_dir();
     // A folder's own size is not the size of its contents, so none is shown.
     let size = if is_dir { None } else { reported_size(info) };
     Entry {
         uri: uri.to_owned(),
-        name: display_name(uri, info, fallback_name),
+        name,
         kind,
         is_dir,
         is_virtual: classification.is_virtual,
@@ -241,7 +242,7 @@ mod tests {
         let file = entry_for_uri("smb://nas/work/README", &info);
         assert!(!file.is_dir);
         assert_eq!(file.size, Some(0));
-        assert_eq!(file.type_label, "Text document");
+        assert_eq!(file.type_label, "Text Document");
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`
