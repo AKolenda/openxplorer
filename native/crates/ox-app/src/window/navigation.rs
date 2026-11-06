@@ -6,7 +6,8 @@
 //! scroll position; moving to another location forgets the selection and
 //! the scroll position, and showing another tab puts its own back. As in
 //! Dolphin, Back and Forward return to where the view was, and going up
-//! selects the folder just left.
+//! selects the folder just left. Search results are a step of the
+//! history too ([`super::search_steps`]).
 //! [`super::location_view`] draws the result into the frame.
 
 use gtk::prelude::*;
@@ -264,7 +265,7 @@ impl BrowserWindow {
 
     /// Where the view is in the active tab's folder: what Back or Forward
     /// returns to; `None` on a landing page, which does not scroll.
-    fn left_view(&self) -> Option<LeftView> {
+    pub(super) fn left_view(&self) -> Option<LeftView> {
         let uri = self.current_uri()?;
         if Page::from_uri(&uri).is_some() {
             return None;
@@ -350,7 +351,7 @@ impl BrowserWindow {
         }
         self.change_model(|| {
             let model = self.folder_pane().model();
-            self.search_box().clear();
+            self.clear_search_box_quietly();
             model.set_query("");
             model.set_store(Some(&view.store));
             model.select_uris(&view.selected);
@@ -368,6 +369,8 @@ impl BrowserWindow {
                 pane.focus_item_later(uri);
             }
         }
+        // A tab on search results shows them again (SRCH-042).
+        self.show_step_search();
         if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);
         } else if view.changed_while_hidden {
@@ -497,6 +500,8 @@ impl BrowserWindow {
         self.leave_location();
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
+        // Search results the step showed run again there (SRCH-042).
+        self.show_step_search();
         self.focus_files_after_navigation();
     }
 

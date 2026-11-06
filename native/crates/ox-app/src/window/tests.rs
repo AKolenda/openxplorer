@@ -61,6 +61,7 @@ mod recycle_bin;
 mod renaming;
 mod renaming_several;
 mod search;
+mod search_history;
 mod search_options;
 mod selection;
 mod send_to;
