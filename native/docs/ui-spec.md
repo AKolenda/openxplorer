@@ -478,7 +478,7 @@ where it differs; ✓ means the target equals the current app.
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
-| Row | **48** (62) including a 1 px bottom border `@ox_border`; padding `7 16 6 13`; group gap 14; background `@ox_chrome`. Children are **vertically centred**, not stretched (D-N08). | Explorer's address row is about 48 (observed, unverified) | Applied (owner decision 2026-11-06). |
+| Row | **48** (62) including a 1 px bottom border `@ox_border`; padding `6 16 4 13` around a 37 px content box (room for GTK 4.14, which measures it 35), the 34 px fields 7 px down; group gap 14; background `@ox_chrome`. Children are **vertically centred**, not stretched (D-N08). | Explorer's address row is about 48 (observed, unverified) | Applied (owner decision 2026-11-06). |
 | Back, Forward, Up, Refresh | 34 × 34, radius 4, 5 apart, glyph 16; disabled `@ox_text_disabled` | AppBarButton hover and pressed (ABB#L77–79) | safe |
 | Address box | 34 high including borders; radius **4** (5); `border: 1px solid @ox_border; border-bottom-color: @ox_field_bottom`; background `@ox_field_bg`; padding `0 8 0 11`; gap 10; location icon **16** (17) | TextBox: min height 32 (GX#L96), padding `10,5,6,6` (CC#L26), strong bottom stroke (TB#L155–162) | safe |
 | Address focus or edit | bottom edge 2 px `@ox_accent`, drawn as `border-bottom-color: @ox_accent; box-shadow: inset 0 -1px @ox_accent` (no height change) | Focused border `1,1,1,2` with an accent bottom (CC#L25; TB#L164–171) | Keep. |
