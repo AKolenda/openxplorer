@@ -27,8 +27,10 @@
     </style>
     <!--
       header.titlebar: caption buttons, the tabs, "+" right after the last
-      tab, the drag area taking the rest, the open-windows button and the
-      caption buttons. The whole bar is a GtkWindowHandle, so dragging or
+      tab, the drag area taking the rest and the caption buttons. Windows
+      11 has no open-windows button there, so neither has this bar: the
+      tab menu, Settings and the launcher open that list from the tab in
+      front (src/window/tab_menu.rs). The whole bar is a GtkWindowHandle, so dragging or
       double-clicking any empty part moves or maximises the window as the
       desktop expects; the tabs' drag source on the handle claims a dragged
       tab first, so a tab drag never moves the window.
@@ -63,24 +65,11 @@
             <child>
               <!-- .title-drag: the empty part of the bar, which keeps its
                    CSS minimum width so the window can always be grabbed. -->
-              <object class="GtkBox">
+              <object class="GtkBox" id="title_drag">
                 <property name="hexpand">true</property>
                 <style>
                   <class name="title-drag"/>
                 </style>
-              </object>
-            </child>
-            <child>
-              <!-- #windows-button: the open windows, New window and Quit. -->
-              <object class="GtkMenuButton" id="open_windows_button">
-                <property name="tooltip-text" translatable="yes">Open windows</property>
-                <property name="valign">center</property>
-                <style>
-                  <class name="windows-button"/>
-                </style>
-                <accessibility>
-                  <property name="label" translatable="yes">Open windows</property>
-                </accessibility>
               </object>
             </child>
             <child>

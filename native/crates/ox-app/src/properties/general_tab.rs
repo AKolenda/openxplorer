@@ -161,7 +161,7 @@ pub(super) fn general_tab(
     }
 }
 
-/// `PNG image (.png)`: the type and, when the name has one, its extension.
+/// `PNG File (.png)`: the type and, when the name has one, its extension.
 fn type_of_file(entry: &Entry) -> String {
     let extension = std::path::Path::new(&entry.name)
         .extension()

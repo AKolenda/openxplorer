@@ -139,6 +139,14 @@ msgstr "文件命令"
 msgid "Close details pane"
 msgstr "关闭详细信息窗格"
 
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Availability"
+msgstr "可用性"
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Available on this device"
+msgstr "在此设备上可用"
+
 #: crates/ox-app/resources/ui/network-sign-in.ui
 msgid "Cancel sign-in"
 msgstr "取消登录"
@@ -3710,6 +3718,10 @@ msgstr "{label}（Delete）"
 msgid "Ascending"
 msgstr "升序"
 
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Compressed (zipped) Folder"
+msgstr "压缩(zipped)文件夹"
+
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "CSV file"
 msgstr "CSV 文件"
@@ -3818,6 +3830,10 @@ msgstr "选择匹配的项目…"
 msgid "Select none"
 msgstr "全不选"
 
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Shortcut"
+msgstr "快捷方式"
+
 #: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/settings-page.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/location/virtual_place.rs packaging/data/io.winspace.Development.desktop
 msgid "Settings"
 msgstr "设置"
@@ -3840,6 +3856,10 @@ msgstr "分屏视图"
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Terminal"
 msgstr "终端"
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Text Document"
+msgstr "文本文档"
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
 msgid "Text document"
@@ -3997,33 +4017,9 @@ msgstr "显示子文件夹"
 msgid "This link points to an address OpenXplorer cannot open."
 msgstr "此链接指向 OpenXplorer 无法打开的地址。"
 
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter."
-msgstr "文件通过 GIO/GVfs 访问。保存的位置不是系统范围的驱动器盘符。"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Items"
-msgstr "项目"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Multiple items"
-msgstr "多个项目"
-
 #: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/sidebar/row.rs crates/ox-core/src/entry/classify.rs
 msgid "Network share"
 msgstr "网络共享"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Select an item to see its properties. Double-click to open it."
-msgstr "选择项目以查看其属性。双击可将其打开。"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Storage"
-msgstr "存储"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "This computer"
-msgstr "此计算机"
 
 #: crates/ox-app/src/window/details_pane/content.rs
 msgid "{selected} items selected"
@@ -5951,24 +5947,57 @@ msgid "Only folders and network shares can be pinned to Quick access."
 msgstr "只能将文件夹和网络共享固定到“快速访问”。"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Compressed folder"
-msgstr "压缩文件夹"
+msgid "Application"
+msgstr "应用程序"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Excel worksheet"
-msgstr "Excel 工作表"
+msgid "Microsoft Excel 97-2003 Worksheet"
+msgstr "Microsoft Excel 97-2003 工作表"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "MP4 video"
-msgstr "MP4 视频"
+msgid "Microsoft Excel Worksheet"
+msgstr "Microsoft Excel 工作表"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "PowerPoint presentation"
-msgstr "PowerPoint 演示文稿"
+msgid "Microsoft PowerPoint 97-2003 Presentation"
+msgstr "Microsoft PowerPoint 97-2003 演示文稿"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Word document"
-msgstr "Word 文档"
+msgid "Microsoft PowerPoint Presentation"
+msgstr "Microsoft PowerPoint 演示文稿"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "Microsoft Word 97 - 2003 Document"
+msgstr "Microsoft Word 97 - 2003 文档"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "Microsoft Word Document"
+msgstr "Microsoft Word 文档"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Presentation"
+msgstr "OpenDocument 演示文稿"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Spreadsheet"
+msgstr "OpenDocument 电子表格"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Text"
+msgstr "OpenDocument 文本"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "PDF Document"
+msgstr "PDF 文档"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "PDF File"
+msgstr "PDF 文件"
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/entry/type_label.rs
+msgid "{extension} File"
+msgstr "{extension} 文件"
 
 #: crates/ox-core/src/folder_locations.rs
 msgid "Choose a dedicated folder, not your entire home directory or the filesystem root."

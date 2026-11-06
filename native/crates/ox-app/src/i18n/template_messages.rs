@@ -25,10 +25,6 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("details-pane.ui", "close_button", "label", true, "Close details pane"),
     ("details-pane.ui", "close_button", "tooltip-text", false, "Close details pane"),
     ("details-pane.ui", "i18n_1", "label", false, "Details"),
-    ("details-pane.ui", "i18n_2", "label", false, "Open"),
-    ("details-pane.ui", "i18n_3", "label", false, "Pin to Quick access"),
-    ("details-pane.ui", "i18n_4", "label", false, "Pin to Quick access"),
-    ("details-pane.ui", "i18n_5", "label", false, "Properties"),
     ("network-sign-in.ui", "cancel_button", "label", false, "Cancel"),
     ("network-sign-in.ui", "close_button", "label", true, "Cancel sign-in"),
     ("network-sign-in.ui", "close_button", "tooltip-text", false, "Cancel sign-in"),
@@ -110,6 +106,4 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("window.ui", "navigation_row", "label", true, "Navigation"),
     ("window.ui", "new_tab_button", "label", true, "New tab"),
     ("window.ui", "new_tab_button", "tooltip-text", false, "New tab (Ctrl+T)"),
-    ("window.ui", "open_windows_button", "label", true, "Open windows"),
-    ("window.ui", "open_windows_button", "tooltip-text", false, "Open windows"),
 ];
