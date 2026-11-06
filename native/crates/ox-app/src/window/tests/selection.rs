@@ -224,6 +224,77 @@ fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
     );
 }
 
+/// The middle of the name cell of the row at `position` in `view`, and a
+/// point on the same row past the end of its name, in `view`'s
+/// coordinates.
+fn name_and_beside_it(test: &TestWindow, view: &gtk::Widget, position: u32) -> ((f64, f64), (f64, f64)) {
+    let cell = test
+        .window
+        .folder_pane()
+        .owners()
+        .file_cell_at(position, view)
+        .expect("the row is on screen");
+    let bounds = cell.compute_bounds(view).expect("a shown row has bounds");
+    let y = f64::from(bounds.y() + bounds.height() / 2.0);
+    let on_name = (f64::from(bounds.x()) + 40.0, y);
+    let beside = (f64::from(view.width()) - 40.0, y);
+    (on_name, beside)
+}
+
+/// In a folder whose rows fill the details view, the empty part of an
+/// unselected row is blank space, as in Windows Explorer: a press there
+/// clears the selection and may start a rubber band. Its icon and name,
+/// a selected row, and the tiles of the icon views stay the item.
+///
+/// parity: SEL-002, SEL-012
+#[gtk::test]
+fn the_empty_part_of_an_unselected_details_row_is_blank_space() {
+    let fixture = Fixture::with_files(LONG_FOLDER);
+    let test = TestWindow::open(&fixture.uri());
+    show_view(&test, "details");
+    let view = test.window.folder_pane().view_widget();
+    let (on_name, beside) = name_and_beside_it(&test, &view, 3);
+    test.window.folder_model().select_only(1);
+
+    let name_is_blank = test.window.is_blank_space(&view, on_name.0, on_name.1);
+    let beside_is_blank = test.window.is_blank_space(&view, beside.0, beside.1);
+    test.window.folder_model().select_only(3);
+    let beside_selected_is_blank = test.window.is_blank_space(&view, beside.0, beside.1);
+    test.window.folder_model().select_only(1);
+    press_at(&test, beside.0, beside.1);
+    let after_press = selected(&test);
+
+    assert!(!name_is_blank, "the name is the item");
+    assert!(beside_is_blank, "beside the name is blank space");
+    assert!(
+        !beside_selected_is_blank,
+        "a selected row is the item across its width"
+    );
+    assert!(
+        after_press.is_empty(),
+        "a press beside a name clears the selection"
+    );
+    assert!(test.window.folder_pane().view_has_focus());
+
+    show_view(&test, "medium");
+    let grid = test.window.folder_pane().view_widget();
+    let tile = test
+        .window
+        .folder_pane()
+        .owners()
+        .widget_at(3)
+        .expect("the tile is on screen");
+    let bounds = tile.compute_bounds(&grid).expect("a shown tile has bounds");
+    let tile_edge = (
+        f64::from(bounds.x() + bounds.width()) - 2.0,
+        f64::from(bounds.y() + bounds.height()) - 2.0,
+    );
+    assert!(
+        !test.window.is_blank_space(&grid, tile_edge.0, tile_edge.1),
+        "a tile is the item to its edge"
+    );
+}
+
 /// parity: SEL-004, SEL-005
 #[gtk::test]
 fn ctrl_a_and_escape_work_outside_the_view_but_not_in_text_fields() {

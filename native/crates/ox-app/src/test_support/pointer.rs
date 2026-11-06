@@ -103,12 +103,21 @@ impl Pointer {
 
     /// Presses and releases `key` on the private display's keyboard.
     pub(crate) fn tap_key(&mut self, key: gdk::Key) {
-        let keycode = gdk::Display::default()
-            .and_then(|display| display.map_keyval(key))
-            .and_then(|keys| keys.first().map(gdk::KeymapKey::keycode))
-            .expect("the private display's keyboard has the key");
-        let keycode = u8::try_from(keycode).expect("an X11 keycode");
+        let keycode = keycode_of(key);
         self.fake(KEY_PRESS, keycode, 0, 0);
+        self.fake(KEY_RELEASE, keycode, 0, 0);
+    }
+
+    /// Holds `key` down on the private display's keyboard until
+    /// [`Self::let_go_key`].
+    pub(crate) fn hold_key(&mut self, key: gdk::Key) {
+        let keycode = keycode_of(key);
+        self.fake(KEY_PRESS, keycode, 0, 0);
+    }
+
+    /// Lets go of `key`, held with [`Self::hold_key`].
+    pub(crate) fn let_go_key(&mut self, key: gdk::Key) {
+        let keycode = keycode_of(key);
         self.fake(KEY_RELEASE, keycode, 0, 0);
     }
 
@@ -261,6 +270,15 @@ pub(crate) fn window_origin(
             Some((x - round(in_x), y - round(in_y)))
         })
         .expect("the window is on the screen")
+}
+
+/// The X11 keycode of `key` on the private display's keyboard.
+fn keycode_of(key: gdk::Key) -> u8 {
+    let keycode = gdk::Display::default()
+        .and_then(|display| display.map_keyval(key))
+        .and_then(|keys| keys.first().map(gdk::KeymapKey::keycode))
+        .expect("the private display's keyboard has the key");
+    u8::try_from(keycode).expect("an X11 keycode")
 }
 
 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
