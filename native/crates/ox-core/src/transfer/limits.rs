@@ -180,27 +180,27 @@ pub(crate) struct Incoming<'a> {
 }
 
 impl Incoming<'_> {
-    /// Refuses the run before anything is written when the items that will
-    /// be written do not fit in the destination's free space. Items a move
+    /// Finds, before anything is written, whether the items that will be
+    /// written fit in the destination's free space. Items a move
     /// only renames, and items Skip will leave alone, need no space. An
     /// item that cannot be measured counts as empty: its copy reports the
     /// problem. `on_folder` is called before each folder is listed, so the
-    /// caller can show that a long walk is under way. Returns what the run
-    /// writes, when the destination's free space is known and so the
-    /// items were measured.
+    /// caller can show that a long walk is under way. When they fit, returns
+    /// what the run writes, when the destination's free space is known and
+    /// so the items were measured.
     ///
     /// # Errors
     ///
-    /// "Not enough free space on …", or [`TransferError::Cancelled`].
+    /// [`TransferError::Cancelled`], or a failure to measure an item.
     pub(crate) fn check_free_space(
         &self,
         factory: &NodeFactory,
         uris: &[&str],
         cancel: &Cancellation,
         on_folder: &mut dyn FnMut(),
-    ) -> Result<Option<TreeTotals>, TransferError> {
+    ) -> Result<FreeSpace, TransferError> {
         let Some(free) = self.filesystem.free else {
-            return Ok(None);
+            return Ok(FreeSpace::Fits(None));
         };
         let mut needed = 0_u64;
         let mut files = 0_u64;
@@ -214,18 +214,13 @@ impl Incoming<'_> {
             let tree = tree_size(source.as_ref(), cancel, 0, on_folder)?;
             needed = needed.saturating_add(tree.bytes);
             files = files.saturating_add(tree.files);
-            if needed > free {
-                return Err(TransferError::failed(crate::i18n::format_message(
-                    "Not enough free space on {destination}: {needed} needed, {free} free.",
-                    &[
-                        ("destination", &self.folder.display_name()),
-                        ("needed", &pretty_bytes(needed)),
-                        ("free", &pretty_bytes(free)),
-                    ],
-                )));
-            }
         }
-        Ok(Some(TreeTotals { bytes: needed, files }))
+        // Every item is counted, so the question can say how much the run
+        // needs, as Windows does.
+        if needed > free {
+            return Ok(FreeSpace::Short(Shortfall { needed, free }));
+        }
+        Ok(FreeSpace::Fits(Some(TreeTotals { bytes: needed, files })))
     }
 
     /// True when the run will write `source`'s bytes into the folder. A
@@ -252,6 +247,40 @@ impl Incoming<'_> {
             return !is_taken;
         }
         true
+    }
+}
+
+/// What the free-space check found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FreeSpace {
+    /// The items fit, with what was measured of them when the free space
+    /// is known.
+    Fits(Option<TreeTotals>),
+    /// They do not.
+    Short(Shortfall),
+}
+
+/// Items that do not fit in the destination's free space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Shortfall {
+    /// The bytes the items need.
+    pub(crate) needed: u64,
+    /// The bytes free there.
+    pub(crate) free: u64,
+}
+
+impl Shortfall {
+    /// The error that refuses the run, for the folder called
+    /// `destination`: "Not enough free space on …".
+    pub(crate) fn error(self, destination: &str) -> TransferError {
+        TransferError::NoSpace(crate::i18n::format_message(
+            "Not enough free space on {destination}: {needed} needed, {free} free.",
+            &[
+                ("destination", destination),
+                ("needed", &pretty_bytes(self.needed)),
+                ("free", &pretty_bytes(self.free)),
+            ],
+        ))
     }
 }
 

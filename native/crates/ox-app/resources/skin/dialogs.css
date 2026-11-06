@@ -138,6 +138,8 @@ speedgraph .speed-label { font-size: 11px; }
    question.rs). Hover changes the row's fill at once, with no fade. */
 .progress-action.asking .progress-percent { font-size: 16px; }
 .progress-action.asking .conflict-question { margin-top: 6px; }
+.progress-action.asking .space-question { margin-top: 2px; }
+.progress-action .space-drive { color: @ox_muted; }
 window.ox button.conflict-command { min-height: 32px; padding: 3px 8px 3px 16px; border-radius: 4px; }
 window.ox button.conflict-command label { font-size: 15px; }
 button.conflict-command.replace image { color: @ox_success; }

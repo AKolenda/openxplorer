@@ -33,17 +33,12 @@ fn copy_namesakes(fixture: &Fixture, names: &[&str]) -> TestWindow {
     test
 }
 
-/// Waits for the report that names the skipped files, and closes it.
-fn close_the_report_of_skipped_files(test: &TestWindow) {
-    wait_until("the report", || dialog_over(test).is_some());
-    let report = dialog_over(test).expect("it shows");
-    assert!(
-        report.message_text().contains("skipped"),
-        "{}",
-        report.message_text()
-    );
-    report.press("OK");
-    wait_until("the report to close", || dialog_over(test).is_none());
+/// Waits for the copy to end and checks that nothing reports the files
+/// Skip left alone, as Windows says nothing more about them.
+fn assert_no_report_of_skipped_files(test: &TestWindow) {
+    wait_until("the copy to end", || !test.window.is_writing_files());
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    assert!(dialog_over(test).is_none(), "no report of the skipped files");
 }
 
 /// The progress window, once it shows the question.
@@ -175,7 +170,7 @@ fn several_taken_names_ask_in_the_plural_and_skip_keeps_them() {
     button(&window, "Skip these files").emit_clicked();
 
     wait_until("the action to end", || test.context.progress_window().is_none());
-    close_the_report_of_skipped_files(&test);
+    assert_no_report_of_skipped_files(&test);
     for name in ["Notes 2.txt", "Notes 10.txt"] {
         assert_eq!(fs::read(fixture.path(name)).unwrap(), b"Synthetic test data\n");
     }
@@ -345,7 +340,7 @@ fn files_with_the_same_date_and_size_can_be_skipped_at_once() {
     continue_button.emit_clicked();
 
     wait_until("the action to end", || test.context.progress_window().is_none());
-    close_the_report_of_skipped_files(&test);
+    assert_no_report_of_skipped_files(&test);
     assert!(!fixture.path("Notes 2 (2).txt").exists());
 }
 
