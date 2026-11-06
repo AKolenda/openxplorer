@@ -62,6 +62,16 @@ impl Desktop {
     }
 }
 
+/// The Type column's name for a shortcut, as Windows Explorer shows it.
+const SHORTCUT_LABEL: &str = message_id("Shortcut");
+
+/// The Type column text of a shortcut: a symbolic link with no known
+/// type's extension, the app's shortcut, which Windows Explorer calls
+/// "Shortcut" whatever it points to.
+pub(super) fn shortcut_label() -> String {
+    crate::i18n::gettext(SHORTCUT_LABEL)
+}
+
 /// Type column text of the item `name`: the label of `folder_type` for
 /// navigable items, else Windows' name for `content_type`.
 pub(super) fn type_label(folder_type: Option<FolderType>, content_type: Option<&str>, name: &str) -> String {
@@ -138,7 +148,7 @@ fn windows_message(content_type: &str, desktop: Desktop) -> Option<&'static str>
         | "application/x-msdownload"
         | "application/x-ms-dos-executable"
         | "application/vnd.microsoft.portable-executable" => message_id("Application"),
-        "application/x-ms-shortcut" | "application/x-desktop" => message_id("Shortcut"),
+        "application/x-ms-shortcut" | "application/x-desktop" => SHORTCUT_LABEL,
         _ => return None,
     };
     Some(label)
