@@ -423,12 +423,12 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 13] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
-    // Ctrl+E is Explorer's other search key (CMD-036).
-    (WindowAction::Search, &["<Primary>f", "<Primary>e"]),
+    // Ctrl+E and F3 are Explorer's other search keys (CMD-036).
+    (WindowAction::Search, &["<Primary>f", "<Primary>e", "F3"]),
     // Explorer's Alt+P shows its Preview pane, which is the details pane
     // here, as it previews the selection too (VIEW-063).
     // Windows' keys: Alt+Shift+P for the Details pane, Alt+P for the
@@ -444,9 +444,6 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
     // Dolphin's Open Preferred Search Tool (OPEN-024).
     (WindowAction::SearchTool, &["<Primary><Shift>f"]),
-    // Dolphin's Split (VIEW-059); Explorer leaves F3 to its search box,
-    // which Ctrl+F reaches here.
-    (WindowAction::SplitView, &["F3"]),
     // Dolphin's Handbook and GNOME's Keyboard Shortcuts (CMD-033, CMD-032).
     (WindowAction::Help, &["F1"]),
     (WindowAction::KeyboardShortcuts, &["<Primary>question"]),

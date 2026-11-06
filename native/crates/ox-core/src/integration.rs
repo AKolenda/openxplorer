@@ -59,6 +59,7 @@
 //! | `disk_tools` | Disks, the Disk Image Mounter and a disk-usage analyser | (new) |
 //! | `drive_format` | Formatting a removable drive through UDisks | (new) |
 //! | `email_portal` | Share: emailing files through the desktop's Email portal | (new) |
+//! | `bluetooth_sender` | Send to ▸ Bluetooth device: the desktop's Bluetooth file sender | (new) |
 //! | `program` | Starting a program the user chose: drops, custom commands | (new) |
 //! | `private_file`, `worker` | Atomic private writes; worker threads | the Python modules' helpers |
 
@@ -66,6 +67,7 @@ mod activation;
 mod app_catalog;
 mod applications;
 mod background_portal;
+mod bluetooth_sender;
 mod brave;
 mod default_apps;
 mod dialog_folders;
@@ -94,6 +96,7 @@ pub use applications::{ApplicationDatabase, ApplicationInfo, InstalledApplicatio
 pub use background_portal::{
     request_autostart, AutostartRequest, BackgroundError, DESKTOP_PORTAL_NAME, DESKTOP_PORTAL_PATH,
 };
+pub use bluetooth_sender::BluetoothSender;
 pub use brave::{
     BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveReach,
     BraveStatus, Confirmation, DownloadPreference, DownloadPrompt, ProcessTable, ProfileFailure,

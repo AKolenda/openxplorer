@@ -1,24 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The breadcrumbs' subfolder menus and wheel, which app.js lacked, as
-//! Dolphin's location bar and Explorer's crumb chevrons have them.
+//! The breadcrumbs' subfolder menus, which app.js lacked, as Dolphin's
+//! location bar and Explorer's crumb chevrons have them.
 //!
 //! - A click on the divider after a crumb, or Down on a focused crumb,
 //!   opens a menu of that folder's subfolders. The folder the address
 //!   goes on to is bold, hidden folders show only while hidden files do,
 //!   and past 30 folders a "More" item lists the next ones (NAV-020).
-//! - The wheel over a crumb replaces it with the previous or next folder
-//!   beside it and goes there, while the crumbs fit the bar; when they
-//!   overflow, the wheel scrolls them as before (NAV-022).
+//!
+//! As in Windows Explorer, the wheel over a crumb never switches folders;
+//! it only scrolls crumbs that overflow the bar.
 
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{enumerate_folder, EntryKind};
-use ox_core::location::{parent_location, same_location, ArchiveLocation};
+use ox_core::location::{same_location, ArchiveLocation};
 
 use crate::folder_view::sorting::SortKey;
 use crate::icons::Icon;
 
-use super::address_bar::AddressBar;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -129,15 +128,6 @@ pub(super) fn subfolder_menu(
     entries
 }
 
-/// The folder `step` places from `current` among `folders`, if any.
-fn sibling<'a>(folders: &'a [Subfolder], current: &str, step: i32) -> Option<&'a Subfolder> {
-    let position = folders
-        .iter()
-        .position(|folder| same_location(&folder.uri, current))?;
-    let target = position.checked_add_signed(isize::try_from(step).ok()?)?;
-    folders.get(target)
-}
-
 /// Opens the subfolder menu of `folder`, with `shown` in bold, on a click
 /// on the divider `label` after its crumb.
 pub(super) fn open_subfolders_on_click(label: &gtk::Label, folder: &str, shown: &str) {
@@ -155,77 +145,38 @@ pub(super) fn open_subfolders_on_click(label: &gtk::Label, folder: &str, shown: 
     label.set_tooltip_text(Some(&ox_core::i18n::gettext("Show subfolders")));
 }
 
-impl AddressBar {
-    /// Gives the crumb `button` of `folder` its subfolder menu on Down,
-    /// with `next` in bold, and its sibling switching on the wheel.
-    pub(super) fn add_crumb_menu_and_wheel(&self, button: &gtk::Button, folder: &str, next: Option<&str>) {
-        let keys = gtk::EventControllerKey::new();
-        let menu_target = (folder, next.unwrap_or_default(), 0_u32).to_variant();
-        keys.connect_key_pressed(move |keys, key, _, modifiers| {
-            let down = matches!(key, gdk::Key::Down | gdk::Key::KP_Down);
-            if !down || !modifiers.is_empty() {
-                return glib::Propagation::Proceed;
-            }
-            if let Some(button) = keys.widget() {
-                WindowAction::CrumbSubfolders.activate_from(&button, Some(&menu_target));
-            }
-            glib::Propagation::Stop
-        });
-        button.add_controller(keys);
-        // Discrete, so GTK adds up a high-resolution wheel's fractions to
-        // whole notches; a touchpad's pixel deltas are ignored, as Dolphin
-        // counts only whole wheel notches, so one swipe cannot skip
-        // through several folders.
-        let wheel = gtk::EventControllerScroll::new(
-            gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
-        );
-        let folder = folder.to_owned();
-        wheel.connect_scroll(glib::clone!(
-            #[weak(rename_to = bar)]
-            self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |wheel, _, dy| {
-                let notches = dy.trunc();
-                let touchpad = wheel.unit() == gdk::ScrollUnit::Surface;
-                if bar.crumbs_overflow() || touchpad || notches == 0.0 {
-                    return glib::Propagation::Proceed;
-                }
-                let step: i32 = if notches > 0.0 { 1 } else { -1 };
-                if let Some(button) = wheel.widget() {
-                    WindowAction::CrumbSibling.activate_from(&button, Some(&(&folder, step).to_variant()));
-                }
-                glib::Propagation::Stop
-            }
-        ));
-        button.add_controller(wheel);
-    }
+/// Gives the crumb `button` of `folder` its subfolder menu on Down, with
+/// `next` in bold.
+pub(super) fn open_subfolders_on_down(button: &gtk::Button, folder: &str, next: Option<&str>) {
+    let keys = gtk::EventControllerKey::new();
+    let menu_target = (folder, next.unwrap_or_default(), 0_u32).to_variant();
+    keys.connect_key_pressed(move |keys, key, _, modifiers| {
+        let down = matches!(key, gdk::Key::Down | gdk::Key::KP_Down);
+        if !down || !modifiers.is_empty() {
+            return glib::Propagation::Proceed;
+        }
+        if let Some(button) = keys.widget() {
+            WindowAction::CrumbSubfolders.activate_from(&button, Some(&menu_target));
+        }
+        glib::Propagation::Stop
+    });
+    button.add_controller(keys);
 }
 
 impl BrowserWindow {
-    /// Adds the actions the crumbs' menus and wheel run.
+    /// Adds the action the crumbs' menus run.
     pub(super) fn install_crumb_actions(&self) {
-        self.add_action_entries([
-            gio::ActionEntry::builder(WindowAction::CrumbSubfolders.name())
-                .parameter_type(Some(glib::VariantTy::new("(ssu)").expect("a valid type")))
-                .activate(|window: &BrowserWindow, _, target| {
-                    let Some((folder, shown, first)) =
-                        target.and_then(glib::Variant::get::<(String, String, u32)>)
-                    else {
-                        return;
-                    };
-                    window.show_subfolder_menu(folder, shown, first);
-                })
-                .build(),
-            gio::ActionEntry::builder(WindowAction::CrumbSibling.name())
-                .parameter_type(Some(glib::VariantTy::new("(si)").expect("a valid type")))
-                .activate(|window: &BrowserWindow, _, target| {
-                    if let Some((folder, step)) = target.and_then(glib::Variant::get::<(String, i32)>) {
-                        window.go_to_sibling(folder, step);
-                    }
-                })
-                .build(),
-        ]);
+        self.add_action_entries([gio::ActionEntry::builder(WindowAction::CrumbSubfolders.name())
+            .parameter_type(Some(glib::VariantTy::new("(ssu)").expect("a valid type")))
+            .activate(|window: &BrowserWindow, _, target| {
+                let Some((folder, shown, first)) =
+                    target.and_then(glib::Variant::get::<(String, String, u32)>)
+                else {
+                    return;
+                };
+                window.show_subfolder_menu(folder, shown, first);
+            })
+            .build()]);
     }
 
     /// Whether hidden files are shown, so the menus list hidden folders.
@@ -287,25 +238,6 @@ impl BrowserWindow {
         popover.popup();
         Some(popover)
     }
-
-    /// Goes to the folder `step` places from `folder` among its parent's
-    /// subfolders.
-    pub(super) fn go_to_sibling(&self, folder: String, step: i32) {
-        let Some(parent) = parent_location(&folder) else {
-            return;
-        };
-        let show_hidden = self.shows_hidden_files();
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move {
-                let folders = list_subfolders(&parent, show_hidden).await;
-                if let Some(next) = sibling(&folders, &folder, step) {
-                    window.navigate_or_report(&next.uri);
-                }
-            }
-        ));
-    }
 }
 
 #[cfg(test)]
@@ -356,16 +288,5 @@ mod tests {
         );
         assert_eq!(items(&second_page).len(), 15);
         assert!(subfolder_menu(&[], "file:///demo", "", 0).is_empty());
-    }
-
-    /// parity: NAV-022
-    #[test]
-    fn the_wheel_steps_to_the_folder_beside_and_stops_at_either_end() {
-        let three = folders(3);
-
-        assert_eq!(sibling(&three, "file:///demo/Folder%201", 1), Some(&three[2]));
-        assert_eq!(sibling(&three, "file:///demo/Folder%201", -1), Some(&three[0]));
-        assert_eq!(sibling(&three, "file:///demo/Folder%202", 1), None);
-        assert_eq!(sibling(&three, "file:///demo/Folder%200", -1), None);
     }
 }

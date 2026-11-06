@@ -46,8 +46,8 @@ const NEW_TAB_POSITIONS: [Choice<bool>; 2] = [
 
 const BEGIN_SPLIT: RowText = RowText {
     title: "Open new windows in split view",
-    description: "New windows show two folders side by side. F3 splits or unsplits a tab.",
-    keywords: "split view dual pane two panes side by side f3 commander",
+    description: "New windows show two folders side by side. View > Split view splits or unsplits a tab.",
+    keywords: "split view dual pane two panes side by side commander",
 };
 
 const TAB_SWITCHES_PANES: RowText = RowText {

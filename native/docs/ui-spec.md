@@ -563,6 +563,7 @@ where it differs; ✓ means the target equals the current app.
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
+| Default | Closed for a new user; Details or Alt+Shift+P opens it, and the choice is saved | Windows 11 Explorer opens with the Details and Preview panes closed | Keep. |
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
 | Header | "Details" at 13 px; close button 24 × 24, glyph 12; 20 px below | — | Keep. |
 | Preview | min height 148; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); icon 83 with `drop-shadow(0 4px 4px alpha(black, .04))`; 18 px below; thumbnails when available (gain) | — | safe |
@@ -593,6 +594,7 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Submenu arrow | chevron 12 `@ox_muted`, right end | same | chevron margin 24 (MF#L257) | Keep. |
 | Submenu | shown in the same popup, in place of the menu's items, under a back row (arrow-left 16 and the submenu's name) and a separator | same | GTK's sliding PopoverMenu submenus; Windows cascades a second flyout | deviation: one popup, so no nested Wayland popup grab |
 | Quick-action strip (Windows 11 style only) | — | five 34-high icon buttons at 20 % width each, 2 px gap and padding, above the list ✓ | Windows 11 context menu (observed, unverified) | Keep. |
+| Send to (classic item menu only) | a submenu row between dividers above Cut, as in Windows Explorer's classic menu; its rows in Windows' order: Bluetooth device, Compressed (zipped) folder, Desktop (create shortcut), Documents, Mail recipient, then the removable drives and saved network locations under their This PC names; rows the computer lacks are left out, rows that cannot run are disabled with the reason in their tooltip; Documents and Mail recipient show Fluent's colour art, as Windows shows colour glyphs, the others their Fluent glyphs, as Fluent has no colour art for them (CMD-038) | — (Windows 11's compact menu has no Send to) | Windows Explorer classic menu, Send To folder | Keep. |
 
 ### 4.10 Tooltips
 

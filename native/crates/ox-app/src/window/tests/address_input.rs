@@ -361,48 +361,23 @@ fn choosing_a_folder_from_a_crumb_menu_goes_there() {
     assert!(descendants::<MenuPopover>(address).is_empty(), "the menu is gone");
 }
 
-/// parity: NAV-022
+/// As in Windows Explorer, the wheel over a crumb never switches to the
+/// folder beside it: no crumb takes the wheel, which goes on to the
+/// crumbs' own sideways scrolling.
 #[gtk::test]
-fn the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it() {
+fn the_wheel_on_a_crumb_never_switches_folders() {
     let fixture = Fixture::standard();
-    for folder in ["Music", ".cache"] {
-        std::fs::create_dir(fixture.path(folder)).expect("fixture subfolder");
-    }
-    let deep = (1..=12).fold(String::from("Documents"), |path, level| {
-        format!("{path}/A rather long folder name at level {level}")
-    });
-    std::fs::create_dir_all(fixture.path(&deep)).expect("fixture subfolders");
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let address = test.window.address_bar();
-    let scroll_last_crumb = |dy: f64| {
-        let crumb = address.crumb_buttons().pop().expect("a crumb");
-        let wheel = controllers::<gtk::EventControllerScroll>(&crumb)
-            .pop()
-            .expect("the crumb's wheel");
-        wheel.emit_by_name::<bool>("scroll", &[&0.0_f64, &dy])
-    };
+    let crumbs = test.window.address_bar().crumb_buttons();
 
-    assert!(!scroll_last_crumb(0.1), "a fraction of a notch does nothing");
-    wait_for(std::time::Duration::from_millis(200));
-    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
-    assert!(scroll_last_crumb(1.0));
-    wait_until("the next folder", || {
-        test.window.current_uri() == Some(fixture.uri_of("Music"))
-    });
-    test.wait_for_listing("Music");
-    assert!(scroll_last_crumb(1.0));
-    wait_for(std::time::Duration::from_millis(200));
-    assert_eq!(
-        test.window.current_uri(),
-        Some(fixture.uri_of("Music")),
-        "hidden .cache is skipped and Music is last"
-    );
-
-    test.window
-        .navigate(&fixture.uri_of(&deep))
-        .expect("valid folder");
-    wait_until("the crumbs to overflow", || address.crumbs_overflow());
-    assert!(!scroll_last_crumb(1.0), "overflowing crumbs scroll sideways");
+    assert!(!crumbs.is_empty());
+    for crumb in &crumbs {
+        assert!(
+            controllers::<gtk::EventControllerScroll>(crumb).is_empty(),
+            "{} takes no wheel",
+            crumb.label().unwrap_or_default()
+        );
+    }
 }
 
 /// parity: NAV-029
