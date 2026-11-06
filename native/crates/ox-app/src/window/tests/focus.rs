@@ -209,7 +209,9 @@ fn typing_on_a_command_or_the_details_pane_selects_in_the_folder() {
     let properties = details_button(&test);
 
     for button in [refresh, properties] {
-        test.window.folder_pane().model().select_none();
+        // The pane shows Properties only with something selected.
+        test.select_named("Documents");
+        wait_until("the control shown", || button.is_drawable());
         assert!(button.grab_focus(), "the control takes the keyboard");
         assert!(!test.window.folder_pane().view_has_focus());
 
@@ -303,7 +305,9 @@ fn closing_the_details_pane_puts_the_keyboard_in_the_folder() {
     let test = TestWindow::open(&fixture.uri());
     test.wait_for_listing("the first folder");
     test.open_details_pane();
+    test.select_named("Notes 2.txt");
     let button = details_button(&test);
+    wait_until("the Properties button", || button.is_drawable());
     assert!(
         button.grab_focus(),
         "the pane's Properties button takes the keyboard"
