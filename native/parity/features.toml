@@ -3312,7 +3312,7 @@ native_note = "Hidden items shown with Show hidden files are drawn at 60% opacit
 id = "VIEW-027"
 area = "VIEW"
 title = "Details pane toggle"
-behaviour = "The command-bar 'Details' button (highlighted when on), View > 'Details pane' (checked when on) and the pane's own close button toggle the right-hand details pane. The state is saved as a preference."
+behaviour = "The command-bar 'Details' button (highlighted when on), View > 'Details pane' (checked when on) and the pane's own close button toggle the right-hand details pane. The state is saved as a preference. A new user's windows open with it closed, as Windows 11 Explorer opens with its Details and Preview panes closed."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -3332,7 +3332,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "F11 Information panel; Information panel (F11)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved. native/crates/ox-app/src/window/tests/focus.rs (closing_the_details_pane_puts_the_keyboard_in_the_folder): the folder takes the keyboard from a button of the pane that hides."
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved. native/crates/ox-app/src/window/tests/focus.rs (closing_the_details_pane_puts_the_keyboard_in_the_folder): the folder takes the keyboard from a button of the pane that hides. Closed by default, as in Windows 11, where the Python app had it open (native/crates/ox-core/src/settings/preferences.rs: defaults_match_the_python_app); details is stored whatever its value, so a settings file that has it keeps the pane as it was."
 
 [[feature]]
 id = "VIEW-028"
@@ -14316,7 +14316,7 @@ native_note = "A preference change reaches every window through the shared AppCo
 id = "SET-016"
 area = "SET"
 title = "Preference defaults and allowed values"
-behaviour = "Defaults: theme 'system', view 'details', details pane on, showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away; a stored 'win10' that older releases and the Python app wrote as their default loads as 'win11' once, and choosing the classic menu stores 'classicMenuChosen': true so it stays), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
+behaviour = "Defaults: theme 'system', view 'details', details pane off (closed, as Windows 11 Explorer opens; the Python app had it on, and a stored value stays), showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away; a stored 'win10' that older releases and the Python app wrote as their default loads as 'win11' once, and choosing the classic menu stores 'classicMenuChosen': true so it stays), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14894,7 +14894,7 @@ native_note = "native/crates/ox-app/src/theme/desktop_text.rs: the skin reads th
 id = "LOOK-026"
 area = "LOOK"
 title = "Dates and times follow locale and the desktop clock format"
-behaviour = "Dates use the user's locale, as today. Times in Properties timestamps follow GNOME's 12/24-hour clock setting."
+behaviour = "Dates use the user's locale, as today; in en_US the month and day have no leading zero, as Windows' short date M/d/yyyy writes them (9/13/2026 3:05 PM). Times in Properties timestamps follow GNOME's 12/24-hour clock setting."
 origin = ["gnome"]
 priority = "could"
 openxplorer = "partial"
@@ -14904,7 +14904,7 @@ bridge = []
 dolphin = "KDE regional settings (QLocale)"
 gnome = "org.gnome.desktop.interface clock-format; GDateTime locale formatting"
 native = "done"
-native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it (properties_timestamps_follow_the_desktop_clock_format), live, through native/crates/ox-app/src/application/clock_format.rs (the_desktop_clock_format_is_followed_at_once: unset keeps the locale's clock although the schema default is 24h, 12h and 24h apply at once, a reset returns to the locale). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
+native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); en_US alone drops the leading zero of the month and day, as Windows' en-US short date does, and only when the C library really formats in en_US, so a process left in the C locale keeps 09/13/2026 (only_en_us_drops_the_leading_zero_of_the_month_and_day); other locales keep their two-digit fields, as Windows' en-GB, de-DE and fr-FR short dates have them; Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it (properties_timestamps_follow_the_desktop_clock_format), live, through native/crates/ox-app/src/application/clock_format.rs (the_desktop_clock_format_is_followed_at_once: unset keeps the locale's clock although the schema default is 24h, 12h and 24h apply at once, a reset returns to the locale). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
 
 [[feature]]
 id = "LOOK-027"

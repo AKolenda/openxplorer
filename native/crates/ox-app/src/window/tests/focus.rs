@@ -203,6 +203,7 @@ fn typing_on_a_command_or_the_details_pane_selects_in_the_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.wait_for_listing("the first folder");
+    test.open_details_pane();
     let refresh = refresh_button(&test);
     let close = details_close(&test);
 
@@ -300,6 +301,7 @@ fn closing_the_details_pane_puts_the_keyboard_in_the_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.wait_for_listing("the first folder");
+    test.open_details_pane();
     let close = details_close(&test);
     assert!(close.grab_focus(), "the pane's close button takes the keyboard");
 

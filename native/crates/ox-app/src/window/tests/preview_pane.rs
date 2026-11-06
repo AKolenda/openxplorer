@@ -6,7 +6,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::geometry::laid_out;
+use super::geometry::laid_out_with_details_pane;
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::window_action::WindowAction;
@@ -42,7 +42,7 @@ fn view_marks(test: &TestWindow) -> Vec<String> {
 #[gtk::test]
 fn the_preview_pane_and_the_details_pane_take_turns_in_one_pane() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     test.select_named("Notes 2.txt");
     let pane = test.window.imp().details_pane.get();
     assert!(pane.is_visible());

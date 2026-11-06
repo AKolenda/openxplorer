@@ -6,7 +6,7 @@
 
 use gtk::prelude::*;
 
-use super::geometry::{bounds, button_for, laid_out};
+use super::geometry::{bounds, button_for, laid_out, laid_out_with_details_pane};
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 
@@ -21,7 +21,7 @@ fn resize(test: &TestWindow, width: i32) {
 #[gtk::test]
 fn the_details_pane_gives_way_below_961_pixels_and_comes_back() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     let pane = test.window.details_pane();
     assert!(pane.is_visible());
     resize(&test, 940);
@@ -62,7 +62,7 @@ fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
 #[gtk::test]
 fn the_name_column_keeps_260_pixels_and_the_list_scrolls_sideways() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     resize(&test, 1000);
     let details = test.window.folder_pane().details();
     let name = details.column(SortColumn::Name).expect("a Name column");
