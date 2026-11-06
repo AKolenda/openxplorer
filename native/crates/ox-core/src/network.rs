@@ -28,7 +28,7 @@
 //! | `credential_store` | The keyring, sign-out generations and keyring locks every window shares | `session_credentials.py` |
 //! | `session_credentials` | One window's credentials per server, in memory and in the keyring | `session_credentials.py` |
 //! | `prompts` | `GVfs`'s sign-in questions, answered by the window's dialog | `auth_bridge.py` |
-//! | `mounting` | Mount on demand and Map network location | `winspace.py`, `gio_backend.py` |
+//! | `mounting` | Mount on demand and Map network drive | `winspace.py`, `gio_backend.py` |
 //! | `volumes` | Connect drives and phones, Disconnect, Eject and Safely remove | `winspace.py`, `volume_locations.py` |
 //! | `sign_out` | Sign out of a server | `winspace.py` |
 //! | `discovery` | Servers advertising on the local network | `winspace.py`, `gio_backend.py` |
@@ -91,8 +91,9 @@ pub use mounting::{
     WriteActivity,
 };
 pub use prompts::{
-    split_identity, Answer, Challenge, ChallengeId, ChallengeKind, Identity, MountOutcome, MountPrompts,
-    PasswordChallenge, QuestionChallenge, SignIn, SignInError, SignInPrompter, KEYRING_SAVE_NOTICE,
+    split_identity, Answer, Challenge, ChallengeId, ChallengeKind, CredentialChoice, Identity, MountOutcome,
+    MountPrompts, PasswordChallenge, QuestionChallenge, SignIn, SignInError, SignInPrompter,
+    KEYRING_SAVE_NOTICE,
 };
 pub use recent_servers::RecentServers;
 pub use secret_service::SecretService;

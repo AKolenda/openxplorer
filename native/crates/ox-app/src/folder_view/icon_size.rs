@@ -194,6 +194,39 @@ pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
     }
 }
 
+/// The icon edge of Tiles: Windows 11's tiles show 48-pixel icons and
+/// thumbnails (VIEW-071).
+pub(crate) const TILES_ICON: i32 = 48;
+
+/// The icon edge of Content's rows (VIEW-071).
+pub(crate) const CONTENT_ICON: i32 = 32;
+
+/// The height of a line of the tiles' and Content's text at `scale`: the
+/// icon view's 0.95 line height on 13-pixel text.
+fn text_line(scale: f64) -> f64 {
+    17.0 * scale
+}
+
+/// A Tiles cell at `text_size`: 256 pixels wide at 100%, about the 250 of
+/// Windows 11's tiles and the gap to the next, growing with the text; as
+/// tall as its three lines of text (name, type and size) or its icon,
+/// with 8 pixels of padding above and below and the 2-pixel gap.
+pub(crate) fn tiles_cell(text_size: TextSize) -> CellSize {
+    let scale = text_size::metrics(text_size).scale;
+    CellSize {
+        width: text_size::ceil_pixels(200.0 * scale + 56.0).max(256),
+        height: text_size::ceil_pixels(3.0 * text_line(scale) + 18.0).max(TILES_ICON + 18),
+    }
+}
+
+/// The height of a Content row at `text_size`: two lines of text with 12
+/// pixels above and below, 58 pixels at 100%, as Windows 11's rows are
+/// about 56 to 60, and the 1-pixel line under it.
+pub(crate) fn content_row(text_size: TextSize) -> i32 {
+    let scale = text_size::metrics(text_size).scale;
+    text_size::ceil_pixels(2.0 * text_line(scale) + 24.0).max(58)
+}
+
 /// The height of a compact-view item at `text_size`, as Explorer's List
 /// layout packs its names closer than the details rows: 26 pixels at
 /// 100%, growing with the text (the web's 38-pixel details row less its
@@ -265,6 +298,28 @@ mod tests {
             }
         );
         assert!(cell_size(IconSize::EXTRA_LARGE, TextSize::from_percent(100)).width > cell.width);
+    }
+
+    /// Tiles are 256 pixels wide at 100%, about Windows 11's 250 and the
+    /// gap, and hold three lines of text; Content's rows are 58 pixels
+    /// tall; both grow with the text.
+    ///
+    /// parity: VIEW-071
+    #[test]
+    fn tiles_and_content_rows_have_windows_sizes_and_grow_with_the_text() {
+        let normal = TextSize::from_percent(100);
+        let larger = TextSize::from_percent(150);
+        assert_eq!(
+            tiles_cell(normal),
+            CellSize {
+                width: 256,
+                height: 69
+            }
+        );
+        assert!(tiles_cell(larger).width > 256 && tiles_cell(larger).height > 69);
+        assert_eq!(tiles_cell(normal).columns_in(1000), 3);
+        assert_eq!(content_row(normal), 58);
+        assert!(content_row(larger) > 58);
     }
 
     /// A pane width and the columns `renderRows` gives it.

@@ -119,6 +119,9 @@ pub(crate) struct CellOwners {
     drop_row: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     /// What the rows' tooltips name.
     row_tooltip: Cell<RowTooltip>,
+    /// Items show no infotip (Folder Options' "Show pop-up description
+    /// for folder and desktop items" off).
+    hides_infotips: Cell<bool>,
     /// Which items show previews in the folder shown.
     previews: Cell<PreviewPolicy>,
     /// Folders in the Size column say how many items they hold.
@@ -158,6 +161,16 @@ impl CellOwners {
     /// while the window searches, names otherwise.
     pub(crate) fn set_row_tooltip(&self, tooltip: RowTooltip) {
         self.row_tooltip.set(tooltip);
+    }
+
+    /// Whether items show no infotip, only a name cut short.
+    pub(crate) fn hides_infotips(&self) -> bool {
+        self.hides_infotips.get()
+    }
+
+    /// Shows the items' infotips, or only names cut short with `hide`.
+    pub(crate) fn set_hides_infotips(&self, hide: bool) {
+        self.hides_infotips.set(hide);
     }
 
     /// The item the registered `cell` shows, while it shows one.

@@ -108,7 +108,7 @@ pub fn file_uri(path: &Path) -> String {
     format!("file://{escaped}")
 }
 
-/// Normalises a network folder for Map network location: an SMB shared
+/// Normalises a network folder for Map network drive: an SMB shared
 /// folder (not a bare server such as `smb://nas/`), a folder on an SFTP,
 /// FTP or WebDAV server (its root included) or an NFS export.
 ///

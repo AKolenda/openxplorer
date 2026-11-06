@@ -406,7 +406,7 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
         .any(|button| {
             button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
         });
-    assert!(sidebar_maps, "the sidebar keeps Map network location");
+    assert!(sidebar_maps, "the sidebar keeps Map network drive");
 }
 
 /// Disconnect network drive lists each network mount once, by the root
@@ -922,16 +922,18 @@ fn escape_or_left_closes_only_a_submenu_the_pointer_opened() {
 }
 
 /// The View menu, as Windows 11 File Explorer's: the views from the
-/// largest icons to Details, the Details pane, Show, then Dolphin's split
-/// view, folder tree and terminal where they were before Show, and the
-/// text size. Windows' Tiles and Content are views the app does not have.
-const VIEW_MENU: [&str; 18] = [
+/// largest icons to Details, Tiles and Content, the Details pane, Show,
+/// then Dolphin's split view, folder tree and terminal where they were
+/// before Show, and the text size.
+const VIEW_MENU: [&str; 20] = [
     "Extra large icons",
     "Large icons",
     "Medium icons",
     "Small icons",
     "List",
     "Details",
+    "Tiles",
+    "Content",
     "-",
     "Details pane",
     "Preview pane",
@@ -1105,6 +1107,8 @@ fn the_more_and_view_menus_show_windows_glyphs() {
         ("Small icons", Icon::Grid),
         ("List", Icon::TextColumnTwo),
         ("Details", Icon::TextBulletList),
+        ("Tiles", Icon::AppsListDetail),
+        ("Content", Icon::ContentView),
         ("Details pane", Icon::PanelRight),
     ] {
         assert_eq!(glyph_of(&view, label), glyph, "{label}");

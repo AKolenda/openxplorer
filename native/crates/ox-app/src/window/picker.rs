@@ -660,6 +660,12 @@ impl BrowserWindow {
         }
     }
 
+    /// Whether this window is a file dialog for another application
+    /// (INT-032).
+    pub(super) fn is_file_dialog(&self) -> bool {
+        self.picker().is_some()
+    }
+
     /// The window's picker, if it is one.
     fn picker(&self) -> Option<Rc<Picker>> {
         self.imp().picker.borrow().clone()
@@ -2768,7 +2774,7 @@ mod tests {
                     .collect();
                 (lists, details.vadjustment())
             }
-            FolderView::Compact | FolderView::Icons(_) => {
+            FolderView::Compact | FolderView::Icons(_) | FolderView::Tiles | FolderView::Content => {
                 let icons = pane.icon_view();
                 (vec![icons.grid().clone().upcast()], icons.scroll_adjustment())
             }

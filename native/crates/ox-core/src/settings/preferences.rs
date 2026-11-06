@@ -446,6 +446,32 @@ pub struct Preferences {
     /// `show_details_pane` is.
     #[serde(rename = "previewPane", skip_serializing_if = "std::ops::Not::not")]
     pub preview_pane: bool,
+    /// A folder opened from the file list opens in a window of its own
+    /// (Folder Options' "Open each folder in its own window"). Off by
+    /// default, as in Windows. Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub open_folders_in_own_window: bool,
+    /// Items show no infotip on hover (Folder Options' "Show pop-up
+    /// description for folder and desktop items" off). Stored only when
+    /// on, as are the next four.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_infotips: bool,
+    /// The status bar is hidden (Folder Options' "Show status bar" off).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_status_bar: bool,
+    /// The Preview pane shows the item's icon rather than its contents
+    /// (Folder Options' "Show preview handlers in preview pane" off).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_preview_handlers: bool,
+    /// Text typed in the file list goes to the search box rather than
+    /// selecting the item it names (Folder Options' "When typing into
+    /// list view").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub type_into_search_box: bool,
+    /// Searches start with "Names and contents" rather than "File names"
+    /// (Folder Options' "Always search file names and contents").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub search_contents: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -554,6 +580,12 @@ impl Default for Preferences {
             compact_density: false,
             show_extensions: false,
             preview_pane: false,
+            open_folders_in_own_window: false,
+            hide_infotips: false,
+            hide_status_bar: false,
+            hide_preview_handlers: false,
+            type_into_search_box: false,
+            search_contents: false,
             view_defaults: None,
             folder_views: Vec::new(),
             downloads_group_by: None,
@@ -584,6 +616,21 @@ impl Preferences {
         replace_if_some(&mut self.compact_density, update.compact_density);
         replace_if_some(&mut self.show_extensions, update.show_extensions);
         replace_if_some(&mut self.preview_pane, update.preview_pane);
+    }
+
+    /// Folder Options' choices that only it sets: how folders open, the
+    /// infotips, the status bar, the Preview pane's contents, typing in the
+    /// file list and what searches look at.
+    fn apply_folder_options(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(
+            &mut self.open_folders_in_own_window,
+            update.open_folders_in_own_window,
+        );
+        replace_if_some(&mut self.hide_infotips, update.hide_infotips);
+        replace_if_some(&mut self.hide_status_bar, update.hide_status_bar);
+        replace_if_some(&mut self.hide_preview_handlers, update.hide_preview_handlers);
+        replace_if_some(&mut self.type_into_search_box, update.type_into_search_box);
+        replace_if_some(&mut self.search_contents, update.search_contents);
     }
 
     fn apply_confirmations(&mut self, update: &PreferencesUpdate) {
@@ -713,6 +760,7 @@ impl Preferences {
         replace_if_some(&mut self.item_checks_on_ctrl, update.item_checks_on_ctrl);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
         self.apply_names_and_panes(update);
+        self.apply_folder_options(update);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
@@ -895,6 +943,18 @@ pub struct PreferencesUpdate {
     pub show_extensions: Option<bool>,
     /// See [`Preferences::preview_pane`].
     pub preview_pane: Option<bool>,
+    /// See [`Preferences::open_folders_in_own_window`].
+    pub open_folders_in_own_window: Option<bool>,
+    /// See [`Preferences::hide_infotips`].
+    pub hide_infotips: Option<bool>,
+    /// See [`Preferences::hide_status_bar`].
+    pub hide_status_bar: Option<bool>,
+    /// See [`Preferences::hide_preview_handlers`].
+    pub hide_preview_handlers: Option<bool>,
+    /// See [`Preferences::type_into_search_box`].
+    pub type_into_search_box: Option<bool>,
+    /// See [`Preferences::search_contents`].
+    pub search_contents: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
@@ -981,6 +1041,12 @@ impl PreferencesUpdate {
             compact_density: flag("compactView"),
             show_extensions: flag("showExtensions"),
             preview_pane: flag("previewPane"),
+            open_folders_in_own_window: flag("openFoldersInOwnWindow"),
+            hide_infotips: flag("hideInfotips"),
+            hide_status_bar: flag("hideStatusBar"),
+            hide_preview_handlers: flag("hidePreviewHandlers"),
+            type_into_search_box: flag("typeIntoSearchBox"),
+            search_contents: flag("searchContents"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
             downloads_group_by: values
@@ -1419,6 +1485,45 @@ mod tests {
         });
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         assert!(stored.get("showExtensions").is_none(), "hidden again, not stored");
+    }
+
+    /// Folder Options' own choices start as Windows' defaults and are not
+    /// stored then; each one changed is saved under its key and read
+    /// back, and set back to the default it leaves the file again.
+    ///
+    /// parity: VIEW-020
+    #[test]
+    fn folder_options_choices_are_stored_only_when_changed() {
+        let keys = [
+            "openFoldersInOwnWindow",
+            "hideInfotips",
+            "hideStatusBar",
+            "hidePreviewHandlers",
+            "typeIntoSearchBox",
+            "searchContents",
+        ];
+        let mut preferences = Preferences::default();
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert!(stored.get(key).is_none(), "{key} is not stored by default");
+        }
+        let all = |on: bool| {
+            let values = keys.iter().map(|key| ((*key).to_owned(), json!(on))).collect();
+            PreferencesUpdate::from_json(&Value::Object(values)).expect("valid preferences")
+        };
+        preferences.apply(&all(true));
+        assert!(preferences.open_folders_in_own_window && preferences.hide_infotips);
+        assert!(preferences.hide_status_bar && preferences.hide_preview_handlers);
+        assert!(preferences.type_into_search_box && preferences.search_contents);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert_eq!(stored[key], json!(true), "{key} is stored once on");
+        }
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
+        assert_eq!(read, preferences, "read back as saved");
+        preferences.apply(&all(false));
+        assert_eq!(preferences, Preferences::default());
     }
 
     /// The item check boxes wait for Ctrl by default and the choice is not
