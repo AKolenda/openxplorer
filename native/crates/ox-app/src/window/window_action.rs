@@ -94,8 +94,6 @@ pub(crate) enum WindowAction {
     GoTo,
     /// Mounts the volume whose id is the string target, then opens it.
     MountVolume,
-    /// Opens the SMB server or share typed on the Network page.
-    OpenServerAddress,
     /// Opens the one selected item (Enter).
     Open,
     /// Selects every item (Ctrl+A).
@@ -194,26 +192,20 @@ pub(crate) enum WindowAction {
     ResetLayout,
     /// New ▸ Folder (Ctrl+Shift+N).
     NewFolder,
-    /// New ▸ Text document.
-    NewTextDocument,
-    /// New ▸ File….
-    NewFile,
-    /// New ▸ Markdown document.
-    NewMarkdownDocument,
-    /// New ▸ CSV file.
-    NewCsvFile,
-    /// New ▸ JSON file.
-    NewJsonFile,
-    /// New ▸ HTML document.
-    NewHtmlDocument,
-    /// New ▸ From template….
-    NewFromTemplate,
-    /// Opens the New from template dialog with the template whose id is
-    /// the string target chosen: a user template listed in the New menu
-    /// (OPS-003).
-    NewFromUserTemplate,
-    /// New ▸ Link to file or folder… (OPS-004).
+    /// New ▸ Shortcut: the link dialog (OPS-004).
     NewLink,
+    /// New ▸ Bitmap image.
+    NewBitmapImage,
+    /// New ▸ Rich Text Document.
+    NewRichTextDocument,
+    /// New ▸ Text Document.
+    NewTextDocument,
+    /// New ▸ Compressed (zipped) Folder.
+    NewCompressedFolder,
+    /// Copies the user template whose id is the string target into the
+    /// folder and renames the copy in place: a template the New menu
+    /// lists (OPS-003).
+    NewFromUserTemplate,
     /// Cut (Ctrl+X).
     Cut,
     /// Copy (Ctrl+C).
@@ -256,6 +248,9 @@ pub(crate) enum WindowAction {
     CancelOperation,
     /// Puts the selected Recycle Bin items back where they came from.
     Restore,
+    /// Puts every item in the Recycle Bin back where it came from (the
+    /// command bar's "Restore all items").
+    RestoreAllItems,
     /// Deletes everything in the Recycle Bin, after asking.
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
@@ -302,10 +297,6 @@ pub(crate) enum WindowAction {
     /// Opens the connect dialog at a web address, as Windows 11's "Add a
     /// network location" (This PC's and Network's "…").
     AddNetworkLocation,
-    /// Looks for SMB servers that advertise themselves.
-    DiscoverServers,
-    /// Stops looking for servers.
-    StopDiscovery,
     /// Saves the network location in the string target under Network
     /// ("Keep in Network").
     KeepInNetwork,
@@ -498,7 +489,6 @@ impl WindowAction {
             WindowAction::Search => "search",
             WindowAction::GoTo => "go-to",
             WindowAction::MountVolume => "mount-volume",
-            WindowAction::OpenServerAddress => "open-server-address",
             WindowAction::Open => "open",
             WindowAction::SelectAll => "select-all",
             WindowAction::SelectNone => "select-none",
@@ -541,15 +531,12 @@ impl WindowAction {
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",
             WindowAction::NewFolder => "new-folder",
-            WindowAction::NewTextDocument => "new-text-document",
-            WindowAction::NewFile => "new-file",
-            WindowAction::NewMarkdownDocument => "new-markdown-document",
-            WindowAction::NewCsvFile => "new-csv-file",
-            WindowAction::NewJsonFile => "new-json-file",
-            WindowAction::NewHtmlDocument => "new-html-document",
-            WindowAction::NewFromTemplate => "new-from-template",
-            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::NewLink => "new-link",
+            WindowAction::NewBitmapImage => "new-bitmap-image",
+            WindowAction::NewRichTextDocument => "new-rich-text-document",
+            WindowAction::NewTextDocument => "new-text-document",
+            WindowAction::NewCompressedFolder => "new-compressed-folder",
+            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",
@@ -569,6 +556,7 @@ impl WindowAction {
             WindowAction::Redo => "redo",
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
+            WindowAction::RestoreAllItems => "restore-all-items",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ClearRecentFiles => "clear-recent-files",
@@ -587,8 +575,6 @@ impl WindowAction {
             WindowAction::DropChoice => "drop-choice",
             WindowAction::MapNetworkLocation => "map-network-location",
             WindowAction::AddNetworkLocation => "add-network-location",
-            WindowAction::DiscoverServers => "discover-servers",
-            WindowAction::StopDiscovery => "stop-discovery",
             WindowAction::KeepInNetwork => "keep-in-network",
             WindowAction::RemoveSavedLocation => "remove-saved-location",
             WindowAction::SignOut => "sign-out",

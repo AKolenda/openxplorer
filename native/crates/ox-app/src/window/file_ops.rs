@@ -31,8 +31,7 @@
 //! | `delete_label` | The name of Delete: "Delete", or "Delete permanently" in the Recycle Bin |
 //! | `names` | The name check of the name dialogs (`validateName`) |
 //! | `name_dialog` | The dialog that asks for a name (`nameDialog`) |
-//! | `new_items` | New folder, and New file from a template |
-//! | `template_dialog` | The New file and New from template dialog |
+//! | `new_items` | New folder, and the New menu's documents and templates, made in place |
 //! | `template_menu` | The user's templates in the New menu, subfolders as submenus |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
@@ -48,9 +47,6 @@
 //! | `links` | Create links, from a drop |
 //! | `clipboard` | Cut, Copy and the desktop's file clipboard |
 //! | `transfer` | Pasting into a folder, with the name-conflict check |
-//! | `conflict_dialog` | The name-conflict dialog |
-//! | `conflict_compare` | The two items side by side in that dialog |
-//! | `conflict_rename` | The new name typed in that dialog |
 //! | `unstorable_dialog` | The question about names and links the destination cannot store |
 //! | `shortcuts` | The file commands' keys, which text fields keep |
 //! | `actions` | The window actions of these commands |
@@ -59,9 +55,6 @@ mod actions;
 mod availability;
 mod batch_rename;
 mod clipboard;
-mod conflict_compare;
-mod conflict_dialog;
-mod conflict_rename;
 mod delete;
 mod delete_label;
 mod duplicate;
@@ -84,7 +77,6 @@ mod rename;
 mod rename_conflict;
 mod running;
 mod shortcuts;
-mod template_dialog;
 mod template_menu;
 mod transfer;
 mod unfinished;
@@ -108,10 +100,6 @@ pub(crate) struct FileOperations {
     running: Option<Cancellation>,
     /// Independent copy, move and delete jobs, with their own panels.
     jobs: Vec<jobs::Job>,
-    /// Set while a paste checks its destination and asks about name
-    /// conflicts (`state.transferPlanning`), so a second paste cannot
-    /// start meanwhile.
-    planning: bool,
     /// The file list on the desktop's clipboard, as last read; `None`
     /// when it holds no files (`state.clipboard`, CLIP-009).
     clipboard: Option<ClipboardFiles>,
@@ -133,19 +121,19 @@ impl FileOperations {
         self.running.is_some()
     }
 
-    /// How many transfers run now, each with its own panel.
+    /// How many transfers run now, each with its own panel. A paste that
+    /// checks or asks about name conflicts is one.
     pub(crate) fn job_count(&self) -> usize {
         self.jobs.len()
     }
 
-    /// True while an exclusive operation runs or a paste is being planned:
-    /// no new file operation may start.
+    /// True while an exclusive operation runs: no new file operation may
+    /// start.
     pub(crate) fn is_busy(&self) -> bool {
-        self.is_running() || self.planning
+        self.is_running()
     }
 
-    /// True while no operation runs or is being planned, so a drag or a
-    /// drop may start.
+    /// True while no operation runs, so a drag or a drop may start.
     pub(crate) fn is_idle(&self) -> bool {
         !self.is_busy() && self.jobs.is_empty()
     }

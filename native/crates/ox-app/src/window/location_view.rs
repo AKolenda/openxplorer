@@ -86,8 +86,8 @@ pub(super) fn crumb_buttons(locations: &LocationContext, uri: &str, full_path: b
         .collect()
 }
 
-/// A tab's icon, as `renderTabs` picks it: the network glyph on the
-/// Network page, the gear on Settings, a phone for devices, the colour
+/// A tab's icon, as `renderTabs` picks it: the network glyph on
+/// Network, the gear on Settings, a phone for devices, the colour
 /// folder everywhere else, This PC included, and for a network location
 /// (SMB, or a folder under a kernel CIFS/SMB3 mount, NET-006) the location
 /// on the network bar as its row of `network` shows it in the sidebar.
@@ -181,6 +181,7 @@ impl BrowserWindow {
         self.render_tabs();
         self.show_pane_captions();
         self.show_snapshot_banner();
+        self.show_network_info_bar();
         self.update_properties_actions();
         self.sidebar().select(uri);
         self.follow_with_folder_tree();

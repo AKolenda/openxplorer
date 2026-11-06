@@ -4,7 +4,10 @@
 //! The expected numbers in those tests are the current app's layout as
 //! Chromium draws `v2.0.0:desktop/ui/index.html` with `style.css` at 100% text
 //! size (the reference captures of `tools/capture-screenshots.py`), in
-//! window coordinates.
+//! window coordinates, except where Windows 11's density replaced it
+//! (owner decision 2026-11-06): the 48-pixel navigation row and command
+//! bar, the 32-pixel column header, rows and sidebar rows, and the
+//! 16-pixel icons in rows and the sidebar.
 
 use gtk::graphene;
 use gtk::prelude::*;

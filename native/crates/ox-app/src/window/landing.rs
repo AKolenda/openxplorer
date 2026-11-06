@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The This PC and Network landing pages.
+//! The This PC landing page.
 //!
-//! Ports the `pc:` branch of `renderLanding` in `v2.0.0:desktop/ui/app.js`, and
-//! draws the title of every page ([`super::network_page`] draws the rest
-//! of Network). This PC lists Quick access (cards in a stretching grid,
+//! Ports the `pc:` branch of `renderLanding` in `v2.0.0:desktop/ui/app.js`.
+//! Network is listed like a folder instead, as in Windows 11
+//! ([`super::loading`]). This PC lists Quick access (cards in a stretching grid,
 //! [`super::card_grid`]), then Devices and drives (Local Disk, drives and
 //! devices with a capacity bar, unmounted volumes that connect on click),
 //! then the saved network locations with their state. A saved location's
@@ -25,15 +25,14 @@ use ox_core::places::{NetworkKind, Place, SavedShare};
 
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
 use crate::locations::Page;
-use crate::network::DiscoveryState;
 use crate::places::Places;
 use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
+use super::gestures;
 use super::place_menus::{attach_place_menu, PlaceMenu};
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
-use super::{gestures, network_page};
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
@@ -45,7 +44,7 @@ const QUICK_CARD_ART: i32 = 43;
 /// The icon of a drive, device or saved network location's card.
 const DRIVE_CARD_ICON: i32 = 46;
 /// Pixels between a card's picture and its texts.
-pub(super) const CARD_ICON_GAP: i32 = 15;
+const CARD_ICON_GAP: i32 = 15;
 
 /// The file system attributes a drive card reads.
 const CAPACITY_ATTRIBUTES: &str = "filesystem::size,filesystem::free";
@@ -90,7 +89,7 @@ fn label(text: &str, css_class: &str) -> gtk::Label {
 }
 
 /// A section heading: a glyph and a bold title.
-pub(super) fn section_title(text: &str, glyph: Icon) -> gtk::Box {
+fn section_title(text: &str, glyph: Icon) -> gtk::Box {
     let title = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     title.add_css_class("section-title");
     title.append(&icons::image(glyph, SECTION_GLYPH));
@@ -99,7 +98,7 @@ pub(super) fn section_title(text: &str, glyph: Icon) -> gtk::Box {
 }
 
 /// A card button that opens `uri`.
-pub(super) fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> gtk::Button {
+fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> gtk::Button {
     let card = gtk::Button::builder()
         .child(content)
         .css_classes([css_class])
@@ -122,7 +121,7 @@ fn card_texts_with(name: &str, subtitle: &gtk::Label) -> gtk::Box {
 }
 
 /// A card's name above a subtitle that ends in "…" when it is too long.
-pub(super) fn card_texts(name: &str, subtitle: &str) -> gtk::Box {
+fn card_texts(name: &str, subtitle: &str) -> gtk::Box {
     card_texts_with(name, &label(subtitle, "card-sub"))
 }
 
@@ -424,15 +423,8 @@ fn page_header(body: &gtk::Box, page: Page) {
     body.append(&subtitle);
 }
 
-/// Draws `page` into `body`, replacing what it showed; the Network page
-/// shows `discovery`.
-pub(super) fn render(
-    body: &gtk::Box,
-    page: Page,
-    places: &Places,
-    locations: &LocationContext,
-    discovery: &DiscoveryState,
-) {
+/// Draws `page` into `body`, replacing what it showed.
+pub(super) fn render(body: &gtk::Box, page: Page, places: &Places, locations: &LocationContext) {
     remove_children(body);
     match page {
         Page::ThisPc => {
@@ -441,13 +433,10 @@ pub(super) fn render(
             devices_and_drives(body, places, locations);
             saved_shares(body, places, locations);
         }
-        Page::Network => {
-            page_header(body, page);
-            network_page::render(body, places, locations, discovery);
-        }
-        // The Settings page replaces the whole browsing area, landing
-        // pages included (`super::settings_tab`), so it leaves this empty.
-        Page::Settings => {}
+        // Network is listed like a folder; the Settings page replaces the
+        // whole browsing area, landing pages included
+        // (`super::settings_tab`). Neither draws anything here.
+        Page::Network | Page::Settings => {}
     }
 }
 

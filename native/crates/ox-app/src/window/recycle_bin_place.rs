@@ -106,6 +106,9 @@ impl BrowserWindow {
                     if window.imp().trash_items.replace(count) != count {
                         let [_, _, bin] = sidebar::recent_and_bin_entries(count);
                         window.sidebar().replace_entry(bin);
+                        // A search in the Recycle Bin enables its commands
+                        // by this count.
+                        window.update_file_commands();
                     }
                     if !window.imp().recycle_bin_watch.stale.get() {
                         break;

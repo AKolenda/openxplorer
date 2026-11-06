@@ -160,10 +160,10 @@ fn the_more_view_and_sort_menus_are_captured_light_and_dark() {
             view.upcast_ref(),
             &format!("native-menu-view-{theme}.png"),
         );
-        view.click_row("Show");
+        let show = view.open_submenu_of("Show");
         capture_popover(
             &test.window,
-            view.upcast_ref(),
+            show.upcast_ref(),
             &format!("native-menu-view-show-{theme}.png"),
         );
         view_button.popdown();

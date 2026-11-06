@@ -613,19 +613,16 @@ pub(crate) struct BackgroundSubmenus {
     pub new: Vec<MenuEntry>,
 }
 
-/// The Windows 11 style of the folder's own menu, in the order of
-/// Explorer's compact menu on blank space: View, Sort by, Group by and
-/// Refresh; Paste and Undo; New; Properties; Open in Terminal; then "Show
-/// more options" for the rest (CMD-011, CMD-012). View, Sort by, Group by
-/// and New open `submenus` in place.
-pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+/// The folder menus' View, Sort by, Group by and New items, which open
+/// `submenus` beside the menu.
+fn background_submenu_items(submenus: BackgroundSubmenus) -> [MenuEntry; 4] {
     let BackgroundSubmenus {
         view,
         sort,
         group,
         new,
     } = submenus;
-    vec![
+    [
         MenuItem::submenu(
             ox_core::i18n::gettext_static("View"),
             Icon::Grid,
@@ -647,6 +644,27 @@ pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubm
             group,
         )
         .into(),
+        MenuItem::submenu(
+            ox_core::i18n::gettext_static("New"),
+            Icon::Add,
+            WindowAction::ShowNewMenu,
+            new,
+        )
+        .into(),
+    ]
+}
+
+/// The Windows 11 style of the folder's own menu, in the order of
+/// Explorer's compact menu on blank space: View, Sort by, Group by and
+/// Refresh; Paste and Undo; New; Properties; Open in Terminal; then "Show
+/// more options" for the rest (CMD-011, CMD-012). View, Sort by, Group by
+/// and New open `submenus` beside the menu.
+pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+    let [view, sort, group, new] = background_submenu_items(submenus);
+    vec![
+        view,
+        sort,
+        group,
         item(
             ox_core::i18n::gettext_static("Refresh"),
             Icon::ArrowClockwise,
@@ -666,13 +684,7 @@ pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubm
             .with_shortcut("Ctrl+Z")
             .into(),
         MenuEntry::Divider,
-        MenuItem::submenu(
-            ox_core::i18n::gettext_static("New"),
-            Icon::Add,
-            WindowAction::ShowNewMenu,
-            new,
-        )
-        .into(),
+        new,
         MenuEntry::Divider,
         properties_item(),
         MenuEntry::Divider,
@@ -790,34 +802,23 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 
 /// The menu of blank space in a folder, acting on the folder
 /// (`backgroundMenu`, CMD-011, CMD-012). `undo_label` and `redo_label` name what
-/// Undo and Redo would do, such as "Undo Rename".
+/// Undo and Redo would do, such as "Undo Rename". View, Sort by, Group by
+/// and New open `submenus` beside the menu, as in Windows 10's.
 pub(crate) fn background_menu(
     undo_label: &str,
     redo_label: &str,
     applications: &[ApplicationChoice],
+    submenus: BackgroundSubmenus,
 ) -> Vec<MenuEntry> {
+    // Explorer's and Dolphin's View and Sort by (CMD-012), as the command
+    // bar's menus.
+    let [view, sort, group, new] = background_submenu_items(submenus);
     let mut entries: Vec<MenuEntry> = vec![
-        // Explorer's and Dolphin's View and Sort by (CMD-012), as the
-        // command bar's menus.
-        item(
-            ox_core::i18n::gettext_static("View"),
-            Icon::Grid,
-            WindowAction::ShowViewMenu,
-        )
-        .into(),
-        item(
-            ox_core::i18n::gettext_static("Sort by"),
-            Icon::ArrowSort,
-            WindowAction::ShowSortMenu,
-        )
-        .into(),
+        view,
+        sort,
+        group,
         MenuEntry::Divider,
-        item(
-            ox_core::i18n::gettext_static("New…"),
-            Icon::Add,
-            WindowAction::ShowNewMenu,
-        )
-        .into(),
+        new,
         item(
             ox_core::i18n::gettext_static("Paste"),
             Icon::ClipboardPaste,
@@ -1050,6 +1051,17 @@ mod tests {
     }
 
     /// The labels of `entries`, a divider as `-`.
+    /// Submenus with one item each, for the folder menus.
+    fn submenus() -> BackgroundSubmenus {
+        let one = |label: &str| vec![item(label, Icon::ArrowSort, WindowAction::Sort).into()];
+        BackgroundSubmenus {
+            view: one("Details"),
+            sort: one("Name"),
+            group: one("Type"),
+            new: one("Folder"),
+        }
+    }
+
     fn labels(entries: &[MenuEntry]) -> Vec<String> {
         entries
             .iter()
@@ -1717,12 +1729,13 @@ mod tests {
             icon: None,
         };
         assert_eq!(
-            labels(&background_menu("Undo Rename", "Redo", &[files])),
+            labels(&background_menu("Undo Rename", "Redo", &[files], submenus())),
             [
                 "View",
                 "Sort by",
+                "Group by",
                 "-",
-                "New…",
+                "New",
                 "Paste",
                 "Undo Rename",
                 "Redo",

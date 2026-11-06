@@ -94,7 +94,11 @@ window.progress-window { background-color: @ox_bg; color: @ox_text; }
 .progress-action { padding: 14px 20px 14px 20px; }
 .progress-action + .progress-action { border-top: 1px solid @ox_border; }
 .progress-header { font-size: 12px; }
-.progress-header link { color: @ox_accent; }
+/* Folder links as in Windows: accent text, underlined only on hover. */
+.progress-header link,
+.file-conflicts-sides link { color: @ox_accent; text-decoration-line: none; }
+.progress-header link:hover,
+.file-conflicts-sides link:hover { text-decoration-line: underline; }
 .progress-percent { font-size: 18px; }
 window.ox button.progress-control { min-width: 28px; min-height: 28px; padding: 0; border-radius: 4px; }
 .progress-action progressbar > trough {
@@ -128,6 +132,31 @@ speedgraph .speed-grid { color: alpha(@ox_text, .07); }
 .progress-action.paused speedgraph .speed-reached { color: alpha(@ox_caution, .14); }
 speedgraph .speed-label { font-size: 11px; }
 .progress-footer { padding: 6px 12px 10px 12px; border-top: 1px solid @ox_border; }
+/* "Replace or Skip Files": what the action found in the percentage's
+   place, then three command rows, each a flat button with Windows'
+   glyph colours: a green check, accent arrows (src/window/transfer_panel/
+   question.rs). Hover changes the row's fill at once, with no fade. */
+.progress-action.asking .progress-percent { font-size: 16px; }
+.progress-action.asking .conflict-question { margin-top: 6px; }
+window.ox button.conflict-command { min-height: 32px; padding: 3px 8px 3px 16px; border-radius: 4px; }
+window.ox button.conflict-command label { font-size: 15px; }
+button.conflict-command.replace image { color: @ox_success; }
+button.conflict-command.skip image,
+button.conflict-command.decide image { color: @ox_accent; }
+
+/* ---- The File Conflict window of the progress window (§4.17,
+   src/window/conflict_window.rs): "Which files do you want to keep?",
+   the two sides' check boxes, one row per file, then "Skip … same date
+   and size", Continue and Cancel. ---- */
+window.file-conflicts { background-color: @ox_bg; color: @ox_text; }
+.file-conflicts-top { padding: 12px 16px 14px 16px; }
+.file-conflicts-heading { font-size: 16px; color: @ox_accent; }
+.file-conflicts-sides { padding: 0 16px 10px 16px; border-bottom: 1px solid @ox_border; }
+.file-conflict { padding: 8px 16px 10px 16px; border-bottom: 1px solid @ox_border; }
+.file-conflict-name { font-size: 12px; color: @ox_muted; }
+.file-conflict-side check { margin-top: 4px; }
+.file-conflicts-footer { padding: 10px 12px 10px 12px; border-top: 1px solid @ox_border; }
+window.ox button.file-conflicts-button { min-width: 88px; min-height: 26px; padding: 0 8px; border-radius: 4px; }
 
 /* ---- Windows 11 style context menu (§4.9, CMD-008) ---- */
 popover.ox-menu.compact > contents {

@@ -2,10 +2,11 @@
 //! The command bar's menus: New, Sort, View, More options and the
 //! appearance choices.
 //!
-//! Ports `openNewMenu`, the Sort and View menus of `setup()`, the More
-//! options menu and `appearanceMenu` in `v2.0.0:desktop/ui/app.js`, in their
-//! order. Each item runs a window or application action; the choices and
-//! toggles show a check mark while their action's state matches.
+//! Ports the Sort and View menus of `setup()`, the More options menu and
+//! `appearanceMenu` in `v2.0.0:desktop/ui/app.js`, in their order; the New
+//! menu, once `openNewMenu`, is Windows 11's. Each item runs a window or
+//! application action; the choices and toggles show a check mark while
+//! their action's state matches.
 
 use ox_core::grouping::GroupBy;
 use ox_core::i18n::gettext;
@@ -25,52 +26,43 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
     MenuItem::new(label, glyph, action).into()
 }
 
-/// The New menu (`openNewMenu`), which the folder background's "New…"
-/// opens too, with the user's `templates` before "From template…"
-/// (OPS-003) and Dolphin's link item (OPS-004).
+/// The New menu, which the folder background's "New…" opens too, laid
+/// out as Windows 11's: Folder and Shortcut, then the document types a
+/// stock Windows 11 registers, then the user's `templates`, Linux's
+/// counterpart of further registered types (OPS-003). Every file is made
+/// at once and renamed in place; Shortcut opens the link dialog (OPS-004).
 pub(in crate::window) fn new_menu(templates: Vec<MenuEntry>) -> Vec<MenuEntry> {
     let mut entries = vec![
         MenuItem::new(&gettext("Folder"), Icon::FolderAdd, WindowAction::NewFolder)
             .with_shortcut("Ctrl+Shift+N")
             .into(),
+        item(&gettext("Shortcut"), Icon::Link, WindowAction::NewLink),
+        MenuEntry::Divider,
         item(
-            &gettext("Text document"),
+            &gettext("Bitmap image"),
+            Icon::Image,
+            WindowAction::NewBitmapImage,
+        ),
+        item(
+            &gettext("Rich Text Document"),
+            Icon::Document,
+            WindowAction::NewRichTextDocument,
+        ),
+        item(
+            &gettext("Text Document"),
             Icon::DocumentText,
             WindowAction::NewTextDocument,
         ),
-        item(&gettext("File…"), Icon::DocumentAdd, WindowAction::NewFile),
-        MenuEntry::Divider,
         item(
-            &gettext("Markdown document"),
-            Icon::Markdown,
-            WindowAction::NewMarkdownDocument,
+            &gettext("Compressed (zipped) Folder"),
+            Icon::FolderZip,
+            WindowAction::NewCompressedFolder,
         ),
-        item(&gettext("CSV file"), Icon::Table, WindowAction::NewCsvFile),
-        item(&gettext("JSON file"), Icon::Braces, WindowAction::NewJsonFile),
-        item(
-            &gettext("HTML document"),
-            Icon::Code,
-            WindowAction::NewHtmlDocument,
-        ),
-        MenuEntry::Divider,
     ];
     if !templates.is_empty() {
-        entries.extend(templates);
         entries.push(MenuEntry::Divider);
+        entries.extend(templates);
     }
-    entries.extend([
-        item(
-            &gettext("From template…"),
-            Icon::DocumentCopy,
-            WindowAction::NewFromTemplate,
-        ),
-        MenuEntry::Divider,
-        item(
-            &gettext("Link to file or folder…"),
-            Icon::Link,
-            WindowAction::NewLink,
-        ),
-    ]);
     entries
 }
 

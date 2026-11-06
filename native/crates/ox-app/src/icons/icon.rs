@@ -65,18 +65,21 @@ pub(crate) enum Icon {
     /// set, for the owner to keep or remove.
     #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-03"))]
     ArrowSwap,
-    /// `arrow_undo_20_regular`: Undo.
+    /// `arrow_undo_20_regular`: Undo, and "Skip this file" in Replace or
+    /// Skip Files.
     ArrowUndo,
     /// `arrow_up_20_regular`: Up and the Ascending sort.
     ArrowUp,
     /// `bluetooth_20_regular`: Send to ▸ Bluetooth device.
     Bluetooth,
-    /// `braces_20_regular`: New JSON file.
+    /// `braces_20_regular`: New JSON file until New took Windows 11's list (2026-11-06);
+    /// still bundled with the approved set, for the owner to keep or remove.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-06"))]
     Braces,
     /// `checkbox_checked_20_regular`: View > Show > Item check boxes.
     CheckboxChecked,
-    /// `checkmark_20_regular`: a checked menu item and the chosen option of
-    /// a settings drop-down.
+    /// `checkmark_20_regular`: a checked menu item, the chosen option of a
+    /// settings drop-down, and "Replace the file in the destination".
     Checkmark,
     /// `chevron_down_20_regular`: the menu carets of New, Sort and View.
     ChevronDown,
@@ -101,7 +104,7 @@ pub(crate) enum Icon {
     /// `clock_20_regular`: Previous versions, and the banner of a tab that
     /// browses one (`icon('clock')` in app.js).
     Clock,
-    /// `code_20_regular`: New HTML document.
+    /// `code_20_regular`: the address menu's Keep address editable.
     Code,
     /// `code_20_color`: code, HTML and JSON files at small sizes.
     CodeColor20,
@@ -133,10 +136,10 @@ pub(crate) enum Icon {
     /// `dismiss_circle_16_filled`: the badge of a disconnected network share
     /// or mapped drive, as Windows marks one with a red cross.
     DismissCircleFilled,
-    /// `document_20_regular`: the Documents and Templates folders, and
-    /// License & source.
+    /// `document_20_regular`: the Documents and Templates folders, License &
+    /// source, and New ▸ Rich Text Document and the user's templates.
     Document,
-    /// `document_add_20_regular`: New file.
+    /// `document_add_20_regular`: the panel of a file being created.
     DocumentAdd,
     /// `document_20_color`: documents, PDFs, slides and unknown files at
     /// small sizes, and Send to ▸ Documents.
@@ -145,7 +148,8 @@ pub(crate) enum Icon {
     DocumentColor32,
     /// `document_48_color`: the same at large sizes.
     DocumentColor48,
-    /// `document_copy_20_regular`: New from template.
+    /// `document_copy_20_regular`: Duplicate, Compare files, and "Compare
+    /// info for both files".
     DocumentCopy,
     /// `document_text_20_regular`: New text document.
     DocumentText,
@@ -164,7 +168,8 @@ pub(crate) enum Icon {
     Folder,
     /// `folder_add_20_regular`: New folder.
     FolderAdd,
-    /// `folder_zip_20_regular`: the badge that marks a ZIP archive.
+    /// `folder_zip_20_regular`: the badge that marks a ZIP archive, and New
+    /// ▸ Compressed (zipped) Folder.
     FolderZip,
     /// `grid_20_regular`: View and the icon views.
     Grid,
@@ -180,7 +185,7 @@ pub(crate) enum Icon {
     History,
     /// `home_20_regular`: Home.
     Home,
-    /// `image_20_regular`: the Pictures folder.
+    /// `image_20_regular`: the Pictures folder and New ▸ Bitmap image.
     Image,
     /// `image_20_color`: pictures at small sizes.
     ImageColor20,
@@ -197,7 +202,8 @@ pub(crate) enum Icon {
     InvertSelection24,
     /// `laptop_20_regular`: This PC.
     Laptop,
-    /// `link_20_regular`: Copy as path in the context menus.
+    /// `link_20_regular`: Copy as path in the context menus, and New ▸
+    /// Shortcut.
     Link,
     /// `mail_20_color`: Send to ▸ Mail recipient, in colour as in Windows.
     MailColor20,
@@ -205,7 +211,9 @@ pub(crate) enum Icon {
     /// made for `OpenXplorer` to match Windows 11's command-bar glyph
     /// (`native/icon-sources`).
     MapNetworkDrive24,
-    /// `markdown_20_regular`: New Markdown document.
+    /// `markdown_20_regular`: New Markdown document until New took Windows 11's list (2026-11-06);
+    /// still bundled with the approved set, for the owner to keep or remove.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-06"))]
     Markdown,
     /// `maximize_20_regular`: the window's maximise button.
     Maximize,
@@ -281,7 +289,9 @@ pub(crate) enum Icon {
     StarFilled,
     /// `subtract_20_regular`: the window's minimise button and Smaller text.
     Subtract,
-    /// `table_20_regular`: New CSV file.
+    /// `table_20_regular`: New CSV file until New took Windows 11's list (2026-11-06);
+    /// still bundled with the approved set, for the owner to keep or remove.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-06"))]
     Table,
     /// `table_20_color`: spreadsheets and CSV files at small sizes.
     TableColor20,

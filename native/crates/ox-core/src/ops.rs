@@ -48,7 +48,7 @@
 //! | `delete_plan` | Trash support, and the Delete and Shift+Delete confirmations |
 //! | `run_transfer` | Copy, move, Trash and permanent delete through the engine |
 //! | `changed_copies` | Copies changed since their copy, before Undo trashes them |
-//! | `chosen_transfer` | A copy or move with an answer per name conflict |
+//! | `resolved_transfer` | A copy or move with an answer per name conflict, inside merged folders too |
 //! | `duplicate` | Duplicate in place |
 //! | `links` | Symbolic links to dropped items, and New ▸ Link |
 //! | `shortcuts` | Shortcuts named as Windows names them, for Send to ▸ Desktop |
@@ -74,7 +74,6 @@
 
 mod batch_rename;
 mod changed_copies;
-mod chosen_transfer;
 mod conflicts;
 mod context;
 mod create;
@@ -91,6 +90,7 @@ mod recycle_bin;
 mod recycle_bin_drag;
 mod rename;
 mod report;
+mod resolved_transfer;
 mod results;
 mod run_transfer;
 mod shortcuts;
@@ -102,8 +102,7 @@ mod unfinished;
 
 pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
 pub use changed_copies::changed_copies;
-pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
-pub use conflicts::find_conflicts;
+pub use conflicts::{scan_name_conflicts, ConflictScan, ItemFacts, NameConflict, PlannedItem, PlannedKind};
 pub use context::{FailureAsker, MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
 pub use create::{create_folder_path, create_item, create_numbered_folder, CreatedFolderPath, CreatedItem};
 pub use delete_plan::{
@@ -113,7 +112,9 @@ pub use duplicate::duplicate_items;
 pub use error::OpsError;
 pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
 pub use links::{create_link, create_links, CreatedLink, LinkRequest, NewLink};
-pub use new_from_template::{create_from_template, create_numbered_starter, NewFromTemplate};
+pub use new_from_template::{
+    create_from_template, create_numbered_document, create_numbered_from_template, NewFromTemplate,
+};
 pub use numbered_rename::{rename_numbered_items, NumberedRename};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
@@ -126,6 +127,9 @@ pub use report::{
     summarize, summarize_batch_rename, summarize_duplicate, summarize_journal_step, summarize_links,
     summarize_restore, summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
 };
+pub use resolved_transfer::{
+    run_answered_items, run_free_items, run_resolved_transfer, FreeItemsDone, Resolution,
+};
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use shortcuts::{create_shortcut, create_shortcuts, shortcut_name, NO_LINKS_HERE};
 pub use tab_transfer::{
@@ -133,7 +137,7 @@ pub use tab_transfer::{
     TabTransfers, WindowId, MAX_PENDING_TAB_TRANSFERS, TAB_TRANSFER_LIFETIME,
 };
 pub use templates::{
-    list_templates, BuiltinTemplate, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
+    list_templates, BuiltinTemplate, NewDocument, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
     MAX_USER_TEMPLATES,
 };
 pub use undo::{MovedItem, Operation, RenamedPair, UndoRecord};

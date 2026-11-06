@@ -104,6 +104,19 @@ pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, 
     name_with_copy_marker(name, &copy_marker(number), kind)
 }
 
+/// The name the copied item gets when the user keeps both versions in
+/// Windows' File Conflict window: "If you select both versions, the
+/// copied file will have a number added to its name", `report (2).png`,
+/// then `report (3).png`. `number` starts at 2; the number goes where
+/// [`new_copy_name`] puts its marker.
+///
+/// # Errors
+///
+/// As [`new_copy_name`].
+pub fn kept_both_name(name: &str, number: u32, kind: ItemKind) -> Result<String, LocationError> {
+    name_with_copy_marker(name, &format!(" ({number})"), kind)
+}
+
 /// The marker of the `number`th copy: ` - Copy`, then ` - Copy (2)`.
 fn copy_marker(number: u32) -> String {
     if number <= 1 {
@@ -296,6 +309,23 @@ mod tests {
             copy_name("file - Copy.txt", 1, ItemKind::File),
             "file - Copy - Copy.txt"
         );
+    }
+
+    /// Keeping both versions in the File Conflict window numbers the
+    /// copied file as Windows does: "report (2).png", then "(3)".
+    ///
+    /// parity: OPS-028
+    #[test]
+    fn kept_both_names_follow_windows_file_conflicts() {
+        let kept = |name: &str, number: u32, kind: ItemKind| {
+            kept_both_name(name, number, kind).expect("a valid name with room for the number")
+        };
+        assert_eq!(kept("report.png", 2, ItemKind::File), "report (2).png");
+        assert_eq!(kept("report.png", 3, ItemKind::File), "report (3).png");
+        assert_eq!(kept("Photos", 2, ItemKind::Folder), "Photos (2)");
+        assert_eq!(kept(".profile", 2, ItemKind::File), ".profile (2)");
+        assert_eq!(kept("archive.tar.gz", 2, ItemKind::File), "archive.tar (2).gz");
+        assert!(kept_both_name("a/b", 2, ItemKind::File).is_err());
     }
 
     /// parity: XFER-008

@@ -58,9 +58,10 @@ fn send_source(uri: &str, recent_target: Option<&str>) -> String {
 }
 
 /// Why a copy, and why a shortcut, cannot start now: `(copy, shortcut)`,
-/// `None` where one can. `is_busy` is an exclusive operation running or
-/// being planned, `jobs` the transfers running, `panel_busy` another
-/// writer holding the transfer panel.
+/// `None` where one can. `is_busy` is an exclusive operation running,
+/// `jobs` the transfers running, a paste still checking or asking about
+/// name conflicts among them, `panel_busy` another writer holding the
+/// transfer panel.
 fn capacity_refusals(
     is_busy: bool,
     jobs: usize,

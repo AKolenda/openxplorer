@@ -22,7 +22,9 @@ columnview.files > header > button {
   color: @ox_muted;
   font-weight: normal;
   padding: 0 12px;
-  min-height: 37px;
+  /* 31px plus the header's line, as Windows 11's column header (owner
+     decision 2026-11-06); theme/fonts.rs grows it with the text. */
+  min-height: 31px;
   box-shadow: none;
 }
 columnview.files > header > button:hover { background-color: @ox_hover; }
@@ -345,3 +347,18 @@ paned.pane-split > separator {
   background-image: none;
 }
 paned.pane-split > separator:hover { background-color: @ox_accent; }
+
+/* Windows' info bar above the items, as Network shows it while discovery
+   cannot run (window/network_info_bar.rs): the caution tokens of C35,
+   the whole width of the folder panes, the text at the start. */
+window.ox button.info-bar {
+  min-height: 0;
+  padding: 7px 14px;
+  border: none;
+  border-bottom: 1px solid @ox_caution_border;
+  border-radius: 0;
+  background-color: @ox_caution_bg;
+  color: @ox_caution_text;
+  box-shadow: none;
+}
+window.ox button.info-bar:hover { background-color: mix(@ox_caution_bg, @ox_caution_border, .35); }

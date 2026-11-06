@@ -16,7 +16,7 @@
 use gio::prelude::*;
 
 use super::context::on_worker;
-use super::undo::UndoRecord;
+use super::undo::{Operation, UndoRecord};
 use crate::transfer::MAX_DEPTH;
 
 /// The most items inside copied folders that are looked at.
@@ -29,9 +29,35 @@ const ATTRIBUTES: &str = "standard::name,standard::display-name,standard::type,t
 /// anything inside which, were modified after `since` (seconds since the
 /// Unix epoch), or could not be checked completely. Empty for every other step.
 pub async fn changed_copies(record: &UndoRecord, since: u64) -> Vec<String> {
-    let (UndoRecord::Copy { copies } | UndoRecord::Duplicate { copies }) = record else {
-        return Vec::new();
+    let copies = match record {
+        UndoRecord::Copy { copies } | UndoRecord::Duplicate { copies } => copies,
+        // A copy that replaced files: its copies are in its Copy step, or,
+        // once undone and redone, in the step that moves them to the Trash
+        // again.
+        UndoRecord::Replace {
+            operation: Operation::Copy,
+            steps,
+            ..
+        } => {
+            let copies: Vec<String> = steps
+                .iter()
+                .flat_map(|step| match step {
+                    UndoRecord::Copy { copies } => copies.as_slice(),
+                    UndoRecord::Restore { restored } => restored.as_slice(),
+                    _ => &[],
+                })
+                .cloned()
+                .collect();
+            return changed_among(copies, since).await;
+        }
+        _ => return Vec::new(),
     };
+    changed_among(copies.clone(), since).await
+}
+
+/// The names of `copies` that, or anything inside which, changed after
+/// `since`, or could not be checked completely.
+async fn changed_among(copies: Vec<String>, since: u64) -> Vec<String> {
     let pending = copies.clone();
     on_worker(move || Ok(changed_copies_blocking(&pending, since, MAX_CHECKED)))
         .await

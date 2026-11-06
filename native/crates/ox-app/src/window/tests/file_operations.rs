@@ -31,31 +31,6 @@ use crate::window::file_drop::DropAction;
 use crate::window::session::PaneSide;
 use crate::window::transfer_panel::TransferKind;
 
-/// parity: OPS-002
-#[gtk::test]
-fn a_new_menu_file_starts_from_its_template_and_is_created_from_it() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-
-    test.activate("new-markdown-document", None);
-    let dialog = open_dialog(&test);
-
-    assert_eq!(dialog.title_text(), "New from template");
-    assert_eq!(
-        dialog.message_text(),
-        "Create a new copy without changing the template."
-    );
-    assert_eq!(dialog.button_labels(), ["Cancel", "Create"]);
-    assert_eq!(text_field(&dialog).text(), "New document.md");
-    dialog.press("Create");
-    wait_for_no_dialog(&test);
-    wait_until("the new file to be selected", || {
-        test.selected_names() == ["New document.md"]
-    });
-    let contents = fs::read_to_string(fixture.path("New document.md")).expect("the new file");
-    assert_eq!(contents, "# New document\n");
-}
-
 /// parity: OPS-004
 #[gtk::test]
 fn new_link_asks_for_the_path_and_selects_the_new_link() {
@@ -92,7 +67,7 @@ fn new_is_disabled_where_nothing_can_be_created() {
     let test = TestWindow::open(Page::ThisPc.uri());
 
     assert!(!is_enabled(&test, "new-folder"));
-    assert!(!is_enabled(&test, "new-file"));
+    assert!(!is_enabled(&test, "new-text-document"));
     assert!(!is_enabled(&test, "paste"));
 }
 
