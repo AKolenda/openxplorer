@@ -13,7 +13,7 @@ use std::path::Path;
 
 use gio::prelude::*;
 
-use ox_core::ops::{plan_delete, DeleteItem, OpsError};
+use ox_core::ops::{plan_delete, DeleteItem, DeleteSubject, OpsError};
 use ox_core::transfer::Cancellation;
 
 use ops_support::{block_on, file_uri};
@@ -50,7 +50,10 @@ fn an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_p
 
     assert_eq!(plan.to_trash, [file_uri(&local)]);
     assert_eq!(plan.to_delete, [file_uri(&vanished)]);
-    assert_eq!(plan.confirmation().title, "Delete items?");
+    assert_eq!(
+        plan.confirmation(DeleteSubject::Items(2)).title,
+        "Delete Multiple Items"
+    );
 }
 
 /// An item goes to the Trash when GIO says the item itself can, even
@@ -78,7 +81,10 @@ fn an_item_in_a_folder_inside_a_read_only_folder_goes_to_the_trash() {
     let plan = plan.unwrap();
     assert_eq!(plan.to_trash, [item.uri]);
     assert!(plan.to_delete.is_empty());
-    assert_eq!(plan.confirmation().title, "Move to Trash?");
+    assert_eq!(
+        plan.confirmation(DeleteSubject::File).body,
+        "Are you sure you want to move this file to the Recycle Bin?"
+    );
 }
 
 /// GIO reports `access::can-trash` false for an item in a folder the user
@@ -103,7 +109,10 @@ fn an_item_gio_reports_without_a_trash_is_planned_for_permanent_delete() {
     let plan = plan.unwrap();
     assert!(plan.to_trash.is_empty());
     assert_eq!(plan.to_delete, [item.uri]);
-    assert_eq!(plan.confirmation().title, "Delete permanently?");
+    assert_eq!(
+        plan.confirmation(DeleteSubject::File).body,
+        "Are you sure you want to permanently delete this file?"
+    );
 }
 
 /// A listed item that cannot go to the Trash decides only for itself: a
@@ -182,7 +191,10 @@ fn a_share_that_cannot_answer_counts_as_having_a_trash() {
 
     assert_eq!(plan.to_trash, [item.uri]);
     assert!(plan.to_delete.is_empty());
-    assert_eq!(plan.confirmation().title, "Move to Trash?");
+    assert_eq!(
+        plan.confirmation(DeleteSubject::File).body,
+        "Are you sure you want to move this file to the Recycle Bin?"
+    );
 }
 
 #[test]

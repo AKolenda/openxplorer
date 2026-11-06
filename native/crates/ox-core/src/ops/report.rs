@@ -44,7 +44,7 @@ pub fn summarize(mode: TransferMode, result: &TransferResult) -> OperationSummar
         TransferMode::Copy => crate::i18n::message_id("{count} item(s) copied."),
         TransferMode::Move => crate::i18n::message_id("{count} item(s) moved."),
         TransferMode::Delete => crate::i18n::message_id("{count} item(s) permanently deleted."),
-        TransferMode::Trash => crate::i18n::message_id("{count} item(s) sent to Trash."),
+        TransferMode::Trash => crate::i18n::message_id("{count} item(s) moved to the Recycle Bin."),
     };
     summarize_items(message, result)
 }
@@ -198,7 +198,7 @@ mod tests {
             },
             ToastCase {
                 mode: TransferMode::Trash,
-                toast: "2 item(s) sent to Trash.",
+                toast: "2 item(s) moved to the Recycle Bin.",
             },
         ];
         for case in cases {

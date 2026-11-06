@@ -15,7 +15,7 @@ pub(crate) enum ButtonStyle {
     Accent,
     /// A secondary action with a thin border, such as Open or Try again.
     Bordered,
-    /// The red button of a destructive question, such as "Move to Trash".
+    /// The red button of a destructive question, such as "Empty Recycle Bin".
     Danger,
 }
 

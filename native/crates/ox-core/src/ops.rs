@@ -29,10 +29,10 @@
 //! (the `cancel` request) have no counterpart here.
 //!
 //! Wording: the place `trash:///` is the Recycle Bin in every message, as
-//! [`crate::location`] names it. The Delete command and its confirmation
-//! keep the Python app's "Move to Trash" texts word for word (OPS-015,
-//! CMD-003), and Undo names the step as Windows Explorer does ("Undo
-//! Delete").
+//! [`crate::location`] names it. The Delete command, its confirmations
+//! and Undo use Windows Explorer's words ("Delete", "Delete File", "Are you
+//! sure you want to move this file to the Recycle Bin?", "Undo Delete";
+//! OPS-015, CMD-003).
 //!
 //! | Module | Responsibility |
 //! |---|---|
@@ -105,7 +105,7 @@ pub use conflicts::find_conflicts;
 pub use context::{FailureAsker, MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
 pub use create::{create_folder_path, create_item, create_numbered_folder, CreatedFolderPath, CreatedItem};
 pub use delete_plan::{
-    permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, DeletePlan,
+    permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, DeletePlan, DeleteSubject,
 };
 pub use duplicate::duplicate_items;
 pub use error::OpsError;

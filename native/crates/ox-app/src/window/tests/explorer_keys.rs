@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::file_ops_support::{
-    dialog_over, is_enabled, name_editor, open_dialog, press_shortcut, press_shortcut_where_focused,
+    dialog_over, is_enabled, name_editor, press_shortcut, press_shortcut_where_focused,
     require_private_trash, select_names,
 };
 use crate::test_support::harness::{application, settle, wait_until, Fixture, TestWindow};
@@ -78,8 +78,8 @@ fn ctrl_e_moves_to_the_search_box_and_selects_its_text() {
     assert!(focus_is_in_search(&test), "Ctrl+E works from the address bar too");
 }
 
-/// Ctrl+D asks and moves the selection to the Recycle Bin exactly as
-/// Delete does, and Ctrl+Z brings it back: the same Undo step.
+/// Ctrl+D moves the selection to the Recycle Bin exactly as Delete does,
+/// without asking, and Ctrl+Z brings it back: the same Undo step.
 ///
 /// parity: CMD-036, OPS-015
 #[gtk::test]
@@ -90,14 +90,11 @@ fn ctrl_d_moves_the_selection_to_the_recycle_bin_as_delete_does() {
     select_names(&test, &["Résumé.txt"]);
 
     press_shortcut(&test, gdk::Key::d, gdk::ModifierType::CONTROL_MASK);
-    let dialog = open_dialog(&test);
 
-    assert_eq!(dialog.title_text(), "Move to Trash?");
-    assert_eq!(dialog.button_labels(), ["Cancel", "Move to Trash"]);
-    dialog.press("Move to Trash");
     wait_until("the file to leave the folder", || {
         !fixture.path("Résumé.txt").exists()
     });
+    assert!(dialog_over(&test).is_none(), "nothing asked");
     wait_until("Undo to be offered", || is_enabled(&test, "undo"));
     press_shortcut(&test, gdk::Key::z, gdk::ModifierType::CONTROL_MASK);
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
