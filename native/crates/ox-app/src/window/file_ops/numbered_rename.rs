@@ -25,7 +25,7 @@ use ox_core::ops::{rename_numbered_items, summarize_batch_rename, BatchItem, Num
 
 use super::extension_confirm::changes_extension;
 use super::name_dialog::{ask_for_name, NameRequest};
-use super::rename::{name_selection, NOT_RENAMED};
+use super::rename::{has_no_extension, name_selection, NOT_RENAMED};
 use super::running::FinishedOperation;
 use crate::window::BrowserWindow;
 
@@ -41,12 +41,13 @@ pub(super) fn numbered_batch_for(entries: &[Entry], edited: &Entry, typed: &str)
             .map(|entry| BatchItem {
                 uri: entry.uri.clone(),
                 name: entry.name.clone(),
-                is_dir: entry.is_dir,
+                // A shortcut's name, like a folder's, has no extension.
+                is_dir: has_no_extension(entry),
             })
             .collect(),
         name: typed.to_owned(),
         edited_name: edited.name.clone(),
-        edited_is_dir: edited.is_dir,
+        edited_is_dir: has_no_extension(edited),
     }
 }
 

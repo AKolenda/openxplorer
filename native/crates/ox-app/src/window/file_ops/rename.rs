@@ -45,6 +45,12 @@ pub(super) fn name_selection(entry: &Entry) -> NameSelection {
     }
 }
 
+/// Whether `entry`'s name has no extension for a rename to keep or ask
+/// about: a folder's or a shortcut's ([`name_selection`]).
+pub(super) fn has_no_extension(entry: &Entry) -> bool {
+    name_selection(entry) == NameSelection::Whole
+}
+
 /// How many characters of `entry`'s name a rename selects
 /// ([`name_selection`]).
 pub(super) fn selected_name_length(entry: &Entry) -> usize {

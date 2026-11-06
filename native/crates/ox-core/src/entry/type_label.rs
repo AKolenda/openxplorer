@@ -28,6 +28,16 @@ const UNKNOWN_TYPE: &str = crate::i18n::message_id("File");
 /// (`"<name> — Compressed folder"` in `v2.0.0:desktop/ui/app.js`).
 const ZIP_LABEL: &str = crate::i18n::message_id("Compressed folder");
 
+/// The Type column's name for a shortcut, as Windows Explorer shows it.
+const SHORTCUT_LABEL: &str = crate::i18n::message_id("Shortcut");
+
+/// The Type column text of a shortcut: a symbolic link, the app's
+/// shortcut, which Windows Explorer calls "Shortcut" whatever it points
+/// to.
+pub(super) fn shortcut_label() -> String {
+    crate::i18n::gettext(SHORTCUT_LABEL)
+}
+
 /// Type column text: the label of `folder_type` for navigable items, then
 /// the interface's name for a common type, then GIO's description of
 /// `content_type`, then "File".

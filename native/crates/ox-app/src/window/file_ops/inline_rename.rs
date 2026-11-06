@@ -27,10 +27,9 @@ use gtk::{gdk, glib};
 use ox_core::entry::Entry;
 use ox_core::ops::rename_item;
 
-use super::name_dialog::NameSelection;
 use super::names::check_typed_name;
 use super::numbered_rename::numbered_batch_for;
-use super::rename::{name_selection, selected_name_length};
+use super::rename::{has_no_extension, selected_name_length};
 use crate::folder_view::cells::FileCell;
 use crate::folder_view::shown_name::{hidden_extension, shown_name};
 use crate::window::folder_pane::FolderView;
@@ -95,7 +94,7 @@ impl BrowserWindow {
         let target = RenameTarget {
             uri: entry.uri.clone(),
             name: entry.name.clone(),
-            has_no_extension: name_selection(entry) == NameSelection::Whole,
+            has_no_extension: has_no_extension(entry),
             several: several.map(Rc::from),
             hidden_extension: hidden_extension.clone(),
         };

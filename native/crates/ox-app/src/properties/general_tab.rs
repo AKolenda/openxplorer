@@ -162,7 +162,12 @@ pub(super) fn general_tab(
 }
 
 /// `PNG image (.png)`: the type and, when the name has one, its extension.
+/// A shortcut is just "Shortcut": its name has no extension, and the
+/// `.lnk` Windows shows there does not exist here.
 fn type_of_file(entry: &Entry) -> String {
+    if entry.is_symlink {
+        return entry.type_label.clone();
+    }
     let extension = std::path::Path::new(&entry.name)
         .extension()
         .and_then(|extension| extension.to_str())
@@ -251,8 +256,9 @@ pub(super) struct GeneralEdits {
     original_name: RefCell<String>,
     is_folder: bool,
     /// Renaming asks about a changed extension, except for a link to a
-    /// folder, whose name has none (OPS-049).
-    links_to_folder: bool,
+    /// folder or any other shortcut, whose name has none: Windows keeps a
+    /// shortcut's hidden `.lnk` and never asks (OPS-049).
+    is_shortcut: bool,
     name: gtk::Entry,
     read_only: gtk::CheckButton,
     /// Whether the item is read-only now; `None` for a folder, whose box
@@ -303,7 +309,7 @@ impl GeneralEdits {
             uri,
             original_name: RefCell::new(entry.name.clone()),
             is_folder: entry.is_dir,
-            links_to_folder: properties.links_to_folder,
+            is_shortcut: entry.is_symlink || properties.links_to_folder,
             name,
             read_only,
             read_only_now: Cell::new(read_only_now),
@@ -472,7 +478,7 @@ impl GeneralEdits {
                 ));
             };
             let uri = self.uri.borrow().clone();
-            let is_folder = self.is_folder || self.links_to_folder;
+            let has_no_extension = self.is_folder || self.is_shortcut;
             let parent = window.as_ref().map_or_else(
                 || opener.clone().upcast::<gtk::Window>(),
                 |window| window.clone().upcast(),
@@ -483,7 +489,7 @@ impl GeneralEdits {
             self.name.set_editable(false);
             self.hidden.set_sensitive(false);
             let renaming = opener
-                .rename_item_at(&parent, &uri, &original, &wanted, is_folder)
+                .rename_item_at(&parent, &uri, &original, &wanted, has_no_extension)
                 .await;
             self.name.set_editable(editable);
             self.hidden.set_sensitive(can_hide);
