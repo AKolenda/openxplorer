@@ -490,7 +490,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 121] = [
+pub(crate) const ALL_ICONS: [Icon; 123] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
