@@ -138,8 +138,30 @@ fn device_label(row: &VolumeRow) -> Option<DeviceLabel> {
         return None;
     }
     let uri = row.uri()?.to_owned();
-    let label = row.label.clone();
+    let label = clean_label(&row.label);
     Some(DeviceLabel { uri, label })
+}
+
+/// `label` without the control characters a device is free to report.
+///
+/// A phone, camera or iOS device names itself, so the name is data from
+/// outside this computer, and it reaches the navigation pane, the address
+/// bar, Copy as path and the paths Copy publishes as text. A name holding a
+/// line break or an escape character would draw as two rows or reach a
+/// terminal's escape parsing, so such a character becomes U+FFFD, which is
+/// what a name this font cannot draw shows as too. Everything else is kept
+/// as the device wrote it.
+fn clean_label(label: &str) -> String {
+    label
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                '\u{FFFD}'
+            } else {
+                character
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -176,6 +198,33 @@ mod tests {
             .into_iter()
             .map(|crumb| crumb.label)
             .collect()
+    }
+
+    /// A device names itself, so its name is data from outside this
+    /// computer: a line break or an escape character in it never reaches the
+    /// navigation pane, the address bar or the paths Copy publishes as text.
+    ///
+    /// parity: CLIP-004
+    #[test]
+    fn a_device_label_loses_the_control_characters_it_reports() {
+        let mount = MountFacts {
+            name: "Pixel\n7\u{1b}[31m".into(),
+            root_uri: "mtp://[usb:001,010]/".into(),
+            shadowed: false,
+            controls: MountControls::UNMOUNTABLE,
+        };
+        let context = location_context(PathBuf::from(DEMO_HOME), &locations(&[mount], &[]));
+
+        assert_eq!(
+            context.device_name(PHONE_FOLDER),
+            "Pixel\u{FFFD}7\u{FFFD}[31m",
+            "the name is shown as one line, and its escape is no escape"
+        );
+        assert_eq!(
+            clean_label("Pixel 7"),
+            "Pixel 7",
+            "an ordinary name is kept whole"
+        );
     }
 
     #[test]

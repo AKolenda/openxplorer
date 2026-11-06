@@ -480,6 +480,42 @@ fn share_and_device_roots_are_refused_before_any_text_is_published() {
     }
 }
 
+/// An address holding a control character is no line: the selection then
+/// publishes no text at all, and the four file formats still name the item
+/// exactly. A terminal pasting two lines would run the second as a command.
+///
+/// Only a device's label can reach this, since `require_item_uri` refuses a
+/// URI carrying an encoded control character; the app also cleans a label as
+/// it reads it, so this is the guard behind the type's public
+/// [`LocationContext::devices`] field.
+///
+/// parity: CLIP-004
+#[test]
+fn a_label_holding_a_line_break_publishes_no_text() {
+    // A phone that names itself "Pixel\n7" would make the path two lines.
+    let locations = LocationContext {
+        devices: vec![DeviceLabel {
+            uri: "mtp://[usb:001,010]/".to_owned(),
+            label: "Pixel\n7".to_owned(),
+        }],
+        ..LocationContext::default()
+    };
+
+    let uris = vec!["mtp://[usb:001,010]/Internal%20storage/DCIM".to_owned()];
+    let files = ClipboardFiles::new(ClipboardMode::Copy, &uris, &locations).expect("a valid item");
+
+    let published: Vec<&str> = files
+        .encode(&locations)
+        .into_iter()
+        .map(|payload| payload.mime_type)
+        .collect();
+    assert_eq!(
+        published,
+        vec![CUSTOM, GNOME, URI_LIST, KDE_CUT],
+        "no text, but every file format"
+    );
+}
+
 /// parity: CLIP-004
 #[test]
 fn selections_outside_one_to_a_hundred_thousand_items_are_refused_as_a_transfer_is() {

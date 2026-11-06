@@ -14,7 +14,7 @@
 //! | [`CUSTOM`] | Python and native app windows | JSON with mode, URIs and token |
 //! | [`GNOME`] | Nautilus and other GTK apps | `copy` or `cut`, then one URI per line |
 //! | [`URI_LIST`] | every file manager | CRLF-terminated URIs |
-//! | [`TEXT`] | terminals and editors that take text | each item's path, one per line |
+//! | [`TEXT`] | terminals and editors that take text | each item's path, one per line, when every path is one line |
 //! | [`KDE_CUT`] | Dolphin and other KDE apps | `1` for cut, `0` for copy |
 //!
 //! Paste tries [`CUSTOM`], then [`GNOME`], then [`URI_LIST`] with the
@@ -49,7 +49,10 @@ pub const URI_LIST: &str = "text/uri-list";
 /// pasting into a terminal gives the files' paths. It carries
 /// [`LocationContext::copied_location`], so a local item is its path, an SMB
 /// item its `\\server\share\…` path and a phone's item `Pixel 7 / path`.
-/// Nothing is quoted: Windows' quoted form belongs to Copy as path.
+/// Nothing is quoted: Windows' quoted form belongs to Copy as path. A
+/// selection with an address that holds a control character publishes no
+/// text at all, since pasting it into a terminal would paste more lines than
+/// the items it names ([`ClipboardFiles::encode`]).
 pub const TEXT: &str = "text/plain;charset=utf-8";
 /// KDE's cut marker, published beside [`URI_LIST`]: `1` for cut, `0` for
 /// copy.
@@ -179,7 +182,8 @@ impl ClipboardFiles {
         // text every path, which a device label can make longer than its
         // address; the other formats are smaller. A paste refuses a payload
         // over MAX_BYTES, so publishing one would leave nothing to paste.
-        if files.custom_json().len() > MAX_BYTES || files.text(locations).len() > MAX_BYTES {
+        let text_bytes = files.text(locations).map_or(0, |text| text.len());
+        if files.custom_json().len() > MAX_BYTES || text_bytes > MAX_BYTES {
             return Err(ClipboardError::TooLarge);
         }
         Ok(files)
@@ -244,7 +248,9 @@ impl ClipboardFiles {
         self.uris.len() != original_len
     }
 
-    /// Encodes all five formats for a single system-clipboard owner.
+    /// Encodes the formats for a single system-clipboard owner: the four
+    /// file-list formats, and [`TEXT`] when every item's address is one
+    /// line.
     ///
     /// A consumed, empty selection has no file formats and should clear the
     /// clipboard instead of publishing an invalid empty file list.
@@ -252,7 +258,7 @@ impl ClipboardFiles {
         if self.uris.is_empty() {
             return Vec::new();
         }
-        vec![
+        let mut payloads = vec![
             ClipboardPayload {
                 mime_type: CUSTOM,
                 bytes: self.custom_json(),
@@ -265,27 +271,42 @@ impl ClipboardFiles {
                 mime_type: URI_LIST,
                 bytes: encode_uri_list(&self.uris).into_bytes(),
             },
-            ClipboardPayload {
+        ];
+        if let Some(text) = self.text(locations) {
+            payloads.push(ClipboardPayload {
                 mime_type: TEXT,
-                bytes: self.text(locations).into_bytes(),
-            },
-            ClipboardPayload {
-                mime_type: KDE_CUT,
-                bytes: self.mode.kde_cut_marker().to_vec(),
-            },
-        ]
+                bytes: text.into_bytes(),
+            });
+        }
+        payloads.push(ClipboardPayload {
+            mime_type: KDE_CUT,
+            bytes: self.mode.kde_cut_marker().to_vec(),
+        });
+        payloads
     }
 
     /// The [`TEXT`] payload: each item's display address, one per line,
     /// unquoted, without a trailing newline, as GTK's file-list text
-    /// serializer writes them.
-    fn text(&self, locations: &LocationContext) -> String {
+    /// serializer writes them; `None` when there is no such payload.
+    ///
+    /// Safety rule (one line per item): an address holding a control
+    /// character is no line, so the selection publishes no text rather than
+    /// a payload whose lines are not items, which a terminal would paste as
+    /// more than was copied. No URI can bring one, since
+    /// [`require_item_uri`] refuses an encoded control character: only a
+    /// device's label can, and the app cleans a label as it reads it. This is
+    /// the guard behind the public `devices` field that keeps such a name
+    /// from ever becoming a second line.
+    fn text(&self, locations: &LocationContext) -> Option<String> {
         let lines: Vec<String> = self
             .uris
             .iter()
             .map(|uri| locations.copied_location(uri))
             .collect();
-        lines.join("\n")
+        if lines.iter().any(|line| line.chars().any(char::is_control)) {
+            return None;
+        }
+        Some(lines.join("\n"))
     }
 
     /// The [`CUSTOM`] payload: `{"mode": ..., "uris": [...], "token": ...}`.
