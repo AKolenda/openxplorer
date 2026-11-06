@@ -40,6 +40,7 @@ use entries::{
     zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation,
     ItemShape,
 };
+pub(super) use entries::{SendToDrive, SendToTargets};
 
 /// How far into a row, and from the view's corner without one, a menu
 /// opened from the keyboard points.
@@ -276,6 +277,7 @@ impl BrowserWindow {
             caching,
             delete_label: self.delete_label(),
             disk_tool: disk_tool_of(entry),
+            send_to: self.send_to_targets(),
         }
     }
 
@@ -379,6 +381,13 @@ impl BrowserWindow {
     #[cfg(test)]
     pub(super) fn context_menu(&self) -> MenuPopover {
         context_menu_of(&self.folder_pane().input_widget()).expect("every view has a context menu")
+    }
+
+    /// Opens the submenu labelled `label` of the open context menu, for
+    /// the snapshot hook's `submenu=` step; false when there is none.
+    pub(crate) fn open_context_submenu(&self, label: &str) -> bool {
+        context_menu_of(&self.folder_pane().input_widget())
+            .is_some_and(|menu| menu.is_visible() && menu.open_submenu_labelled(label))
     }
 
     /// Opens the context menu as a right-click at the item at `position`,

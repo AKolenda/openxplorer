@@ -303,7 +303,7 @@ impl AddressBar {
                 crumb_box.append(&label);
             }
             let button = crumb_button(crumb);
-            self.add_crumb_menu_and_wheel(&button, &crumb.crumb.uri, next);
+            crumb_menus::open_subfolders_on_down(&button, &crumb.crumb.uri, next);
             if index == last {
                 button.update_property(&[gtk::accessible::Property::Description(&ox_core::i18n::gettext(
                     "Current location",
@@ -419,13 +419,6 @@ impl AddressBar {
         super::widget_tree::children(&*self.imp().crumbs)
             .filter_map(|child| child.downcast::<gtk::Button>().ok())
             .collect()
-    }
-
-    /// Whether the crumbs are wider than the bar, so the wheel scrolls
-    /// them rather than switching folders (NAV-022).
-    pub(super) fn crumbs_overflow(&self) -> bool {
-        let adjustment = self.imp().crumb_scroll.hadjustment();
-        adjustment.upper() > adjustment.page_size() + 0.5
     }
 
     /// The crumbs' horizontal scroll position, for tests.

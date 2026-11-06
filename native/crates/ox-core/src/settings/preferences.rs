@@ -242,7 +242,10 @@ pub struct Preferences {
     pub theme: Theme,
     /// Details list or icon grid.
     pub view: View,
-    /// Details pane visible. Stored as `details`, the Python app's key.
+    /// Details pane visible. Off by default, as Windows 11 Explorer opens
+    /// with its Details and Preview panes closed. Stored as `details`, the
+    /// Python app's key, whatever its value, so a file that has it keeps
+    /// the pane as it was.
     #[serde(rename = "details")]
     pub show_details_pane: bool,
     /// Hidden files shown.
@@ -505,7 +508,7 @@ impl Default for Preferences {
         Self {
             theme: Theme::default(),
             view: View::default(),
-            show_details_pane: true,
+            show_details_pane: false,
             show_hidden: false,
             auto_index: true,
             context_menu: ContextMenu::default(),
@@ -1139,18 +1142,21 @@ mod tests {
         assert_eq!(preferences.network_interval, 60);
         assert_eq!(preferences.text_size, 100);
         assert!(preferences.auto_index);
-        assert!(preferences.show_details_pane);
+        // Closed, as Windows 11 Explorer opens, where the Python app had
+        // it open.
+        assert!(!preferences.show_details_pane);
         assert!(!preferences.show_hidden);
     }
 
     /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`,
-    /// with Windows 11's compact menu where the Python app stored "win10".
+    /// with Windows 11's compact menu where the Python app stored "win10"
+    /// and its closed details pane where the Python app had it open.
     /// parity: SET-016
     #[test]
     fn default_preferences_are_stored_like_the_python_app() {
         let stored = serde_json::to_value(Preferences::default()).unwrap();
         let python = json!({
-            "theme": "system", "view": "details", "details": true, "showHidden": false,
+            "theme": "system", "view": "details", "details": false, "showHidden": false,
             "autoIndex": true, "contextMenu": "win11", "networkInterval": 60, "textSize": 100
         });
         assert_eq!(stored, python);

@@ -51,7 +51,7 @@
 //! | `chosen_transfer` | A copy or move with an answer per name conflict |
 //! | `duplicate` | Duplicate in place |
 //! | `links` | Symbolic links to dropped items, and New ▸ Link |
-//! | `shortcut` | A shortcut: a symbolic link named `report.txt - Shortcut` |
+//! | `shortcuts` | Shortcuts named as Windows names them, for Send to ▸ Desktop and dropped links |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
@@ -93,7 +93,7 @@ mod rename;
 mod report;
 mod results;
 mod run_transfer;
-mod shortcut;
+mod shortcuts;
 mod tab_transfer;
 mod templates;
 mod undo;
@@ -127,7 +127,7 @@ pub use report::{
     summarize_restore, summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
-pub use shortcut::create_shortcut;
+pub use shortcuts::{create_shortcut, create_shortcuts, shortcut_name, NO_LINKS_HERE};
 pub use tab_transfer::{
     Acceptance, Delivery, KeptReason, TabMessage, TabMoveOutcome, TabTransferError, TabTransferToken,
     TabTransfers, WindowId, MAX_PENDING_TAB_TRANSFERS, TAB_TRANSFER_LIFETIME,

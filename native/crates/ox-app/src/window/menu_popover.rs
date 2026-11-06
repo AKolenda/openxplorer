@@ -571,6 +571,17 @@ impl MenuPopover {
         self.focus_first_item();
     }
 
+    /// Opens the submenu of the shown item labelled `label`, as Right on
+    /// its row does; false when no such item has a submenu that can open.
+    pub(in crate::window) fn open_submenu_labelled(&self, label: &str) -> bool {
+        let Some(index) = self.items().iter().position(|item| item.label == label) else {
+            return false;
+        };
+        let depth = self.imp().path.borrow().len();
+        self.open_submenu(index);
+        self.imp().path.borrow().len() > depth
+    }
+
     /// Goes back from a submenu to the items it is among, with the
     /// keyboard on its item.
     fn go_back(&self) {

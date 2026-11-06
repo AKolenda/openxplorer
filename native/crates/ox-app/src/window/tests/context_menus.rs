@@ -68,7 +68,7 @@ fn a_right_press_selects_the_item_and_its_release_opens_the_menu() {
     assert!(menu.is_visible(), "the release opens the menu");
 }
 
-/// parity: CMD-008, CMD-009, CMD-015, SEL-003
+/// parity: CMD-008, CMD-009, CMD-015, SEL-003, CMD-038
 #[gtk::test]
 fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     let fixture = Fixture::standard();
@@ -97,6 +97,8 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Open",
             "Open containing folder in Terminal",
             "Open with…",
+            "-",
+            "Send to",
             "-",
             "Cut",
             "Copy",

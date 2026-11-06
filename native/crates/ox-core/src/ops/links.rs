@@ -18,7 +18,6 @@
 //! other backends make no symbolic links, and a link to an `smb://`
 //! address would point nowhere for other apps.
 
-use std::io;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +27,7 @@ use super::context::{on_worker, OperationContext};
 use super::create::name_taken_or;
 use super::error::OpsError;
 use super::run_transfer::TransferOutcome;
-use super::shortcut::create_shortcut;
+use super::shortcuts::create_shortcut;
 use super::undo::UndoRecord;
 use crate::location::{file_uri, normalise, typed_local_path, validate_name};
 use crate::transfer::{TransferResult, MAX_ITEMS};
@@ -39,10 +38,6 @@ const NOT_LOCAL_FOLDER: &str =
 
 /// Why one item gets no link.
 const NOT_LOCAL_ITEM: &str = crate::i18n::message_id("Links can only point to items on this computer.");
-
-/// Why one item's link was not made.
-const NAME_TAKEN: &str =
-    crate::i18n::message_id("An item with this name already exists. Nothing was replaced.");
 
 /// Why New ▸ Link has nothing to point to.
 const NO_TARGET: &str = crate::i18n::message_id("Enter the path of the file or folder to link to.");
@@ -205,15 +200,10 @@ fn link_item(uri: &str, folder: &Path) -> Result<PathBuf, String> {
     if target.file_name().is_none() {
         return Err(crate::i18n::gettext(NOT_LOCAL_ITEM));
     }
-    create_shortcut(&target, folder).map_err(|error| describe(&error))
-}
-
-/// The message for a failed link.
-fn describe(error: &io::Error) -> String {
-    if error.kind() == io::ErrorKind::AlreadyExists {
-        return crate::i18n::gettext(NAME_TAKEN);
-    }
-    error.to_string()
+    let link = create_shortcut(uri, &file_uri(folder)).map_err(|error| error.to_string())?;
+    gio::File::for_uri(&link)
+        .path()
+        .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))
 }
 
 /// Records that the item at `uri` got no link, as `name: reason`.
