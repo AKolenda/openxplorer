@@ -938,3 +938,98 @@ fn a_column_shown_in_a_grouped_list_keeps_its_first_heading() {
         assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
     }
 }
+
+/// How a test leaves Downloads and comes back to it.
+#[derive(Debug, Clone, Copy)]
+enum Return {
+    /// Back to the folder before, then Forward.
+    BackThenForward,
+    /// Back to the folder before, then Downloads in the sidebar.
+    BackThenSidebar,
+}
+
+/// Opens the home folder, then Downloads, then leaves Downloads and comes
+/// back as `how` says, checking that Downloads shows its date groups each
+/// time it is shown.
+fn downloads_stays_grouped_across(test: &TestWindow, home: &TestHome, how: Return) {
+    let downloads = home.downloads();
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    assert_eq!(headings(test), ["Today (2)", "A long time ago (1)"]);
+
+    test.activate("back", None);
+    test.wait_for_listing("the home folder");
+    assert_eq!(test.window.current_uri(), Some(file_uri(&home.home)));
+    match how {
+        Return::BackThenForward => test.activate("forward", None),
+        Return::BackThenSidebar => {
+            assert!(super::sidebar::row_named(test, "Downloads").activate());
+        }
+    }
+    test.wait_for_listing("Downloads again");
+    assert_eq!(test.window.current_uri(), Some(downloads), "{how:?}");
+    assert_eq!(
+        test.action_state("group-by").as_deref(),
+        Some("modified"),
+        "{how:?} keeps Downloads grouped"
+    );
+    assert_eq!(
+        headings(test),
+        ["Today (2)", "A long time ago (1)"],
+        "{how:?} shows Downloads' groups"
+    );
+}
+
+/// Back from Downloads and Forward to it again, or Back and Downloads in
+/// the sidebar, leave it grouped by date, as Windows keeps a folder's
+/// grouping until the user changes it: with each folder keeping its own
+/// style, the default.
+///
+/// parity: VIEW-022, VIEW-020, NAV-008
+#[gtk::test]
+fn downloads_stays_grouped_after_back_and_forward_or_the_sidebar() {
+    for how in [Return::BackThenForward, Return::BackThenSidebar] {
+        let home = TestHome::new();
+        let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+        downloads_stays_grouped_across(&test, &home, how);
+    }
+}
+
+/// The same with one style for every folder.
+///
+/// parity: VIEW-022, VIEW-020, NAV-008
+#[gtk::test]
+fn downloads_stays_grouped_after_back_and_forward_with_one_style() {
+    for how in [Return::BackThenForward, Return::BackThenSidebar] {
+        let home = TestHome::new();
+        let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+        test.share_one_view();
+        downloads_stays_grouped_across(&test, &home, how);
+    }
+}
+
+/// The same once the user grouped Downloads by date and sorted it
+/// themselves, so it keeps a style of its own.
+///
+/// parity: VIEW-022, VIEW-020, NAV-008
+#[gtk::test]
+fn downloads_grouped_by_the_user_stays_grouped_after_back_and_forward() {
+    for how in [Return::BackThenForward, Return::BackThenSidebar] {
+        let home = TestHome::new();
+        let downloads = home.downloads();
+        let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+        test.activate("group-by", Some("modified"));
+        test.activate("sort", Some("modified"));
+        test.activate("sort", Some("name"));
+        wait_until("Downloads' own style", || {
+            let preferences = test.context.settings_data().preferences;
+            ox_core::settings::saved_style_for(&preferences.folder_views, &downloads).is_some()
+        });
+        test.window
+            .navigate(&file_uri(&home.home))
+            .expect("the home folder");
+        test.wait_for_listing("the home folder");
+        downloads_stays_grouped_across(&test, &home, how);
+    }
+}
