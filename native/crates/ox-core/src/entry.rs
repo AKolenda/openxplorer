@@ -248,6 +248,38 @@ impl Entry {
         }
     }
 
+    /// A computer or server found on the network, as Network lists it
+    /// (`network:///`, HOME-008): a shortcut to `uri`, the server's list
+    /// of shared folders, called `name`, of the type "Computer", as
+    /// Windows Explorer's Network calls one. No file command acts on it.
+    pub fn network_computer(uri: String, name: String) -> Self {
+        let folder_type = classify::FolderType::Computer;
+        let serialized_icon = gio::prelude::IconExt::serialize(&gio::ThemedIcon::new("network-server"));
+        Self {
+            target_uri: Some(uri.clone()),
+            uri,
+            name,
+            kind: EntryKind::Shortcut,
+            is_dir: true,
+            is_virtual: true,
+            can_operate: false,
+            size: None,
+            type_label: type_label::type_label(Some(folder_type), None),
+            content_type: None,
+            modified: None,
+            is_hidden: false,
+            is_symlink: false,
+            trash_orig_path: None,
+            trash_deletion_date: None,
+            can_rename: Some(false),
+            can_trash: Some(false),
+            can_delete: Some(false),
+            can_write: Some(false),
+            serialized_icon,
+            meta: Box::default(),
+        }
+    }
+
     /// The URI to open when the item is activated: the validated target of
     /// a share or shortcut, otherwise the item itself.
     pub fn navigation_uri(&self) -> &str {

@@ -86,13 +86,7 @@ const FONT_SIZES: &[FontSize] = &[
     font(".landing .connected", 10.0),
     font(".landing .quiet", 12.0),
     font(".landing .notice", 12.0),
-    font(".landing .banner-hint", 12.0),
     font(".landing .primary", 12.0),
-    font(".landing .network-manual button", 11.0),
-    font(".landing .network-manual entry", 12.0),
-    font(".landing .network-count", 11.0),
-    font(".landing .discovery-note", 11.0),
-    font(".landing .network-protocol", 10.0),
     // The network dialogs (`.modal` and `.auth-*` in style.css; the title
     // at the dialog title's size of ui-spec.md T10).
     font(".ox-dialog .dialog-title", 20.0),

@@ -228,10 +228,6 @@ impl BrowserWindow {
             plain_action(WindowAction::Search, BrowserWindow::focus_search),
             text_action(WindowAction::GoTo, BrowserWindow::navigate_or_report),
             text_action(WindowAction::MountVolume, BrowserWindow::mount_volume),
-            text_action(
-                WindowAction::OpenServerAddress,
-                BrowserWindow::open_server_address,
-            ),
         ]);
     }
 

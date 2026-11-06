@@ -54,7 +54,8 @@ pub(crate) struct Places {
     /// Saved shares with their connection state (This PC's Network
     /// locations section).
     pub saved_shares: Vec<SavedShare>,
-    /// Every network location, merged (the sidebar and the Network page).
+    /// Every network location, merged, as the sidebar lists them under
+    /// Network.
     pub network: Vec<NetworkLocation>,
 }
 

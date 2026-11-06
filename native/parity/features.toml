@@ -1157,8 +1157,8 @@ python_tests = [
   "v2.0.0:desktop/tests/ui_rc4.py::Network discovery cards open server tabs without leaving Network",
 ]
 bridge = ["discover", "cancel", "normalise"]
-native = "done"
-native_note = "native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit); native/crates/ox-app/src/window/tests/landing_pages.rs (the_network_page_has_the_banner_address_field_and_notes); native/crates/ox-app/src/network/discovery.rs (the_page_says_what_discovery_is_doing)."
+native = "n-a"
+native_note = "Changed to match Windows 11 (2026-11-06): Network is no longer a page with a heading, subtitle and a 'Computers & network storage' banner with Discover servers and Stop. It is listed like a folder, its computers as items (HOME-007, HOME-008): going there discovers, Refresh (F5) discovers again, and the address bar's Stop ends discovery, as for any slow listing (VIEW-068). Where the network browser cannot be read, Windows' yellow info bar shows above the items, 'Network discovery is turned off. Network computers and devices are not visible. Click to learn more...', with GIO's reason as its tooltip; it opens Help at 'Network locations' (native/crates/ox-app/src/window/network_info_bar.rs; native/crates/ox-app/src/window/tests/network.rs network_says_when_discovery_is_turned_off; native/crates/ox-app/src/network/discovery.rs only_a_first_pass_that_fails_says_discovery_cannot_run)."
 
 [[feature]]
 id = "HOME-007"
@@ -1173,7 +1173,7 @@ python_tests = ["v2.0.0:desktop/tests/ui_release.py::Network discovery populates
 bridge = ["discover", "cancel"]
 gnome = "GVfs network:// / dns-sd backend"
 native = "done"
-native_note = "native/crates/ox-app/src/network/discovery.rs (passes_merge_servers_by_address_in_the_order_first_found, stop_ends_the_passes_and_keeps_what_was_found); native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit)."
+native_note = "native/crates/ox-app/src/network/discovery.rs (passes_list_each_server_once_in_the_order_first_found, only_a_first_pass_that_fails_says_discovery_cannot_run); native/crates/ox-app/src/window/tests/network.rs (network_lists_the_discovered_computers_as_items). Changed to match Windows 11 (2026-11-06): every listing of Network discovers, not only the first visit, as Windows enumerates its Network folder each time; each pass adds the servers no earlier pass found, F5 discovers again and keeps the items until it is done, and the address bar's Stop drops the passes still to come. There is no count badge: the status bar counts the items, as in any folder. Warnings of a browser read part-way are logged, not shown; a first pass that fails shows the info bar (HOME-006)."
 
 [[feature]]
 id = "HOME-008"
@@ -1189,7 +1189,7 @@ python_tests = [
 ]
 bridge = ["discover", "list"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit); native/crates/ox-app/src/network/discovery.rs (the_page_says_what_discovery_is_doing). Middle-click uses the landing cards' shared gesture."
+native_note = "native/crates/ox-app/src/window/tests/network.rs (network_lists_the_discovered_computers_as_items); native/crates/ox-app/src/icons/art.rs (a_share_in_a_server_listing_stands_on_the_network_bar). Changed to match Windows 11 (2026-11-06): each discovered server is an item of Network's list rather than a card, in the view the folder has (Details, icons, groups), named as advertised, of the type 'Computer' (Windows' Category), with the server on the network bar as its picture (the owner's icon mapping, LOOK-016). Opening it (double-click, Enter) shows the server's shared folders; a middle-click or Open in new tab opens them in a tab behind, as for any folder. With no servers the list is empty, as Windows' Network is; the fixed note on how discovery works moved to Help > Network locations."
 
 [[feature]]
 id = "HOME-009"
@@ -1202,8 +1202,8 @@ openxplorer = "has"
 sources = ["v2.0.0:desktop/ui/app.js:922"]
 python_tests = []
 bridge = ["normalise", "list"]
-native = "done"
-native_note = "native/crates/ox-app/src/window/tests/landing_pages.rs (the_network_page_has_the_banner_address_field_and_notes, open_address_refuses_anything_but_an_smb_server); native/crates/ox-app/src/window/tests/network.rs (map_network_location_keeps_its_errors_inside_the_dialog)."
+native = "n-a"
+native_note = "Changed to match Windows 11 (2026-11-06): Network has no address field of its own and no Open address or Map location buttons. As in Windows, the address bar takes \\\\server and \\\\server\\share addresses everywhere (NAV-034), and Map network drive is in Network's and This PC's '...' (CMD-007) and below the navigation pane (NET-001)."
 
 [[feature]]
 id = "HOME-010"
@@ -1216,8 +1216,8 @@ openxplorer = "has"
 sources = ["v2.0.0:desktop/ui/app.js:926", "v2.0.0:desktop/ui/app.js:1769-1776"]
 python_tests = ["v2.0.0:desktop/tests/ui_v07.py::Network landing page uses connected and saved union"]
 bridge = ["bookmark", "signOut"]
-native = "done"
-native_note = "native/crates/ox-app/src/window/place_menus.rs (a_network_share_can_be_kept_removed_and_signed_out_of); native/crates/ox-app/src/window/tests/landing_pages.rs (a_server_card_shows_the_server_in_the_share_blue_on_the_network_bar). Every network location is a card that opens on a click, in a background tab on a middle-click, and shows its menu on a right-click."
+native = "n-a"
+native_note = "Changed to match Windows 11 (2026-11-06): Network lists the computers found on the network, as Windows' Network folder does, and no longer repeats the network locations as cards. Every saved, connected and session-visited location stays a row under Network in the navigation pane (SIDE-019), which opens on a click, in a background tab on a middle-click, and has the same menu (SIDE-020); saved ones are also cards under Network locations on This PC, where Windows shows mapped drives (HOME-005)."
 
 [[feature]]
 id = "HOME-011"
@@ -11124,7 +11124,7 @@ bridge = ["discover", "cancel", "connect", "list", "authReply"]
 dolphin = "Dolphin network:/ (KDNSSD/SMB); remote:/ network:/ smb:/ (kio-extras)"
 gnome = "GVfs network:/// backend; gvfsd-network / network:///; GVfs smb-browse / network:/// and dns-sd"
 native = "done"
-native_note = "native/crates/ox-core/src/network/discovery.rs (only_smb_servers_are_listed_once_and_sorted_by_label, a_server_without_a_name_is_labelled_by_its_host_and_keeps_its_port, discovery_aborts_every_password_request); native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit). Tests discover through a fixed answer; the real network browser is covered by manual acceptance."
+native_note = "native/crates/ox-core/src/network/discovery.rs (only_smb_servers_are_listed_once_and_sorted_by_label, a_server_without_a_name_is_labelled_by_its_host_and_keeps_its_port, discovery_aborts_every_password_request); native/crates/ox-app/src/window/tests/network.rs (network_lists_the_discovered_computers_as_items). Tests discover through a fixed answer; the real network browser is covered by manual acceptance. Each server is a 'Computer' item of Network's list (HOME-008); the note on what can hide devices is in Help > Network locations, and where the browser cannot be read at all Network shows Windows' info bar (HOME-006)."
 
 [[feature]]
 id = "NET-025"
@@ -17234,7 +17234,7 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation"]
 bridge = ["cancel"]
 native = "done"
-native_note = "Every late reply is dropped. Listings: load generations per tab (window/session.rs, old_results_cannot_repopulate_a_navigated_or_closed_tab). Typed addresses and file locations: each tab keeps its own newest lookup (window/tests/opening.rs, navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it). Searches: search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Archive listings: a generation (archive_view/browser.rs; window/tests/archives.rs, a_late_archive_listing_never_replaces_a_newer_one, which delivers the older Docs listing after the newer top listing and fails without the check). Extraction preflight: closing the Extract dialog cancels the check and an answer after that is ignored (archive_view/extract_dialog.rs; window/tests/archives.rs, closing_the_extract_dialog_drops_its_check). Discovery: Stop aborts the passes (network/discovery.rs, a_pass_that_answers_after_stop_is_ignored). Map network location: closing the dialog aborts the connection (dialog/window.rs, Dialog::run; dialogs/network_map.rs, a_connection_that_answers_after_cancel_is_ignored). Properties: a read that answers after the dialog closed is ignored (properties/view.rs) and a Previous versions lookup overtaken by Refresh is dropped by its generation (properties/versions_panel.rs); window/tests/late_replies.rs, a_properties_read_after_close_changes_nothing, a_versions_lookup_overtaken_by_refresh_is_dropped."
+native_note = "Every late reply is dropped. Listings: load generations per tab (window/session.rs, old_results_cannot_repopulate_a_navigated_or_closed_tab). Typed addresses and file locations: each tab keeps its own newest lookup (window/tests/opening.rs, navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it). Searches: search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Archive listings: a generation (archive_view/browser.rs; window/tests/archives.rs, a_late_archive_listing_never_replaces_a_newer_one, which delivers the older Docs listing after the newer top listing and fails without the check). Extraction preflight: closing the Extract dialog cancels the check and an answer after that is ignored (archive_view/extract_dialog.rs; window/tests/archives.rs, closing_the_extract_dialog_drops_its_check). Discovery: Stop drops Network's listing and the passes with it (folder_view/loader.rs, a_discovery_pass_that_answers_after_stop_is_ignored). Map network location: closing the dialog aborts the connection (dialog/window.rs, Dialog::run; dialogs/network_map.rs, a_connection_that_answers_after_cancel_is_ignored). Properties: a read that answers after the dialog closed is ignored (properties/view.rs) and a Previous versions lookup overtaken by Refresh is dropped by its generation (properties/versions_panel.rs); window/tests/late_replies.rs, a_properties_read_after_close_changes_nothing, a_versions_lookup_overtaken_by_refresh_is_dropped."
 
 [[feature]]
 id = "SAFE-014"
