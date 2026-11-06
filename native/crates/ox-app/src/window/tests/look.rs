@@ -306,8 +306,8 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
     assert_same_colour(colour, css_colour("#e8f1fb"), "the selected colour");
 }
 
-/// Classic menus are 264 pixels with 33-pixel rows at 100% text; the
-/// compact menu is 276 pixels with the 34-pixel icon strip.
+/// Classic menus are 264 pixels with Windows 11's 32-pixel rows at 100%
+/// text; the compact menu is 276 pixels with the 34-pixel icon strip.
 ///
 /// parity: LOOK-019
 #[gtk::test]
@@ -324,7 +324,7 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     // The contents box, inside 3 pixels of padding and a 1-pixel border.
     assert_eq!(contents.width() + 2 * (3 + 1), 264, "the classic width");
     let row = menu.rows().into_iter().next().expect("a row");
-    assert_eq!(row.height(), 33, "the classic row");
+    assert_eq!(row.height(), 32, "the classic row");
     menu.popdown();
 
     choose_menu_style(&test, ContextMenu::Win11);
@@ -365,6 +365,8 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
         test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
         let menu = test.window.context_menu();
         wait_until("the menu to be drawn", || menu.is_mapped() && menu.width() > 0);
+        // Once it has faded in.
+        wait_for(crate::window::MENU_OPENING_MOTION);
         wait_for_frames(&test.window, 2);
         let contents = menu.child().expect("the menu has contents");
         let place = bounds_in(&contents, &menu);
