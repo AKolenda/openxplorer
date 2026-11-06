@@ -193,8 +193,6 @@ pub(crate) struct BrowserWindow {
     /// The column Up and Down keep to in the icon grid, across rows of
     /// different lengths; see [`super::grid_keys`].
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
-    /// The link to GNOME's previewer (PROP-012).
-    pub(super) quick_look: super::quick_look::QuickLook,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
     /// In tests, a volume id and the root it mounts at, standing in for a
@@ -333,7 +331,6 @@ impl ObjectImpl for BrowserWindow {
         let window = self.obj();
         window.finish_title_bar();
         window.add_navigation_buttons();
-        window.watch_quick_look();
         self.transfer_panel
             .set(TransferPanel::for_window(&window))
             .expect("constructed runs once per object");

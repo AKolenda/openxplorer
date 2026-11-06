@@ -124,7 +124,6 @@ mod place_menus;
 mod preferences;
 mod progress_window;
 mod quick_access;
-mod quick_look;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;

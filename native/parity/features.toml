@@ -57,7 +57,7 @@ schema = 1
 id = "NAV-001"
 area = "NAV"
 title = "Back and Forward buttons walk per-tab history"
-behaviour = "Back (tooltip 'Back (Alt+Left)') and Forward (tooltip 'Forward (Alt+Right)') move one step in the active tab's own history without adding entries. Back is disabled at index 0, Forward at the last entry. Each tab has independent history."
+behaviour = "Back and Forward move one step in the active tab's own history without adding entries. Back is disabled at index 0, Forward at the last entry. Each tab has independent history. As in Windows 11 File Explorer, their tooltips name where they lead, by the title its tab would have: 'Back to Downloads (Alt + Left Arrow)', 'Forward to Documents (Alt + Right Arrow)'; where they lead nowhere, 'Back (Alt + Left Arrow)' and 'Forward (Alt + Right Arrow)'."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -90,7 +90,7 @@ bridge = ["list"]
 dolphin = "Go > Back/Forward; Dolphin Back/Forward toolbar buttons with history dropdown on long-press/right-click.; Back/Forward, Alt+Left/Alt+Right; go_back: Alt+Left, Back key, Backspace; go_forward: Alt+Right, Forward key"
 gnome = "GtkButton in header; per-tab history model"
 native = "done"
-native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_say_their_keys_and_follow_each_tabs_own_history): the buttons' tooltips, their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
+native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_say_their_keys_and_follow_each_tabs_own_history): the buttons' tooltips naming where they lead or only their key (native/crates/ox-app/src/window/navigation_buttons.rs, show_navigation_tooltips, run whenever the location is rendered), their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
 
 [[feature]]
 id = "NAV-002"
@@ -181,7 +181,7 @@ native_note = "native/crates/ox-app/src/history.rs (navigating_after_back_drops_
 id = "NAV-006"
 area = "NAV"
 title = "Back/Forward history drop-down lists"
-behaviour = "A delayed press or right-click on Back or Forward opens a menu of up to 12 history entries with icons and place-relative names such as 'Home/Documents'. Choosing an entry jumps straight there and skips the intermediate steps."
+behaviour = "A delayed press or right-click on Back or Forward opens a menu of up to 12 history entries with icons, each named by its display name as its tab is titled ('Documents'), as Windows 11 File Explorer's menus are. Choosing an entry jumps straight there and skips the intermediate steps."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -194,7 +194,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "go_back/go_forward KToolBarPopupAction (DelayedPopup)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/history_menu.rs: a right-click or long press on Back or Forward opens a menu of up to 12 history steps, nearest first, with the address icon and names relative to the home folder ('Home/Documents'); choosing one runs win.go-history with the step count, so the intermediate steps are skipped. Tested in history_menu.rs unit tests and native/crates/ox-app/src/window/tests/history.rs (the_back_menu_lists_the_history_and_jumps_straight_to_an_entry)."
+native_note = "native/crates/ox-app/src/window/history_menu.rs: a right-click or long press on Back or Forward opens a menu of up to 12 history steps, nearest first, with the address icon and each location's tab title (LocationContext::title_for: 'Documents', 'Home', 'This PC'); choosing one runs win.go-history with the step count, so the intermediate steps are skipped. Tested in history_menu.rs unit tests and native/crates/ox-app/src/window/tests/history.rs (the_back_menu_lists_the_history_and_jumps_straight_to_an_entry, which checks the folders' names)."
 
 [[feature]]
 id = "NAV-007"
@@ -260,7 +260,7 @@ native_note = "Native navigation never keeps a redirecting location as its own s
 id = "NAV-010"
 area = "NAV"
 title = "Up button and Alt+Up go to the parent folder"
-behaviour = "The Up button ('Up (Alt+Up)') and Alt+ArrowUp navigate to the parent location: local folder to its parent, SMB folder to its share, share to the server (smb://host/), device folder to the device root. Up is disabled on Home/This PC/Network/Settings pages and at any root (/, SMB server, device root)."
+behaviour = "The Up button (tooltip 'Up to \"Desktop\" (Alt + Up Arrow)', naming the parent as Windows 11 File Explorer does, or 'Up (Alt + Up Arrow)' where Up is disabled) and Alt+ArrowUp navigate to the parent location: local folder to its parent, SMB folder to its share, share to the server (smb://host/), device folder to the device root. Up is disabled on Home/This PC/Network/Settings pages and at any root (/, SMB server, device root)."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -280,7 +280,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin: Alt+Up goes up.; Go > Up (Alt+Up); Up, Alt+Up; go_up: Alt+Up"
 native = "done"
-native_note = "Parents: native/crates/ox-core/src/location/display.rs and native/crates/ox-core/tests/location_javascript.rs (parent_locations_match_app_js). native/crates/ox-app/src/window/tests/history.rs (up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots): the 'Up (Alt+Up)' tooltip, Alt+Up from the file list, and Up disabled on This PC, Network and at /."
+native_note = "Parents: native/crates/ox-core/src/location/display.rs and native/crates/ox-core/tests/location_javascript.rs (parent_locations_match_app_js). native/crates/ox-app/src/window/tests/history.rs (up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots): the tooltip naming the parent, and 'Up (Alt + Up Arrow)' at /, Alt+Up from the file list, and Up disabled on This PC, Network and at /."
 
 [[feature]]
 id = "NAV-011"
@@ -325,7 +325,7 @@ native_note = "native/crates/ox-app/src/window/navigation_buttons.rs binds Alt+H
 id = "NAV-013"
 area = "NAV"
 title = "Refresh button, F5 and Ctrl+R reload the folder"
-behaviour = "Refresh (tooltip 'Refresh (F5)') refreshes the environment (sidebar, mounts) and reloads the active listing without clearing it first. F5 and Ctrl+R reload the listing and work even while focus is in a text field. During a search, F5/Ctrl+R instead asks the backend to refresh the first cache root covering the folder and re-runs the search."
+behaviour = "Refresh (tooltip 'Refresh \"Documents\" (F5)', naming the folder as Windows 11 File Explorer does) refreshes the environment (sidebar, mounts) and reloads the active listing without clearing it first. F5 and Ctrl+R reload the listing and work even while focus is in a text field. During a search, F5/Ctrl+R instead asks the backend to refresh the first cache root covering the folder and re-runs the search."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -562,8 +562,8 @@ sources = ["kio:src/filewidgets/kurlnavigatorbutton.cpp:374-383", "v2.0.0:deskto
 python_tests = []
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton::wheelEvent"
-native = "done"
-native_note = "native/crates/ox-app/src/window/crumb_menus.rs: each whole wheel notch over a crumb goes to the previous or next folder beside it (win.crumb-sibling, hidden folders skipped unless shown) while the crumbs fit the bar; the controller is discrete, so a high-resolution wheel's fractions add up to notches, and touchpad scrolling is ignored so one swipe cannot skip through folders. When the crumbs overflow, the wheel scrolls them sideways. Tested in crumb_menus.rs (the_wheel_steps_to_the_folder_beside_and_stops_at_either_end) and native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it, which emits scroll on the crumb's controller: 0.1 does nothing, 1.0 steps, overflowing crumbs pass the wheel on)."
+native = "n-a"
+native_note = "Windows 11 File Explorer's address bar does nothing on the wheel over a crumb, and the product goal is that it feels exactly like Explorer, so the native app drops Dolphin's sibling switching. The wheel over the crumbs only scrolls them sideways when they overflow the bar (native/crates/ox-app/src/window/address_bar.rs). Test: native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_never_switches_folders). Folders beside a crumb stay one click away in the subfolder menu of the crumb before it (NAV-020)."
 
 [[feature]]
 id = "NAV-023"
@@ -4066,7 +4066,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "split_view: F3"
 native = "done"
-native_note = "Split view (F3, View ▸ Split view): the tab shows two folder panes side by side, each a tab of the session of its own with its own location, history, selection and listing; the active pane stands in the strip for its tab, so the address bar, history buttons, status bar, details pane, commands and Sort/View menus follow it. A click, keyboard focus, Ctrl+wheel or a drag entering the other pane makes it active; the active pane's caption has the accent underline and the other pane is dimmed. F3 again closes the active pane (Dolphin's default). Settings ▸ General ▸ Windows and tabs: 'Open new windows in split view' and 'Tab key switches between split panes'. Split tabs are saved with the session (TAB-053). F3 was free: Explorer's F3 search is Ctrl+F here. Moving a split tab to another window or reopening a closed one takes its active pane only. (native/crates/ox-app/src/window/split_view.rs, window/session/split.rs, window/pane_content.rs). Tests: native/crates/ox-app/src/window/tests/split_view.rs (each_pane_keeps_its_folder_and_the_window_follows_the_active_one), window/session/split.rs (each_pane_of_a_split_tab_keeps_its_own_history). A split measures the same height for any width, also before its first layout, since the empty page scrolls (window/tests/split_view.rs: a_split_measures_the_same_height_whatever_width_it_is_given). Each pane's empty page opens the folder menu of its own folder (window/tests/empty_folder.rs: each_pane_of_a_split_tab_has_its_own_empty_page_menu)."
+native_note = "Split view (View ▸ Split view): the tab shows two folder panes side by side, each a tab of the session of its own with its own location, history, selection and listing; the active pane stands in the strip for its tab, so the address bar, history buttons, status bar, details pane, commands and Sort/View menus follow it. A click, keyboard focus, Ctrl+wheel or a drag entering the other pane makes it active; the active pane's caption has the accent underline and the other pane is dimmed. Split view again closes the active pane (Dolphin's default). Settings ▸ General ▸ Windows and tabs: 'Open new windows in split view' and 'Tab key switches between split panes'. Split tabs are saved with the session (TAB-053). Split view has no key: F3 is Windows Explorer's search key, which moves to the search box here too (CMD-036), so Dolphin's F3 is not kept. Moving a split tab to another window or reopening a closed one takes its active pane only. (native/crates/ox-app/src/window/split_view.rs, window/session/split.rs, window/pane_content.rs). Tests: native/crates/ox-app/src/window/tests/split_view.rs (each_pane_keeps_its_folder_and_the_window_follows_the_active_one), window/session/split.rs (each_pane_of_a_split_tab_keeps_its_own_history). A split measures the same height for any width, also before its first layout, since the empty page scrolls (window/tests/split_view.rs: a_split_measures_the_same_height_whatever_width_it_is_given). Each pane's empty page opens the folder menu of its own folder (window/tests/empty_folder.rs: each_pane_of_a_split_tab_has_its_own_empty_page_menu)."
 
 [[feature]]
 id = "VIEW-060"
@@ -6241,7 +6241,7 @@ native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_cli
 id = "CMD-016"
 area = "CMD"
 title = "Shortcut hints in menus and tooltips"
-behaviour = "Menu items show their keys: Open 'Enter', Cut 'Ctrl+X', Copy 'Ctrl+C', Paste 'Ctrl+V', Rename 'F2', Delete/Move to Trash 'Delete', Properties 'Alt+Enter', Refresh 'F5', Folder 'Ctrl+Shift+N', New window 'Ctrl+N', Larger text 'Ctrl++', Smaller text 'Ctrl+−', Reset text size 'Ctrl+0', Show more options 'Shift+F10'. Button tooltips: 'Back (Alt+Left)', 'Forward (Alt+Right)', 'Up (Alt+Up)', 'Refresh (F5)', 'New tab (Ctrl+T)', 'Cut (Ctrl+X)', 'Copy (Ctrl+C)', 'Paste files (Ctrl+V)', 'Rename (F2)', 'Move to Trash (Delete)' or 'Delete permanently (Delete)', 'Settings (Ctrl+,)'."
+behaviour = "Menu items show their keys: Open 'Enter', Cut 'Ctrl+X', Copy 'Ctrl+C', Paste 'Ctrl+V', Rename 'F2', Delete/Move to Trash 'Delete', Properties 'Alt+Enter', Refresh 'F5', Folder 'Ctrl+Shift+N', New window 'Ctrl+N', Larger text 'Ctrl++', Smaller text 'Ctrl+−', Reset text size 'Ctrl+0', Show more options 'Shift+F10'. Button tooltips: Windows 11 File Explorer's 'Back to <folder> (Alt + Left Arrow)', 'Forward to <folder> (Alt + Right Arrow)', 'Up to \"<folder>\" (Alt + Up Arrow)', 'Refresh \"<folder>\" (F5)' (NAV-001, NAV-010, NAV-013), 'New tab (Ctrl+T)', 'Cut (Ctrl+X)', 'Copy (Ctrl+C)', 'Paste files (Ctrl+V)', 'Rename (F2)', 'Move to Trash (Delete)' or 'Delete permanently (Delete)', 'Settings (Ctrl+,)'."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -6608,7 +6608,7 @@ native_note = "Every letter shortcut (Ctrl+A, C, X, V, F, H, L, N, R, T, W, Z, C
 id = "CMD-036"
 area = "CMD"
 title = "Windows Explorer's Ctrl+E, Ctrl+D and F11"
-behaviour = "As in Windows 11 File Explorer: Ctrl+E moves keyboard focus to the search box and selects its text, exactly as Ctrl+F does, from any focus (the Settings tab's search on Settings). Ctrl+D moves the selection to the Recycle Bin exactly as Delete does: the same confirmation settings, the same permanent delete after asking where a location has no Recycle Bin, the same Undo step; like Delete it does nothing in a text field (the search box, the address being typed, a name being renamed), on a breadcrumb or on the Settings page, where the field keeps the key. F11 shows the window full screen and, pressed again, gives it back the size and maximized state it had; full screen is never saved as the next window's size, and a file dialog (picker) keeps its size. F3 stays Split view (VIEW-059). The keyboard shortcuts window (CMD-032) lists all three and Alt+P (VIEW-063)."
+behaviour = "As in Windows 11 File Explorer: Ctrl+E and F3 move keyboard focus to the search box and select its text, exactly as Ctrl+F does, from any focus (the Settings tab's search on Settings). Ctrl+D moves the selection to the Recycle Bin exactly as Delete does: the same confirmation settings, the same permanent delete after asking where a location has no Recycle Bin, the same Undo step; like Delete it does nothing in a text field (the search box, the address being typed, a name being renamed), on a breadcrumb or on the Settings page, where the field keeps the key. F11 shows the window full screen and, pressed again, gives it back the size and maximized state it had; full screen is never saved as the next window's size, and a file dialog (picker) keeps its size. Split view (VIEW-059) therefore has no key, only View > Split view. The keyboard shortcuts window (CMD-032) lists them and Alt+P (VIEW-063)."
 origin = ["openxplorer"]
 priority = "should"
 openxplorer = "missing"
@@ -6618,7 +6618,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "Ctrl+E is a second application accelerator of win.search and F11 the accelerator of win.full-screen (native/crates/ox-app/src/window/actions.rs, WINDOW_ACCELERATORS), so both work from text fields as Ctrl+F does; Ctrl+D is a second trigger of win.trash in the bubble-phase file keys (native/crates/ox-app/src/window/file_ops/shortcuts.rs), which a text field, a crumb, the splitter and the Settings page keep. native/crates/ox-app/src/window/full_screen.rs toggles gtk_window_fullscreen and follows the fullscreened property when the desktop ends full screen itself; window_size.rs saves nothing while full screen, as GTK calls a full-screen window not maximized. The picker turns win.full-screen off (DISABLED_ACTIONS). No GTK, KDE Plasma or app default binds Ctrl+E, Ctrl+D, F11 or Alt+P. Tests: native/crates/ox-app/src/window/tests/explorer_keys.rs; picker.rs (a_dialog_does_not_go_full_screen); shortcuts_window.rs (the_shortcuts_window_lists_explorers_further_keys). The private Xvfb display has no window manager, so the tests check what F11 asks for, not the desktop's full screen."
+native_note = "Ctrl+E and F3 are further application accelerators of win.search and F11 the accelerator of win.full-screen (native/crates/ox-app/src/window/actions.rs, WINDOW_ACCELERATORS), so both work from text fields as Ctrl+F does; Ctrl+D is a second trigger of win.trash in the bubble-phase file keys (native/crates/ox-app/src/window/file_ops/shortcuts.rs), which a text field, a crumb, the splitter and the Settings page keep. native/crates/ox-app/src/window/full_screen.rs toggles gtk_window_fullscreen and follows the fullscreened property when the desktop ends full screen itself; window_size.rs saves nothing while full screen, as GTK calls a full-screen window not maximized. The picker turns win.full-screen off (DISABLED_ACTIONS). No GTK, KDE Plasma or app default binds Ctrl+E, Ctrl+D, F11 or Alt+P; F3 was Dolphin's Split view here until it became Explorer's search key. Tests: native/crates/ox-app/src/window/tests/explorer_keys.rs; picker.rs (a_dialog_does_not_go_full_screen); shortcuts_window.rs (the_shortcuts_window_lists_explorers_further_keys). The private Xvfb display has no window manager, so the tests check what F11 asks for, not the desktop's full screen."
 
 [[feature]]
 id = "CMD-037"
@@ -11764,7 +11764,7 @@ native_note = "The file list's activate signal and win.open open the selected it
 id = "OPEN-003"
 area = "OPEN"
 title = "Open several selected items at once"
-behaviour = "With several items selected, Enter opens all of them: folders in new tabs (Shift: new windows) and files with their preferred applications, one launch per application where supported. Opening more than 5 items asks 'Are you sure you want to open <n> items?'"
+behaviour = "With several items selected, Enter opens all of them: folders in new tabs (Shift: new windows) and files with their preferred applications, one launch per application where supported. Opening 15 or more items asks 'Are you sure you want to open <n> items?', as Windows File Explorer asks from its MultipleInvokePromptMinimum of 15 (Dolphin asks above 5)."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -11778,7 +11778,7 @@ python_tests = []
 bridge = ["activateItem", "open"]
 dolphin = "itemsActivated / runPreferredApplications"
 native = "done"
-native_note = "Enter (the list's activate signal, window/input.rs connect_view_activation), Open and the item menu's Open act on every selected item (native/crates/ox-app/src/window/open_several.rs): one item opens as a double-click does; with several, each folder and each .desktop link to a folder opens in a background tab in the order of the view, and each file or archive in its default application (an archive is not browsed, since the archive browser is a dialog and several would stack), one launch per file; an item outside a selection of several is never opened; more than five ask 'Are you sure you want to open <n> items?' first (Cancel / Open all). Shift+Enter does not open new windows. Test: native/crates/ox-app/src/window/tests/opening.rs (enter_on_several_items_opens_each_and_asks_for_many). Porting notes: OpenXplorer's Enter opened only when exactly one item was selected."
+native_note = "Enter (the list's activate signal, window/input.rs connect_view_activation), Open and the item menu's Open act on every selected item (native/crates/ox-app/src/window/open_several.rs): one item opens as a double-click does; with several, each folder and each .desktop link to a folder opens in a background tab in the order of the view, and each file or archive in its default application (an archive is not browsed, since the archive browser is a dialog and several would stack), one launch per file; an item outside a selection of several is never opened; 15 or more ask 'Are you sure you want to open <n> items?' first (Cancel / Open all), as Windows File Explorer does, and 14 open without asking. Shift+Enter does not open new windows. Test: native/crates/ox-app/src/window/tests/opening.rs (enter_on_several_items_opens_each_and_asks_for_many). Porting notes: OpenXplorer's Enter opened only when exactly one item was selected."
 
 [[feature]]
 id = "OPEN-004"
@@ -13373,8 +13373,8 @@ python_tests = []
 bridge = []
 dolphin = "n/a (Information panel)"
 gnome = "org.gnome.NautilusPreviewer2 ShowFile (gnome-sushi 46 installed, org.gnome.NautilusPreviewer.service)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/quick_look.rs; native/crates/ox-app/src/window/tests/input.rs (space_previews_the_selected_file_with_the_gnome_previewer). Each window follows GNOME Sushi through an asynchronous gio::DBusProxy for org.gnome.NautilusPreviewer2 made when the window is built (no D-Bus call blocks a key press): when Sushi runs or is D-Bus activatable, Space on one selected file (no typed prefix) calls ShowFile, moving the selection while the preview is open shows the newly selected file, the arrow keys pressed in Sushi's window (SelectionEvent) move the selection, and Space or Escape calls Close. When Sushi closes its window itself (its Visible property turns false after being true) or quits, the window stops following the selection, so the next Space opens a new preview. Without Sushi, or with a folder or several items selected, Space toggles the selection as before, and a typed prefix keeps its space. The Flatpak manifests allow talking to org.gnome.NautilusPreviewer. Missing: the preview is not transient for the OpenXplorer window, because the window handle needs the GDK X11/Wayland bindings (gdk4-x11, gdk4-wayland), which the app does not link. Porting notes: Must not break type-ahead, where Space can be part of a name prefix."
+native = "n-a"
+native_note = "In Windows 11 File Explorer Space only selects the focused item and never opens a previewer, and the product goal is that it feels exactly like Explorer, so the native app no longer asks GNOME Sushi to preview on Space, and the Flatpak no longer talks to org.gnome.NautilusPreviewer. Space selects the current item (SEL-036); Explorer's preview of the selection is its Preview pane, Alt+P (VIEW-070)."
 
 [[feature]]
 id = "PROP-013"

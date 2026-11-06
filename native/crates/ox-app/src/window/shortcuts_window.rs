@@ -352,7 +352,7 @@ mod tests {
         dialog.finish();
     }
 
-    /// Explorer's Ctrl+E, Ctrl+D, F11 and Alt+P are listed beside the keys
+    /// Explorer's Ctrl+E, F3, Ctrl+D, F11 and Alt+P are listed beside the keys
     /// they match, and the search finds them by name and by key.
     ///
     /// parity: CMD-032, CMD-036
@@ -379,7 +379,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
 
-        assert_eq!(keys_of("Search"), ["Ctrl+F", "Ctrl+E"]);
+        assert_eq!(keys_of("Search"), ["Ctrl+F", "Ctrl+E", "F3"]);
         assert_eq!(keys_of("Delete"), ["Delete", "Ctrl+D"]);
         assert_eq!(keys_of("Details pane"), ["Shift+Alt+P"]);
         assert_eq!(keys_of("Preview pane"), ["Alt+P"]);
@@ -393,6 +393,7 @@ mod tests {
         assert!(shown_after("full").contains(&"Full screen".to_owned()));
         assert!(shown_after("ctrl+d").contains(&"Delete".to_owned()));
         assert!(shown_after("ctrl+e").contains(&"Search".to_owned()));
+        assert!(shown_after("f3").contains(&"Search".to_owned()));
         assert!(shown_after("alt+p").contains(&"Details pane".to_owned()));
         dialog.finish();
     }
