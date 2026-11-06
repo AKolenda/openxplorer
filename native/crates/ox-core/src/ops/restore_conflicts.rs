@@ -80,6 +80,45 @@ pub fn restores_into_one_folder(scan: &ConflictScan) -> bool {
         .all(|item| item.destination_folder == scan.destination_folder)
 }
 
+/// The questions the restore `scan` asks, in order: one per original
+/// folder that has conflicts, each a plan of that folder's conflicts
+/// alone, with where they are in `scan.conflicts`. Each question and its
+/// File Conflict window name one destination, as Windows' do, so
+/// conflicts in several folders are asked about folder by folder.
+pub fn restore_questions(scan: &ConflictScan) -> Vec<(ConflictScan, Vec<usize>)> {
+    let mut questions: Vec<(ConflictScan, Vec<usize>)> = Vec::new();
+    for item in &scan.items {
+        let PlannedKind::Conflict(index) = item.kind else {
+            continue;
+        };
+        let asked = questions
+            .iter()
+            .position(|(question, _)| question.destination_folder == item.destination_folder);
+        let at = asked.unwrap_or_else(|| {
+            let question = ConflictScan {
+                mode: scan.mode,
+                destination_folder: item.destination_folder.clone(),
+                selection: Vec::new(),
+                items: Vec::new(),
+                conflicts: Vec::new(),
+                merged_folders: Vec::new(),
+            };
+            questions.push((question, Vec::new()));
+            questions.len() - 1
+        });
+        let (question, indices) = &mut questions[at];
+        question.selection.push(item.uri.clone());
+        question.items.push(PlannedItem {
+            uri: item.uri.clone(),
+            destination_folder: item.destination_folder.clone(),
+            kind: PlannedKind::Conflict(question.conflicts.len()),
+        });
+        question.conflicts.push(scan.conflicts[index].clone());
+        indices.push(index);
+    }
+    questions
+}
+
 /// [`scan_restore_conflicts`] on the calling thread.
 fn scan_blocking(uris: &[String], cancel: &Cancellation) -> Result<ConflictScan, OpsError> {
     let mut scan = ConflictScan {
@@ -337,6 +376,17 @@ fn keep_both(
 
 /// The item of `conflict` takes the existing item's place, which goes to
 /// the Recycle Bin first; nothing is replaced where it cannot.
+///
+/// The original folder is read again first, as it is now: the question
+/// may have shown for a long time.
+///
+/// - A name freed meanwhile takes the item as any free name does.
+/// - An item there of the other kind now (a folder where a file was, or
+///   the other way round) is not replaced.
+/// - A name this restore already replaced holds an item it restored, so
+///   a second item from the same place stays in the Recycle Bin rather
+///   than sending the first one back there; Undo then has one item to
+///   take back and one replaced item to bring back.
 fn replace(
     item: &PlannedItem,
     conflict: &NameConflict,
@@ -345,10 +395,25 @@ fn replace(
 ) {
     let name = conflict.name();
     let existing = GioNode::new(&conflict.existing_uri);
-    let kept = existing.path().filter(|_| {
-        conflict.incoming.is_folder == conflict.existing.is_folder
-            && existing.can_trash(Some(&context.cancel)).unwrap_or(false)
+    let cancel = &context.cancel;
+    if !existing.exists(Some(cancel)) {
+        let restored = restore_item(&item.uri, context);
+        so_far.add(&item.uri, restored, &name);
+        return;
+    }
+    if existing
+        .path()
+        .is_some_and(|path| so_far.replaced.contains(&path))
+    {
+        record_failure(&mut so_far.outcome.result, &name, &taken_meanwhile(&name));
+        return;
+    }
+    let same_kind = facts(&existing, cancel).is_ok_and(|now| {
+        now.is_folder == conflict.incoming.is_folder && now.is_folder == conflict.existing.is_folder
     });
+    let kept = existing
+        .path()
+        .filter(|_| same_kind && existing.can_trash(Some(cancel)).unwrap_or(false));
     let Some(path) = kept else {
         let refusal = OpsError::failed(crate::i18n::format_message(
             "The item named “{name}” in its original folder cannot be replaced. It was left in the Recycle Bin.",

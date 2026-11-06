@@ -17,9 +17,9 @@
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, move_out_of_recycle_bin,
-    permanent_delete_confirmation, restore_answered_items, restore_free_items, restores_into_one_folder,
-    scan_restore_conflicts, starting_label, summarize, summarize_restore, DeleteItem, OperationContext,
-    OpsError, TransferOutcome,
+    permanent_delete_confirmation, restore_answered_items, restore_free_items, restore_questions,
+    restores_into_one_folder, scan_restore_conflicts, starting_label, summarize, summarize_restore,
+    DeleteItem, OperationContext, OpsError, Resolution, TransferOutcome,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -94,9 +94,16 @@ impl BrowserWindow {
             return restore_answered_items(&scan, &[], so_far, context).await;
         }
         let panel = self.panel_for_operation(&context.cancel);
-        let Some(answers) = panel.ask_about_conflicts(&scan).await else {
-            return Ok(so_far.into_outcome());
-        };
+        // One question per original folder, each naming its folder.
+        let mut answers = vec![Resolution::Skip; scan.conflicts.len()];
+        for (question, indices) in restore_questions(&scan) {
+            let Some(answered) = panel.ask_about_conflicts(&question).await else {
+                return Ok(so_far.into_outcome());
+            };
+            for (index, answer) in indices.into_iter().zip(answered) {
+                answers[index] = answer;
+            }
+        }
         restore_answered_items(&scan, &answers, so_far, context).await
     }
 

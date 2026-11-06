@@ -10,15 +10,16 @@ mod ops_support;
 mod private_trash;
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use ox_core::ops::{
-    list_recycle_bin, restore_answered_items, restore_free_items, restores_into_one_folder, reverse,
-    run_transfer, scan_restore_conflicts, summarize_restore, ConflictScan, OperationContext,
-    OperationSummary, PlannedKind, RecycledItem, Resolution, TransferOutcome, TransferRequest, UndoRecord,
+    list_recycle_bin, restore_answered_items, restore_free_items, restore_questions,
+    restores_into_one_folder, reverse, run_transfer, scan_restore_conflicts, summarize_restore, ConflictScan,
+    OperationContext, OperationSummary, PlannedKind, RecycledItem, Resolution, TransferOutcome,
+    TransferRequest, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -230,6 +231,166 @@ fn replace_never_puts_a_file_in_place_of_a_folder() {
         ]
     );
     assert_eq!(recycled_from(&report, 1).len(), 1);
+}
+
+/// Two items trashed from one place, both answered Replace: the first
+/// replaces the newer file, and the second stays in the Recycle Bin
+/// rather than sending the first back there, so Undo takes one item back
+/// and brings the newer file back.
+///
+/// parity: OPS-041, OPS-028, OPS-029
+#[test]
+fn replacing_one_name_twice_restores_one_item_and_undo_brings_the_newer_file_back() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    for contents in [b"first".as_slice(), b"second".as_slice()] {
+        fs::write(&notes, contents).unwrap();
+        trash(&[&notes]);
+    }
+    fs::write(&notes, b"newer").unwrap();
+    let uris: Vec<String> = recycled_from(&notes, 2)
+        .into_iter()
+        .map(|item| item.uri)
+        .collect();
+    // The Recycle Bin dates deletions to the second: Undo tells the newer
+    // file from the items trashed before the restore by its later date.
+    thread::sleep(Duration::from_millis(1100));
+
+    let context = OperationContext::default();
+    let plan = scan(&uris);
+    let outcome = restore(&plan, &[Resolution::Replace; 2], &context);
+
+    assert_eq!(plan.conflicts.len(), 2);
+    let restored = fs::read(&notes).unwrap();
+    assert!(restored == b"first" || restored == b"second", "{restored:?}");
+    assert_eq!(outcome.created, [file_uri(&notes)]);
+    assert_eq!(
+        outcome.result.errors,
+        [
+            "notes.txt: An item named “notes.txt” already exists in its original folder. \
+          It was left in the Recycle Bin."
+        ]
+    );
+    assert_eq!(
+        recycled_from(&notes, 2).len(),
+        2,
+        "the newer file and the second item"
+    );
+    let Some(record @ UndoRecord::Replace { .. }) = outcome.undo else {
+        panic!("a Replace record: {:?}", outcome.undo);
+    };
+
+    let reversal = block_on(reverse(&record, &context, |_| {})).expect("Undo runs");
+    assert!(reversal.result.errors.is_empty(), "{:?}", reversal.result.errors);
+    assert_eq!(fs::read(&notes).unwrap(), b"newer");
+    assert_eq!(
+        recycled_from(&notes, 2).len(),
+        2,
+        "both items are in the Recycle Bin"
+    );
+}
+
+/// Replace reads the original folder again before it replaces: a file
+/// that became a folder while the question showed stays, and the item
+/// stays in the Recycle Bin; a name freed meanwhile takes the item.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn replace_reads_the_original_folder_again_before_replacing() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    let plan_file = temp.path().join("plan.txt");
+    fs::write(&notes, b"trashed").unwrap();
+    fs::write(&plan_file, b"trashed plan").unwrap();
+    trash(&[&notes, &plan_file]);
+    fs::write(&notes, b"newer").unwrap();
+    fs::write(&plan_file, b"newer plan").unwrap();
+    let uris = [
+        recycled_from(&notes, 1)[0].uri.clone(),
+        recycled_from(&plan_file, 1)[0].uri.clone(),
+    ];
+    let plan = scan(&uris);
+    // While the question shows: notes.txt becomes a folder, plan.txt goes.
+    fs::remove_file(&notes).unwrap();
+    fs::create_dir(&notes).unwrap();
+    fs::write(notes.join("inside.txt"), b"inside").unwrap();
+    fs::remove_file(&plan_file).unwrap();
+
+    let outcome = restore(&plan, &[Resolution::Replace; 2], &OperationContext::default());
+
+    assert_eq!(plan.conflicts.len(), 2);
+    assert_eq!(fs::read(notes.join("inside.txt")).unwrap(), b"inside");
+    assert_eq!(fs::read(&plan_file).unwrap(), b"trashed plan");
+    assert_eq!(outcome.created, [file_uri(&plan_file)]);
+    assert_eq!(
+        outcome.result.errors,
+        [
+            "notes.txt: The item named “notes.txt” in its original folder cannot be replaced. \
+          It was left in the Recycle Bin."
+        ]
+    );
+    assert_eq!(recycled_from(&notes, 1).len(), 1);
+    assert_eq!(
+        outcome.undo,
+        Some(UndoRecord::Restore {
+            restored: vec![file_uri(&plan_file)]
+        })
+    );
+}
+
+/// Conflicts in several original folders are asked about folder by
+/// folder, each question naming its own folder.
+///
+/// parity: OPS-041, OPS-026
+#[test]
+fn conflicts_in_several_folders_are_asked_about_folder_by_folder() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let (first, second) = (temp.path().join("First"), temp.path().join("Second"));
+    fs::create_dir(&first).unwrap();
+    fs::create_dir(&second).unwrap();
+    let files = [first.join("a.txt"), second.join("b.txt"), first.join("c.txt")];
+    for file in &files {
+        fs::write(file, b"trashed").unwrap();
+    }
+    trash(&files.iter().map(PathBuf::as_path).collect::<Vec<_>>());
+    for file in &files {
+        fs::write(file, b"newer").unwrap();
+    }
+    let uris: Vec<String> = files
+        .iter()
+        .map(|file| recycled_from(file, 1)[0].uri.clone())
+        .collect();
+
+    let plan = scan(&uris);
+    let questions = restore_questions(&plan);
+
+    assert!(!restores_into_one_folder(&plan));
+    let asked: Vec<(String, Vec<String>, Vec<usize>)> = questions
+        .iter()
+        .map(|(question, indices)| {
+            let names = question
+                .conflicts
+                .iter()
+                .map(ox_core::ops::NameConflict::name)
+                .collect();
+            (question.destination_folder.clone(), names, indices.clone())
+        })
+        .collect();
+    assert_eq!(
+        asked,
+        [
+            (
+                file_uri(&first),
+                vec!["a.txt".to_owned(), "c.txt".to_owned()],
+                vec![0, 2]
+            ),
+            (file_uri(&second), vec!["b.txt".to_owned()], vec![1]),
+        ]
+    );
+    assert_eq!(questions[0].0.items[1].kind, PlannedKind::Conflict(1));
 }
 
 /// A cancelled question keeps what was restored and says nothing.
