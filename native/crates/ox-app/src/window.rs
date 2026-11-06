@@ -134,6 +134,7 @@ mod search_box;
 mod select_matching;
 mod selection;
 mod selection_keys;
+mod send_to;
 mod service_actions;
 mod session;
 mod session_restore;
@@ -232,6 +233,7 @@ impl BrowserWindow {
         window.install_size_scans();
         window.install_item_dialogs();
         window.install_archive_actions();
+        window.install_send_to_actions();
         window.install_input();
         window.connect_signals();
         window.connect_settings_page();

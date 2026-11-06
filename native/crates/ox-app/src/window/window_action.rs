@@ -409,6 +409,15 @@ pub(crate) enum WindowAction {
     /// Compress to…: asks for the new archive's name and format first
     /// (ARC-023).
     CompressTo,
+    /// Send to ▸ a folder (Documents, a drive or a network location),
+    /// with its URI: copies the selection there (CMD-038).
+    SendTo,
+    /// Send to ▸ Desktop (create shortcut): a shortcut to each selected
+    /// item on the Desktop.
+    SendToDesktop,
+    /// Send to ▸ Bluetooth device: the desktop's Bluetooth sender with the
+    /// selected files.
+    SendToBluetooth,
     /// Open with…: the Open with dialog for the one selected item, or the
     /// folder.
     OpenWith,
@@ -621,6 +630,9 @@ impl WindowAction {
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
             WindowAction::CompressTo => "compress-to",
+            WindowAction::SendTo => "send-to",
+            WindowAction::SendToDesktop => "send-to-desktop",
+            WindowAction::SendToBluetooth => "send-to-bluetooth",
             WindowAction::OpenWith => "open-with",
             WindowAction::ChangeApp => "change-app",
             WindowAction::OpenWithOf => "open-with-of",
