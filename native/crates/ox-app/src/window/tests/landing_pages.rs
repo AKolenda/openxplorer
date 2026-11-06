@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The This PC and Network pages against `renderLanding` and
-//! `renderNetwork` in `v2.0.0:desktop/ui/app.js`: cards in stretching grids, the
-//! Network page's banner, address field and notes, Open address, and the
-//! network locations' art.
+//! The This PC page against `renderLanding` in `v2.0.0:desktop/ui/app.js`:
+//! cards in stretching grids and the network locations' art. Network is
+//! listed like a folder (`network.rs`).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -119,52 +118,6 @@ fn a_quick_access_card_says_where_the_folder_is_and_opens_it() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
 
-/// parity: HOME-006, HOME-009
-#[gtk::test]
-fn the_network_page_has_the_banner_address_field_and_notes() {
-    let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
-    test.window
-        .navigate(Page::Network.uri())
-        .expect("the Network page");
-    test.wait_for_listing("the Network page");
-    // The first visit discovers servers; stopping shows the idle page.
-    test.activate("stop-discovery", None);
-    wait_for_frames(&test.window, 2);
-    let texts = texts_in(test.window.folder_pane().landing());
-    for expected in [
-        "Find shared storage on your local network, or enter an address.",
-        "Computers & network storage",
-        "Discover devices without scanning their files.",
-        "Discover servers",
-        "Open address",
-        "Map location",
-        "No advertised SMB servers found yet. Discover again or enter an address above.",
-    ] {
-        assert!(
-            texts.iter().any(|text| text == expected),
-            "{expected} in {texts:?}"
-        );
-    }
-    let entries = descendants::<gtk::Entry>(test.window.folder_pane().landing());
-    let address = entries.first().expect("the page has an address field");
-    assert_eq!(
-        address.placeholder_text().as_deref(),
-        Some("\\\\server or \\\\archive-nas")
-    );
-}
-
-/// parity: HOME-009
-#[gtk::test]
-fn open_address_refuses_anything_but_a_network_server() {
-    let fixture = Fixture::standard();
-    let test = laid_out(Page::Network.uri());
-    test.activate("open-server-address", Some(&fixture.uri()));
-    let message = test.window.shown_message();
-    assert_eq!(message.as_str(), "Enter a network server or shared folder.");
-    assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
-}
-
 /// app.js drew a blue server on every saved share's card; the owner's icon
 /// mapping (2026-09-28) shows a network location the same way everywhere,
 /// so a mapped drive that is not mounted is the crossed-out drive on the
@@ -187,24 +140,24 @@ fn a_saved_share_card_shows_the_art_of_its_sidebar_row() {
 
 /// A server keeps the blue app.js gave a saved share's server glyph
 /// (`im.style.color='#4b96c0'`), now on the network bar; the stylesheet
-/// colours it, not code.
+/// colours it, not code. Its row under Network shows it.
 ///
 /// parity: LOOK-016
 #[gtk::test]
-fn a_server_card_shows_the_server_in_the_share_blue_on_the_network_bar() {
-    let test = laid_out(Page::Network.uri());
+fn a_server_row_shows_the_server_in_the_share_blue_on_the_network_bar() {
+    let test = laid_out(Page::ThisPc.uri());
     // Browsing a server lists it under Network for the session; recording
     // it directly mounts nothing.
     test.window.context().remember_network("smb://nas/");
     let server = Art::for_network_location(NetworkKind::Server, "nas", Connection::Disconnected);
-    let landing = test.window.folder_pane().landing();
-    wait_until("the server's card", || arts_in(landing).contains(&server));
+    let sidebar = test.window.sidebar();
+    wait_until("the server's row", || arts_in(sidebar).contains(&server));
     wait_for_frames(&test.window, 2);
-    let card_art = art_image_showing(landing, server).expect("the card is drawn");
-    let glyph = descendants::<gtk::Image>(&card_art)
+    let row_art = art_image_showing(sidebar, server).expect("the row is drawn");
+    let glyph = descendants::<gtk::Image>(&row_art)
         .into_iter()
         .find(|image| image.has_css_class("server"))
-        .expect("the card shows the server glyph");
+        .expect("the row shows the server glyph");
     assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Server.name()));
     assert_eq!(glyph.color().to_str(), "rgb(75,150,192)");
 }
@@ -258,18 +211,6 @@ fn a_this_pc_card_menu_survives_the_page_being_drawn_again() {
     let share = Art::for_network_location(NetworkKind::Share, "Media (M:)", Connection::Disconnected);
 
     let menu = open_card_menu(&test, share);
-
-    redraw_with_the_menu_open(&test, &menu);
-}
-
-/// parity: SIDE-020
-#[gtk::test]
-fn a_network_card_menu_survives_the_page_being_drawn_again() {
-    let test = laid_out(Page::Network.uri());
-    test.window.context().remember_network("smb://nas/");
-    let server = Art::for_network_location(NetworkKind::Server, "nas", Connection::Disconnected);
-
-    let menu = open_card_menu(&test, server);
 
     redraw_with_the_menu_open(&test, &menu);
 }

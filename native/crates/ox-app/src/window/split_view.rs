@@ -386,7 +386,7 @@ impl BrowserWindow {
         self.pane_on(side).details().show_listing(listing);
         let _ = show_pane_state(self.pane_on(side), state, || None);
         self.apply_view_options();
-        if Page::from_uri(&uri).is_some() {
+        if Page::drawn_at(&uri).is_some() {
             self.render_landing_in(side, &uri, &self.places());
         }
         self.show_pane_captions();

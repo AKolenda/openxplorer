@@ -6,7 +6,12 @@
   does ("Copying 1,718 items from Downloads to Backup", each folder a
   link), "44% complete" with Pause and Cancel beside it, and the bar. Its
   "More details" are the speed graph, which takes the bar's place, the
-  name of the item handled, the time remaining and the items remaining. src/window/transfer_panel.rs fills it
+  name of the item handled, the time remaining and the items remaining.
+  When a copy or move meets taken names, the question takes the place of
+  the bar and the details, as Windows' "Replace or Skip Files" does: what
+  it found ("The destination already has a file named "report.png"") in
+  the percentage's place, beside Cancel, and three command rows, Replace, Skip and Compare (or
+  "Let me decide for each file"). src/window/transfer_panel.rs fills it
   in and handles the buttons and links.
 -->
 <interface>
@@ -30,7 +35,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkBox">
+      <object class="GtkBox" id="progress_row">
         <property name="spacing">8</property>
         <child>
           <object class="GtkLabel" id="percent_label">
@@ -75,6 +80,94 @@
             <child>
               <object class="GtkImage" id="cancel_icon">
                 <property name="accessible-role">presentation</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="question">
+        <property name="orientation">vertical</property>
+        <property name="spacing">4</property>
+        <property name="visible">false</property>
+        <style>
+          <class name="conflict-question"/>
+        </style>
+        <child>
+          <object class="GtkButton" id="replace_button">
+            <style>
+              <class name="flat"/>
+              <class name="conflict-command"/>
+              <class name="replace"/>
+            </style>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">8</property>
+                <child>
+                  <object class="GtkImage" id="replace_icon">
+                    <property name="accessible-role">presentation</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="replace_label">
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="skip_button">
+            <style>
+              <class name="flat"/>
+              <class name="conflict-command"/>
+              <class name="skip"/>
+            </style>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">8</property>
+                <child>
+                  <object class="GtkImage" id="skip_icon">
+                    <property name="accessible-role">presentation</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="skip_label">
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="decide_button">
+            <style>
+              <class name="flat"/>
+              <class name="conflict-command"/>
+              <class name="decide"/>
+            </style>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">8</property>
+                <child>
+                  <object class="GtkImage" id="decide_icon">
+                    <property name="accessible-role">presentation</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="decide_label">
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                  </object>
+                </child>
               </object>
             </child>
           </object>

@@ -219,11 +219,20 @@ impl BrowserWindow {
                     },
                 )
             }
-            (None, false) => background_menu(
-                &self.journal_label(JournalDirection::Undo),
-                &self.journal_label(JournalDirection::Redo),
-                &self.folder_applications(),
-            ),
+            (None, false) => {
+                self.refresh_template_menu();
+                background_menu(
+                    &self.journal_label(JournalDirection::Undo),
+                    &self.journal_label(JournalDirection::Redo),
+                    &self.folder_applications(),
+                    BackgroundSubmenus {
+                        view: view_menu(),
+                        sort: sort_menu(),
+                        group: group_by_menu(),
+                        new: new_menu(self.template_menu_entries()),
+                    },
+                )
+            }
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
             (Some(first), false) => {
                 let mut facts = self.item_facts(first.entry(), items.len() == 1);

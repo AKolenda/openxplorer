@@ -23,6 +23,9 @@ pub(super) enum FolderType {
     NetworkShare,
     /// Another navigable virtual item, such as a server or a shortcut.
     NetworkLocation,
+    /// A computer that Network lists, as Windows Explorer's Category
+    /// column calls one.
+    Computer,
 }
 
 impl FolderType {
@@ -32,6 +35,7 @@ impl FolderType {
             Self::FileFolder => crate::i18n::gettext_static("File folder"),
             Self::NetworkShare => crate::i18n::gettext_static("Network share"),
             Self::NetworkLocation => crate::i18n::gettext_static("Network location"),
+            Self::Computer => crate::i18n::gettext_static("Computer"),
         }
     }
 }

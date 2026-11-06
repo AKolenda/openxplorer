@@ -10,6 +10,38 @@ use gtk::subclass::prelude::*;
 use super::{MenuPopover, MenuStyle};
 
 impl MenuPopover {
+    /// Clicks the row labelled `label`, which opens its submenu beside
+    /// the menu, and returns that submenu, for tests.
+    pub(crate) fn open_submenu_of(&self, label: &str) -> MenuPopover {
+        self.row(label).emit_activate();
+        let submenu = self
+            .open_submenu_menu()
+            .unwrap_or_else(|| panic!("{label} opens a submenu"));
+        crate::test_support::harness::wait_until("the submenu", || submenu.is_mapped());
+        submenu
+    }
+
+    /// Rests the pointer on the row labelled `label`, or on no row with
+    /// `None`, as moving the pointer there does, for tests.
+    pub(crate) fn hover_row(&self, label: Option<&str>) {
+        let index = label.map(|label| usize::try_from(self.row(label).index()).expect("a row"));
+        self.rest_on(index);
+    }
+
+    /// The pointer reaches this submenu from the menu it opens from, for
+    /// tests.
+    pub(crate) fn pointer_enters(&self) {
+        if let Some(parent) = self.parent_menu() {
+            parent.keep_submenu_open();
+        }
+    }
+
+    /// Whether this menu is a submenu, and the menu it opens from, for
+    /// tests.
+    pub(crate) fn opens_from(&self) -> Option<MenuPopover> {
+        self.parent_menu()
+    }
+
     /// The labels of the menu's items, drawn or not, for tests.
     pub(crate) fn items_labels(&self) -> Vec<String> {
         self.items().into_iter().map(|item| item.label).collect()

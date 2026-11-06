@@ -21,10 +21,12 @@ use ox_core::archive::{ArchiveBrowser, ArchiveEntryKind, ArchiveError, ArchiveLi
 use ox_core::entry::{self, Entry, EntryError};
 use ox_core::location::ArchiveLocation;
 use ox_core::location::RECENT_LOCATIONS_URI;
+use ox_core::network::DiscoveredServer;
 use ox_core::transfer::Cancellation;
 
 use super::recent_locations::list_recent_locations;
 use crate::archive_view::{archive_browser, listing_notice};
+use crate::network::{discover_computers, Discoverer};
 
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
@@ -82,6 +84,34 @@ pub(crate) fn list_folder(
         };
         on_done(result);
     })
+}
+
+/// Lists Network (`network:///`) as Windows Explorer does, like a folder:
+/// the computers `discoverer` finds, each pass's new ones in a batch to
+/// `on_batch` (HOME-007, HOME-008). `on_done` gets why discovery could
+/// not run, or `None` when it ran; either way the listing succeeded, with
+/// what it found. Neither is called after the [`Listing`] is dropped,
+/// which drops the passes still to come.
+pub(crate) fn list_network(
+    discoverer: Discoverer,
+    on_batch: impl Fn(Vec<Entry>) + 'static,
+    on_done: impl FnOnce(Option<String>) + 'static,
+) -> Listing {
+    Listing::spawn(async move {
+        #[cfg(test)]
+        crate::test_support::held::wait_while_held(ox_core::location::NETWORK_URI).await;
+        let discovered = discover_computers(&discoverer, |servers| {
+            on_batch(servers.into_iter().map(computer_entry).collect());
+        })
+        .await;
+        on_done(discovered.err());
+    })
+}
+
+/// The row of a computer Network found: it opens the server's shared
+/// folders.
+fn computer_entry(server: DiscoveredServer) -> Entry {
+    Entry::network_computer(server.uri, server.label)
 }
 
 /// Cancels the archive reader's work when the listing that owns it is
@@ -231,5 +261,35 @@ mod tests {
         assert!(kept.batches.get() > 0);
         assert_eq!(dropped.batches.get(), 0);
         assert!(!dropped.done.get());
+    }
+
+    /// Stop drops a listing of Network: a discovery pass that answers
+    /// after it lists nothing and ends nothing.
+    ///
+    /// parity: SAFE-013
+    #[gtk::test]
+    fn a_discovery_pass_that_answers_after_stop_is_ignored() {
+        let delivered = Rc::new(Delivered::default());
+        let batches = Rc::clone(&delivered);
+        let done = Rc::clone(&delivered);
+        let found = ox_core::network::Discovery {
+            servers: vec![DiscoveredServer {
+                uri: "smb://nas/".into(),
+                label: "NAS".into(),
+                host: "nas".into(),
+            }],
+            warnings: Vec::new(),
+        };
+        let slow = Discoverer::finding_after(std::time::Duration::from_millis(100), found);
+
+        drop(list_network(
+            slow,
+            move |_| batches.batches.set(batches.batches.get() + 1),
+            move |_| done.done.set(true),
+        ));
+        crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+        assert_eq!(delivered.batches.get(), 0);
+        assert!(!delivered.done.get());
     }
 }

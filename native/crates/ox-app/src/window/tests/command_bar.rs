@@ -190,7 +190,6 @@ fn row_glyphs(menu: &MenuPopover) -> Vec<(String, String)> {
         Icon::CircleSmallFilled.name(),
         Icon::Checkmark.name(),
         Icon::ChevronRight16.name(),
-        Icon::ArrowLeft.name(),
     ];
     menu.rows()
         .into_iter()
@@ -263,13 +262,13 @@ fn the_sort_menu_has_no_glyphs_and_dots_its_choices_as_windows_does() {
         "the choices are dotted: {marks:?}"
     );
     for submenu in ["More", "Group by"] {
-        sort.row(submenu).emit_activate();
+        let opened = sort.open_submenu_of(submenu);
         wait_for_frames(&test.window, 2);
-        assert_eq!(row_glyphs(&sort), Vec::<(String, String)>::new(), "{submenu}");
-        let marks = row_marks(&sort);
+        assert_eq!(row_glyphs(&opened), Vec::<(String, String)>::new(), "{submenu}");
+        let marks = row_marks(&opened);
         assert!(marks.iter().all(|(_, mark)| *mark == dot), "{submenu}: {marks:?}");
-        sort.rows()[0].emit_activate();
-        wait_for_frames(&test.window, 2);
+        assert!(opened.press_in_list(gdk::Key::Left), "Left closes {submenu}");
+        wait_until("the submenu to close", || !opened.is_visible());
     }
     sort.popdown();
 }
@@ -628,8 +627,8 @@ fn the_more_view_and_show_menus_show_no_shortcut_text_as_in_windows() {
     view.popup();
     wait_until("the View menu", || view.is_visible());
     assert_eq!(shortcut_texts(&view), Vec::<String>::new());
-    view.click_row("Show");
-    assert_eq!(shortcut_texts(&view), Vec::<String>::new());
+    let show = view.open_submenu_of("Show");
+    assert_eq!(shortcut_texts(&show), Vec::<String>::new());
     view.popdown();
 }
 
@@ -807,6 +806,121 @@ fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
     });
 }
 
+/// A submenu opened before its menu has laid out its rows, as Right or
+/// Enter can just after a menu opens, and as a newer GTK maps a menu
+/// before it lays it out, opens beside its row once the rows are laid
+/// out, not level with the menu's top.
+///
+/// parity: CMD-031
+#[gtk::test]
+fn a_submenu_opened_before_its_menu_is_laid_out_opens_beside_its_row() {
+    use crate::window::menu_popover::{MenuEntry, MenuItem};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let button = super::support::menu_button_with_class(&test, "new-command");
+    let menu = super::support::app_menu(&button);
+    let entries = || -> Vec<MenuEntry> {
+        let mut entries: Vec<MenuEntry> = (0..6)
+            .map(|row| MenuItem::new(&format!("Item {row}"), Icon::Folder, WindowAction::NewFolder).into())
+            .collect();
+        let deep = vec![MenuItem::new("Note", Icon::Document, WindowAction::NewFolder).into()];
+        entries.push(MenuItem::submenu("Letters", Icon::Folder, WindowAction::ShowNewMenu, deep).into());
+        entries
+    };
+    menu.set_entries(entries());
+    button.popup();
+    wait_until("the New menu", || menu.is_mapped());
+    // New rows, which the menu has not laid out yet, and Letters opened
+    // from the keyboard at once.
+    menu.set_entries(entries());
+    menu.open_submenu(6, true);
+    let letters = menu.open_submenu_menu().expect("Letters opens");
+    let row = menu.row("Letters");
+    let row_top = || {
+        #[expect(clippy::cast_possible_truncation, reason = "menu rows are small")]
+        let top = row.compute_bounds(&menu).map(|bounds| bounds.y() as i32);
+        top.filter(|_| row.height() > 0)
+    };
+    wait_until("Letters beside its row", || {
+        let (points, pointing) = letters.pointing_to();
+        points && row_top().is_some_and(|top| top > 0 && pointing.y() == top)
+    });
+    menu.popdown();
+}
+
+/// Escape or Left in a menu whose submenu the pointer opened, which
+/// leaves the keyboard in the menu, closes only that submenu, as on
+/// Windows: not the whole menu, and at a nested level not the submenu the
+/// keyboard is in.
+///
+/// parity: CMD-031, OPS-003
+#[gtk::test]
+fn escape_or_left_closes_only_a_submenu_the_pointer_opened() {
+    use crate::window::menu_popover::{MenuEntry, MenuItem};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let button = super::support::menu_button_with_class(&test, "new-command");
+    let menu = super::support::app_menu(&button);
+    let deep: Vec<MenuEntry> = vec![MenuItem::new("Note", Icon::Document, WindowAction::NewFolder).into()];
+    let work = MenuItem::submenu("Work", Icon::Folder, WindowAction::ShowNewMenu, deep);
+    let letters = MenuItem::submenu(
+        "Letters",
+        Icon::Folder,
+        WindowAction::ShowNewMenu,
+        vec![work.into()],
+    );
+    menu.set_entries(vec![
+        MenuItem::new("Folder", Icon::Folder, WindowAction::NewFolder).into(),
+        letters.into(),
+    ]);
+    button.popup();
+    wait_until("the New menu", || menu.is_visible());
+
+    for key in [gdk::Key::Escape, gdk::Key::Left] {
+        // The pointer opens Letters: the keyboard stays in the New menu.
+        let letters = menu.open_submenu_of("Letters");
+        assert!(menu.press_in_list(key), "{key:?} is the submenu's to handle");
+        assert!(menu.open_submenu_menu().is_none(), "{key:?} closes Letters");
+        assert!(!letters.is_visible());
+        assert!(menu.is_visible(), "{key:?} leaves the New menu open");
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&test.window).and_downcast::<gtk::ListBoxRow>(),
+            Some(menu.row("Letters")),
+            "the keyboard is back on Letters"
+        );
+
+        // Nested: the pointer opens Work from Letters; the key in Letters
+        // closes Work, not Letters.
+        let letters = menu.open_submenu_of("Letters");
+        let work = letters.open_submenu_of("Work");
+        assert!(letters.press_in_list(key));
+        assert!(
+            letters.open_submenu_menu().is_none() && !work.is_visible(),
+            "{key:?} closes Work"
+        );
+        assert!(letters.is_visible(), "{key:?} leaves Letters open");
+        assert_eq!(menu.open_submenu_menu().as_ref(), Some(&letters));
+        // Again in Letters, with nothing open from it, it closes Letters.
+        assert!(letters.press_in_list(key));
+        assert!(menu.open_submenu_menu().is_none() && menu.is_visible());
+
+        // The pointer opens Letters, then Work, then goes back to the New
+        // menu's Letters row, taking the keyboard there: the key closes
+        // only Work, the innermost.
+        let letters = menu.open_submenu_of("Letters");
+        let work = letters.open_submenu_of("Work");
+        menu.row("Letters").grab_focus();
+        assert!(menu.press_in_list(key));
+        assert!(!work.is_visible(), "{key:?} closes Work");
+        assert!(letters.is_visible(), "{key:?} leaves Letters open");
+        assert!(menu.press_in_list(key));
+        assert!(menu.open_submenu_menu().is_none() && menu.is_visible());
+    }
+    menu.popdown();
+}
+
 /// The View menu, as Windows 11 File Explorer's: the views from the
 /// largest icons to Details, the Details pane, Show, then Dolphin's split
 /// view, folder tree and terminal where they were before Show, and the
@@ -834,9 +948,7 @@ const VIEW_MENU: [&str; 18] = [
 
 /// View > Show, as Windows 11's: the navigation pane, Compact view, item
 /// check boxes, File name extensions and Hidden items.
-const SHOW_MENU: [&str; 9] = [
-    "Show",
-    "-",
+const SHOW_MENU: [&str; 7] = [
     "Navigation pane",
     "-",
     "Compact view",
@@ -862,10 +974,10 @@ fn view_show_checks_hidden_items_and_the_details_pane_while_on() {
         view.popup();
         wait_until("the View menu", || view.is_visible());
         let pane = view.checked_labels().contains(&"Details pane".to_owned());
-        view.click_row("Show");
-        assert_eq!(view.row_labels(), SHOW_MENU);
-        assert!(view.row("Hidden items").is_sensitive());
-        let hidden = view.checked_labels().contains(&"Hidden items".to_owned());
+        let show = view.open_submenu_of("Show");
+        assert_eq!(show.row_labels(), SHOW_MENU);
+        assert!(show.row("Hidden items").is_sensitive());
+        let hidden = show.checked_labels().contains(&"Hidden items".to_owned());
         view.popdown();
         wait_until("the View menu to close", || !view.is_visible());
         [hidden, pane]
@@ -891,8 +1003,8 @@ fn menu_marks_are_dots_for_choices_and_checks_for_toggles_beside_the_glyph() {
     let view = menu_of(&test, "View");
     view.popup();
     wait_until("the View menu", || view.is_visible());
-    let mark_of = |label: &str| {
-        let row = view.row(label);
+    let mark_in = |menu: &crate::window::menu_popover::MenuPopover, label: &str| {
+        let row = menu.row(label);
         descendants::<gtk::Image>(&row)
             .into_iter()
             .find(|image| image.has_css_class("menu-mark"))
@@ -900,22 +1012,26 @@ fn menu_marks_are_dots_for_choices_and_checks_for_toggles_beside_the_glyph() {
             .map(|name| name.to_string())
     };
     assert_eq!(
-        mark_of("Details").as_deref(),
+        mark_in(&view, "Details").as_deref(),
         Some(Icon::CircleSmallFilled.name())
     );
     assert_eq!(
         row_glyph(&view.row("Details")).as_deref(),
         Some(Icon::TextBulletList.name())
     );
-    assert_eq!(mark_of("Large icons"), None, "an unchosen view has no mark");
-    view.click_row("Show");
+    assert_eq!(
+        mark_in(&view, "Large icons"),
+        None,
+        "an unchosen view has no mark"
+    );
+    let show = view.open_submenu_of("Show");
     if test.window.is_action_enabled(WindowAction::Sidebar.name()) {
         assert_eq!(
-            mark_of("Navigation pane").as_deref(),
+            mark_in(&show, "Navigation pane").as_deref(),
             Some(Icon::Checkmark.name())
         );
         assert_eq!(
-            row_glyph(&view.row("Navigation pane")).as_deref(),
+            row_glyph(&show.row("Navigation pane")).as_deref(),
             Some(Icon::PanelLeft.name())
         );
     }
@@ -1016,6 +1132,68 @@ fn the_more_and_view_menus_show_windows_glyphs() {
             ("Hidden items".to_owned(), Icon::Eye),
         ]
     );
+}
+
+/// View > Show opens beside the View menu, as on Windows 11: Show has its
+/// chevron at the far right, tells screen readers it opens a submenu,
+/// stays highlighted while its submenu is open, and the submenu's first
+/// item is level with it.
+///
+/// parity: CMD-006
+#[gtk::test]
+fn view_show_opens_beside_the_view_menu_as_on_windows() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let on = |name: &str| {
+        test.window
+            .lookup_action(name)
+            .and_then(|action| action.state())
+            .and_then(|state| state.get::<bool>())
+    };
+    let view = menu_of(&test, "View");
+    view.popup();
+    wait_until("the View menu", || view.is_mapped());
+    let row = view.row("Show");
+    let content = row.child().expect("content");
+    let parts: Vec<gtk::Widget> = crate::window::widget_tree::children(&content).collect();
+    assert!(
+        parts
+            .last()
+            .is_some_and(|last| last.has_css_class("submenu-arrow")),
+        "a chevron at the far right"
+    );
+    assert!(
+        gtk::test_accessible_has_property(&row, gtk::AccessibleProperty::HasPopup),
+        "screen readers hear that Show opens a submenu"
+    );
+    assert!(gtk::test_accessible_has_state(
+        &row,
+        gtk::AccessibleState::Expanded
+    ));
+
+    let show = view.open_submenu_of("Show");
+    assert_eq!(show.row_labels(), SHOW_MENU);
+    assert_eq!(
+        show.checked_labels().contains(&"Navigation pane".to_owned()),
+        on("sidebar") == Some(true),
+        "{:?}",
+        show.checked_labels()
+    );
+    assert!(row.has_css_class("submenu-open"), "Show stays highlighted");
+    // Beside Show, its first item level with Show.
+    assert_eq!(show.opens_from().as_ref(), Some(&view));
+    // Once the View menu has laid out its rows: a newer GTK maps a menu
+    // before it lays it out.
+    wait_until("Show's submenu beside Show", || {
+        let (points, pointing) = show.pointing_to();
+        #[expect(clippy::cast_possible_truncation, reason = "menu rows are small")]
+        let top = row.compute_bounds(&view).map(|bounds| bounds.y() as i32);
+        points && row.height() > 0 && top.is_some_and(|top| top > 0 && pointing.y() == top)
+    });
+    let compact = on("compact-density");
+    show.row("Compact view").emit_activate();
+    assert_eq!(on("compact-density"), compact.map(|was| !was));
+    wait_until("the menus to close", || !view.is_visible() && !show.is_visible());
 }
 
 /// View > Terminal and Ctrl+Shift+F4, Dolphin's Terminal panel keys, open
@@ -1202,14 +1380,14 @@ fn copy_path_runs_on_explorers_and_dolphins_keys() {
 }
 
 /// Submenus within submenus, as template folders within folders in the
-/// New menu, show in the one popup: each level under a row that goes
-/// back to the level above, with its check marks, icons and the reasons
-/// a disabled item gives; choosing a deep item closes the menu and runs
-/// it.
+/// New menu, open beside each other, as Windows 11's do: each beside the
+/// row that opens it, with a chevron at the row's right, its check marks,
+/// icons and the reasons a disabled item gives. Only the New menu holds a
+/// pointer grab. Choosing a deep item closes every menu and runs it.
 ///
 /// parity: CMD-031, OPS-003
 #[gtk::test]
-fn nested_submenus_show_one_level_at_a_time_in_one_popup() {
+fn nested_submenus_open_beside_each_other() {
     use crate::window::menu_popover::{MenuEntry, MenuItem};
 
     let fixture = Fixture::standard();
@@ -1240,41 +1418,58 @@ fn nested_submenus_show_one_level_at_a_time_in_one_popup() {
         descendants::<MenuPopover>(&test.window)
             .into_iter()
             .filter(|menu| menu.is_visible() || menu.is_mapped())
-            .count()
+            .collect::<Vec<_>>()
     };
 
     button.popup();
     wait_until("the New menu", || menu.is_visible());
-    // Clicks go through the list's own click handling, which goes on
-    // after the rows it clicked are replaced.
-    menu.click_row("Letters");
-    assert_eq!(menu.row_labels(), ["Letters", "-", "Work"]);
-    menu.click_row("Work");
-    assert_eq!(menu.row_labels(), ["Work", "-", "Name", "Size", "Not here"]);
-    assert_eq!(menu.checked_labels(), ["Name"]);
-    let disabled = menu.row("Not here");
+    let letters = menu.open_submenu_of("Letters");
+    assert_eq!(letters.row_labels(), ["Work"]);
+    let work = letters.open_submenu_of("Work");
+    assert_eq!(work.row_labels(), ["Name", "Size", "Not here"]);
+    assert_eq!(work.checked_labels(), ["Name"]);
+    let disabled = work.row("Not here");
     assert!(!disabled.is_sensitive());
     assert_eq!(
         disabled.tooltip_text().as_deref(),
         Some("Not here\nNot in this folder")
     );
-    assert_eq!(shown_menus(), 1, "one popup only");
+    assert_eq!(
+        menu.items_labels(),
+        ["Folder", "Letters"],
+        "the New menu keeps its rows"
+    );
+    let shown = shown_menus();
+    assert_eq!(shown.len(), 3, "the New menu and two submenus");
+    let grabbing: Vec<&MenuPopover> = shown.iter().filter(|menu| menu.is_autohide()).collect();
+    assert_eq!(grabbing, [&menu], "only the New menu grabs the pointer");
+    assert_eq!(work.opens_from().as_ref(), Some(&letters));
+    assert_eq!(letters.opens_from().as_ref(), Some(&menu));
+    for submenu in [&letters, &work] {
+        assert_eq!(submenu.position(), gtk::PositionType::Right, "beside its row");
+        assert_eq!(submenu.valign(), gtk::Align::Start, "level with its row");
+    }
 
-    // Back one level with Left, then Escape, then down again with
-    // Right and Enter, then choose.
-    assert!(menu.press_in_list(gdk::Key::Left));
-    assert_eq!(menu.row_labels(), ["Letters", "-", "Work"]);
-    assert!(menu.press_in_list(gdk::Key::Escape));
-    assert_eq!(menu.items_labels(), ["Folder", "Letters"]);
+    // Left closes only Work, Escape only Letters; Right and Enter open
+    // them again with the keyboard on their first item.
+    assert!(work.press_in_list(gdk::Key::Left));
+    assert!(letters.open_submenu_menu().is_none() && letters.is_visible());
+    assert!(letters.press_in_list(gdk::Key::Escape));
+    assert!(menu.open_submenu_menu().is_none());
     assert!(menu.is_visible(), "Escape in a submenu leaves the menu open");
     menu.row("Letters").grab_focus();
     assert!(menu.press_in_list(gdk::Key::Right));
-    assert_eq!(menu.row_labels(), ["Letters", "-", "Work"]);
-    assert!(menu.press_in_list(gdk::Key::Right));
-    assert_eq!(menu.row_labels().first().map(String::as_str), Some("Work"));
-    menu.click_row("Size");
+    let letters = menu.open_submenu_menu().expect("Right opens Letters");
+    assert!(letters.press_in_list(gdk::Key::Return));
+    let work = letters.open_submenu_menu().expect("Enter opens Work");
+    // Once Letters has laid out Work's row, beside which Work shows.
+    wait_until("the keyboard on Work's first item", || {
+        gtk::prelude::GtkWindowExt::focus(&test.window).and_downcast::<gtk::ListBoxRow>()
+            == Some(work.row("Name"))
+    });
+    work.click_row("Size");
     assert_eq!(test.action_state("sort").as_deref(), Some("size"));
     wait_until("the menu to close", || !menu.is_visible());
-    assert_eq!(shown_menus(), 0);
+    assert!(shown_menus().is_empty());
     assert_eq!(menu.items_labels(), ["Folder", "Letters"], "back at the top");
 }

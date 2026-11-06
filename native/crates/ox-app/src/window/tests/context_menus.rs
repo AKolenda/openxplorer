@@ -2,7 +2,8 @@
 //! The folder views' context menus in a real window, against `entryMenu`,
 //! `backgroundMenu` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`: the item a
 //! right-click selects, both menu styles, the items the selection
-//! disables, and the menus "Show more options" and "New…" open in place.
+//! disables, "Show more options" opening the classic menu in place, and
+//! submenus opening beside a menu.
 
 use std::fs;
 
@@ -354,7 +355,7 @@ fn the_folder_menu_names_the_step_undo_and_redo_take_as_windows_does() {
 
 /// parity: CMD-011, CMD-004
 #[gtk::test]
-fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
+fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_beside_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     // The classic folder menu, which this test reads; Windows 11's compact
@@ -369,15 +370,12 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
         test.selected_names().is_empty(),
         "blank space clears the selection"
     );
-    assert!(menu.row("New…").is_sensitive());
+    assert!(menu.row("New").is_sensitive());
     assert!(menu.row("Refresh").is_sensitive());
     assert!(!menu.row("Undo").is_sensitive(), "nothing to undo yet");
-    menu.row("New…").emit_activate();
-    wait_until("the New menu", || {
-        menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Folder")
-    });
+    let new = menu.open_submenu_of("New");
     assert_eq!(
-        menu.row_labels(),
+        new.row_labels(),
         [
             "Folder",
             "Shortcut",
@@ -391,7 +389,7 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
 }
 
 /// In a folder the user may not write to (no write permission, on a
-/// writable drive), the folder menu's New… and Paste stay on, empty
+/// writable drive), the folder menu's New and Paste stay on, empty
 /// folder or not, as in Windows Explorer: the user tries, and the
 /// system's error says why. Paste asks about the item that failed, New
 /// says why in the toast, and nothing is made. Tests run as a normal
@@ -440,7 +438,7 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
         assert!(is_enabled(&test, "paste"), "Paste in {what}");
         test.window.right_click(None);
         let menu = test.window.context_menu();
-        for label in ["New…", "Paste"] {
+        for label in ["New", "Paste"] {
             assert!(menu.row(label).is_sensitive(), "{label} in {what}");
         }
         menu.popdown();
@@ -490,12 +488,12 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
     );
 }
 
-/// The folder menu's "Sort by" opens the command bar's Sort menu in
-/// place, and a choice there sorts the folder.
+/// The folder menu's "Sort by" opens the command bar's Sort menu beside
+/// it, and a choice there sorts the folder.
 ///
 /// parity: CMD-012
 #[gtk::test]
-fn the_folder_menu_sorts_and_changes_the_view_in_place() {
+fn the_folder_menu_sorts_and_changes_the_view_in_submenus() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     // The classic folder menu, which this test reads; Windows 11's compact
@@ -505,34 +503,34 @@ fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     let menu = test.window.context_menu();
     assert_eq!(menu.row_labels()[..2], ["View", "Sort by"]);
 
-    menu.row("Sort by").emit_activate();
-    wait_until("the Sort menu", || {
-        menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Name")
-    });
-    // Size is under More, as in Explorer's Sort menu, in the same menu.
-    menu.row("More").emit_activate();
-    assert_eq!(menu.row_labels()[..3], ["More", "-", "Size"]);
-    menu.row("Size").emit_activate();
+    let sort = menu.open_submenu_of("Sort by");
+    assert_eq!(sort.row_labels().first().map(String::as_str), Some("Name"));
+    // Size is under More, as in Explorer's Sort menu, beside it.
+    let more = sort.open_submenu_of("More");
+    assert_eq!(more.row_labels().first().map(String::as_str), Some("Size"));
+    more.row("Size").emit_activate();
+    wait_until("the menus to close", || !menu.is_visible());
 
-    let sort = test
+    let sorted = test
         .window
         .action_state("sort")
         .and_then(|state| state.get::<String>());
-    assert_eq!(sort.as_deref(), Some("size"));
+    assert_eq!(sorted.as_deref(), Some("size"));
     test.window.right_click(None);
-    menu.row("View").emit_activate();
-    wait_until("the View menu", || {
-        menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Extra large icons")
-    });
+    let view = menu.open_submenu_of("View");
+    assert_eq!(
+        view.row_labels().first().map(String::as_str),
+        Some("Extra large icons")
+    );
 }
 
 /// Right-clicking blank space opens Windows 11's compact folder menu,
-/// whose View, Sort by and Group by open in the same compact menu rather
-/// than turning it into the classic one.
+/// whose View, Sort by and Group by open beside it in the compact look
+/// rather than the classic one.
 ///
 /// parity: CMD-010, CMD-011, CMD-012
 #[gtk::test]
-fn the_compact_folder_menu_opens_its_submenus_in_place() {
+fn the_compact_folder_menu_opens_its_submenus_beside_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window.right_click(None);
@@ -545,15 +543,18 @@ fn the_compact_folder_menu_opens_its_submenus_in_place() {
     );
     capture_popover(&test.window, menu.upcast_ref(), "native-menu-compact-folder.png");
 
-    menu.row("Sort by").emit_activate();
-    wait_until("the Sort submenu", || {
-        menu.is_visible() && menu.row_labels().iter().any(|row| row == "Name")
-    });
+    let sort = menu.open_submenu_of("Sort by");
+    assert!(sort.row_labels().iter().any(|row| row == "Name"));
     assert_eq!(
-        menu.style(),
+        sort.style(),
         MenuStyle::Compact,
         "the submenu keeps the compact look"
     );
+    assert!(
+        sort.strip_labels().is_empty(),
+        "no file actions strip in a submenu"
+    );
+    assert!(menu.is_visible(), "the folder menu stays open");
 }
 
 /// Shift+F10 (`win.context-menu`) opens the classic menu of the selection,
