@@ -85,6 +85,8 @@ it.
 | `actions/ox-braces-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/braces_20_regular.svg` | 831e9dbe8a711887b0212ccaedca58056f72121d16a8c0fc2b7061dac770d29b |
 | `actions/ox-checkbox-checked-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/checkbox_checked_20_regular.svg` | e283886c405bba6ffc78d236a38e211360e7d02b16e446d2eba71e9f8697bcc3 |
 | `actions/ox-checkmark-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/checkmark_20_regular.svg` | 9ad90a13e5d3dd6309544d09a14817b7e609015db6e6c60ecd44ef120d2b3470 |
+| `actions/ox-chevron-double-left-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_double_left_16_regular.svg` | 9bb0f038fd84313dce771fdcd12500fb54bed2dc4e94916b5101a8e0d7a3b10c |
+| `actions/ox-chevron-double-right-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_double_right_16_regular.svg` | 67f59dacb708a2662ffedef5c63e360e08ec225af5959ca87a9ca0cfc862c2ba |
 | `actions/ox-chevron-down-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_down_16_regular.svg` | 33efa668d236d70a945c00cbbd3fda019994794a5b5a2e17f5e66aac19abd199 |
 | `actions/ox-chevron-down-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_down_20_regular.svg` | 2584741754fe0e27641d7423ff96e675167119889fbc1e5129516973cbfb136a |
 | `actions/ox-chevron-left-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_left_16_regular.svg` | 51d4eeb4a620aec50aa0aed834830f5d7e035203c0cf15f87cf11a8e76f56bab |

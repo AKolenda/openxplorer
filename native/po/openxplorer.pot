@@ -3953,7 +3953,7 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
@@ -4233,6 +4233,14 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/address_bar.rs
 msgid "Go to {label}"
+msgstr ""
+
+#: crates/ox-app/src/window/address_bar.rs
+msgid "Show earlier folders"
+msgstr ""
+
+#: crates/ox-app/src/window/address_bar.rs
+msgid "Show locations"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4554,7 +4562,7 @@ msgstr ""
 msgid "Map network drive"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/crumb_menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "More"
 msgstr ""
 
@@ -4866,8 +4874,20 @@ msgstr ""
 msgid "Open a folder first."
 msgstr ""
 
+#: crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Network"
+msgstr ""
+
+#: crates/ox-app/resources/manual.md crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Recycle Bin"
+msgstr ""
+
 #: crates/ox-app/src/window/crumb_menus.rs
 msgid "Show subfolders"
+msgstr ""
+
+#: crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "This PC"
 msgstr ""
 
 #: crates/ox-app/src/window/desktop_link.rs
@@ -6350,10 +6370,6 @@ msgstr ""
 msgid "Empty"
 msgstr ""
 
-#: crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
-msgid "Network"
-msgstr ""
-
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Opened this session"
 msgstr ""
@@ -6382,10 +6398,6 @@ msgstr ""
 msgid "Recently visited folders"
 msgstr ""
 
-#: crates/ox-app/resources/manual.md crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
-msgid "Recycle Bin"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Recycle Bin · {state}"
@@ -6397,10 +6409,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Saved · connect on open"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
-msgid "This PC"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs

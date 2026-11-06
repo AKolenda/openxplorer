@@ -424,7 +424,7 @@ native_note = "native/crates/ox-app/src/window/session.rs (old_results_cannot_re
 id = "NAV-017"
 area = "NAV"
 title = "Breadcrumb bar shows one button per ancestor"
-behaviour = "Local paths show a '/' root button then one button per folder separated by '/'. SMB paths show a server button then share and folders separated by '\\'. The dividers are drawn as Windows 11 Explorer's chevrons (left-pointing in right-to-left languages); the crumbs still record which of '/' or '\\' the path uses (location_view.rs). MTP/PTP/AFC paths start with the connected device's mount label, never the raw usb identifier. Labels are percent-decoded; each button's URI keeps the original encoding (a literal '#' stays %23) and host:port. Every ancestor stays visible (no collapsing). The last crumb has aria-current=location. Tooltip is the full display path and aria-label 'Go to <name>'. The bar auto-scrolls to the end and the mouse wheel scrolls it horizontally."
+behaviour = "Local paths show a '/' root button then one button per folder separated by '/'. SMB paths show a server button then share and folders separated by '\\'. The dividers are drawn as Windows 11 Explorer's chevrons (left-pointing in right-to-left languages); the crumbs still record which of '/' or '\\' the path uses (location_view.rs). MTP/PTP/AFC paths start with the connected device's mount label, never the raw usb identifier. Labels are percent-decoded; each button's URI keeps the original encoding (a literal '#' stays %23) and host:port. Every ancestor has its own crumb. The last crumb has aria-current=location. Tooltip is the full display path and aria-label 'Go to <name>'. As in Windows 11 File Explorer, a chevron follows the location icon, before the first crumb, and lists the top-level places; crumbs that do not fit collapse into a « button in its place (NAV-023)."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -460,7 +460,7 @@ python_tests = [
 bridge = ["list", "environment"]
 dolphin = "KUrlNavigator breadcrumb mode; Dolphin KUrlNavigator breadcrumb mode."
 native = "done"
-native_note = "native/crates/ox-app/src/locations.rs and native/crates/ox-core/src/location/display.rs (crumbs, labels, device mount names, SMB roots); native/crates/ox-app/src/window/tests/address_bar.rs (crumbs_name_their_folder_and_show_its_full_address, the_crumbs_stay_scrolled_to_the_current_folder, the_title_crumbs_and_address_call_a_phone_by_its_mount_name); native/crates/ox-app/src/window/tests/address_input.rs (an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded): backslash dividers, decoded labels, %23 and host:port kept in the target."
+native_note = "native/crates/ox-app/src/locations.rs and native/crates/ox-core/src/location/display.rs (crumbs, labels, device mount names, SMB roots); native/crates/ox-app/src/window/address_bar/crumb_strip.rs lays out the chevron, the « and the crumbs, and native/crates/ox-app/src/window/crumb_menus.rs lists Home, This PC, Network and the Recycle Bin under the chevron, the place the crumbs start at in bold (Windows lists its own top-level places there; these are the app's, as the navigation pane shows them). Tests: native/crates/ox-app/src/window/tests/address_bar.rs (crumbs_name_their_folder_and_show_its_full_address, the_chevron_after_the_icon_lists_the_top_level_places, a_long_path_collapses_its_first_crumbs_into_a_button_as_the_width_allows, the_title_crumbs_and_address_call_a_phone_by_its_mount_name); crumb_menus.rs (the_first_chevron_lists_the_places_and_the_overflow_the_hidden_crumbs_first); native/crates/ox-app/src/window/tests/address_input.rs (an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded): backslash dividers, decoded labels, %23 and host:port kept in the target."
 
 [[feature]]
 id = "NAV-018"
@@ -514,7 +514,7 @@ native_note = "native/crates/ox-app/src/window/address_bar.rs: a capture-phase c
 id = "NAV-020"
 area = "NAV"
 title = "Breadcrumb subfolder menus"
-behaviour = "The '>' arrow after each breadcrumb opens a menu of that folder's subfolders. The child currently shown is bold, hidden folders appear only when hidden files are shown, and more than 30 entries overflow into a 'More' submenu. Choosing an entry navigates there."
+behaviour = "The '>' arrow after each breadcrumb opens a menu of that folder's subfolders. The child currently shown is bold, and hidden folders appear only when hidden files are shown. As in Windows 11 File Explorer, the menu lists every subfolder, scrolling when it is taller than the screen (Dolphin pages them by 30 behind a 'More' submenu). Choosing an entry navigates there."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -533,7 +533,7 @@ python_tests = [
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton arrow menu; KUrlNavigatorButton::keyPressEvent"
 native = "done"
-native_note = "native/crates/ox-app/src/window/crumb_menus.rs: a click on the divider after a crumb, or Down on a focused crumb, lists that folder's subfolders (natural order, hidden ones only while hidden files are shown) in a menu pointing at the crumb; the folder the address goes on to is bold, and past 30 entries a 'More' item opens the next 30. Choosing one runs win.go-to. The menu is parented to the address bar, not the crumb, as navigating rebuilds the crumbs. The divider keeps the app.js '/' or '\\' glyph and gains a hover highlight. Tested in crumb_menus.rs (a_crumb_menu_lists_thirty_subfolders_with_the_shown_one_bold_then_more) and native/crates/ox-app/src/window/tests/address_input.rs (choosing_a_folder_from_a_crumb_menu_goes_there, which opens the real menu and activates a row)."
+native_note = "native/crates/ox-app/src/window/crumb_menus.rs: a click on the divider after a crumb, or Down on a focused crumb, lists that folder's subfolders (natural order, hidden ones only while hidden files are shown) in a menu pointing at the crumb; the folder the address goes on to is bold, and every subfolder is listed, as in Windows, in one menu that scrolls when it is taller than its monitor (menu_popover/height.rs). Choosing one runs win.go-to. The menu is parented to the address bar, not the crumb, as navigating rebuilds the crumbs. The divider keeps the app.js '/' or '\\' glyph and gains a hover highlight. Tested in crumb_menus.rs (a_crumb_menu_lists_every_subfolder_with_the_shown_one_bold) and native/crates/ox-app/src/window/tests/address_input.rs (choosing_a_folder_from_a_crumb_menu_goes_there, which opens the real menu and activates a row)."
 
 [[feature]]
 id = "NAV-021"
@@ -563,13 +563,13 @@ python_tests = []
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton::wheelEvent"
 native = "n-a"
-native_note = "Windows 11 File Explorer's address bar does nothing on the wheel over a crumb, and the product goal is that it feels exactly like Explorer, so the native app drops Dolphin's sibling switching. The wheel over the crumbs only scrolls them sideways when they overflow the bar (native/crates/ox-app/src/window/address_bar.rs). Test: native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_never_switches_folders). Folders beside a crumb stay one click away in the subfolder menu of the crumb before it (NAV-020)."
+native_note = "Windows 11 File Explorer's address bar does nothing on the wheel over a crumb, and the product goal is that it feels exactly like Explorer, so the native app drops Dolphin's sibling switching. The crumbs never scroll either: those that do not fit collapse into a « button (NAV-023, native/crates/ox-app/src/window/address_bar/crumb_strip.rs). Test: native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_never_switches_folders). Folders beside a crumb stay one click away in the subfolder menu of the crumb before it (NAV-020)."
 
 [[feature]]
 id = "NAV-023"
 area = "NAV"
-title = "Breadcrumb bar overflow scrolling"
-behaviour = "After every navigation the breadcrumb strip scrolls to show the last (current) crumb. When crumbs overflow, the mouse wheel over the strip scrolls it horizontally (vertical wheel delta is used when there is no horizontal delta) and the page does not scroll."
+title = "Breadcrumb bar overflow"
+behaviour = "After every navigation the last (current) crumb shows in full. The web app scrolled overflowing crumbs sideways, with the wheel too. As in Windows 11 File Explorer, the native app instead collapses the crumbs that do not fit, from the first on, into a « button after the location icon, in place of its chevron, and decides again whenever the bar's width changes; the «'s menu lists the hidden crumbs, the nearest last, then the top-level places. Nothing scrolls, so the wheel over the crumbs does nothing and the page does not scroll."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -577,7 +577,7 @@ sources = ["v2.0.0:desktop/ui/app.js:344", "v2.0.0:desktop/ui/app.js:964"]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/address_bar.rs (the_crumbs_stay_scrolled_to_the_current_folder); native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_scrolls_overflowing_crumbs_sideways): a vertical wheel scrolls the crumbs sideways and the page does not scroll."
+native_note = "native/crates/ox-app/src/window/address_bar/crumb_strip.rs measures the crumbs on every allocation and hides the leading ones that do not fit (hidden_count, unit-tested there); the last crumb always shows and is cut off only when it alone is wider than the bar. The hidden crumbs take no keyboard focus. Tests: native/crates/ox-app/src/window/tests/address_bar.rs (a_long_path_collapses_its_first_crumbs_into_a_button_as_the_width_allows: a 14-folder path at 1320 and 800 pixels, the « menu, and choosing its nearest folder; a_deep_path_and_many_tabs_do_not_widen_the_window); native/crates/ox-app/src/window/crumb_menus.rs (the_first_chevron_lists_the_places_and_the_overflow_the_hidden_crumbs_first); native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_never_switches_folders: no scrolled window and no wheel handler on a crumb)."
 
 [[feature]]
 id = "NAV-024"
