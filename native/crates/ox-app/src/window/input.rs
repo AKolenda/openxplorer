@@ -487,8 +487,8 @@ impl BrowserWindow {
     }
 
     /// Escape, Backspace and Space, which act on a typed prefix first:
-    /// Escape clears the prefix, and only without one closes Quick Look,
-    /// cancels a file dialog or clears the selection; Backspace erases a
+    /// Escape clears the prefix, and only without one cancels a file
+    /// dialog or clears the selection; Backspace erases a
     /// typed character, and only without a prefix goes back, as in
     /// Dolphin and Explorer (NAV-004), once the input method did not take
     /// it for text it is composing; Space is prefix text, and only without
@@ -506,7 +506,6 @@ impl BrowserWindow {
                 input.reset();
                 self.reset_typeahead();
             }
-            gdk::Key::Escape if self.close_quick_look() => {}
             // In an Open or Save dialog Escape cancels, as in Windows,
             // even with items selected.
             gdk::Key::Escape if self.is_picking() => self.cancel_picking(),
@@ -520,10 +519,8 @@ impl BrowserWindow {
                     self.go_history(Direction::Backward);
                 }
             }
-            // Space previews the selected file in GNOME's previewer
-            // (PROP-012), else selects the current item, unless a prefix
-            // is typed.
-            gdk::Key::space if !prefix_active && self.toggle_quick_look() => {}
+            // Space selects the current item, unless a prefix is typed. As
+            // in Windows Explorer, it never opens a previewer.
             gdk::Key::space if !prefix_active => self.select_current_item(),
             _ => return None,
         }

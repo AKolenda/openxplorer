@@ -18,7 +18,7 @@ Right-click a Details heading to choose columns, then drag headings to reorder t
 
 ## Two folders in one tab
 
-Press F3 or choose View → Split view to open two panes. Click either pane to make its path, selection and commands active. Each pane keeps its own folder and history. F3 again closes the active pane and keeps the other.
+Choose View → Split view to open two panes. Click either pane to make its path, selection and commands active. Each pane keeps its own folder and history. Choosing Split view again closes the active pane and keeps the other.
 
 Settings → General → Start up lets you choose where new windows open and turn on Reopen my tabs when OpenXplorer starts. Session restoration is off by default. New tabs normally open beside the current tab.
 
@@ -32,9 +32,15 @@ View → Folder tree (F7) shows a tree of folders below the navigation places. E
 
 ## Templates, shortcuts and help
 
-Your Templates folder supplies entries directly in New, with its subfolders as submenus. Choose a template and a new name; creating from a template never overwrites an existing file.
+New lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder. Each new item is made at once, as “New Text Document.txt” for example, or “New Text Document (2).txt” when that name is taken, and renamed in place. Your Templates folder adds its files after them, with its subfolders as submenus; a template is copied under its own name the same way. Creating never overwrites an existing file.
 
-Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys; Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E moves to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
+Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys; Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E and F3 move to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
+
+## Rename an item
+
+Press F2, or choose Rename, and the name becomes a text field in its row or tile, with a file’s name before its extension selected. Press Enter or click elsewhere to keep the new name, or Escape to keep the old one. As in Windows, the characters \ / : * ? " < > | can’t be typed or pasted into the name: nothing is inserted, and a balloon under the field says “A file name can’t contain any of the following characters”. A name that already has one keeps it while you edit it.
+
+If another file in the folder already has the name you type, the Rename File question offers the next free numbered name, such as Report (2).txt: Yes renames the file to it, and No lets you edit the name again. A folder given a name that is taken is not renamed, and nothing is ever overwritten.
 
 ## Rename several items at once
 
@@ -47,6 +53,8 @@ To number items your own way, right-click the selection, choose Show more option
 Copy, move and delete jobs show in a small progress window of their own, as in Windows Explorer: it appears when a job takes more than a moment, is titled with the job's percentage (“44% complete”) or, with several jobs, “2 Running Actions”, and closes when the last job ends. Each job says what it does, such as “Copying 12 items from Projects to Archive” (click a folder to open it), and has its own Pause and Cancel. More details shows a speed graph, the item being handled, the time remaining and the items remaining; the window remembers the choice. Closing the window cancels its jobs; finished items stay.
 
 Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue. Inside a folder, only the file that fails is asked about, and the rest of the folder is still copied.
+
+When a copy or move meets files that already have the same names, OpenXplorer asks as Windows 11 does. The files without a conflict are copied first; then the job in the progress window shows Replace or Skip Files in place of its progress: “The destination already has a file named "report.png"” with Replace the file in the destination, Skip this file and Compare info for both files, or, for several, “The destination has 3 files with the same names” with Replace the files in the destination, Skip these files and Let me decide for each file. A folder that meets a folder of its name is merged without asking, and only the files inside with the same names count. Compare info or Let me decide opens the File Conflict window, which blocks only the progress window: check the files to keep on each side, with their thumbnails, dates and sizes (Files from … and Files already in … check a whole side), or Skip the files with the same date and size, then Continue. Checking both versions keeps both, and the copied file gets a number, as report (2).png. A replaced file goes to the Recycle Bin first where the drive has one, so Undo (Ctrl+Z) brings it back; Closing the window (or the job's Cancel, when other jobs run beside it) stops the job and keeps what it already copied.
 
 ## Add installed service actions
 
@@ -62,7 +70,15 @@ Administrator access does not remove OpenXplorer’s protection of snapshot fold
 
 ## Choose your context menu
 
-The Windows 11-style compact menu is the default, as on the Menu key, with the classic menu behind Show more options, on Shift+F10 and on Shift+right-click; Settings can make the Windows 10-style classic menu the default instead. If you chose the classic menu in 2.0.11 or earlier, choose it again once: those versions saved it the same way as their default. Open with uses registered applications; identical editor names are deduplicated.
+The Windows 11-style compact menu is the default, as on the Menu key, with the classic menu behind Show more options, on Shift+F10 and on Shift+right-click; Settings can make the Windows 10-style classic menu the default instead. If you chose the classic menu in 2.0.11 or earlier, choose it again once: those versions saved it the same way as their default. Open with uses registered applications; identical editor names are deduplicated. Its chooser works like Windows 11's: the current default and suggested apps first, every other app under More apps, then Just once or Always (which makes the app the default for that file type); Choose an app on your PC runs a program file, and Use a custom command… runs a command line with the file.
+
+## Send files with Send to
+
+The classic menu (Show more options, Shift+F10) has Windows Explorer’s Send to submenu. In Windows’ order it offers Bluetooth device, Compressed (zipped) folder, Desktop (create shortcut), Documents, Mail recipient, then each removable drive and each saved network location under the name This PC shows, such as Backup (\\fileserver) (S:). Entries that come from other applications are not added.
+
+Documents, a drive or a network location get a copy, with the same name-conflict questions, progress and Undo as a paste, and the items you sent stay selected. Compressed (zipped) folder makes a ZIP beside the items, as Compress to ZIP file does. Desktop (create shortcut) puts a shortcut on the Desktop named as Windows names it, report.txt - Shortcut, then report.txt - Shortcut (2) when that name is taken; it never replaces anything, a very long name is shortened before its extension so the shortcut still fits, and Ctrl+Z moves the shortcuts to the Recycle Bin. A shortcut is a symbolic link, so a location without symbolic links, such as a share opened through GVfs or a FAT-formatted USB stick, says so instead.
+
+Mail recipient opens a new message in your email app with the files attached, as Share does, and Bluetooth device hands the files to your desktop’s Bluetooth sender (GNOME Bluetooth, Blueman or KDE’s BlueDevil), which asks for the device. Each appears only when the computer has it: Bluetooth needs an adapter and a sender, Mail recipient the desktop’s email portal. An entry that cannot run is greyed out and its tooltip says why: Bluetooth and Mail recipient take files only, Desktop (create shortcut) is unavailable in a previous version, and the copies and the shortcut wait while your other file operations leave no room for them. In Recent files, Send to sends the file each row stands for. A saved network location that is not connected is offered too: choosing it connects it first, asking you to sign in if the server needs it, then copies.
 
 ## Share files by email
 
@@ -100,7 +116,7 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 ## Measure folder sizes on demand
 
-Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
+Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. A drive's Properties shows what Windows 11's does instead: its label, type and file system, its used and free space and capacity in bytes and GB, and a ring of the two, without counting anything on it; where it is mounted and from what are on its Hardware tab. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
 
 Size counts logical file bytes; Size on disk counts the blocks the files take, which on a compressing filesystem such as ZFS is the compressed space. Neither is a ZFS dataset used/referenced value or a snapshot-exclusive block count.
 
@@ -144,7 +160,9 @@ Press a tab to show it, then drag it along its strip: the other tabs slide aside
 
 Select one or more files or folders and drag them into an application that accepts native file drops. The desktop app supplies file URIs and readable paths through GTK, including already-mounted network paths when available. Ctrl-click or Shift-click to select multiple items. Press Escape to cancel.
 
-Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. As in Windows Explorer, a plain drag of OpenXplorer's own items moves them to a folder on the same drive and copies them to another drive; hold Ctrl to copy or Shift to move. A plain drag of items from another app always copies them; hold Shift to move them instead. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.
+Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. As in Windows Explorer, a plain drag of OpenXplorer's own items moves them to a folder on the same drive and copies them to another drive; hold Ctrl to copy or Shift to move. A plain drag of items from another app always copies them; hold Shift to move them instead. Files with the same names are asked about in the progress window, as for Paste. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Drop onto a folder or drive in the navigation pane to copy or move into it; drop between Quick access entries (where an accent line and Pin to Quick access show) to pin or reorder folders. Holding a drag over a folder in the file list never opens it, as in Windows 11; drop on it to copy or move into it. Holding a drag over the navigation pane never changes the folder shown either; held over a collapsed This PC or Network, it expands it. File drops never request deletion of the source.
+
+Drag with the right mouse button to choose what happens, as in Windows Explorer. Pressing the right button selects the item; releasing it without moving opens its menu. When you release a right-button drag over a folder, a menu opens there: Copy here, Move here, Create shortcuts here and Cancel. The bold entry is what an ordinary drag would do, Move here on the same drive and Copy here on another. Only what is possible is listed: items you may not delete cannot be moved, and Create shortcuts here needs items and a folder on this computer whose drive can hold symbolic links (not FAT or exFAT). A shortcut is a symbolic link named like a Windows shortcut, such as report.txt - Shortcut, then report.txt - Shortcut (2). Dropped back in their own folder, the menu offers Copy here, which makes copies such as report - Copy.txt, and Create shortcuts here. Escape or Cancel does nothing. Once the menu is open, Up, Down and Enter choose an entry.
 
 ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Automatic extraction remains unavailable. Undo (Ctrl+Z) takes back a drop into an OpenXplorer folder, a copy or a move, as it takes back Paste.
 

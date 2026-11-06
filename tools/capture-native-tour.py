@@ -90,7 +90,9 @@ NETWORK = Target('Network', 'network', 'Open Network', tooltip='Network', kind='
 SCENES = (
     Scene('home', 'Home', 'Your home folder, with the sidebar on the left and the details pane '
           'on the right.',
-          Picture(start=DEMO_HOME),
+          # The details pane opens for the tour; a new user's window has it
+          # closed, as Windows 11's has.
+          Picture(start=DEMO_HOME, scene=('action=details-pane',)),
           (listed('Documents', 'documents', 'Open Documents'),
            sidebar('Pictures', 'Pictures', 'pictures'), THIS_PC, NETWORK,
            Target('Search Home', 'search', 'Search for “budget”', kind='entry'),
@@ -98,13 +100,13 @@ SCENES = (
            Target('Settings (Ctrl+,)', 'settings', 'Open Settings', kind='button'))),
     Scene('documents', 'Documents', 'Documents in the Details view, with folders first. The '
           'details pane describes the folder shown.',
-          Picture(start=DOCUMENTS),
+          Picture(start=DOCUMENTS, scene=('action=details-pane',)),
           (listed(FOLDER, 'folder', f'Open {FOLDER}'),
            Target('Home', 'home', 'Back to Home', tooltip=DEMO_HOME, kind='button'),
            sidebar('Pictures', 'Pictures', 'pictures'), THIS_PC)),
     Scene('folder', 'A selected file', f'{FOLDER}, with {FILE} selected. The details pane shows '
           'its type, size and dates.',
-          Picture(start=FOLDER_PATH, scene=(f'select={FILE}',)),
+          Picture(start=FOLDER_PATH, scene=(f'select={FILE}', 'action=details-pane')),
           (listed(FILE, 'context-menu', f'Right-click {FILE}'),
            Target('Documents', 'documents', 'Back to Documents', tooltip=DOCUMENTS, kind='button'),
            Target('Home', 'home', 'Back to Home', tooltip=DEMO_HOME, kind='button'))),

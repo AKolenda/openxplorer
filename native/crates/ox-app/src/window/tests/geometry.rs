@@ -4,7 +4,10 @@
 //! The expected numbers in those tests are the current app's layout as
 //! Chromium draws `v2.0.0:desktop/ui/index.html` with `style.css` at 100% text
 //! size (the reference captures of `tools/capture-screenshots.py`), in
-//! window coordinates.
+//! window coordinates, except where Windows 11's density replaced it
+//! (owner decision 2026-11-06): the 48-pixel navigation row and command
+//! bar, the 32-pixel column header, rows and sidebar rows, and the
+//! 16-pixel icons in rows and the sidebar.
 
 use gtk::graphene;
 use gtk::prelude::*;
@@ -68,6 +71,15 @@ pub(super) fn bounds(test: &TestWindow, widget: &impl IsA<gtk::Widget>) -> Bound
 /// A window on `uri`, listed and drawn.
 pub(super) fn laid_out(uri: &str) -> TestWindow {
     let test = TestWindow::open(uri);
+    wait_for_frames(&test.window, 3);
+    test
+}
+
+/// [`laid_out`] with the details pane open, which a new window has
+/// closed.
+pub(super) fn laid_out_with_details_pane(uri: &str) -> TestWindow {
+    let test = TestWindow::open(uri);
+    test.open_details_pane();
     wait_for_frames(&test.window, 3);
     test
 }

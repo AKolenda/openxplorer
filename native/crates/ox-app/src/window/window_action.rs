@@ -88,17 +88,12 @@ pub(crate) enum WindowAction {
     /// Opens the subfolder menu of a crumb; the target is the folder, the
     /// subfolder shown in bold and the first one listed (NAV-020).
     CrumbSubfolders,
-    /// Goes to the folder beside a crumb's; the target is the folder and
-    /// the step (NAV-022).
-    CrumbSibling,
     /// Moves keyboard focus to the search box (Ctrl+F).
     Search,
     /// Moves the active tab to the location in the string target.
     GoTo,
     /// Mounts the volume whose id is the string target, then opens it.
     MountVolume,
-    /// Opens the SMB server or share typed on the Network page.
-    OpenServerAddress,
     /// Opens the one selected item (Enter).
     Open,
     /// Selects every item (Ctrl+A).
@@ -148,8 +143,8 @@ pub(crate) enum WindowAction {
     Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
-    /// Splits the tab into two panes, or closes its active pane (F3,
-    /// VIEW-059).
+    /// Splits the tab into two panes, or closes its active pane (View >
+    /// Split view, VIEW-059).
     SplitView,
     /// Windows Explorer's Full screen: makes the window fill the screen,
     /// or gives it back its size (F11, CMD-036).
@@ -197,26 +192,20 @@ pub(crate) enum WindowAction {
     ResetLayout,
     /// New ▸ Folder (Ctrl+Shift+N).
     NewFolder,
-    /// New ▸ Text document.
-    NewTextDocument,
-    /// New ▸ File….
-    NewFile,
-    /// New ▸ Markdown document.
-    NewMarkdownDocument,
-    /// New ▸ CSV file.
-    NewCsvFile,
-    /// New ▸ JSON file.
-    NewJsonFile,
-    /// New ▸ HTML document.
-    NewHtmlDocument,
-    /// New ▸ From template….
-    NewFromTemplate,
-    /// Opens the New from template dialog with the template whose id is
-    /// the string target chosen: a user template listed in the New menu
-    /// (OPS-003).
-    NewFromUserTemplate,
-    /// New ▸ Link to file or folder… (OPS-004).
+    /// New ▸ Shortcut: the link dialog (OPS-004).
     NewLink,
+    /// New ▸ Bitmap image.
+    NewBitmapImage,
+    /// New ▸ Rich Text Document.
+    NewRichTextDocument,
+    /// New ▸ Text Document.
+    NewTextDocument,
+    /// New ▸ Compressed (zipped) Folder.
+    NewCompressedFolder,
+    /// Copies the user template whose id is the string target into the
+    /// folder and renames the copy in place: a template the New menu
+    /// lists (OPS-003).
+    NewFromUserTemplate,
     /// Cut (Ctrl+X).
     Cut,
     /// Copy (Ctrl+C).
@@ -259,6 +248,9 @@ pub(crate) enum WindowAction {
     CancelOperation,
     /// Puts the selected Recycle Bin items back where they came from.
     Restore,
+    /// Puts every item in the Recycle Bin back where it came from (the
+    /// command bar's "Restore all items").
+    RestoreAllItems,
     /// Deletes everything in the Recycle Bin, after asking.
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
@@ -305,10 +297,6 @@ pub(crate) enum WindowAction {
     /// Opens the connect dialog at a web address, as Windows 11's "Add a
     /// network location" (This PC's and Network's "…").
     AddNetworkLocation,
-    /// Looks for SMB servers that advertise themselves.
-    DiscoverServers,
-    /// Stops looking for servers.
-    StopDiscovery,
     /// Saves the network location in the string target under Network
     /// ("Keep in Network").
     KeepInNetwork,
@@ -412,6 +400,15 @@ pub(crate) enum WindowAction {
     /// Compress to…: asks for the new archive's name and format first
     /// (ARC-023).
     CompressTo,
+    /// Send to ▸ a folder (Documents, a drive or a network location),
+    /// with its URI: copies the selection there (CMD-038).
+    SendTo,
+    /// Send to ▸ Desktop (create shortcut): a shortcut to each selected
+    /// item on the Desktop.
+    SendToDesktop,
+    /// Send to ▸ Bluetooth device: the desktop's Bluetooth sender with the
+    /// selected files.
+    SendToBluetooth,
     /// Open with…: the Open with dialog for the one selected item, or the
     /// folder.
     OpenWith,
@@ -489,11 +486,9 @@ impl WindowAction {
             WindowAction::CompactDensity => "compact-density",
             WindowAction::ItemCheckBoxes => "item-check-boxes",
             WindowAction::CrumbSubfolders => "crumb-subfolders",
-            WindowAction::CrumbSibling => "crumb-sibling",
             WindowAction::Search => "search",
             WindowAction::GoTo => "go-to",
             WindowAction::MountVolume => "mount-volume",
-            WindowAction::OpenServerAddress => "open-server-address",
             WindowAction::Open => "open",
             WindowAction::SelectAll => "select-all",
             WindowAction::SelectNone => "select-none",
@@ -536,15 +531,12 @@ impl WindowAction {
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",
             WindowAction::NewFolder => "new-folder",
-            WindowAction::NewTextDocument => "new-text-document",
-            WindowAction::NewFile => "new-file",
-            WindowAction::NewMarkdownDocument => "new-markdown-document",
-            WindowAction::NewCsvFile => "new-csv-file",
-            WindowAction::NewJsonFile => "new-json-file",
-            WindowAction::NewHtmlDocument => "new-html-document",
-            WindowAction::NewFromTemplate => "new-from-template",
-            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::NewLink => "new-link",
+            WindowAction::NewBitmapImage => "new-bitmap-image",
+            WindowAction::NewRichTextDocument => "new-rich-text-document",
+            WindowAction::NewTextDocument => "new-text-document",
+            WindowAction::NewCompressedFolder => "new-compressed-folder",
+            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",
@@ -564,6 +556,7 @@ impl WindowAction {
             WindowAction::Redo => "redo",
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
+            WindowAction::RestoreAllItems => "restore-all-items",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ClearRecentFiles => "clear-recent-files",
@@ -582,8 +575,6 @@ impl WindowAction {
             WindowAction::DropChoice => "drop-choice",
             WindowAction::MapNetworkLocation => "map-network-location",
             WindowAction::AddNetworkLocation => "add-network-location",
-            WindowAction::DiscoverServers => "discover-servers",
-            WindowAction::StopDiscovery => "stop-discovery",
             WindowAction::KeepInNetwork => "keep-in-network",
             WindowAction::RemoveSavedLocation => "remove-saved-location",
             WindowAction::SignOut => "sign-out",
@@ -625,6 +616,9 @@ impl WindowAction {
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
             WindowAction::CompressTo => "compress-to",
+            WindowAction::SendTo => "send-to",
+            WindowAction::SendToDesktop => "send-to-desktop",
+            WindowAction::SendToBluetooth => "send-to-bluetooth",
             WindowAction::OpenWith => "open-with",
             WindowAction::ChangeApp => "change-app",
             WindowAction::OpenWithOf => "open-with-of",

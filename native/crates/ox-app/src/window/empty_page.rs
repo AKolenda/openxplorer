@@ -8,7 +8,7 @@
 //! [`super::loading`]).
 
 use gtk::prelude::*;
-use ox_core::location::{is_smb_server, same_location, split_location, TRASH_URI};
+use ox_core::location::{is_smb_server, split_location};
 
 use crate::icons::{self, Icon};
 
@@ -31,10 +31,9 @@ pub(super) enum EmptyState {
     Unavailable(String),
     /// A search found nothing; the message says why (SRCH-013).
     NoMatches(String),
-    /// The folder has no items.
+    /// The folder has no items; the Recycle Bin too, which says so as
+    /// any empty folder does, as in Windows 11 (OPS-040).
     EmptyFolder,
-    /// The Recycle Bin has no items (OPS-040).
-    EmptyRecycleBin,
     /// A server lists no shared folders.
     NoShares,
     /// The phone and camera list (`mtp://`) has no devices.
@@ -42,13 +41,11 @@ pub(super) enum EmptyState {
 }
 
 impl EmptyState {
-    /// What an empty listing of `uri` says: Dolphin's placeholders for
-    /// the Recycle Bin, a server without shares and the device list, and
-    /// "This folder is empty" elsewhere.
+    /// What an empty listing of `uri` says: Dolphin's placeholders for a
+    /// server without shares and the device list, and "This folder is
+    /// empty" elsewhere, the Recycle Bin included.
     pub(super) fn empty_listing(uri: &str) -> EmptyState {
-        if same_location(uri, TRASH_URI) {
-            EmptyState::EmptyRecycleBin
-        } else if is_smb_server(uri) {
+        if is_smb_server(uri) {
             EmptyState::NoShares
         } else if split_location(uri)
             .is_ok_and(|parts| parts.scheme.eq_ignore_ascii_case("mtp") && parts.authority.is_empty())
@@ -130,7 +127,6 @@ impl EmptyPage {
     pub(super) fn show(&self, state: &EmptyState) {
         let glyph = match state {
             EmptyState::Unavailable(_) => Icon::Organization,
-            EmptyState::EmptyRecycleBin => Icon::Delete,
             _ => Icon::Folder,
         };
         icons::set_icon(&self.icon, glyph, STATE_GLYPH);
@@ -147,7 +143,6 @@ impl EmptyPage {
                 ox_core::i18n::gettext_static("This folder is empty"),
                 ox_core::i18n::gettext_static("Create a folder or paste files here."),
             ),
-            EmptyState::EmptyRecycleBin => (ox_core::i18n::gettext_static("Recycle Bin is empty"), ""),
             EmptyState::NoShares => (ox_core::i18n::gettext_static("No shared folders found"), ""),
             EmptyState::NoDevices => (
                 ox_core::i18n::gettext_static("No MTP-compatible devices found"),
@@ -196,10 +191,7 @@ mod tests {
     /// parity: VIEW-048
     #[test]
     fn empty_listings_say_what_is_missing_where() {
-        assert_eq!(
-            EmptyState::empty_listing("trash:///"),
-            EmptyState::EmptyRecycleBin
-        );
+        assert_eq!(EmptyState::empty_listing("trash:///"), EmptyState::EmptyFolder);
         assert_eq!(EmptyState::empty_listing("smb://nas/"), EmptyState::NoShares);
         assert_eq!(
             EmptyState::empty_listing("smb://nas/Team"),

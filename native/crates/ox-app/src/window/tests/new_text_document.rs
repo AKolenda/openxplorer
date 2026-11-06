@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! New ▸ Text document in a real window, as Windows Explorer makes one:
+//! New ▸ Text Document in a real window, as Windows Explorer makes one:
 //! the file is created at once as "New Text Document.txt", or
 //! "New Text Document (2).txt" and so on when that is taken, then
 //! selected and renamed in place with only its name before ".txt"
-//! selected. The other New items keep their dialogs.
+//! selected. The New menu's other documents and the user's templates are
+//! made the same way.
 
 use std::fs;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
+use ox_core::ops::NewDocument;
+use ox_core::places::{FolderLocations, KnownFolder};
 
 use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
-    select_names, text_field, wait_for_no_dialog,
+    select_names,
 };
 use crate::test_support::harness::{settle, wait_for, wait_until, Fixture, TestWindow};
 
@@ -64,8 +68,8 @@ fn new_text_document_makes_the_file_at_once_and_renames_its_name_in_place() {
     assert!(created.is_file(), "made before any name is typed");
     assert_eq!(
         fs::read(&created).expect("the new file"),
-        ox_core::ops::BuiltinTemplate::Text.contents(),
-        "the Text document starter's content"
+        NewDocument::TextDocument.contents(),
+        "an empty text document"
     );
     assert_eq!(test.selected_names(), ["New Text Document.txt"]);
     assert_eq!(field.text(), "New Text Document.txt");
@@ -193,46 +197,111 @@ fn undo_takes_the_new_text_document_away() {
     });
 }
 
-/// Every other New item still asks first, in the dialog it opened before,
-/// with its own suggested name.
+/// A file in the Templates folder of the test run's private home,
+/// removed again when dropped.
+struct UserTemplate(PathBuf);
+
+impl UserTemplate {
+    /// Puts `contents` in the Templates folder as `name`. Panics unless
+    /// that folder is in the private home `native/tools/check.py` gives
+    /// each test run, so a test never writes to the user's own.
+    fn add(name: &str, contents: &[u8]) -> Self {
+        let folders = FolderLocations::from_environment().read_paths();
+        let folder = folders.path(KnownFolder::Templates);
+        assert!(
+            folder.starts_with(std::env::temp_dir()),
+            "templates are written only to a private home below {}; found {}",
+            std::env::temp_dir().display(),
+            folder.display()
+        );
+        fs::create_dir_all(folder).expect("the Templates folder");
+        let file = folder.join(name);
+        fs::write(&file, contents).expect("a user template");
+        Self(file)
+    }
+}
+
+impl Drop for UserTemplate {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
+/// A New menu item for [`the_other_new_files_are_made_at_once_and_renamed_in_place`].
+type NewMenuFile = (
+    &'static str,
+    Option<&'static str>,
+    &'static str,
+    i32,
+    &'static [u8],
+);
+
+/// Bitmap image, Rich Text Document and Compressed (zipped) Folder, and a
+/// template from the Templates folder, are made at once too, as in
+/// Windows 11: under Windows' name, or the template's own, with their
+/// content, then selected and renamed in place with the name before the
+/// extension selected. No dialog asks first.
 ///
-/// parity: OPS-002
+/// parity: OPS-002, OPS-003, OPS-010, CMD-004
 #[gtk::test]
-fn the_other_new_items_still_open_their_dialogs() {
+fn the_other_new_files_are_made_at_once_and_renamed_in_place() {
+    let _template = UserTemplate::add("Letter.odt", b"letter");
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let before = test.names();
-
-    for (action, target, title, name) in [
-        ("new-file", None, "New file", "New file"),
+    super::support::show_file_name_extensions(&test);
+    // The action, its target, the new file's name, where the selected
+    // name ends and the content.
+    let files: [NewMenuFile; 4] = [
         (
-            "new-markdown-document",
+            "new-bitmap-image",
             None,
-            "New from template",
-            "New document.md",
+            "New Bitmap image.bmp",
+            16,
+            NewDocument::BitmapImage.contents(),
         ),
-        ("new-csv-file", None, "New from template", "New spreadsheet.csv"),
-        ("new-json-file", None, "New from template", "New file.json"),
-        ("new-html-document", None, "New from template", "New page.html"),
-        ("new-from-template", None, "New from template", "New document.txt"),
+        (
+            "new-rich-text-document",
+            None,
+            "New Rich Text Document.rtf",
+            22,
+            NewDocument::RichTextDocument.contents(),
+        ),
+        (
+            "new-compressed-folder",
+            None,
+            "New Compressed (zipped) Folder.zip",
+            30,
+            NewDocument::CompressedFolder.contents(),
+        ),
         (
             "new-from-user-template",
-            Some("text"),
-            "New from template",
-            "New document.txt",
+            Some("user:Letter.odt"),
+            "Letter.odt",
+            6,
+            b"letter",
         ),
-    ] {
-        test.activate(action, target);
-        let dialog = open_dialog(&test);
-        assert_eq!(dialog.title_text(), title, "{action}");
-        let field = text_field(&dialog);
-        assert_eq!(field.text(), name, "{action}");
-        assert!(!is_renaming_in_place(&test), "{action}");
-        dialog.press("Cancel");
-        wait_for_no_dialog(&test);
-    }
+    ];
 
-    assert_eq!(test.names(), before, "nothing was created");
+    for (action, target, name, name_end, contents) in files {
+        test.activate(action, target);
+        let field = name_editor(&test);
+        settle();
+
+        assert!(dialog_over(&test).is_none(), "{action}: no dialog asks");
+        assert_eq!(field.text(), name, "{action}");
+        assert_eq!(
+            field.selection_bounds(),
+            Some((0, name_end)),
+            "{action}: the name before its extension"
+        );
+        escape(&test, &field);
+        assert_eq!(
+            fs::read(fixture.path(name)).expect("the new file"),
+            contents,
+            "{action}"
+        );
+        assert_eq!(test.selected_names(), [name], "{action}");
+    }
 }
 
 /// The names in `fixture`'s folder on disk, sorted, hidden ones included,
@@ -280,7 +349,7 @@ fn closing_during_a_slow_create_asks_and_cancels_it() {
     let running = test.window.has_running_write();
     let panel_shown = test.window.transfer_panel().is_visible();
     let others_enabled =
-        ["new-folder", "new-text-document", "new-file", "undo"].map(|name| is_enabled(&test, name));
+        ["new-folder", "new-text-document", "new-bitmap-image", "undo"].map(|name| is_enabled(&test, name));
     let can_cancel = is_enabled(&test, "cancel-operation");
     test.window.close();
     let question = open_dialog(&test);

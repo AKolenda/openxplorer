@@ -501,9 +501,11 @@ fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
 
 /// A window that opened in the icon view used to keep one column, because
 /// GTK ignored the column count set while it allocated the view. Tiles sit
-/// where `renderRows` in app.js puts them: `floor(width / 135)` columns
+/// where `renderRows` in app.js puts them: `floor(width / cell)` columns
 /// sharing the width less 20 pixels, the first 10 pixels in and 5 down,
-/// 4 pixels apart, 128 pixels tall on a 130-pixel pitch.
+/// 4 pixels apart. Large icons' 96-pixel icons (Windows 11's, owner
+/// decision 2026-11-06) make the web's 135 × 130 cell 40 pixels wider and
+/// taller: 168 pixels tall on a 170-pixel pitch.
 ///
 /// parity: VIEW-005, LOOK-014
 #[gtk::test]
@@ -516,14 +518,14 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     test.show(&fixture.uri());
     wait_for_frames(&test.window, 4);
     let (width, tiles) = tile_bounds(&test);
-    let columns = width / 135;
+    let columns = width / 175;
     assert!(columns >= 2, "a {width}-pixel pane holds several columns");
     let tile_width = (width - 20) / columns - 4;
-    assert_eq!(tiles[0], Bounds::new(10, 5, tile_width, 128), "the first tile");
+    assert_eq!(tiles[0], Bounds::new(10, 5, tile_width, 168), "the first tile");
     let first_row: Vec<_> = tiles.iter().filter(|tile| tile.y == 5).collect();
     assert_eq!(first_row.len(), usize::try_from(columns).expect("a few columns"));
     let next_row = tiles.iter().find(|tile| tile.y != 5).expect("a second row");
-    assert_eq!(next_row.y, 5 + 130, "rows are 130 pixels apart");
+    assert_eq!(next_row.y, 5 + 170, "rows are 170 pixels apart");
     let first_cell = descendants::<FileCell>(test.window.folder_pane().icon_view().grid())
         .into_iter()
         .next()
@@ -533,7 +535,7 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
         .next()
         .expect("a name");
     let name_top = name.compute_bounds(&first_cell).map(|rect| pixels(rect.y()));
-    assert_eq!(name_top, Some(56 + 8), "the name starts 8 pixels under the icon");
+    assert_eq!(name_top, Some(96 + 8), "the name starts 8 pixels under the icon");
 }
 
 /// Choosing a view starts it from the top and saves it; Explorer's keys
@@ -685,7 +687,7 @@ fn zooming_changes_and_saves_the_view() {
     // The Python app's view key is saved while every folder shares one.
     test.share_one_view();
     test.window.folder_pane().model().select_only(3);
-    test.window.zoom_view(6);
+    test.window.zoom_view(7);
     assert_eq!(
         test.window.folder_pane().view(),
         FolderView::Icons(IconSize::MEDIUM)
@@ -696,5 +698,5 @@ fn zooming_changes_and_saves_the_view() {
     });
     assert_eq!(test.selected_names().len(), 1, "zooming keeps the selection");
     test.window.zoom_view(1);
-    assert_eq!(test.window.folder_pane().view().as_str(), "icons-48");
+    assert_eq!(test.window.folder_pane().view().as_str(), "icons-56");
 }

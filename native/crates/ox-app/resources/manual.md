@@ -20,9 +20,9 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Files and folders
 
-- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.
+- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, "New Text Document.txt" (or "New Text Document (2).txt" when that name is taken), then renamed in place: type its name and press Enter.
 - Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.
-- Rename with F2. Select several items to rename them together.
+- Rename with F2. Select several items to rename them together. As in Windows, \ / : * ? " < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.
 - Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.
 - When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.
 - Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.
@@ -32,7 +32,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 ## Views and sorting
 
 - View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.
-- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
+- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
 - View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.
 - Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
@@ -44,13 +44,15 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Search
 
-- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.
+- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.
 - Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
+- A search is a step of the tab's history, as in Windows: the tab and the address bar read Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box goes back to the folder too.
 
 ## Network locations
 
-- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.
+- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\server\share or smb://server/share in the address bar.
+- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.
 - Map network location, below the navigation pane, or Map network drive in the "…" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.
 - OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.
 - Right-click a share or server and choose Sign out of server to disconnect and forget a session.

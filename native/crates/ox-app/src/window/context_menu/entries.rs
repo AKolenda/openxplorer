@@ -90,6 +90,50 @@ pub(crate) struct ItemFacts {
     /// local `.iso` or `.img` file (DEV-011), Analyse disk usage for a
     /// local folder (PROP-015).
     pub(crate) disk_tool: Option<DiskTool>,
+    /// Where Send to can send the selection (CMD-038).
+    pub(crate) send_to: SendToTargets,
+}
+
+/// A drive or network location Send to copies to, named as This PC
+/// names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SendToDrive {
+    /// Its This PC name, such as `Backup (\\fileserver) (S:)`.
+    pub(crate) label: String,
+    /// Its root.
+    pub(crate) uri: String,
+    /// A saved network location rather than a removable drive. One that
+    /// is not connected is offered too: choosing it connects it first.
+    pub(crate) is_network: bool,
+}
+
+/// What Send to offers beside Compressed (zipped) folder, which is always
+/// there (CMD-038): only what the computer has, as Windows lists only
+/// what is set up.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag says whether one independent destination exists"
+)]
+pub(crate) struct SendToTargets {
+    /// A Bluetooth adapter and the desktop's sender exist.
+    pub(crate) bluetooth: bool,
+    /// The desktop has a Desktop folder.
+    pub(crate) desktop: bool,
+    /// The Documents folder, when the desktop has one.
+    pub(crate) documents: Option<String>,
+    /// The desktop's Email portal can attach files.
+    pub(crate) mail: bool,
+    /// The removable drives, then the saved network locations.
+    pub(crate) drives: Vec<SendToDrive>,
+    /// The selection holds a folder, which only files can be sent as.
+    pub(crate) has_folder: bool,
+    /// Why a copy cannot start now, when it cannot: Documents, the drives
+    /// and the network locations wait for a transfer slot.
+    pub(crate) copy_refusal: Option<&'static str>,
+    /// Why Desktop (create shortcut) cannot start now, when it cannot: it
+    /// runs as the window's one exclusive operation.
+    pub(crate) shortcut_refusal: Option<&'static str>,
 }
 
 /// A context menu: its rows, and the icon strip of the compact style.
@@ -108,6 +152,9 @@ const ONE_ITEM_AT_A_TIME: &str = crate::i18n::message_id("Select only one item f
 /// Why a command that runs or changes an item is disabled in a previous
 /// version.
 const READ_ONLY_VERSION: &str = crate::i18n::message_id("Items in a previous version are read-only.");
+
+/// Why Send to ▸ Bluetooth device is disabled for a folder.
+const BLUETOOTH_FILES_ONLY: &str = crate::i18n::message_id("Only files can be sent to a Bluetooth device.");
 
 /// An item that runs `action`.
 fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
@@ -429,6 +476,107 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     entries
 }
 
+/// "Send to", Windows Explorer's submenu in the classic menu (CMD-038), in
+/// its order: Bluetooth device, Compressed (zipped) folder, Desktop
+/// (create shortcut), Documents, Mail recipient, then each removable
+/// drive and saved network location as This PC names it. Bluetooth,
+/// Desktop, Documents and Mail recipient appear only where the computer
+/// has them; no other application adds entries. Documents and Mail
+/// recipient show Fluent's colour art, as Windows shows colour glyphs;
+/// the others keep their glyphs, as Fluent has no colour art for them.
+fn send_to_item(facts: &ItemFacts) -> MenuEntry {
+    let targets = &facts.send_to;
+    let mut entries: Vec<MenuEntry> = Vec::new();
+    if targets.bluetooth {
+        let bluetooth = item(
+            ox_core::i18n::gettext_static("Bluetooth device"),
+            Icon::Bluetooth,
+            WindowAction::SendToBluetooth,
+        )
+        .disabled_because(
+            targets.has_folder,
+            ox_core::i18n::gettext_static(BLUETOOTH_FILES_ONLY),
+        );
+        entries.push(bluetooth.into());
+    }
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Compressed (zipped) folder"),
+            Icon::FolderZip,
+            WindowAction::CompressToZip,
+        )
+        .into(),
+    );
+    if targets.desktop {
+        let desktop = item(
+            ox_core::i18n::gettext_static("Desktop (create shortcut)"),
+            Icon::Desktop,
+            WindowAction::SendToDesktop,
+        )
+        .disabled_because(
+            facts.is_read_only,
+            ox_core::i18n::gettext_static(READ_ONLY_VERSION),
+        );
+        let desktop = match targets.shortcut_refusal {
+            Some(reason) => desktop.disabled_because(true, reason),
+            None => desktop,
+        };
+        entries.push(desktop.into());
+    }
+    if let Some(documents) = &targets.documents {
+        // Windows draws Send to's destinations in colour; Fluent's colour
+        // document art stands for Documents.
+        let glyph = Icon::DocumentColor20;
+        entries.push(
+            copy_item(
+                MenuItem::with_text_target(
+                    &ox_core::i18n::gettext("Documents"),
+                    glyph,
+                    WindowAction::SendTo,
+                    documents,
+                ),
+                targets,
+            )
+            .into(),
+        );
+    }
+    if targets.mail {
+        entries.push(
+            item(
+                ox_core::i18n::gettext_static("Mail recipient"),
+                Icon::MailColor20,
+                WindowAction::Share,
+            )
+            .into(),
+        );
+    }
+    for drive in &targets.drives {
+        let glyph = if drive.is_network {
+            Icon::Organization
+        } else {
+            Icon::HardDrive
+        };
+        let copy = MenuItem::with_text_target(&drive.label, glyph, WindowAction::SendTo, &drive.uri);
+        entries.push(copy_item(copy, targets).into());
+    }
+    MenuItem::submenu(
+        ox_core::i18n::gettext_static("Send to"),
+        Icon::Share,
+        WindowAction::SendTo,
+        entries,
+    )
+    .into()
+}
+
+/// `item`, a destination Send to copies to, disabled with the reason
+/// while no copy can start.
+fn copy_item(item: MenuItem, targets: &SendToTargets) -> MenuItem {
+    match targets.copy_refusal {
+        Some(reason) => item.disabled_because(true, reason),
+        None => item,
+    }
+}
+
 /// Properties, of the selection or of the folder.
 fn properties_item() -> MenuEntry {
     item(
@@ -465,19 +613,16 @@ pub(crate) struct BackgroundSubmenus {
     pub new: Vec<MenuEntry>,
 }
 
-/// The Windows 11 style of the folder's own menu, in the order of
-/// Explorer's compact menu on blank space: View, Sort by, Group by and
-/// Refresh; Paste and Undo; New; Properties; Open in Terminal; then "Show
-/// more options" for the rest (CMD-011, CMD-012). View, Sort by, Group by
-/// and New open `submenus` in place.
-pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+/// The folder menus' View, Sort by, Group by and New items, which open
+/// `submenus` beside the menu.
+fn background_submenu_items(submenus: BackgroundSubmenus) -> [MenuEntry; 4] {
     let BackgroundSubmenus {
         view,
         sort,
         group,
         new,
     } = submenus;
-    vec![
+    [
         MenuItem::submenu(
             ox_core::i18n::gettext_static("View"),
             Icon::Grid,
@@ -499,6 +644,27 @@ pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubm
             group,
         )
         .into(),
+        MenuItem::submenu(
+            ox_core::i18n::gettext_static("New"),
+            Icon::Add,
+            WindowAction::ShowNewMenu,
+            new,
+        )
+        .into(),
+    ]
+}
+
+/// The Windows 11 style of the folder's own menu, in the order of
+/// Explorer's compact menu on blank space: View, Sort by, Group by and
+/// Refresh; Paste and Undo; New; Properties; Open in Terminal; then "Show
+/// more options" for the rest (CMD-011, CMD-012). View, Sort by, Group by
+/// and New open `submenus` beside the menu.
+pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+    let [view, sort, group, new] = background_submenu_items(submenus);
+    vec![
+        view,
+        sort,
+        group,
         item(
             ox_core::i18n::gettext_static("Refresh"),
             Icon::ArrowClockwise,
@@ -518,13 +684,7 @@ pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubm
             .with_shortcut("Ctrl+Z")
             .into(),
         MenuEntry::Divider,
-        MenuItem::submenu(
-            ox_core::i18n::gettext_static("New"),
-            Icon::Add,
-            WindowAction::ShowNewMenu,
-            new,
-        )
-        .into(),
+        new,
         MenuEntry::Divider,
         properties_item(),
         MenuEntry::Divider,
@@ -596,13 +756,15 @@ fn rename_items_item(facts: &ItemFacts) -> Option<MenuEntry> {
     Some(rename_items.into())
 }
 
-/// The Windows 10 style: every command as a row, with the folder's cache
-/// entry and an SMB item's Sign out (CMD-009), and Rename items… for
-/// several items (OPS-014).
+/// The Windows 10 style: every command as a row, with Send to (CMD-038),
+/// the folder's cache entry and an SMB item's Sign out (CMD-009), and
+/// Rename items… for several items (OPS-014).
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
     let mut entries = open_group(facts, MenuStyle::Classic);
-    entries.push(MenuEntry::Divider);
+    // Explorer's classic menu puts Send to in a group of its own above
+    // Cut and Copy.
+    entries.extend([MenuEntry::Divider, send_to_item(facts), MenuEntry::Divider]);
     entries.extend([cut.into(), copy.into(), paste.into(), MenuEntry::Divider]);
     entries.push(rename.into());
     entries.extend(rename_items_item(facts));
@@ -640,34 +802,23 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 
 /// The menu of blank space in a folder, acting on the folder
 /// (`backgroundMenu`, CMD-011, CMD-012). `undo_label` and `redo_label` name what
-/// Undo and Redo would do, such as "Undo Rename".
+/// Undo and Redo would do, such as "Undo Rename". View, Sort by, Group by
+/// and New open `submenus` beside the menu, as in Windows 10's.
 pub(crate) fn background_menu(
     undo_label: &str,
     redo_label: &str,
     applications: &[ApplicationChoice],
+    submenus: BackgroundSubmenus,
 ) -> Vec<MenuEntry> {
+    // Explorer's and Dolphin's View and Sort by (CMD-012), as the command
+    // bar's menus.
+    let [view, sort, group, new] = background_submenu_items(submenus);
     let mut entries: Vec<MenuEntry> = vec![
-        // Explorer's and Dolphin's View and Sort by (CMD-012), as the
-        // command bar's menus.
-        item(
-            ox_core::i18n::gettext_static("View"),
-            Icon::Grid,
-            WindowAction::ShowViewMenu,
-        )
-        .into(),
-        item(
-            ox_core::i18n::gettext_static("Sort by"),
-            Icon::ArrowSort,
-            WindowAction::ShowSortMenu,
-        )
-        .into(),
+        view,
+        sort,
+        group,
         MenuEntry::Divider,
-        item(
-            ox_core::i18n::gettext_static("New…"),
-            Icon::Add,
-            WindowAction::ShowNewMenu,
-        )
-        .into(),
+        new,
         item(
             ox_core::i18n::gettext_static("Paste"),
             Icon::ClipboardPaste,
@@ -867,7 +1018,7 @@ mod tests {
     use gtk::prelude::ToVariant;
 
     use super::*;
-    use crate::window::menu_popover::ItemAvailability;
+    use crate::window::menu_popover::{ItemAvailability, MenuAction};
 
     /// A single local file, not in a previous version.
     fn file() -> ItemFacts {
@@ -885,6 +1036,7 @@ mod tests {
             caching: None,
             delete_label: "Delete",
             disk_tool: None,
+            send_to: SendToTargets::default(),
         }
     }
 
@@ -899,6 +1051,17 @@ mod tests {
     }
 
     /// The labels of `entries`, a divider as `-`.
+    /// Submenus with one item each, for the folder menus.
+    fn submenus() -> BackgroundSubmenus {
+        let one = |label: &str| vec![item(label, Icon::ArrowSort, WindowAction::Sort).into()];
+        BackgroundSubmenus {
+            view: one("Details"),
+            sort: one("Name"),
+            group: one("Type"),
+            new: one("Folder"),
+        }
+    }
+
     fn labels(entries: &[MenuEntry]) -> Vec<String> {
         entries
             .iter()
@@ -920,6 +1083,220 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Every Send to destination this computer has.
+    fn everything() -> SendToTargets {
+        SendToTargets {
+            bluetooth: true,
+            desktop: true,
+            documents: Some("file:///home/demo/Documents".to_owned()),
+            mail: true,
+            drives: vec![
+                SendToDrive {
+                    label: "Holiday stick".to_owned(),
+                    uri: "file:///media/demo/HOLIDAY".to_owned(),
+                    is_network: false,
+                },
+                SendToDrive {
+                    label: "Backup (\\\\fileserver) (S:)".to_owned(),
+                    uri: "smb://fileserver/backup".to_owned(),
+                    is_network: true,
+                },
+                SendToDrive {
+                    label: "Media (M:)".to_owned(),
+                    uri: "smb://studio-nas/media".to_owned(),
+                    is_network: true,
+                },
+            ],
+            has_folder: false,
+            copy_refusal: None,
+            shortcut_refusal: None,
+        }
+    }
+
+    /// The Send to submenu of `facts`' classic menu.
+    fn send_to_of(facts: &ItemFacts) -> MenuItem {
+        item_menu(facts, MenuStyle::Classic)
+            .entries
+            .into_iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Item(item) if item.label == "Send to" => Some(item),
+                _ => None,
+            })
+            .expect("Send to is listed")
+    }
+
+    /// Send to lists Windows' destinations in Windows' order, each with
+    /// the action and target that sends there, and only the classic menu
+    /// has it, as in Windows 11.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn send_to_lists_windows_destinations_in_windows_order() {
+        let facts = ItemFacts {
+            send_to: everything(),
+            ..file()
+        };
+        let send_to = send_to_of(&facts);
+
+        assert_eq!(
+            labels(&send_to.submenu),
+            [
+                "Bluetooth device",
+                "Compressed (zipped) folder",
+                "Desktop (create shortcut)",
+                "Documents",
+                "Mail recipient",
+                "Holiday stick",
+                "Backup (\\\\fileserver) (S:)",
+                "Media (M:)",
+            ]
+        );
+        let actions: Vec<(MenuAction, Option<String>)> = items_of(&send_to.submenu)
+            .map(|item| {
+                (
+                    item.action,
+                    item.target.as_ref().and_then(gtk::glib::Variant::get::<String>),
+                )
+            })
+            .collect();
+        let text = |uri: &str| Some(uri.to_owned());
+        assert_eq!(
+            actions,
+            [
+                (WindowAction::SendToBluetooth.into(), None),
+                (WindowAction::CompressToZip.into(), None),
+                (WindowAction::SendToDesktop.into(), None),
+                (WindowAction::SendTo.into(), text("file:///home/demo/Documents")),
+                (WindowAction::Share.into(), None),
+                (WindowAction::SendTo.into(), text("file:///media/demo/HOLIDAY")),
+                (WindowAction::SendTo.into(), text("smb://fileserver/backup")),
+                (WindowAction::SendTo.into(), text("smb://studio-nas/media")),
+            ]
+        );
+        // A saved location that is not connected stays enabled, as in
+        // Windows: choosing it connects first.
+        assert!(disabled(&send_to.submenu).is_empty());
+        let compact = labels(&item_menu(&facts, MenuStyle::Compact).entries);
+        assert!(!compact.contains(&"Send to".to_owned()), "{compact:?}");
+    }
+
+    /// As in Windows, Documents and Mail recipient show colour glyphs:
+    /// Fluent's own colour art, which exists for these two; the others keep
+    /// their Fluent glyphs, as no colour art exists for them.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn send_to_shows_fluent_colour_art_where_it_exists() {
+        let facts = ItemFacts {
+            send_to: everything(),
+            ..file()
+        };
+        let glyphs: Vec<(String, Icon)> = items_of(&send_to_of(&facts).submenu)
+            .map(|item| (item.label.clone(), item.glyph))
+            .collect();
+
+        assert_eq!(
+            glyphs[..5],
+            [
+                ("Bluetooth device".to_owned(), Icon::Bluetooth),
+                ("Compressed (zipped) folder".to_owned(), Icon::FolderZip),
+                ("Desktop (create shortcut)".to_owned(), Icon::Desktop),
+                ("Documents".to_owned(), Icon::DocumentColor20),
+                ("Mail recipient".to_owned(), Icon::MailColor20),
+            ]
+        );
+    }
+
+    /// Only what the computer has is offered: without a Bluetooth sender,
+    /// a mail app, the standard folders or drives, Send to holds
+    /// Compressed (zipped) folder alone.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn send_to_leaves_out_what_the_computer_lacks() {
+        let send_to = send_to_of(&file());
+
+        assert_eq!(labels(&send_to.submenu), ["Compressed (zipped) folder"]);
+    }
+
+    /// Entries that cannot run are disabled and say why: Bluetooth for a
+    /// folder, Desktop (create shortcut) in a previous version.
+    ///
+    /// parity: CMD-038, CMD-031
+    #[test]
+    fn send_to_disables_what_cannot_run_and_says_why() {
+        let with_folder = ItemFacts {
+            send_to: SendToTargets {
+                has_folder: true,
+                ..everything()
+            },
+            ..file()
+        };
+        let in_version = ItemFacts {
+            is_read_only: true,
+            send_to: everything(),
+            ..file()
+        };
+        let reasons = |facts: &ItemFacts| -> Vec<(String, Option<&'static str>)> {
+            items_of(&send_to_of(facts).submenu)
+                .filter(|item| item.availability == ItemAvailability::Disabled)
+                .map(|item| (item.label.clone(), item.disabled_reason))
+                .collect()
+        };
+
+        assert_eq!(
+            reasons(&with_folder),
+            [("Bluetooth device".to_owned(), Some(BLUETOOTH_FILES_ONLY)),]
+        );
+        assert_eq!(
+            reasons(&in_version),
+            [("Desktop (create shortcut)".to_owned(), Some(READ_ONLY_VERSION)),]
+        );
+    }
+
+    /// While the window's file operations leave no room, the entries
+    /// that would start one are disabled and say why; Bluetooth device,
+    /// Compressed (zipped) folder and Mail recipient, which use no
+    /// transfer slot, keep their own rules.
+    ///
+    /// parity: CMD-038, CMD-031
+    #[test]
+    fn send_to_disables_copies_and_shortcuts_without_room_and_says_why() {
+        let wait = "Wait for a running file operation to finish.";
+        let facts = ItemFacts {
+            send_to: SendToTargets {
+                copy_refusal: Some(wait),
+                shortcut_refusal: Some(wait),
+                ..everything()
+            },
+            ..file()
+        };
+        let reasons: Vec<(String, Option<&'static str>)> = items_of(&send_to_of(&facts).submenu)
+            .filter(|item| item.availability == ItemAvailability::Disabled)
+            .map(|item| (item.label.clone(), item.disabled_reason))
+            .collect();
+
+        let disabled = |label: &str| (label.to_owned(), Some(wait));
+        assert_eq!(
+            reasons,
+            [
+                disabled("Desktop (create shortcut)"),
+                disabled("Documents"),
+                disabled("Holiday stick"),
+                disabled("Backup (\\\\fileserver) (S:)"),
+                disabled("Media (M:)"),
+            ]
+        );
+    }
+
+    /// The items among `entries`.
+    fn items_of(entries: &[MenuEntry]) -> impl Iterator<Item = &MenuItem> {
+        entries.iter().filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item),
+            MenuEntry::Divider => None,
+        })
     }
 
     /// Rename items… follows Rename in the classic menu ("Show more
@@ -963,7 +1340,7 @@ mod tests {
         assert_eq!(action, Some(WindowAction::RenameItems.into()));
     }
 
-    /// parity: CMD-009, CMD-016, TAB-028
+    /// parity: CMD-009, CMD-016, TAB-028, CMD-038
     #[test]
     fn a_folder_classic_menu_keeps_the_python_order_and_shortcuts() {
         let menu = item_menu(&folder(), MenuStyle::Classic);
@@ -977,6 +1354,8 @@ mod tests {
                 "Open in new tab",
                 "Open in new window",
                 "Pin to Quick access",
+                "-",
+                "Send to",
                 "-",
                 "Cut",
                 "Copy",
@@ -1350,12 +1729,13 @@ mod tests {
             icon: None,
         };
         assert_eq!(
-            labels(&background_menu("Undo Rename", "Redo", &[files])),
+            labels(&background_menu("Undo Rename", "Redo", &[files], submenus())),
             [
                 "View",
                 "Sort by",
+                "Group by",
                 "-",
-                "New…",
+                "New",
                 "Paste",
                 "Undo Rename",
                 "Redo",

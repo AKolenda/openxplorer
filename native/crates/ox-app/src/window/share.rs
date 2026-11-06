@@ -168,7 +168,7 @@ impl BrowserWindow {
 
     /// The bus name of the portal that can share; `None` where none can,
     /// and in an Open or Save dialog.
-    fn share_portal(&self) -> Option<String> {
+    pub(super) fn share_portal(&self) -> Option<String> {
         if self.is_picking() {
             return None;
         }

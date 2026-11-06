@@ -412,13 +412,16 @@ mod tests {
     fn preference_types_follow_python() {
         let Outcome { settings, .. } = read(&json!({"preferences": {
             "textSize": 150.0, "networkInterval": 30.0, "sidebarWidth": true,
-            "details": "no", "showHidden": true, "columnWidths": {"name": 300, "type": true, "css": 1}
+            "details": "yes", "showHidden": true, "columnWidths": {"name": 300, "type": true, "css": 1}
         }}));
         let preferences = settings.preferences;
         assert_eq!(preferences.text_size, 100);
         assert_eq!(preferences.network_interval, 30);
         assert_eq!(preferences.sidebar_width, None);
-        assert!(preferences.show_details_pane);
+        assert!(
+            !preferences.show_details_pane,
+            "a text is not a choice: the default"
+        );
         assert!(preferences.show_hidden);
         let columns = preferences.column_widths.unwrap();
         assert_eq!(columns.get(Column::Name), Some(300));

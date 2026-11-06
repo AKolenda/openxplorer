@@ -78,6 +78,9 @@ pub(super) struct CrumbButton {
     /// The `/` or `\\` drawn before the crumb, if any
     /// ([`ox_core::location::crumb_divider`]).
     pub divider_before: Option<&'static str>,
+    /// The crumb of search results, which runs the search again rather
+    /// than opening its folder.
+    pub refreshes: bool,
 }
 
 mod imp {
@@ -193,13 +196,19 @@ impl AddressBar {
 
     /// Scrolls to the last crumb whenever the crumbs or the width change,
     /// as `crumbs.scrollLeft = crumbs.scrollWidth` in app.js. `changed`
-    /// fires for new bounds only, so the user can still scroll back.
+    /// fires for new bounds only, so the user can still scroll back. It
+    /// fires while the row is laid out, when moving the crumbs would wait
+    /// for the next layout, which a crumb added to the same folder's
+    /// crumbs (search results) does not cause; so they move once it ends.
     fn keep_current_folder_visible(&self) {
         self.imp()
             .crumb_scroll
             .hadjustment()
             .connect_changed(|adjustment| {
-                adjustment.set_value(adjustment.upper() - adjustment.page_size());
+                let adjustment = adjustment.clone();
+                glib::idle_add_local_once(move || {
+                    adjustment.set_value(adjustment.upper() - adjustment.page_size());
+                });
             });
     }
 
@@ -303,7 +312,9 @@ impl AddressBar {
                 crumb_box.append(&label);
             }
             let button = crumb_button(crumb);
-            self.add_crumb_menu_and_wheel(&button, &crumb.crumb.uri, next);
+            if !crumb.refreshes {
+                crumb_menus::open_subfolders_on_down(&button, &crumb.crumb.uri, next);
+            }
             if index == last {
                 button.update_property(&[gtk::accessible::Property::Description(&ox_core::i18n::gettext(
                     "Current location",
@@ -421,13 +432,6 @@ impl AddressBar {
             .collect()
     }
 
-    /// Whether the crumbs are wider than the bar, so the wheel scrolls
-    /// them rather than switching folders (NAV-022).
-    pub(super) fn crumbs_overflow(&self) -> bool {
-        let adjustment = self.imp().crumb_scroll.hadjustment();
-        adjustment.upper() > adjustment.page_size() + 0.5
-    }
-
     /// The crumbs' horizontal scroll position, for tests.
     #[cfg(test)]
     pub(super) fn crumb_adjustment(&self) -> gtk::Adjustment {
@@ -458,9 +462,18 @@ fn divider_label() -> gtk::Label {
         .build()
 }
 
-/// A crumb that opens its folder, named "Go to …" for screen readers.
+/// A crumb that opens its folder, named "Go to …" for screen readers; the
+/// crumb of search results runs the search again.
 fn crumb_button(crumb: &CrumbButton) -> gtk::Button {
     let uri = crumb.crumb.uri.as_str();
+    if crumb.refreshes {
+        return gtk::Button::builder()
+            .label(&crumb.crumb.label)
+            .tooltip_text(&crumb.address)
+            .action_name(WindowAction::Refresh.detailed_name())
+            .css_classes([CRUMB_CLASS])
+            .build();
+    }
     let button = gtk::Button::builder()
         .label(&crumb.crumb.label)
         .tooltip_text(&crumb.address)

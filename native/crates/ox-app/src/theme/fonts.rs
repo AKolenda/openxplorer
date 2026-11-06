@@ -65,14 +65,11 @@ const FONT_SIZES: &[FontSize] = &[
     font("columnview.files", 12.0),
     font("columnview.files > header > button", 12.0),
     font("gridview.files", 12.0),
-    font(".details .detail-header", 13.0),
-    font(".details .detail-name", 16.0),
-    font(".details .detail-type", 12.0),
+    font(".details .detail-name", 14.0),
     font(".details button.detail-button", 12.0),
-    font(".details .detail-section", 12.0),
+    font(".details .detail-section", 13.0),
     font(".details .detail-key", 11.0),
     font(".details .detail-value", 11.0),
-    font(".details .detail-note", 11.0),
     font(".statusbar", 11.0),
     font(".statusbar .status-mode", 10.0),
     font(".toast", 12.0),
@@ -86,13 +83,7 @@ const FONT_SIZES: &[FontSize] = &[
     font(".landing .connected", 10.0),
     font(".landing .quiet", 12.0),
     font(".landing .notice", 12.0),
-    font(".landing .banner-hint", 12.0),
     font(".landing .primary", 12.0),
-    font(".landing .network-manual button", 11.0),
-    font(".landing .network-manual entry", 12.0),
-    font(".landing .network-count", 11.0),
-    font(".landing .discovery-note", 11.0),
-    font(".landing .network-protocol", 10.0),
     // The network dialogs (`.modal` and `.auth-*` in style.css; the title
     // at the dialog title's size of ui-spec.md T10).
     font(".ox-dialog .dialog-title", 20.0),
@@ -201,12 +192,15 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
     }
 }
 
-/// A sidebar row (`.side-entry`).
-const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list > row", 35, 20.0, 15.0);
+/// A sidebar row (`.side-entry`): 31 pixels at 100%, 32 apart with the
+/// 1-pixel gap, as Windows 11's navigation pane rows are (owner decision
+/// 2026-11-06; the web's were 35).
+const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list > row", 31, 20.0, 11.0);
 
-/// A sidebar row in Compact view: 26 pixels at 100% instead of 35, growing
-/// with the text as the usual rows do.
-const COMPACT_SIDEBAR_ROW: ScaledHeight = grows("window.compact-density .sidebar list > row", 26, 20.0, 6.0);
+/// A sidebar row in Compact view: 24 pixels at 100% instead of 31, as
+/// Windows 11's Compact view packs them, and no lower, as Compact view's
+/// details rows, growing with the text as the usual rows do.
+const COMPACT_SIDEBAR_ROW: ScaledHeight = grows("window.compact-density .sidebar list > row", 24, 20.0, 4.0);
 
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
@@ -219,14 +213,18 @@ const SCALED_HEIGHTS: &[ScaledHeight] = &[
     TITLE_BAR,
     TAB,
     SIDEBAR_ROW,
-    grows(".commandbar", 54, 30.0, 12.0),
+    // 47 pixels and its line, as Windows 11's command bar (owner
+    // decision 2026-11-06; the web's was 54).
+    grows(".commandbar", 47, 30.0, 12.0),
     grows(
         ".commandbar button.command, .commandbar menubutton.command > button",
         34,
         24.0,
         6.0,
     ),
-    grows("columnview.files > header > button", 37, 24.0, 10.0),
+    // 31 pixels and the header's line, as Windows 11's column header
+    // (owner decision 2026-11-06; the web's was 37).
+    grows("columnview.files > header > button", 31, 24.0, 7.0),
     grows(".statusbar", 29, 15.0, 9.0),
     grows("window.ox.ox-dialog entry", 33, 24.0, 8.0),
     grows("window.ox.ox-dialog button.dialog-button", 30, 24.0, 6.0),
@@ -272,7 +270,7 @@ fn details_row_rule(detail_row: i32) -> String {
 /// `window/compact_density.rs`, VIEW-067): the sidebar's rows stand
 /// closer, and the details rows as close as the List layout's items
 /// ([`compact_row`]), less the 1-pixel margin above and below each, so
-/// rows 38 pixels apart at 100% stand 26 apart. The window class makes
+/// rows 32 pixels apart at 100% stand 26 apart. The window class makes
 /// these rules win over the usual heights above. The folder tree's rows
 /// are in `skin/sidebar.css`, as their usual height is.
 fn compact_density_rules(scale: f64, text_size: TextSize) -> [String; 2] {
@@ -289,7 +287,7 @@ const SELECTION_BAR_HEIGHT: i32 = 16;
 
 /// The accent bar's place on the selected sidebar row, in the usual rows
 /// and in Compact view's: centred on the row, the odd pixel above it, so
-/// 10 pixels down a 35-pixel row as Chromium drew the web's bar.
+/// 8 pixels down a 31-pixel row.
 fn selection_bar_rules(scale: f64) -> [String; 2] {
     let rule = |selector: &str, row: &ScaledHeight| {
         let margin = (row.height(scale) - SELECTION_BAR_HEIGHT + 1) / 2;
@@ -354,8 +352,8 @@ mod tests {
         css_for_text_size(TextSize::from_percent(percent))
     }
 
-    /// Compact view's rows are 24 pixels in Details and 26 in the sidebar
-    /// at 100%, and still grow with larger text, staying closer than the
+    /// Compact view's rows are 24 pixels in Details and the sidebar at
+    /// 100%, and still grow with larger text, staying closer than the
     /// usual rows.
     ///
     /// parity: VIEW-067
@@ -365,38 +363,40 @@ mod tests {
         assert!(
             css.contains("window.compact-density columnview.files > listview > row { min-height: 24px; }")
         );
-        assert!(css.contains("window.compact-density .sidebar list > row { min-height: 26px; }"));
+        assert!(css.contains("window.compact-density .sidebar list > row { min-height: 24px; }"));
         let larger = css_at(150);
         assert!(
             larger.contains("window.compact-density columnview.files > listview > row { min-height: 36px; }")
         );
-        assert!(larger.contains("window.compact-density .sidebar list > row { min-height: 36px; }"));
-        assert!(larger.contains(".sidebar list > row { min-height: 45px; }"));
+        assert!(larger.contains("window.compact-density .sidebar list > row { min-height: 34px; }"));
+        assert!(larger.contains(".sidebar list > row { min-height: 41px; }"));
+        assert!(larger.contains("columnview.files > listview > row { min-height: 42px; }"));
     }
 
     /// The selected sidebar row's 16-pixel accent bar stays centred on the
-    /// row, 10 pixels down a 35-pixel row, 5 down Compact view's 26-pixel
+    /// row, 8 pixels down a 31-pixel row, 4 down Compact view's 24-pixel
     /// one, and further down the taller rows of larger text.
     ///
     /// parity: LOOK-014, VIEW-067
     #[test]
     fn the_selection_bar_stays_centred_on_the_sidebar_row() {
         let css = css_at(100);
-        assert!(css.contains(".sidebar .pill { margin-top: 10px; }"));
-        assert!(css.contains("window.compact-density .sidebar .pill { margin-top: 5px; }"));
+        assert!(css.contains(".sidebar .pill { margin-top: 8px; }"));
+        assert!(css.contains("window.compact-density .sidebar .pill { margin-top: 4px; }"));
         let larger = css_at(150);
-        assert!(larger.contains(".sidebar .pill { margin-top: 15px; }"));
-        assert!(larger.contains("window.compact-density .sidebar .pill { margin-top: 10px; }"));
+        assert!(larger.contains(".sidebar .pill { margin-top: 13px; }"));
+        assert!(larger.contains("window.compact-density .sidebar .pill { margin-top: 9px; }"));
     }
 
     /// parity: VIEW-044
     #[test]
-    fn the_default_text_size_draws_13_pixel_text_and_36_pixel_rows() {
+    fn the_default_text_size_draws_13_pixel_text_and_30_pixel_rows() {
         let css = css_at(100);
         assert!(css.contains("window.ox { font-size: 13px; }"));
         assert!(css.contains(".statusbar { font-size: 11px; }"));
-        assert!(css.contains("columnview.files > listview > row { min-height: 36px; }"));
-        assert!(css.contains("gridview.files.icons-large > child { min-width: 56px; min-height: 104px; }"));
+        assert!(css.contains("columnview.files > listview > row { min-height: 30px; }"));
+        assert!(css.contains("gridview.files.icons-large > child { min-width: 96px; min-height: 144px; }"));
+        assert!(css.contains("gridview.files.icons-56 > child { min-width: 56px; min-height: 104px; }"));
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 33px; }"));
         assert!(
@@ -435,7 +435,7 @@ mod tests {
     fn larger_text_scales_fonts_and_rows() {
         let css = css_at(200);
         assert!(css.contains("window.ox { font-size: 26px; }"));
-        assert!(css.contains("row { min-height: 60px; }"));
+        assert!(css.contains("columnview.files > listview > row { min-height: 54px; }"));
     }
 
     /// The skin's heights stay at 100% and grow with larger text, as the
@@ -447,9 +447,9 @@ mod tests {
         let normal = css_at(100);
         let large = css_at(200);
         for (selector, at_100, at_200) in [
-            (".sidebar list > row", 35, 55),
-            (".commandbar", 54, 72),
-            ("columnview.files > header > button", 37, 58),
+            (".sidebar list > row", 31, 51),
+            (".commandbar", 47, 72),
+            ("columnview.files > header > button", 31, 55),
             (".statusbar", 29, 39),
             ("window.ox.ox-dialog entry", 33, 56),
             ("window.ox.ox-dialog button.dialog-button", 30, 54),

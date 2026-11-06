@@ -94,13 +94,13 @@ fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
 
 /// parity: LOOK-012
 #[gtk::test]
-fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar() {
+fn the_address_and_search_boxes_are_34_pixels_tall_7_pixels_below_the_title_bar() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let address = bounds(&test, test.window.address_bar());
-    assert_eq!((address.x, address.y, address.height), (178, 56, 34));
+    assert_eq!((address.x, address.y, address.height), (178, 49, 34));
     let search = bounds(&test, test.window.search_box());
-    assert_eq!((search.y, search.width, search.height), (56, 235, 34));
+    assert_eq!((search.y, search.width, search.height), (49, 235, 34));
     assert_eq!(
         search.right(),
         test.window.width() - 16,

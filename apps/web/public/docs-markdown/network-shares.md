@@ -4,7 +4,7 @@ Browse your network without losing your sense of place.
 
 ## Connect to a server
 
-Open Network and enter a server or share address. The address bar also accepts Linux paths, UNC paths and smb:// locations. Each breadcrumb is separately clickable.
+Type a server or share address in the address bar, or open Network to see the computers on your network and open one. The address bar also accepts Linux paths, UNC paths and smb:// locations. Each breadcrumb is separately clickable.
 
 Windows-style paths use backslashes, not backticks: \\studio-nas\Projects. You can also use smb://studio-nas/Projects. Click each breadcrumb to jump to an ancestor. The website walkthrough uses this exact interface; the website itself makes no SMB connections.
 
@@ -37,7 +37,7 @@ The picture shows the sidebar with the sample folder Launch planning pinned to Q
 
 ## Discover nearby servers
 
-Discover servers uses the installed GVfs discovery providers. Devices must advertise themselves and be reachable through your network and firewall. It does not scan every IP address or guarantee an exhaustive list.
+Network lists the computers and servers that advertise themselves on your network, as Windows 11 does, through the installed GVfs discovery providers. It looks each time you open it, and Refresh looks again. Devices must advertise themselves and be reachable through your network and firewall. It does not scan every IP address or guarantee an exhaustive list. If Network says that network discovery is turned off, the GVfs network services are missing; type the server's address instead.
 
 ## Bookmarks are not persistent mounts
 

@@ -9,13 +9,13 @@
 //! a hidden launcher or one that takes neither files nor URIs; on a share
 //! without a local mount only applications that read URIs are available.
 //! The chosen application must still be in that list when it launches,
-//! and nothing changes a default unless the user ticked "Always use this
-//! app", which never applies to folders.
+//! and nothing changes a default unless the user pressed "Always", which
+//! never applies to folders.
 
 use std::path::PathBuf;
 
-use gtk::gio;
 use gtk::prelude::*;
+use gtk::{gio, glib};
 use ox_core::entry::{inspect, Entry, EntryError, EntryKind};
 use ox_core::integration::{unique_applications, APP_ID, FOLDER_CONTENT_TYPE, UNKNOWN_CONTENT_TYPE};
 use ox_core::location::{normalise, LocationError};
@@ -81,7 +81,7 @@ pub(crate) fn application_image(icon: Option<&str>, size: i32) -> Option<gtk::Im
 pub(crate) enum ApplicationScope {
     /// The applications registered for the item's content type.
     Recommended,
-    /// Every installed application ("Show all installed applications").
+    /// Every installed application ("More apps").
     AllInstalled,
 }
 
@@ -104,18 +104,74 @@ pub(crate) struct ApplicationChoice {
 }
 
 impl ApplicationChoice {
-    /// The line under its name.
-    pub(crate) fn note(&self) -> &'static str {
-        if self.is_default {
-            ox_core::i18n::gettext_static("Current default")
-        } else if !self.is_available {
-            ox_core::i18n::gettext_static("Requires a local mount")
-        } else if self.is_recommended {
-            ox_core::i18n::gettext_static("Recommended")
-        } else {
-            ox_core::i18n::gettext_static("Installed application")
-        }
+    /// The line under its name: why it cannot be chosen. The dialog's
+    /// sections ("Current default", "Suggested apps", "More apps") say
+    /// why the others are offered.
+    pub(crate) fn note(&self) -> Option<&'static str> {
+        (!self.is_available).then(|| ox_core::i18n::gettext_static("Requires a local mount"))
     }
+}
+
+/// A program picked with "Choose an app on your PC".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ProgramFile {
+    /// An installed application's launcher: its desktop ID.
+    Installed(String),
+    /// An executable: the command line that runs it, the path quoted.
+    Command(String),
+}
+
+/// The desktop ID of a launcher inside an XDG `applications` folder: its
+/// path below that folder with `/` as `-`, so `applications/vendor/viewer.desktop`
+/// is `vendor-viewer.desktop`, as GIO names it.
+fn desktop_id(path: &std::path::Path) -> Option<String> {
+    let real_path = std::fs::canonicalize(path).ok();
+    let data_folders = std::iter::once(glib::user_data_dir()).chain(glib::system_data_dirs());
+    data_folders
+        .map(|folder| folder.join("applications"))
+        .find_map(|folder| {
+            let relative = path
+                .strip_prefix(&folder)
+                .ok()
+                .map(std::path::Path::to_path_buf)
+                .or_else(|| {
+                    let folder = std::fs::canonicalize(&folder).ok()?;
+                    let relative = real_path.as_deref()?.strip_prefix(folder).ok()?;
+                    Some(relative.to_path_buf())
+                })?;
+            let parts: Option<Vec<&str>> = relative.iter().map(std::ffi::OsStr::to_str).collect();
+            Some(parts?.join("-"))
+        })
+}
+
+/// What the program file at `path` is: an installed launcher (`.desktop`)
+/// or an executable file.
+///
+/// # Errors
+///
+/// The message to show for a launcher that is not installed, or a file
+/// that is neither.
+pub(crate) fn program_file(path: &std::path::Path) -> Result<ProgramFile, String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let is_launcher = path.extension().is_some_and(|extension| extension == "desktop");
+    if is_launcher {
+        let file_name = path.file_name().and_then(|name| name.to_str()).map(str::to_owned);
+        return desktop_id(path)
+            .or(file_name)
+            .filter(|id| installed_application(id).is_some())
+            .map(ProgramFile::Installed)
+            .ok_or_else(|| ox_core::i18n::gettext("That app launcher is not installed."));
+    }
+    let is_executable = std::fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0);
+    if !is_executable {
+        return Err(ox_core::i18n::gettext(
+            "Choose a program file or an app launcher (.desktop).",
+        ));
+    }
+    let command = glib::shell_quote(path);
+    Ok(ProgramFile::Command(command.to_string_lossy().into_owned()))
 }
 
 /// The applications for one item.
@@ -287,7 +343,7 @@ impl ChoiceFacts<'_> {
 pub(crate) struct PreparedLaunch {
     /// The item's local path, also for a mounted share, else its URI.
     pub(crate) target: LaunchTarget,
-    /// The item's content type, for "Always use this app".
+    /// The item's content type, for "Always".
     pub(crate) content_type: String,
     /// The item is a folder, whose default is never changed.
     pub(crate) is_folder: bool,
@@ -365,12 +421,13 @@ pub(crate) async fn prepare_target(uri: String) -> Result<PreparedLaunch, OpenWi
     prepared.await.map_err(|_| OpenWithError::Interrupted)?
 }
 
-/// Whether "Always use this app for this file type" was ticked.
+/// Whether the user pressed "Just once" or "Always".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DefaultChoice {
-    /// Leave the defaults alone: the default choice.
+    /// Leave the defaults alone: "Just once", and a double-click.
     Keep,
-    /// Make the application the default for the item's content type.
+    /// "Always": make the application the default for the item's content
+    /// type.
     MakeDefault,
 }
 
@@ -430,21 +487,42 @@ mod tests {
     }
 
     /// Ported from the row labels of `openWithDialog` in
-    /// `v2.0.0:desktop/ui/app.js`.
+    /// `v2.0.0:desktop/ui/app.js`: an application that cannot open the
+    /// item says why; the dialog's sections say why the others are offered.
     ///
     /// parity: OPEN-011
     #[test]
-    fn each_application_says_why_it_is_offered() {
-        assert_eq!(choice("Viewer", true, true, true).note(), "Current default");
+    fn an_application_that_cannot_open_the_item_says_why() {
+        assert_eq!(choice("Viewer", true, true, true).note(), None);
         assert_eq!(
             choice("Player", false, true, false).note(),
-            "Requires a local mount"
+            Some("Requires a local mount")
         );
-        assert_eq!(choice("Editor", false, true, true).note(), "Recommended");
-        assert_eq!(
-            choice("Other", false, false, true).note(),
-            "Installed application"
-        );
+        assert_eq!(choice("Editor", false, true, true).note(), None);
+        assert_eq!(choice("Other", false, false, true).note(), None);
+    }
+
+    /// Choose an app on your PC takes an executable as a command line with
+    /// its path quoted, and refuses other files and launchers that are not
+    /// installed.
+    ///
+    /// parity: OPEN-014
+    #[test]
+    fn a_picked_program_file_is_a_command_or_an_installed_launcher() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let program = folder.path().join("my viewer");
+        std::fs::write(&program, "#!/bin/sh\n").expect("the folder is writable");
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let expected = format!("'{}'", program.display());
+        assert_eq!(program_file(&program), Ok(ProgramFile::Command(expected)));
+        let document = folder.path().join("notes.txt");
+        std::fs::write(&document, "text").expect("the folder is writable");
+        assert!(program_file(&document).is_err(), "a document is not a program");
+        let launcher = folder.path().join("org.openxplorer.NotInstalled.desktop");
+        std::fs::write(&launcher, "[Desktop Entry]\n").expect("the folder is writable");
+        assert!(program_file(&launcher).is_err(), "only installed launchers");
     }
 
     /// parity: OPEN-011
@@ -496,7 +574,7 @@ mod tests {
         );
     }
 
-    /// "Always use this app" changes nothing unless ticked, never a
+    /// "Always" changes nothing unless pressed, never a
     /// folder's handler, and makes the application the default for a
     /// file's content type. The last part writes `mimeapps.list`, so it
     /// runs only with a private configuration folder (native/tools/check.py).
@@ -527,6 +605,29 @@ mod tests {
         assert_eq!(message, "Opened with the selected application.");
         let default = gio::AppInfo::default_for_type("application/x-openxplorer-test", false);
         assert_eq!(default.and_then(|default| default.id()), app.id());
+    }
+
+    /// A launcher in a folder inside an `applications` folder is chosen by
+    /// its desktop ID, which names that folder.
+    ///
+    /// parity: OPEN-014
+    #[gtk::test]
+    fn a_picked_launcher_in_a_vendor_folder_is_found_by_its_desktop_id() {
+        const ID: &str = "openxplorer-vendor-test-viewer.desktop";
+        let data = gtk::glib::user_data_dir();
+        assert!(data.starts_with(std::env::temp_dir()), "a private data folder");
+        let folder = data.join("applications/openxplorer-vendor-test");
+        std::fs::create_dir_all(&folder).expect("the data folder is writable");
+        let launcher = folder.join("viewer.desktop");
+        let entry = "[Desktop Entry]\nType=Application\nName=Vendor viewer\nExec=true %F\n";
+        std::fs::write(&launcher, entry).expect("the data folder is writable");
+        crate::test_support::harness::wait_until("GIO to list the viewer", || {
+            installed_application(ID).is_some()
+        });
+
+        assert_eq!(program_file(&launcher), Ok(ProgramFile::Installed(ID.to_owned())));
+
+        std::fs::remove_file(&launcher).expect("the test entry is removed");
     }
 
     /// The menu offers the installed applications of a file's type up to

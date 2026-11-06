@@ -5,7 +5,7 @@
 use gtk::prelude::*;
 use ox_core::settings::{PreferencesUpdate, Settings};
 
-use super::geometry::{bounds, laid_out, Bounds};
+use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 use crate::window::widget_tree::children;
 
@@ -53,8 +53,8 @@ fn columns_run_from_14_pixels_in_with_the_web_widths() {
         "Size holds the 14 pixels after them"
     );
     assert!(
-        titles.iter().all(|title| title.height == 37),
-        "37-pixel titles above a 1-pixel line"
+        titles.iter().all(|title| title.height == 31),
+        "31-pixel titles above a 1-pixel line, as Windows 11's"
     );
 }
 
@@ -113,7 +113,7 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let row_place = bounds(&test, &row);
     assert_eq!(
         (row_place.x, row_place.width, row_place.height),
-        (list.x + 12, list.width - 24, 36),
+        (list.x + 12, list.width - 24, 30),
         "folders show no arrows by default, as in Explorer"
     );
     let (cell_x, title_x) = cell_and_title_x(&test, &row);
@@ -124,7 +124,7 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let row_place = bounds(&test, &row);
     assert_eq!(
         (row_place.x, row_place.width, row_place.height),
-        (list.x + 2, list.width - 14, 36),
+        (list.x + 2, list.width - 14, 30),
         "the fixture has folders, so rows make room for their arrows"
     );
     let (cell_x, title_x) = cell_and_title_x(&test, &row);
@@ -168,7 +168,7 @@ fn a_folders_arrow_sits_inside_its_rows_highlight() {
 #[gtk::test]
 fn the_details_pane_stacks_its_parts_as_windows_does() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     let pane = test.window.details_pane();
     let pane_place = bounds(&test, pane);
     assert_eq!(pane_place.width, 262);
@@ -206,7 +206,7 @@ fn the_details_pane_stacks_its_parts_as_windows_does() {
 #[gtk::test]
 fn the_details_values_line_up() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     test.select_named("Notes 2.txt");
     wait_for_frames(&test.window, 2);
     let pane = test.window.details_pane();

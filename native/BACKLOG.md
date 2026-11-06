@@ -230,11 +230,10 @@ baseline and GNOME integration. Priority is from the inventory.
 | ARC-023 | partial | should | Compress the selection into an archive |
 | ARC-024 | partial | should | Extract non-ZIP archives in-app |
 
-#### PROP: Properties, details pane, previous versions and folder sizes (2)
+#### PROP: Properties, details pane, previous versions and folder sizes (1)
 
 | ID | Status | Priority | Behaviour |
 |---|---|---|---|
-| PROP-012 | partial | could | Quick Look with Space via the GNOME previewer |
 | PROP-013 | partial | could | Media and document metadata in Properties and Details |
 
 #### LOOK: Appearance (1)
