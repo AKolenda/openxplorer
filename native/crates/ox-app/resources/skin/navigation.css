@@ -3,15 +3,17 @@
    search box (ui-spec.md §4.2; style.css .navigation, .address,
    .search-wrap). */
 
-/* 61px plus its line, with the 34px buttons and fields centred in it as
-   `align-items:center` centres them. The web row puts them 13.5px down,
-   which Chromium draws from the 14th pixel; GTK centres on whole pixels
-   and rounds down, so the band starts 12px down to land on the same row. */
+/* 47px plus its line, as Windows 11's address row (owner decision
+   2026-11-06; the web's row was 61px), with the 34px buttons and fields
+   7px down. The content box is 37px rather than the fields' 34, so the
+   row stays 48px where GTK measures it a few pixels taller than its
+   children (GTK 4.14 makes it 35); GTK centres the fields in it, 1px
+   down, rounding down. */
 .navigation {
   background-color: @ox_chrome;
   border-bottom: 1px solid @ox_border;
-  padding: 12px 16px 10px 13px;
-  min-height: 39px;
+  padding: 6px 16px 4px 13px;
+  min-height: 37px;
   border-spacing: 14px;
 }
 .navigation .nav-buttons { border-spacing: 5px; }
@@ -85,6 +87,24 @@
 .address .crumb-divider:dir(rtl) { background-image: -gtk-icontheme("ox-chevron-left-16-symbolic"); }
 /* A divider opens the subfolder menu of the crumb before it (NAV-020). */
 .address .crumb-divider:hover { background-color: @ox_hover; }
+/* As in Windows 11 Explorer, a chevron follows the location icon and
+   lists the top-level places, and while the first crumbs do not fit a «
+   takes its place and lists them (NAV-017, NAV-023). Drawn as the
+   dividers are; the base button look adds the hover and pressed fills. */
+.address button.crumb-root, .address button.crumb-overflow {
+  min-width: 20px;
+  min-height: 24px;
+  color: @ox_muted;
+  background-image: -gtk-icontheme("ox-chevron-right-16-symbolic");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+}
+.address button.crumb-overflow { background-image: -gtk-icontheme("ox-chevron-double-left-16-symbolic"); }
+.address button.crumb-root:dir(rtl) { background-image: -gtk-icontheme("ox-chevron-left-16-symbolic"); }
+.address button.crumb-overflow:dir(rtl) {
+  background-image: -gtk-icontheme("ox-chevron-double-right-16-symbolic");
+}
 .address button.address-chevron { min-width: 22px; min-height: 24px; }
 .address entry {
   border: none;

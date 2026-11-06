@@ -75,10 +75,12 @@ pub struct ViewProperties {
 
 impl Default for ViewProperties {
     /// Details, by name ascending, folders first: a new installation.
+    /// The icon view's size is Large icons, 96 pixels as in Windows 11
+    /// (the web app's were 56).
     fn default() -> Self {
         Self {
             mode: "details".to_owned(),
-            icon_size: 56,
+            icon_size: 96,
             sort: "name".to_owned(),
             descending: false,
             groups: false,

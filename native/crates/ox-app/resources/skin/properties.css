@@ -75,6 +75,22 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties grid.properties-rows { border-spacing: 14px 7px; margin: 5px 0 5px 4px; }
 .ox-properties .properties-rows .property-name { min-width: 76px; }
 .ox-properties .properties-attributes { border-spacing: 14px 6px; }
+
+/* A drive's General tab: Used space and Free space after their colours,
+   bytes and the short size in right-aligned columns, then the ring
+   (src/properties/space_ring.rs) with the drive's name under it. Used is
+   the accent, free a light grey, as Windows draws them. */
+.ox-properties grid.drive-space { border-spacing: 8px 7px; }
+.ox-properties grid.drive-space .property-name { min-width: 68px; }
+.ox-properties .drive-swatch { min-width: 12px; min-height: 12px; }
+.ox-properties .drive-swatch.used,
+.ox-properties .drive-swatch.free { box-shadow: inset 0 0 0 1px alpha(@ox_text, .2); }
+.ox-properties .drive-swatch.used { background-color: @ox_accent; }
+.ox-properties .drive-swatch.free { background-color: alpha(@ox_text, .14); }
+.ox-properties spacering .space-used { color: @ox_accent; }
+.ox-properties spacering .space-free { color: alpha(@ox_text, .14); }
+.ox-properties spacering.drive-ring { margin: 10px 0 6px 0; }
+.ox-properties .drive-name-row { margin: 0 0 4px 0; min-height: 23px; }
 .ox-properties checkbutton { padding: 0; min-height: 18px; }
 
 /* Buttons: Windows' push buttons, at least 75 wide and 23 high. */
@@ -151,9 +167,18 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties .snapshot-warnings { margin-top: 6px; color: @ox_muted; }
 .ox-properties .snapshot-source-actions { border-spacing: 8px; margin-top: 16px; }
 
-/* Customize: the template list, then the folder picture's stacked
-   buttons beside its preview, as Windows 11 spaces them. */
+/* Customize, and its Change Icon dialog's grid of icons
+   (src/properties/change_icon.rs). */
 .ox-properties .properties-icon-preview { margin: 0 8px 4px 0; }
+.ox-properties flowbox.properties-icon-grid { padding: 4px; background-color: @ox_bg; }
+.ox-properties flowbox.properties-icon-grid > flowboxchild { padding: 6px; border-radius: 0; }
+.ox-properties flowbox.properties-icon-grid > flowboxchild:hover { background-color: @ox_hover; }
+.ox-properties flowbox.properties-icon-grid > flowboxchild:selected {
+  background-color: @ox_selected;
+  color: @ox_text;
+}
+/* The template list, then the folder picture's stacked
+   buttons beside its preview, as Windows 11 spaces them. */
 .ox-properties dropdown.folder-template { margin: 2px 0 6px 0; }
 /* Windows' combo box: a push button's frame around the choice and its
    chevron. */

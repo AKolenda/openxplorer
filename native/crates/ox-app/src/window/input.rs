@@ -263,7 +263,9 @@ impl BrowserWindow {
     /// Opens the item at `position` of the active pane, which Enter or a
     /// double-click activated. A folder opened with Ctrl goes to a new tab
     /// behind, with Ctrl+Shift to a new tab in front and with Shift to a
-    /// new window, whatever is selected, as in Dolphin (TAB-026).
+    /// new window, whatever is selected, as in Dolphin (TAB-026). With
+    /// Folder Options' "Open each folder in its own window", a folder
+    /// opened alone goes to a new window too, as in Windows.
     pub(super) fn activate_from_view(&self, position: u32) {
         // DND-007: the press or release of a drag never opens an item.
         if self.are_item_clicks_paused() {
@@ -280,7 +282,11 @@ impl BrowserWindow {
             return;
         }
         let selected = self.folder_pane().model().selected_positions();
-        if selected.is_empty() || selected == [position] {
+        let alone = selected.is_empty() || selected == [position];
+        let own_window = alone && self.opens_folders_in_own_window();
+        if let Some(uri) = self.folder_in_view(position).filter(|_| own_window) {
+            WindowAction::OpenWindow.activate_from(self, Some(&uri.to_variant()));
+        } else if alone {
             self.activate_item(position);
         } else if selected.contains(&position) {
             self.open_selection();
@@ -487,8 +493,8 @@ impl BrowserWindow {
     }
 
     /// Escape, Backspace and Space, which act on a typed prefix first:
-    /// Escape clears the prefix, and only without one closes Quick Look,
-    /// cancels a file dialog or clears the selection; Backspace erases a
+    /// Escape clears the prefix, and only without one cancels a file
+    /// dialog or clears the selection; Backspace erases a
     /// typed character, and only without a prefix goes back, as in
     /// Dolphin and Explorer (NAV-004), once the input method did not take
     /// it for text it is composing; Space is prefix text, and only without
@@ -506,7 +512,6 @@ impl BrowserWindow {
                 input.reset();
                 self.reset_typeahead();
             }
-            gdk::Key::Escape if self.close_quick_look() => {}
             // In an Open or Save dialog Escape cancels, as in Windows,
             // even with items selected.
             gdk::Key::Escape if self.is_picking() => self.cancel_picking(),
@@ -520,10 +525,8 @@ impl BrowserWindow {
                     self.go_history(Direction::Backward);
                 }
             }
-            // Space previews the selected file in GNOME's previewer
-            // (PROP-012), else selects the current item, unless a prefix
-            // is typed.
-            gdk::Key::space if !prefix_active && self.toggle_quick_look() => {}
+            // Space selects the current item, unless a prefix is typed. As
+            // in Windows Explorer, it never opens a previewer.
             gdk::Key::space if !prefix_active => self.select_current_item(),
             _ => return None,
         }
@@ -543,11 +546,11 @@ impl BrowserWindow {
         }
     }
 
-    /// A primary press on blank space in `view`, below the rows or between
-    /// the tiles, clears the selection and keeps keyboard focus on the view,
-    /// as in Windows Explorer and Dolphin; with Ctrl or Shift held the
-    /// selection stays. A drag from there draws a rubber band
-    /// ([`super::rubber_band`]).
+    /// A primary press on blank space in `view`, below the rows, between
+    /// the tiles or on the empty part of an unselected details row, clears
+    /// the selection and keeps keyboard focus on the view, as in Windows
+    /// Explorer and Dolphin; with Ctrl or Shift held the selection stays.
+    /// A drag from there draws a rubber band ([`super::rubber_band`]).
     fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
@@ -572,15 +575,45 @@ impl BrowserWindow {
     }
 
     /// Whether (`x`, `y`) in `view` is its blank space: inside the list,
-    /// not on an item, and not on the column titles.
+    /// not on an item, and not on the column titles. The empty part of an
+    /// unselected details row is blank space too ([`Self::is_beside_item`]).
     pub(super) fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
         if self.folder_pane().owners().position_at(view, x, y).is_some() {
-            return false;
+            return self.is_beside_item(view, x, y);
         }
         // The details view's rows are an inner list view; its titles are
         // not inside it. The icon grid is the list itself.
         view.pick(x, y, gtk::PickFlags::DEFAULT)
             .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
+    }
+
+    /// Whether (`x`, `y`) in `view` is on the empty part of an unselected
+    /// details row: past the end of its name, or in its other columns. As
+    /// in Windows Explorer, only the icon and the name (with the check box
+    /// and the expand arrow before them) are the item there, so a press on
+    /// the rest of the row starts a rubber band, even in a folder whose
+    /// rows fill the view, and a click there clears the selection. A
+    /// selected row stays the item across its width, and so does every
+    /// tile of the icon views. A drop still goes into the folder of the
+    /// whole row.
+    pub(super) fn is_beside_item(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
+        if !view.is::<gtk::ColumnView>() {
+            return false;
+        }
+        let pane = self.folder_pane();
+        let Some(position) = pane.owners().position_at(view, x, y) else {
+            return false;
+        };
+        if pane.model().selection().is_selected(position) {
+            return false;
+        }
+        let Some(cell) = pane.owners().file_cell_at(position, view) else {
+            return false;
+        };
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let in_view = gtk::graphene::Point::new(x as f32, y as f32);
+        view.compute_point(&cell, &in_view)
+            .is_some_and(|point| cell.is_past_name(point))
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;

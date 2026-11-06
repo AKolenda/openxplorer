@@ -45,18 +45,25 @@ const SEARCH_STEP: usize = 80;
 pub(crate) enum Button {
     Primary = 1,
     Middle = 2,
+    Secondary = 3,
 }
 
-/// The tests' pointer, on the private X display.
+/// The tests' pointer, on the private X display. Dropping it releases
+/// the buttons it holds, so a test that fails mid-drag leaves none pressed
+/// for the next one.
 #[derive(Debug)]
 pub(crate) struct Pointer {
     connection: UnixStream,
     root: u32,
     xtest: u8,
+    /// The buttons pressed and not released yet.
+    held: Vec<Button>,
 }
 
 impl Pointer {
-    /// Connects to the private display of `native/tools/check.py`.
+    /// Connects to the private display of `native/tools/check.py`, after
+    /// closing what earlier tests left on its screen (see
+    /// [`close_leftovers`]), so the pointer reaches the window under test.
     ///
     /// # Panics
     ///
@@ -80,8 +87,10 @@ impl Pointer {
             connection,
             root,
             xtest: 0,
+            held: Vec::new(),
         };
         pointer.xtest = pointer.extension_opcode(b"XTEST");
+        close_leftovers();
         pointer
     }
 
@@ -92,22 +101,33 @@ impl Pointer {
 
     /// Presses `button` where the pointer is.
     pub(crate) fn press(&mut self, button: Button) {
+        self.held.push(button);
         self.fake(BUTTON_PRESS, button as u8, 0, 0);
     }
 
     /// Releases `button`.
     pub(crate) fn release(&mut self, button: Button) {
+        self.held.retain(|held| *held != button);
         self.fake(BUTTON_RELEASE, button as u8, 0, 0);
     }
 
     /// Presses and releases `key` on the private display's keyboard.
     pub(crate) fn tap_key(&mut self, key: gdk::Key) {
-        let keycode = gdk::Display::default()
-            .and_then(|display| display.map_keyval(key))
-            .and_then(|keys| keys.first().map(gdk::KeymapKey::keycode))
-            .expect("the private display's keyboard has the key");
-        let keycode = u8::try_from(keycode).expect("an X11 keycode");
+        let keycode = keycode_of(key);
         self.fake(KEY_PRESS, keycode, 0, 0);
+        self.fake(KEY_RELEASE, keycode, 0, 0);
+    }
+
+    /// Holds `key` down on the private display's keyboard until
+    /// [`Self::let_go_key`].
+    pub(crate) fn hold_key(&mut self, key: gdk::Key) {
+        let keycode = keycode_of(key);
+        self.fake(KEY_PRESS, keycode, 0, 0);
+    }
+
+    /// Lets go of `key`, held with [`Self::hold_key`].
+    pub(crate) fn let_go_key(&mut self, key: gdk::Key) {
+        let keycode = keycode_of(key);
         self.fake(KEY_RELEASE, keycode, 0, 0);
     }
 
@@ -129,6 +149,7 @@ impl Pointer {
     /// before a drag and drop may start, comes between them however busy
     /// its main loop is.
     pub(crate) fn press_and_flick(&mut self, button: Button, path: &[(i32, i32)]) {
+        self.held.push(button);
         let mut requests = self.fake_request(BUTTON_PRESS, button as u8, 0, 0);
         for &(x, y) in path {
             requests.extend(self.fake_request(MOTION_NOTIFY, 0, x, y));
@@ -212,6 +233,62 @@ impl Pointer {
     }
 }
 
+impl Drop for Pointer {
+    fn drop(&mut self) {
+        // Never panics, as a drop may run during a failed test's
+        // unwinding: a display that went away holds no buttons either.
+        for button in std::mem::take(&mut self.held) {
+            let request = self.fake_request(BUTTON_RELEASE, button as u8, 0, 0);
+            if self.connection.write_all(&request).is_err() {
+                return;
+            }
+        }
+        let _ = self.connection.write_all(&[GET_INPUT_FOCUS, 0, 1, 0]);
+        let mut reply = [0; 32];
+        let _ = self.connection.read_exact(&mut reply);
+        super::harness::settle();
+    }
+}
+
+/// Takes off the screen what earlier tests of the process left on it
+/// (see [`super::harness::put_away`]): a window or dialog still shown
+/// over no window, with any menu open in it and the pointer and keyboard
+/// grab such a menu holds, which go with its window. Those tests' own
+/// events never went through the X server, so nothing they left showed
+/// there; a real pointer's press would land on it instead of on the window
+/// under test. The test's own windows stay, as a test may connect after
+/// opening them: browser windows, which a test window's teardown always
+/// destroys, and what shows over a window still shown.
+/// Says on standard error what it put away, for a failure's log.
+fn close_leftovers() {
+    // Hiding a window leaves the dialogs over it shown, now over no shown
+    // window: the next pass puts them away. A dialog chain is never this
+    // deep.
+    const PASSES: usize = 8;
+    for _ in 0..PASSES {
+        let shown: Vec<gtk::Window> = gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+            .filter(|window| {
+                let over_a_shown_window = window.transient_for().is_some_and(|parent| parent.is_visible());
+                window.is_visible() && !window.is::<crate::window::BrowserWindow>() && !over_a_shown_window
+            })
+            .collect();
+        if shown.is_empty() {
+            return;
+        }
+        for window in &shown {
+            eprintln!(
+                "putting away a {} left shown by an earlier test: {:?}",
+                window.type_().name(),
+                window.title().unwrap_or_default()
+            );
+            super::harness::put_away(window);
+        }
+        super::harness::settle();
+    }
+}
+
 /// The screen coordinates of (`x`, `y`) in `widget`, found by placing the
 /// pointer at `probe` on the screen, over `widget`'s window, and asking GDK
 /// where that is in the window.
@@ -260,6 +337,15 @@ pub(crate) fn window_origin(
             Some((x - round(in_x), y - round(in_y)))
         })
         .expect("the window is on the screen")
+}
+
+/// The X11 keycode of `key` on the private display's keyboard.
+fn keycode_of(key: gdk::Key) -> u8 {
+    let keycode = gdk::Display::default()
+        .and_then(|display| display.map_keyval(key))
+        .and_then(|keys| keys.first().map(gdk::KeymapKey::keycode))
+        .expect("the private display's keyboard has the key");
+    u8::try_from(keycode).expect("an X11 keycode")
 }
 
 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]

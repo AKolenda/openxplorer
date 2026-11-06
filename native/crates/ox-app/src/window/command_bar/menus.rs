@@ -2,10 +2,11 @@
 //! The command bar's menus: New, Sort, View, More options and the
 //! appearance choices.
 //!
-//! Ports `openNewMenu`, the Sort and View menus of `setup()`, the More
-//! options menu and `appearanceMenu` in `v2.0.0:desktop/ui/app.js`, in their
-//! order. Each item runs a window or application action; the choices and
-//! toggles show a check mark while their action's state matches.
+//! Ports the Sort and View menus of `setup()`, the More options menu and
+//! `appearanceMenu` in `v2.0.0:desktop/ui/app.js`, in their order; the New
+//! menu, once `openNewMenu`, is Windows 11's. Each item runs a window or
+//! application action; the choices and toggles show a check mark while
+//! their action's state matches.
 
 use ox_core::grouping::GroupBy;
 use ox_core::i18n::gettext;
@@ -25,52 +26,43 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
     MenuItem::new(label, glyph, action).into()
 }
 
-/// The New menu (`openNewMenu`), which the folder background's "New…"
-/// opens too, with the user's `templates` before "From template…"
-/// (OPS-003) and Dolphin's link item (OPS-004).
+/// The New menu, which the folder background's "New…" opens too, laid
+/// out as Windows 11's: Folder and Shortcut, then the document types a
+/// stock Windows 11 registers, then the user's `templates`, Linux's
+/// counterpart of further registered types (OPS-003). Every file is made
+/// at once and renamed in place; Shortcut opens the link dialog (OPS-004).
 pub(in crate::window) fn new_menu(templates: Vec<MenuEntry>) -> Vec<MenuEntry> {
     let mut entries = vec![
         MenuItem::new(&gettext("Folder"), Icon::FolderAdd, WindowAction::NewFolder)
             .with_shortcut("Ctrl+Shift+N")
             .into(),
+        item(&gettext("Shortcut"), Icon::Link, WindowAction::NewLink),
+        MenuEntry::Divider,
         item(
-            &gettext("Text document"),
+            &gettext("Bitmap image"),
+            Icon::Image,
+            WindowAction::NewBitmapImage,
+        ),
+        item(
+            &gettext("Rich Text Document"),
+            Icon::Document,
+            WindowAction::NewRichTextDocument,
+        ),
+        item(
+            &gettext("Text Document"),
             Icon::DocumentText,
             WindowAction::NewTextDocument,
         ),
-        item(&gettext("File…"), Icon::DocumentAdd, WindowAction::NewFile),
-        MenuEntry::Divider,
         item(
-            &gettext("Markdown document"),
-            Icon::Markdown,
-            WindowAction::NewMarkdownDocument,
+            &gettext("Compressed (zipped) Folder"),
+            Icon::FolderZip,
+            WindowAction::NewCompressedFolder,
         ),
-        item(&gettext("CSV file"), Icon::Table, WindowAction::NewCsvFile),
-        item(&gettext("JSON file"), Icon::Braces, WindowAction::NewJsonFile),
-        item(
-            &gettext("HTML document"),
-            Icon::Code,
-            WindowAction::NewHtmlDocument,
-        ),
-        MenuEntry::Divider,
     ];
     if !templates.is_empty() {
-        entries.extend(templates);
         entries.push(MenuEntry::Divider);
+        entries.extend(templates);
     }
-    entries.extend([
-        item(
-            &gettext("From template…"),
-            Icon::DocumentCopy,
-            WindowAction::NewFromTemplate,
-        ),
-        MenuEntry::Divider,
-        item(
-            &gettext("Link to file or folder…"),
-            Icon::Link,
-            WindowAction::NewLink,
-        ),
-    ]);
     entries
 }
 
@@ -165,7 +157,7 @@ fn group_item(group_by: GroupBy) -> MenuEntry {
 }
 
 /// The View menu's item for `view`. Windows 11's View menu shows no
-/// shortcut text, so neither does this one; Explorer's Ctrl+Shift+1 to 6
+/// shortcut text, so neither does this one; Explorer's Ctrl+Shift+1 to 8
 /// still choose the views (VIEW-009).
 fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
     MenuItem::choice(label, glyph, WindowAction::View, view.as_str()).into()
@@ -189,13 +181,12 @@ fn icon_size_glyph(size: IconSize) -> Icon {
 }
 
 /// The View menu, as Windows 11 File Explorer's: the icon sizes from the
-/// largest, List and Details; the Details pane, with a dot while it is
+/// largest, List, Details, Tiles and Content (VIEW-071); the Details pane, with a dot while it is
 /// open, and the Preview pane, which takes its place; Show, with the
 /// navigation pane, Compact view, item check boxes, File name extensions
 /// and Hidden items; then Dolphin's Split view, Folder tree and Terminal,
 /// at the top level where they were before Show existed; then the text
-/// size. Windows' Tiles and Content views are views the app does not
-/// have, so they are not listed.
+/// size.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = IconSize::NAMED
         .into_iter()
@@ -207,6 +198,8 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     entries.extend([
         view_item(&gettext("List"), Icon::TextColumnTwo, FolderView::Compact),
         view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details),
+        view_item(&gettext("Tiles"), Icon::AppsListDetail, FolderView::Tiles),
+        view_item(&gettext("Content"), Icon::ContentView, FolderView::Content),
         MenuEntry::Divider,
         // Windows 11 marks the open pane with a dot, as Details and its
         // Preview pane are one choice there.
@@ -387,9 +380,9 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// Quick access; Select all, Select none, Invert selection and the app's
 /// Select items matching…; then Properties, of the selection or the
 /// folder, and Options. In This PC and Network, in Windows' order: Add a
-/// network location (the Map network location dialog at a web address, as
-/// Windows' wizard adds websites and FTP sites), Map network drive (the
-/// same dialog) and Disconnect network drive, in place of Pin. Windows' Connect to a media
+/// network location (the connect dialog with a Type list, at a web
+/// address, as Windows' wizard adds websites and FTP sites), Map network
+/// drive (Windows' dialog) and Disconnect network drive, in place of Pin. Windows' Connect to a media
 /// server has no `GVfs` backend to run on Linux, so it is not offered.
 ///
 /// The rest of what "…" used to list moved where Windows has it (the
@@ -401,7 +394,7 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// appearances to Settings > Appearance; Show hidden files to View >
 /// Show > Hidden items; Keyboard shortcuts, Help, License & source and
 /// About this build to Settings > About, with F1 and Ctrl+? as before.
-/// Map network location also stays at the foot of the navigation pane.
+/// Map network drive also stays at the foot of the navigation pane.
 pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = match state.place {
         MorePlace::Folder => folder_commands(state),

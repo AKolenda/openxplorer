@@ -47,11 +47,11 @@ and does not "improve" them away.
 | Area | Keep |
 |---|---|
 | Layout order | Tab strip in the title bar → navigation row (Back, Forward, Up, Refresh, breadcrumb address, search) → command bar (New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾, View ▾, More ··· ⟶ Details) → sidebar │ content │ details pane → status bar. |
-| Band heights | Title bar 42 (no border), navigation row 62, command bar 55, column header 38, status bar 30 (each of these four includes its 1 px border); row pitch 38. |
+| Band heights | Title bar 42 (no border), navigation row 48, command bar 48, column header 32, status bar 30 (each of these four includes its 1 px border); row pitch 32. Windows 11's density (owner decision 2026-11-06, which replaced the identity's navigation row 62, command bar 55, column header 38 and row pitch 38, so about 22 rows fit a 900 px window instead of 17). |
 | Widths | Tab 215, sidebar 210 plus a 6 px resizer, details pane 262, search 235, caption buttons 46. |
 | Palette character | Blue-grey tab strip (`#eff1f4` / `#191919`) standing in for Mica Alt; the active tab merges into a light chrome band; white (or `#202020`) content; soft blue selection `#e8f1fb` / `#263c50` with a faint blue edge. |
 | Artwork | The project's own colour art (`folderIcon`, `appendFolderArt`, `zipFolderIcon`, `fileIcon`, `networkIcon` in `app.js`) and its own stroke glyphs (the `paths` table). Folder art: `#d99a22` back, `#ffce56` / `#f7bd40` front, `#fff0bd` paper. Network pipe: `#23873f` with `#62cf7c` / `#35a854` highlights. |
-| Sizes | Row icons 21, sidebar icons 19, tiles 56, details preview 83. |
+| Sizes | Row icons 16, sidebar icons 16, Large icons tiles 96, details preview 83. Windows 11's icon sizes (owner decision 2026-11-06; before it 21, 19 and 56). |
 | Behaviour you can see | Breakpoints at 1190 / 960 / 680 px, text sizes 80–200 %, the Windows 11 (default) or classic Windows 10 context menu, the amber snapshot-tab marker, type-to-select feedback in the status bar, drag-to-pin highlighting, reduced-motion support. |
 
 ### 1.2 What "true to spec" means
@@ -179,11 +179,13 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C14 | `accent` | `#0067c0` / `#74beff` | AccentFillColorDefault = SystemAccentColorDark1 in light, SystemAccentColorLight2 in dark (CT#L329 / CT#L125); for the default blue these are `#0067C0` / `#4CC2FF` (WA) | `#0067c0` / `#4cc2ff` | light already matches; dark visible, P3 |
 | C15 | `accent_hover`, `accent_pressed` (new) | none | AccentFillColorSecondary and Tertiary are the accent at 0.9 and 0.8 opacity (CT#L330–331 / CT#L126–127) | `alpha(@ox_accent, .9)`, `alpha(@ox_accent, .8)` | safe |
 | C16 | `on_accent`: text on primary buttons | `#ffffff` / `#142535` (auth dialog `#112438`) | TextOnAccentFillColorPrimary `#FFFFFF` / `#000000` (CT#L216 / CT#L12) | `#ffffff` / `#000000` | safe |
-| C17 | `hover`: rows, sidebar, commands, menu items | `#f0f0f0` / `#343434` | SubtleFillColorSecondary `#09000000` / `#0FFFFFFF` → `#f0f0f0` on `#f9f9f9`, `#f6f6f6` on white / `#353535` on `#282828` (CT#L230 / CT#L26) | `#f0f0f0` / `#343434` on every surface | Keep. Equals WinUI on the chrome, slightly stronger on white. |
+| C17 | `hover`: rows, sidebar, commands, menu items | `#f0f0f0` / `#343434` | SubtleFillColorSecondary `#09000000` / `#0FFFFFFF` → `#f0f0f0` on `#f9f9f9`, `#f6f6f6` on white / `#353535` on `#282828` (CT#L230 / CT#L26) | `#f0f0f0` / `#343434` on every surface but the items below | Keep. Equals WinUI on the chrome, slightly stronger on white. |
+| C17 items | `item_hover`: file list rows and tiles, navigation pane rows | as C17 | File Explorer's item view: a pale blue tint in light, a subtle neutral grey in dark (observed, unverified) | `#e5f3ff` / `#2d2d2d` (approximations); in light a GNOME accent other than blue gives `mix(@ox_bg, @ox_accent, .1)` | Applied (2026-11-06). |
 | C18 | `pressed` | web `filter: brightness(.96)`; native `#e9e9e9` / `#3a3a3a` | SubtleFillColorTertiary `#06000000` / `#0AFFFFFF` → `#f3f3f3` / `#303030` on chrome (CT#L231 / CT#L27), with the foreground at TextFillColorSecondary (ABB#L83, BT#L121, TTL#L20) | `#f3f3f3` / `#303030` plus `color: @ox_muted` | safe. Windows makes pressed *lighter* than hover. |
-| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)); the navigation pane no longer paints the pill (Explorer has none, 2026-11-02). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` | Keep. |
-| C20 | `selected_hover` (new) | none | ListViewItemBackgroundSelectedPointerOver = SubtleFillColorTertiary (LV#L173); Explorer deepens the blue (observed, unverified) | `mix(@ox_selected, @ox_accent, .06)` = `#dae9f7` light (GTK 4.14.5 weights the second colour by the factor; measured) / ≈ `#28445a` dark with `#4cc2ff` | visible (subtle) |
-| C21 | `selected_edge` | rows `#80b4e028`, tiles `#80b4e060` | none in WinUI; GridViewItem draws a 2 px selected border (GV#L111) | rows `alpha(#80b4e0, .16)`, tiles `alpha(#80b4e0, .38)` | Keep. |
+| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)); the navigation pane no longer paints the pill (Explorer has none, 2026-11-02). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` for commands, menus and the other surfaces | Keep. |
+| C19 items | `item_selected`: file list rows and tiles, navigation pane rows; a press shows it at once | as C19, with the C21 edge | File Explorer's item view fills a selected item with a light blue in light (classic Explorer about `#cce8ff`, with a 1 px `#99d1ff` edge while focused; Windows 11 draws the rounded fill without the edge) and a neutral grey in dark, about `#444`–`#4c4c4c`, not a blue (observed, unverified) | `#cce8ff` / `#3d3d3d` (approximations), no edge. Dark stays at `#3d3d3d` so `@ox_muted` (`#aaaaaa`) keeps 4.5:1 on it (4.68:1; `#444` gives 4.19:1). In light a GNOME accent other than blue gives `mix(@ox_bg, @ox_accent, .2)`; dark keeps the grey for every accent, as Windows does. | Applied (2026-11-06). |
+| C20 | `item_selected_hover` | none | ListViewItemBackgroundSelectedPointerOver = SubtleFillColorTertiary (LV#L173); whether File Explorer changes a selected item under the pointer is unverified | `@ox_item_selected`, as before | Keep the current behaviour until Windows' value is known. |
+| C21 | `selected_edge` | rows `#80b4e028`, tiles `#80b4e060` | none in WinUI; GridViewItem draws a 2 px selected border (GV#L111) | `alpha(#80b4e0, .16)` on Properties' selected list row; file list rows and tiles draw none (C19 items) | Applied (2026-11-06). |
 | C22 | `border`: pane dividers, band borders | `#e8e8e8` / `#373737` | DividerStrokeColorDefault `#0F000000` / `#15FFFFFF` → `#eaeaea` on `#f9f9f9` / `#3a3a3a` on `#282828` (CT#L257 / CT#L53) | `#e8e8e8` / `#373737` | Keep (within 2 steps). |
 | C23 | `control_stroke`: bordered buttons and fields (new) | `var(--border)` | ControlStrokeColorDefault `#0F000000` / `#12FFFFFF` (CT#L243 / CT#L39) | `alpha(black, .06)` / `alpha(white, .07)` | safe |
 | C24 | `control_stroke_edge`: bottom edge in light, top edge in dark (new) | none | ControlElevationBorderBrush: ControlStrokeColorSecondary `#29000000` at the bottom in light (flipped gradient, CT#L382–389), `#18FFFFFF` at the top in dark (CT#L186–190; CT#L244 / CT#L40) | `alpha(black, .16)` / `alpha(white, .09)` | safe |
@@ -191,8 +193,8 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C26 | `field_bg`: address and search | `#ffffff` / `#202020` | TextControlBackground = ControlFillColorDefault → `#fdfdfd` / `#353535` on chrome; focused ControlFillColorInputActive `#FFFFFF` / `#B31E1E1E` (TB#L130–132; CT#L225 / CT#L21) | `#ffffff` / `#202020` | Keep: the recessed dark field is part of the identity. |
 | C27 | `field_bottom`: address and search bottom edge | `#c9c9c9` in **both** themes (a bug in dark) | TextControlElevationBorderBrush uses ControlStrongStrokeColorDefault at the bottom: `#72000000` / `#8BFFFFFF` → `#8d8d8d` / `#9a9a9a` (TB#L155–162; CT#L252 / CT#L48) | `#c9c9c9` / `#5a5a5a` | Softened identity; dark fixes D-A01. |
 | C28 | `input_bottom`: dialog text inputs (new) | `#8e8e8e` (light and dark); auth and network inputs use `var(--muted)` | same as C27: `#8d8d8d` / `#9a9a9a` | `#8d8d8d` / `#9a9a9a` | safe |
-| C29 | `focus_outer` (new) | 2 px `@accent`, drawn inside | FocusStrokeColorOuter `#E4000000` / `#FFFFFF`, 2 px (CT#L258 / CT#L54; L-FOCUS) | `alpha(black, .89)` / `#ffffff` | visible, P2 |
-| C30 | `focus_inner` (new) | none | FocusStrokeColorInner `#B3FFFFFF` / `#B3000000`, 1 px (CT#L259 / CT#L55; L-FOCUS) | `alpha(white, .7)` / `alpha(black, .7)` | visible, P2 |
+| C29 | `focus_outer` (new) | 2 px `@accent`, drawn inside | FocusStrokeColorOuter `#E4000000` / `#FFFFFF`, 2 px (CT#L258 / CT#L54; L-FOCUS) | `alpha(black, .89)` / `#ffffff` | visible, P2. Applied to file list rows and tiles and navigation pane rows as `item_focus_outer` (2026-11-06); buttons and other controls keep the accent. |
+| C30 | `focus_inner` (new) | none | FocusStrokeColorInner `#B3FFFFFF` / `#B3000000`, 1 px (CT#L259 / CT#L55; L-FOCUS) | `alpha(white, .7)` / `alpha(black, .7)` | visible, P2. Applied with C29 as `item_focus_inner` (2026-11-06). |
 | C31 | `text_selection_bg`, `text_selection_fg` (new) | WebKit default | AccentFillColorSelectedTextBackground = SystemAccentColor, `#0078D4` for the default blue (CT#L328 / CT#L124; WA); TextOnAccentFillColorSelectedText `#FFFFFF` (CT#L215 / CT#L11) | `#0078d4`, `#ffffff` in both themes | safe |
 | C32 | `critical`: error text | `#b32323` / `#ff9b96` | SystemFillColorCritical `#C42B1C` / `#FF99A4` (CT#L282 / CT#L78) | `#c42b1c` / `#ff99a4` | safe |
 | C33 | `critical_fill`: close-button hover, danger buttons | close `#c42b1c`, danger `#b52a26` | `#C42B1C` (CT#L282). Caption close hover is the same red in both themes (observed, unverified). | `#c42b1c` in both themes; pressed `alpha(#c42b1c, .9)` (unverified: WinUI has no caption-button resource) | safe |
@@ -248,9 +250,10 @@ unverified). That is why the app's 12 px base is correct.
 | I03 | Tab icon | 17 (colour art) | TabViewItemHeaderIconSize 16 (TV#L246) | 16 colour art | safe |
 | I04 | Caption glyphs | 12 | ChromeMinimize E921, ChromeMaximize E922, ChromeRestore E923, ChromeClose E8BB; the maximize and restore glyphs have rounded corners (L-TITLE); drawn at 10 (observed, unverified) | 10, with a dedicated 10 × 10 path and a 1 px stroke | visible (crisper) |
 | I05 | Menu glyphs | 15 (classic) / 16 (Windows 11) | MenuFlyoutItem icon 16 × 16 (MF#L388); icon column 28 = 16 + 12 (MF#L212) | 16 in both styles | safe |
-| I06 | Sidebar icons | 19 in a 20 × 24 slot | NavigationView icon 16 (NV#L219) | 19 | Keep (identity). |
-| I07 | Row icons, details view | 21 | Explorer details view uses 16 (observed, unverified) | 21 | Keep (identity). |
-| I08 | Tile icons | 56 ("Large icons") | Explorer: Small 16, Medium 48, Large 96, Extra large 256 (observed, unverified) | 56 for Large (identity); native adds 28 / 40 / 96 as a gain | Keep. |
+| I06 | Sidebar icons | 16, the name where it was (19 in a 20 × 24 slot before) | NavigationView icon 16 (NV#L219) | 16 | Applied (owner decision 2026-11-06). |
+| I07 | Row icons, details view | 16 (21 before) | Explorer details view uses 16 (observed, unverified) | 16 | Applied (owner decision 2026-11-06). |
+| I08 | Tile icons | Small 16, Medium 48, Large 96, Extra large 256 (28 / 40 / 56 / 96 before) | Explorer: Small 16, Medium 48, Large 96, Extra large 256 (observed, unverified) | Windows' four; the zoom levels between them (22 to 192) are a gain | Applied (owner decision 2026-11-06). Small icons stay tiles with the name below; Explorer puts the name beside a small icon. |
+| I11 | Tiles and Content icons | none (the views were missing) | Explorer: Tiles 48 beside three lines (name, type, size) in tiles about 250 wide; Content 32 to 48 in rows about 56 to 60 tall, name and type beside the icon, Date modified and Size at the right, thin lines between rows (observed, unverified) | Tiles 48 in 256-pixel cells, 69 tall; Content 32 in 58-pixel rows with a 1 px `@ox_border` line under each; both grow with the text size (VIEW-071) | Applied (2026-11-06). Pictures show Date modified and Size in Content, not Windows' Date taken and Dimensions, which the app does not read for listings. |
 | I09 | Status-bar view toggles | 15 | 16 (observed, unverified) | 16 | safe |
 | I10 | Glyph stroke | `stroke-width: 1.35` in a 24-unit box: 0.68 px at 12, 0.9 px at 16, 1.0 px at 18 | Monoline, a single 1 epx stroke (L-ICON) | 1 logical px at every size (stroke width in path units = 24 / size) | safe at 16 px and above (0.9 → 1.0 px); visible below 16 px (0.68 → 1.0 px at 12 px is about 50 % bolder), P3. It fixes faint 12 px glyphs. |
 
@@ -354,9 +357,12 @@ names.
 @define-color ox_hover #f0f0f0;
 @define-color ox_pressed #f3f3f3;
 @define-color ox_selected #e8f1fb;
-@define-color ox_selected_hover mix(@ox_selected, @ox_accent, .06);
 @define-color ox_selected_edge alpha(#80b4e0, .16);
-@define-color ox_tile_selected_edge alpha(#80b4e0, .38);
+@define-color ox_item_hover #e5f3ff;
+@define-color ox_item_selected #cce8ff;
+@define-color ox_item_selected_hover @ox_item_selected;
+@define-color ox_item_focus_outer alpha(black, .89);
+@define-color ox_item_focus_inner alpha(white, .7);
 @define-color ox_border #e8e8e8;
 @define-color ox_control_stroke alpha(black, .06);
 @define-color ox_control_stroke_edge alpha(black, .16);
@@ -406,9 +412,12 @@ names.
 @define-color ox_hover #343434;
 @define-color ox_pressed #303030;
 @define-color ox_selected #263c50;
-@define-color ox_selected_hover mix(@ox_selected, @ox_accent, .06);
 @define-color ox_selected_edge alpha(#80b4e0, .16);
-@define-color ox_tile_selected_edge alpha(#80b4e0, .38);
+@define-color ox_item_hover #2d2d2d;
+@define-color ox_item_selected #3d3d3d;
+@define-color ox_item_selected_hover @ox_item_selected;
+@define-color ox_item_focus_outer #ffffff;
+@define-color ox_item_focus_inner alpha(black, .7);
 @define-color ox_border #373737;
 @define-color ox_control_stroke alpha(white, .07);
 @define-color ox_control_stroke_edge alpha(white, .09);
@@ -439,7 +448,7 @@ names.
 Staging: *safe* rows can land at once. Until sign-off, the *visible* rows keep
 their current values: `ox_accent` stays `#74beff` in dark, `ox_text` stays
 `#f1f1f1` in dark, `ox_muted` stays `#aaaaaa` in dark, `ox_card` stays
-`#202020` in dark, and the focus colours stay the accent. `ox_title_hover` in
+`#202020` in dark, and the focus colours stay the accent, except the item ring (C29, C30), which file list and navigation pane items draw. `ox_title_hover` in
 light is also *visible*. The file art
 colours (C46) and snapshot colours (C35) live in the art code, not these
 files.
@@ -478,31 +487,35 @@ where it differs; ✓ means the target equals the current app.
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
-| Row | 62 including a 1 px bottom border `@ox_border`; padding `11 16 11 13`; group gap 14; background `@ox_chrome` ✓. Children are **vertically centred**, not stretched (D-N08). | Explorer's address row is about 48 (observed, unverified) | Keep. |
+| Row | **48** (62) including a 1 px bottom border `@ox_border`; padding `6 16 4 13` around a 37 px content box (room for GTK 4.14, which measures it 35), the 34 px fields 7 px down; group gap 14; background `@ox_chrome`. Children are **vertically centred**, not stretched (D-N08). | Explorer's address row is about 48 (observed, unverified) | Applied (owner decision 2026-11-06). |
 | Back, Forward, Up, Refresh | 34 × 34, radius 4, 5 apart, glyph 16; disabled `@ox_text_disabled` | AppBarButton hover and pressed (ABB#L77–79) | safe |
 | Address box | 34 high including borders; radius **4** (5); `border: 1px solid @ox_border; border-bottom-color: @ox_field_bottom`; background `@ox_field_bg`; padding `0 8 0 11`; gap 10; location icon **16** (17) | TextBox: min height 32 (GX#L96), padding `10,5,6,6` (CC#L26), strong bottom stroke (TB#L155–162) | safe |
 | Address focus or edit | bottom edge 2 px `@ox_accent`, drawn as `border-bottom-color: @ox_accent; box-shadow: inset 0 -1px @ox_accent` (no height change) | Focused border `1,1,1,2` with an accent bottom (CC#L25; TB#L164–171) | Keep. |
 | Crumb | 28 high, padding `0 9`, radius 4, 12 px, `border: 1px solid transparent`; hover `@ox_hover` with a `@ox_border` edge; keyboard focus is the focus ring (§4.13) | BreadcrumbBar: normal weight, hover and pressed change only the text colour (BB#L39–42). Explorer shows a hover backplate (observed, unverified). | Keep. |
 | Crumb divider | chevron glyph 11 in `@ox_text_tertiary`, 1 px padding each side | E974 at 12 px, padding `2,0` (BB#L36–38, BB#L64) | safe (colour) |
-| Crumb overflow | a « button at the start that lists hidden ancestors in a popover (native gain); the web app scrolls instead | BreadcrumbBar ellipsis flyout (BB#L29 / BB#L60) | gain |
+| First chevron | the divider's chevron, 20 wide, right after the location icon and before the first crumb; it lists Home, This PC, Network and the Recycle Bin, the place the crumbs start at in bold | Explorer's address bar starts with a chevron that lists the top-level places (observed, unverified) | Applied. |
+| Crumb overflow | the crumbs that do not fit collapse, from the first on, into a « button (`chevron_double_left`, 20 wide) in the first chevron's place, decided again whenever the bar's width changes; its menu lists them, the nearest last, then the top-level places; the current folder's crumb always shows in full and nothing scrolls. The web app scrolled instead. | BreadcrumbBar ellipsis flyout (BB#L29 / BB#L60); Explorer's address bar shows « (observed, unverified) | Applied. |
+| Crumb menus | every subfolder in one menu, scrolling when it is taller than the monitor; no "More" page | Explorer lists all subfolders (observed, unverified) | Applied. |
 | History chevron | 22 × 24, glyph 12, `@ox_muted`, right end | — | Keep. |
 | Edit mode | an entry replaces the crumbs; 13 px; all text selected on entry; selection `@ox_text_selection_bg` / `_fg` | CT#L328 | safe |
 | Search box | 235 × 34 (195 at ≤ 1190, 175 at ≤ 960, hidden at ≤ 680); radius 4; padding `0 35 0 12`; 12 px; placeholder "Search *folder*" in `@ox_muted`; search glyph 15 in `@ox_muted`, **11 px from the right edge**; focus as the address box | placeholder TextFillColorSecondary (TB#L142); Explorer puts the glyph at the right end (observed, unverified) | Keep. |
+| Search results | once a search runs, a step of the tab's history titled "Search Results in *folder*" in the tab, the window title and the Back and Forward tooltips and menus; the address bar shows the folder's crumbs, then a "Search Results in *folder*" crumb that runs the search again, with the search glyph (`ox-search-20-symbolic`) as the location icon and the tab icon; Back returns to the folder with the box empty | Windows 11 File Explorer's search location ("Documents › Search Results in Documents") | gain |
 
 ### 4.3 Command bar
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
-| Bar | 55 including a 1 px bottom border (min `max(53, ceil(30·s + 12))`); padding `0 15`; gap 4; background `@ox_chrome`; scrolls horizontally when too narrow ✓ | CommandBar compact height 48 (CB#L72); Explorer is about 48 (observed, unverified) | Keep. |
+| Bar | **48** (55) including a 1 px bottom border (min `max(47, ceil(30·s + 12))` + 1); padding `0 15`; gap 4; background `@ox_chrome`; scrolls horizontally when too narrow | CommandBar compact height 48 (CB#L72); Explorer is about 48 (observed, unverified) | Applied (owner decision 2026-11-06). |
 | Icon command | 34 high, min 38 wide, padding `0 10`, radius 4, glyph **16** (18) | I01 | safe |
 | Text command | padding `0 11`, 12 px label, glyph **16** (17), gap **8** (9); dropdown chevron 12 in `@ox_muted`, 4 px after the label | AppBarButton label 12 (ABB#L33) | safe |
 | "New" | padding `0 10 0 8` ✓ | — | Keep. |
 | Separator | 1 × 20, `margin: 0 10`, `@ox_border` | AppBarSeparator 1 px, DividerStrokeColorDefault, margin `2,8,2,8` (ABS#L8, ABS#L14–16) | Keep. |
 | States | hover `@ox_hover`; pressed `@ox_pressed` with `@ox_muted` text; disabled `@ox_text_disabled`; toggled (Details open) `@ox_selected` | ABB#L77–79, ABB#L12 | safe |
 | Right group | Update (accent fill, download glyph and "Update" or "Restart", only while a release waits), Settings (gear) and the Details toggle ✓. The Appearance button (sun or moon glyph with a "Light" / "Dark" label) is built but hidden; Settings › Appearance chooses the theme (2026-11-04). | — | Applied. |
-| More options (…) | Windows 11 File Explorer's "…" (2026-11-03, the user's requests with current Windows 11 screenshots; CMD-007). In a folder: Undo and Redo, each only while it can run and named plainly, as Windows' "…" names them (the folder's own menu names the step), Redo with Undo's arrow mirrored │ Pin to Quick access, or Unpin from Quick access while the folder is pinned │ Select all · Select none · Invert selection · Select items matching… (the app's) │ Properties (wrench; the selection's, else the folder's) · Options (gear). In This PC and Network, in Windows' order: Add a network location (the Map network location dialog, titled so and starting at Secure WebDAV, as Windows' wizard adds websites and FTP sites; it saves under Network locations) · Map network drive · Disconnect network drive (a submenu of the network mounts, one per mount and named as the volume monitor names it, each unmounted with `win.disconnect`; a saved share inside a mount is not listed apart, since disconnecting ends the whole mount; disabled, saying "No network drive is connected.", while there is none) │ the selection commands │ Properties · Options; no Pin. This PC's Properties opens the desktop's system information app, as Windows' opens the system's properties: KDE's Info Center on Plasma, else GNOME Settings' About page (`gnome-about-panel.desktop`, `gnome-control-center system about`) or its System page, found by desktop file; where none is installed it is left out, not greyed (the user's decision, 2026-11-04). Network's Properties stays disabled, saying pages have none. Windows' Connect to a media server is left out: GVfs has no UPnP/DLNA backend (`dav+sd` is WebDAV found through DNS-SD, not a media server), so there is nothing it could open. Glyphs (2026-11-04, compared with the user's Windows 11 screenshots): Undo and Redo (`arrow_undo`, Redo mirrored) and Pin (`pin_16`) in Windows' blue (the same two values), as Windows draws them; Select all, Select none, Invert selection, Options and This PC's Add a network location, Map network drive and Disconnect network drive are **custom, not Fluent**: original icons made for OpenXplorer to match Windows 11's command-bar glyphs (a dashed frame with blue squares, four outline squares, a mix of both; a gear with a blue centre; a monitor, a drive and a crossed-out drive on a blue network connector), with no third-party source, under the project's licence, their grey in the text colour and their blue in Windows' blue, #0078d4 in the light theme and Windows' dark-theme accent fill #60cdff in the dark one (`native/icon-sources/`); Properties (`wrench`) is plain. No item shows shortcut text, as in Windows; the keys work and the keyboard shortcuts window lists them. Windows' newer builds also list Filter ▸ on Home, Recent and search results; it is not built yet. Earlier moves (Settings, appearances, Default file explorer, the cache toggle, Keyboard shortcuts, Help, License & source, About this build, Show hidden files) are as before: Settings, Folder Options' More settings…, and View > Show > Hidden items; since upstream's 2026-11-04 change Settings also has its gear beside Details again. | File Explorer "…" in a folder and in This PC, Windows 11 (the user's screenshots, 2026-11-03) | Applied. |
-| View menu | Extra large icons · Large icons (`rectangle_landscape`) · Medium icons (`desktop`) · Small icons (`grid`) · List (`text_column_two`) · Details (`text_bullet_list_ltr`), the chosen view marked with a dot │ Details pane (`panel_right`, Alt+Shift+P) · Preview pane (`panel_right_gallery`, Alt+P), the open one marked with a dot; they share the pane at the right and opening one closes the other, as in Windows; the Preview pane is the details pane showing only its preview, under the heading "Preview" · Show ▸ │ Split view F3 · Folder tree F7 · Terminal │ Larger, Smaller and Reset text. Show: Navigation pane (`panel_left`) │ Compact view (`arrow_autofit_height`) │ Item check boxes (`checkbox_checked`) · File name extensions (`document`; off by default, as in Windows: a known type's extension is hidden in the file list, tooltips, the details pane and an opened archive's crumb) · Hidden items (`eye`, Ctrl+H), each with a check mark while on. Not listed, as the app has no such views: Tiles and Content. Split view, Folder tree and Terminal are Dolphin's and stay at the top level, where they were before Show. No item shows shortcut text, as in Windows' View menu (2026-11-04); the keys work and the keyboard shortcuts window lists them. | File Explorer View and View > Show, Windows 11 (the user's screenshots, 2026-11-03) | Applied. |
+| More options (…) | Windows 11 File Explorer's "…" (2026-11-03, the user's requests with current Windows 11 screenshots; CMD-007). In a folder: Undo and Redo, each only while it can run and named plainly, as Windows' "…" names them (the folder's own menu names the step), Redo with Undo's arrow mirrored │ Pin to Quick access, or Unpin from Quick access while the folder is pinned │ Select all · Select none · Invert selection · Select items matching… (the app's) │ Properties (wrench; the selection's, else the folder's) · Options (gear). In This PC and Network, in Windows' order: Add a network location (the connect dialog with a Type list, titled so and starting at Secure WebDAV, as Windows' wizard adds websites and FTP sites; it saves under Network locations) · Map network drive (Windows 11's dialog, §4.11) · Disconnect network drive (a submenu of the network mounts, one per mount and named as the volume monitor names it, each unmounted with `win.disconnect`; a saved share inside a mount is not listed apart, since disconnecting ends the whole mount; disabled, saying "No network drive is connected.", while there is none) │ the selection commands │ Properties · Options; no Pin. This PC's Properties opens the desktop's system information app, as Windows' opens the system's properties: KDE's Info Center on Plasma, else GNOME Settings' About page (`gnome-about-panel.desktop`, `gnome-control-center system about`) or its System page, found by desktop file; where none is installed it is left out, not greyed (the user's decision, 2026-11-04). Network's Properties stays disabled, saying pages have none. Windows' Connect to a media server is left out: GVfs has no UPnP/DLNA backend (`dav+sd` is WebDAV found through DNS-SD, not a media server), so there is nothing it could open. Glyphs (2026-11-04, compared with the user's Windows 11 screenshots): Undo and Redo (`arrow_undo`, Redo mirrored) and Pin (`pin_16`) in Windows' blue (the same two values), as Windows draws them; Select all, Select none, Invert selection, Options and This PC's Add a network location, Map network drive and Disconnect network drive are **custom, not Fluent**: original icons made for OpenXplorer to match Windows 11's command-bar glyphs (a dashed frame with blue squares, four outline squares, a mix of both; a gear with a blue centre; a monitor, a drive and a crossed-out drive on a blue network connector), with no third-party source, under the project's licence, their grey in the text colour and their blue in Windows' blue, #0078d4 in the light theme and Windows' dark-theme accent fill #60cdff in the dark one (`native/icon-sources/`); Properties (`wrench`) is plain. No item shows shortcut text, as in Windows; the keys work and the keyboard shortcuts window lists them. Windows' newer builds also list Filter ▸ on Home, Recent and search results; it is not built yet. Earlier moves (Settings, appearances, Default file explorer, the cache toggle, Keyboard shortcuts, Help, License & source, About this build, Show hidden files) are as before: Settings, Folder Options' More settings…, and View > Show > Hidden items; since upstream's 2026-11-04 change Settings also has its gear beside Details again. | File Explorer "…" in a folder and in This PC, Windows 11 (the user's screenshots, 2026-11-03) | Applied. |
+| View menu | Extra large icons · Large icons (`rectangle_landscape`) · Medium icons (`desktop`) · Small icons (`grid`) · List (`text_column_two`) · Details (`text_bullet_list_ltr`) · Tiles (`apps_list_detail`) · Content (`content_view`), the chosen view marked with a dot │ Details pane (`panel_right`, Alt+Shift+P) · Preview pane (`panel_right_gallery`, Alt+P), the open one marked with a dot; they share the pane at the right and opening one closes the other, as in Windows; the Preview pane is the details pane showing only its preview, under the heading "Preview" · Show ▸ │ Split view F3 · Folder tree F7 · Terminal │ Larger, Smaller and Reset text. Show: Navigation pane (`panel_left`) │ Compact view (`arrow_autofit_height`) │ Item check boxes (`checkbox_checked`) · File name extensions (`document`; off by default, as in Windows: a known type's extension is hidden in the file list, tooltips, the details pane and an opened archive's crumb) · Hidden items (`eye`, Ctrl+H), each with a check mark while on. Split view, Folder tree and Terminal are Dolphin's and stay at the top level, where they were before Show. No item shows shortcut text, as in Windows' View menu (2026-11-04); the keys work and the keyboard shortcuts window lists them. | File Explorer View and View > Show, Windows 11 (the user's screenshots, 2026-11-03) | Applied. |
 | Sort menu | Name · Date modified · Type · More ▸ (Size and the further keys) │ Ascending · Descending │ Group by ▸ │ Folders first (the app's own, a toggle with a check mark). As in Windows 11 (the user's screenshot, 2026-11-05), no row has a glyph, in More and Group by either: a dot in the mark column marks the chosen column, direction and grouping. The folder's right-click Sort by shows the same rows. No menu row shows a tooltip that only repeats its label, as Windows' menus show none; a row whose label the menu cuts short shows it whole, and a disabled row still says why. | File Explorer Sort, Windows 11 (the user's screenshot, 2026-11-05) | Applied. |
+| Recycle Bin | In the Recycle Bin, as in Windows 11 File Explorer: after View, a separator, **Empty Recycle Bin** (`delete_dismiss`) and **Restore all items** (`arrow_counterclockwise`), text commands like Extract all; Restore all items reads **Restore the selected items** while items are selected. Both are greyed while the Recycle Bin is empty. New stays greyed; Cut, Copy, Paste, Rename and Share stay greyed, as before (Windows also offers Cut there). Empty Recycle Bin asks Windows' "Delete Multiple Items" / "Are you sure you want to permanently delete these N items?" with Yes and No. | File Explorer in the Recycle Bin, Windows 11 | Applied. |
 | Responsive | ≤ 1190: gap 1, padding `0 10`, separator margin `0 6`; ≤ 960: commands padding `0 8`, min width 32; ≤ 680: hide Share, Cut, Rename and the Details toggle (they stay in More) ✓ | CommandBar overflow (CB#L5–8) | Keep. |
 
 ### 4.4 Sidebar
@@ -511,51 +524,53 @@ where it differs; ✓ means the target equals the current app.
 |---|---|---|---|
 | Pane | width 210 by default (185 at ≤ 1190, 175 at ≤ 960, 150 at ≤ 680), user-resizable; background `@ox_sidebar`; padding **`12 8 0`** (`13 7 0`) | Explorer pane default width about 200–220 (observed, unverified) | safe |
 | Resizer | 6 px wide, background `@ox_sidebar`, 1 px `@ox_border` right edge; hover or focus: `@ox_selected` with a 2 px `@ox_accent` centre line | — | Keep. |
-| Entry | 35 high (min `ceil(20·s + 15)`), margin `1 0` (37 pitch), radius 4, padding `0 11`, gap 12, 12 px text; icon slot 20 × 24 holding a 19 px icon | NavigationViewItem min height 36 with margin `4,2` (NV#L217, NV#L228); TreeViewItem 28 with margin `4,2` (TR#L79, TR#L82) | Keep. |
-| States | hover `@ox_hover`; pressed `@ox_pressed`; current location `@ox_selected`, the pill kept clear (Explorer's navigation pane has none; 2026-11-02) | TreeViewItem hover and selected fills (TR#L47, TR#L50) | safe |
+| Entry | **31** high (min `max(31, ceil(20·s + 11))`), 1 px above (**32** pitch; 35 and 36 before), radius 4, padding `0 11`, 12 px text; a **16** px icon (18 / 19 before) 2 px in and 14 px before the name, which stays where it was; Compact view **24** high (min `max(24, ceil(20·s + 4))`; 26 before), the same as Compact view's details rows, which no row goes below | NavigationViewItem min height 36 with margin `4,2` (NV#L217, NV#L228); TreeViewItem 28 with margin `4,2` (TR#L79, TR#L82); Explorer's navigation pane rows are about 32 apart, about 24 in Compact view (observed, unverified) | Applied (owner decision 2026-11-06). |
+| States | hover `@ox_item_hover`; pressed and current location `@ox_item_selected` (C17 items, C19 items), the pill kept clear (Explorer's navigation pane has none; 2026-11-02); keyboard focus: the two-tone item ring (§4.13); the folder tree's rows the same | File Explorer's navigation pane shares the item view's colours (observed, unverified); TreeViewItem hover and selected fills (TR#L47, TR#L50) | Applied (2026-11-06). |
 | Selection pill | 3 × **16**, radius **2** (3 × 15, radius 4), `@ox_accent`, at the left edge, centred vertically | NavigationView indicator 3 × 16, radius 2 (NV#L220–222); TreeViewItem 3 × 16, radius 2 (TRI#L130) | safe |
 | Indent | child rows `padding-left: 32`; expander chevron 9 in `@ox_muted` | TreeView chevron (TRI#L143–145) | Keep. |
 | Pin glyph | 11 in `@ox_text_tertiary`, right-aligned, on pinned Quick access rows | Explorer shows a pin on pinned items (observed, unverified) | safe |
 | Group separator | 1 px `@ox_border`, margin `12 13` | NavigationView separator margin `0,3,0,4` (NV#L247) | Keep. |
 | Headings | T06 | L-TYPE casing | visible, P3 |
 | Quick access drop | block `border: 1px solid @ox_accent` (2 px in high contrast), background `@ox_selected`, heading in `@ox_accent`; insertion line 2 px `@ox_accent`, radius 2; dashed 30 px tail row when empty ✓ | — | Keep (rule 1). |
-| Bottom area | `border-top: 1px solid @ox_border`; padding `9 0 11`; button 34 high, glyph 17 in `@ox_accent`, "Map network location" at 12 px ✓ | — | Keep. |
+| Bottom area | `border-top: 1px solid @ox_border`; padding `9 0 11`; button 34 high, glyph 17 in `@ox_accent`, "Map network drive" at 12 px ✓ | — | Keep. |
 | Network rows | network art (folder or server glyph on a green pipe, `networkIcon`) ✓ | — | Keep. |
 
 ### 4.5 Details view
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
-| Header | 38 including a 1 px bottom border `@ox_border` (min `max(38, ceil(24·s + 10))`); 12 px `@ox_muted`, weight 400; column padding `0 12`; header row inset `0 14` so labels line up with cell text | Explorer header labels are 12 px secondary text (observed, unverified) | Keep. |
-| Header hover | `@ox_hover` plus a 1 px `@ox_border` right edge | Explorer shows column dividers on hover (observed, unverified) | Keep. |
-| Size header | label **right-aligned**, 17 px right padding | Explorer left-aligns every header (observed, unverified) | Keep (identity). |
+| Header | **32** (38) including a 1 px bottom border `@ox_border` (min `max(32, ceil(24·s + 8))`); 12 px `@ox_muted`, weight 400; column padding `0 12`; header row inset `0 14` so labels line up with cell text | Explorer header labels are 12 px secondary text; the header is about 32 high (observed, unverified) | Applied (owner decision 2026-11-06). |
+| Header hover | the title under the pointer `@ox_hover`; the 1 px `@ox_border` dividers between titles show only while the pointer is over the header | Explorer shows column dividers on hover (observed, unverified) | Applied (2026-11-06). |
+| Size header | label **left-aligned**, as every title, 12 px left padding; the sizes under it stay right-aligned | Explorer left-aligns every header and right-aligns sizes (observed, unverified) | Applied (2026-11-06). |
 | Resize handle | 8 px hit area centred on the column edge; hover `@ox_selected` with a 2 px `@ox_accent` line; column-resize cursor | — | Keep. |
-| Sort indicator | caret glyph 10, `@ox_muted`, 6 px after the label, **primary sort column only** | Explorer draws a small chevron centred above the label (observed, unverified) | Keep; see D-N05. |
+| Sort indicator | chevron glyph 10 (`ox-chevron-up-16` ascending, `ox-chevron-down-16` descending), `@ox_muted`, centred over the column on the title's top edge (2 px above it, so the stroke sits about 1 to 5 px down) as the title's background, **primary sort column only**; GTK's own indicator stays hidden | Explorer draws a small chevron centred on the header's top edge, ^ ascending and v descending (observed, unverified) | Applied (2026-11-06); see D-N05. |
 | Columns | Name (flexible, min 170), Date modified 152, Type 135, Size **78** (native 90); at ≤ 1190: 140 / 132 / 112 / 63; at ≤ 680: Name and Size only; user-resized widths persist | — | Keep. |
 | Search-results columns | Name (min 160), Folder (min 210, 1.2×), Type 110, Size 74; folder text 11 → **12** px `@ox_muted` | — | Keep, except T04. |
-| Row, normal | pitch **38** = 36 row + 2 gap (`row = max(38, ceil(24·s + 14)) − 2`); first row 4 below the header (5) | ListViewItem min height 40 (LV#L166); Explorer normal pitch about 30–32 (observed, unverified) | Keep. |
-| Row, compact (new) | pitch **28** = 26 + 2 (`max(28, ceil(20·s + 8)) − 2`), behind a "Compact view" toggle in View | Explorer "Compact view" (`UseCompactMode`); compact pitch about 22–24 (observed, unverified) | gain |
+| Row, normal | pitch **32** = 30 row + 2 gap (`row = max(32, ceil(24·s + 8)) − 2`; 38 before); first row 4 below the header (5) | ListViewItem min height 40 (LV#L166); Explorer normal pitch about 30–32 (observed, unverified) | Applied (owner decision 2026-11-06). |
+| Row, compact (new) | pitch **26** = 24 + 2 (`max(26, ceil(24·s + 2)) − 2`), behind a "Compact view" toggle in View; 24 is the lowest row the app draws, kept as the smallest pointer and touch target | Explorer "Compact view" (`UseCompactMode`); compact pitch about 22–26 (observed, unverified) | gain |
 | Row backplate | inset 12 from both pane edges ✓ (S03); radius 4; inner padding `0 2`; cells padding `0 12` | ListViewItemCornerRadius 4 (LV#L210) | Keep. |
-| Name cell | icon 21, gap 11, `@ox_text`, ellipsis at the end | — | Keep. |
+| Name cell | icon **16** (21), gap 11, `@ox_text`, ellipsis at the end | Explorer details view uses 16 (I07) | Applied (owner decision 2026-11-06). |
 | Other cells | `@ox_muted`; Size right-aligned with 12 px right padding and tabular figures (T14) | — | Keep. |
-| Row states | hover `@ox_hover`; selected `@ox_selected` + `inset 0 0 0 1px @ox_selected_edge`; selected and hovered `@ox_selected_hover`; keyboard focus: inset ring (§4.13); cut: `opacity: .5`; drag source: `opacity: .5`; drop target: `outline: 2px solid @ox_accent` inset with `@ox_selected` | LV#L170–173, LV#L183 | see §3.1 |
+| Row states | hover `@ox_item_hover`; pressed and selected `@ox_item_selected`, no edge; selected and hovered `@ox_item_selected_hover`; keyboard focus: the two-tone item ring (§4.13); cut: `opacity: .5`; drag source: `opacity: .5`; drop target: `outline: 2px solid @ox_accent` inset with `@ox_selected` | LV#L170–173, LV#L183; File Explorer's item view (C17 items, C19 items) | Applied (2026-11-06); see §3.1 |
 | Rubberband | 1 px `@ox_accent`, fill `alpha(@ox_accent, .15)`, radius 0 | — | Keep (native). |
+| Rubberband start (new) | a primary press below the rows, or on the empty part of an **unselected** row (right of the end of its name, or in its other columns); the icon and name, and a selected row, are the item | Explorer: the white space right of an unselected item's name is the background (The Old New Thing, 2009-08-05) | Applied (SEL-012). |
+| Drag label (new) | under the drag icon, over this app's drop targets: "→ Move to Documents", "+ Copy to Documents", "Create link in Documents"; padding `3 8`, 1 px `@ox_border`, radius 4, `@ox_chrome`, text `@ox_text`, glyph 12 (`arrow_right`, `add`, `link`) in `@ox_accent`; none where a release does nothing or for a right-button drag | Explorer's drop description beside the pointer (observed) | Applied (DND-028). |
 
 ### 4.6 Icon view
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Cell | width `max(135, ceil(90·s + 45))`, height `130 + max(0, ceil((s − 1)·46))`; tiles are 4 px apart (cell minus 4 wide, minus 2 high); the grid starts 10 px from the left and 5 px from the top | — | Keep. |
-| Tile | radius **4** (6); padding `12 10`; gap 8; icon 56 (Large), top-aligned; name 12 px, centred, at most two lines, line height 1.35, ellipsis | GridViewItem radius 4 (GV#L109); grid items use centred caption text (L-SPACE) | safe |
-| States | as rows; selected edge `inset 0 0 0 1px @ox_tile_selected_edge` | GV#L111 | Keep. |
+| Tile | radius **4** (6); padding `12 10`; gap 8; icon **96** (Large icons; 56 before, owner decision 2026-11-06), top-aligned; name 12 px, centred, at most two lines, line height 1.35, ellipsis | GridViewItem radius 4 (GV#L109); grid items use centred caption text (L-SPACE) | safe |
+| States | as rows, without an edge | GV#L111 draws a 2 px selected border; File Explorer's Windows 11 item view draws none (observed, unverified) | Applied (2026-11-06). |
 | Thumbnails (gain) | images and video show the freedesktop thumbnail in the icon box, radius 4, 1 px `@ox_border` | Dolphin and Explorer both preview (§8) | gain |
-| Other sizes (native gain) | Small 28, Medium 40, Extra large 96; cell width `max(grid_width, icon + 79)` | Explorer sizes 16 / 48 / 96 / 256 (observed, unverified) | gain |
+| Other sizes | Small **16**, Medium **48**, Extra large **256** (28, 40 and 96 before, owner decision 2026-11-06); Ctrl + wheel also stops at 22, 28, 32, 40, 56, 64, 80, 128, 160 and 192 (gain); cell width `max(grid_width, icon + 79)`, height `grid_row + icon − 56`, so a 56 px tile keeps the web's 135 × 130 cell. A size saved before keeps its pixels. | Explorer sizes 16 / 48 / 96 / 256 (observed, unverified) | Applied. |
 
 ### 4.7 Status bar
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
-| Bar | 30 including a 1 px top border (min `max(29, ceil(15·s + 9))` + 1); padding `0 13 0 19`; gap 18; background `@ox_bg`; text **12** px (11) in `@ox_muted` | 12 px minimum (L-TYPE) | text visible, P2 |
+| Bar | hidden with Folder Options' "Show status bar" off, as in Windows; 30 including a 1 px top border (min `max(29, ceil(15·s + 9))` + 1); padding `0 13 0 19`; gap 18; background `@ox_bg`; text **12** px (11) in `@ox_muted` | 12 px minimum (L-TYPE) | text visible, P2 |
 | Left | "N items", then, while something is selected, a 1 × 14 `@ox_border` divider 10 px from each side and "1 item selected  19.0 KB" / "N items selected  1.23 MB" (the size, written as Explorer writes sizes, only when every selected item is a file); type-to-select hint in `@ox_accent`, or `@ox_muted` when nothing matches; ellipsis at 48 % width. No folder total, no name or type of the selected or hovered item, no free space (2026-11-05) | Windows 11 File Explorer's status bar: item count, divider, selection and its size | Keep; D-N13. |
 | Right | the update button 24 × 24 only while an update needs the user (the status mode, **12** px, is hidden: Explorer names no build there; 2026-11-02); then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph. No free space and no zoom slider (2026-11-05) | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
 
@@ -563,6 +578,7 @@ where it differs; ✓ means the target equals the current app.
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
+| Default | Closed for a new user; Details or Alt+Shift+P opens it, and the choice is saved | Windows 11 Explorer opens with the Details and Preview panes closed | Keep. |
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
 | Header | "Details" at 13 px; close button 24 × 24, glyph 12; 20 px below | — | Keep. |
 | Preview | min height 148; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); icon 83 with `drop-shadow(0 4px 4px alpha(black, .04))`; 18 px below; thumbnails when available (gain) | — | safe |
@@ -591,8 +607,11 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Heading | 12 px (10) `@ox_muted`, padding `7 12 5` | same | L-TYPE minimum | visible, P2 |
 | Check and radio | a mark column of 16 before the glyph in every row of a menu with a choice or toggle: a check mark for a toggle that is on, a dot (`circle_small_20_filled`) for the chosen choice and the open Details or Preview pane; the glyph stays beside it (2026-11-03; it replaced the glyph before) | same | File Explorer View menu, Windows 11 (the user's screenshots, 2026-11-03) | Applied. |
 | Submenu arrow | chevron 12 `@ox_muted`, right end | same | chevron margin 24 (MF#L257) | Keep. |
-| Submenu | shown in the same popup, in place of the menu's items, under a back row (arrow-left 16 and the submenu's name) and a separator | same | GTK's sliding PopoverMenu submenus; Windows cascades a second flyout | deviation: one popup, so no nested Wayland popup grab |
+| Submenu | a flyout beside its row, opening after the pointer rests on the row for 400 ms (Windows' MenuShowDelay) or at once on a click, Right or Enter; its first item level with the row, overlapping the menu by its border and padding; flipped left near the screen's edge; the row stays highlighted while it is open. It is a popup of the menu's surface without a grab of its own | same | Windows 11 cascades a flyout (SPI_GETMENUSHOWDELAY 400 ms) | Keep: only the first menu holds a Wayland popup grab |
 | Quick-action strip (Windows 11 style only) | — | five 34-high icon buttons at 20 % width each, 2 px gap and padding, above the list ✓ | Windows 11 context menu (observed, unverified) | Keep. |
+| Send to (classic item menu only) | a submenu row between dividers above Cut, as in Windows Explorer's classic menu; its rows in Windows' order: Bluetooth device, Compressed (zipped) folder, Desktop (create shortcut), Documents, Mail recipient, then the removable drives and saved network locations under their This PC names; rows the computer lacks are left out, rows that cannot run are disabled with the reason in their tooltip; Documents and Mail recipient show Fluent's colour art, as Windows shows colour glyphs, the others their Fluent glyphs, as Fluent has no colour art for them (CMD-038) | — (Windows 11's compact menu has no Send to) | Windows Explorer classic menu, Send To folder | Keep. |
+| Right-drag menu (DND-027) | opens at the drop point when a right-button drag is released: Copy here, Move here, Create shortcuts here, a separator, Cancel; only the entries the items allow; what a left drop would do is **bold** (the Item label at weight 700); **text only**: no glyph, the empty glyph column keeps the label where other menus put it; no tooltip of the window shows while it is open; the first item takes the keyboard, Up/Down/Enter choose, Escape closes it doing nothing; no third-party entries | same | Windows 11 right-drag menu (observed) | Keep. |
+| Right-click timing | the secondary-button press selects the item; the menu opens on release, so the press can start a right-button drag | same | Windows Explorer (observed) | Keep. |
 
 ### 4.10 Tooltips
 
@@ -601,6 +620,13 @@ radius 4; padding `6px 9px 8px 9px`; maximum width 320 (wrap with
 `max-width-chars: 48` in code); shadow E04. Sources: ToolTip font size 12,
 border 1, padding `9,6,9,8`, max width 320, ControlCornerRadius (TT#L29–33,
 TT#L52, TT#L76–77). Tag: safe.
+
+The balloon under a name being renamed in place, when a character Windows
+forbids is typed or pasted (OPS-010), has the tooltip's look with a tail
+pointing up at the field (`popover.name-balloon`, `skin/folder-views.css`):
+Windows' "A file name can't contain any of the following characters:" and,
+indented 16 px on the next line, `\ / : * ? " < > |`. It never takes the
+keyboard from the field and hides at the next key or after 5 s. Tag: visible.
 
 ### 4.11 Dialogs
 
@@ -615,8 +641,15 @@ TT#L52, TT#L76–77). Tag: safe.
 | Danger | background `@ox_critical_fill`, white text | SystemFillColorCritical (CT#L282) | safe |
 | Text input | 35 high (keep), radius 4, background `@ox_chrome`, `border: 1px solid @ox_border; border-bottom-color: @ox_input_bottom`; focus: bottom 2 px `@ox_accent` | TextBox (§4.2) | safe |
 | Checkbox | 16 × 16, accent fill when checked | — | Keep. |
-| Auth caption bar | 43 high; close button 44 × 42 with a `@ox_critical_fill` hover ✓ | — | Keep. |
+| Auth caption bar | 43 high; close button 44 × 42 with a `@ox_critical_fill` hover ✓; its text is the dialog's title ("Enter network credentials", or "Network connection" for a server's question), not a product name: Windows' caption says "Windows Security", which OpenXplorer does not borrow (2026-11-06) | Windows 11 credential dialog (CredUI) | visible |
+| Enter network credentials (NET-007) | Windows' words: heading "Enter network credentials", then "Enter your credentials to connect to: <server>"; "User name" (placeholder "User name") and "Password"; "Remember my credentials"; OK (primary) and Cancel. A first sign-in has no further description, as in Windows; a retry says "The previous sign-in was not accepted. Check your username and password." in the highlight. The server badge, the eye, the keyring note and Connect as guest stay (2026-11-06) | Windows 11 "Enter network credentials" | visible |
+| Map network drive (NET-001) | Windows 11's dialog under the heading "Map network drive": "What network folder would you like to map?" and "Specify the drive letter for the connection and the folder that you want to connect to:"; "Drive:" (Z: chosen, down to A:, no C:), "Folder:" with `Example: \\server\share` under it; check boxes "Reconnect at sign-in" (checked; saves the share under Network locations) and "Connect using different credentials" (shows Enter network credentials even for a known account; a share that is already connected is refused with Windows' "Multiple connections to a server or shared resource by the same user, using more than one user name, are not allowed. …"); the link "Connect to a Web site that you can use to store your documents and pictures." (`button.link-button`), which closes it and opens Add a network location, where SFTP, FTP, WebDAV and NFS folders and a display name of one's own are given (their addresses typed in Folder work too); Finish (primary) and Cancel. The letter ends the share's label, `Projects (Z:)`, which This PC shows as `Projects (\\nas) (Z:)`; on Linux it is no system-wide drive letter. Windows' Browse… and the Folder list's history are not built (2026-11-06) | Windows 11 Map Network Drive | visible |
+| Folder Options (VIEW-021, "…" > Options) | Windows 11's three tabs, General, View and Search, in Windows' words, each with Restore Defaults at its bottom right; OK, Cancel and Apply (greyed until something changes). General: Open File Explorer to (Home, This PC, the Settings folder); Browse folders and Click items as follows as captioned groups of choices indented 22 px, where Single-click and its two underline choices are greyed with the tooltip "OpenXplorer opens items with a double-click." (SEL-018); Privacy with Show recently used files and Show frequently used folders, then "Clear File Explorer history" with a bordered Clear at the right; More settings… at the bottom left. View: Folder views, then "Advanced settings:" over a bordered list (`.advanced-settings`, radius 4, 260 px high, scrolling) holding "Files and Folders" and its options indented 22 px, a choice of two under its own heading indented again. Search: "When searching non-indexed locations" and its one check box. Options stand 4 px apart (`.option-row`), closer than a dialog's check boxes. Only options the app honours are listed; Windows' others are left out (Display file icon on thumbnails, Display file size information in folder tips, Hide empty drives, Hide folder merge conflicts, Hide protected operating system files, Launch folder windows in a separate process, Show drive letters, Show encrypted or compressed NTFS files in color, Show sync provider notifications, Use Sharing Wizard, the Navigation pane options, Show files from Office.com, Don't use the index…, Include system directories, Include compressed files) | Windows 11 Folder Options (24H2) | safe |
+| Open with (OPEN-011, OPEN-012, OPEN-014) | heading "Select an app to open this .txt file" (20 / 600; "… this file" without an extension, "… this folder" for a folder); a "Find an application" field (not in Windows, kept so filtering is not lost); in one framed 280 px list, "Current default", "Suggested apps" and the "More apps" expander (closed for files, open for folders) as 600 `@ox_muted` headings over 24 px app icons and names; the links "Choose an app on your PC" and "Use a custom command…" in `@ox_accent` under the list; footer **Just once** (primary), **Always** (hidden for folders) and Cancel; a double-click or Enter on an app is Just once; no Microsoft Store link | Windows 11 "Open with > Choose another app" | visible |
 | Properties: Details tab (files only, between Security and Previous Versions) | a sunken list (`.properties-list-frame`, 320 px high, scrolling) under a Property / Value header split by a 1 px `@ox_border` rule; headings `@ox_accent` text followed by a 1 px `alpha(@ox_accent, .35)` rule to the right edge; a 128 px name column and the value; Rating as five 14 px Fluent stars (`star_20_filled` / `star_20_regular`) in `@ox_muted`; the cursor's row `@ox_selected`; no animation; values selectable after Enter, F2 or a click, Ctrl+C copies the cursor's value; rows without a Linux source are left out; no "Remove Properties and Personal Information" link (PROP-035) | Windows 11 Properties > Details | safe |
+| Properties: a drive's General tab (a folder the kernel mounts a file system at: Local Disk, a USB stick, a disc, a system-mounted share) | the drive glyph (`hard_drive`) at 32 px beside the volume label in a read-only `.properties-name` field (empty without a label); Type (Local Disk, Removable Disk, Network Drive, CD Drive) and File system (NTFS, FAT32, FAT, exFAT, CDFS, UDF, else Linux's name, such as ext4); Used space and Free space, each after a 12 px swatch (`@ox_accent`, `alpha(@ox_text, .14)`, 1 px `alpha(@ox_text, .2)` inset), then `123,456,789,012 bytes` and `114 GB` in right-aligned columns; Capacity likewise after a divider (these rows and the ring are left out, never shown as zero, when the file system reports no space); a 96 px ring (`spacering`, 22 % of its width thick, used in `@ox_accent` from the top clockwise, free in `alpha(@ox_text, .14)`, drawn as pixels at the device scale like the speed graph) with the drive's name centred under it and Details at its right only where a disk usage analyser is installed (it opens that analyser on the drive, as Windows' Details opens Storage settings). Nothing on the drive is counted. Windows' Compress and indexing boxes and Disk Cleanup are left out: Linux has no per-drive equivalent. Mounted on and Mounted from are on a Hardware tab after General, Windows' place for a disk's own facts; no Tools or Quota tab (PROP-004) | Windows 11 Properties of a drive | safe |
+| Properties: several items (PROP-002) | titled with the first two names, `a.txt, b.txt Properties`, and `a.txt, b.txt, ... Properties` for three or more; Type `All of type <Type>` or `Multiple Types`; after the sizes a divider and Attributes: Read-only and Hidden side by side (one above the other when a folder makes Read-only `Read-only (Only applies to files in folder)`), ticked when every item has it, clear when none has, half ticked (GTK's inconsistent check box) when they differ or a folder is among them; a half-ticked box cycles ticked, clear, unchanged; greyed until the items are read and where any item cannot be changed. No Advanced... (as for one item: nothing on Linux backs Windows' Advanced Attributes) | Windows 11 Properties of a multiple selection | safe |
+| Properties: Customize and Change Icon (PROP-016) | the Folder icons group as before (Change Icon..., Restore Default, the 32 px preview); no "What kind of folder do you want?" or "Folder pictures" group (no folder templates, no content pictures in folder icons). Change Icon... opens a 400 wide modal Properties-style dialog titled `Change Icon for <folder> Folder`: `Select an icon from the list below:` (mnemonic S), a `.properties-list-frame` holding a 4-row scrolling grid of 32 px icons (6 px padding, `@ox_hover` under the pointer, `@ox_selected` when selected), the icon theme's `folder` and `folder-*` icons that are files, never `-symbolic`, each with its name as tooltip and accessible name; under it Browse... (a picture joins the grid first, selected), then OK and Cancel only. Double click or Enter on an icon presses OK | Windows 11 Change Icon for a folder | safe |
 
 ### 4.12 Scrollbars
 
@@ -636,9 +669,9 @@ pointer click. That already holds in both apps.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Free-standing buttons (navigation, command bar, dialog, details "Open"), cards | `outline: 2px solid @ox_focus_outer; outline-offset: 1px; box-shadow: 0 0 0 1px @ox_focus_inner;` (inner 1 px ring against the edge, then a 2 px ring). Current: `outline: 2px solid accent; outline-offset: -2px`. | A 2 px primary border outside a 1 px secondary border (L-FOCUS). L-FOCUS gives the default margin as 1 px, but Button and GridViewItem set FocusVisualMargin −3 (BT#L167, GV#L149), which puts the secondary ring flush against the edge, as here. Colours CT#L258–259 / CT#L54–55. | visible, P2 |
-| Rows, tiles, sidebar entries, menu items, and tabs, crumbs and caption buttons (these sit edge to edge, inside a ScrolledWindow's viewport or at the window edge, and those parents clip with `overflow: hidden`, so an outside ring would be cut off, §6.2) | `box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner;` (current: 1 px accent inside); on a selected row, add the selected edge after these | ListViewItemFocusBorderBrush = FocusStrokeColorOuter (LV#L183) | visible, P2 |
+| Rows, tiles, sidebar entries, menu items, and tabs, crumbs and caption buttons (these sit edge to edge, inside a ScrolledWindow's viewport or at the window edge, and those parents clip with `overflow: hidden`, so an outside ring would be cut off, §6.2) | `box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner;`. File list rows and tiles, navigation pane rows and the folder tree draw it now as `outline: 2px solid @ox_item_focus_outer; outline-offset: -2px; box-shadow: inset 0 0 0 3px @ox_item_focus_inner` (GTK 4 paints a later inset shadow over an earlier one, so two stacked inset shadows would put the light ring over the dark one) (black and white in light, white and black in dark; the selected fill shows inside, with no edge); menu items, tabs, crumbs and caption buttons keep a 1 or 2 px accent ring | ListViewItemFocusBorderBrush = FocusStrokeColorOuter (LV#L183); File Explorer draws a 2 px dark ring outside a 1 px light one on the focused item (observed, unverified) | Applied to items (2026-11-06); visible, P2 for the rest |
 | Fields | none; the 2 px accent bottom edge is the focus indicator ✓ | TB#L164–171 | Keep. |
-| High contrast (GNOME `high-contrast`) | `outline-width: 2px` everywhere; sidebar current row `outline: 1px solid @ox_accent`; pin drop block 2 px border (the current `prefers-contrast: more` rules) | — | Keep (rule 1). |
+| High contrast (GNOME `high-contrast`) | `outline-width: 2px` everywhere; sidebar current row `outline: 1px solid @ox_accent`; pin drop block 2 px border (the current `prefers-contrast: more` rules); the item ring opaque, `outline: 2px solid @ox_text` over `inset 0 0 0 3px @ox_bg`; menu rows 2 px `@ox_focus_outer` | — | Keep (rule 1). |
 
 ### 4.14 States summary
 
@@ -648,7 +681,7 @@ pointer click. That already holds in both apps.
 | Title-strip button (+, caption, windows; inactive tabs per §4.1) | transparent | `@ox_title_hover` | `alpha(black, .02)` / `alpha(white, .04)` (SubtleFillColorTertiary, TV#L23 / TV#L101) | active tab `@ox_chrome` | `@ox_text_disabled` |
 | Bordered button | `@ox_control_fill` + E06 | `@ox_control_fill_hover` | `@ox_control_fill_pressed` + `@ox_muted` text, border `@ox_control_stroke` only | — | fill ControlFillColorDisabled (`@ox_control_fill_pressed` in light, `alpha(white, .04)` in dark), border `@ox_control_stroke`, text `@ox_text_disabled`, no opacity (BT#L131, BT#L135, BT#L139; CT#L223 / CT#L19) |
 | Accent button | `@ox_accent` | `@ox_accent_hover` | `@ox_accent_pressed` | — | `alpha(black, .22)` / `alpha(white, .16)` fill (AccentFillColorDisabled, CT#L242 / CT#L38) |
-| Row or tile | transparent | `@ox_hover` | `@ox_pressed` | `@ox_selected` + edge; hover `@ox_selected_hover` | — |
+| Row or tile, navigation pane row | transparent | `@ox_item_hover` | `@ox_item_selected` | `@ox_item_selected`, no edge; hover `@ox_item_selected_hover` | — |
 
 All transitions follow M01.
 
@@ -656,9 +689,9 @@ All transitions follow M01.
 
 | State | Target | Tag |
 |---|---|---|
-| Empty folder | The list stays, with its column titles in Details; "This folder is empty." in `@ox_muted`, centred just under the titles (near the top in the icon views), wrapping in a narrow pane, as in Windows Explorer. | safe |
-| No results, unavailable location, empty Recycle Bin | Centred block starting 30 % down the pane, 20 px from each side, gap 12: glyph 44 at `opacity: .6` in `@ox_muted`; title 16 / **600** in `@ox_text`; message 12 px `@ox_muted`, max width 460, wrapping; optional action as a bordered button, padding `8 20`. | visible (subtle), P3 (weight, T13) |
-| Error (unreachable share, denied) | The same block with the error text and a Retry button. | Keep. |
+| Empty folder | The list stays, with its column titles in Details; "This folder is empty." in `@ox_muted`, centred just under the titles (near the top in the icon views), wrapping in a narrow pane, as in Windows Explorer. An empty Recycle Bin looks the same, as in Windows 11 (no "Recycle Bin is empty" page). | safe |
+| No results, unavailable location | Centred block starting 30 % down the pane, 20 px from each side, gap 12: glyph 44 at `opacity: .6` in `@ox_muted`; title 16 / **600** in `@ox_text`; message 12 px `@ox_muted`, max width 460, wrapping; optional action as a bordered button, padding `8 20`. | visible (subtle), P3 (weight, T13) |
+| Error (unreachable share, denied) | The same block with the error text and a Retry button. A folder on this computer that may not be read, opened in the tab in front, shows the dialog "Location is not available" instead ("<path> is not accessible." and "Access is denied.", the system's error under a Details expander), and the tab stays where it was, as in Windows 11. | Keep; the dialog: Windows 11. |
 | Opening a location | As in Windows Explorer, from the first moment: a `@ox_selected` fill crawls along behind the address (`.address.loading`, quickly at first, then ever slower, still at a third of the field when animations are off, M08), the address bar is busy for screen readers, and Refresh is Stop. After 300 ms (M06), "Working on it..." in `@ox_muted` where "This folder is empty." goes, in place of the previous folder's rows (VIEW-068). | safe |
 | Search in progress or cached | Search-info bar under the header area: min height 40, padding `7 14`, `@ox_chrome`, 1 px bottom border, **12** px text (11), accent glyph; cache freshness on the right in `@ox_muted`. | text visible, P2 |
 | Folder-size scan | Bottom bar: min height 44, padding `8 18`, `@ox_chrome`, 1 px top border, **12** px text (11), "Cancel scan" as a secondary button 27 high. | text visible, P2 (T04) |
@@ -674,7 +707,7 @@ Keep the current metrics:
 - Quick cards 78 high, padding 12, radius **4** (6), glyph 43, hover `@ox_hover` with a `@ox_border` edge.
 - Drive cards min height 103 (native: 67), padding 18, radius 7 (R09), 1 px `@ox_border`, background `@ox_card`, glyph 46; capacity bar per C47.
 - This PC groups Devices and drives and Network locations as Windows 11 does: each drive shows its glyph, name, a capacity bar and "N free of M"; a saved share is named as Windows names a mapped drive, label, server and letter (`Backup (\\fileserver) (S:)`), with its own capacity bar and "N free of M" while it is mounted (measuring never mounts), its state line, and its address as the tooltip (2026-11-03, the user's screenshot). Quick access stays above them, as before.
-- Network banner padding 20, radius 7 (R09).
+- Network is no landing page: it is listed like a folder, as in Windows 11 (2026-11-06), its discovered computers as items of the type "Computer" with the server on the network bar, in the folder's view. Where the network browser cannot be read, Windows' info bar shows above the items, across the folder panes: "Network discovery is turned off. Network computers and devices are not visible. Click to learn more..." (Windows says "Click to change...": OpenXplorer cannot turn discovery on, so the bar opens Help at Network locations), padding `7 14`, the caution tokens of C35 (`ox_caution_bg`, `ox_caution_text`, a 1 px `ox_caution_border` below), GIO's reason as its tooltip.
 - Recent table: 12 px rows with 10 px padding and 1 px `@ox_border` dividers.
 - Settings: left navigation 244 wide on `@ox_sidebar`; sections max 1000 wide, radius **7** (9) (R09), padding 24.
 
@@ -690,13 +723,39 @@ all copy jobs). Templates: `resources/ui/progress-window.ui` and
 |---|---|---|
 | Window | Content 460 wide; not resizable, as the Windows window is not: it takes its natural height each time More details opens or closes and each time an action comes or goes, up to 560 for the list, which then scrolls. No parent, no position, not modal: the desktop places it (Wayland). Background `@ox_bg`. | Width: measured from screenshots, not a source. Fixed size: Windows. No placement: Wayland. |
 | Title | One action: its percentage, "44% complete". Several: "2 Running Actions". | UX-PROG ("66% Complete" for a modeless progress window); the plural form from Windows screenshots. |
-| When it shows | After an action has run for 1 s, without taking the focus; never for an operation that ends sooner. An action that already waited before it started (a slow New ▸ Text document) shows at once. No widget has focus and no focus ring shows when it opens; Tab reaches the folder links, whose ring the keyboard shows. | UX-PROG ("two seconds or longer" need feedback; "Don't steal input focus"). The 1 s value is not from a source. |
+| When it shows | After an action has run for 1 s, without taking the focus; never for an operation that ends sooner. An action that already waited before it started (a slow New ▸ Text Document or another file from New) shows at once. No widget has focus and no focus ring shows when it opens; Tab reaches the folder links, whose ring the keyboard shows. | UX-PROG ("two seconds or longer" need feedback; "Don't steal input focus"). The 1 s value is not from a source. |
 | When it closes | When its last action ends. Closing it cancels every action; finished items stay. | Observed Windows behaviour, not a source. |
-| Action | Padding `14 20`; actions divided by 1 px `@ox_border`. Line 1, 12 px: "Copying 1,718 items from Downloads to Backup", each folder a link in `@ox_accent` that opens it in a new window. Line 2: "44% complete", 18 px, with Pause (Play while paused) and Cancel as 28 × 28 flat icon buttons (Fluent `pause_16`, `play_16`, `dismiss_16`), named "Pause", "Resume" and "Cancel". Bar: 14 px trough `@ox_chrome` with a 1 px `@ox_border` edge, fill `@ox_accent`. | Verbs: SH-ACT (Copying, Moving, Recycling, Deleting); Extracting and Compressing are not Shell actions. Links and per-job pause/stop: B8-COPY. Sizes: not a source. |
+| Action | Padding `14 20`; actions divided by 1 px `@ox_border`. Line 1, 12 px: "Copying 1,718 items from Downloads to Backup", each folder a link in `@ox_accent`, underlined only on hover, that opens it in a new window. Line 2: "44% complete", 18 px, with Pause (Play while paused) and Cancel as 28 × 28 flat icon buttons (Fluent `pause_16`, `play_16`, `dismiss_16`), named "Pause", "Resume" and "Cancel". Bar: 14 px trough `@ox_chrome` with a 1 px `@ox_border` edge, fill `@ox_accent`. | Verbs: SH-ACT (Copying, Moving, Recycling, Deleting); Extracting and Compressing are not Shell actions. Links and per-job pause/stop: B8-COPY. Sizes: not a source. |
 | Paused | Bar fill, the graph's area, part done and speed line `@ox_caution`, all on the next frame, with details open or closed, and back on Resume; no fade. Pause becomes Resume. | UX-PROG ("Turn the progress bar yellow … If the user has paused, change the Pause button label to Resume"). |
 | More details | A flat toggle at the bottom with a chevron, "More details" / "Fewer details", for every action; remembered across sessions (`progressDetails`), saved without telling the browsing windows that their settings changed, so they do not redraw. | B8-COPY ("'More details' is sticky … across sessions"). |
 | Details | Speed graph 72 high in the bar's place, 1 px `@ox_border` edge on `@ox_bg`: faint gridlines (10 columns, 4 rows, `alpha(@ox_text, .07)`), the part done shaded `alpha(@ox_accent, .12)`, the speed as a filled area `alpha(@ox_accent, .6)` up to the current percentage, its top edge running straight from one report's speed to the next and anti-aliased, the highest speed at 1/1.3 of the height, and a 1 px `@ox_text` line across at the current speed with "Speed: 32.8 MB/s" (11 px) above its right end. Then "Name: <item>", "Time remaining: About 25 seconds" ("Calculating…" at first), "Items remaining: 1,030 (313 MB)". No bar of the file being copied, as in Windows. | B8-COPY ("a real-time throughput graph … the speed of data transfer, the transfer rate trend, and how much data is left"); wording from Windows screenshots; time formats per UX-PROG. Sizes and colours: not a source. |
 | Motion | None: the bar and graph change only on reports, and the paused colour applies at once, with or without animations (ACC-010). | — |
+| Replace or Skip Files | When a copy or move meets taken names, the items without a conflict go first, then the action asks in place of its bar and details, and the window shows at once, in front, titled "Replace or Skip Files" while it has that one action. The action keeps line 1, its folder links in `@ox_accent`, underlined only on hover; the 18 px line becomes 16 px and says what it found, wrapping. Alone in the window the action shows no Cancel, as in Windows: the window's close button cancels it; beside other actions its Cancel stays: one conflict, 'The destination already has a file named "report.png"' (a folder: 'a folder named'); several, "The destination has 3 files with the same names". Under it three command rows, flat buttons at least 32 high with padding `3 8 3 16`, radius 4, a 20 px glyph 8 from 15 px text: Fluent `checkmark_20` in `@ox_success` with "Replace the file in the destination" / "Replace the files in the destination", `arrow_undo_20` in `@ox_accent` with "Skip this file" / "Skip these files", `document_copy_20` in `@ox_accent` with "Compare info for both files" / "Let me decide for each file". Nothing is focused and no focus ring shows when it asks; Tab reaches the rows. A folder meeting a folder of its name merges without asking; only the files inside with taken names count. | Wording, rows and glyph colours: Windows 11 screenshots (private, not in the repository). Conflicts at the end of the job and the three choices: B8-COPY (the Windows team's replies: "conflicts are all queued to the end of the copy job"; "replace, skip or choose"). Silent merge: Folder Options' "Hide folder merge conflicts", on by default. Sizes: not a source. |
+| Not enough space | When the destination's drive is full, before the copy (the free-space check) or during it, the action asks in place of its bar and details, as Windows does, and the window shows at once, titled "1 Interrupted Action" while it has that one action: line 2 says "There is not enough space on USB Drive." (the drive's mount name, "Local Disk" for the system's own), then "4.4 GB is needed to copy this item. Delete or move files so you have enough space.", the drive's "Space free" and "Total size" in `@ox_muted`, and Try Again (accent) and Cancel, right-aligned, 26 high. No Skip, as in Windows. | Wording: Windows 11 screenshots (private, not in the repository). Sizes: not a source. |
+
+#### Failed-item questions
+
+When an item fails for a reason other than a name conflict (OPS-047), a
+dialog over the browsing window asks in Windows 11's words. Source:
+`src/window/file_ops/failure_dialog.rs`.
+
+| Cause | Caption | Text | Buttons |
+|---|---|---|---|
+| Permission | File Access Denied (Folder Access Denied) | You need permission to perform this action | Try Again, Skip, Cancel |
+| Destination folder not writable | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder ("move to") | Try Again, Skip, Cancel (Windows' Continue needs an administrator path a running copy does not have) |
+| Busy (EBUSY, ETXTBSY) | File In Use (Folder In Use) | The action can't be completed because the file is open in another program; Close the file and try again. | Try Again, Skip, Cancel |
+| Gone | Item Not Found | Could not find this item; This is no longer located in <folder>. Verify the item's location and try again. | Try Again, Skip, Cancel |
+| Anything else | Interrupted Action | An unexpected error is keeping you from copying the file. …; the system's error | Try Again, Skip, Cancel |
+
+The caption is the dialog's heading (the app's dialogs draw no title bar),
+and the text under it starts with Windows' main instruction. Under the
+text, the item: its 48 px icon, its name, then "Type:", "Size:"
+and "Date modified:" for a file or "Date created:" for a folder (the
+destination folder for Destination Folder Access Denied). "Do this for all
+current items" shows while other items remain; with it, Skip skips every
+later failure. Try Again is the accent button and has the focus; Escape
+and closing are Cancel. Nothing is reported afterwards about the failures
+answered here.
 
 The graph's pixels are computed in Rust (`render` in
 `speed_graph.rs`) at the device's scale and shown as a texture in a
@@ -706,6 +765,22 @@ swatches styled in `dialogs.css`. It uses no GTK or Cairo drawing call,
 which `native/tools/check.py` forbids for icons. The item count first counts the selected items, then every file
 once the free-space check has counted them; Windows counts every file from
 the start.
+
+#### File Conflict window
+
+"Compare info for both files" or "Let me decide for each file" opens it.
+Source: `src/window/conflict_window.rs`; skin: `dialogs.css`.
+
+| Part | Target | Source |
+|---|---|---|
+| Window | Title "1 File Conflict" / "3 File Conflicts". Default 560 × 520, resizable. Transient for the progress window and modal within a window group of the two alone: it blocks only the progress window; the browsing windows and other actions stay usable. No position: the desktop places it (Wayland). Background `@ox_bg`. | Windows 11 screenshots; the group is how GTK limits a modal window. |
+| Top | Padding `12 16 8`. "Which files do you want to keep?" 16 px `@ox_accent`, a heading for assistive technologies; under it "If you select both versions, the copied file will have a number added to its name." | Windows 11 screenshots; the hint also in B8-COPY's replies. |
+| Sides | Two equal columns, padding `0 16 10`, 1 px `@ox_border` under: a check box with "Files from Downloads" and one with "Files already in Desktop", each folder a link in `@ox_accent`, underlined only on hover, that opens it in a new window. Each takes its side for every file not skipped; it shows mixed when only some files have it. | Windows 11 screenshots. |
+| Rows | One per file, padding `8 16 10`, 1 px `@ox_border` under: the name (12 px `@ox_muted`, ellipsized in the middle), then for each side a check box, a 64 px thumbnail from the shared cache (the type's colour icon until one loads or when there is none, the folder icon for a folder) and the date modified ("10/31/2026 16:13", the Date modified column's format) over the size, all aligned at the top; clicking the thumbnail or the text toggles the box. Each check box is named "report.png from Downloads, <date>, <size>" or "… already in Desktop, …". | Windows 11 screenshots; thumbnails: B8-COPY ("hover over the thumbnail image"). |
+| Footer | Padding `10 12`, 1 px `@ox_border` above: "Skip 1 file with the same date and size" when there are such files (it skips them and greys their check boxes), then Continue (default, enabled once every file has a side) and Cancel, bordered buttons at least 88 × 26, 8 apart. Nothing is focused and no focus ring shows when the window opens; Tab moves in, Enter presses Continue, Escape cancels. | Windows 11 screenshots. |
+| Answers | Only the incoming side: Replace. Only the existing side: Skip. Both: Keep both, the copy numbered "report (2).png", then "(3)". Cancel or Escape stops the whole action; what was copied before the question stays. | Windows 11 screenshots and Windows' behaviour. |
+| Replace | The replaced file goes to the Recycle Bin first where the Trash works, so Undo brings it back; elsewhere the file is overwritten, as in Windows. | Not Windows: Windows overwrites. |
+| Motion | None. | — |
 
 ---
 
@@ -884,17 +959,13 @@ window.ox button:focus-visible {
 columnview.files > listview > row {
   margin: 1px 0; border-radius: 4px; transition: background-color 83ms linear;
 }
-columnview.files > listview > row:hover { background-color: @ox_hover; }
-columnview.files > listview > row:selected {
-  background-color: @ox_selected; box-shadow: inset 0 0 0 1px @ox_selected_edge;
-}
-columnview.files > listview > row:selected:hover { background-color: @ox_selected_hover; }
+columnview.files > listview > row:hover { background-color: @ox_item_hover; }
+columnview.files > listview > row:active,
+columnview.files > listview > row:selected { background-color: @ox_item_selected; }
+columnview.files > listview > row:selected:hover { background-color: @ox_item_selected_hover; }
 columnview.files > listview > row:focus-visible {
-  box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner;
-}
-columnview.files > listview > row:selected:focus-visible {
-  box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner,
-              inset 0 0 0 4px @ox_selected_edge;
+  outline: 2px solid @ox_item_focus_outer; outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
 }
 columnview.files > header > button sort-indicator:not(.ascending):not(.descending) {
   -gtk-icon-source: none; min-width: 0; margin: 0;
@@ -956,7 +1027,7 @@ comment in `style.css` notes. Instead:
    the ScrolledWindow (add the class `files-scroll` in code) paints `@ox_bg`
    and the line.
 3. Have `fonts.rs` emit the header height `h` for the text size
-   (`h = max(38, ceil(24·s + 10)) − 1`, set as the header button
+   (`h = max(32, ceil(24·s + 8)) − 1`, set as the header button
    `min-height`) and this rule:
    `scrolledwindow.files-scroll { background-color: @ox_bg; background-image: linear-gradient(to bottom, transparent {h}px, @ox_border {h}px, @ox_border {h+1}px, transparent {h+1}px); }`
    The header stays fixed while scrolling vertically, and so does this
@@ -1032,9 +1103,9 @@ Rule 1 needs proof that nothing is lost. Rule 3 needs proof that the look
 holds.
 
 1. **Band metrics** (automatable with the pixel-run method used here): at
-   1440 × 900 and 100 % text size, the title bar is 42, the navigation row 62
-   and the command bar 55; the column header is 38; the row pitch is 38
-   (compact 28); the status bar is 30; the sidebar is 210 + 6; the details
+   1440 × 900 and 100 % text size, the title bar is 42, the navigation row 48
+   and the command bar 48; the column header is 32; the row pitch is 32
+   (compact 26); the status bar is 30; the sidebar is 210 + 6; the details
    pane is 262. Fields are 34, tabs 35 × 215 at y = 7, caption buttons 46 × 42. Check
    the same at 1190, 960 and 680 against the §4 breakpoint values, and at
    150 % and 200 % text size against the formulas.

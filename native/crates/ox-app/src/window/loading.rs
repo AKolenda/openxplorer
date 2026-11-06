@@ -22,11 +22,16 @@
 //!   server being signed out is not listed
 //!   (NET-023), and a listed SMB location joins the session's Network
 //!   list (NET-016).
+//! - Network is listed like a folder, as in Windows 11: its listing
+//!   discovers the computers on the network, each pass's new ones a batch
+//!   (`crate::network::discover_computers`), and records whether
+//!   discovery could run, for Network's info bar.
 //! - A folder that disappears while shown gives way to the nearest
 //!   existing folder above it (NAV-039).
 //! - A folder whose drive or share goes away drops its rows and says the
 //!   drive or share was disconnected.
 
+mod denied_folder;
 mod disconnected;
 mod mount_retry;
 mod removed_folder;
@@ -123,8 +128,8 @@ impl BrowserWindow {
         let Some(start) = self.begin_load(id, mode) else {
             return;
         };
-        if let Some(page) = Page::from_uri(&start.uri) {
-            self.finish_page(id, page);
+        if Page::drawn_at(&start.uri).is_some() {
+            self.finish_page(id);
             return;
         }
         if mode == LoadMode::Navigate {
@@ -181,8 +186,8 @@ impl BrowserWindow {
     }
 
     /// A landing page needs no listing and no watch: it is listed as soon
-    /// as it is shown. The Network page's first showing starts discovery.
-    fn finish_page(&self, id: TabId, page: Page) {
+    /// as it is shown.
+    fn finish_page(&self, id: TabId) {
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.listing_state = ListingState::Listed;
             tab.watch = None;
@@ -190,9 +195,6 @@ impl BrowserWindow {
         if !self.imp().session.borrow().is_active(id) {
             self.redraw_pane(id);
             return;
-        }
-        if page == Page::Network {
-            self.discover_servers_once();
         }
         self.render_landing();
         self.update_content();
@@ -207,7 +209,15 @@ impl BrowserWindow {
     /// already watches it. Watching starts before the listing, so changes
     /// made during a first listing are seen too.
     fn keep_watching(&self, id: TabId, uri: &str) {
-        // Recent locations is no folder to watch; F5 lists it again.
+        // Recent locations and Network are no folders to watch; F5 lists
+        // them again. Network drops the watch of the folder the tab left,
+        // whose changes would otherwise list Network again.
+        if Page::from_uri(uri) == Some(Page::Network) {
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.watch = None;
+            }
+            return;
+        }
         if uri == RECENT_LOCATIONS_URI {
             return;
         }
@@ -283,6 +293,21 @@ impl BrowserWindow {
             held_rows: RefCell::default(),
         });
         let batch_run = Rc::clone(&run);
+        if Page::from_uri(&start.uri) == Some(Page::Network) {
+            return loader::list_network(
+                self.context().network().discoverer(),
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |entries| window.receive_batch(&batch_run, entries)
+                ),
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |problem| window.finish_network_listing(&run, problem)
+                ),
+            );
+        }
         if let Some(inside) = ArchiveLocation::from_uri(&start.uri) {
             return loader::list_archive_folder(
                 &inside,
@@ -360,6 +385,10 @@ impl BrowserWindow {
                 self.mount_and_list_again(run);
                 return;
             }
+            Err(error @ EntryError::PermissionDenied(_)) if self.may_leave_denied_folder(run) => {
+                self.leave_denied_folder(run, &error);
+                return;
+            }
             Err(error) => self.fail_load(id, run.mode, error),
         }
         if is_listed {
@@ -406,6 +435,19 @@ impl BrowserWindow {
         if end == ListingEnd::ListAgain {
             self.folder_changed(id);
         }
+    }
+
+    /// Ends a listing of Network: `problem` says why discovery could not
+    /// run, which the info bar shows while Network is in front, or is
+    /// `None` when it ran. The listing itself succeeded, with what it
+    /// found.
+    fn finish_network_listing(&self, run: &LoadRun, problem: Option<String>) {
+        if !self.imp().session.borrow().accepts(run.tab, run.generation) {
+            return;
+        }
+        self.network().set_discovery_problem(problem);
+        self.finish_load(run, Ok(()));
+        self.show_network_info_bar();
     }
 
     /// Shows `notice`, what a ZIP's listing left out, in the message line

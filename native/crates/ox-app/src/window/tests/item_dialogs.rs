@@ -1174,7 +1174,7 @@ fn size_on_disk_of_several_items_follows_links_as_size_does() {
     let test = TestWindow::open(&fixture.uri());
     super::file_ops_support::select_names(&test, &["Big.bin", "Big link.bin"]);
     test.activate("properties", None);
-    let window = test.wait_for_properties("2 items Properties");
+    let window = test.wait_for_properties("Big link.bin, Big.bin Properties");
     let both = [fixture.path("Big.bin"), fixture.path("Big link.bin")];
 
     wait_until("the space on disk", || {
@@ -1205,9 +1205,15 @@ fn properties_of_several_items_total_them_and_change_them_together() {
     let test = TestWindow::open(&fixture.uri());
     super::file_ops_support::select_names(&test, &["Documents", "Notes 2.txt", "Notes 10.txt"]);
     test.activate("properties", None);
-    let window = test.wait_for_properties("3 items Properties");
+    let window = test.wait_for_properties("Documents, Notes 2.txt, ... Properties");
 
     assert_eq!(window.tab_labels(), ["General", "Security"]);
+    let read_only = check(&window, "Read-only (Only applies to files in folder)");
+    wait_until("the items read", || read_only.is_sensitive());
+    assert!(
+        read_only.is_inconsistent(),
+        "a folder's files keep what they have"
+    );
     wait_until("the folders measured", || {
         value_after(&window, "Contains:").as_deref() == Some("3 Files, 1 Folders")
     });
@@ -1251,12 +1257,70 @@ fn properties_of_several_items_total_them_and_change_them_together() {
     assert_eq!(mode_of(&fixture.path("Documents")), 0o750);
 }
 
-/// A link says where it points, and a mount point what is mounted there
-/// and how much space is free.
+/// Several items' Read-only and Hidden are half ticked where the items
+/// differ, and OK or Apply gives every item the state chosen: Read-only
+/// takes write from every file, and Hidden adds a leading dot to each
+/// name, as one item's do, and the title follows the new names.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn several_items_attributes_show_mixed_and_apply_to_every_item() {
+    let fixture = Fixture::standard();
+    fs::set_permissions(fixture.path("Notes 2.txt"), fs::Permissions::from_mode(0o444))
+        .expect("a read-only file");
+    fs::set_permissions(fixture.path("Notes 10.txt"), fs::Permissions::from_mode(0o644))
+        .expect("a writable file");
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt, Notes 10.txt Properties");
+    let general = tab(&window, "general");
+    assert_eq!(
+        value_after(&general, "Type:").as_deref(),
+        Some("All of type Text document")
+    );
+    let (read_only, hidden) = (check(&general, "Read-only"), check(&general, "Hidden"));
+    wait_until("the items read", || {
+        read_only.is_sensitive() && hidden.is_sensitive()
+    });
+    assert!(read_only.is_inconsistent(), "one file is read-only, one is not");
+    assert!(
+        !hidden.is_inconsistent() && !hidden.is_active(),
+        "neither is hidden"
+    );
+    assert!(!window.apply_button().is_sensitive());
+
+    read_only.set_active(!read_only.is_active());
+    assert!(
+        read_only.is_active() && !read_only.is_inconsistent(),
+        "half ticked, then ticked"
+    );
+    hidden.set_active(true);
+    press(&window, "Apply");
+
+    wait_until("every name hidden", || {
+        fixture.path(".Notes 2.txt").exists() && fixture.path(".Notes 10.txt").exists()
+    });
+    wait_until("the new title", || {
+        window.title_text() == ".Notes 2.txt, .Notes 10.txt Properties"
+    });
+    for name in [".Notes 2.txt", ".Notes 10.txt"] {
+        assert_eq!(mode_of(&fixture.path(name)) & 0o222, 0, "{name} is read-only");
+    }
+    assert!(!fixture.path("Notes 2.txt").exists() && !fixture.path("Notes 10.txt").exists());
+    assert!(hidden.is_active() && read_only.is_active());
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    window.close();
+}
+
+/// A link says where it points. A drive, the root among them, has
+/// Windows' drive General tab: its type, file system, used and free
+/// space and capacity in bytes and short, and the ring, with nothing on
+/// it counted; where it is mounted and from what are on its Hardware tab.
 ///
 /// parity: PROP-004
 #[gtk::test]
-fn properties_show_a_links_target_and_a_mount_points_details() {
+fn properties_show_a_links_target_and_a_drives_space() {
     let fixture = Fixture::standard();
     std::os::unix::fs::symlink("Documents", fixture.path("Shortcut")).expect("a link");
     let test = TestWindow::open(&fixture.uri());
@@ -1268,17 +1332,39 @@ fn properties_show_a_links_target_and_a_mount_points_details() {
     window.close();
 
     test.activate("properties-of", Some("file:///"));
-    wait_until("the root's Properties", || {
-        test.window.properties_windows().len() == 1
-    });
-    let window = test.window.properties_windows().remove(0);
+    let window = test.wait_for_properties("Local Disk Properties");
+    let tabs = window.tab_labels();
+    assert_eq!(
+        tabs.get(..2),
+        Some(&["General".to_owned(), "Hardware".to_owned()][..]),
+        "{tabs:?}"
+    );
     let general = tab(&window, "general");
-    wait_until("the mount's details", || {
-        value_after(&general, "Mounted on:").is_some()
-    });
-    assert_eq!(value_after(&general, "Mounted on:").as_deref(), Some("/"));
-    assert!(value_after(&general, "File system:").is_some());
-    assert!(value_after(&general, "Free space:").is_some_and(|text| text.contains(" free of ")));
+    wait_until("the drive's details", || value_after(&general, "Type:").is_some());
+    assert_eq!(value_after(&general, "Type:").as_deref(), Some("Local Disk"));
+    assert!(value_after(&general, "File system:").is_some_and(|name| !name.is_empty()));
+    for row in ["Used space:", "Free space:", "Capacity:"] {
+        assert!(
+            value_after(&general, row).is_some_and(|text| text.ends_with(" bytes")),
+            "{row} in bytes"
+        );
+    }
+    for row in ["Location:", "Size:", "Contains:", "Mounted on:"] {
+        assert_eq!(value_after(&general, row), None, "no {row} for a drive");
+    }
+    assert!(
+        texts(&general).contains(&"Local Disk".to_owned()),
+        "the name under the ring"
+    );
+    assert_eq!(
+        descendants::<crate::properties::SpaceRing>(&general).len(),
+        1,
+        "the ring"
+    );
+    let hardware = tab(&window, "hardware");
+    assert_eq!(value_after(&hardware, "Mounted on:").as_deref(), Some("/"));
+    assert!(value_after(&hardware, "Mounted from:").is_some());
+    capture_dialog(&window, "native-properties-drive.png");
 }
 
 /// Change... opens Open with over the Properties window, as its own
@@ -2134,6 +2220,61 @@ fn applying_the_customize_tab_is_captured_before_and_after() {
         });
         capture(&test.window, &format!("customize-apply-after-{theme}.png"));
     }
+
+/// Change Icon... opens Windows' "Change Icon for <folder> Folder", which
+/// lists the icon theme's folder icons, never its glyphs, with Browse...,
+/// OK and Cancel; the icon chosen shows on the Customize tab on OK and
+/// waits there for the tab's own OK or Apply.
+///
+/// parity: PROP-016
+#[gtk::test]
+fn change_icon_lists_the_themes_folder_icons() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Album")).expect("a folder");
+    let theme = tempfile::tempdir().expect("an icon folder");
+    let pixels = glib::Bytes::from_owned(vec![0x80_u8; 2 * 2 * 4]);
+    let picture = gtk::gdk::MemoryTexture::new(2, 2, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 8);
+    for name in ["folder-oxtest.png", "folder-oxtest-symbolic.png"] {
+        picture
+            .save_to_png(theme.path().join(name))
+            .expect("an icon picture");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    gtk::IconTheme::for_display(&WidgetExt::display(&test.window)).add_search_path(theme.path());
+    test.select_named("Album");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Album Properties");
+    let customize = group_box(&tab(&window, "customize"), "Folder icons");
+    wait_until("the icon buttons", || {
+        texts(&customize).contains(&"Change Icon...".to_owned())
+    });
+    assert!(!button(&customize, "Restore Default").is_visible());
+
+    press(&customize, "Change Icon...");
+    let dialog = sub_dialog(&window, "Change Icon for Album Folder");
+    assert_eq!(dialog.button_labels(), ["OK", "Cancel"]);
+    assert!(button(&dialog, "Browse...").is_sensitive());
+    let tiles = descendants::<gtk::FlowBoxChild>(&dialog);
+    let names: Vec<String> = tiles
+        .iter()
+        .filter_map(|tile| tile.tooltip_text().map(String::from))
+        .collect();
+    assert!(names.iter().any(|name| name == "folder-oxtest"), "{names:?}");
+    assert!(!names.iter().any(|name| name.ends_with("-symbolic")), "{names:?}");
+    let tile = tiles
+        .iter()
+        .find(|tile| tile.tooltip_text().as_deref() == Some("folder-oxtest"))
+        .expect("the theme's folder icon");
+    descendants::<gtk::FlowBox>(&dialog)[0].select_child(tile);
+    dialog.ok_button().emit_clicked();
+
+    wait_until("Change Icon to close", || dialog.is_closed());
+    assert!(
+        button(&customize, "Restore Default").is_visible(),
+        "the icon is chosen"
+    );
+    assert!(window.apply_button().is_sensitive(), "it waits for OK or Apply");
+    window.close();
 }
 
 /// OK pressed while Apply's change is still being made closes the window

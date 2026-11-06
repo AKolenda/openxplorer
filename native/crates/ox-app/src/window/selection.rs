@@ -95,7 +95,6 @@ impl BrowserWindow {
     fn update_selection_state(&self) {
         self.update_status();
         self.update_details_pane();
-        self.follow_quick_look();
         let selected = self.folder_pane().model().summary().count;
         self.set_action_enabled(WindowAction::Open, selected >= 1);
         self.set_action_enabled(WindowAction::PinSelected, selected == 1);
@@ -106,6 +105,7 @@ impl BrowserWindow {
         self.update_size_actions();
         self.update_archive_actions();
         self.update_share_command();
+        self.update_send_to_actions();
         self.picker_selection_changed();
     }
 
@@ -140,7 +140,7 @@ impl BrowserWindow {
 
     /// Shows the item count and the selection in the status bar.
     pub(super) fn update_status(&self) {
-        let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
+        let on_page = self.current_uri().as_deref().and_then(Page::drawn_at).is_some();
         let shown = self.folder_pane().model().n_items();
         let subject = if on_page {
             StatusSubject::Page

@@ -20,15 +20,20 @@
 //! | `window` | [`PropertiesWindow`]: the window, its tabs and OK, Cancel and Apply |
 //! | `item_window` | The Properties window of one item |
 //! | `selection_view` | Properties of several items |
+//! | `selection_attributes` | Read-only and Hidden of several items |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_tab` | The General tab: name, type, sizes, dates and attributes |
+//! | `drive_tab` | A drive's General and Hardware tabs |
+//! | `drive_facts` | A drive's label, type and file system |
+//! | `space_ring` | [`SpaceRing`](space_ring::SpaceRing): the ring of a drive's used and free space |
 //! | `folder_count` | A folder's size and content, counting up |
 //! | `security_tab` | The Security tab and its Edit and Advanced dialogs |
 //! | `security_model` | Windows' permission names over Linux bits |
 //! | `details_tab` | The Details tab of a file: its list, keys and reader |
 //! | `details_rows` | The Details tab's headings, rows and value wording |
 //! | `permissions_editor` | Changing several items' permissions together |
-//! | `custom_icon` | The Customize tab: Change Icon... |
+//! | `custom_icon` | The Customize tab: Change Icon... and Restore Default |
+//! | `change_icon` | The Change Icon dialog: the theme's folder icons and Browse... |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `sharing_panel` | The Sharing tab: Samba user shares of a local folder |
@@ -40,9 +45,12 @@
 //! | `folder_sizes` | [`FolderSizeState`] and [`FolderSizes`]: measured sizes and their text |
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
+mod change_icon;
 mod custom_icon;
 mod details_rows;
 mod details_tab;
+mod drive_facts;
+mod drive_tab;
 mod folder_count;
 mod folder_sizes;
 mod general_tab;
@@ -54,11 +62,13 @@ mod permissions_editor;
 mod restore;
 mod security_model;
 mod security_tab;
+mod selection_attributes;
 mod selection_view;
 mod sharing_panel;
 mod size_scan_strip;
 mod snapshot_banner;
 mod snapshot_source;
+mod space_ring;
 mod version_row;
 mod versions_panel;
 mod window;
@@ -81,6 +91,8 @@ pub(crate) use selection_view::open_selection_properties;
 pub(crate) use sharing_panel::system_usershares;
 pub(crate) use size_scan_strip::{progress_text, RunEnd, RunPosition, SizeScanStrip};
 pub(crate) use snapshot_banner::SnapshotBanner;
+#[cfg(test)]
+pub(crate) use space_ring::SpaceRing;
 pub(crate) use version_row::SnapshotTarget;
 #[cfg(test)]
 pub(crate) use versions_panel::VersionsPanel;
@@ -114,6 +126,8 @@ impl PropertiesTarget {
 pub(crate) enum PropertiesTab {
     /// Name, type, location, sizes, dates and attributes.
     General,
+    /// Where a drive is mounted and what is mounted there (drives only).
+    Hardware,
     /// Sharing a local folder on the network (local folders only).
     Sharing,
     /// Owner, group and others, and what each may do.
@@ -134,6 +148,7 @@ impl PropertiesTab {
     pub(crate) fn label(self) -> &'static str {
         match self {
             PropertiesTab::General => ox_core::i18n::gettext_static("General"),
+            PropertiesTab::Hardware => ox_core::i18n::gettext_static("Hardware"),
             PropertiesTab::Sharing => ox_core::i18n::gettext_static("Sharing"),
             PropertiesTab::Security => ox_core::i18n::gettext_static("Security"),
             PropertiesTab::Location => ox_core::i18n::gettext_static("Location"),
@@ -147,6 +162,7 @@ impl PropertiesTab {
     pub(crate) const fn page_name(self) -> &'static str {
         match self {
             PropertiesTab::General => "general",
+            PropertiesTab::Hardware => "hardware",
             PropertiesTab::Sharing => "sharing",
             PropertiesTab::Security => "security",
             PropertiesTab::Location => "location",

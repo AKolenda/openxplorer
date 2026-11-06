@@ -14,6 +14,8 @@ use ox_core::location::{normalise, parent_location};
 use ox_core::network::read_mount_table;
 use ox_core::permissions::Account;
 
+use super::drive_facts::{drive_type, filesystem_name, read_block_facts, DriveType};
+
 /// The attributes Properties asks for beyond a listing's
 /// (`PROPERTY_ATTRS` in `file_services.py`).
 const PROPERTY_ATTRIBUTES: &str = concat!(
@@ -69,15 +71,20 @@ pub(crate) struct ItemProperties {
     pub size_on_disk: Option<u64>,
 }
 
-/// A mount point's details for the General tab (PROP-004).
+/// A mount point's details: a drive's General tab and its Hardware tab
+/// (PROP-004).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MountFacts {
     /// Where it is mounted.
     pub mounted_on: String,
     /// What is mounted, for example `/dev/sdb1` or `//nas/share`.
     pub mounted_from: String,
-    /// The file system type, for example `ext4`.
+    /// The file system as Windows names it, for example `NTFS` or `ext4`.
     pub filesystem: String,
+    /// The volume label, empty without one.
+    pub label: String,
+    /// "Local Disk", "Removable Disk", "Network Drive" or "CD Drive".
+    pub drive_type: DriveType,
     /// Free and total bytes, where the file system reports them.
     pub space: Option<(u64, u64)>,
 }
@@ -186,6 +193,17 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
     })
 }
 
+/// Whether the folder `uri` is a mount point of the kernel's mount table,
+/// which makes it a drive. Reading the table never mounts anything.
+pub(crate) fn is_mount_point(uri: &str) -> bool {
+    let Some(path) = gio::File::for_uri(uri).path() else {
+        return false;
+    };
+    let mounts = read_mount_table().unwrap_or_default();
+    path.to_str()
+        .is_some_and(|path| mounts.iter().any(|mount| mount.path == path))
+}
+
 /// What is mounted at the folder `file`, if it is a mount point of the
 /// kernel's mount table. Reading the table never mounts anything.
 fn mount_at(file: &gio::File) -> Option<MountFacts> {
@@ -193,22 +211,32 @@ fn mount_at(file: &gio::File) -> Option<MountFacts> {
     let path = path.to_str()?;
     let mounts = read_mount_table().ok()?;
     let mount = mounts.into_iter().rev().find(|mount| mount.path == path)?;
-    let space = file
-        .query_filesystem_info("filesystem::free,filesystem::size", gio::Cancellable::NONE)
-        .ok()
-        .and_then(|info| {
-            let known = info.has_attribute("filesystem::free") && info.has_attribute("filesystem::size");
-            known.then(|| {
-                (
-                    info.attribute_uint64("filesystem::free"),
-                    info.attribute_uint64("filesystem::size"),
-                )
-            })
-        });
+    let info = file
+        .query_filesystem_info(
+            "filesystem::free,filesystem::size,filesystem::remote",
+            gio::Cancellable::NONE,
+        )
+        .ok();
+    let space = info.as_ref().and_then(|info| {
+        let known = info.has_attribute("filesystem::free") && info.has_attribute("filesystem::size");
+        known.then(|| {
+            (
+                info.attribute_uint64("filesystem::free"),
+                info.attribute_uint64("filesystem::size"),
+            )
+        })
+    });
+    let remote = info
+        .as_ref()
+        .and_then(|info| optional_bool(info, "filesystem::remote"))
+        .unwrap_or_default();
+    let block = read_block_facts(&mount.source);
     Some(MountFacts {
+        filesystem: filesystem_name(&mount.filesystem, &block),
+        drive_type: drive_type(&mount.filesystem, remote, &block),
+        label: block.label,
         mounted_on: mount.path,
         mounted_from: mount.source,
-        filesystem: mount.filesystem,
         space,
     })
 }

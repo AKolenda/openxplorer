@@ -3,17 +3,23 @@
 //!
 //! Dolphin zooms icons through fixed sizes from 16 to 256 pixels
 //! (`ZoomLevelInfo`); Windows Explorer names four of them in its Layout menu
-//! (Small, Medium, Large and Extra large icons, Ctrl+Shift+4 to 1). Every
-//! level is an [`IconSize`]; the named ones keep the keys and CSS classes the
-//! icon view had before it zoomed (VIEW-005, VIEW-010).
+//! (Small, Medium, Large and Extra large icons, Ctrl+Shift+4 to 1), at
+//! Windows 11's sizes: 16, 48, 96 and 256 pixels (owner decision
+//! 2026-11-06; the web app's Large icons were 56). Every level is an
+//! [`IconSize`]; the named ones keep the keys and CSS classes the icon view
+//! had before it zoomed (VIEW-005, VIEW-010).
 
 use crate::i18n::message_id;
 use crate::text_size::{self, TextSize};
 
-/// A large tile's width beyond its icon: the 135-pixel `gridWidth` less
-/// the 56-pixel icon of Large icons. Larger icons widen the tile by as
-/// much as the icon grows.
-const TILE_WIDTH_BEYOND_ICON: i32 = 79;
+/// The icon edge the web's 135 × 130 grid cell was made for: its Large
+/// icons, 56 pixels. Cells for other icons grow or shrink from it.
+const WEB_TILE_ICON: i32 = 56;
+
+/// A web tile's width beyond its icon: the 135-pixel `gridWidth` less
+/// [`WEB_TILE_ICON`]. Larger icons widen the tile by as much as the icon
+/// grows.
+const TILE_WIDTH_BEYOND_ICON: i32 = 135 - WEB_TILE_ICON;
 
 /// One zoom level: its icon edge, its action key and CSS class, and the
 /// Layout menu's name for it.
@@ -27,25 +33,25 @@ struct Level {
 
 /// Every level, smallest first.
 const LEVELS: [Level; 14] = [
-    plain_level(16, "icons-16"),
+    named_level(16, "small", "icons-small", message_id("Small icons")),
     plain_level(22, "icons-22"),
-    named_level(28, "small", "icons-small", message_id("Small icons")),
+    plain_level(28, "icons-28"),
     plain_level(32, "icons-32"),
-    named_level(40, "medium", "icons-medium", message_id("Medium icons")),
-    plain_level(48, "icons-48"),
-    named_level(56, "large", "icons-large", message_id("Large icons")),
+    plain_level(40, "icons-40"),
+    named_level(48, "medium", "icons-medium", message_id("Medium icons")),
+    plain_level(56, "icons-56"),
     plain_level(64, "icons-64"),
     plain_level(80, "icons-80"),
+    named_level(96, "large", "icons-large", message_id("Large icons")),
+    plain_level(128, "icons-128"),
+    plain_level(160, "icons-160"),
+    plain_level(192, "icons-192"),
     named_level(
-        96,
+        256,
         "extra-large",
         "icons-extra-large",
         message_id("Extra large icons"),
     ),
-    plain_level(128, "icons-128"),
-    plain_level(160, "icons-160"),
-    plain_level(192, "icons-192"),
-    plain_level(256, "icons-256"),
 ];
 
 /// A level the Layout menu does not name, keyed by its class.
@@ -73,14 +79,15 @@ const fn named_level(pixels: i32, key: &'static str, css_class: &'static str, la
 pub(crate) struct IconSize(usize);
 
 impl IconSize {
-    /// Explorer's "Small icons" (Ctrl+Shift+4).
-    pub(crate) const SMALL: IconSize = IconSize(2);
-    /// "Medium icons" (Ctrl+Shift+3).
-    pub(crate) const MEDIUM: IconSize = IconSize(4);
-    /// "Large icons" (Ctrl+Shift+2), the Python app's only icon view.
-    pub(crate) const LARGE: IconSize = IconSize(6);
-    /// "Extra large icons" (Ctrl+Shift+1).
-    pub(crate) const EXTRA_LARGE: IconSize = IconSize(9);
+    /// Explorer's "Small icons" (Ctrl+Shift+4), 16 pixels.
+    pub(crate) const SMALL: IconSize = IconSize(0);
+    /// "Medium icons" (Ctrl+Shift+3), 48 pixels.
+    pub(crate) const MEDIUM: IconSize = IconSize(5);
+    /// "Large icons" (Ctrl+Shift+2), 96 pixels, the Python app's only
+    /// icon view, whose icons were 56.
+    pub(crate) const LARGE: IconSize = IconSize(9);
+    /// "Extra large icons" (Ctrl+Shift+1), 256 pixels.
+    pub(crate) const EXTRA_LARGE: IconSize = IconSize(13);
 
     /// Explorer's named sizes, largest first, as its Layout menu lists them.
     pub(crate) const NAMED: [IconSize; 4] = [
@@ -174,12 +181,12 @@ impl CellSize {
 }
 
 /// The cell of tiles of `size` at `text_size`: `gridWidth` ×
-/// `gridRow` from `metrics()` in text-size.js for large icons (135 × 130
-/// at 100%), widened and heightened with the icon for the other sizes,
-/// which the Python app does not have.
+/// `gridRow` from `metrics()` in text-size.js for the web's 56-pixel
+/// icons (135 × 130 at 100%), widened and heightened with the icon for
+/// the other sizes, which the Python app does not have.
 pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
     let metrics = text_size::metrics(text_size);
-    let icon_growth = size.pixels() - IconSize::LARGE.pixels();
+    let icon_growth = size.pixels() - WEB_TILE_ICON;
     let width_for_icon = size.pixels() + TILE_WIDTH_BEYOND_ICON;
     CellSize {
         width: metrics.grid_width.max(width_for_icon),
@@ -187,10 +194,46 @@ pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
     }
 }
 
-/// The height of a compact-view item at `text_size`: a details row less
-/// its roomy padding, as Explorer's List layout packs its names closer.
+/// The icon edge of Tiles: Windows 11's tiles show 48-pixel icons and
+/// thumbnails (VIEW-071).
+pub(crate) const TILES_ICON: i32 = 48;
+
+/// The icon edge of Content's rows (VIEW-071).
+pub(crate) const CONTENT_ICON: i32 = 32;
+
+/// The height of a line of the tiles' and Content's text at `scale`: the
+/// icon view's 0.95 line height on 13-pixel text.
+fn text_line(scale: f64) -> f64 {
+    17.0 * scale
+}
+
+/// A Tiles cell at `text_size`: 256 pixels wide at 100%, about the 250 of
+/// Windows 11's tiles and the gap to the next, growing with the text; as
+/// tall as its three lines of text (name, type and size) or its icon,
+/// with 8 pixels of padding above and below and the 2-pixel gap.
+pub(crate) fn tiles_cell(text_size: TextSize) -> CellSize {
+    let scale = text_size::metrics(text_size).scale;
+    CellSize {
+        width: text_size::ceil_pixels(200.0 * scale + 56.0).max(256),
+        height: text_size::ceil_pixels(3.0 * text_line(scale) + 18.0).max(TILES_ICON + 18),
+    }
+}
+
+/// The height of a Content row at `text_size`: two lines of text with 12
+/// pixels above and below, 58 pixels at 100%, as Windows 11's rows are
+/// about 56 to 60, and the 1-pixel line under it.
+pub(crate) fn content_row(text_size: TextSize) -> i32 {
+    let scale = text_size::metrics(text_size).scale;
+    text_size::ceil_pixels(2.0 * text_line(scale) + 24.0).max(58)
+}
+
+/// The height of a compact-view item at `text_size`, as Explorer's List
+/// layout packs its names closer than the details rows: 26 pixels at
+/// 100%, growing with the text (the web's 38-pixel details row less its
+/// 12 pixels of roomy padding).
 pub(crate) fn compact_row(text_size: TextSize) -> i32 {
-    text_size::metrics(text_size).detail_row - 12
+    let scale = text_size::metrics(text_size).scale;
+    text_size::ceil_pixels(24.0 * scale + 2.0).max(26)
 }
 
 #[cfg(test)]
@@ -205,7 +248,7 @@ mod tests {
         }
         let pixels: Vec<i32> = IconSize::NAMED.iter().map(|size| size.pixels()).collect();
         assert!(pixels.windows(2).all(|pair| pair[0] > pair[1]));
-        assert_eq!(IconSize::LARGE.pixels(), 56);
+        assert_eq!(pixels, [256, 96, 48, 16], "Windows 11's sizes");
     }
 
     /// The levels run from 16 to 256 pixels, growing; a saved size snaps to
@@ -215,14 +258,23 @@ mod tests {
         let pixels: Vec<i32> = IconSize::levels().map(IconSize::pixels).collect();
         assert_eq!((pixels[0], pixels[pixels.len() - 1]), (16, 256));
         assert!(pixels.windows(2).all(|pair| pair[0] < pair[1]));
-        assert_eq!(IconSize::nearest(100), IconSize::EXTRA_LARGE);
+        assert_eq!(IconSize::nearest(100), IconSize::LARGE);
+        assert_eq!(
+            IconSize::nearest(56).pixels(),
+            56,
+            "the web's Large icons stay as saved"
+        );
         assert_eq!(IconSize::at_index(99), IconSize::LARGEST);
     }
 
+    /// 56-pixel tiles keep the web's grid cells; Large icons' 96-pixel
+    /// ones are 40 pixels wider and taller.
+    ///
     /// parity: VIEW-005
     #[test]
     fn large_icon_cells_are_the_web_grid_cells() {
-        let cell = cell_size(IconSize::LARGE, TextSize::from_percent(100));
+        let web_icons = IconSize::nearest(56);
+        let cell = cell_size(web_icons, TextSize::from_percent(100));
         assert_eq!(
             cell,
             CellSize {
@@ -230,7 +282,7 @@ mod tests {
                 height: 130
             }
         );
-        let larger_text = cell_size(IconSize::LARGE, TextSize::from_percent(150));
+        let larger_text = cell_size(web_icons, TextSize::from_percent(150));
         assert_eq!(
             larger_text,
             CellSize {
@@ -238,7 +290,36 @@ mod tests {
                 height: 153
             }
         );
+        assert_eq!(
+            cell_size(IconSize::LARGE, TextSize::from_percent(100)),
+            CellSize {
+                width: 175,
+                height: 170
+            }
+        );
         assert!(cell_size(IconSize::EXTRA_LARGE, TextSize::from_percent(100)).width > cell.width);
+    }
+
+    /// Tiles are 256 pixels wide at 100%, about Windows 11's 250 and the
+    /// gap, and hold three lines of text; Content's rows are 58 pixels
+    /// tall; both grow with the text.
+    ///
+    /// parity: VIEW-071
+    #[test]
+    fn tiles_and_content_rows_have_windows_sizes_and_grow_with_the_text() {
+        let normal = TextSize::from_percent(100);
+        let larger = TextSize::from_percent(150);
+        assert_eq!(
+            tiles_cell(normal),
+            CellSize {
+                width: 256,
+                height: 69
+            }
+        );
+        assert!(tiles_cell(larger).width > 256 && tiles_cell(larger).height > 69);
+        assert_eq!(tiles_cell(normal).columns_in(1000), 3);
+        assert_eq!(content_row(normal), 58);
+        assert!(content_row(larger) > 58);
     }
 
     /// A pane width and the columns `renderRows` gives it.
@@ -250,7 +331,7 @@ mod tests {
     /// parity: VIEW-005
     #[test]
     fn grid_columns_follow_the_width_as_render_rows_counts_them() {
-        let large_icon_cell = cell_size(IconSize::LARGE, TextSize::from_percent(100));
+        let large_icon_cell = cell_size(IconSize::nearest(56), TextSize::from_percent(100));
         assert_eq!(large_icon_cell.width, 135, "the web's gridWidth");
         let cases = [
             ColumnCase {

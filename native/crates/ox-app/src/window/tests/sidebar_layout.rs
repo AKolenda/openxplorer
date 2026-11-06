@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar's geometry, measured against the current app (see
-//! [`super::geometry`]): 35-pixel rows 36 pixels apart, the Quick access
-//! rows 4 pixels further in and 35 pixels apart, the accent bar on the
-//! selected row, the 6-pixel resizer and the "Map network location"
+//! [`super::geometry`]), with Windows 11's denser rows (owner decision
+//! 2026-11-06): 31-pixel rows 32 pixels apart, the Quick access rows 4
+//! pixels further in and 31 pixels apart, the accent bar on the
+//! selected row, the 6-pixel resizer and the "Map network drive"
 //! button below the list.
 
 use gtk::prelude::*;
@@ -53,13 +54,13 @@ fn with_two_pins(fixture: &Fixture) -> TestWindow {
 
 /// parity: LOOK-014
 #[gtk::test]
-fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
+fn quick_access_rows_sit_4_pixels_in_on_a_31_pixel_pitch() {
     let fixture = Fixture::standard();
     let test = with_two_pins(&fixture);
     let home = bounds(&test, &row_named(&test, "Home"));
     assert_eq!(
         home,
-        Bounds::new(7, 173, 196, 35),
+        Bounds::new(7, 152, 196, 31),
         "Home is 14 pixels below the command bar"
     );
     let quick_access: Vec<Bounds> = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
@@ -68,9 +69,9 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
         .map(|row| bounds(&test, &row))
         .collect();
     assert!(quick_access.len() >= 2, "the known folders and two pins");
-    assert_eq!(quick_access[0], Bounds::new(11, 234, 188, 35));
+    assert_eq!(quick_access[0], Bounds::new(11, 209, 188, 31));
     for pair in quick_access.windows(2) {
-        assert_eq!(pair[1].y - pair[0].y, 35, "Quick access rows touch");
+        assert_eq!(pair[1].y - pair[0].y, 31, "Quick access rows touch");
     }
     let last = quick_access[quick_access.len() - 1];
     let this_pc = bounds(&test, &row_named(&test, "This PC"));
@@ -78,10 +79,14 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     let separator_gap = 12 + 1 + 12;
     assert_eq!(
         this_pc.y,
-        last.y + 35 + 4 + 1 + separator_gap,
+        last.y + 31 + 4 + 1 + separator_gap,
         "4px padding and a 1px border end Quick access, then a separator"
     );
-    assert_eq!(local_disk.y - this_pc.y, 36, "other rows are a pixel apart");
+    assert_eq!(
+        local_disk.y - this_pc.y,
+        32,
+        "other rows are a pixel apart, 32 apart as in Windows 11"
+    );
     assert_eq!(this_pc.x, 7);
 }
 
@@ -102,7 +107,7 @@ fn the_selected_row_is_marked_by_its_fill_without_an_accent_bar() {
         .expect("every row has the accent bar");
     let row = bounds(&test, &documents);
     // 3 x 16 (ui-spec.md §4.4; the web's is 3 x 15), kept for the layout.
-    assert_eq!(bounds(&test, &bar), Bounds::new(row.x, row.y + 10, 3, 16));
+    assert_eq!(bounds(&test, &bar), Bounds::new(row.x, row.y + 8, 3, 16));
     assert_same_colour(
         painted_colour(&documents, 1, 18),
         painted_colour(&documents, 6, 18),
@@ -127,8 +132,8 @@ fn map_network_location_sits_below_the_list() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let button = button_for(&test, "win.map-network-location");
-    assert!(button.is_sensitive(), "Map network location opens its dialog");
-    assert_eq!(button.tooltip_text().as_deref(), Some("Map network location"));
+    assert!(button.is_sensitive(), "Map network drive opens its dialog");
+    assert_eq!(button.tooltip_text().as_deref(), Some("Map network drive"));
     let place = bounds(&test, &button);
     let window_height = test.window.height();
     assert_eq!((place.x, place.width, place.height), (7, 196, 34));

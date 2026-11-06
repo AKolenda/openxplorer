@@ -146,12 +146,13 @@ impl SortDirection {
         Self::ALL.into_iter().find(|direction| direction.as_str() == key)
     }
 
-    /// CSS class of a column title's sort arrow pointing this way;
-    /// `resources/skin/folder-views.css` turns `.sort-caret.ascending` up.
+    /// CSS class of the column title sorted this way, from which
+    /// `resources/skin/folder-views.css` draws its chevron, up for
+    /// ascending.
     pub(crate) const fn css_class(self) -> &'static str {
         match self {
-            SortDirection::Ascending => "ascending",
-            SortDirection::Descending => "descending",
+            SortDirection::Ascending => "sort-ascending",
+            SortDirection::Descending => "sort-descending",
         }
     }
 

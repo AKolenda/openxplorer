@@ -10,8 +10,8 @@
 //! |---|---|---|
 //! | `format_drive` | Format a removable drive | Windows' Format dialog |
 //! | `network_sign_in` | Enter network credentials, and a server's questions | `renderAuth` in `app.js` |
-//! | `network_map` | Map network location | `connectDialog` in `app.js` |
-//! | `network_protocol` | The protocols Map network location offers | Dolphin and Files |
+//! | `network_map` | Map network drive and Add a network location | `connectDialog` in `app.js` |
+//! | `network_protocol` | The protocols Add a network location offers | Dolphin and Files |
 //! | `network_sign_out` | Sign out of a server | `signOut` in `app.js` |
 
 mod format_drive;

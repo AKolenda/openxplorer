@@ -137,6 +137,10 @@ mod imp {
         /// The content preview shown, which a redraw for the same item
         /// keeps (PROP-011).
         pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
+        /// The Preview pane shows the item's icon in place of its
+        /// contents (Folder Options' "Show preview handlers in preview
+        /// pane" off).
+        pub(super) hides_media: Cell<bool>,
         /// The Properties rows the preview added: Dimensions, Length.
         pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
         /// The pane's options, as saved (PROP-010).
@@ -307,6 +311,19 @@ impl DetailsPane {
         self.show_mode();
     }
 
+    /// Whether the pane shows the Details or only the preview.
+    pub(super) fn mode(&self) -> PaneMode {
+        self.imp().mode.get()
+    }
+
+    /// Makes the Preview pane show the item's icon in place of its
+    /// contents with `hide`, as Windows does with "Show preview handlers
+    /// in preview pane" off; true when that changed, so the content is
+    /// shown again.
+    pub(super) fn set_hides_media(&self, hide: bool) -> bool {
+        self.imp().hides_media.replace(hide) != hide
+    }
+
     /// The header's title, before the close button.
     fn title_label(&self) -> Option<gtk::Label> {
         self.imp()
@@ -381,8 +398,13 @@ impl DetailsPane {
         self.show_properties(&content.properties);
         imp.note.set_text(content.note);
         imp.note_row.set_visible(!content.note.is_empty());
-        self.show_media(content.media.as_ref());
-        if imp.mode.get() == PaneMode::Preview {
+        let preview_only = imp.mode.get() == PaneMode::Preview;
+        let media = content
+            .media
+            .as_ref()
+            .filter(|_| !(preview_only && imp.hides_media.get()));
+        self.show_media(media);
+        if preview_only {
             self.show_mode();
         }
     }

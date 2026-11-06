@@ -13,7 +13,7 @@ use ox_core::settings::ContextMenu;
 
 use super::context_menus::{choose_menu_style, position_of};
 use super::file_ops_support::open_dialog;
-use super::geometry::{bounds, laid_out, Bounds};
+use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
 use super::icons::{assert_same_colour, css_colour, painted, painted_colour, TRANSITION_TIME};
 use crate::test_support::harness::{
     descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
@@ -97,15 +97,16 @@ fn assert_surfaces(window: &BrowserWindow, expected: &Surfaces) {
     );
 }
 
-/// From top to bottom: the 42-pixel tab strip, the navigation row, the
-/// command bar, the sidebar, file list and details pane side by side, and
-/// the 30-pixel status bar, all in the app's font stack at 13 pixels.
+/// From top to bottom: the 42-pixel tab strip, the 48-pixel navigation
+/// row and command bar, as Windows 11's (owner decision 2026-11-06), the
+/// sidebar, file list and details pane side by side, and the 30-pixel
+/// status bar, all in the app's font stack at 13 pixels.
 ///
 /// parity: LOOK-001
 #[gtk::test]
 fn the_bars_and_panes_stack_as_in_explorer_in_the_apps_font() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     let window = &test.window;
     let title = bounds(&test, &window.titlebar().expect("the tab strip is the title bar"));
     let navigation = bounds(&test, &*window.imp().navigation_row);
@@ -115,10 +116,10 @@ fn the_bars_and_panes_stack_as_in_explorer_in_the_apps_font() {
     let details = bounds(&test, window.details_pane());
     let status = bounds(&test, window.status_bar());
     assert_eq!((title.y, title.height), (0, 42), "the title bar");
-    assert_eq!((navigation.y, navigation.height), (42, 62), "the navigation row");
-    assert_eq!((commands.y, commands.height), (104, 55), "the command bar");
+    assert_eq!((navigation.y, navigation.height), (42, 48), "the navigation row");
+    assert_eq!((commands.y, commands.height), (90, 48), "the command bar");
     for pane in [sidebar, files, details] {
-        assert_eq!((pane.y, pane.y + pane.height), (159, status.y), "{pane:?}");
+        assert_eq!((pane.y, pane.y + pane.height), (138, status.y), "{pane:?}");
     }
     assert_eq!((sidebar.x, sidebar.width), (0, 210), "the sidebar");
     assert!(sidebar.right() < files.x, "the resizer sits between");
@@ -171,7 +172,13 @@ fn a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance() {
     let fixture = Fixture::standard();
     let first = laid_out(&fixture.uri());
     show_theme(&first, "dark");
-    let test = TestWindow::open(&fixture.uri());
+    // With the details pane, closed in a new window as in Windows 11,
+    // switched on, so it is part of the layout.
+    first.open_details_pane();
+    wait_until("the open pane to be saved", || {
+        first.context.settings_data().preferences.show_details_pane
+    });
+    let test = first.open_beside(&fixture.uri());
     wait_for_frames(&test.window, 1);
     let window = &test.window;
     let parts: [&gtk::Widget; 6] = [
@@ -265,7 +272,7 @@ fn the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line() {
     }
 }
 
-/// The command bar is 55 pixels with its bottom line; Appearance,
+/// The command bar is 48 pixels with its bottom line; Appearance,
 /// Settings and Details sit at its right end, the file commands scroll
 /// sideways instead of clipping, and the switched-on Details toggle shows
 /// the selected colour.
@@ -275,11 +282,11 @@ fn the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line() {
 fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     show_theme(&test, "light");
     let bar = test.window.command_bar();
     let place = bounds(&test, bar);
-    assert_eq!(place.height, 55);
+    assert_eq!(place.height, 48);
     let details = descendants::<gtk::ToggleButton>(bar)
         .into_iter()
         .find(|button| button.has_css_class("details-toggle"))
@@ -451,5 +458,65 @@ fn the_toast_is_an_inverted_status_78_pixels_above_the_bottom() {
         assert!((centre - test.window.width() / 2).abs() <= 1, "{place:?}");
         let background = painted_colour(&surface, 4, place.height / 2);
         assert_same_colour(background, css_colour(inverted), &format!("{theme} toast"));
+    }
+}
+
+/// The selected row of the file list in `test`'s window.
+fn selected_row(test: &TestWindow) -> gtk::Widget {
+    let details = test.window.folder_pane().details().column_view();
+    descendants::<gtk::Widget>(details)
+        .into_iter()
+        .find(|widget| widget.css_name() == "row" && widget.state_flags().contains(gtk::StateFlags::SELECTED))
+        .expect("a selected row")
+}
+
+/// The file list selects as Windows 11 File Explorer does: a light blue
+/// fill in light and a neutral grey one in dark, with no edge, and the
+/// keyboard's row draws Windows' two-tone ring, 2 pixels dark outside 1
+/// pixel light (ui-spec.md §3.1 C19, C29, C30; §4.13).
+///
+/// parity: ACC-009
+#[gtk::test]
+fn selected_rows_and_the_keyboard_ring_take_windows_11s_colours() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.window.folder_model().select_only(1);
+    // The selection, then the ring on it: alpha(white, .7) over #cce8ff
+    // with alpha(black, .89) over that in light, alpha(black, .7) over
+    // #3d3d3d with white over that in dark.
+    for (theme, fill, outer, inner) in [
+        ("light", "#cce8ff", "#1a1b1c", "#f0f8ff"),
+        ("dark", "#3d3d3d", "#ffffff", "#121212"),
+    ] {
+        show_theme(&test, theme);
+        test.window.set_focus_visible(false);
+        wait_for_frames(&test.window, 2);
+        let row = selected_row(&test);
+        // Between the row's edge and its icon, where nothing else paints.
+        let middle = row.height() / 2;
+        for x in [0, 2, 6] {
+            assert_same_colour(
+                painted_colour(&row, x, middle),
+                css_colour(fill),
+                &format!("{theme} selection at {x}, without an edge"),
+            );
+        }
+        row.grab_focus();
+        test.window.set_focus_visible(true);
+        wait_for_frames(&test.window, 2);
+        assert!(row.has_focus(), "the selected row has the keyboard");
+        for (x, colour, what) in [
+            (0, outer, "outer ring"),
+            (1, outer, "outer ring"),
+            (2, inner, "inner ring"),
+            (6, fill, "selection"),
+        ] {
+            assert_same_colour(
+                painted_colour(&row, x, middle),
+                css_colour(colour),
+                &format!("{theme} {what} at {x}"),
+            );
+        }
     }
 }

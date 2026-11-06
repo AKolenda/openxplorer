@@ -34,6 +34,7 @@ use crate::search::{
 
 use super::empty_page::EmptyState;
 use super::search_box::ViewKey;
+use super::search_steps::StepChange;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -122,7 +123,13 @@ impl BrowserWindow {
     /// Each keystroke: stops the running search, drops its results,
     /// filters the listing by the text, clears the selection and scrolls
     /// to the top (`queueSearch`).
+    /// Emptying the box on search results goes back to the folder
+    /// ([`Self::leave_search_step`]).
     fn search_edited(&self, text: &str) {
+        let was_searching = self.is_searching();
+        if !was_searching && !text.trim().is_empty() {
+            self.remember_view_before_search();
+        }
         let folder = self.current_uri().unwrap_or_default();
         let roots = self.context().search_cache().roots();
         self.imp().search.borrow_mut().edit(text, &folder, &roots);
@@ -132,6 +139,9 @@ impl BrowserWindow {
             self.folder_pane().scroll_to_start();
         }
         self.show_search_state();
+        if was_searching && !self.is_searching() && !self.is_clearing_search_box() {
+            self.leave_search_step();
+        }
     }
 
     /// Moves keyboard focus from the search box to the items shown, as
@@ -153,8 +163,15 @@ impl BrowserWindow {
         pane.reveal(position);
     }
 
-    /// Runs the search once typing paused (`runSearch`).
+    /// Runs the search once typing paused (`runSearch`), as a step of
+    /// the tab's history of its own ("Search Results in Documents").
     fn run_search(&self) {
+        self.run_search_as(StepChange::New);
+    }
+
+    /// Runs the search, recording it in the tab's history as `change`
+    /// says.
+    fn run_search_as(&self, change: StepChange) {
         // Clearing the query already restores the listing synchronously.
         // A delayed search-changed signal must not reset its expanded rows.
         if !self.is_searching() {
@@ -165,6 +182,7 @@ impl BrowserWindow {
         };
         let roots = self.context().search_cache().roots();
         let run = self.imp().search.borrow_mut().begin(&folder, &roots);
+        self.record_search_step(change);
         self.show_searched_items();
         self.show_search_state();
         match run {
@@ -415,7 +433,7 @@ impl BrowserWindow {
     /// The user chose other search options: a change between names and
     /// contents runs the search again, and the kind and date options
     /// filter the rows shown (SRCH-036, SRCH-037).
-    fn change_search_options(&self, search_in: SearchIn, facets: SearchFacets) {
+    pub(super) fn change_search_options(&self, search_in: SearchIn, facets: SearchFacets) {
         let search = self.imp().search.borrow();
         let search_in_changed = search.search_in() != search_in;
         let facets_changed = search.facets() != facets;
@@ -430,6 +448,7 @@ impl BrowserWindow {
         if search_in_changed {
             self.run_search();
         } else if facets_changed {
+            self.record_search_step(StepChange::New);
             self.show_searched_items();
             self.show_search_state();
         }
@@ -438,7 +457,7 @@ impl BrowserWindow {
     /// Leaving the folder ends the search, unless the strip's "Keep
     /// search when changing folders" is pressed (SRCH-005): the search
     /// then runs again in the folder the tab opens, once it has started
-    /// listing it.
+    /// listing it, and that folder's step shows it.
     pub(super) fn leave_search(&self) {
         if !(self.is_searching() && self.search_strip().keeps_search()) {
             self.end_search();
@@ -460,14 +479,14 @@ impl BrowserWindow {
             return;
         }
         self.search_edited(&text);
-        self.run_search();
+        self.run_search_as(StepChange::InPlace);
     }
 
     /// Ends the search as leaving the folder does: empties the box and
     /// forgets the scope.
     pub(super) fn end_search(&self) {
         self.imp().search.borrow_mut().end();
-        self.search_box().clear();
+        self.clear_search_box_quietly();
         self.show_searched_items();
         self.show_search_state();
     }

@@ -48,6 +48,7 @@
 //! `resources/ui/transfer-panel.ui`.
 
 mod action;
+mod question;
 mod rate;
 mod speed_graph;
 
@@ -56,7 +57,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::transfer::{Cancellation, Progress, ProgressScope};
 
-pub(crate) use action::{Action, Verb};
+pub(crate) use action::{location_name, Action, Verb};
+pub(crate) use question::SpaceTexts;
 
 use crate::icons::{self, Icon};
 use crate::operation_session::OperationSession;
@@ -102,10 +104,12 @@ mod imp {
     use ox_core::transfer::{Cancellation, ItemCount};
 
     use super::action::Action;
+    use super::question::Row;
     use super::rate::{Rate, Reading};
     use super::speed_graph::SpeedGraph;
     use super::TransferKind;
     use crate::operation_session::OperationSession;
+    use crate::window::conflict_window::FileConflictWindow;
     use crate::window::progress_window::ProgressWindow;
     use crate::window::BrowserWindow;
 
@@ -116,9 +120,43 @@ mod imp {
         /// What the action does, with its folders as links.
         #[template_child]
         pub(super) header_label: TemplateChild<gtk::Label>,
-        /// "44% complete", or "Cancelling…".
+        /// "44% complete", or "Cancelling…"; while the action asks, what
+        /// it found ("The destination already has a file named …").
         #[template_child]
         pub(super) percent_label: TemplateChild<gtk::Label>,
+        /// "Replace or Skip Files": the three command rows.
+        #[template_child]
+        pub(super) question: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub(super) replace_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub(super) replace_icon: TemplateChild<gtk::Image>,
+        #[template_child]
+        pub(super) replace_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub(super) skip_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub(super) skip_icon: TemplateChild<gtk::Image>,
+        #[template_child]
+        pub(super) skip_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub(super) decide_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub(super) decide_icon: TemplateChild<gtk::Image>,
+        #[template_child]
+        pub(super) decide_label: TemplateChild<gtk::Label>,
+        /// "There is not enough space on …": what is needed, the drive's
+        /// space, Try Again and Cancel.
+        #[template_child]
+        pub(super) space_question: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub(super) space_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub(super) space_drive_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub(super) space_retry_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub(super) space_cancel_button: TemplateChild<gtk::Button>,
         /// How far the action is, while the details are hidden.
         #[template_child]
         pub(super) progress_bar: TemplateChild<gtk::ProgressBar>,
@@ -173,6 +211,13 @@ mod imp {
         pub(super) owner: glib::WeakRef<BrowserWindow>,
         /// The progress window the action shows in.
         pub(super) window: glib::WeakRef<ProgressWindow>,
+        /// Receives the row chosen while the action asks.
+        pub(super) question_answer: RefCell<Option<async_channel::Sender<Option<Row>>>>,
+        /// Receives Try Again (true) or Cancel while the action asks
+        /// about a full drive.
+        pub(super) space_answer: RefCell<Option<async_channel::Sender<bool>>>,
+        /// The File Conflict window the question opened, while it shows.
+        pub(super) conflict_window: glib::WeakRef<FileConflictWindow>,
     }
 
     #[glib::object_subclass]
@@ -202,6 +247,7 @@ mod imp {
                 super::GLYPH_SIZE,
             );
             panel.show_pause_state(false);
+            panel.connect_question();
             self.pause_button.connect_clicked(glib::clone!(
                 #[weak]
                 panel,
@@ -386,6 +432,7 @@ impl TransferPanel {
         cancel.cancel();
         imp.cancel_button.set_sensitive(false);
         imp.pause_button.set_sensitive(false);
+        self.stop_asking();
         self.show_percent();
         self.refresh_window();
     }
@@ -414,6 +461,7 @@ impl TransferPanel {
     /// the progress window, which closes with its last action.
     pub(crate) fn finish(&self) {
         let imp = self.imp();
+        self.stop_asking();
         imp.cancel.replace(None);
         imp.session.replace(None);
         self.set_visible(false);
@@ -455,7 +503,7 @@ impl TransferPanel {
 
     /// Opens the folder of a link in a new window of the app, as clicking
     /// a folder of the Windows progress window opens it.
-    fn open_location(&self, uri: &str) {
+    pub(crate) fn open_location(&self, uri: &str) {
         if let Some(owner) = self.imp().owner.upgrade() {
             owner.open_in_new_window(uri);
         }
@@ -606,6 +654,12 @@ impl TransferPanel {
     #[cfg(test)]
     pub(crate) fn press_cancel(&self) {
         self.imp().cancel_button.emit_clicked();
+    }
+
+    /// Whether Cancel shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn shows_cancel(&self) -> bool {
+        self.imp().cancel_button.get_visible()
     }
 
     /// Presses Pause or Resume, for tests.

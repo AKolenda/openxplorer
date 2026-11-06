@@ -321,18 +321,14 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
     press(&frame, "Extract");
 
-    wait_until("the name-conflict question", || {
-        super::file_ops_support::dialog_over(&test).is_some()
-    });
-    super::file_ops_support::open_dialog(&test).press("Skip duplicates");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
 
     wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
-    wait_until("the move's report", || {
-        super::file_ops_support::dialog_over(&test)
-            .is_some_and(|dialog| dialog.message_text().contains("1 skipped"))
-    });
-    super::file_ops_support::open_dialog(&test).press("OK");
     super::file_ops_support::assert_ended_without_a_message(&test);
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing reports the name Skip left alone, as in Windows"
+    );
     assert_eq!(
         fs::read(fixture.path("readme.txt")).expect("kept"),
         b"mine",
@@ -363,8 +359,10 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
 }
 
 /// Cancel in the name-conflict question of an extraction into an existing
-/// folder just stops, as in Windows Explorer: no message follows, nothing
-/// is added and the private folder is removed.
+/// folder just stops, as in Windows Explorer: no message follows, the
+/// file it asked about is unchanged and the private folder is removed.
+/// As Windows asks at the end of the job, the items without a conflict
+/// were already extracted, and stay.
 ///
 /// parity: ARC-011, ARC-012
 #[gtk::test]
@@ -380,11 +378,8 @@ fn cancelling_an_extractions_conflict_question_says_nothing() {
     });
     descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
     press(&frame, "Extract");
-    wait_until("the name-conflict question", || {
-        super::file_ops_support::dialog_over(&test).is_some()
-    });
 
-    super::file_ops_support::open_dialog(&test).press("Cancel");
+    super::file_ops_support::cancel_conflicts(&test);
     wait_until("the private folder to be removed", || {
         fs::read_dir(fixture.root())
             .expect("the folder")
@@ -400,7 +395,10 @@ fn cancelling_an_extractions_conflict_question_says_nothing() {
 
     assert!(super::file_ops_support::dialog_over(&test).is_none());
     assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
-    assert!(!fixture.path("Docs").exists(), "nothing is added");
+    assert!(
+        fixture.path("Docs/a.txt").is_file(),
+        "the items without a conflict came first"
+    );
     assert_eq!(fs::read(fixture.path("readme.txt")).expect("kept"), b"mine");
 }
 

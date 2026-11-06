@@ -141,21 +141,27 @@ impl Accent {
 
 /// The tokens that `accent` redefines over the palette of `appearance`:
 /// the accent itself, which buttons, focus rings, progress and the sidebar
-/// bar use, and the selection's fill and edges tinted with it. Empty for
-/// the Windows blue.
+/// bar use, and the selection's fill and edge tinted with it. In light,
+/// the file list's and navigation pane's items take the accent's tint
+/// too, in place of Windows' light blue; in dark they keep Windows'
+/// neutral greys whatever the accent. Empty for the Windows blue.
 pub(crate) fn stylesheet(accent: Accent, appearance: Appearance) -> String {
     let Some(shade) = accent.shade(appearance) else {
         return String::new();
     };
-    let selected_tint = match appearance {
-        Appearance::Light => ".1",
-        Appearance::Dark => ".22",
+    let (selected_tint, items) = match appearance {
+        Appearance::Light => (
+            ".1",
+            "@define-color ox_item_hover mix(@ox_bg, @ox_accent, .1);\n\
+             @define-color ox_item_selected mix(@ox_bg, @ox_accent, .2);\n",
+        ),
+        Appearance::Dark => (".22", ""),
     };
     format!(
         "@define-color ox_accent {shade};\n\
          @define-color ox_selected mix(@ox_bg, @ox_accent, {selected_tint});\n\
          @define-color ox_selected_edge alpha(@ox_accent, .16);\n\
-         @define-color ox_tile_selected_edge alpha(@ox_accent, .38);\n"
+         {items}"
     )
 }
 
@@ -216,6 +222,12 @@ mod tests {
         assert!(
             green.contains("ox_selected mix(@ox_bg, @ox_accent, .22)"),
             "{green}"
+        );
+        assert!(!green.contains("ox_item_"), "dark items stay grey: {green}");
+        let light_green = stylesheet(Accent::Green, Appearance::Light);
+        assert!(
+            light_green.contains("ox_item_selected mix(@ox_bg, @ox_accent, .2)"),
+            "{light_green}"
         );
     }
 }

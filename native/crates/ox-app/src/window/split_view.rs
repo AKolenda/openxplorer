@@ -2,7 +2,7 @@
 //! Split view (VIEW-059, INT-005): a tab that shows two folders side by
 //! side.
 //!
-//! Ports Dolphin's Split (F3, `DolphinMainWindow::toggleSplitView` and
+//! Ports Dolphin's Split (`DolphinMainWindow::toggleSplitView` and
 //! `DolphinTabPage`). The window has two folder panes; a tab that is not
 //! split shows in the left one. Each pane of a split tab is a tab of the
 //! session of its own ([`super::session`]), so it keeps its own location,
@@ -12,7 +12,8 @@
 //! A click, a drag or keyboard focus entering the other pane makes it
 //! active. The active pane's caption carries the accent line, as the
 //! selected item of a Windows 11 navigation view does, and the other pane
-//! is dimmed, as Dolphin dims it. F3 again closes the active pane.
+//! is dimmed, as Dolphin dims it. View > Split view again closes the
+//! active pane. F3 is Windows Explorer's search key, so it has no key.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -96,7 +97,7 @@ impl BrowserWindow {
         pane == self.folder_pane()
     }
 
-    /// Adds `win.split-view` (F3) and makes a click, a key or a drag in
+    /// Adds `win.split-view` (View > Split view) and makes a click, a key or a drag in
     /// either pane of a split tab make that pane active.
     pub(super) fn install_split_view(&self) {
         self.add_action_entries([toggle_action(WindowAction::SplitView, false, |window, _| {
@@ -141,7 +142,7 @@ impl BrowserWindow {
         column.add_controller(focus);
     }
 
-    /// F3: splits the tab, or closes its active pane.
+    /// View > Split view: splits the tab, or closes its active pane.
     pub(super) fn toggle_split_view(&self) {
         let is_split = self.imp().session.borrow().active().is_some_and(Tab::is_split);
         if self.refuse_while_tabs_move() {
@@ -385,7 +386,7 @@ impl BrowserWindow {
         self.pane_on(side).details().show_listing(listing);
         let _ = show_pane_state(self.pane_on(side), state, || None);
         self.apply_view_options();
-        if Page::from_uri(&uri).is_some() {
+        if Page::drawn_at(&uri).is_some() {
             self.render_landing_in(side, &uri, &self.places());
         }
         self.show_pane_captions();

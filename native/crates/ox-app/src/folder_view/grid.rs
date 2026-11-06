@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The icon view: tiles with an icon and up to two lines of name, or the
-//! compact list of small icons with their names beside them.
+//! The icon view: tiles with an icon and up to two lines of name, the
+//! compact list of small icons with their names beside them, or Windows
+//! 11's Tiles and Content.
 //!
 //! Matches `.file-tile` in `v2.0.0:desktop/ui/style.css` ("Large icons": a 56
 //! pixel icon in a 135 pixel cell) and the grid layout of `renderRows` in
@@ -8,7 +9,10 @@
 //! the window binds Explorer's four named sizes to Ctrl+Shift+1..4. The
 //! compact layout is Dolphin's Compact view and Explorer's List layout
 //! (VIEW-008): the same grid turned on its side, so the items fill columns
-//! top to bottom and the view scrolls sideways. [`IconView`] is the widget;
+//! top to bottom and the view scrolls sideways. Tiles and Content
+//! (VIEW-071) are the same grid with other cells: Tiles in as many columns
+//! of 256-pixel tiles as fit, Content in one column of rows that span the
+//! width, both scrolling down. [`IconView`] is the widget;
 //! it keeps its layout and the text size, and fits its lines to its size.
 
 use std::rc::Rc;
@@ -18,8 +22,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners};
-use crate::folder_view::icon_size::compact_row;
 pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
+use crate::folder_view::icon_size::{compact_row, tiles_cell, CONTENT_ICON, TILES_ICON};
 use crate::text_size::TextSize;
 
 /// The icon edge of the compact layout (Explorer's List uses small icons).
@@ -28,6 +32,12 @@ const COMPACT_ICON_SIZE: i32 = 16;
 /// The CSS class of the compact layout.
 const COMPACT_CLASS: &str = "compact";
 
+/// The CSS class of the Tiles layout.
+const TILES_CLASS: &str = "tiles";
+
+/// The CSS class of the Content layout.
+const CONTENT_CLASS: &str = "content";
+
 /// How the icon view lays its items out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GridLayout {
@@ -35,6 +45,12 @@ pub(crate) enum GridLayout {
     Icons(IconSize),
     /// Small icons with names beside them, in columns that scroll sideways.
     Compact,
+    /// Explorer's Tiles: a 48-pixel icon with its name, type and size
+    /// beside it, in rows that scroll down.
+    Tiles,
+    /// Explorer's Content: one row per item across the width, its name and
+    /// type beside its icon and its date modified and size at the right.
+    Content,
 }
 
 /// The registry the views' cells share, which every factory the icon view
@@ -51,6 +67,8 @@ impl TileRegistries {
         let (cell_layout, icon_pixels) = match layout {
             GridLayout::Icons(size) => (CellLayout::IconTile, size.pixels()),
             GridLayout::Compact => (CellLayout::CompactItem, COMPACT_ICON_SIZE),
+            GridLayout::Tiles => (CellLayout::Tile, TILES_ICON),
+            GridLayout::Content => (CellLayout::ContentRow, CONTENT_ICON),
         };
         cells::connect_file_cells(&factory, cell_layout, icon_pixels, &self.owners);
         factory
@@ -169,7 +187,7 @@ impl IconView {
         let scroller = &self.imp().scroller;
         match self.layout() {
             GridLayout::Compact => scroller.hadjustment(),
-            GridLayout::Icons(_) => scroller.vadjustment(),
+            GridLayout::Icons(_) | GridLayout::Tiles | GridLayout::Content => scroller.vadjustment(),
         }
     }
 
@@ -186,12 +204,13 @@ impl IconView {
     }
 
     /// The icon size of the tiles, or of the last tiles shown while the
-    /// view is compact.
+    /// view is compact, Tiles or Content.
     pub(crate) fn icon_size(&self) -> IconSize {
         self.imp().icon_size.get()
     }
 
-    /// Restores a saved icon size without leaving the compact layout.
+    /// Restores a saved icon size without leaving the compact, Tiles or
+    /// Content layout.
     pub(crate) fn set_icon_size(&self, size: IconSize) {
         self.imp().icon_size.set(size);
         if matches!(self.layout(), GridLayout::Icons(_)) {
@@ -216,16 +235,20 @@ impl IconView {
 
     /// Gives the grid the lines its size holds at the current layout and
     /// text size: columns of tiles across its width (see
-    /// [`super::icon_size::CellSize::columns_in`]), or compact rows down its
-    /// height.
+    /// [`super::icon_size::CellSize::columns_in`]), compact rows down its
+    /// height, columns of Tiles across its width, or Content's one column.
     pub(crate) fn fit_lines(&self) {
         let imp = self.imp();
+        let text_size = imp.text_size.get();
+        let width = imp.scroller.width();
         let lines = match imp.layout.get() {
-            GridLayout::Icons(size) => cell_size(size, imp.text_size.get()).columns_in(imp.scroller.width()),
+            GridLayout::Icons(size) => cell_size(size, text_size).columns_in(width),
             GridLayout::Compact => {
-                let rows = imp.scroller.height() / compact_row(imp.text_size.get()).max(1);
+                let rows = imp.scroller.height() / compact_row(text_size).max(1);
                 u32::try_from(rows.max(1)).unwrap_or(1)
             }
+            GridLayout::Tiles => tiles_cell(text_size).columns_in(width),
+            GridLayout::Content => 1,
         };
         if imp.grid.max_columns() != lines {
             imp.grid.set_max_columns(lines);
@@ -236,7 +259,7 @@ impl IconView {
     fn apply_layout(&self, layout: GridLayout) {
         let imp = self.imp();
         imp.layout.set(layout);
-        for class in IconSize::css_classes().chain([COMPACT_CLASS]) {
+        for class in IconSize::css_classes().chain([COMPACT_CLASS, TILES_CLASS, CONTENT_CLASS]) {
             imp.grid.remove_css_class(class);
         }
         let (class, orientation) = match layout {
@@ -245,6 +268,8 @@ impl IconView {
                 (size.css_class(), gtk::Orientation::Vertical)
             }
             GridLayout::Compact => (COMPACT_CLASS, gtk::Orientation::Horizontal),
+            GridLayout::Tiles => (TILES_CLASS, gtk::Orientation::Vertical),
+            GridLayout::Content => (CONTENT_CLASS, gtk::Orientation::Vertical),
         };
         imp.grid.add_css_class(class);
         imp.grid.set_orientation(orientation);
@@ -319,5 +344,28 @@ mod tests {
         assert_eq!(view.scroll_adjustment(), view.imp().scroller.hadjustment());
         view.set_layout(GridLayout::Icons(IconSize::LARGE));
         assert_eq!(grid.orientation(), gtk::Orientation::Vertical);
+    }
+
+    /// Tiles and Content scroll down, each with its own class, and keep the
+    /// icon size the icons had; Content is one column.
+    ///
+    /// parity: VIEW-071
+    #[gtk::test]
+    fn tiles_and_content_scroll_down_and_keep_the_icon_size() {
+        let view = IconView::new(&CellOwners::new());
+        view.set_layout(GridLayout::Icons(IconSize::MEDIUM));
+        let grid = view.grid();
+        for (layout, class) in [
+            (GridLayout::Tiles, TILES_CLASS),
+            (GridLayout::Content, CONTENT_CLASS),
+        ] {
+            view.set_layout(layout);
+            assert_eq!(grid.orientation(), gtk::Orientation::Vertical);
+            assert!(grid.has_css_class(class));
+            assert!(!grid.has_css_class(IconSize::MEDIUM.css_class()));
+            assert_eq!(view.scroll_adjustment(), view.imp().scroller.vadjustment());
+            assert_eq!(view.icon_size(), IconSize::MEDIUM);
+        }
+        assert_eq!(grid.max_columns(), 1, "Content is one column");
     }
 }

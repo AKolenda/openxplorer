@@ -86,8 +86,13 @@ impl BrowserWindow {
     }
 
     /// Adds text the input method committed to the typed prefix and
-    /// selects the next matching name.
+    /// selects the next matching name, or types it into the search box
+    /// with Folder Options' "Automatically type into the Search Box".
     pub(super) fn type_text(&self, text: &str) {
+        if self.types_into_search_box() {
+            self.search_box().type_text(text);
+            return;
+        }
         for character in text.chars() {
             self.type_character(character);
         }

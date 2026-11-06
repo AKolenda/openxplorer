@@ -55,6 +55,14 @@ pub struct LiveSearch {
     pub search_in: SearchIn,
 }
 
+/// Whether `entry` matches `pattern` by its name and its text together,
+/// as a search of contents finds a file: it reads the file, so call it
+/// off the main thread, and only for files on this computer's own disks.
+pub fn matches_by_contents(pattern: &NamePattern, entry: &Entry) -> bool {
+    let name = entry.name.to_lowercase();
+    lowercase_text(entry).is_some_and(|text| pattern.matches_lowercase(&name, &text))
+}
+
 /// Whether a live search of `folder` walks its subfolders: only a folder
 /// on this computer's own disks is walked. A share, a network mount, or
 /// any folder while the mount table cannot be read is filtered only.
@@ -183,8 +191,7 @@ impl Walk<'_> {
             return true;
         }
         let reads_contents = self.is_local && search.search_in == SearchIn::NamesAndContents;
-        reads_contents
-            && lowercase_text(entry).is_some_and(|text| search.pattern.matches_lowercase(&name, &text))
+        reads_contents && matches_by_contents(&search.pattern, entry)
     }
 
     /// Keeps a match; false once more than the limit matched.

@@ -8,10 +8,10 @@
 //! - "Folder pictures" ([`folder_picture`], PROP-037): "Choose File..."
 //!   puts a picture on the folder's icon in the larger icon views, and
 //!   "Restore Default" takes it off;
-//! - "Folder icons" (PROP-016): "Change Icon..." picks a picture, which
-//!   shows beside it at once and becomes the folder's icon. Restore
-//!   Default, beside it while the folder has its own icon, goes back to
-//!   the standard folder. The choice is stored as `GVfs` metadata
+//! - "Folder icons" (PROP-016): "Change Icon..." opens Windows' Change
+//!   Icon dialog ([`super::change_icon`]), whose icon shows beside it at
+//!   once and becomes the folder's icon. Restore Default, beside it while
+//!   the folder has its own icon, goes back to the standard folder. The choice is stored as `GVfs` metadata
 //!   (`metadata::custom-icon`, the key Files uses), so both file managers
 //!   show it.
 //!
@@ -146,10 +146,19 @@ pub(super) fn customize_tab(
     page
 }
 
-/// Asks for a picture for the folder's icon.
+/// Opens Change Icon over the Properties window, with the icon chosen so
+/// far selected.
 fn choose_icon(button: &gtk::Button, choice: &Rc<IconChoice>) {
+    let Some(window) = PropertiesWindow::of(button) else {
+        return;
+    };
+    let folder = gio::File::for_uri(&choice.uri.borrow())
+        .basename()
+        .map(|name| name.display().to_string())
+        .unwrap_or_default();
+    let current = choice.chosen.borrow().clone();
     let choice = Rc::clone(choice);
-    choose_picture(button, &ox_core::i18n::gettext("Change Icon"), move |icon| {
+    super::change_icon::open(&window, &folder, current.as_deref(), move |icon| {
         choice.choose(Some(icon));
     });
 }

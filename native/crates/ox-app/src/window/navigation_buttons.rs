@@ -34,35 +34,54 @@ struct NavigationButton {
     glyph: Icon,
     /// The accessible name (`aria-label`).
     name: &'static str,
-    /// The tooltip, with the keyboard shortcut (`title`).
+    /// The tooltip with the keyboard shortcut, as Windows Explorer words
+    /// it when the button leads nowhere.
     tooltip: &'static str,
+    /// The tooltip naming the `{place}` the button leads to.
+    tooltip_to: &'static str,
     action: WindowAction,
 }
 
-/// Back, Forward, Up and Refresh, in that order.
+impl NavigationButton {
+    /// The tooltip for a button that leads to the place titled `place`,
+    /// or nowhere.
+    fn tooltip(&self, place: Option<&str>) -> String {
+        match place {
+            Some(place) => ox_core::i18n::format_message(self.tooltip_to, &[("place", place)]),
+            None => ox_core::i18n::gettext(self.tooltip),
+        }
+    }
+}
+
+/// Back, Forward, Up and Refresh, in that order, with Windows 11
+/// Explorer's tooltips.
 const NAVIGATION_BUTTONS: [NavigationButton; 4] = [
     NavigationButton {
         glyph: Icon::ArrowLeft,
         name: crate::i18n::message_id("Back"),
-        tooltip: crate::i18n::message_id("Back (Alt+Left)"),
+        tooltip: crate::i18n::message_id("Back (Alt + Left Arrow)"),
+        tooltip_to: crate::i18n::message_id("Back to {place} (Alt + Left Arrow)"),
         action: WindowAction::Back,
     },
     NavigationButton {
         glyph: Icon::ArrowRight,
         name: crate::i18n::message_id("Forward"),
-        tooltip: crate::i18n::message_id("Forward (Alt+Right)"),
+        tooltip: crate::i18n::message_id("Forward (Alt + Right Arrow)"),
+        tooltip_to: crate::i18n::message_id("Forward to {place} (Alt + Right Arrow)"),
         action: WindowAction::Forward,
     },
     NavigationButton {
         glyph: Icon::ArrowUp,
         name: crate::i18n::message_id("Up"),
-        tooltip: crate::i18n::message_id("Up (Alt+Up)"),
+        tooltip: crate::i18n::message_id("Up (Alt + Up Arrow)"),
+        tooltip_to: crate::i18n::message_id("Up to \"{place}\" (Alt + Up Arrow)"),
         action: WindowAction::Up,
     },
     NavigationButton {
         glyph: Icon::ArrowClockwise,
         name: crate::i18n::message_id("Refresh"),
         tooltip: crate::i18n::message_id("Refresh (F5)"),
+        tooltip_to: crate::i18n::message_id("Refresh \"{place}\" (F5)"),
         action: WindowAction::Refresh,
     },
 ];
@@ -133,6 +152,27 @@ impl BrowserWindow {
         glib::Propagation::Stop
     }
 
+    /// Names where Back, Forward, Up and Refresh lead from the active tab
+    /// in their tooltips, by the title its tab would have, as Windows
+    /// Explorer does: "Back to Downloads (Alt + Left Arrow)". A button
+    /// showing Stop keeps its own.
+    pub(super) fn show_navigation_tooltips(&self) {
+        let row = &*self.imp().navigation_buttons;
+        for button in
+            super::widget_tree::children(row).filter_map(|child| child.downcast::<gtk::Button>().ok())
+        {
+            let action = button.action_name();
+            let Some(command) = NAVIGATION_BUTTONS
+                .iter()
+                .find(|command| action.as_deref() == Some(command.action.detailed_name().as_str()))
+            else {
+                continue;
+            };
+            let place = self.navigation_title(command.action);
+            button.set_tooltip_text(Some(&command.tooltip(place.as_deref())));
+        }
+    }
+
     /// False while a dialog of the window is open, in the window or as a
     /// window of its own: the history keys and the mouse's side buttons
     /// then do nothing (NAV-002, NAV-003).
@@ -144,7 +184,7 @@ impl BrowserWindow {
 fn navigation_button(command: &NavigationButton) -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::image(command.glyph, NAVIGATION_GLYPH))
-        .tooltip_text(ox_core::i18n::gettext(command.tooltip))
+        .tooltip_text(command.tooltip(None))
         .action_name(command.action.detailed_name())
         .build();
     button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(

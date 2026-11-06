@@ -20,6 +20,11 @@ use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWin
 fn with_check_boxes(test: TestWindow) -> TestWindow {
     test.activate("item-check-boxes", None);
     assert_eq!(toggle_is_on(&test), Some(true));
+    // The toggle saves its choice off the main thread: a save finishing
+    // after a test changed the file itself would write the choice back.
+    wait_until("the check boxes to be saved", || {
+        test.context.settings_data().preferences.selection_marker
+    });
     wait_for_frames(&test.window, 3);
     test
 }
@@ -153,7 +158,7 @@ fn an_item_check_box_shows_on_hover_and_while_selected() {
     let fixture = Fixture::standard();
     let test = with_check_boxes(laid_out(&fixture.uri()));
     test.window.hold_ctrl(true);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         wait_for_frames(&test.window, 3);
         let cell = cell_at(&test, 2);

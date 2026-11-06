@@ -28,13 +28,13 @@ art .emblem {
 /* On a hovered, pressed or selected item the plate takes the item's fill
    (folder-views.css), so it does not cut a square into it. */
 columnview.files > listview > row:hover art .emblem,
-gridview.files > child:hover art .emblem { background-color: @ox_hover; }
+gridview.files > child:hover art .emblem { background-color: @ox_item_hover; }
 columnview.files > listview > row:active art .emblem,
-gridview.files > child:active art .emblem { background-color: @ox_pressed; }
+gridview.files > child:active art .emblem,
 columnview.files > listview > row:selected art .emblem,
-gridview.files > child:selected art .emblem { background-color: @ox_selected; }
+gridview.files > child:selected art .emblem { background-color: @ox_item_selected; }
 columnview.files > listview > row:selected:hover art .emblem,
-gridview.files > child:selected:hover art .emblem { background-color: @ox_selected_hover; }
+gridview.files > child:selected:hover art .emblem { background-color: @ox_item_selected_hover; }
 
 /* A folder's picture on its icon (PROP-037), in the larger icon views and
    the Customize tab's preview: a photo card with a white edge and a soft

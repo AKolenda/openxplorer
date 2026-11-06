@@ -32,7 +32,7 @@ use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::create::{CreatedItem, MAX_NUMBERED_NAMES};
 use super::error::OpsError;
 use super::templates::{
-    list_templates_blocking, BuiltinTemplate, TemplateId, MAX_TEMPLATE_BYTES, TEMPLATE_PATH_SEPARATOR,
+    list_templates_blocking, NewDocument, TemplateId, MAX_TEMPLATE_BYTES, TEMPLATE_PATH_SEPARATOR,
 };
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
@@ -84,40 +84,65 @@ pub async fn create_from_template(
     on_worker(move || create_from_template_blocking(&request, &context)).await
 }
 
-/// Creates a file from the built-in `starter` in the folder at
-/// `folder_uri` under the first free name of `base_name`,
-/// `base_name (2)`, `base_name (3)`, ..., the number going before the
-/// extension, as Windows names a new text document ("New Text
-/// Document (2).txt"). It is the first half of Explorer's New ▸ Text
-/// document, which then renames the file in place. Each attempt is a
-/// [`create_from_template`], whose publication never overwrites, so an
-/// item that takes a name meanwhile is kept and only moves the new file
-/// to the next number.
+/// Creates `document` in the folder at `folder_uri` under the first free
+/// name of `base_name.<extension>`, `base_name (2).<extension>`, ..., as
+/// Windows names a new file ("New Text Document (2).txt"). It is the first
+/// half of Explorer's New ▸ Text Document and the menu's other documents,
+/// which then rename the file in place. Each attempt publishes without
+/// overwriting, as [`create_from_template`] does, so an item that takes a
+/// name meanwhile is kept and only moves the new file to the next number.
 ///
 /// # Errors
 ///
 /// As [`create_from_template`], except that a taken name tries the next
 /// number; after [`MAX_NUMBERED_NAMES`] taken names the refusal says to
 /// rename some of them.
-pub async fn create_numbered_starter(
+pub async fn create_numbered_document(
     folder_uri: &str,
     base_name: &str,
-    starter: BuiltinTemplate,
+    document: NewDocument,
     context: &OperationContext,
 ) -> Result<CreatedItem, OpsError> {
     let folder_uri = folder_uri.to_owned();
-    let base_name = base_name.to_owned();
+    let name = format!("{base_name}.{}", document.extension());
     let context = context.clone();
     on_worker(move || {
-        first_free_name(&base_name, |name| {
-            let request = NewFromTemplate {
-                folder_uri: folder_uri.clone(),
-                name: name.to_owned(),
-                template: TemplateId::Builtin(starter),
-                // A starter's content is built in; nothing is read there.
-                templates_folder: PathBuf::new(),
-            };
-            create_from_template_blocking(&request, &context)
+        first_free_name(&name, |name| {
+            create_file_blocking(&folder_uri, name, || Ok(document.contents().to_vec()), &context)
+        })
+    })
+    .await
+}
+
+/// Creates a copy of the user template at `path` below `templates_folder`
+/// in the folder at `folder_uri`, under the template's file name or the
+/// first free numbered one ("Letter (2).odt"), as New does with the
+/// templates it lists (OPS-003). The template is read once, under the
+/// OPS-048 rules, and each attempt publishes without overwriting.
+///
+/// # Errors
+///
+/// As [`create_from_template`], except that a taken name tries the next
+/// number, as [`create_numbered_document`] does.
+pub async fn create_numbered_from_template(
+    folder_uri: &str,
+    path: &str,
+    templates_folder: &Path,
+    context: &OperationContext,
+) -> Result<CreatedItem, OpsError> {
+    let folder_uri = folder_uri.to_owned();
+    let path = path.to_owned();
+    let templates_folder = templates_folder.to_path_buf();
+    let context = context.clone();
+    on_worker(move || {
+        let name = path
+            .rsplit(TEMPLATE_PATH_SEPARATOR)
+            .next()
+            .unwrap_or(&path)
+            .to_owned();
+        let contents = read_user_template(&path, &templates_folder, &context.cancel)?;
+        first_free_name(&name, |name| {
+            create_file_blocking(&folder_uri, name, || Ok(contents.clone()), &context)
         })
     })
     .await
@@ -158,8 +183,25 @@ fn create_from_template_blocking(
     request: &NewFromTemplate,
     context: &OperationContext,
 ) -> Result<CreatedItem, OpsError> {
-    validate_name(&request.name)?;
-    let folder_uri = normalise(&request.folder_uri)?;
+    create_file_blocking(
+        &request.folder_uri,
+        &request.name,
+        || template_contents(request, &context.cancel),
+        context,
+    )
+}
+
+/// Creates the file `name` in the folder at `folder_uri` with what
+/// `contents` gives, which is asked for only once the name is checked and
+/// found free. Nothing is ever overwritten.
+fn create_file_blocking(
+    folder_uri: &str,
+    name: &str,
+    contents: impl FnOnce() -> Result<Vec<u8>, OpsError>,
+    context: &OperationContext,
+) -> Result<CreatedItem, OpsError> {
+    validate_name(name)?;
+    let folder_uri = normalise(folder_uri)?;
     if is_smb_server(&folder_uri) {
         return Err(OpsError::failed(crate::i18n::gettext(
             "Open a share before creating a file.",
@@ -167,11 +209,11 @@ fn create_from_template_blocking(
     }
     context.protection.check(&folder_uri)?;
     let folder = gio::File::for_uri(&folder_uri);
-    let target = GioNode::from_file(folder.child(&request.name));
+    let target = GioNode::from_file(folder.child(name));
     if unless_cancelled(&context.cancel, || target.exists(Some(&context.cancel)))? {
         return Err(OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)));
     }
-    let contents = template_contents(request, &context.cancel)?;
+    let contents = contents()?;
     publish_new_file(&folder, &target, &contents, context)?;
     Ok(CreatedItem {
         uri: target.uri(),

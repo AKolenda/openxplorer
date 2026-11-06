@@ -2,7 +2,9 @@
 //! The highlight that shows where a drop would go (DND-011, DND-014,
 //! TAB-018): a folder row or the whole folder view, the sidebar's row or
 //! Quick access line, a crumb, or a tab. Holding a drag over a tab for
-//! 800 ms shows it, as Windows Explorer does. No highlight means no drop.
+//! 800 ms shows it, as Windows Explorer does; holding it over a folder
+//! never opens the folder, as in Windows Explorer (DND-021). No highlight
+//! means no drop.
 
 use std::time::Duration;
 
@@ -11,11 +13,14 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::spot::DropSpot;
-use super::spring::folder_to_open;
 use super::DropZone;
 use crate::window::file_drop::DropDestination;
 use crate::window::session::TabId;
+use crate::window::sidebar::SidebarDropSpot;
 use crate::window::BrowserWindow;
+
+/// The hint while a drop on the sidebar would pin.
+const PIN_HINT: &str = crate::i18n::message_id("Pin to Quick access");
 
 /// How long a drag must stay over a tab before the tab is shown.
 const TAB_HOVER_DELAY: Duration = Duration::from_millis(800);
@@ -25,10 +30,8 @@ const TAB_HOVER_DELAY: Duration = Duration::from_millis(800);
 pub(super) const VIEW_DROP_CLASS: &str = "file-drop-active";
 
 impl BrowserWindow {
-    /// Highlights `spot` in `zone`, or nothing there, and opens the
-    /// folder under it when the drag stays there.
+    /// Highlights `spot` in `zone`, or nothing there.
     pub(super) fn show_drop_spot(&self, zone: DropZone, spot: Option<&DropSpot>) {
-        self.open_folder_after_hover(spot.and_then(folder_to_open));
         match zone {
             DropZone::FolderView => self.show_folder_view_spot(spot),
             DropZone::Sidebar => {
@@ -37,6 +40,10 @@ impl BrowserWindow {
                     _ => None,
                 };
                 self.sidebar().show_drop_spot(sidebar_spot);
+                // Windows Explorer's hint for a drop that pins (DND-014).
+                let pins = matches!(sidebar_spot, Some(SidebarDropSpot::Pin { .. }));
+                let hint = pins.then(|| ox_core::i18n::gettext_static(PIN_HINT));
+                self.folder_pane().show_drag_hint(hint);
             }
             DropZone::Breadcrumbs => {
                 let crumb = match spot {

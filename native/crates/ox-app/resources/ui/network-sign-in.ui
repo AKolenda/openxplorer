@@ -48,8 +48,8 @@
                   </object>
                 </child>
                 <child>
-                  <object class="GtkLabel" id="i18n_1">
-                    <property name="label" translatable="yes">OpenXplorer Security</property>
+                  <!-- The dialog's title, set by the code. -->
+                  <object class="GtkLabel" id="caption_label">
                     <property name="hexpand">true</property>
                     <property name="xalign">0</property>
                   </object>
@@ -173,7 +173,7 @@
                             </child>
                             <child>
                               <object class="GtkLabel" id="i18n_3">
-                                <property name="label" translatable="yes">Username</property>
+                                <property name="label" translatable="yes">User name</property>
                                 <property name="xalign">0</property>
                                 <property name="mnemonic-widget">username_entry</property>
                                 <style>
@@ -183,12 +183,12 @@
                             </child>
                             <child>
                               <object class="GtkEntry" id="username_entry">
-                                <property name="placeholder-text" translatable="yes">Your network username</property>
+                                <property name="placeholder-text" translatable="yes">User name</property>
                                 <property name="max-length">512</property>
                                 <property name="activates-default">true</property>
                                 <property name="input-hints">no-spellcheck</property>
                                 <accessibility>
-                                  <property name="label" translatable="yes">Username</property>
+                                  <property name="label" translatable="yes">User name</property>
                                 </accessibility>
                               </object>
                             </child>
@@ -370,7 +370,7 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="connect_button">
-                    <property name="label" translatable="yes">Connect</property>
+                    <property name="label" translatable="yes">OK</property>
                     <style>
                       <class name="accent"/>
                     </style>

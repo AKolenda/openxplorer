@@ -152,7 +152,7 @@ impl BrowserWindow {
         context.move_by_copying = Some(self.move_by_copying_asker());
         // OPS-047: an item that fails asks whether to retry, skip or
         // cancel.
-        context.item_failure = Some(self.failure_asker());
+        context.item_failure = Some(self.failure_asker(&context.cancel));
         if !self.claim_transfer_panel(TransferKind::Files, label, &context.cancel) {
             return None;
         }

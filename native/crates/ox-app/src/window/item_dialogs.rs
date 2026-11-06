@@ -158,6 +158,15 @@ impl BrowserWindow {
         self.named_target(entry.navigation_uri().to_owned(), entry.name.clone(), kind)
     }
 
+    /// Whether `uri` is a standard folder (Documents, Downloads and the
+    /// others), which keeps its name.
+    pub(crate) fn is_standard_folder(&self, uri: &str) -> bool {
+        self.context()
+            .known_folders()
+            .into_iter()
+            .any(|place| place.known_folder.is_some() && same_location(&place.uri, uri))
+    }
+
     /// A target titled with the standard folder's label when `uri` is one
     /// (`findKnownFolder`).
     fn named_target(&self, uri: String, name: String, kind: ItemKind) -> PropertiesTarget {
@@ -207,6 +216,10 @@ impl BrowserWindow {
                     )
                     .await;
                 let (name, kind) = match queried {
+                    // The root is Local Disk, as the sidebar names it.
+                    Ok(info) if info.display_name() == "/" => {
+                        (window.imp().locations.borrow().base_name(&uri), item_kind(&info))
+                    }
                     Ok(info) => (info.display_name().to_string(), item_kind(&info)),
                     // The General tab says why the item cannot be read.
                     Err(_) => (window.imp().locations.borrow().base_name(&uri), ItemKind::File),
