@@ -462,7 +462,20 @@ fn the_right_drag_menu_is_text_only_and_hides_tooltips_while_open() {
     test.window
         .drop_files(&dropped, None, DropAction::Ask(DragOrigin::ThisApp));
     let menu = test.window.drop_menu();
-    wait_until("the drop menu", || menu.is_mapped());
+    // Mapped is not laid out: the labels are measured once they have a
+    // width.
+    wait_until("the drop menu to be laid out", || {
+        let labels: Vec<gtk::Label> = menu
+            .rows()
+            .iter()
+            .filter_map(|row| {
+                crate::test_support::harness::descendants::<gtk::Label>(row)
+                    .into_iter()
+                    .next()
+            })
+            .collect();
+        menu.is_mapped() && !labels.is_empty() && labels.iter().all(|label| label.width() > 0)
+    });
     let glyphs: usize = menu
         .rows()
         .iter()
