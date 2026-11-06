@@ -360,11 +360,19 @@ fn open_submenus_by_keyboard(popover: &MenuPopover, list: &gtk::ListBox) {
             }
             gdk::Key::Left | gdk::Key::KP_Left | gdk::Key::Escape => {
                 // A submenu the pointer opened leaves the keyboard here:
-                // the key closes it, not this menu. Otherwise it closes
-                // this menu if it is a submenu, and a menu that opened
-                // from the window is GTK's to close on Escape.
+                // the key closes the innermost one open from this menu,
+                // not this menu. Otherwise it closes this menu if it is a
+                // submenu, and a menu that opened from the window is GTK's
+                // to close on Escape.
                 let closes = if popover.open_submenu_menu().is_some() {
-                    Some(popover.clone())
+                    let mut deepest = popover.clone();
+                    while let Some(inner) = deepest
+                        .open_submenu_menu()
+                        .filter(|inner| inner.open_submenu_menu().is_some())
+                    {
+                        deepest = inner;
+                    }
+                    Some(deepest)
                 } else {
                     popover.parent_menu()
                 };

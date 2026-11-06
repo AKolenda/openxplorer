@@ -905,6 +905,18 @@ fn escape_or_left_closes_only_a_submenu_the_pointer_opened() {
         // Again in Letters, with nothing open from it, it closes Letters.
         assert!(letters.press_in_list(key));
         assert!(menu.open_submenu_menu().is_none() && menu.is_visible());
+
+        // The pointer opens Letters, then Work, then goes back to the New
+        // menu's Letters row, taking the keyboard there: the key closes
+        // only Work, the innermost.
+        let letters = menu.open_submenu_of("Letters");
+        let work = letters.open_submenu_of("Work");
+        menu.row("Letters").grab_focus();
+        assert!(menu.press_in_list(key));
+        assert!(!work.is_visible(), "{key:?} closes Work");
+        assert!(letters.is_visible(), "{key:?} leaves Letters open");
+        assert!(menu.press_in_list(key));
+        assert!(menu.open_submenu_menu().is_none() && menu.is_visible());
     }
     menu.popdown();
 }
