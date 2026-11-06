@@ -166,6 +166,7 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::Back, location.can_go_back);
         self.set_action_enabled(WindowAction::Forward, location.can_go_forward);
         self.set_action_enabled(WindowAction::Up, parent_location(uri).is_some());
+        self.show_navigation_tooltips();
         let in_zip = is_archive_location(uri);
         // A ZIP opened like a folder is neither pinned nor searched: its
         // location is the app's own, and search reads real folders.

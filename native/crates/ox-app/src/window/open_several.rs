@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Opening several selected items at once (Enter or Open), as Dolphin's
 //! `itemsActivated` does: each folder in a background tab of its own, each
-//! file in its default application, and a question first when more than
-//! five would open (OPEN-003). One selected item is opened as `openEntry`
+//! file in its default application, and a question first when 15 or more
+//! would open, as Windows Explorer asks (OPEN-003). One selected item is opened as `openEntry`
 //! opens it ([`BrowserWindow::activate_item`]).
 
 use gtk::glib;
@@ -15,8 +15,9 @@ use super::BrowserWindow;
 use super::ButtonStyle;
 use crate::dialog::Dialog;
 
-/// More items than this at once are asked about first (Dolphin's limit).
-const MANY_ITEMS: usize = 5;
+/// This many items or more at once are asked about first (Windows
+/// Explorer's `MultipleInvokePromptMinimum`).
+const MANY_ITEMS: usize = 15;
 
 impl BrowserWindow {
     /// Opens the selected items: one as a double-click does, several each
@@ -37,7 +38,7 @@ impl BrowserWindow {
             .filter_map(|position| model.item(position))
             .map(|item| item.entry().clone())
             .collect();
-        if entries.len() <= MANY_ITEMS {
+        if entries.len() < MANY_ITEMS {
             self.open_each(&entries);
             return;
         }

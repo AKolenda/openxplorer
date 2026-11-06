@@ -563,6 +563,7 @@ where it differs; ✓ means the target equals the current app.
 
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
+| Default | Closed for a new user; Details or Alt+Shift+P opens it, and the choice is saved | Windows 11 Explorer opens with the Details and Preview panes closed | Keep. |
 | Pane | width **262** (235 at ≤ 1190, hidden at ≤ 960); `border-left: 1px solid @ox_border`; padding `22 22 16`; background `@ox_bg` | Explorer details pane about 260–320 (observed, unverified) | Keep. |
 | Header | "Details" at 13 px; close button 24 × 24, glyph 12; 20 px below | — | Keep. |
 | Preview | min height 148; background `@ox_chrome`; 1 px `@ox_border`; radius 7 ✓ (R09); icon 83 with `drop-shadow(0 4px 4px alpha(black, .04))`; 18 px below; thumbnails when available (gain) | — | safe |

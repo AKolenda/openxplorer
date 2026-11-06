@@ -5,7 +5,7 @@
 use gtk::prelude::*;
 use ox_core::settings::{PreferencesUpdate, Settings};
 
-use super::geometry::{bounds, laid_out, Bounds};
+use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
 use crate::test_support::harness::{
     descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -165,7 +165,7 @@ fn a_folders_arrow_sits_inside_its_rows_highlight() {
 #[gtk::test]
 fn the_details_pane_spaces_its_parts_as_the_current_app() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     let pane = test.window.details_pane();
     let pane_place = bounds(&test, pane);
     assert_eq!(pane_place.width, 262);
@@ -188,7 +188,7 @@ fn the_details_pane_spaces_its_parts_as_the_current_app() {
 #[gtk::test]
 fn the_details_note_fills_the_pane_width() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     let pane = test.window.details_pane();
     let preview = bounds(
         &test,
@@ -214,7 +214,7 @@ fn the_details_note_fills_the_pane_width() {
 #[gtk::test]
 fn the_details_note_hides_while_one_item_is_selected() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     let note = descendants::<gtk::Box>(test.window.details_pane())
         .into_iter()
         .find(|row| row.has_css_class("detail-note"))
