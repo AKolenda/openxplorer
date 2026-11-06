@@ -170,3 +170,27 @@ fn the_pane_offers_share_and_properties() {
     properties.emit_clicked();
     test.wait_for_properties("Notes 2.txt Properties");
 }
+
+/// The pane's keyboard stops are its buttons: its names and values can be
+/// selected with the pointer but take no Tab, so focus moving on its own
+/// (after a menu closes) never lands on a label (see `property_value`).
+///
+/// parity: PROP-009
+#[gtk::test]
+fn the_panes_labels_are_no_tab_stops() {
+    let fixture = Fixture::standard();
+    let test = window_with_pane(&fixture);
+    test.select_named("Notes 2.txt");
+    let pane = test.window.details_pane();
+    let labels = crate::test_support::harness::descendants::<gtk::Label>(pane);
+    assert!(
+        labels.iter().any(gtk::Label::is_selectable),
+        "values can be selected"
+    );
+    let stops: Vec<String> = labels
+        .iter()
+        .filter(|label| label.is_focusable())
+        .map(|label| label.text().to_string())
+        .collect();
+    assert!(stops.is_empty(), "labels that take Tab: {stops:?}");
+}
