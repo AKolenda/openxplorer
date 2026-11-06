@@ -50,6 +50,7 @@ impl MixedCheck {
             wanted: Cell::new(now),
             is_updating: Cell::new(false),
         });
+        super::window::wrap_check_label(&mixed.check);
         mixed.check.set_sensitive(false);
         mixed.show();
         let weak = Rc::downgrade(&mixed);

@@ -59,6 +59,9 @@ pub(crate) trait Pending {
     fn apply(self: Rc<Self>) -> ApplyFuture;
 }
 
+mod tab_rows;
+mod tab_strip;
+
 mod imp {
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -78,8 +81,15 @@ mod imp {
         pub(super) title: gtk::Label,
         /// The title bar's picture.
         pub(super) art: gtk::Box,
-        /// The tabs.
+        /// The tabs' pages; its own tab row stays hidden.
         pub(super) notebook: gtk::Notebook,
+        /// The row of tabs, which wraps onto a second row when the tabs
+        /// are wider than the window, as Windows' property sheets do.
+        pub(super) tab_strip: super::tab_rows::TabRows,
+        /// The tab buttons, in the notebook's page order.
+        pub(super) tab_buttons: RefCell<Vec<gtk::ToggleButton>>,
+        /// Whether a single tab still shows its tab.
+        pub(super) shows_single_tab: Cell<bool>,
         /// Scrolls the tabs when they are taller than the screen.
         pub(super) scroller: gtk::ScrolledWindow,
         /// How tall the window may be, once it is realized on a screen.
@@ -163,7 +173,7 @@ mod imp {
             self.parent_map();
             // A dialog with one tab hides the tab row, which then takes no
             // focus: OK has it instead.
-            if !self.has_shown.replace(true) && !self.notebook.grab_focus() {
+            if !self.has_shown.replace(true) && !self.obj().focus_selected_tab() {
                 self.ok.grab_focus();
             }
         }
@@ -239,20 +249,30 @@ impl PropertiesWindow {
         let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
         imp.notebook.add_css_class("properties-notebook");
         imp.notebook.set_scrollable(false);
+        imp.notebook.set_show_tabs(false);
         imp.notebook.set_vexpand(true);
+        let tab_area = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["properties-tab-area"])
+            .vexpand(true)
+            .build();
+        self.build_tab_strip();
+        tab_area.append(&imp.tab_strip);
+        tab_area.append(&imp.notebook);
         // The tabs move into the scroller only once they outgrow the screen
         // (Self::scroll_tabs): a window that holds a scroller no longer
         // grows to the rows a tab reads after it shows.
         imp.scroller.set_hscrollbar_policy(gtk::PolicyType::Never);
         imp.scroller.set_propagate_natural_height(true);
         imp.scroller.set_vexpand(true);
-        column.append(&imp.notebook);
+        column.append(&tab_area);
         column.append(&self.footer());
         // Windows' Properties keep one width for every item: a long name,
         // location or value wraps or ends in "…" instead of widening it.
         self.set_child(Some(&super::fixed_width::FixedWidth::new(&column, WINDOW_WIDTH)));
         self.add_controller(crate::modal::escape_closes());
         self.add_controller(self.refresh_key());
+        self.add_controller(self.tab_keys());
         self.update_relation(&[gtk::accessible::Relation::LabelledBy(&[imp.title.upcast_ref()])]);
     }
 
@@ -404,8 +424,8 @@ impl PropertiesWindow {
         page.set_widget_name(name);
         let tab = gtk::Label::new(Some(label));
         notebook.append_page(page, Some(&tab));
-        notebook.set_show_tabs(notebook.n_pages() > 1);
         notebook.set_show_border(true);
+        self.add_tab_button(label, page.upcast_ref());
     }
 
     /// Keeps the window on the screen beside its parent or opener: tabs
@@ -437,7 +457,8 @@ impl PropertiesWindow {
         };
         column.remove(&imp.notebook);
         imp.scroller.set_child(Some(&imp.notebook));
-        column.prepend(&imp.scroller);
+        // Under the row of tabs, which stays in place.
+        column.append(&imp.scroller);
         crate::modal::cap_body(self.upcast_ref(), &imp.scroller, tallest);
         imp.scroller
             .set_min_content_height(imp.scroller.max_content_height());
@@ -463,7 +484,8 @@ impl PropertiesWindow {
     /// Shows the tab row although there is one tab, as Windows' Edit...
     /// dialog shows its Security tab.
     pub(crate) fn show_single_tab(&self) {
-        self.imp().notebook.set_show_tabs(true);
+        self.imp().shows_single_tab.set(true);
+        self.update_tab_strip();
     }
 
     /// Shows the tab named `name`, if there is one.
@@ -489,12 +511,18 @@ impl PropertiesWindow {
     /// The tabs' labels, left to right.
     #[cfg(test)]
     pub(crate) fn tab_labels(&self) -> Vec<String> {
-        let notebook = &self.imp().notebook;
-        (0..notebook.n_pages())
-            .filter_map(|page| notebook.nth_page(Some(page)))
-            .filter_map(|page| notebook.tab_label_text(&page))
-            .map(String::from)
+        self.imp()
+            .tab_buttons
+            .borrow()
+            .iter()
+            .filter_map(|button| button.label().map(String::from))
             .collect()
+    }
+
+    /// The tab buttons, left to right, for tests.
+    #[cfg(test)]
+    pub(crate) fn tab_buttons(&self) -> Vec<gtk::ToggleButton> {
+        self.imp().tab_buttons.borrow().clone()
     }
 
     /// The page of the tab named `name`.
@@ -768,6 +796,21 @@ pub(crate) fn group(title: &str) -> (gtk::Frame, gtk::Box) {
         .css_classes(["properties-group"])
         .build();
     (frame, content)
+}
+
+/// Lets the label of `check` wrap inside the window's width rather than
+/// widen it, as Windows' check boxes wrap in a property sheet; the box
+/// keeps its label for its mnemonic and for screen readers.
+pub(crate) fn wrap_check_label(check: &gtk::CheckButton) {
+    let mut child = check.first_child();
+    while let Some(widget) = child {
+        if let Some(label) = widget.downcast_ref::<gtk::Label>() {
+            label.set_wrap(true);
+            label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+            label.set_xalign(0.0);
+        }
+        child = widget.next_sibling();
+    }
 }
 
 /// A wrapped paragraph of plain text.
