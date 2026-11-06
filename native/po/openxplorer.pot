@@ -5075,7 +5075,11 @@ msgid "This network item needs an app that supports SMB addresses. For a local-o
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs
-msgid "Select up to 200 files or folders. Extract ZIP contents before dragging them."
+msgid "Extract ZIP contents before dragging them."
+msgstr ""
+
+#: crates/ox-app/src/window/file_drag/payload.rs crates/ox-app/src/window/file_drop.rs crates/ox-core/src/clipboard.rs crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
+msgid "Select between 1 and 100,000 items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs
@@ -7150,9 +7154,8 @@ msgstr ""
 msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/clipboard.rs
-msgid "Copy or cut between 1 and {max} items at a time."
+msgid "This file selection is too large to copy or cut."
 msgstr ""
 
 #: crates/ox-core/src/entry/classify.rs
@@ -8081,10 +8084,6 @@ msgstr ""
 
 #: crates/ox-core/src/ops/conflicts.rs
 msgid "Open a destination folder before pasting."
-msgstr ""
-
-#: crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
-msgid "Select between 1 and 100,000 items."
 msgstr ""
 
 #: crates/ox-core/src/ops/context.rs
