@@ -10,7 +10,10 @@
 //! The safety rules:
 //!
 //! - Restoring never overwrites: an item whose original name is taken
-//!   again stays in the Recycle Bin, and the error says so.
+//!   again stays in the Recycle Bin, and the error says so. Restore and
+//!   Restore all items first ask about such names as Windows does
+//!   ([`super::restore_conflicts`]); only Replace there moves the item in
+//!   the way, to the Recycle Bin.
 //! - Missing parent folders of the original location are created again
 //!   (OPS-041). Before anything changes, the write protection is asked
 //!   about the original location and every location the item's tree
@@ -247,7 +250,7 @@ pub(super) fn forget_removed_items() {
 
 /// Restores the Recycle Bin item `uri` to its original location and
 /// returns that location's URI.
-fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsError> {
+pub(super) fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsError> {
     context.cancel.check()?;
     let item = top_level_item(uri)?;
     let info = item.query_info(
@@ -307,7 +310,10 @@ pub(super) fn move_out(
 
 /// OPS-041: creates the missing folders above a restored item's original
 /// location.
-fn recreate_original_folder(target: &gio::File, context: &OperationContext) -> Result<(), OpsError> {
+pub(super) fn recreate_original_folder(
+    target: &gio::File,
+    context: &OperationContext,
+) -> Result<(), OpsError> {
     let Some(folder) = target.parent() else {
         return Ok(());
     };
@@ -471,7 +477,7 @@ fn newest_trashed_from<'a>(
 }
 
 /// The last component of `path`, for messages.
-fn path_name(path: &Path) -> String {
+pub(super) fn path_name(path: &Path) -> String {
     path.file_name().map_or_else(
         || path.display().to_string(),
         |name| name.to_string_lossy().into_owned(),

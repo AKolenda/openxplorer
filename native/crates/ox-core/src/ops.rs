@@ -91,6 +91,7 @@ mod recycle_bin_drag;
 mod rename;
 mod report;
 mod resolved_transfer;
+mod restore_conflicts;
 mod results;
 mod run_transfer;
 mod shortcuts;
@@ -129,6 +130,10 @@ pub use report::{
 };
 pub use resolved_transfer::{
     run_answered_items, run_free_items, run_resolved_transfer, FreeItemsDone, Resolution,
+};
+pub use restore_conflicts::{
+    restore_answered_items, restore_free_items, restores_into_one_folder, scan_restore_conflicts,
+    RestoreSoFar,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use shortcuts::{create_shortcut, create_shortcuts, shortcut_name, NO_LINKS_HERE};

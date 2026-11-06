@@ -6259,7 +6259,7 @@ msgstr ""
 msgid "Recently visited folders"
 msgstr ""
 
-#: crates/ox-app/resources/manual.md crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/resources/manual.md crates/ox-app/src/window/sidebar/entries.rs crates/ox-app/src/window/transfer_panel/action.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Recycle Bin"
 msgstr ""
 
@@ -6516,6 +6516,20 @@ msgstr ""
 #: crates/ox-app/src/window/transfer_panel/action.rs
 msgid "Moving {count} item from {source} to {destination}"
 msgid_plural "Moving {count} items from {source} to {destination}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Moving {count} item to its original folder"
+msgid_plural "Moving {count} items to their original folders"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Moving {count} item to {destination}"
+msgid_plural "Moving {count} items to {destination}"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -8235,7 +8249,7 @@ msgid "Recycling…"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/recycle_bin.rs
+#: crates/ox-core/src/ops/recycle_bin.rs crates/ox-core/src/ops/restore_conflicts.rs
 msgid "An item named “{name}” already exists in its original folder. It was left in the Recycle Bin."
 msgstr ""
 
@@ -8341,13 +8355,18 @@ msgstr ""
 msgid "This item's name is not valid UTF-8, so no number can be added to it. Rename it before keeping both."
 msgstr ""
 
-#: crates/ox-core/src/ops/resolved_transfer.rs
+#: crates/ox-core/src/ops/resolved_transfer.rs crates/ox-core/src/ops/restore_conflicts.rs
 msgid "Too many numbered names. Rename the item before keeping both."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/resolved_transfer.rs
 msgid "{name}: The file it was to replace is in the Recycle Bin. Restore it from there."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/restore_conflicts.rs
+msgid "The item named “{name}” in its original folder cannot be replaced. It was left in the Recycle Bin."
 msgstr ""
 
 #: crates/ox-core/src/ops/run_transfer.rs crates/ox-core/src/transfer/request.rs
