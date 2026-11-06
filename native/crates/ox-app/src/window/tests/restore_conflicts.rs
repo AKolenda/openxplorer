@@ -49,6 +49,20 @@ fn trash_and_take_names(fixture: &Fixture, names: &[&str]) -> TestWindow {
     test
 }
 
+/// What Tab focuses in the question `window`, from no focus, `presses`
+/// times: each focused widget, or the button it is in.
+fn focus_after_tabs(window: &impl IsA<gtk::Window>, presses: usize) -> Vec<gtk::Widget> {
+    let window = window.upcast_ref::<gtk::Window>();
+    GtkWindowExt::set_focus(window, None::<&gtk::Widget>);
+    (0..presses)
+        .map(|_| {
+            window.child_focus(gtk::DirectionType::TabForward);
+            let focused = GtkWindowExt::focus(window).expect("Tab focuses a widget");
+            focused.ancestor(gtk::Button::static_type()).unwrap_or(focused)
+        })
+        .collect()
+}
+
 /// Deletes the Recycle Bin items that came from `fixture`, so the next
 /// pass finds only its own.
 fn forget_trashed_items_of(fixture: &Fixture) {
@@ -115,6 +129,16 @@ fn restoring_onto_a_taken_name_asks_replace_or_skip_files() {
         dialog_over(&test).is_none(),
         "nothing is asked over the browsing window"
     );
+    // Tab goes to the destination's link first, then down the answers.
+    let order = focus_after_tabs(&window, 4);
+    assert!(order[0].has_css_class("link"), "{order:?}");
+    let answers = [
+        "Replace the file in the destination",
+        "Skip this file",
+        "Compare info for both files",
+    ]
+    .map(|text| button(&window, text).upcast::<gtk::Widget>());
+    assert_eq!(order[1..], answers);
 
     button(&window, "Skip this file").emit_clicked();
     ends_without_a_report(&test);
@@ -179,6 +203,11 @@ fn restore_conflicts_are_captured_light_and_dark() {
         test.activate("restore", None);
         let window = question_window(&test);
         capture_dialog(&window, &format!("native-restore-question-{theme}.png"));
+        if theme == "light" {
+            focus_after_tabs(&window, 2);
+            window.set_focus_visible(true);
+            capture_dialog(&window, "native-restore-question-focus-light.png");
+        }
         button(&window, "Compare info for both files").emit_clicked();
         let conflicts = super::name_conflicts::conflict_window(&window);
         wait_for(Duration::from_millis(1500));
