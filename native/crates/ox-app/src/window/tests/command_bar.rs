@@ -156,20 +156,15 @@ fn the_edit_commands_follow_the_selection_with_their_python_tooltips() {
     );
 }
 
-/// The New menu of `openNewMenu`, then New ▸ Link, a divider as `-`.
-const NEW_MENU: [&str; 12] = [
+/// The New menu, laid out as Windows 11's, a divider as `-`.
+const NEW_MENU: [&str; 7] = [
     "Folder",
-    "Text document",
-    "File…",
+    "Shortcut",
     "-",
-    "Markdown document",
-    "CSV file",
-    "JSON file",
-    "HTML document",
-    "-",
-    "From template…",
-    "-",
-    "Link to file or folder…",
+    "Bitmap image",
+    "Rich Text Document",
+    "Text Document",
+    "Compressed (zipped) Folder",
 ];
 
 /// The Sort menu, laid out as Windows Explorer's: three keys, More,

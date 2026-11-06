@@ -112,7 +112,9 @@ pub use duplicate::duplicate_items;
 pub use error::OpsError;
 pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
 pub use links::{create_link, create_links, CreatedLink, LinkRequest, NewLink};
-pub use new_from_template::{create_from_template, create_numbered_starter, NewFromTemplate};
+pub use new_from_template::{
+    create_from_template, create_numbered_document, create_numbered_from_template, NewFromTemplate,
+};
 pub use numbered_rename::{rename_numbered_items, NumberedRename};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
@@ -135,7 +137,7 @@ pub use tab_transfer::{
     TabTransfers, WindowId, MAX_PENDING_TAB_TRANSFERS, TAB_TRANSFER_LIFETIME,
 };
 pub use templates::{
-    list_templates, BuiltinTemplate, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
+    list_templates, BuiltinTemplate, NewDocument, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
     MAX_USER_TEMPLATES,
 };
 pub use undo::{MovedItem, Operation, RenamedPair, UndoRecord};
