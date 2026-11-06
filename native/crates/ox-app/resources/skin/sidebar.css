@@ -65,6 +65,9 @@
 .sidebar .side-entry { padding: 0 11px 0 19px; }
 /* Rows inside This PC and Network (.side-entry.indent). */
 .sidebar list > row.indent .side-entry { padding-left: 35px; }
+/* The dashed tail of an empty Quick access sits 7px further in (6px
+   margin, 1px border), so its glyph takes the same column. */
+.sidebar list > row.quick-drop-tail .side-entry { padding-left: 12px; }
 /* This PC and Network: the 9px chevron starts 5px in and the icon 19px
    after it, in the column of the other top-level icons. */
 .sidebar list > row.group .side-entry { padding-left: 5px; }
