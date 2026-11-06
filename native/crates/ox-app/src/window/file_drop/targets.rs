@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The parts of the window that take dropped files (DND-011, DND-014,
-//! DND-016, DND-025, TAB-018): each zone's drop target, which asks
-//! [`spot`] where a drop at a point goes, [`highlight`] to show it and
+//! DND-016, DND-025, DND-028, TAB-018): each zone's drop target, which
+//! asks [`spot`] where a drop at a point goes, [`highlight`] to show it,
+//! [`label`] to say on the drag icon what a release would do, and
 //! [`autoscroll`] to scroll a zone the drag hovers near the edge of. As in
 //! Windows Explorer, a folder a drag stays over never opens (DND-021).
 //!
@@ -13,6 +14,7 @@
 
 mod autoscroll;
 mod highlight;
+mod label;
 mod spot;
 #[cfg(test)]
 mod tests;
@@ -22,6 +24,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
 pub(in crate::window) use autoscroll::{scroll_step, DragScroll, TICK as SCROLL_TICK};
+pub(in crate::window) use label::DropLabels;
 
 use spot::DropSpot;
 
@@ -125,6 +128,7 @@ impl BrowserWindow {
         // Asked at every motion, even where nothing takes the drop, so the
         // first offer is remembered as the drag reaches the window.
         let action = self.hover_action(drop);
+        self.show_drop_label(drop, spot.as_ref(), self.drop_run(drop));
         match spot {
             Some(_) => action,
             None => gdk::DragAction::empty(),
@@ -147,6 +151,7 @@ impl BrowserWindow {
     /// forgotten, as they may change before the next drag.
     fn leave_drop_zone(&self, zone: DropZone) {
         self.show_drop_spot(zone, None);
+        self.hide_drop_label();
         self.stop_drag_scroll();
         match zone {
             DropZone::FolderView => self.forget_program_checks(),

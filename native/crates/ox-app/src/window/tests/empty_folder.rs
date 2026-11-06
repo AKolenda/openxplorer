@@ -483,13 +483,20 @@ fn try_again_that_finds_an_empty_folder_gives_the_keyboard_to_its_list() {
 struct Unreadable(std::path::PathBuf);
 
 impl Unreadable {
+    /// The folder, still readable: a folder that cannot be read when the
+    /// user goes to it keeps the tab where it was, as in Windows, so the
+    /// tests take its read permission away once it is shown.
     fn make(fixture: &Fixture) -> Self {
-        use std::os::unix::fs::PermissionsExt;
         let folder = fixture.path("Unreadable");
         std::fs::create_dir(&folder).expect("the folder is made");
-        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o333))
-            .expect("no read permission");
         Self(folder)
+    }
+
+    /// Takes the folder's read permission away, keeping write permission.
+    fn lock(&self) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o333))
+            .expect("no read permission");
     }
 }
 
@@ -503,9 +510,28 @@ impl Drop for Unreadable {
 /// Goes to `uri`, which cannot be listed, and waits for its page.
 fn go_to_unavailable(test: &TestWindow, uri: &str) {
     test.activate("go-to", Some(uri));
+    wait_for_the_unavailable_page(test);
+}
+
+/// Waits for "This location is unavailable".
+fn wait_for_the_unavailable_page(test: &TestWindow) {
     wait_until("the unavailable page", || {
         !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
     });
+}
+
+/// Goes to `unreadable`'s folder, takes its read permission away and
+/// lists it again with F5, which shows "This location is unavailable" in
+/// place, and waits for that page.
+fn show_unreadable(test: &TestWindow, fixture: &Fixture, unreadable: &Unreadable) {
+    let uri = fixture.uri_of("Unreadable");
+    test.activate("go-to", Some(&uri));
+    wait_until("the folder", || {
+        !test.window.is_loading() && test.window.current_uri().as_deref() == Some(uri.as_str())
+    });
+    unreadable.lock();
+    test.activate("refresh", None);
+    wait_for_the_unavailable_page(test);
 }
 
 /// Ctrl+V on "This location is unavailable" pastes nothing, as its menu
@@ -520,7 +546,7 @@ fn ctrl_v_pastes_nothing_into_a_folder_that_could_not_be_read() {
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
-    go_to_unavailable(&test, &fixture.uri_of("Unreadable"));
+    show_unreadable(&test, &fixture, &unreadable);
 
     press_shortcut(&test, gdk::Key::v, gdk::ModifierType::CONTROL_MASK);
 
@@ -538,11 +564,11 @@ fn ctrl_v_pastes_nothing_into_a_folder_that_could_not_be_read() {
 #[gtk::test]
 fn new_and_paste_stay_off_while_an_unavailable_folder_is_listed_again() {
     let fixture = Fixture::standard();
-    let _unreadable = Unreadable::make(&fixture);
+    let unreadable = Unreadable::make(&fixture);
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
-    go_to_unavailable(&test, &fixture.uri_of("Unreadable"));
+    show_unreadable(&test, &fixture, &unreadable);
     assert!(!super::file_ops_support::is_enabled(&test, "paste"));
 
     test.activate("refresh", None);

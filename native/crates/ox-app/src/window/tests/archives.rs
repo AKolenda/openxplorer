@@ -324,12 +324,11 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
 
     wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
-    wait_until("the move's report", || {
-        super::file_ops_support::dialog_over(&test)
-            .is_some_and(|dialog| dialog.message_text().contains("1 skipped"))
-    });
-    super::file_ops_support::open_dialog(&test).press("OK");
     super::file_ops_support::assert_ended_without_a_message(&test);
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing reports the name Skip left alone, as in Windows"
+    );
     assert_eq!(
         fs::read(fixture.path("readme.txt")).expect("kept"),
         b"mine",

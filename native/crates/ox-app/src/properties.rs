@@ -20,6 +20,7 @@
 //! | `window` | [`PropertiesWindow`]: the window, its tabs and OK, Cancel and Apply |
 //! | `item_window` | The Properties window of one item |
 //! | `selection_view` | Properties of several items |
+//! | `selection_attributes` | Read-only and Hidden of several items |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_tab` | The General tab: name, type, sizes, dates and attributes |
 //! | `drive_tab` | A drive's General and Hardware tabs |
@@ -32,7 +33,8 @@
 //! | `details_tab` | The Details tab of a file: its list, keys and reader |
 //! | `details_rows` | The Details tab's headings, rows and value wording |
 //! | `permissions_editor` | Changing several items' permissions together |
-//! | `custom_icon` | The Customize tab: Change Icon... |
+//! | `custom_icon` | The Customize tab: Change Icon... and Restore Default |
+//! | `change_icon` | The Change Icon dialog: the theme's folder icons and Browse... |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `sharing_panel` | The Sharing tab: Samba user shares of a local folder |
@@ -44,6 +46,7 @@
 //! | `folder_sizes` | [`FolderSizeState`] and [`FolderSizes`]: measured sizes and their text |
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
+mod change_icon;
 mod custom_icon;
 mod details_rows;
 mod details_tab;
@@ -61,6 +64,7 @@ mod permissions_editor;
 mod restore;
 mod security_model;
 mod security_tab;
+mod selection_attributes;
 mod selection_view;
 mod sharing_panel;
 mod size_scan_strip;

@@ -449,6 +449,17 @@ impl PropertiesWindow {
         self.imp().scroller.clone()
     }
 
+    /// Leaves Apply out, for a dialog that has only OK and Cancel, as
+    /// Windows' Change Icon has.
+    pub(crate) fn hide_apply(&self) {
+        self.imp().apply.set_visible(false);
+    }
+
+    /// Presses OK: makes the changes, then closes the window.
+    pub(crate) fn accept(&self) {
+        self.press_ok();
+    }
+
     /// Shows the tab row although there is one tab, as Windows' Edit...
     /// dialog shows its Security tab.
     pub(crate) fn show_single_tab(&self) {
@@ -641,12 +652,13 @@ impl PropertiesWindow {
         self.imp().ok.clone()
     }
 
-    /// The footer buttons' labels, for tests.
+    /// The labels of the footer buttons shown, for tests.
     #[cfg(test)]
     pub(crate) fn button_labels(&self) -> Vec<String> {
         let imp = self.imp();
         [&imp.ok, &imp.cancel, &imp.apply]
             .iter()
+            .filter(|button| button.is_visible())
             .filter_map(|button| button.label())
             .map(String::from)
             .collect()

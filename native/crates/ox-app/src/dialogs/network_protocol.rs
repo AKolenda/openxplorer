@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The protocols Map network location connects with, and the address it
+//! The protocols Add a network location connects with, and the address it
 //! builds from the dialog's fields.
 //!
 //! SMB is what the Python app offered; SFTP, FTP, FTPS, WebDAV and NFS are

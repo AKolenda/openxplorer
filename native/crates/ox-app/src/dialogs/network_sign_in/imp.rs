@@ -19,6 +19,10 @@ pub(crate) struct SignInDialog {
     /// The shield of the caption bar.
     #[template_child]
     pub(super) caption_glyph: TemplateChild<gtk::Image>,
+    /// The caption bar's title: the dialog's own, as Windows' credential
+    /// dialog has its caption, without a product's name.
+    #[template_child]
+    pub(super) caption_label: TemplateChild<gtk::Label>,
     /// × in the caption bar: Cancel sign-in.
     #[template_child]
     pub(super) close_button: TemplateChild<gtk::Button>,
@@ -31,10 +35,10 @@ pub(crate) struct SignInDialog {
     /// The computer in the badge beside the heading.
     #[template_child]
     pub(super) device_glyph: TemplateChild<gtk::Image>,
-    /// "Connect to <host>".
+    /// "Enter your credentials to connect to: <host>".
     #[template_child]
     pub(super) host_label: TemplateChild<gtk::Label>,
-    /// What to enter, or why the last account was refused.
+    /// Why the last account was refused; hidden on a first sign-in.
     #[template_child]
     pub(super) description_label: TemplateChild<gtk::Label>,
     /// The glyph before the server's name.
@@ -76,13 +80,13 @@ pub(crate) struct SignInDialog {
     /// One button per answer to the question, then Cancel.
     #[template_child]
     pub(super) choices: TemplateChild<gtk::FlowBox>,
-    /// The footer with Cancel and Connect.
+    /// The footer with OK and Cancel.
     #[template_child]
     pub(super) actions: TemplateChild<gtk::Box>,
     /// Cancel.
     #[template_child]
     pub(super) cancel_button: TemplateChild<gtk::Button>,
-    /// Connect.
+    /// OK, which connects.
     #[template_child]
     pub(super) connect_button: TemplateChild<gtk::Button>,
     /// The server needs a user name, unless the user signs in as guest.

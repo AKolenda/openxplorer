@@ -28,6 +28,7 @@
 //! the secondary button selects the item, and the context menu opens only
 //! when it is released without dragging.
 
+mod label;
 mod payload;
 
 use std::collections::HashSet;
@@ -46,6 +47,9 @@ use crate::icons::{Art, ArtImage};
 use super::zip_copies::ZipDragContent;
 use super::BrowserWindow;
 
+pub(crate) use label::{show_drag_label, DragLabel, DragVerb};
+#[cfg(test)]
+pub(crate) use label::{shown_drag_glyph, shown_drag_label};
 use payload::dragged_uris;
 pub(crate) use payload::{is_draggable_location, DragPayload, DragRefusal, DraggedItems};
 
@@ -140,6 +144,11 @@ pub(crate) fn is_being_dragged(uri: &str) -> bool {
     DRAGGED.with(|dragged| dragged.borrow().contains(uri))
 }
 
+/// The items this process drags now, from any of its windows.
+pub(crate) fn dragged_now() -> Vec<String> {
+    DRAGGED.with(|dragged| dragged.borrow().iter().cloned().collect())
+}
+
 /// The button `drag`, a drag of this process, was made with.
 pub(crate) fn drag_button(drag: &gdk::Drag) -> DragButton {
     let is_secondary = SECONDARY_DRAG.with(|secondary| secondary.borrow().upgrade().as_ref() == Some(drag));
@@ -201,18 +210,26 @@ pub(super) fn drag_actions(
 }
 
 /// The icon that follows the pointer: the first item's art, with the
-/// number of items beside it when there are several.
+/// number of items beside it when there are several, and under them the
+/// label that says what a release would do ([`label`]).
 fn drag_icon(art: Art, count: usize) -> gtk::Widget {
-    let icon = gtk::Box::builder().spacing(4).css_classes(["drag-icon"]).build();
-    icon.append(&ArtImage::new(art, DRAG_ICON_SIZE));
+    let pictures = gtk::Box::builder().spacing(4).build();
+    pictures.append(&ArtImage::new(art, DRAG_ICON_SIZE));
     if count > 1 {
         let badge = gtk::Label::builder()
             .label(ox_core::format::group_digits(count as u64))
             .valign(gtk::Align::Start)
             .css_classes(["drag-count"])
             .build();
-        icon.append(&badge);
+        pictures.append(&badge);
     }
+    let icon = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(4)
+        .css_classes(["drag-icon"])
+        .build();
+    icon.append(&pictures);
+    icon.append(&label::drag_label());
     icon.upcast()
 }
 
@@ -254,6 +271,11 @@ impl BrowserWindow {
             None,
             move |source, x, y| {
                 let button = pressed_button(source)?;
+                // The empty part of a details row is no item to drag: a
+                // primary press there draws a rubber band (SEL-012).
+                if button == DragButton::Primary && window.is_blank_space(&view, x, y) {
+                    return None;
+                }
                 let position = window.folder_pane().owners().position_at(&view, x, y)?;
                 let content = window.drag_content_for(position)?;
                 source.set_actions(drag_actions(&content, button, source.current_event_state()));
@@ -301,6 +323,7 @@ impl BrowserWindow {
             move |_, drag, _| {
                 super::drag_surface::keep_finished_drag(drag);
                 SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
+                label::forget_drag_label();
                 window.end_file_drag();
             }
         ));

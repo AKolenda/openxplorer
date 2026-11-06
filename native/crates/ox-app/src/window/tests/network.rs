@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Network shares and devices in the window: Network's discovered
-//! computers and info bar, Map network location, Sign out of server, Keep in
+//! computers and info bar, Map network drive, Sign out of server, Keep in
 //! Network and Remove saved location, This PC's network and drive cards,
 //! and connecting and removing drives, against `renderNetwork`,
 //! `connectDialog`, `signOut`, `networkLocationMenu`, `mountVolume` and
@@ -230,7 +230,7 @@ fn network_says_when_discovery_is_turned_off() {
     assert!(!bar.is_visible(), "the bar belongs to Network");
 }
 
-/// Map network location opens from every place that offers it; an
+/// Map network drive opens from every place that offers it; an
 /// address that is not a share is refused inside the dialog, which stays
 /// open for another try, and Cancel closes it.
 ///
@@ -251,7 +251,7 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
     wait_until("the error", || dialog.error_text().is_some());
 
     assert!(dialog.is_visible());
-    assert!(dialog.can_press("Connect"), "Connect can be pressed again");
+    assert!(dialog.can_press("Finish"), "Finish can be pressed again");
     dialog.press("Cancel");
     wait_until("Cancel to close the dialog", || !dialog.is_visible());
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
@@ -260,22 +260,25 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
 /// "…" > Add a network location opens the connect dialog under Windows'
 /// title, at a web address type (Windows' wizard adds websites and FTP
 /// sites), and saves what it connects under Network locations; Map
-/// network drive opens it at a Windows share.
+/// network drive opens Windows' dialog at drive Z:, reconnecting at
+/// sign-in.
 ///
 /// parity: NET-001, NET-002, CMD-007
 #[gtk::test]
 fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
     let test = TestWindow::open(Page::ThisPc.uri());
-    for (action, title, kind) in [
+    for (action, title, first, keep) in [
         (
             "add-network-location",
             "Add a network location",
             "Secure WebDAV (HTTPS)",
+            "Save in the sidebar · reconnect when opened",
         ),
         (
             "map-network-location",
-            "Map network location",
-            "Windows share (SMB)",
+            "Map network drive",
+            "Z:",
+            "Reconnect at sign-in",
         ),
     ] {
         test.activate(action, None);
@@ -286,14 +289,10 @@ fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
             .and_then(gtk::DropDown::selected_item)
             .and_downcast::<gtk::StringObject>()
             .map(|chosen| chosen.string().to_string());
-        assert_eq!(chosen.as_deref(), Some(kind), "{action}");
+        assert_eq!(chosen.as_deref(), Some(first), "{action}");
         let save = descendants::<gtk::CheckButton>(&dialog)
             .into_iter()
-            .find(|check| {
-                check
-                    .label()
-                    .is_some_and(|label| label.starts_with("Save in the sidebar"))
-            })
+            .find(|check| check.label().is_some_and(|label| label == keep))
             .expect("the dialog saves the location");
         assert!(save.is_active(), "{action} saves it under Network locations");
         dialog.press("Cancel");
@@ -632,10 +631,10 @@ fn this_pc_lists_saved_locations_or_says_how_to_map_one() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
     let empty =
-        "No network locations saved. Use “Map network location” to connect to a share and add it to the \
+        "No network locations saved. Use “Map network drive” to connect to a share and add it to the \
                  sidebar.";
     assert!(shows(landing, empty));
-    assert!(shows(landing, "Map network location"));
+    assert!(shows(landing, "Map network drive"));
 
     test.save_share("smb://fileserver/backup", "Backup (S:)");
     // Named as Windows 11 names a mapped drive: its label, its server and
