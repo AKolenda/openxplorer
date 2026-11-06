@@ -34,7 +34,7 @@ msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, B
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -357,7 +357,7 @@ msgstr ""
 msgid "Extract all…"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/file_ops/conflict_compare.rs
+#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/details_pane/content.rs
 msgid "Folder"
 msgstr ""
 
@@ -430,7 +430,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/file_drop/action.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs
 msgid "Cancel"
 msgstr ""
 
@@ -1296,31 +1296,11 @@ msgid "That application is not installed."
 msgstr ""
 
 #: crates/ox-app/src/locations.rs
-msgid "Find shared storage on your local network, or enter an address."
-msgstr ""
-
-#: crates/ox-app/src/locations.rs
 msgid "Folders, devices, and connected storage."
 msgstr ""
 
 #: crates/ox-app/src/locations.rs
 msgid "Your explorer, your way."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Discover devices without scanning their files."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Discovery can take a few seconds."
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "Listening for advertised SMB servers…"
-msgstr ""
-
-#: crates/ox-app/src/network/discovery.rs
-msgid "No advertised SMB servers found yet. Discover again or enter an address above."
 msgstr ""
 
 #: crates/ox-app/src/properties.rs
@@ -1536,7 +1516,7 @@ msgstr ""
 msgid "F-stop"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/file_ops/conflict_compare.rs crates/ox-core/src/entry/type_label.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/entry/type_label.rs
 msgid "File"
 msgstr ""
 
@@ -2476,7 +2456,7 @@ msgstr ""
 msgid "Read-only in OpenXplorer · Restore a copy to edit"
 msgstr ""
 
-#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/menu_popover.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Back"
 msgstr ""
 
@@ -4461,7 +4441,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -4582,7 +4562,7 @@ msgstr ""
 msgid "Options"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Pin to Quick access"
 msgstr ""
 
@@ -4656,6 +4636,56 @@ msgstr ""
 
 #: crates/ox-app/src/window/compress_dialog.rs
 msgid "Compress"
+msgstr ""
+
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "Continue"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "Files already in {folder}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "Files from {folder}"
+msgstr ""
+
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "Files with the same names"
+msgstr ""
+
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "If you select both versions, the copied file will have a number added to its name."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "Skip {count} file with the same date and size"
+msgid_plural "Skip {count} files with the same date and size"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "Which files do you want to keep?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "{count} File Conflict"
+msgid_plural "{count} File Conflicts"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "{name} already in {folder}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/conflict_window.rs
+msgid "{name} from {folder}"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu.rs
@@ -4732,10 +4762,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Mount disk image"
-msgstr ""
-
-#: crates/ox-app/src/window/context_menu/entries.rs
-msgid "New…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -5089,7 +5115,7 @@ msgid "Copy here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
-msgid "Create links here"
+msgid "Create shortcuts here"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/action.rs
@@ -5224,85 +5250,6 @@ msgstr ""
 msgid "The desktop clipboard could not be claimed."
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs
-msgid "Existing: {text}"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs
-msgid "Incoming: {text}"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs
-msgid "The existing item is newer."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs
-msgid "The existing item is older."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs
-msgid "The two files are identical."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs
-msgid "This is the item itself, so it cannot replace itself."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/conflict_compare.rs
-msgid "{kind} · Modified {date_time_text}"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "Apply to all {count} items"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "Items already exist"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "Keep both"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/file_ops/inline_rename.rs
-msgid "New name"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "Otherwise the choice is for “{first}” only. A new name is always for “{first}” only."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "Replace existing"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "Replace older"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "Skip duplicates"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
-msgid "{count} matching name(s) in {destination}\n\nReplace existing files or skip conflicts. Same-name folders are merged; destination-only files stay in place."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/conflict_rename.rs
-msgid "Enter a name that differs from the item's own name."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/conflict_rename.rs
-msgid "“{name}” already exists here too. Enter another name."
-msgstr ""
-
 #: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/folder_options.rs
 msgid "No"
 msgstr ""
@@ -5354,6 +5301,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/hide_confirm.rs
 msgid "Rename and hide?"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/inline_rename.rs
+msgid "New name"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/jobs.rs
@@ -5823,53 +5774,8 @@ msgstr ""
 msgid "Up to \"{place}\" (Alt + Up Arrow)"
 msgstr ""
 
-#: crates/ox-app/src/window/network_page.rs
-msgid "Computers & network storage"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Connected & saved locations"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discover servers"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discovered servers"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Discovery depends on devices advertising themselves and on local firewall/network settings. It does not guarantee a list of every host."
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Enter a network server or shared folder."
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Map location"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Open address"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "SMB server address"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "Stop"
-msgstr ""
-
-#: crates/ox-app/src/window/network_page.rs
-msgid "\\\\server or \\\\archive-nas"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/network_page.rs
-msgid "{protocol_name} · Discovered"
+#: crates/ox-app/src/window/network_info_bar.rs
+msgid "Network discovery is turned off. Network computers and devices are not visible. Click to learn more..."
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
@@ -6038,6 +5944,10 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/progress-window.ui crates/ox-app/src/window/progress_window.rs
 msgid "More details"
+msgstr ""
+
+#: crates/ox-app/src/window/progress_window.rs
+msgid "Replace or Skip Files"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6582,6 +6492,47 @@ msgid_plural "Recycling {count} items from {source}"
 msgstr[0] ""
 msgstr[1] ""
 
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "Compare info for both files"
+msgstr ""
+
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "Let me decide for each file"
+msgstr ""
+
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "Replace the file in the destination"
+msgstr ""
+
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "Replace the files in the destination"
+msgstr ""
+
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "Skip these files"
+msgstr ""
+
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "Skip this file"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "The destination already has a file named \"{name}\""
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "The destination already has a folder named \"{name}\""
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/question.rs
+msgid "The destination has {count} file with the same name"
+msgid_plural "The destination has {count} files with the same names"
+msgstr[0] ""
+msgstr[1] ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/transfer_panel/rate.rs
 msgid "About {time}"
@@ -6892,7 +6843,7 @@ msgstr ""
 msgid "An item changed while it was compressed. Nothing was created."
 msgstr ""
 
-#: crates/ox-core/src/archive/error.rs crates/ox-core/src/ops/links.rs
+#: crates/ox-core/src/archive/error.rs
 msgid "An item with this name already exists. Nothing was replaced."
 msgstr ""
 
@@ -7177,6 +7128,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/clipboard.rs
 msgid "Copy or cut between 1 and {max} items at a time."
+msgstr ""
+
+#: crates/ox-core/src/entry/classify.rs
+msgid "Computer"
 msgstr ""
 
 #: crates/ox-core/src/entry/classify.rs
@@ -8341,6 +8296,23 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/report.rs
 msgid "{title} undone."
+msgstr ""
+
+#: crates/ox-core/src/ops/resolved_transfer.rs
+msgid "Answer every name conflict first."
+msgstr ""
+
+#: crates/ox-core/src/ops/resolved_transfer.rs
+msgid "This item's name is not valid UTF-8, so no number can be added to it. Rename it before keeping both."
+msgstr ""
+
+#: crates/ox-core/src/ops/resolved_transfer.rs
+msgid "Too many numbered names. Rename the item before keeping both."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/resolved_transfer.rs
+msgid "{name}: The file it was to replace is in the Recycle Bin. Restore it from there."
 msgstr ""
 
 #: crates/ox-core/src/ops/run_transfer.rs crates/ox-core/src/transfer/request.rs

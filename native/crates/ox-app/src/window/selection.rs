@@ -140,7 +140,7 @@ impl BrowserWindow {
 
     /// Shows the item count and the selection in the status bar.
     pub(super) fn update_status(&self) {
-        let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
+        let on_page = self.current_uri().as_deref().and_then(Page::drawn_at).is_some();
         let shown = self.folder_pane().model().n_items();
         let subject = if on_page {
             StatusSubject::Page

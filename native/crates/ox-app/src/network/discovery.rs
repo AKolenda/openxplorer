@@ -1,66 +1,91 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Discover servers, on the Network page.
+//! Finding the computers that Network lists.
 //!
 //! Ports `discoverNetwork` and `cancelDiscovery` in `v2.0.0:desktop/ui/app.js`.
 //! ox-core's [`discover_servers`] reads `GVfs`'s network browser once;
-//! advertisements arrive over a few seconds, so the page reads it up to
-//! three times, 2.5 seconds apart, and merges the servers by address. The
-//! results belong to the window and last for its session. Stop drops the
-//! passes still to come, and results that arrive after it are ignored.
+//! advertisements arrive over a few seconds, so every listing of Network
+//! reads it up to three times, 2.5 seconds apart, and lists each server
+//! the first time a pass finds it. Network is listed like a folder
+//! (`crate::window`): its listing runs these passes, so going there,
+//! Refresh (F5) and Stop discover, as in Windows Explorer, and results
+//! that arrive after Stop are dropped with the listing.
 //!
 //! Discovery never asks for a password and never lists a server's shares
 //! (NET-024); both rules are enforced in ox-core.
 
-use std::cell::RefCell;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
 use ox_core::network::{discover_servers, DiscoveredServer, Discovery, NetworkError};
 
-/// How many times one Discover servers reads the network browser.
+/// How many times one listing of Network reads the network browser.
 const PASSES: usize = 3;
 /// The pause between two passes.
 const PAUSE_BETWEEN_PASSES: Duration = Duration::from_millis(2500);
 
-/// The banner's hint while discovery runs.
-const LISTENING: &str = crate::i18n::message_id("Listening for advertised SMB servers…");
-/// The banner's hint otherwise.
-const IDLE_HINT: &str = crate::i18n::message_id("Discover devices without scanning their files.");
-/// The notice while discovery runs and has found nothing yet.
-const STILL_LOOKING: &str = crate::i18n::message_id("Discovery can take a few seconds.");
-/// The notice when discovery found nothing.
-const NOTHING_FOUND: &str =
-    crate::i18n::message_id("No advertised SMB servers found yet. Discover again or enter an address above.");
-
 /// One reading of the network browser.
 type DiscoveryPass = Pin<Box<dyn Future<Output = Result<Discovery, NetworkError>>>>;
 
-/// Where Discover servers looks: `GVfs`'s network browser, or, in tests, a
-/// fixed answer, so no test sends discovery traffic onto a network.
+/// Where discovery looks: `GVfs`'s network browser, or, in tests, a fixed
+/// answer, so no test sends discovery traffic onto a network.
 #[derive(Clone)]
-pub(crate) struct Discoverer(Rc<dyn Fn() -> DiscoveryPass>);
+pub(crate) struct Discoverer {
+    /// Starts one pass.
+    pass: Rc<dyn Fn() -> DiscoveryPass>,
+    /// The pause between two passes.
+    pause: Duration,
+}
 
 impl Discoverer {
     /// Reads `GVfs`'s network browser.
     fn network_browser() -> Self {
-        Self(Rc::new(|| Box::pin(discover_servers())))
+        Self {
+            pass: Rc::new(|| Box::pin(discover_servers())),
+            pause: PAUSE_BETWEEN_PASSES,
+        }
     }
 
-    /// Answers every pass with `discovery`.
+    /// Answers every pass with `discovery`, at once.
     pub(crate) fn finding(discovery: Discovery) -> Self {
-        Self(Rc::new(move || {
-            let discovery = discovery.clone();
-            Box::pin(async move { Ok(discovery) })
-        }))
+        Self {
+            pass: Rc::new(move || {
+                let discovery = discovery.clone();
+                Box::pin(async move { Ok(discovery) })
+            }),
+            pause: Duration::ZERO,
+        }
     }
 
-    /// Starts one pass.
-    fn pass(&self) -> DiscoveryPass {
-        (self.0)()
+    /// Answers every pass with `discovery` after `delay`, for tests.
+    #[cfg(test)]
+    pub(crate) fn finding_after(delay: Duration, discovery: Discovery) -> Self {
+        Self {
+            pass: Rc::new(move || {
+                let discovery = discovery.clone();
+                Box::pin(async move {
+                    glib::timeout_future(delay).await;
+                    Ok(discovery)
+                })
+            }),
+            pause: Duration::ZERO,
+        }
+    }
+
+    /// Answers every pass with what `answer` returns, at once, for tests.
+    #[cfg(test)]
+    pub(crate) fn answering(answer: impl Fn() -> Result<Discovery, NetworkError> + 'static) -> Self {
+        let answer = Rc::new(answer);
+        Self {
+            pass: Rc::new(move || {
+                let answer = Rc::clone(&answer);
+                Box::pin(async move { answer() })
+            }),
+            pause: Duration::ZERO,
+        }
     }
 }
 
@@ -82,153 +107,51 @@ impl fmt::Debug for Discoverer {
     }
 }
 
-/// Where discovery stands, as the Network page shows it.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct DiscoveryState {
-    /// Discovery ran in this window; the first visit of the Network page
-    /// starts it.
-    pub has_started: bool,
-    /// A pass runs, or another follows.
-    pub is_busy: bool,
-    /// The servers found, each once, in the order first found.
-    pub servers: Vec<DiscoveredServer>,
-    /// The last pass's warnings, one per line, or why discovery failed;
-    /// empty when there were none.
-    pub problem: String,
-}
-
-impl DiscoveryState {
-    /// The line under the banner's title.
-    pub(crate) fn banner_hint(&self) -> &'static str {
-        if self.is_busy {
-            ox_core::i18n::gettext_static(LISTENING)
-        } else {
-            ox_core::i18n::gettext_static(IDLE_HINT)
-        }
-    }
-
-    /// The notice shown while no server is listed.
-    pub(crate) fn empty_notice(&self) -> &str {
-        if self.is_busy {
-            ox_core::i18n::gettext_static(STILL_LOOKING)
-        } else if self.problem.is_empty() {
-            ox_core::i18n::gettext_static(NOTHING_FOUND)
-        } else {
-            &self.problem
-        }
-    }
-
-    /// A new run starts with nothing found.
-    fn begin(&mut self) {
-        self.has_started = true;
-        self.is_busy = true;
-        self.servers.clear();
-        self.problem.clear();
-    }
-
-    /// Adds the servers of one pass: a server found again replaces the
-    /// earlier row in its place (`new Map(...)` in app.js).
-    fn merge(&mut self, discovery: Discovery) {
-        for server in discovery.servers {
-            let known = self.servers.iter().position(|known| known.uri == server.uri);
-            match known {
-                Some(index) => self.servers[index] = server,
-                None => self.servers.push(server),
-            }
-        }
-        self.problem = discovery.warnings.join("\n");
-    }
-
-    /// Records why a pass failed; a cancelled or timed-out pass is not a
-    /// problem to show.
-    fn fail(&mut self, error: &NetworkError) {
-        if !error.is_cancelled() {
-            self.problem = error.to_string();
-        }
-    }
-}
-
-/// A window's server discovery: what it found and the passes running.
-#[derive(Debug, Default)]
-pub(crate) struct ServerDiscovery {
-    /// What the Network page shows.
-    state: RefCell<DiscoveryState>,
-    /// The passes of the current run; aborting it is Stop.
-    running: RefCell<Option<glib::JoinHandle<()>>>,
-}
-
-impl ServerDiscovery {
-    /// What the Network page shows now.
-    pub(crate) fn state(&self) -> DiscoveryState {
-        self.state.borrow().clone()
-    }
-
-    /// Discover servers: runs the passes through `discoverer` unless they
-    /// run already, calling `on_change` whenever the page changes.
-    pub(crate) fn start(self: &Rc<Self>, discoverer: Discoverer, on_change: impl Fn() + 'static) {
-        if self.state.borrow().is_busy {
-            return;
-        }
-        self.state.borrow_mut().begin();
-        let on_change: Rc<dyn Fn()> = Rc::new(on_change);
-        let passes = run_passes(Rc::downgrade(self), discoverer, on_change);
-        let running = glib::spawn_future_local(passes);
-        self.running.replace(Some(running));
-    }
-
-    /// Stop: drops the passes still to come; what they would find is
-    /// ignored.
-    pub(crate) fn stop(&self) {
-        if let Some(running) = self.running.take() {
-            running.abort();
-        }
-        self.state.borrow_mut().is_busy = false;
-    }
-}
-
-impl Drop for ServerDiscovery {
-    fn drop(&mut self) {
-        self.stop();
-    }
-}
-
-/// Reads the network browser [`PASSES`] times, merging each pass into
-/// `discovery` while it lives, and ends the run.
-async fn run_passes(discovery: Weak<ServerDiscovery>, discoverer: Discoverer, on_change: Rc<dyn Fn()>) {
+/// Reads the network browser through `discoverer` up to [`PASSES`] times,
+/// calling `on_found` with the servers each pass finds that no earlier
+/// pass did, in the order found.
+///
+/// # Errors
+///
+/// Why discovery cannot run, in GIO's words, when the first pass fails:
+/// the network browser cannot be mounted or read. A pass that gives up
+/// at its deadline, or a later pass that fails, ends discovery with what
+/// it found. Warnings about a browser read part-way are only logged.
+pub(crate) async fn discover_computers(
+    discoverer: &Discoverer,
+    on_found: impl Fn(Vec<DiscoveredServer>),
+) -> Result<(), String> {
+    let mut listed: Vec<String> = Vec::new();
     for pass in 1..=PASSES {
-        let found = discoverer.pass().await;
-        let Some(owner) = discovery.upgrade() else {
-            return;
+        let discovery = match (discoverer.pass)().await {
+            Ok(discovery) => discovery,
+            Err(error) if pass == 1 && !error.is_cancelled() => return Err(error.to_string()),
+            Err(_) => return Ok(()),
         };
-        let failed = found.is_err();
-        match found {
-            Ok(found) => owner.state.borrow_mut().merge(found),
-            Err(error) => owner.state.borrow_mut().fail(&error),
+        for warning in &discovery.warnings {
+            glib::g_debug!(ox_core::LOG_DOMAIN, "Network discovery: {warning}");
         }
-        drop(owner);
-        if failed {
-            break;
+        let found: Vec<DiscoveredServer> = discovery
+            .servers
+            .into_iter()
+            .filter(|server| !listed.contains(&server.uri))
+            .collect();
+        listed.extend(found.iter().map(|server| server.uri.clone()));
+        if !found.is_empty() {
+            on_found(found);
         }
-        on_change();
         if pass < PASSES {
-            glib::timeout_future(PAUSE_BETWEEN_PASSES).await;
+            glib::timeout_future(discoverer.pause).await;
         }
     }
-    let Some(owner) = discovery.upgrade() else {
-        return;
-    };
-    owner.state.borrow_mut().is_busy = false;
-    // The run is over; its handle has nothing left to abort.
-    owner.running.take();
-    on_change();
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
 
     use super::*;
-    use crate::test_support::harness::{wait_for, wait_until};
 
     fn server(uri: &str, label: &str) -> DiscoveredServer {
         DiscoveredServer {
@@ -238,108 +161,71 @@ mod tests {
         }
     }
 
-    /// A server found again replaces its row in place; the warnings of
-    /// the latest pass replace the earlier ones.
+    /// Runs discovery through `discoverer` to its end: the batches it
+    /// listed, and its outcome.
+    fn run(discoverer: &Discoverer) -> (Vec<Vec<String>>, Result<(), String>) {
+        let batches = RefCell::new(Vec::new());
+        let outcome = glib::MainContext::default().block_on(discover_computers(discoverer, |found| {
+            let labels = found.into_iter().map(|server| server.label).collect();
+            batches.borrow_mut().push(labels);
+        }));
+        (batches.into_inner(), outcome)
+    }
+
+    /// Each pass lists only the servers no earlier pass found, so Network
+    /// lists every server once, in the order first found.
     ///
     /// parity: HOME-007
-    #[test]
-    fn passes_merge_servers_by_address_in_the_order_first_found() {
-        let mut state = DiscoveryState::default();
-        state.begin();
-
-        state.merge(Discovery {
-            servers: vec![server("smb://nas/", "NAS"), server("smb://studio/", "Studio")],
-            warnings: vec!["Browsing stopped early.".into()],
+    #[gtk::test]
+    fn passes_list_each_server_once_in_the_order_first_found() {
+        let passes = Cell::new(0);
+        let discoverer = Discoverer::answering(move || {
+            passes.set(passes.get() + 1);
+            let servers = match passes.get() {
+                1 => vec![server("smb://nas/", "NAS"), server("smb://studio/", "Studio")],
+                2 => vec![server("smb://printer/", "Printer"), server("smb://nas/", "NAS")],
+                _ => vec![server("smb://studio/", "Studio")],
+            };
+            Ok(Discovery {
+                servers,
+                warnings: vec!["Browsing stopped early.".into()],
+            })
         });
-        state.merge(Discovery {
-            servers: vec![
-                server("smb://printer/", "Printer"),
-                server("smb://nas/", "NAS (renamed)"),
-            ],
-            warnings: Vec::new(),
-        });
 
-        let labels: Vec<&str> = state.servers.iter().map(|found| found.label.as_str()).collect();
-        assert_eq!(labels, ["NAS (renamed)", "Studio", "Printer"]);
-        assert_eq!(state.problem, "");
+        let (batches, outcome) = run(&discoverer);
+
+        assert_eq!(batches, [vec!["NAS", "Studio"], vec!["Printer"]]);
+        assert_eq!(outcome, Ok(()));
     }
 
-    /// parity: HOME-006, HOME-008
-    #[test]
-    fn the_page_says_what_discovery_is_doing() {
-        let mut state = DiscoveryState::default();
+    /// A first pass that fails says why discovery cannot run; one that
+    /// gives up at its deadline does not, and neither does a later pass
+    /// that fails after servers were found.
+    ///
+    /// parity: HOME-007
+    #[gtk::test]
+    fn only_a_first_pass_that_fails_says_discovery_cannot_run() {
+        let unsupported = Discoverer::answering(|| Err(NetworkError::NotAFolder));
         assert_eq!(
-            state.banner_hint(),
-            "Discover devices without scanning their files."
+            run(&unsupported),
+            (Vec::new(), Err("This location is not a folder.".into()))
         );
-        assert_eq!(state.empty_notice(), NOTHING_FOUND);
 
-        state.begin();
-        assert_eq!(state.banner_hint(), "Listening for advertised SMB servers…");
-        assert_eq!(state.empty_notice(), "Discovery can take a few seconds.");
+        let timed_out = Discoverer::answering(|| Err(NetworkError::Cancelled));
+        assert_eq!(run(&timed_out), (Vec::new(), Ok(())));
 
-        state.fail(&NetworkError::NotAFolder);
-        state.is_busy = false;
-        assert_eq!(state.empty_notice(), "This location is not a folder.");
-    }
-
-    #[test]
-    fn a_cancelled_pass_shows_no_problem() {
-        let mut state = DiscoveryState::default();
-        state.fail(&NetworkError::Cancelled);
-        assert_eq!(state.problem, "");
-    }
-
-    /// The first pass shows its servers at once; Stop ends the run, and
-    /// the passes still to come find nothing more.
-    ///
-    /// parity: HOME-006, HOME-007
-    #[gtk::test]
-    fn stop_ends_the_passes_and_keeps_what_was_found() {
-        let discovery = Rc::new(ServerDiscovery::default());
-        let changes = Rc::new(Cell::new(0));
-        let counted = Rc::clone(&changes);
-        let found = Discovery {
-            servers: vec![server("smb://nas/", "NAS")],
-            warnings: Vec::new(),
-        };
-
-        discovery.start(Discoverer::finding(found), move || counted.set(counted.get() + 1));
-        wait_until("the first pass", || changes.get() == 1);
-        assert!(discovery.state().is_busy, "two more passes follow");
-        discovery.stop();
-
-        let state = discovery.state();
-        assert!(!state.is_busy);
-        assert!(state.has_started);
-        assert_eq!(state.servers, [server("smb://nas/", "NAS")]);
-        assert!(discovery.running.borrow().is_none());
-    }
-
-    /// A pass that answers after Stop changes nothing on the page.
-    ///
-    /// parity: SAFE-013
-    #[gtk::test]
-    fn a_pass_that_answers_after_stop_is_ignored() {
-        let discovery = Rc::new(ServerDiscovery::default());
-        let changes = Rc::new(Cell::new(0));
-        let counted = Rc::clone(&changes);
-        let slow = Discoverer(Rc::new(|| {
-            Box::pin(async {
-                glib::timeout_future(Duration::from_millis(100)).await;
+        let passes = Cell::new(0);
+        let failing_later = Discoverer::answering(move || {
+            passes.set(passes.get() + 1);
+            if passes.get() == 1 {
                 Ok(Discovery {
                     servers: vec![server("smb://nas/", "NAS")],
                     warnings: Vec::new(),
                 })
-            })
-        }));
-
-        discovery.start(slow, move || counted.set(counted.get() + 1));
-        discovery.stop();
-        wait_for(Duration::from_millis(300));
-
-        assert_eq!(changes.get(), 0);
-        assert!(discovery.state().servers.is_empty());
-        assert!(!discovery.state().is_busy);
+            } else {
+                Err(NetworkError::NotAFolder)
+            }
+        });
+        assert_eq!(run(&failing_later), (vec![vec!["NAS".to_owned()]], Ok(())));
     }
 }

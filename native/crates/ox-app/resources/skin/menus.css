@@ -46,6 +46,12 @@ popover.ox-menu list > row:disabled image { -gtk-icon-palette: success @ox_text_
 /* The mark column: a check mark for a toggle, a dot for a choice. */
 popover.ox-menu list > row image.menu-mark { color: @ox_text; }
 popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }
+/* A row whose submenu is open stays highlighted while the pointer is in the
+   submenu, as Windows 11 keeps Show highlighted under View > Show. */
+popover.ox-menu list > row.submenu-open { background-color: @ox_hover; }
+/* A submenu's chevron, at the far right. */
+popover.ox-menu list > row .submenu-arrow { color: @ox_muted; margin-left: 12px; }
+popover.ox-menu list > row:disabled .submenu-arrow { color: @ox_text_disabled; }
 
 /* ---- Toast (§4.15, E08) ---- */
 .toast {

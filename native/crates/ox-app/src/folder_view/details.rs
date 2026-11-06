@@ -42,8 +42,9 @@ use crate::folder_view::model::{self, FolderModel};
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::folder_view::tree::FolderTree;
 
-/// Icon edge in details rows (`.name-cell svg{height:21px}`).
-const ROW_ICON_SIZE: i32 = 21;
+/// Icon edge in details rows: 16 pixels, as Windows 11 File Explorer's
+/// (owner decision 2026-11-06; the web's `.name-cell svg` was 21).
+const ROW_ICON_SIZE: i32 = 16;
 
 /// How long column widths must stay unchanged before they are saved, so a
 /// drag saves once instead of on every pixel.

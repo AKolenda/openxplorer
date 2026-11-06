@@ -65,7 +65,8 @@ pub(crate) enum Icon {
     /// set, for the owner to keep or remove.
     #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-03"))]
     ArrowSwap,
-    /// `arrow_undo_20_regular`: Undo.
+    /// `arrow_undo_20_regular`: Undo, and "Skip this file" in Replace or
+    /// Skip Files.
     ArrowUndo,
     /// `arrow_up_20_regular`: Up and the Ascending sort.
     ArrowUp,
@@ -77,8 +78,8 @@ pub(crate) enum Icon {
     Braces,
     /// `checkbox_checked_20_regular`: View > Show > Item check boxes.
     CheckboxChecked,
-    /// `checkmark_20_regular`: a checked menu item and the chosen option of
-    /// a settings drop-down.
+    /// `checkmark_20_regular`: a checked menu item, the chosen option of a
+    /// settings drop-down, and "Replace the file in the destination".
     Checkmark,
     /// `chevron_down_20_regular`: the menu carets of New, Sort and View.
     ChevronDown,
@@ -147,7 +148,8 @@ pub(crate) enum Icon {
     DocumentColor32,
     /// `document_48_color`: the same at large sizes.
     DocumentColor48,
-    /// `document_copy_20_regular`: Duplicate and Compare files.
+    /// `document_copy_20_regular`: Duplicate, Compare files, and "Compare
+    /// info for both files".
     DocumentCopy,
     /// `document_text_20_regular`: New text document.
     DocumentText,
