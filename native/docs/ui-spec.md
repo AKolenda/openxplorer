@@ -179,11 +179,13 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C14 | `accent` | `#0067c0` / `#74beff` | AccentFillColorDefault = SystemAccentColorDark1 in light, SystemAccentColorLight2 in dark (CT#L329 / CT#L125); for the default blue these are `#0067C0` / `#4CC2FF` (WA) | `#0067c0` / `#4cc2ff` | light already matches; dark visible, P3 |
 | C15 | `accent_hover`, `accent_pressed` (new) | none | AccentFillColorSecondary and Tertiary are the accent at 0.9 and 0.8 opacity (CT#L330–331 / CT#L126–127) | `alpha(@ox_accent, .9)`, `alpha(@ox_accent, .8)` | safe |
 | C16 | `on_accent`: text on primary buttons | `#ffffff` / `#142535` (auth dialog `#112438`) | TextOnAccentFillColorPrimary `#FFFFFF` / `#000000` (CT#L216 / CT#L12) | `#ffffff` / `#000000` | safe |
-| C17 | `hover`: rows, sidebar, commands, menu items | `#f0f0f0` / `#343434` | SubtleFillColorSecondary `#09000000` / `#0FFFFFFF` → `#f0f0f0` on `#f9f9f9`, `#f6f6f6` on white / `#353535` on `#282828` (CT#L230 / CT#L26) | `#f0f0f0` / `#343434` on every surface | Keep. Equals WinUI on the chrome, slightly stronger on white. |
+| C17 | `hover`: rows, sidebar, commands, menu items | `#f0f0f0` / `#343434` | SubtleFillColorSecondary `#09000000` / `#0FFFFFFF` → `#f0f0f0` on `#f9f9f9`, `#f6f6f6` on white / `#353535` on `#282828` (CT#L230 / CT#L26) | `#f0f0f0` / `#343434` on every surface but the items below | Keep. Equals WinUI on the chrome, slightly stronger on white. |
+| C17 items | `item_hover`: file list rows and tiles, navigation pane rows | as C17 | File Explorer's item view: a pale blue tint in light, a subtle neutral grey in dark (observed, unverified) | `#e5f3ff` / `#2d2d2d` (approximations); in light a GNOME accent other than blue gives `mix(@ox_bg, @ox_accent, .1)` | Applied (2026-11-06). |
 | C18 | `pressed` | web `filter: brightness(.96)`; native `#e9e9e9` / `#3a3a3a` | SubtleFillColorTertiary `#06000000` / `#0AFFFFFF` → `#f3f3f3` / `#303030` on chrome (CT#L231 / CT#L27), with the foreground at TextFillColorSecondary (ABB#L83, BT#L121, TTL#L20) | `#f3f3f3` / `#303030` plus `color: @ox_muted` | safe. Windows makes pressed *lighter* than hover. |
-| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)); the navigation pane no longer paints the pill (Explorer has none, 2026-11-02). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` | Keep. |
-| C20 | `selected_hover` (new) | none | ListViewItemBackgroundSelectedPointerOver = SubtleFillColorTertiary (LV#L173); Explorer deepens the blue (observed, unverified) | `mix(@ox_selected, @ox_accent, .06)` = `#dae9f7` light (GTK 4.14.5 weights the second colour by the factor; measured) / ≈ `#28445a` dark with `#4cc2ff` | visible (subtle) |
-| C21 | `selected_edge` | rows `#80b4e028`, tiles `#80b4e060` | none in WinUI; GridViewItem draws a 2 px selected border (GV#L111) | rows `alpha(#80b4e0, .16)`, tiles `alpha(#80b4e0, .38)` | Keep. |
+| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)); the navigation pane no longer paints the pill (Explorer has none, 2026-11-02). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` for commands, menus and the other surfaces | Keep. |
+| C19 items | `item_selected`: file list rows and tiles, navigation pane rows; a press shows it at once | as C19, with the C21 edge | File Explorer's item view fills a selected item with a light blue in light (classic Explorer about `#cce8ff`, with a 1 px `#99d1ff` edge while focused; Windows 11 draws the rounded fill without the edge) and a neutral grey in dark, about `#444`–`#4c4c4c`, not a blue (observed, unverified) | `#cce8ff` / `#3d3d3d` (approximations), no edge. Dark stays at `#3d3d3d` so `@ox_muted` (`#aaaaaa`) keeps 4.5:1 on it (4.68:1; `#444` gives 4.19:1). In light a GNOME accent other than blue gives `mix(@ox_bg, @ox_accent, .2)`; dark keeps the grey for every accent, as Windows does. | Applied (2026-11-06). |
+| C20 | `item_selected_hover` | none | ListViewItemBackgroundSelectedPointerOver = SubtleFillColorTertiary (LV#L173); whether File Explorer changes a selected item under the pointer is unverified | `@ox_item_selected`, as before | Keep the current behaviour until Windows' value is known. |
+| C21 | `selected_edge` | rows `#80b4e028`, tiles `#80b4e060` | none in WinUI; GridViewItem draws a 2 px selected border (GV#L111) | `alpha(#80b4e0, .16)` on Properties' selected list row; file list rows and tiles draw none (C19 items) | Applied (2026-11-06). |
 | C22 | `border`: pane dividers, band borders | `#e8e8e8` / `#373737` | DividerStrokeColorDefault `#0F000000` / `#15FFFFFF` → `#eaeaea` on `#f9f9f9` / `#3a3a3a` on `#282828` (CT#L257 / CT#L53) | `#e8e8e8` / `#373737` | Keep (within 2 steps). |
 | C23 | `control_stroke`: bordered buttons and fields (new) | `var(--border)` | ControlStrokeColorDefault `#0F000000` / `#12FFFFFF` (CT#L243 / CT#L39) | `alpha(black, .06)` / `alpha(white, .07)` | safe |
 | C24 | `control_stroke_edge`: bottom edge in light, top edge in dark (new) | none | ControlElevationBorderBrush: ControlStrokeColorSecondary `#29000000` at the bottom in light (flipped gradient, CT#L382–389), `#18FFFFFF` at the top in dark (CT#L186–190; CT#L244 / CT#L40) | `alpha(black, .16)` / `alpha(white, .09)` | safe |
@@ -191,8 +193,8 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C26 | `field_bg`: address and search | `#ffffff` / `#202020` | TextControlBackground = ControlFillColorDefault → `#fdfdfd` / `#353535` on chrome; focused ControlFillColorInputActive `#FFFFFF` / `#B31E1E1E` (TB#L130–132; CT#L225 / CT#L21) | `#ffffff` / `#202020` | Keep: the recessed dark field is part of the identity. |
 | C27 | `field_bottom`: address and search bottom edge | `#c9c9c9` in **both** themes (a bug in dark) | TextControlElevationBorderBrush uses ControlStrongStrokeColorDefault at the bottom: `#72000000` / `#8BFFFFFF` → `#8d8d8d` / `#9a9a9a` (TB#L155–162; CT#L252 / CT#L48) | `#c9c9c9` / `#5a5a5a` | Softened identity; dark fixes D-A01. |
 | C28 | `input_bottom`: dialog text inputs (new) | `#8e8e8e` (light and dark); auth and network inputs use `var(--muted)` | same as C27: `#8d8d8d` / `#9a9a9a` | `#8d8d8d` / `#9a9a9a` | safe |
-| C29 | `focus_outer` (new) | 2 px `@accent`, drawn inside | FocusStrokeColorOuter `#E4000000` / `#FFFFFF`, 2 px (CT#L258 / CT#L54; L-FOCUS) | `alpha(black, .89)` / `#ffffff` | visible, P2 |
-| C30 | `focus_inner` (new) | none | FocusStrokeColorInner `#B3FFFFFF` / `#B3000000`, 1 px (CT#L259 / CT#L55; L-FOCUS) | `alpha(white, .7)` / `alpha(black, .7)` | visible, P2 |
+| C29 | `focus_outer` (new) | 2 px `@accent`, drawn inside | FocusStrokeColorOuter `#E4000000` / `#FFFFFF`, 2 px (CT#L258 / CT#L54; L-FOCUS) | `alpha(black, .89)` / `#ffffff` | visible, P2. Applied to file list rows and tiles and navigation pane rows as `item_focus_outer` (2026-11-06); buttons and other controls keep the accent. |
+| C30 | `focus_inner` (new) | none | FocusStrokeColorInner `#B3FFFFFF` / `#B3000000`, 1 px (CT#L259 / CT#L55; L-FOCUS) | `alpha(white, .7)` / `alpha(black, .7)` | visible, P2. Applied with C29 as `item_focus_inner` (2026-11-06). |
 | C31 | `text_selection_bg`, `text_selection_fg` (new) | WebKit default | AccentFillColorSelectedTextBackground = SystemAccentColor, `#0078D4` for the default blue (CT#L328 / CT#L124; WA); TextOnAccentFillColorSelectedText `#FFFFFF` (CT#L215 / CT#L11) | `#0078d4`, `#ffffff` in both themes | safe |
 | C32 | `critical`: error text | `#b32323` / `#ff9b96` | SystemFillColorCritical `#C42B1C` / `#FF99A4` (CT#L282 / CT#L78) | `#c42b1c` / `#ff99a4` | safe |
 | C33 | `critical_fill`: close-button hover, danger buttons | close `#c42b1c`, danger `#b52a26` | `#C42B1C` (CT#L282). Caption close hover is the same red in both themes (observed, unverified). | `#c42b1c` in both themes; pressed `alpha(#c42b1c, .9)` (unverified: WinUI has no caption-button resource) | safe |
@@ -354,9 +356,12 @@ names.
 @define-color ox_hover #f0f0f0;
 @define-color ox_pressed #f3f3f3;
 @define-color ox_selected #e8f1fb;
-@define-color ox_selected_hover mix(@ox_selected, @ox_accent, .06);
 @define-color ox_selected_edge alpha(#80b4e0, .16);
-@define-color ox_tile_selected_edge alpha(#80b4e0, .38);
+@define-color ox_item_hover #e5f3ff;
+@define-color ox_item_selected #cce8ff;
+@define-color ox_item_selected_hover @ox_item_selected;
+@define-color ox_item_focus_outer alpha(black, .89);
+@define-color ox_item_focus_inner alpha(white, .7);
 @define-color ox_border #e8e8e8;
 @define-color ox_control_stroke alpha(black, .06);
 @define-color ox_control_stroke_edge alpha(black, .16);
@@ -406,9 +411,12 @@ names.
 @define-color ox_hover #343434;
 @define-color ox_pressed #303030;
 @define-color ox_selected #263c50;
-@define-color ox_selected_hover mix(@ox_selected, @ox_accent, .06);
 @define-color ox_selected_edge alpha(#80b4e0, .16);
-@define-color ox_tile_selected_edge alpha(#80b4e0, .38);
+@define-color ox_item_hover #2d2d2d;
+@define-color ox_item_selected #3d3d3d;
+@define-color ox_item_selected_hover @ox_item_selected;
+@define-color ox_item_focus_outer #ffffff;
+@define-color ox_item_focus_inner alpha(black, .7);
 @define-color ox_border #373737;
 @define-color ox_control_stroke alpha(white, .07);
 @define-color ox_control_stroke_edge alpha(white, .09);
@@ -439,7 +447,7 @@ names.
 Staging: *safe* rows can land at once. Until sign-off, the *visible* rows keep
 their current values: `ox_accent` stays `#74beff` in dark, `ox_text` stays
 `#f1f1f1` in dark, `ox_muted` stays `#aaaaaa` in dark, `ox_card` stays
-`#202020` in dark, and the focus colours stay the accent. `ox_title_hover` in
+`#202020` in dark, and the focus colours stay the accent, except the item ring (C29, C30), which file list and navigation pane items draw. `ox_title_hover` in
 light is also *visible*. The file art
 colours (C46) and snapshot colours (C35) live in the art code, not these
 files.
@@ -516,7 +524,7 @@ where it differs; ✓ means the target equals the current app.
 | Pane | width 210 by default (185 at ≤ 1190, 175 at ≤ 960, 150 at ≤ 680), user-resizable; background `@ox_sidebar`; padding **`12 8 0`** (`13 7 0`) | Explorer pane default width about 200–220 (observed, unverified) | safe |
 | Resizer | 6 px wide, background `@ox_sidebar`, 1 px `@ox_border` right edge; hover or focus: `@ox_selected` with a 2 px `@ox_accent` centre line | — | Keep. |
 | Entry | **31** high (min `max(31, ceil(20·s + 11))`), 1 px above (**32** pitch; 35 and 36 before), radius 4, padding `0 11`, 12 px text; a **16** px icon (18 / 19 before) 2 px in and 14 px before the name, which stays where it was; Compact view **24** high (min `max(24, ceil(20·s + 4))`; 26 before), the same as Compact view's details rows, which no row goes below | NavigationViewItem min height 36 with margin `4,2` (NV#L217, NV#L228); TreeViewItem 28 with margin `4,2` (TR#L79, TR#L82); Explorer's navigation pane rows are about 32 apart, about 24 in Compact view (observed, unverified) | Applied (owner decision 2026-11-06). |
-| States | hover `@ox_hover`; pressed `@ox_pressed`; current location `@ox_selected`, the pill kept clear (Explorer's navigation pane has none; 2026-11-02) | TreeViewItem hover and selected fills (TR#L47, TR#L50) | safe |
+| States | hover `@ox_item_hover`; pressed and current location `@ox_item_selected` (C17 items, C19 items), the pill kept clear (Explorer's navigation pane has none; 2026-11-02); keyboard focus: the two-tone item ring (§4.13); the folder tree's rows the same | File Explorer's navigation pane shares the item view's colours (observed, unverified); TreeViewItem hover and selected fills (TR#L47, TR#L50) | Applied (2026-11-06). |
 | Selection pill | 3 × **16**, radius **2** (3 × 15, radius 4), `@ox_accent`, at the left edge, centred vertically | NavigationView indicator 3 × 16, radius 2 (NV#L220–222); TreeViewItem 3 × 16, radius 2 (TRI#L130) | safe |
 | Indent | child rows `padding-left: 32`; expander chevron 9 in `@ox_muted` | TreeView chevron (TRI#L143–145) | Keep. |
 | Pin glyph | 11 in `@ox_text_tertiary`, right-aligned, on pinned Quick access rows | Explorer shows a pin on pinned items (observed, unverified) | safe |
@@ -531,10 +539,10 @@ where it differs; ✓ means the target equals the current app.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Header | **32** (38) including a 1 px bottom border `@ox_border` (min `max(32, ceil(24·s + 8))`); 12 px `@ox_muted`, weight 400; column padding `0 12`; header row inset `0 14` so labels line up with cell text | Explorer header labels are 12 px secondary text; the header is about 32 high (observed, unverified) | Applied (owner decision 2026-11-06). |
-| Header hover | `@ox_hover` plus a 1 px `@ox_border` right edge | Explorer shows column dividers on hover (observed, unverified) | Keep. |
-| Size header | label **right-aligned**, 17 px right padding | Explorer left-aligns every header (observed, unverified) | Keep (identity). |
+| Header hover | the title under the pointer `@ox_hover`; the 1 px `@ox_border` dividers between titles show only while the pointer is over the header | Explorer shows column dividers on hover (observed, unverified) | Applied (2026-11-06). |
+| Size header | label **left-aligned**, as every title, 12 px left padding; the sizes under it stay right-aligned | Explorer left-aligns every header and right-aligns sizes (observed, unverified) | Applied (2026-11-06). |
 | Resize handle | 8 px hit area centred on the column edge; hover `@ox_selected` with a 2 px `@ox_accent` line; column-resize cursor | — | Keep. |
-| Sort indicator | caret glyph 10, `@ox_muted`, 6 px after the label, **primary sort column only** | Explorer draws a small chevron centred above the label (observed, unverified) | Keep; see D-N05. |
+| Sort indicator | chevron glyph 10 (`ox-chevron-up-16` ascending, `ox-chevron-down-16` descending), `@ox_muted`, centred over the column on the title's top edge (2 px above it, so the stroke sits about 1 to 5 px down) as the title's background, **primary sort column only**; GTK's own indicator stays hidden | Explorer draws a small chevron centred on the header's top edge, ^ ascending and v descending (observed, unverified) | Applied (2026-11-06); see D-N05. |
 | Columns | Name (flexible, min 170), Date modified 152, Type 135, Size **78** (native 90); at ≤ 1190: 140 / 132 / 112 / 63; at ≤ 680: Name and Size only; user-resized widths persist | — | Keep. |
 | Search-results columns | Name (min 160), Folder (min 210, 1.2×), Type 110, Size 74; folder text 11 → **12** px `@ox_muted` | — | Keep, except T04. |
 | Row, normal | pitch **32** = 30 row + 2 gap (`row = max(32, ceil(24·s + 8)) − 2`; 38 before); first row 4 below the header (5) | ListViewItem min height 40 (LV#L166); Explorer normal pitch about 30–32 (observed, unverified) | Applied (owner decision 2026-11-06). |
@@ -542,7 +550,7 @@ where it differs; ✓ means the target equals the current app.
 | Row backplate | inset 12 from both pane edges ✓ (S03); radius 4; inner padding `0 2`; cells padding `0 12` | ListViewItemCornerRadius 4 (LV#L210) | Keep. |
 | Name cell | icon **16** (21), gap 11, `@ox_text`, ellipsis at the end | Explorer details view uses 16 (I07) | Applied (owner decision 2026-11-06). |
 | Other cells | `@ox_muted`; Size right-aligned with 12 px right padding and tabular figures (T14) | — | Keep. |
-| Row states | hover `@ox_hover`; selected `@ox_selected` + `inset 0 0 0 1px @ox_selected_edge`; selected and hovered `@ox_selected_hover`; keyboard focus: inset ring (§4.13); cut: `opacity: .5`; drag source: `opacity: .5`; drop target: `outline: 2px solid @ox_accent` inset with `@ox_selected` | LV#L170–173, LV#L183 | see §3.1 |
+| Row states | hover `@ox_item_hover`; pressed and selected `@ox_item_selected`, no edge; selected and hovered `@ox_item_selected_hover`; keyboard focus: the two-tone item ring (§4.13); cut: `opacity: .5`; drag source: `opacity: .5`; drop target: `outline: 2px solid @ox_accent` inset with `@ox_selected` | LV#L170–173, LV#L183; File Explorer's item view (C17 items, C19 items) | Applied (2026-11-06); see §3.1 |
 | Rubberband | 1 px `@ox_accent`, fill `alpha(@ox_accent, .15)`, radius 0 | — | Keep (native). |
 | Rubberband start (new) | a primary press below the rows, or on the empty part of an **unselected** row (right of the end of its name, or in its other columns); the icon and name, and a selected row, are the item | Explorer: the white space right of an unselected item's name is the background (The Old New Thing, 2009-08-05) | Applied (SEL-012). |
 | Drag label (new) | under the drag icon, over this app's drop targets: "→ Move to Documents", "+ Copy to Documents", "Create link in Documents"; padding `3 8`, 1 px `@ox_border`, radius 4, `@ox_chrome`, text `@ox_text`, glyph 12 (`arrow_right`, `add`, `link`) in `@ox_accent`; none where a release does nothing or for a right-button drag | Explorer's drop description beside the pointer (observed) | Applied (DND-028). |
@@ -553,7 +561,7 @@ where it differs; ✓ means the target equals the current app.
 |---|---|---|---|
 | Cell | width `max(135, ceil(90·s + 45))`, height `130 + max(0, ceil((s − 1)·46))`; tiles are 4 px apart (cell minus 4 wide, minus 2 high); the grid starts 10 px from the left and 5 px from the top | — | Keep. |
 | Tile | radius **4** (6); padding `12 10`; gap 8; icon **96** (Large icons; 56 before, owner decision 2026-11-06), top-aligned; name 12 px, centred, at most two lines, line height 1.35, ellipsis | GridViewItem radius 4 (GV#L109); grid items use centred caption text (L-SPACE) | safe |
-| States | as rows; selected edge `inset 0 0 0 1px @ox_tile_selected_edge` | GV#L111 | Keep. |
+| States | as rows, without an edge | GV#L111 draws a 2 px selected border; File Explorer's Windows 11 item view draws none (observed, unverified) | Applied (2026-11-06). |
 | Thumbnails (gain) | images and video show the freedesktop thumbnail in the icon box, radius 4, 1 px `@ox_border` | Dolphin and Explorer both preview (§8) | gain |
 | Other sizes | Small **16**, Medium **48**, Extra large **256** (28, 40 and 96 before, owner decision 2026-11-06); Ctrl + wheel also stops at 22, 28, 32, 40, 56, 64, 80, 128, 160 and 192 (gain); cell width `max(grid_width, icon + 79)`, height `grid_row + icon − 56`, so a 56 px tile keeps the web's 135 × 130 cell. A size saved before keeps its pixels. | Explorer sizes 16 / 48 / 96 / 256 (observed, unverified) | Applied. |
 
@@ -655,9 +663,9 @@ pointer click. That already holds in both apps.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Free-standing buttons (navigation, command bar, dialog, details "Open"), cards | `outline: 2px solid @ox_focus_outer; outline-offset: 1px; box-shadow: 0 0 0 1px @ox_focus_inner;` (inner 1 px ring against the edge, then a 2 px ring). Current: `outline: 2px solid accent; outline-offset: -2px`. | A 2 px primary border outside a 1 px secondary border (L-FOCUS). L-FOCUS gives the default margin as 1 px, but Button and GridViewItem set FocusVisualMargin −3 (BT#L167, GV#L149), which puts the secondary ring flush against the edge, as here. Colours CT#L258–259 / CT#L54–55. | visible, P2 |
-| Rows, tiles, sidebar entries, menu items, and tabs, crumbs and caption buttons (these sit edge to edge, inside a ScrolledWindow's viewport or at the window edge, and those parents clip with `overflow: hidden`, so an outside ring would be cut off, §6.2) | `box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner;` (current: 1 px accent inside); on a selected row, add the selected edge after these | ListViewItemFocusBorderBrush = FocusStrokeColorOuter (LV#L183) | visible, P2 |
+| Rows, tiles, sidebar entries, menu items, and tabs, crumbs and caption buttons (these sit edge to edge, inside a ScrolledWindow's viewport or at the window edge, and those parents clip with `overflow: hidden`, so an outside ring would be cut off, §6.2) | `box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner;`. File list rows and tiles, navigation pane rows and the folder tree draw it now as `outline: 2px solid @ox_item_focus_outer; outline-offset: -2px; box-shadow: inset 0 0 0 3px @ox_item_focus_inner` (GTK 4 paints a later inset shadow over an earlier one, so two stacked inset shadows would put the light ring over the dark one) (black and white in light, white and black in dark; the selected fill shows inside, with no edge); menu items, tabs, crumbs and caption buttons keep a 1 or 2 px accent ring | ListViewItemFocusBorderBrush = FocusStrokeColorOuter (LV#L183); File Explorer draws a 2 px dark ring outside a 1 px light one on the focused item (observed, unverified) | Applied to items (2026-11-06); visible, P2 for the rest |
 | Fields | none; the 2 px accent bottom edge is the focus indicator ✓ | TB#L164–171 | Keep. |
-| High contrast (GNOME `high-contrast`) | `outline-width: 2px` everywhere; sidebar current row `outline: 1px solid @ox_accent`; pin drop block 2 px border (the current `prefers-contrast: more` rules) | — | Keep (rule 1). |
+| High contrast (GNOME `high-contrast`) | `outline-width: 2px` everywhere; sidebar current row `outline: 1px solid @ox_accent`; pin drop block 2 px border (the current `prefers-contrast: more` rules); the item ring opaque, `outline: 2px solid @ox_text` over `inset 0 0 0 3px @ox_bg`; menu rows 2 px `@ox_focus_outer` | — | Keep (rule 1). |
 
 ### 4.14 States summary
 
@@ -667,7 +675,7 @@ pointer click. That already holds in both apps.
 | Title-strip button (+, caption, windows; inactive tabs per §4.1) | transparent | `@ox_title_hover` | `alpha(black, .02)` / `alpha(white, .04)` (SubtleFillColorTertiary, TV#L23 / TV#L101) | active tab `@ox_chrome` | `@ox_text_disabled` |
 | Bordered button | `@ox_control_fill` + E06 | `@ox_control_fill_hover` | `@ox_control_fill_pressed` + `@ox_muted` text, border `@ox_control_stroke` only | — | fill ControlFillColorDisabled (`@ox_control_fill_pressed` in light, `alpha(white, .04)` in dark), border `@ox_control_stroke`, text `@ox_text_disabled`, no opacity (BT#L131, BT#L135, BT#L139; CT#L223 / CT#L19) |
 | Accent button | `@ox_accent` | `@ox_accent_hover` | `@ox_accent_pressed` | — | `alpha(black, .22)` / `alpha(white, .16)` fill (AccentFillColorDisabled, CT#L242 / CT#L38) |
-| Row or tile | transparent | `@ox_hover` | `@ox_pressed` | `@ox_selected` + edge; hover `@ox_selected_hover` | — |
+| Row or tile, navigation pane row | transparent | `@ox_item_hover` | `@ox_item_selected` | `@ox_item_selected`, no edge; hover `@ox_item_selected_hover` | — |
 
 All transitions follow M01.
 
@@ -945,17 +953,13 @@ window.ox button:focus-visible {
 columnview.files > listview > row {
   margin: 1px 0; border-radius: 4px; transition: background-color 83ms linear;
 }
-columnview.files > listview > row:hover { background-color: @ox_hover; }
-columnview.files > listview > row:selected {
-  background-color: @ox_selected; box-shadow: inset 0 0 0 1px @ox_selected_edge;
-}
-columnview.files > listview > row:selected:hover { background-color: @ox_selected_hover; }
+columnview.files > listview > row:hover { background-color: @ox_item_hover; }
+columnview.files > listview > row:active,
+columnview.files > listview > row:selected { background-color: @ox_item_selected; }
+columnview.files > listview > row:selected:hover { background-color: @ox_item_selected_hover; }
 columnview.files > listview > row:focus-visible {
-  box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner;
-}
-columnview.files > listview > row:selected:focus-visible {
-  box-shadow: inset 0 0 0 2px @ox_focus_outer, inset 0 0 0 3px @ox_focus_inner,
-              inset 0 0 0 4px @ox_selected_edge;
+  outline: 2px solid @ox_item_focus_outer; outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
 }
 columnview.files > header > button sort-indicator:not(.ascending):not(.descending) {
   -gtk-icon-source: none; min-width: 0; margin: 0;

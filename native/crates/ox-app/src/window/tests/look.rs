@@ -460,3 +460,63 @@ fn the_toast_is_an_inverted_status_78_pixels_above_the_bottom() {
         assert_same_colour(background, css_colour(inverted), &format!("{theme} toast"));
     }
 }
+
+/// The selected row of the file list in `test`'s window.
+fn selected_row(test: &TestWindow) -> gtk::Widget {
+    let details = test.window.folder_pane().details().column_view();
+    descendants::<gtk::Widget>(details)
+        .into_iter()
+        .find(|widget| widget.css_name() == "row" && widget.state_flags().contains(gtk::StateFlags::SELECTED))
+        .expect("a selected row")
+}
+
+/// The file list selects as Windows 11 File Explorer does: a light blue
+/// fill in light and a neutral grey one in dark, with no edge, and the
+/// keyboard's row draws Windows' two-tone ring, 2 pixels dark outside 1
+/// pixel light (ui-spec.md §3.1 C19, C29, C30; §4.13).
+///
+/// parity: ACC-009
+#[gtk::test]
+fn selected_rows_and_the_keyboard_ring_take_windows_11s_colours() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.window.folder_model().select_only(1);
+    // The selection, then the ring on it: alpha(white, .7) over #cce8ff
+    // with alpha(black, .89) over that in light, alpha(black, .7) over
+    // #3d3d3d with white over that in dark.
+    for (theme, fill, outer, inner) in [
+        ("light", "#cce8ff", "#1a1b1c", "#f0f8ff"),
+        ("dark", "#3d3d3d", "#ffffff", "#121212"),
+    ] {
+        show_theme(&test, theme);
+        test.window.set_focus_visible(false);
+        wait_for_frames(&test.window, 2);
+        let row = selected_row(&test);
+        // Between the row's edge and its icon, where nothing else paints.
+        let middle = row.height() / 2;
+        for x in [0, 2, 6] {
+            assert_same_colour(
+                painted_colour(&row, x, middle),
+                css_colour(fill),
+                &format!("{theme} selection at {x}, without an edge"),
+            );
+        }
+        row.grab_focus();
+        test.window.set_focus_visible(true);
+        wait_for_frames(&test.window, 2);
+        assert!(row.has_focus(), "the selected row has the keyboard");
+        for (x, colour, what) in [
+            (0, outer, "outer ring"),
+            (1, outer, "outer ring"),
+            (2, inner, "inner ring"),
+            (6, fill, "selection"),
+        ] {
+            assert_same_colour(
+                painted_colour(&row, x, middle),
+                css_colour(colour),
+                &format!("{theme} {what} at {x}"),
+            );
+        }
+    }
+}
