@@ -192,26 +192,20 @@ pub(crate) enum WindowAction {
     ResetLayout,
     /// New ▸ Folder (Ctrl+Shift+N).
     NewFolder,
-    /// New ▸ Text document.
-    NewTextDocument,
-    /// New ▸ File….
-    NewFile,
-    /// New ▸ Markdown document.
-    NewMarkdownDocument,
-    /// New ▸ CSV file.
-    NewCsvFile,
-    /// New ▸ JSON file.
-    NewJsonFile,
-    /// New ▸ HTML document.
-    NewHtmlDocument,
-    /// New ▸ From template….
-    NewFromTemplate,
-    /// Opens the New from template dialog with the template whose id is
-    /// the string target chosen: a user template listed in the New menu
-    /// (OPS-003).
-    NewFromUserTemplate,
-    /// New ▸ Link to file or folder… (OPS-004).
+    /// New ▸ Shortcut: the link dialog (OPS-004).
     NewLink,
+    /// New ▸ Bitmap image.
+    NewBitmapImage,
+    /// New ▸ Rich Text Document.
+    NewRichTextDocument,
+    /// New ▸ Text Document.
+    NewTextDocument,
+    /// New ▸ Compressed (zipped) Folder.
+    NewCompressedFolder,
+    /// Copies the user template whose id is the string target into the
+    /// folder and renames the copy in place: a template the New menu
+    /// lists (OPS-003).
+    NewFromUserTemplate,
     /// Cut (Ctrl+X).
     Cut,
     /// Copy (Ctrl+C).
@@ -254,6 +248,9 @@ pub(crate) enum WindowAction {
     CancelOperation,
     /// Puts the selected Recycle Bin items back where they came from.
     Restore,
+    /// Puts every item in the Recycle Bin back where it came from (the
+    /// command bar's "Restore all items").
+    RestoreAllItems,
     /// Deletes everything in the Recycle Bin, after asking.
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
@@ -534,15 +531,12 @@ impl WindowAction {
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",
             WindowAction::NewFolder => "new-folder",
-            WindowAction::NewTextDocument => "new-text-document",
-            WindowAction::NewFile => "new-file",
-            WindowAction::NewMarkdownDocument => "new-markdown-document",
-            WindowAction::NewCsvFile => "new-csv-file",
-            WindowAction::NewJsonFile => "new-json-file",
-            WindowAction::NewHtmlDocument => "new-html-document",
-            WindowAction::NewFromTemplate => "new-from-template",
-            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::NewLink => "new-link",
+            WindowAction::NewBitmapImage => "new-bitmap-image",
+            WindowAction::NewRichTextDocument => "new-rich-text-document",
+            WindowAction::NewTextDocument => "new-text-document",
+            WindowAction::NewCompressedFolder => "new-compressed-folder",
+            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",
@@ -562,6 +556,7 @@ impl WindowAction {
             WindowAction::Redo => "redo",
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
+            WindowAction::RestoreAllItems => "restore-all-items",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ClearRecentFiles => "clear-recent-files",

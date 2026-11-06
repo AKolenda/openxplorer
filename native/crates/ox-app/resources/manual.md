@@ -20,7 +20,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Files and folders
 
-- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.
+- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, "New Text Document.txt" (or "New Text Document (2).txt" when that name is taken), then renamed in place: type its name and press Enter.
 - Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.
 - Rename with F2. Select several items to rename them together.
 - Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.

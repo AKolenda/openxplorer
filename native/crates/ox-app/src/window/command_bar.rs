@@ -11,6 +11,9 @@
 //! plainly "Delete", as in Windows Explorer, or "Delete permanently" in the
 //! Recycle Bin (CMD-003). Share, which was Copy path in the Python app, shows
 //! only where the desktop can share by email (CMD-037, `super::share`).
+//! In the Recycle Bin, as in Windows 11 File Explorer, Empty Recycle Bin
+//! and Restore all items follow View, Restore all items reading Restore
+//! the selected items while items are selected (OPS-041, OPS-042).
 //!
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at
@@ -167,6 +170,8 @@ mod imp {
         pub(super) delete_button: OnceCell<gtk::Button>,
         /// Extract all, shown inside a ZIP opened like a folder (ARC-026).
         pub(super) extract_button: OnceCell<gtk::Button>,
+        /// Empty Recycle Bin and Restore, shown in the Recycle Bin.
+        pub(super) recycle_bin: OnceCell<super::RecycleBinCommands>,
         /// The "…" menu, which offers Map network location only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
@@ -263,6 +268,13 @@ impl CommandBar {
             "view-command",
             view_menu(),
         ));
+        let recycle_bin = RecycleBinCommands::new();
+        group.append(&recycle_bin.separator);
+        group.append(&recycle_bin.empty);
+        group.append(&recycle_bin.restore);
+        imp.recycle_bin
+            .set(recycle_bin)
+            .expect("constructed runs once per object");
         let (more, menu) = more_button();
         group.append(&more);
         imp.more_menu.set(menu).expect("constructed runs once per object");
@@ -433,6 +445,100 @@ impl CommandBar {
             button.set_visible(shown);
         }
     }
+
+    /// Shows Empty Recycle Bin and Restore with what Restore restores
+    /// while the window shows the Recycle Bin, or hides them for `None`.
+    pub(super) fn show_recycle_bin_commands(&self, restore: Option<RestoreTarget>) {
+        if let Some(commands) = self.imp().recycle_bin.get() {
+            commands.show(restore);
+        }
+    }
+}
+
+/// What Restore in the Recycle Bin's command bar restores.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RestoreTarget {
+    /// Nothing is selected: "Restore all items".
+    AllItems,
+    /// "Restore the selected items".
+    SelectedItems,
+}
+
+impl RestoreTarget {
+    /// The command's label, as Windows 11 File Explorer words it.
+    fn label(self) -> &'static str {
+        match self {
+            RestoreTarget::AllItems => ox_core::i18n::gettext_static("Restore all items"),
+            RestoreTarget::SelectedItems => ox_core::i18n::gettext_static("Restore the selected items"),
+        }
+    }
+
+    /// The window action the command runs.
+    fn action(self) -> WindowAction {
+        match self {
+            RestoreTarget::AllItems => WindowAction::RestoreAllItems,
+            RestoreTarget::SelectedItems => WindowAction::Restore,
+        }
+    }
+}
+
+/// The Recycle Bin's commands after View, as Windows 11 File Explorer
+/// shows them there: a separator, Empty Recycle Bin and Restore.
+#[derive(Debug)]
+pub(super) struct RecycleBinCommands {
+    separator: gtk::Separator,
+    empty: gtk::Button,
+    restore: gtk::Button,
+    restore_label: gtk::Label,
+}
+
+impl RecycleBinCommands {
+    /// The commands, hidden until the window shows the Recycle Bin.
+    fn new() -> Self {
+        let separator = separator();
+        separator.set_visible(false);
+        let (empty, _) = text_button(
+            &ox_core::i18n::gettext("Empty Recycle Bin"),
+            Icon::DeleteDismiss,
+            WindowAction::EmptyRecycleBin,
+            "empty-recycle-bin-command",
+        );
+        empty.set_visible(false);
+        let target = RestoreTarget::AllItems;
+        let (restore, restore_label) = text_button(
+            target.label(),
+            Icon::ArrowCounterclockwise,
+            target.action(),
+            "restore-command",
+        );
+        restore.set_visible(false);
+        Self {
+            separator,
+            empty,
+            restore,
+            restore_label,
+        }
+    }
+
+    /// Shows the commands with Restore restoring `restore`, or hides them
+    /// for `None`.
+    fn show(&self, restore: Option<RestoreTarget>) {
+        let shown = restore.is_some();
+        self.separator.set_visible(shown);
+        self.empty.set_visible(shown);
+        self.restore.set_visible(shown);
+        let Some(target) = restore else {
+            return;
+        };
+        let label = target.label();
+        if self.restore_label.text() != label {
+            self.restore_label.set_text(label);
+            self.restore
+                .update_property(&[gtk::accessible::Property::Label(label)]);
+        }
+        self.restore
+            .set_action_name(Some(&target.action().detailed_name()));
+    }
 }
 
 fn separator() -> gtk::Separator {
@@ -479,24 +585,38 @@ fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<Menu
         .build()
 }
 
+/// A command with a glyph and `label` that runs `action`; `css_class`
+/// names it for the stylesheet and the tests. Returns the label too, for
+/// a command whose label changes.
+fn text_button(label: &str, glyph: Icon, action: WindowAction, css_class: &str) -> (gtk::Button, gtk::Label) {
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
+    content.append(&icons::image(glyph, TEXT_COMMAND_GLYPH));
+    let text = gtk::Label::new(Some(label));
+    content.append(&text);
+    let button = gtk::Button::builder()
+        .child(&content)
+        .action_name(action.detailed_name())
+        .valign(gtk::Align::Center)
+        .css_classes(["command", "text-command", css_class])
+        .build();
+    button.update_property(&[gtk::accessible::Property::Label(label)]);
+    (button, text)
+}
+
 /// Extract all, as Windows Explorer's command bar shows it while a ZIP is
 /// selected or open; hidden otherwise. A selected TAR archive shows it
 /// too, as Extract all… in its menu does.
 fn extract_all_button() -> gtk::Button {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::image(Icon::FolderZip, TEXT_COMMAND_GLYPH));
-    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Extract all"))));
-    let button = gtk::Button::builder()
-        .child(&content)
-        .tooltip_text(ox_core::i18n::gettext("Extract all files from this archive"))
-        .action_name(WindowAction::ExtractAll.detailed_name())
-        .valign(gtk::Align::Center)
-        .visible(false)
-        .css_classes(["command", "text-command", "extract-command"])
-        .build();
-    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
-        "Extract all",
-    ))]);
+    let (button, _) = text_button(
+        &ox_core::i18n::gettext("Extract all"),
+        Icon::FolderZip,
+        WindowAction::ExtractAll,
+        "extract-command",
+    );
+    button.set_tooltip_text(Some(&ox_core::i18n::gettext(
+        "Extract all files from this archive",
+    )));
+    button.set_visible(false);
     button
 }
 
