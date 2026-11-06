@@ -7,8 +7,8 @@
 //! A request reads the cache through GIO (`thumbnail::path`,
 //! `thumbnail::is-valid`, `thumbnail::failed`) at low priority. A missing
 //! thumbnail is made by the session's thumbnailer service
-//! ([`service`]) when it has one and supports the type, else, for the
-//! picture types gdk-pixbuf reads, by the app itself ([`writer`]). Only a
+//! ([`service`]) when it has one and supports the type, else, for a
+//! picture gdk-pixbuf may read, by the app itself ([`writer`]). Only a
 //! few are decoded or made at a time ([`slots`]); a type that cannot be
 //! previewed, or a failed attempt, keeps its icon. [`PreviewPolicy`]
 //! says which items of a folder get previews, from the Settings the user
@@ -135,12 +135,29 @@ thread_local! {
     static KEPT: RefCell<HashMap<PreviewKey, gdk::Texture>> = RefCell::new(HashMap::new());
     /// Item versions no thumbnail could be made of in this run.
     static FAILED: RefCell<HashSet<(String, Option<u64>)>> = RefCell::new(HashSet::new());
-    /// The picture types gdk-pixbuf reads.
+    /// The types gdk-pixbuf's loaders declare they read.
     static PIXBUF_TYPES: HashSet<String> = Pixbuf::formats()
         .iter()
         .flat_map(PixbufFormat::mime_types)
         .map(|mime| mime.to_string())
         .collect();
+}
+
+/// Whether gdk-pixbuf may be asked to decode the item of `content_type`,
+/// given the `declared` MIME types its loaders say they read.
+///
+/// Every picture qualifies, not only the types a loader declares: what a
+/// loader reads and what GIO names the file differ, gdk-pixbuf's dds
+/// loader declaring `image/x-dds` alone for the `image/vnd.ms-dds` files
+/// GIO reports, so matching the lists exactly would leave pictures
+/// without thumbnails. Decoding settles it instead: [`writer`] reads
+/// what a loader reads and answers `None` for the rest, and the item
+/// keeps its icon.
+fn pixbuf_may_read(content_type: &str, declared: &HashSet<String>) -> bool {
+    let is_picture = content_type
+        .split_once('/')
+        .is_some_and(|(kind, _)| kind == "image");
+    is_picture || declared.contains(content_type)
 }
 
 /// The preview `request` asks for, or `None` when the item keeps its icon.
@@ -224,9 +241,9 @@ async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
     if !cache_dir.starts_with(std::env::temp_dir()) {
         return None;
     }
-    let is_picture = PIXBUF_TYPES.with(|types| types.contains(&request.content_type));
+    let may_read = PIXBUF_TYPES.with(|declared| pixbuf_may_read(&request.content_type, declared));
     let modified = request.modified?;
-    if !is_picture {
+    if !may_read {
         return None;
     }
     let source = Source {
@@ -249,6 +266,29 @@ fn decode(path: &std::path::Path, pixels: i32) -> Option<gdk::Texture> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A picture whose type no loader declares is still decoded, and a
+    /// file that is no picture never reaches gdk-pixbuf.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn pictures_a_loader_does_not_declare_are_tried() {
+        // gdk-pixbuf's dds loader declares `image/x-dds` alone, while GIO
+        // names the same files `image/vnd.ms-dds`.
+        let declared: HashSet<String> = ["image/jpeg", "image/x-dds"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+
+        assert!(pixbuf_may_read("image/vnd.ms-dds", &declared));
+        assert!(pixbuf_may_read("image/jpeg", &declared));
+        assert!(!pixbuf_may_read("application/pdf", &declared));
+        assert!(!pixbuf_may_read("video/mp4", &declared));
+        assert!(!pixbuf_may_read("text/plain", &declared));
+        // A loader's own declaration counts too, whatever its kind.
+        let font = HashSet::from(["application/x-font-ttf".to_owned()]);
+        assert!(pixbuf_may_read("application/x-font-ttf", &font));
+    }
 
     /// Previews follow Settings: off, only in folders on this computer,
     /// and not for files over the limit.
