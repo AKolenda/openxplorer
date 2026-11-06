@@ -10,23 +10,22 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::settings::DetailsPaneOptions;
 
-use super::DetailsPane;
+use super::{DetailsPane, Field};
 use crate::icons::Icon;
 use crate::window::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;
 
-/// The fields the menu can turn off, in the order the pane shows them,
-/// with their glyphs.
-pub(super) const FIELDS: [(&str, Icon); 8] = [
-    ("Type", Icon::Document),
-    ("Size", Icon::HardDrive),
-    ("Modified", Icon::Clock),
-    ("Location", Icon::Folder),
-    ("Dimensions", Icon::Image),
-    ("Length", Icon::Video),
-    ("Items", Icon::TextBulletList),
-    ("Storage", Icon::HardDrive),
-];
+/// The glyph of `field` in the menu.
+fn field_glyph(field: Field) -> Icon {
+    match field {
+        Field::Type => Icon::Document,
+        Field::Size => Icon::HardDrive,
+        Field::Modified | Field::Created => Icon::Clock,
+        Field::Availability => Icon::Laptop,
+        Field::Dimensions => Icon::Image,
+        Field::Length => Icon::Video,
+    }
+}
 
 /// The option names of the choices that are not fields.
 const FOLLOW_HOVER: &str = "follow-hover";
@@ -70,8 +69,9 @@ fn entries(options: &DetailsPaneOptions) -> Vec<MenuEntry> {
         ),
         MenuEntry::Divider,
     ];
-    for (field, glyph) in FIELDS {
-        entries.push(choice(field, glyph, field, options.shows(field)));
+    for field in Field::ALL {
+        let key = field.key();
+        entries.push(choice(field.label(), field_glyph(field), key, options.shows(key)));
     }
     entries.push(MenuEntry::Divider);
     entries.push(choice(

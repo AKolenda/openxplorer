@@ -525,6 +525,8 @@ pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, fi
     let Some(directory) = capture_directory() else {
         return;
     };
+    // A menu fades and slides in as it opens.
+    wait_for(crate::window::MENU_OPENING_MOTION);
     wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
     crate::snapshot::render_png(popover, None, &directory.join(filename))
         .expect("an open popover is drawn and the capture directory is writable");

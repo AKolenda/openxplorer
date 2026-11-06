@@ -276,47 +276,27 @@ fn the_details_pane_spaces_its_parts_as_the_current_app() {
     );
 }
 
-/// The note at the bottom of the pane wraps across the pane's width, not
-/// in a narrow column beside its glyph.
-#[gtk::test]
-fn the_details_note_fills_the_pane_width() {
-    let fixture = Fixture::standard();
-    let test = laid_out_with_details_pane(&fixture.uri());
-    let pane = test.window.details_pane();
-    let preview = bounds(
-        &test,
-        descendants::<gtk::CenterBox>(pane).first().expect("the preview"),
-    );
-    let note = descendants::<gtk::Box>(pane)
-        .into_iter()
-        .find(|row| row.has_css_class("detail-note"))
-        .expect("the note");
-    let label = descendants::<gtk::Label>(&note).remove(0);
-    let text = bounds(&test, &label);
-    assert!(
-        preview.right() - text.right() <= 12,
-        "the note reaches the right side: {text:?} in {preview:?}"
-    );
-}
-
-/// With one item selected on this computer the pane drops its "Select an
-/// item…" note, glyph and all, as Windows Explorer's shows none; with
-/// nothing selected it shows the note again.
+/// Several selected items show their pictures stacked, as Windows 11's
+/// Details pane does, and one item its own picture again.
 ///
 /// parity: PROP-009
 #[gtk::test]
-fn the_details_note_hides_while_one_item_is_selected() {
+fn several_selected_items_are_pictured_stacked() {
     let fixture = Fixture::standard();
     let test = laid_out_with_details_pane(&fixture.uri());
-    let note = descendants::<gtk::Box>(test.window.details_pane())
-        .into_iter()
-        .find(|row| row.has_css_class("detail-note"))
-        .expect("the note");
-    assert!(note.is_visible(), "nothing selected: the hint");
+    let pane = test.window.details_pane();
+    let stack = || {
+        descendants::<gtk::Overlay>(pane)
+            .into_iter()
+            .find(|overlay| overlay.has_css_class("detail-stack"))
+    };
+    test.window.folder_model().select_positions(&[0, 1, 2]);
+    wait_until("the stacked pictures", || stack().is_some());
+    let pictures = descendants::<crate::icons::ArtImage>(&stack().expect("the stack"));
+    assert_eq!(pictures.len(), 3);
+    assert_eq!(pane.shown_name(), "3 items selected");
     test.select_named("Notes 2.txt");
-    wait_until("the note to hide", || !note.is_visible());
-    test.window.folder_model().select_positions(&[]);
-    wait_until("the note to come back", || note.is_visible());
+    wait_until("one picture again", || stack().is_none());
 }
 
 /// parity: VIEW-006
