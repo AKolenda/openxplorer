@@ -121,6 +121,29 @@ pub(crate) enum ProgramFile {
     Command(String),
 }
 
+/// The desktop ID of a launcher inside an XDG `applications` folder: its
+/// path below that folder with `/` as `-`, so `applications/vendor/viewer.desktop`
+/// is `vendor-viewer.desktop`, as GIO names it.
+fn desktop_id(path: &std::path::Path) -> Option<String> {
+    let real_path = std::fs::canonicalize(path).ok();
+    let data_folders = std::iter::once(glib::user_data_dir()).chain(glib::system_data_dirs());
+    data_folders
+        .map(|folder| folder.join("applications"))
+        .find_map(|folder| {
+            let relative = path
+                .strip_prefix(&folder)
+                .ok()
+                .map(std::path::Path::to_path_buf)
+                .or_else(|| {
+                    let folder = std::fs::canonicalize(&folder).ok()?;
+                    let relative = real_path.as_deref()?.strip_prefix(folder).ok()?;
+                    Some(relative.to_path_buf())
+                })?;
+            let parts: Option<Vec<&str>> = relative.iter().map(std::ffi::OsStr::to_str).collect();
+            Some(parts?.join("-"))
+        })
+}
+
 /// What the program file at `path` is: an installed launcher (`.desktop`)
 /// or an executable file.
 ///
@@ -133,10 +156,11 @@ pub(crate) fn program_file(path: &std::path::Path) -> Result<ProgramFile, String
 
     let is_launcher = path.extension().is_some_and(|extension| extension == "desktop");
     if is_launcher {
-        let id = path.file_name().and_then(|name| name.to_str());
-        return id
+        let file_name = path.file_name().and_then(|name| name.to_str()).map(str::to_owned);
+        return desktop_id(path)
+            .or(file_name)
             .filter(|id| installed_application(id).is_some())
-            .map(|id| ProgramFile::Installed(id.to_owned()))
+            .map(ProgramFile::Installed)
             .ok_or_else(|| ox_core::i18n::gettext("That app launcher is not installed."));
     }
     let is_executable = std::fs::metadata(path)
@@ -581,6 +605,29 @@ mod tests {
         assert_eq!(message, "Opened with the selected application.");
         let default = gio::AppInfo::default_for_type("application/x-openxplorer-test", false);
         assert_eq!(default.and_then(|default| default.id()), app.id());
+    }
+
+    /// A launcher in a folder inside an `applications` folder is chosen by
+    /// its desktop ID, which names that folder.
+    ///
+    /// parity: OPEN-014
+    #[gtk::test]
+    fn a_picked_launcher_in_a_vendor_folder_is_found_by_its_desktop_id() {
+        const ID: &str = "openxplorer-vendor-test-viewer.desktop";
+        let data = gtk::glib::user_data_dir();
+        assert!(data.starts_with(std::env::temp_dir()), "a private data folder");
+        let folder = data.join("applications/openxplorer-vendor-test");
+        std::fs::create_dir_all(&folder).expect("the data folder is writable");
+        let launcher = folder.join("viewer.desktop");
+        let entry = "[Desktop Entry]\nType=Application\nName=Vendor viewer\nExec=true %F\n";
+        std::fs::write(&launcher, entry).expect("the data folder is writable");
+        crate::test_support::harness::wait_until("GIO to list the viewer", || {
+            installed_application(ID).is_some()
+        });
+
+        assert_eq!(program_file(&launcher), Ok(ProgramFile::Installed(ID.to_owned())));
+
+        std::fs::remove_file(&launcher).expect("the test entry is removed");
     }
 
     /// The menu offers the installed applications of a file's type up to

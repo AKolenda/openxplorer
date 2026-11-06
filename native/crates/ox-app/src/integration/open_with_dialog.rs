@@ -405,15 +405,17 @@ impl OpenWithDialog {
                 return;
             }
         };
-        imp.listed_all
-            .set(scope == ApplicationScope::AllInstalled || list.is_folder);
+        let lists_all = scope == ApplicationScope::AllInstalled || list.is_folder;
+        imp.listed_all.set(lists_all);
         let can_open = |id: &str| {
             list.choices
                 .iter()
                 .any(|choice| choice.id == id && choice.is_available)
         };
         let mut status = None;
-        let chosen = if let Some(picked) = imp.picked.take() {
+        // A picked launcher waits for the list of every application.
+        let picked = if lists_all { imp.picked.take() } else { None };
+        let chosen = if let Some(picked) = picked {
             if !can_open(&picked) {
                 status = Some(OpenWithError::Unavailable.to_string());
             }
