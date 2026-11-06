@@ -145,6 +145,14 @@ fn the_command_bar_restores_all_items_or_the_selected_ones_in_the_recycle_bin() 
     let restore = restore_button(&test);
     assert_eq!(restore.action_name().as_deref(), Some("win.restore-all-items"));
     assert!(restore.is_sensitive());
+    // A search that matches nothing still leaves the items to restore.
+    test.window.search_box().entry().set_text("zzz-no-such-item");
+    wait_until("the search to match nothing", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    assert!(restore.is_sensitive(), "the Recycle Bin still holds items");
+    test.window.search_box().entry().set_text("");
+    wait_until("the items again", || test.names().len() >= names.len());
     restore.emit_clicked();
 
     wait_until("both files to be back", || {
@@ -314,6 +322,38 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
     assert!(left.is_empty(), "{left:?}");
+}
+
+/// Empty Recycle Bin deletes only the items it asked about: one deleted
+/// while the question shows stays in the Recycle Bin.
+///
+/// parity: OPS-042
+#[gtk::test]
+fn empty_recycle_bin_keeps_an_item_deleted_while_it_asks() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Asked about.txt");
+    fixture.write("Arrived later.txt");
+    trash(&fixture.path("Asked about.txt"));
+    require_only_test_items_in_the_recycle_bin();
+    let test = TestWindow::open(TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        test.names().contains(&"Asked about.txt".to_owned())
+    });
+
+    test.activate("empty-recycle-bin", None);
+    let dialog = open_dialog(&test);
+    trash(&fixture.path("Arrived later.txt"));
+    dialog.press("Yes");
+
+    wait_until("only the later item to be left", || {
+        test.names() == ["Arrived later.txt"]
+    });
+    let left = glib::MainContext::default()
+        .block_on(list_recycle_bin(&Cancellation::new()))
+        .expect("a readable Recycle Bin");
+    let left: Vec<_> = left.into_iter().map(|item| item.name).collect();
+    assert_eq!(left, ["Arrived later.txt"]);
 }
 
 /// With "Ask before emptying the Recycle Bin" off, Empty Recycle Bin

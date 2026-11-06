@@ -15,7 +15,7 @@
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, move_out_of_recycle_bin,
     permanent_delete_confirmation, restore_from_recycle_bin, starting_label, summarize, summarize_restore,
-    DeleteItem,
+    DeleteItem, OpsError,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -120,16 +120,29 @@ impl BrowserWindow {
     }
 
     /// Empty Recycle Bin from the sidebar's Recycle Bin (SIDE-025), from
-    /// any folder: asks, then deletes everything in it for good.
+    /// any folder: asks, then deletes for good the items it asked about,
+    /// or, when the settings say not to ask, everything in it.
     pub(crate) async fn empty_trash(&self) {
         let asks = self.context().settings_data().preferences.confirm_empty_trash;
-        if asks && !self.confirms_emptying().await {
-            return;
-        }
+        let confirmed = if asks {
+            match self.confirm_emptying().await {
+                Ok(Some(uris)) => Some(uris),
+                Ok(None) => return,
+                Err(error) => {
+                    self.conclude_operation(Err(error)).await;
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
             return;
         };
-        let outcome = empty_recycle_bin(&context.cancel).await;
+        let outcome = match confirmed {
+            Some(uris) => delete_from_recycle_bin(&uris, &context.cancel).await,
+            None => empty_recycle_bin(&context.cancel).await,
+        };
         self.end_operation();
         let finished = outcome.map(|result| FinishedOperation {
             summary: summarize(TransferMode::Delete, &result),
@@ -142,15 +155,18 @@ impl BrowserWindow {
     /// Asks about the items in the Recycle Bin as Windows Explorer does
     /// when it empties it: "Delete Multiple Items", "Are you sure you want
     /// to permanently delete these N items?" (one item is asked about as a
-    /// file or a folder, with its details), Yes and No. True for Yes, and
-    /// when the Recycle Bin cannot be listed, so that emptying it says
-    /// why; false for No, and when there is nothing to empty.
-    async fn confirms_emptying(&self) -> bool {
-        let Ok(items) = list_recycle_bin(&Cancellation::new()).await else {
-            return true;
-        };
+    /// file or a folder, with its details), Yes and No. The URIs of the
+    /// items asked about for Yes, so that an item deleted while the
+    /// question shows is kept; `None` for No, and when there is nothing to
+    /// empty.
+    ///
+    /// # Errors
+    ///
+    /// The Recycle Bin could not be listed, so nothing was asked.
+    async fn confirm_emptying(&self) -> Result<Option<Vec<String>>, OpsError> {
+        let items = list_recycle_bin(&Cancellation::new()).await?;
         if items.is_empty() {
-            return false;
+            return Ok(None);
         }
         let items: Vec<DeleteItem> = items
             .into_iter()
@@ -160,6 +176,7 @@ impl BrowserWindow {
                 can_trash: None,
             })
             .collect();
-        self.confirm_deletion(&items, permanent_delete_confirmation).await
+        let confirmed = self.confirm_deletion(&items, permanent_delete_confirmation).await;
+        Ok(confirmed.then(|| items.into_iter().map(|item| item.uri).collect()))
     }
 }

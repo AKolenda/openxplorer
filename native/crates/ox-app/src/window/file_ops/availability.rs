@@ -150,7 +150,8 @@ pub(crate) struct FolderFacts {
     pub(crate) is_searching: bool,
     /// It is the Recycle Bin itself.
     pub(crate) is_recycle_bin: bool,
-    /// It shows at least one item.
+    /// It shows at least one item, or it is the Recycle Bin and holds
+    /// items a search hides.
     pub(crate) has_items: bool,
     /// It is inside a ZIP opened like a folder, read-only (ARC-026).
     pub(crate) is_zip: bool,
@@ -323,11 +324,15 @@ impl BrowserWindow {
         let locations = self.imp().locations.borrow();
         let folder_uri = self.current_uri().unwrap_or_default();
         let listing_failed = self.shown_folder_is_unreadable();
+        let is_recycle_bin = same_location(&folder_uri, TRASH_URI);
         let folder = FolderFacts {
             is_writable: locations.is_writable_location(&folder_uri) && !listing_failed,
             is_searching: self.is_searching(),
-            is_recycle_bin: same_location(&folder_uri, TRASH_URI),
-            has_items: model.n_items() > 0,
+            is_recycle_bin,
+            // A search in the Recycle Bin hides items it still holds,
+            // which Restore all items and Empty Recycle Bin act on.
+            has_items: model.n_items() > 0
+                || (is_recycle_bin && self.is_searching() && self.imp().trash_items.get() > 0),
             is_zip: is_archive_location(&folder_uri),
         };
         let operations = self.imp().file_operations.borrow();
