@@ -195,24 +195,39 @@ async fn thumbnail_of(request: &PreviewRequest) -> Option<PathBuf> {
     if FAILED.with_borrow(|failed| failed.contains(&version)) {
         return None;
     }
-    let made = make_thumbnail(request).await;
-    if made.is_none() {
-        FAILED.with_borrow_mut(|failed| failed.insert(version));
+    match make_thumbnail(request).await {
+        Ok(path) => Some(path),
+        Err(Missing::Failed) => {
+            FAILED.with_borrow_mut(|failed| failed.insert(version));
+            None
+        }
+        // Asked again next time: the user may turn them back on.
+        Err(Missing::TurnedOff) => None,
     }
-    made
+}
+
+/// Why no thumbnail was made of an item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Missing {
+    /// None could be made, and this version of the item is not tried
+    /// again in this run.
+    Failed,
+    /// The user turned the desktop's thumbnailers off for its type, which
+    /// they may turn back on at any time.
+    TurnedOff,
 }
 
 /// Makes the missing thumbnail of the item: by the thumbnailer service
 /// when it supports the type, else by gdk-pixbuf for a picture, else by
 /// the desktop's own thumbnailer for the type when it installs one.
-async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
+async fn make_thumbnail(request: &PreviewRequest) -> Result<PathBuf, Missing> {
     let flavor = ThumbnailFlavor::for_pixels(request.pixels);
     let cache_dir = glib::user_cache_dir();
     // The cache's own pictures keep their icons: a thumbnail of a
     // thumbnail would grow the cache from itself, so nothing is read, made
     // or asked of the service and the desktop's programs for them.
     if writer::inside_cache(&cache_dir, &request.uri) {
-        return None;
+        return Err(Missing::Failed);
     }
     // GIO looks up local files only, and one size: a thumbnail this app
     // made earlier may be there all the same.
@@ -225,22 +240,24 @@ async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
         })
         .await;
     if let Some(Some(path)) = found {
-        return Some(path);
+        return Ok(path);
     }
     if let Some(service) = service::service().await {
         if service.supports(&request.uri, &request.content_type) {
             let _slot = MAKING.with(Rc::clone).take().await;
             let made = service.make(&request.uri, &request.content_type, flavor).await;
             let path = ox_core::entry::thumbnail_file(&cache_dir, &request.uri, flavor);
-            return made.then_some(path);
+            return made.then_some(path).ok_or(Missing::Failed);
         }
     }
     // Test safety: tests write thumbnails only into a private cache.
     #[cfg(test)]
     if !cache_dir.starts_with(std::env::temp_dir()) {
-        return None;
+        return Err(Missing::Failed);
     }
-    let modified = request.modified?;
+    let Some(modified) = request.modified else {
+        return Err(Missing::Failed);
+    };
     make_thumbnail_with(request, &cache_dir, None, flavor, modified).await
 }
 
@@ -255,17 +272,19 @@ async fn make_thumbnail_with(
     catalogue: Option<Arc<Catalogue>>,
     flavor: ThumbnailFlavor,
     modified: u64,
-) -> Option<PathBuf> {
+) -> Result<PathBuf, Missing> {
     if PIXBUF_TYPES.with(|types| types.contains(&request.content_type)) {
         match by_decoding(request, cache_dir, modified, flavor).await {
-            Ok(path) => return Some(path),
+            Ok(path) => return Ok(path),
             // Only a picture the app cannot read leaves room for another
             // thumbnailer. One it read and the cache refused is refused
             // for every thumbnailer, and a dropped request has nobody left
             // to show a picture to: forking a program for either would
             // only cost one.
             Err(writer::Failure::Unreadable) => {}
-            Err(writer::Failure::Unwritable | writer::Failure::Cancelled) => return None,
+            Err(writer::Failure::Unwritable | writer::Failure::Cancelled) => {
+                return Err(Missing::Failed);
+            }
         }
     }
     by_thumbnailer(request, cache_dir, modified, flavor, catalogue).await
@@ -294,15 +313,15 @@ async fn by_decoding(
 }
 
 /// The thumbnail of `request` made by the desktop's thumbnailer for its
-/// type: `None` when none makes it, the user turned them off for the type,
-/// or it failed.
+/// type, or [`Missing::TurnedOff`] when the user turned them off for it
+/// and [`Missing::Failed`] when none makes it or it failed.
 async fn by_thumbnailer(
     request: &PreviewRequest,
     cache_dir: &Path,
     modified: u64,
     flavor: ThumbnailFlavor,
     catalogue: Option<Arc<Catalogue>>,
-) -> Option<PathBuf> {
+) -> Result<PathBuf, Missing> {
     let job = thumbnailers::Job {
         cache_dir: cache_dir.to_path_buf(),
         uri: request.uri.clone(),
@@ -322,15 +341,15 @@ async fn by_thumbnailer(
                 catalogue
             } else {
                 let disabled = thumbnailers::Disabled::of_session();
-                if disabled.all {
-                    return None;
+                if disabled.covers(&job.content_type) {
+                    return Err(Missing::TurnedOff);
                 }
                 Arc::new(thumbnailers::installed().with_disabled(disabled))
             };
-            thumbnailers::write_thumbnail(&job, &installed, cancel)
+            thumbnailers::write_thumbnail(&job, &installed, cancel).ok_or(Missing::Failed)
         })
         .await
-        .flatten()
+        .unwrap_or(Err(Missing::Failed))
 }
 
 /// The thumbnail at `path`, scaled to fit `pixels` square.
@@ -544,7 +563,11 @@ mod tests {
             1_700_000_000,
         ));
 
-        assert!(made.is_none(), "the cache holds no pictures of itself");
+        assert_eq!(
+            made,
+            Err(Missing::Failed),
+            "the cache holds no pictures of itself"
+        );
         assert!(!started.exists(), "and no program is started for one");
     }
 }

@@ -95,6 +95,11 @@ const OUTPUT_PIXEL_LIMIT: u64 = 7680 * 4320;
 /// The start of every PNG file.
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
+/// The chunks of a thumbnailer's PNG the app keeps: those that draw the
+/// picture. The others, text and colour profiles among them, may hold
+/// compressed data that libpng would expand without the pixel limit.
+const DRAWN_CHUNKS: [&[u8; 4]; 5] = [b"IHDR", b"PLTE", b"tRNS", b"IDAT", b"IEND"];
+
 /// The `PATH` a thumbnailer runs with.
 const PROGRAM_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
@@ -176,7 +181,7 @@ impl Disabled {
     /// Whether no program may be started for `content_type`: `disable`
     /// names types, and a type it names takes the kinds of it along, as an
     /// entry naming a parent type does.
-    fn covers(&self, content_type: &str) -> bool {
+    pub(super) fn covers(&self, content_type: &str) -> bool {
         self.all || self.types.iter().any(|declared| covers(content_type, declared))
     }
 }
@@ -690,9 +695,36 @@ impl Workspace {
 
 impl Drop for Workspace {
     fn drop(&mut self) {
-        // Links the program left are removed, never followed.
-        let _ = fs::remove_dir_all(&self.0);
+        // The program may have taken its folders' permissions away to keep
+        // what it left; they are given back first, and the links it left
+        // are removed, never followed. Its sandbox is gone by now, so
+        // nothing changes the folder meanwhile.
+        let removed = fs::symlink_metadata(&self.0)
+            .is_ok_and(|metadata| metadata.is_dir() && open_up(&self.0))
+            && fs::remove_dir_all(&self.0).is_ok();
+        if !removed && self.0.exists() {
+            glib::g_warning!(
+                ox_core::LOG_DOMAIN,
+                "A thumbnailer's folder could not be removed: {}",
+                self.0.display()
+            );
+        }
     }
+}
+
+/// Gives the folder `folder` and every folder in it back to their owner,
+/// without following a link; whether that worked everywhere.
+fn open_up(folder: &Path) -> bool {
+    if fs::set_permissions(folder, fs::Permissions::from_mode(0o700)).is_err() {
+        return false;
+    }
+    let Ok(read) = fs::read_dir(folder) else {
+        return false;
+    };
+    read.filter_map(Result::ok).all(|entry| {
+        let is_folder = entry.file_type().is_ok_and(|kind| kind.is_dir());
+        !is_folder || open_up(&entry.path())
+    })
 }
 
 /// The picture a thumbnailer wrote at `path`, decoded to fit `edge`
@@ -712,26 +744,49 @@ fn read_picture(path: &Path, edge: i32) -> Option<Pixbuf> {
     }
     let mut bytes = Vec::new();
     file.take(OUTPUT_SIZE_LIMIT).read_to_end(&mut bytes).ok()?;
-    let (width, height) = png_size(&bytes)?;
-    let fits = (1..=OUTPUT_SIDE_LIMIT).contains(&width)
-        && (1..=OUTPUT_SIDE_LIMIT).contains(&height)
-        && u64::from(width) * u64::from(height) <= OUTPUT_PIXEL_LIMIT;
-    if !fits {
-        return None;
-    }
-    writer::scaled_png(&bytes, edge).filter(|picture| picture.width() > 0 && picture.height() > 0)
+    let png = drawn_png(&bytes)?;
+    writer::scaled_png(&png, edge).filter(|picture| picture.width() > 0 && picture.height() > 0)
 }
 
-/// The width and height a PNG declares in its header, or `None` when
-/// `bytes` are no PNG: a thumbnailer writes PNG, and only a PNG's size can
-/// be checked before gdk-pixbuf allocates it.
-fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
-    let header = bytes.get(..24)?;
-    if !header.starts_with(PNG_SIGNATURE) || &header[12..16] != b"IHDR" {
-        return None;
+/// The PNG in `bytes` with only the chunks that draw it ([`DRAWN_CHUNKS`]),
+/// or `None` when `bytes` are no well-formed PNG or it declares a picture
+/// larger than [`OUTPUT_SIDE_LIMIT`] or [`OUTPUT_PIXEL_LIMIT`]: a
+/// thumbnailer writes PNG, and only a PNG's size can be checked before
+/// gdk-pixbuf allocates it.
+fn drawn_png(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut rest = bytes.strip_prefix(PNG_SIGNATURE)?;
+    let mut png = PNG_SIGNATURE.to_vec();
+    let mut first = true;
+    loop {
+        let length = usize::try_from(u32::from_be_bytes(rest.get(..4)?.try_into().ok()?)).ok()?;
+        let kind = rest.get(4..8)?;
+        // The length, the kind, the data and the checksum.
+        let chunk = rest.get(..length.checked_add(12)?)?;
+        if first {
+            // The header comes first, and says how large the picture is.
+            if kind != b"IHDR" || length != 13 {
+                return None;
+            }
+            let side = |at: usize| chunk.get(at..at + 4)?.try_into().ok().map(u32::from_be_bytes);
+            let (width, height) = (side(8)?, side(12)?);
+            let fits = (1..=OUTPUT_SIDE_LIMIT).contains(&width)
+                && (1..=OUTPUT_SIDE_LIMIT).contains(&height)
+                && u64::from(width) * u64::from(height) <= OUTPUT_PIXEL_LIMIT;
+            if !fits {
+                return None;
+            }
+            first = false;
+        } else if kind == b"IHDR" {
+            return None;
+        }
+        if DRAWN_CHUNKS.iter().any(|drawn| kind == drawn.as_slice()) {
+            png.extend_from_slice(chunk);
+        }
+        if kind == b"IEND" {
+            return Some(png);
+        }
+        rest = &rest[chunk.len()..];
     }
-    let side = |at: usize| header.get(at..at + 4)?.try_into().ok().map(u32::from_be_bytes);
-    Some((side(16)?, side(20)?))
 }
 
 /// Runs `command` with nothing of its output shown, and returns how it
@@ -1388,9 +1443,33 @@ mod tests {
         header.extend_from_slice(&[8, 2, 0, 0, 0, 0, 0, 0, 0]);
         fs::write(&declared, &header).expect("the header");
         assert!(read_picture(&declared, 128).is_none(), "a bomb is not decoded");
+        // A text chunk is dropped before decoding; the picture stays.
+        let mut texted = fs::read(&picture).expect("the picture");
+        let mut text = Vec::new();
+        text.extend_from_slice(&10_u32.to_be_bytes());
+        text.extend_from_slice(b"zTXtComment\0\0x");
+        text.extend_from_slice(&[0, 0, 0, 0]);
+        texted.splice(33..33, text);
+        let drawn = drawn_png(&texted).expect("a PNG");
+        assert!(!drawn.windows(4).any(|window| window == b"zTXt"));
+        assert!(drawn.len() < texted.len());
+        assert!(
+            drawn_png(&texted[..texted.len() - 12]).is_none(),
+            "a PNG without its end"
+        );
         let other = folder.path().join("other.png");
         fs::write(&other, b"GIF89a, not a PNG at all").expect("the file");
         assert!(read_picture(&other, 128).is_none(), "only a PNG is read");
+        // A folder the program locked is still removed with its files.
+        let workspace = Workspace::new().expect("a workspace");
+        let path = workspace.path().to_path_buf();
+        let locked = path.join("locked");
+        fs::create_dir(&locked).expect("a folder");
+        fs::write(locked.join("kept"), b"left behind").expect("a file");
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).expect("the mode");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o500)).expect("the mode");
+        drop(workspace);
+        assert!(!path.exists(), "the workspace is gone");
         assert_eq!(extension_of(Path::new("/a/Clip.MP4")), ".MP4");
         assert_eq!(extension_of(Path::new("/a/odd.p n g")), "");
         assert_eq!(extension_of(Path::new("/a/none")), "");
