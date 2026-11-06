@@ -92,7 +92,7 @@ pub(crate) fn open_item_properties(
     initial: PropertiesTab,
 ) -> PropertiesWindow {
     let local_folder = local_folder(&target);
-    let is_drive = local_folder.is_some() && is_mount_point(&target.uri);
+    let is_drive = target.as_drive && local_folder.is_some() && is_mount_point(&target.uri);
     let art = if is_drive {
         Some(DRIVE_ART)
     } else {
@@ -350,7 +350,7 @@ impl ItemPages {
             }
             return;
         }
-        if let Some(mount) = &properties.mount {
+        if let Some(mount) = properties.mount.as_ref().filter(|_| self.target.as_drive) {
             window.set_art(DRIVE_ART);
             clear(&self.general);
             let general = drive_general_tab(&properties.entry.uri, mount, &self.context.locations);
