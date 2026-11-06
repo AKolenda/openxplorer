@@ -4,19 +4,53 @@
    heights follow the text size (src/theme/fonts.rs). */
 
 /* ---- Menu surface (E03 classic, C07, C42) ---- */
+/* Windows 11 rounds even its classic menu ("Show more options") by 8px,
+   its OverlayCornerRadius (ui-spec.md R03). */
 popover.ox-menu > contents {
   background-color: @ox_flyout;
   color: @ox_text;
   border: 1px solid @ox_flyout_stroke;
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 3px;
   box-shadow: 0 5px 16px @ox_menu_shadow;
 }
 
+/* ---- Opening motion (ui-spec.md M02, M07; src/window/menu_popover/motion.rs) ---- */
+/* A menu fades in while it slides 8px in from the edge nearest what it
+   opens from, in 167ms on Fluent's fast-in curve, as Windows 11's menus
+   open. 8px stays inside the room GTK keeps around the contents for the
+   shadow, so nothing is cut off. Each opening takes the other of two
+   names, so GTK starts the animation afresh. GTK runs no CSS animation
+   while the desktop turns animations off: the menu then shows at once
+   (M08). It closes at once (M03). */
+@keyframes ox-menu-down-a { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ox-menu-down-b { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ox-menu-up-a { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ox-menu-up-b { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ox-menu-right-a { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ox-menu-right-b { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ox-menu-left-a { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ox-menu-left-b { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+popover.ox-menu > contents {
+  animation-duration: 167ms;
+  animation-timing-function: cubic-bezier(0, 0, 0, 1);
+  animation-iteration-count: 1;
+}
+popover.ox-menu.slides-down.opening-a > contents { animation-name: ox-menu-down-a; }
+popover.ox-menu.slides-down.opening-b > contents { animation-name: ox-menu-down-b; }
+popover.ox-menu.slides-up.opening-a > contents { animation-name: ox-menu-up-a; }
+popover.ox-menu.slides-up.opening-b > contents { animation-name: ox-menu-up-b; }
+popover.ox-menu.slides-right.opening-a > contents { animation-name: ox-menu-right-a; }
+popover.ox-menu.slides-right.opening-b > contents { animation-name: ox-menu-right-b; }
+popover.ox-menu.slides-left.opening-a > contents { animation-name: ox-menu-left-a; }
+popover.ox-menu.slides-left.opening-b > contents { animation-name: ox-menu-left-b; }
+
 /* ---- The app's own menus (src/window/menu_popover.rs) ---- */
 popover.ox-menu list { background: none; color: @ox_text; }
+/* Windows 11's row spacing: 12px at the sides; the row height follows
+   the text size (src/theme/fonts.rs). */
 popover.ox-menu list > row {
-  padding: 0 9px;
+  padding: 0 12px;
   border-radius: 0;
   background: none;
   outline: none;
