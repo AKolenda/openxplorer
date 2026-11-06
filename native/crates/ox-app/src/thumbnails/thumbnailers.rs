@@ -6,9 +6,10 @@
 //! thumbnailer service nor gdk-pixbuf knows, such as Unity asset bundles,
 //! spreadsheets, and videos on a session without tumbler.
 //!
-//! [`super::make_thumbnail`] asks them after the service and before the
-//! app's own decoding: a forked program costs more than gdk-pixbuf reading
-//! a picture in the app, so the picture types it reads never get here. The
+//! [`super::make_thumbnail`] asks them after the service: a forked program
+//! costs more than gdk-pixbuf decoding a picture in the app, so a picture
+//! the app reads is decoded there, and only one it cannot read (a type
+//! without a gdk-pixbuf loader) or one of another kind comes here. The
 //! entries the user turns off in `org.gnome.desktop.thumbnailers`
 //! (`disable`) are skipped, and so is one whose `TryExec` program this
 //! computer lacks, which would fail on every item.
@@ -17,11 +18,10 @@
 //! thumbnail valid; the app writes the picture into the shared cache
 //! itself, as Files does, through [`super::writer`].
 
-use std::cell::RefCell;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -58,11 +58,9 @@ const TEMPORARY: &str = "openxplorer-thumbnailer.png";
 const DISABLE_SCHEMA: &str = "org.gnome.desktop.thumbnailers";
 const DISABLE_KEY: &str = "disable";
 
-thread_local! {
-    /// The desktop's thumbnailers, read once per run: `thumbnailers/` holds
-    /// a handful of small files, and every row of a folder asks for them.
-    static INSTALLED: RefCell<Option<Rc<Vec<Thumbnailer>>>> = const { RefCell::new(None) };
-}
+/// The desktop's thumbnailers, read once per run by [`installed`], which a
+/// worker thread may also read.
+static INSTALLED: OnceLock<Arc<Vec<Thumbnailer>>> = OnceLock::new();
 
 /// What a thumbnail is made of: the item, its type and time, and where the
 /// cache expects the picture.
@@ -112,6 +110,17 @@ pub(super) struct Thumbnailer {
 }
 
 impl Thumbnailer {
+    /// The thumbnailer a test needs, without a `.thumbnailer` file of the
+    /// desktop's: `command` as `Exec` would be split, and the types it
+    /// takes.
+    #[cfg(test)]
+    pub(super) fn for_test(command: &[&str], types: &[&str]) -> Self {
+        Self {
+            command: command.iter().map(|word| (*word).to_owned()).collect(),
+            types: types.iter().map(|mime| (*mime).to_owned()).collect(),
+        }
+    }
+
     /// The thumbnailer the entry `text` describes, or `None` when it is not
     /// a usable one: a file of another kind, an entry naming no command or
     /// no type, or one whose `TryExec` program this computer lacks. Blocks.
@@ -201,16 +210,11 @@ fn expand(word: &str, values: &[(char, &str)]) -> String {
     expanded
 }
 
-/// The thumbnailers this desktop installs, in the order it tries them.
-fn installed() -> Rc<Vec<Thumbnailer>> {
-    INSTALLED.with(|installed| {
-        if let Some(thumbnailers) = installed.borrow().as_ref() {
-            return Rc::clone(thumbnailers);
-        }
-        let thumbnailers = Rc::new(read(&Dirs::of_session()));
-        installed.borrow_mut().replace(Rc::clone(&thumbnailers));
-        thumbnailers
-    })
+/// The thumbnailers this desktop installs, in the order it tries them;
+/// read the first time a thumbnail has to be made, and once per run
+/// (`thumbnailers/` holds a handful of small files).
+pub(super) fn installed() -> Arc<Vec<Thumbnailer>> {
+    Arc::clone(INSTALLED.get_or_init(|| Arc::new(read(&Dirs::of_session()))))
 }
 
 /// The thumbnailers `dirs` holds, the user's folders before the system
@@ -297,18 +301,15 @@ fn disabled() -> Vec<String> {
         .collect()
 }
 
-/// Makes the thumbnail of `job` with the desktop's thumbnailer for its
-/// type and writes it into the cache as the Thumbnail Managing Standard
-/// asks; `None` when no thumbnailer makes the type, it failed, or the
-/// request was cancelled. Blocks: run it off the main thread.
-pub(super) fn write_thumbnail(job: &Job, cancellation: &gio::Cancellable) -> Option<PathBuf> {
-    let thumbnailers = installed();
-    make(job, &thumbnailers, cancellation)
-}
-
-/// As [`write_thumbnail`], with the thumbnailers given: a test reads its
-/// own, so the desktop's own entries make no difference to it.
-fn make(job: &Job, thumbnailers: &[Thumbnailer], cancellation: &gio::Cancellable) -> Option<PathBuf> {
+/// Makes the thumbnail of `job` with the thumbnailer of `thumbnailers`
+/// that makes its type, and writes it into the cache as the Thumbnail
+/// Managing Standard asks; `None` when none makes the type, it failed, or
+/// the request was cancelled. Blocks: run it off the main thread.
+pub(super) fn write_thumbnail(
+    job: &Job,
+    thumbnailers: &[Thumbnailer],
+    cancellation: &gio::Cancellable,
+) -> Option<PathBuf> {
     let thumbnailer = thumbnailers
         .iter()
         .find(|thumbnailer| thumbnailer.handles(&job.content_type))?;
@@ -591,7 +592,7 @@ mod tests {
         };
         let thumbnailers = read(&dirs);
 
-        let written = make(&job, &thumbnailers, &gio::Cancellable::new()).expect("a thumbnail");
+        let written = write_thumbnail(&job, &thumbnailers, &gio::Cancellable::new()).expect("a thumbnail");
 
         assert_eq!(written, thumbnail_file(&cache, &job.uri, ThumbnailFlavor::Normal));
         let thumbnail = Pixbuf::from_file(&written).expect("a PNG");
@@ -620,7 +621,7 @@ mod tests {
             content_type: "image/png".to_owned(),
             ..job.clone()
         };
-        assert!(make(&other, &thumbnailers, &gio::Cancellable::new()).is_none());
+        assert!(write_thumbnail(&other, &thumbnailers, &gio::Cancellable::new()).is_none());
         let silent = Thumbnailer {
             command: vec!["true".to_owned()],
             types: vec![BUNDLE.to_owned()],
@@ -630,7 +631,7 @@ mod tests {
             cache_dir: empty_cache,
             ..job
         };
-        assert!(make(&job, &[silent], &gio::Cancellable::new()).is_none());
+        assert!(write_thumbnail(&job, &[silent], &gio::Cancellable::new()).is_none());
     }
 
     /// A request the user scrolled away from stops its thumbnailer at once
@@ -665,7 +666,7 @@ mod tests {
         let cancellation = gio::Cancellable::new();
         cancellation.cancel();
 
-        let written = make(&job, &[slow], &cancellation);
+        let written = write_thumbnail(&job, &[slow], &cancellation);
 
         assert!(written.is_none(), "a cancelled request makes no thumbnail");
         assert!(!thumbnail_file(&cache, &job.uri, ThumbnailFlavor::Normal).exists());
