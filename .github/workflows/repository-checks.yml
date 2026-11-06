@@ -1,7 +1,8 @@
 name: Repository checks
 on:
-  pull_request:
-    paths: &checked-paths
+  push:
+    branches: [main]
+    paths:
       - 'apps/**'
       - 'tools/**'
       - 'tests/**'
@@ -21,18 +22,16 @@ on:
       - 'native/Cargo.lock'
       - '.github/workflows/checks.yml'
       - '.github/workflows/repository-checks.yml'
-  push:
-    branches: [main]
-    paths: *checked-paths
   # Newly published advisories also matter when the lockfiles do not change.
   schedule:
     - cron: '23 7 * * 1'
+  # Pull requests do not start it; run it on a branch with "Run workflow".
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   website:
