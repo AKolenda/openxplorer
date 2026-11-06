@@ -163,9 +163,9 @@ pub(super) fn general_tab(
 
 /// `PNG image (.png)`: the type and, when the name has one, its extension.
 /// A shortcut is just "Shortcut": its name has no extension, and the
-/// `.lnk` Windows shows there does not exist here.
+/// `.lnk` Windows shows there does not exist here ([`Entry::is_shortcut`]).
 fn type_of_file(entry: &Entry) -> String {
-    if entry.is_symlink {
+    if entry.is_shortcut() {
         return entry.type_label.clone();
     }
     let extension = std::path::Path::new(&entry.name)
@@ -309,7 +309,7 @@ impl GeneralEdits {
             uri,
             original_name: RefCell::new(entry.name.clone()),
             is_folder: entry.is_dir,
-            is_shortcut: entry.is_symlink || properties.links_to_folder,
+            is_shortcut: entry.is_shortcut() || properties.links_to_folder,
             name,
             read_only,
             read_only_now: Cell::new(read_only_now),
