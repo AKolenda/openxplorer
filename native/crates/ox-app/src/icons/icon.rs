@@ -69,6 +69,8 @@ pub(crate) enum Icon {
     ArrowUndo,
     /// `arrow_up_20_regular`: Up and the Ascending sort.
     ArrowUp,
+    /// `bluetooth_20_regular`: Send to ▸ Bluetooth device.
+    Bluetooth,
     /// `braces_20_regular`: New JSON file.
     Braces,
     /// `checkbox_checked_20_regular`: View > Show > Item check boxes.
@@ -137,7 +139,7 @@ pub(crate) enum Icon {
     /// `document_add_20_regular`: New file.
     DocumentAdd,
     /// `document_20_color`: documents, PDFs, slides and unknown files at
-    /// small sizes.
+    /// small sizes, and Send to ▸ Documents.
     DocumentColor20,
     /// `document_32_color`: the same at medium sizes.
     DocumentColor32,
@@ -197,6 +199,8 @@ pub(crate) enum Icon {
     Laptop,
     /// `link_20_regular`: Copy as path in the context menus.
     Link,
+    /// `mail_20_color`: Send to ▸ Mail recipient, in colour as in Windows.
+    MailColor20,
     /// Map network drive in This PC's "…": an original icon
     /// made for `OpenXplorer` to match Windows 11's command-bar glyph
     /// (`native/icon-sources`).
@@ -335,6 +339,7 @@ impl Icon {
             Icon::ArrowSwap => "ox-arrow-swap-20-symbolic",
             Icon::ArrowUndo => "ox-arrow-undo-20-symbolic",
             Icon::ArrowUp => "ox-arrow-up-20-symbolic",
+            Icon::Bluetooth => "ox-bluetooth-20-symbolic",
             Icon::Braces => "ox-braces-20-symbolic",
             Icon::CheckboxChecked => "ox-checkbox-checked-20-symbolic",
             Icon::Checkmark => "ox-checkmark-20-symbolic",
@@ -388,6 +393,7 @@ impl Icon {
             Icon::InvertSelection24 => "ox-invert-selection-24-symbolic",
             Icon::Laptop => "ox-laptop-20-symbolic",
             Icon::Link => "ox-link-20-symbolic",
+            Icon::MailColor20 => "ox-mail-20-color",
             Icon::MapNetworkDrive24 => "ox-map-network-drive-24-symbolic",
             Icon::Markdown => "ox-markdown-20-symbolic",
             Icon::Maximize => "ox-maximize-20-symbolic",
@@ -457,7 +463,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 117] = [
+pub(crate) const ALL_ICONS: [Icon; 119] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
@@ -475,6 +481,7 @@ pub(crate) const ALL_ICONS: [Icon; 117] = [
     Icon::ArrowSwap,
     Icon::ArrowUndo,
     Icon::ArrowUp,
+    Icon::Bluetooth,
     Icon::Braces,
     Icon::CheckboxChecked,
     Icon::Checkmark,
@@ -528,6 +535,7 @@ pub(crate) const ALL_ICONS: [Icon; 117] = [
     Icon::InvertSelection24,
     Icon::Laptop,
     Icon::Link,
+    Icon::MailColor20,
     Icon::MapNetworkDrive24,
     Icon::Markdown,
     Icon::Maximize,

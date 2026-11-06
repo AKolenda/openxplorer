@@ -106,6 +106,7 @@ impl BrowserWindow {
         self.update_size_actions();
         self.update_archive_actions();
         self.update_share_command();
+        self.update_send_to_actions();
         self.picker_selection_changed();
     }
 

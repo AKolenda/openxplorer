@@ -4613,6 +4613,10 @@ msgid "Analyse disk usage"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Bluetooth device"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Calculate folder size"
 msgstr ""
 
@@ -4632,12 +4636,24 @@ msgstr ""
 msgid "Compress to…"
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Compressed (zipped) folder"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Copy as path"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Delete permanently"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Desktop (create shortcut)"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
+msgid "Documents"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
@@ -4657,11 +4673,19 @@ msgid "Items in a previous version are read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Mail recipient"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Mount disk image"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "New…"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Only files can be sent to a Bluetooth device."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -4724,6 +4748,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Select only one item for this command."
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Send to"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4826,6 +4854,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
 msgid "Only a search result has a file location to open."
+msgstr ""
+
+#: crates/ox-app/src/window/disabled_reasons.rs
+msgid "Only files can be attached to an email."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
@@ -5101,7 +5133,7 @@ msgstr ""
 msgid "The Recycle Bin is empty."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/file_ops/transfer.rs
+#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/file_ops/transfer.rs crates/ox-app/src/window/send_to.rs
 msgid "This folder is read-only."
 msgstr ""
 
@@ -5109,7 +5141,7 @@ msgstr ""
 msgid "This is not the Recycle Bin."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs
+#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/send_to.rs
 msgid "Wait for the running file operation to finish."
 msgstr ""
 
@@ -5130,7 +5162,7 @@ msgstr ""
 msgid "Renaming items…"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/clipboard.rs
+#: crates/ox-app/src/window/file_ops/clipboard.rs crates/ox-app/src/window/send_to.rs
 msgid "Open the share first, then select its files or folders."
 msgstr ""
 
@@ -6045,6 +6077,18 @@ msgstr ""
 
 #: crates/ox-app/src/window/select_matching.rs
 msgid "Use * for any characters and ? for one character, such as *.pdf."
+msgstr ""
+
+#: crates/ox-app/src/window/send_to.rs
+msgid "Four file operations are already running. Wait for one to finish."
+msgstr ""
+
+#: crates/ox-app/src/window/send_to.rs
+msgid "Only files on this computer or on a mounted share can be sent by Bluetooth."
+msgstr ""
+
+#: crates/ox-app/src/window/send_to.rs
+msgid "The Bluetooth sender could not be started."
 msgstr ""
 
 #: crates/ox-app/src/window/service_actions.rs
@@ -8019,7 +8063,7 @@ msgstr ""
 msgid "Open a destination folder before pasting."
 msgstr ""
 
-#: crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/transfer/request.rs
+#: crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
 msgid "Select between 1 and 100,000 items."
 msgstr ""
 
@@ -8267,6 +8311,28 @@ msgstr ""
 msgid "Open a network share before pasting files."
 msgstr ""
 
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "A shortcut can only point to an item on this computer or on a mounted share."
+msgstr ""
+
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "Every name for this shortcut is taken. Nothing was replaced."
+msgstr ""
+
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "Shortcuts cannot be created here: this location does not support symbolic links."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "{name} - Shortcut"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/shortcuts.rs
+msgid "{name} - Shortcut ({number})"
+msgstr ""
+
 #: crates/ox-core/src/ops/tab_transfer/messages.rs
 msgid "A window closed before the tab move finished."
 msgstr ""
@@ -8426,10 +8492,6 @@ msgstr ""
 
 #: crates/ox-core/src/places/known_folders.rs
 msgid "Desktop"
-msgstr ""
-
-#: crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
-msgid "Documents"
 msgstr ""
 
 #: crates/ox-core/src/places/known_folders.rs
