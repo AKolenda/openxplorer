@@ -84,6 +84,10 @@ const DISABLED_ACTIONS: [WindowAction; 17] = [
     WindowAction::Share,
 ];
 
+/// The width, in characters, of an Open dialog's type list, about the
+/// width of Windows' type box beside File name.
+const OPEN_TYPE_LIST_CHARS: i32 = 24;
+
 /// Shown when the File name box names nothing that exists.
 const NOT_FOUND: &str = crate::i18n::message_id("“{name}” was not found. Check the file name and try again.");
 
@@ -1395,6 +1399,10 @@ impl BrowserWindow {
             row += 1;
             entry
         });
+        // Windows' Open dialog has no caption for its type list: the list
+        // sits right of File name, above Open and Cancel. "Save as type:"
+        // is the Save dialog's own row.
+        let opens_files = matches!(request.mode, ChooserMode::Open { directory: false, .. });
         let types = (!request.filters.is_empty()).then(|| {
             let labels: Vec<&str> = request
                 .filters
@@ -1403,19 +1411,34 @@ impl BrowserWindow {
                 .collect();
             let list = gtk::DropDown::from_strings(&labels);
             list.set_selected(u32::try_from(request.current_filter.unwrap_or(0)).unwrap_or(0));
-            let caption = if name.is_some() {
-                "Save as type:"
+            if opens_files {
+                place_open_type_list(&fields, &list);
             } else {
-                "File type:"
-            };
-            attach_field(&fields, row, caption, &list);
-            row += 1;
+                let caption = if name.is_some() {
+                    "Save as type:"
+                } else {
+                    "File type:"
+                };
+                attach_field(&fields, row, caption, &list);
+                row += 1;
+            }
             list
         });
         let choices = choice_controls(&fields, &mut row, &request);
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         buttons.add_css_class("picker-buttons");
         buttons.set_valign(gtk::Align::End);
+        // An Open dialog's buttons are on a row of their own under File
+        // name and the type list, at the right, as in Windows.
+        bar.set_orientation(if opens_files {
+            gtk::Orientation::Vertical
+        } else {
+            gtk::Orientation::Horizontal
+        });
+        if opens_files {
+            bar.set_spacing(12);
+            buttons.set_halign(gtk::Align::End);
+        }
         let accept = gtk::Button::builder()
             .label(request.accept_label())
             .css_classes(["picker-button", ButtonStyle::Accent.css_class()])
@@ -1539,6 +1562,53 @@ fn attach_field(
     control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
     fields.attach(&label, 0, row, 1, 1);
     fields.attach(control, 1, row, 1, 1);
+}
+
+/// Puts an Open dialog's type list right of File name, on row 0 of
+/// `fields`, without a caption, as Windows' Open dialog has it. A long
+/// type name is shortened in the closed list and shown whole in its
+/// popup, so the list keeps the width of Windows' type box.
+fn place_open_type_list(fields: &gtk::Grid, list: &gtk::DropDown) {
+    list.set_factory(Some(&type_name_factory(true)));
+    list.set_list_factory(Some(&type_name_factory(false)));
+    list.set_hexpand(false);
+    list.add_css_class("picker-type-list");
+    // Unlabeled on screen, still named for screen readers.
+    list.update_property(&[gtk::accessible::Property::Label("File type")]);
+    fields.attach(list, 2, 0, 1, 1);
+}
+
+/// Rows that show a type's name: `shortened` to the type list's width,
+/// with the whole name as a tooltip, or whole.
+fn type_name_factory(shortened: bool) -> gtk::SignalListItemFactory {
+    let factory = gtk::SignalListItemFactory::new();
+    factory.connect_setup(move |_, item| {
+        let label = gtk::Label::builder().xalign(0.0).build();
+        if shortened {
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            label.set_width_chars(OPEN_TYPE_LIST_CHARS);
+            label.set_max_width_chars(OPEN_TYPE_LIST_CHARS);
+        }
+        if let Some(item) = item.downcast_ref::<gtk::ListItem>() {
+            item.set_child(Some(&label));
+        }
+    });
+    factory.connect_bind(move |_, item| {
+        let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
+            return;
+        };
+        let name = item
+            .item()
+            .and_downcast::<gtk::StringObject>()
+            .map(|name| name.string());
+        if let (Some(label), Some(name)) = (item.child().and_downcast::<gtk::Label>(), name) {
+            label.set_label(&name);
+            if shortened {
+                label.set_tooltip_text(Some(&name));
+            }
+        }
+    });
+    factory
 }
 
 /// The files of a quoted list typed in an Open dialog's File name, each
@@ -4013,6 +4083,150 @@ mod tests {
             );
             assert_eq!(name.selection_bounds(), Some((0, 7)));
             capture(window, &format!("picker-save-name-file-appeared-{theme}.png"));
+        }
+    }
+
+    /// Two types, as an image viewer's Open and Save dialogs offer them.
+    fn image_types() -> glib::Variant {
+        let types = [
+            (
+                "Images (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.tiff)".to_owned(),
+                vec![(0_u32, "*.png".to_owned()), (0_u32, "*.jpg".to_owned())],
+            )
+                .to_variant(),
+            ("All files".to_owned(), vec![(0_u32, "*".to_owned())]).to_variant(),
+        ];
+        glib::Variant::array_from_iter_with_type(types[0].type_(), types.clone())
+    }
+
+    /// The captions of the dialog's bar.
+    fn bar_captions(window: &crate::window::BrowserWindow) -> Vec<String> {
+        crate::test_support::harness::descendants::<gtk::Label>(&*window.imp().picker_bar)
+            .iter()
+            .filter(|label| label.has_css_class("picker-label"))
+            .map(|label| label.label().to_string())
+            .collect()
+    }
+
+    /// Where `widget` is in `window`: its left, top, right and bottom.
+    fn bounds_in(
+        widget: &impl IsA<gtk::Widget>,
+        window: &crate::window::BrowserWindow,
+    ) -> (f32, f32, f32, f32) {
+        let bounds = widget.compute_bounds(window).expect("laid out in the window");
+        (
+            bounds.x(),
+            bounds.y(),
+            bounds.x() + bounds.width(),
+            bounds.y() + bounds.height(),
+        )
+    }
+
+    /// Windows' Open dialog (Properties > Customize > Choose File..., an
+    /// image viewer's Open): the type list sits right of File name without
+    /// a caption, "Save as type:" nowhere, and Open and Cancel on a row
+    /// below them at the right. A long type name keeps the list to the
+    /// width of Windows' type box.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn an_open_dialog_has_its_type_list_beside_file_name_and_no_caption() {
+        let fixture = Fixture::empty();
+        fixture.write("photo.png");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", vec![("filters", image_types())]);
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(
+            bar_captions(window),
+            ["File name:"],
+            "the type list has no caption"
+        );
+
+        let (name_left, name_top, name_right, name_bottom) = bounds_in(&name, window);
+        let (types_left, types_top, types_right, types_bottom) = bounds_in(&types, window);
+        let (accept_left, accept_top, _, _) = bounds_in(&picker.accept, window);
+        assert!(types_left > name_right, "the type list is right of File name");
+        let middle = |top: f32, bottom: f32| f32::midpoint(top, bottom);
+        assert!(
+            (middle(types_top, types_bottom) - middle(name_top, name_bottom)).abs() < 3.0,
+            "on File name's row"
+        );
+        assert!(
+            accept_top >= name_bottom.max(types_bottom),
+            "Open is on a row below"
+        );
+        assert!(
+            accept_left > name_left + (name_right - name_left) / 2.0,
+            "at the right"
+        );
+        assert!(
+            types_right - types_left < (name_right - name_left),
+            "a long type name does not widen the list past File name"
+        );
+    }
+
+    /// A Save dialog keeps "Save as type:" on its own row under File name,
+    /// with Save and Cancel beside them, as Windows' Save dialog does.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_save_dialog_keeps_save_as_type_under_file_name() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "photo.png".to_variant()),
+                ("filters", image_types()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(bar_captions(window), ["File name:", "Save as type:"]);
+        let (name_left, _, name_right, name_bottom) = bounds_in(&name, window);
+        let (types_left, types_top, types_right, _) = bounds_in(&types, window);
+        let (accept_left, _, _, _) = bounds_in(&picker.accept, window);
+        assert!(types_top >= name_bottom, "Save as type is under File name");
+        assert!((types_left - name_left).abs() < 1.0 && (types_right - name_right).abs() < 1.0);
+        assert!(accept_left > name_right, "Save is beside the fields");
+    }
+
+    /// Open and Save dialogs with a type list, light and dark, for review
+    /// with `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`).
+    #[gtk::test]
+    fn open_and_save_type_lists_are_captured_light_and_dark() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            for (method, extra) in [
+                ("OpenFile", None),
+                ("SaveFile", Some(("current_name", "Scan 03.png".to_variant()))),
+            ] {
+                let fixture = Fixture::empty();
+                for name in ["Beach.jpg", "Garden.png", "Scan 01.png", "Scan 02.png"] {
+                    fixture.write(name);
+                }
+                let portal = Portal::new();
+                let mut entries = vec![("filters", image_types())];
+                entries.extend(extra);
+                let _answer = dialog_on(&portal, &fixture, method, entries);
+                let test = &portal.test;
+                test.activate("theme", Some(theme));
+                wait_until("the folder's listing", || test.window.is_listed());
+                settle();
+                let mode = if method == "OpenFile" { "open" } else { "save" };
+                capture(&test.window, &format!("picker-type-list-{mode}-{theme}.png"));
+            }
         }
     }
 
