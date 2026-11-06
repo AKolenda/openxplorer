@@ -12272,7 +12272,7 @@ native_note = "The menus say 'Open in Terminal' for folders and 'Open containing
 id = "OPEN-018"
 area = "OPEN"
 title = "Terminal selection"
-behaviour = "The terminal is Debian's x-terminal-emulator alternative when it points to a known terminal (gnome-terminal.wrapper resolves to gnome-terminal), else the first installed of gnome-terminal, kgx, xfce4-terminal, konsole, xterm and uxterm. Only /usr/bin:/bin:/usr/local/bin are searched; $PATH and $TERMINAL are ignored. With none: 'No supported terminal is installed. On Zorin, install GNOME Terminal with: sudo apt install gnome-terminal'"
+behaviour = "The terminal is Debian's x-terminal-emulator alternative when it points to a known terminal (gnome-terminal.wrapper resolves to gnome-terminal), else the first installed of gnome-terminal, kgx, xfce4-terminal, konsole, kitty, xterm and uxterm. Only /usr/bin:/bin:/usr/local/bin are searched; $PATH and $TERMINAL are ignored. With none: 'No supported terminal is installed. On Zorin, install GNOME Terminal with: sudo apt install gnome-terminal'"
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -12297,7 +12297,7 @@ python_tests = [
 bridge = ["openTerminal"]
 gnome = "x-terminal-emulator alternative; x-terminal-emulator alternative / gnome-terminal --working-directory"
 native = "done"
-native_note = "Open in Terminal launches through ox-core's terminal service, which picks the Debian alternative or the first installed known terminal from the system folders only (native/crates/ox-app/src/integration/terminal.rs). Tests: native/crates/ox-core/tests/integration_terminal/launch.rs."
+native_note = "Open in Terminal launches through ox-core's terminal service, which picks the Debian alternative or the first installed known terminal from the system folders only (native/crates/ox-app/src/integration/terminal.rs). kitty is a native addition to the ported list, ahead of the XTerm family. Tests: native/crates/ox-core/tests/integration_terminal/launch.rs."
 
 [[feature]]
 id = "OPEN-019"
@@ -12322,7 +12322,7 @@ native_note = "Open in Terminal first tries the terminal the desktop names: the 
 id = "OPEN-020"
 area = "OPEN"
 title = "Terminal launch semantics"
-behaviour = "The terminal starts in a new session in the resolved real directory: --working-directory= for GNOME Terminal, Console and Xfce Terminal, --workdir= for Konsole, and only the working directory for xterm. PWD is set and GNOME_TERMINAL_SCREEN/SERVICE are removed so a new window opens. No shell and no command are run. An exit within 0.25 s is reported ('<Terminal> could not start (exit N). Check your terminal installation and desktop session.'). The directory must exist, be a folder and be enterable ('You do not have permission to enter this directory.')."
+behaviour = "The terminal starts in a new session in the resolved real directory: --working-directory= for GNOME Terminal, Console and Xfce Terminal, --workdir= for Konsole, --directory= for kitty, and only the working directory for xterm. PWD is set and GNOME_TERMINAL_SCREEN/SERVICE are removed so a new window opens. No shell and no command are run. An exit within 0.25 s is reported ('<Terminal> could not start (exit N). Check your terminal installation and desktop session.'). The directory must exist, be a folder and be enterable ('You do not have permission to enter this directory.')."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
