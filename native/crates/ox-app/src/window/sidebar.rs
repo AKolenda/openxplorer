@@ -4,7 +4,7 @@
 //! Ports `renderSidebar` and `.sidebar` in `v2.0.0:desktop/ui/app.js` and
 //! `style.css`: the rows of [`entries::sidebar_entries`], separated by
 //! list-row headers so keyboard and screen-reader users never land on an
-//! empty separator row, and the "Map network location" button pinned below
+//! empty separator row, and the "Map network drive" button pinned below
 //! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
 //! [`WindowAction::MountVolume`]; a middle-click or Ctrl+click opens a
 //! place in a tab, and the current location highlights the closest place
@@ -60,7 +60,7 @@ pub(super) enum HiddenRow {
 /// The class that dims a hidden row.
 const HIDDEN_ROW_CLASS: &str = "hidden-place";
 
-/// The "+" of Map network location.
+/// The "+" of Map network drive.
 const MAP_NETWORK_GLYPH: i32 = 17;
 
 mod imp {
@@ -564,17 +564,17 @@ fn section_separator() -> gtk::Separator {
     line
 }
 
-/// The "Map network location" button below the list (`#connect-sidebar`).
+/// The "Map network drive" button below the list (`#connect-sidebar`).
 fn map_network_button() -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
     content.append(&icons::image(Icon::Add, MAP_NETWORK_GLYPH));
     content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext(
-        "Map network location",
+        "Map network drive",
     ))));
     let button = gtk::Button::builder()
         .child(&content)
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(ox_core::i18n::gettext("Map network location"))
+        .tooltip_text(ox_core::i18n::gettext("Map network drive"))
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

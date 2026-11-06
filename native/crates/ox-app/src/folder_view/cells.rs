@@ -64,6 +64,14 @@ const COMPACT_NAME_CHARS: i32 = 28;
 /// line height).
 const TILE_NAME_LINES: i32 = 2;
 
+/// Gap between the icon and the text of Tiles and Content (VIEW-071).
+const LINES_ICON_GAP: i32 = 10;
+
+/// How wide Content's date modified is, in characters, so its column of
+/// date modified and size starts at the same place on every row, as
+/// Windows 11 sets these properties at the right of each row.
+const CONTENT_DATE_CHARS: i32 = 20;
+
 /// The list item behind a factory object (column cells are list items too).
 ///
 /// # Panics
@@ -84,7 +92,12 @@ pub(crate) fn bound_item(list_item: &gtk::ListItem) -> Option<FileItem> {
 /// An ellipsized, left-aligned label in the muted colour of the date,
 /// type and size columns.
 pub(crate) fn dim_cell_label() -> gtk::Label {
-    let label = gtk::Label::new(None);
+    dim_cell_label_with("")
+}
+
+/// [`dim_cell_label`] saying `text`.
+fn dim_cell_label_with(text: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(text).filter(|text| !text.is_empty()));
     label.set_xalign(0.0);
     label.set_ellipsize(pango::EllipsizeMode::End);
     label.set_single_line_mode(true);
@@ -102,6 +115,48 @@ pub(crate) enum CellLayout {
     /// A compact-view item: a small icon left of a name
     /// [`COMPACT_NAME_CHARS`] wide (VIEW-008).
     CompactItem,
+    /// One of Explorer's Tiles: the icon left of three lines, the name,
+    /// the type and, for a file, the size (VIEW-071).
+    Tile,
+    /// One of Explorer's Content rows: the icon left of the name with the
+    /// type under it, and the date modified and, for a file, the size at
+    /// the right, each after its caption (VIEW-071).
+    ContentRow,
+}
+
+/// What a Tile or Content row says about its item beside the name: the
+/// type, the size of a file (empty for a folder) and the date modified.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ItemLines {
+    pub kind: String,
+    pub size: String,
+    pub modified: String,
+}
+
+impl ItemLines {
+    /// The lines for `item`, written as Windows 11's Tiles and Content
+    /// write them: the type's name, the size in the largest whole unit with
+    /// a decimal ("11.4 KB"), and the date and time.
+    pub(crate) fn of(item: &FileItem) -> Self {
+        let entry = item.entry();
+        let size = if entry.is_dir {
+            String::new()
+        } else {
+            item.file_size()
+                .map(ox_core::format::pretty_bytes)
+                .unwrap_or_default()
+        };
+        let modified = if entry.modified.is_some() {
+            ox_core::format::column_date_text(entry.modified, ox_core::format::DateStyle::Absolute)
+        } else {
+            String::new()
+        };
+        Self {
+            kind: entry.type_label.clone(),
+            size,
+            modified,
+        }
+    }
 }
 
 mod imp {
@@ -142,6 +197,20 @@ mod imp {
         pub(super) expander: gtk::Button,
         /// The tree row the cell follows, and its handler.
         pub(super) tree_row: RefCell<Option<(gtk::TreeListRow, glib::SignalHandlerId)>>,
+        /// The lines beside the icon of Tiles and Content: the name, and
+        /// under it the type (and on a tile the size). Unused elsewhere.
+        pub(super) lines: gtk::Box,
+        /// The type, under the name.
+        pub(super) kind: gtk::Label,
+        /// A tile's size, under the type; Content's at its right.
+        pub(super) size: gtk::Label,
+        /// Content's date modified, at its right.
+        pub(super) modified: gtk::Label,
+        /// Content's "Date modified:" and "Size:" lines, each hidden while
+        /// it has nothing to say.
+        pub(super) properties: RefCell<Vec<gtk::Box>>,
+        /// Whether the cell shows [`super::ItemLines`].
+        pub(super) shows_item_lines: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -190,8 +259,74 @@ impl FileCell {
             CellLayout::DetailsRow => cell.lay_out_as_row(),
             CellLayout::IconTile => cell.lay_out_as_tile(),
             CellLayout::CompactItem => cell.lay_out_as_compact_item(),
+            CellLayout::Tile => cell.lay_out_with_lines(false),
+            CellLayout::ContentRow => cell.lay_out_with_lines(true),
         }
         cell
+    }
+
+    /// The check box and the icon left of the name with the type under
+    /// it: a tile with the size under them, or a Content row with the date
+    /// modified and the size at its right (VIEW-071).
+    fn lay_out_with_lines(&self, content: bool) {
+        let imp = self.imp();
+        imp.shows_item_lines.set(true);
+        // The cell spans its tile or row, so the lines can use its width
+        // and Content's date and size line up at its right on every row.
+        self.set_hexpand(true);
+        self.set_orientation(gtk::Orientation::Horizontal);
+        self.set_spacing(LINES_ICON_GAP);
+        self.put_check_before_icon();
+        imp.icon_frame.set_valign(gtk::Align::Center);
+        // The name moves into the lines beside the icon.
+        self.remove(&imp.label);
+        let lines = &imp.lines;
+        lines.set_orientation(gtk::Orientation::Vertical);
+        lines.set_valign(gtk::Align::Center);
+        lines.set_hexpand(true);
+        lines.add_css_class("item-lines");
+        let label = &imp.label;
+        label.set_xalign(0.0);
+        label.set_ellipsize(pango::EllipsizeMode::End);
+        label.set_single_line_mode(true);
+        lines.append(label);
+        for line in [&imp.kind, &imp.size, &imp.modified] {
+            line.set_xalign(0.0);
+            line.set_ellipsize(pango::EllipsizeMode::End);
+            line.set_single_line_mode(true);
+            line.add_css_class("cell-dim");
+        }
+        lines.append(&imp.kind);
+        self.append(lines);
+        if !content {
+            lines.append(&imp.size);
+            return;
+        }
+        let properties = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        properties.set_valign(gtk::Align::Center);
+        // Only the name's lines take the room to spare, which keeps the
+        // date and size at the row's right.
+        properties.set_hexpand(false);
+        properties.add_css_class("item-properties");
+        let mut captioned = Vec::new();
+        for (caption, value) in [
+            (ox_core::i18n::gettext("Date modified:"), &imp.modified),
+            (ox_core::i18n::gettext("Size:"), &imp.size),
+        ] {
+            let line = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+            let caption = dim_cell_label_with(&caption);
+            line.append(&caption);
+            value.remove_css_class("cell-dim");
+            line.append(value);
+            properties.append(&line);
+            captioned.push(line);
+        }
+        // The date is as wide on every row, so the column starts at the
+        // same place on each.
+        imp.modified.set_width_chars(CONTENT_DATE_CHARS);
+        imp.modified.set_max_width_chars(CONTENT_DATE_CHARS);
+        self.append(&properties);
+        imp.properties.replace(captioned);
     }
 
     /// The check box and the icon left of a one-line name that is cut off
@@ -253,8 +388,9 @@ impl FileCell {
         self.prepend(check);
     }
 
-    /// Shows `item`: its art and its name. A rename in place ends: the
-    /// cell now shows another item, or the same one listed again.
+    /// Shows `item`: its art and its name, and in Tiles and Content its
+    /// type, size and date modified. A rename in place ends: the cell now
+    /// shows another item, or the same one listed again.
     pub(crate) fn bind(&self, item: &FileItem) {
         self.hide_name_editor();
         let imp = self.imp();
@@ -262,6 +398,41 @@ impl FileCell {
         imp.image.set_art(item.art(), icon_size);
         imp.image.set_emblems(item.emblems(), icon_size);
         imp.label.set_text(&item.entry().name);
+        if imp.shows_item_lines.get() {
+            self.show_item_lines(&ItemLines::of(item));
+        }
+    }
+
+    /// Shows `lines` beside the name, each line hidden while empty.
+    fn show_item_lines(&self, lines: &ItemLines) {
+        let imp = self.imp();
+        for (label, text) in [
+            (&imp.kind, &lines.kind),
+            (&imp.size, &lines.size),
+            (&imp.modified, &lines.modified),
+        ] {
+            label.set_text(text);
+            label.set_visible(!text.is_empty());
+        }
+        // Content's lines go with their captions.
+        for line in imp.properties.borrow().iter() {
+            let shows = std::iter::successors(line.first_child(), WidgetExt::next_sibling)
+                .last()
+                .is_some_and(|value| value.is_visible());
+            line.set_visible(shows);
+        }
+    }
+
+    /// The type, size and date modified the cell shows beside the name,
+    /// for tests; `None` outside Tiles and Content.
+    #[cfg(test)]
+    pub(crate) fn shown_item_lines(&self) -> Option<ItemLines> {
+        let imp = self.imp();
+        imp.shows_item_lines.get().then(|| ItemLines {
+            kind: imp.kind.text().to_string(),
+            size: imp.size.text().to_string(),
+            modified: imp.modified.text().to_string(),
+        })
     }
 
     /// Shows `name` as the item's name: its own, or without a known type's
@@ -270,11 +441,22 @@ impl FileCell {
         self.imp().label.set_text(name);
     }
 
-    /// Puts `editor` in the name's place, to rename the item in place.
+    /// The box that holds the name: the cell itself, or the lines beside
+    /// the icon of Tiles and Content.
+    fn name_box(&self) -> gtk::Box {
+        self.imp()
+            .label
+            .parent()
+            .and_downcast::<gtk::Box>()
+            .unwrap_or_else(|| self.clone().upcast())
+    }
+
+    /// Puts `editor` in the name's place, to rename the item in place: on
+    /// the name's own line in Tiles and Content.
     pub(crate) fn show_name_editor(&self, editor: &gtk::Entry) {
         self.hide_name_editor();
         let imp = self.imp();
-        self.insert_child_after(editor, Some(&imp.label));
+        self.name_box().insert_child_after(editor, Some(&imp.label));
         imp.label.set_visible(false);
         imp.name_editor.replace(Some(editor.clone()));
     }
@@ -317,7 +499,7 @@ impl FileCell {
         let Some(editor) = imp.name_editor.take() else {
             return;
         };
-        self.remove(&editor);
+        self.name_box().remove(&editor);
         imp.label.set_visible(true);
     }
 

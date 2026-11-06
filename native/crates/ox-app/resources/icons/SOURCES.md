@@ -12,7 +12,9 @@ icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
 (Navigation pane), `arrow_autofit_height_20_regular` (Compact view),
 `checkbox_checked_20_regular` (Item check boxes),
 `panel_right_gallery_20_regular` (Preview pane) and `circle_small_20_filled`
-(the dot that marks a chosen view, sort or open pane). Undo, Redo and Pin
+(the dot that marks a chosen view, sort or open pane). Added on 2026-11-06,
+also awaiting the owner's review: `apps_list_detail_20_regular` (Tiles) and
+`content_view_20_regular` (Content). Undo, Redo and Pin
 are drawn in Windows' blue (#0078d4, or #60cdff in the dark theme) by the menu's CSS, and Redo shows
 `arrow_undo_20_regular` mirrored by it (`-gtk-icon-transform`), as Windows
 11 draws them; the files are not changed. Microsoft publishes no colour
@@ -65,6 +67,7 @@ it.
 | `actions/ox-add-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/add_20_regular.svg` | eace2d0d89e66e50d5c93cf82d21eb9e73a452dc370a76846d1f1802788dd71c |
 | `actions/ox-add-network-location-24-symbolic.svg` | OpenXplorer, original | `native/icon-sources/add-network-location.svg` | d9eed91ea0f0973b2c3724e1c6f73a040a19371ebe2be4b455ba8e12b7f373b6 |
 | `actions/ox-apps-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/apps_20_regular.svg` | 0ad15fd4cca3d66e5221e3533d1fafd4d705ebdbc68e74e0674a72106fe627ba |
+| `actions/ox-apps-list-detail-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/apps_list_detail_20_regular.svg` | 89dfd154ac8e78a6b166f67bd5f076a63c10b4d00f2a80c44e8832fb1643a1d6 |
 | `actions/ox-arrow-autofit-height-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_autofit_height_20_regular.svg` | 6c520e2e07a8b86ced98036b6b5f9cf3018a1a153d80c8be9842770f78990552 |
 | `actions/ox-arrow-clockwise-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_clockwise_20_regular.svg` | e216c5859ca5368c3ce795d1ffaf19b4be5e5ba2df6d09e7ff544d3c2fef0466 |
 | `actions/ox-arrow-counterclockwise-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_counterclockwise_20_regular.svg` | 932290054023ca03b2f567d1c351d5d53fc1b73a312cc8df9902c6dcc09aea1e |
@@ -91,6 +94,7 @@ it.
 | `actions/ox-chevron-up-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_up_16_regular.svg` | 540041d671dfb1c7815bde83212ad161f64100007296adb1246bafe109048fb9 |
 | `actions/ox-clipboard-paste-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/clipboard_paste_20_regular.svg` | ec9306a57faababc7c2ea24526b65109d68337b71ef2b3af8edf5eb54e04f386 |
 | `actions/ox-code-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/code_20_regular.svg` | 856f7cf4747d46ede53514aac276388bbfd2a09c08dea33e64781ca381f2b152 |
+| `actions/ox-content-view-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/content_view_20_regular.svg` | 9aeafda6180a243f57fcfdaad1b6b3bf9121a9103243a401e8a11869f5a7f2f9 |
 | `actions/ox-copy-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/copy_20_regular.svg` | 069105eaa258ab181db8e66234677d149d26d3e8caed4e034ed6cfdf0c9511f9 |
 | `actions/ox-cut-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/cut_20_regular.svg` | 22e7e4781d227d384403a319309f10bfb5c73776bd1eb2804a4692689f44e753 |
 | `actions/ox-delete-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/delete_20_regular.svg` | 117dd937dfea155b95a157489089b658bb0611c736cbad4e5339c8470d5a3b93 |

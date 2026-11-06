@@ -19,7 +19,12 @@
 //!   the server can save a password (NET-007, NET-011).
 //! - The dialog is modal, so it traps Tab and blocks the window's
 //!   shortcuts; Escape, × and Cancel answer [`Answer::Cancel`] for this
-//!   challenge only, and Enter in a field presses Connect (NET-009).
+//!   challenge only, and Enter in a field presses OK (NET-009).
+//!
+//! The words are those of Windows' "Enter network credentials" dialog:
+//! "Enter your credentials to connect to: <server>", User name, Password,
+//! "Remember my credentials", OK and Cancel, with the dialog's own title
+//! in the caption bar rather than a product's name.
 
 use std::rc::Rc;
 
@@ -45,10 +50,8 @@ const REVEAL_GLYPH: i32 = 17;
 /// The size of the note's shield (`icon('shield',14)`).
 const NOTE_GLYPH: i32 = 13;
 
-/// What the description says on a first sign-in.
-const FIRST_SIGN_IN: &str =
-    crate::i18n::message_id("Enter the credentials for this computer or network storage.");
-/// What it says after the server refused the previous account.
+/// What the description says after the server refused the previous
+/// account; a first sign-in has no description, as in Windows.
 const RETRY_SIGN_IN: &str =
     crate::i18n::message_id("The previous sign-in was not accepted. Check your username and password.");
 /// The note while "Remember my credentials" is checked.
@@ -56,7 +59,7 @@ const SAVED_PERMANENTLY: &str = crate::i18n::message_id("Saved in your system ke
 /// The note while it is unchecked, or cannot be checked.
 const SAVED_FOR_SESSION: &str =
     crate::i18n::message_id("Reused for this server during your Linux login session. Not saved permanently.");
-/// Connect's label while the answer is checked.
+/// OK's label while the answer is checked.
 const CONNECTING: &str = "Connecting…";
 
 /// A handler of [`SignInDialog::connect_answered`].
@@ -84,7 +87,7 @@ impl SignInDialog {
         dialog
     }
 
-    /// Calls `on_answer` with each answer: Connect, Connect as guest, a
+    /// Calls `on_answer` with each answer: OK, Connect as guest, a
     /// question's button, or Cancel (the Cancel button, ×, Escape or
     /// closing the window). The dialog stays open until
     /// [`Self::dismiss`].
@@ -98,11 +101,10 @@ impl SignInDialog {
         imp.error_label.set_text(message);
         imp.error_label.set_visible(true);
         imp.connect_button.set_sensitive(true);
-        imp.connect_button.set_label(&ox_core::i18n::gettext("Connect"));
+        imp.connect_button.set_label(&ox_core::i18n::gettext("OK"));
     }
 
-    /// Shows "Connecting…" on a disabled Connect while the answer is
-    /// checked.
+    /// Shows "Connecting…" on a disabled OK while the answer is checked.
     fn show_connecting(&self) {
         let connect = &self.imp().connect_button;
         connect.set_sensitive(false);
@@ -190,20 +192,19 @@ impl SignInDialog {
     /// Fills the password page for a sign-in to `host`.
     fn ask_for_account(&self, host: &str, fields: &PasswordChallenge) {
         let imp = self.imp();
-        self.set_title(Some(ox_core::i18n::gettext_static("Enter network credentials")));
+        self.show_title(ox_core::i18n::gettext_static("Enter network credentials"));
         imp.pages.set_visible_child_name("password");
         imp.host_label.set_text(&ox_core::i18n::format_message(
-            "Connect to {host}",
+            "Enter your credentials to connect to: {host}",
             &[("host", host)],
         ));
         imp.target_label.set_text(host);
-        let description = if fields.is_retry {
+        if fields.is_retry {
             imp.description_label.add_css_class("sign-in-retry");
-            ox_core::i18n::gettext_static(RETRY_SIGN_IN)
-        } else {
-            ox_core::i18n::gettext_static(FIRST_SIGN_IN)
-        };
-        imp.description_label.set_text(description);
+            imp.description_label
+                .set_text(ox_core::i18n::gettext_static(RETRY_SIGN_IN));
+        }
+        imp.description_label.set_visible(fields.is_retry);
         imp.username_entry.set_text(&fields.username);
         imp.needs_username.set(fields.needs_username);
         // Remembering is the default, where the server can save at all.
@@ -218,7 +219,7 @@ impl SignInDialog {
     /// Cancel, which replace the footer.
     fn ask_question(&self, question: &QuestionChallenge) {
         let imp = self.imp();
-        self.set_title(Some(ox_core::i18n::gettext_static("Network connection")));
+        self.show_title(ox_core::i18n::gettext_static("Network connection"));
         imp.pages.set_visible_child_name("question");
         imp.question_label.set_text(&question.message);
         imp.actions.set_visible(false);
@@ -259,6 +260,12 @@ impl SignInDialog {
         }
     }
 
+    /// Titles the window and its caption bar `title`.
+    fn show_title(&self, title: &str) {
+        self.set_title(Some(title));
+        self.imp().caption_label.set_text(title);
+    }
+
     /// Says where the credentials will be kept, as the check box says.
     fn describe_saving(&self) {
         let imp = self.imp();
@@ -284,7 +291,7 @@ impl SignInDialog {
         imp.reveal_button.set_tooltip_text(Some(tooltip));
     }
 
-    /// Connect: checks that a needed user name was entered, then answers
+    /// OK: checks that a needed user name was entered, then answers
     /// with the account (`submitAuth`).
     fn submit_account(&self) {
         let imp = self.imp();
@@ -311,7 +318,7 @@ impl SignInDialog {
         self.answer(Answer::SignIn(sign_in));
     }
 
-    /// Hands `answer` to the handler, with Connect disabled meanwhile.
+    /// Hands `answer` to the handler, with OK disabled meanwhile.
     fn answer(&self, answer: Answer) {
         let handler = self.imp().answered.borrow().clone();
         let Some(handler) = handler else {
@@ -346,7 +353,7 @@ impl SignInDialog {
         self.imp().remember_check.set_active(remember);
     }
 
-    /// Presses Connect.
+    /// Presses OK.
     pub(crate) fn press_connect(&self) {
         self.imp().connect_button.emit_clicked();
     }
@@ -392,7 +399,7 @@ impl SignInDialog {
         self.imp().password_entry.text().to_string()
     }
 
-    /// Connect's label and whether it can be pressed.
+    /// OK's label and whether it can be pressed.
     pub(crate) fn connect_label(&self) -> (String, bool) {
         let connect = &self.imp().connect_button;
         let label = connect.label().map(|label| label.to_string()).unwrap_or_default();

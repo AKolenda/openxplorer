@@ -433,7 +433,7 @@ impl BrowserWindow {
     /// The user chose other search options: a change between names and
     /// contents runs the search again, and the kind and date options
     /// filter the rows shown (SRCH-036, SRCH-037).
-    fn change_search_options(&self, search_in: SearchIn, facets: SearchFacets) {
+    pub(super) fn change_search_options(&self, search_in: SearchIn, facets: SearchFacets) {
         let search = self.imp().search.borrow();
         let search_in_changed = search.search_in() != search_in;
         let facets_changed = search.facets() != facets;

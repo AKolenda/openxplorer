@@ -168,6 +168,18 @@ impl SearchBox {
         entry.select_region(0, -1);
     }
 
+    /// Moves keyboard focus into the box and adds `text` at the end of
+    /// what it holds, as text typed in the file list goes there with
+    /// Folder Options' "Automatically type into the Search Box".
+    pub(super) fn type_text(&self, text: &str) {
+        let entry = &self.imp().entry;
+        entry.grab_focus();
+        entry.set_position(-1);
+        let mut end = entry.position();
+        entry.insert_text(text, &mut end);
+        entry.set_position(end);
+    }
+
     /// Names the folder the box searches: "Search Documents".
     pub(super) fn set_folder_title(&self, title: &str) {
         let placeholder = ox_core::i18n::format_message("Search {title}", &[("title", title)]);

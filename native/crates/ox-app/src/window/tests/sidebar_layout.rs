@@ -4,7 +4,7 @@
 //! 2026-11-06): 31-pixel rows 32 pixels apart, the pinned folders full
 //! width on the same pitch with their icons in Home's column, as in
 //! Windows 11's navigation pane, the accent bar's room on the selected
-//! row, the 6-pixel resizer and the "Map network location"
+//! row, the 6-pixel resizer and the "Map network drive"
 //! button below the list.
 
 use gtk::prelude::*;
@@ -153,8 +153,8 @@ fn map_network_location_sits_below_the_list() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let button = button_for(&test, "win.map-network-location");
-    assert!(button.is_sensitive(), "Map network location opens its dialog");
-    assert_eq!(button.tooltip_text().as_deref(), Some("Map network location"));
+    assert!(button.is_sensitive(), "Map network drive opens its dialog");
+    assert_eq!(button.tooltip_text().as_deref(), Some("Map network drive"));
     let place = bounds(&test, &button);
     let window_height = test.window.height();
     assert_eq!((place.x, place.width, place.height), (7, 196, 34));
