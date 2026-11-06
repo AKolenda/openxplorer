@@ -193,3 +193,56 @@ fn back_from_results_shows_the_folder_while_the_pin_keeps_searches() {
     assert_eq!(test.names(), STANDARD_NAMES);
     assert_eq!(test.active_tab_title(), root);
 }
+
+/// A folder that may not be read, opened from search results, keeps the
+/// tab on the results, as Windows keeps it where it was: the search is
+/// shown again, not the folder without it. Tests run as a normal user:
+/// root reads the folder anyway.
+///
+/// parity: SRCH-042, VIEW-047
+#[gtk::test]
+fn a_denied_folder_opened_from_results_returns_to_the_results() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Gives the folder its permissions back, also when the test fails.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Private")).expect("a folder");
+    let _unlock = Unlock(fixture.path("Private"));
+    fs::set_permissions(fixture.path("Private"), fs::Permissions::from_mode(0o000)).expect("mode");
+    if fs::read_dir(fixture.path("Private")).is_ok() {
+        return; // Running as root, which reads anything.
+    }
+    let test = window_with_notes(&fixture);
+    test.search_for("notes");
+    assert_eq!(test.names(), RESULTS);
+
+    test.window
+        .navigate(&fixture.uri_of("Private"))
+        .expect("valid folder");
+
+    let dialog = super::file_ops_support::open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Location is not available");
+    dialog.press("OK");
+    super::file_ops_support::wait_for_no_dialog(&test);
+    wait_until("the results again", || test.names() == RESULTS);
+    assert_eq!(test.search_text(), "notes");
+    assert!(
+        !test
+            .window
+            .imp()
+            .session
+            .borrow()
+            .active()
+            .expect("a tab")
+            .history
+            .can_go_forward(),
+        "the folder is not in the history"
+    );
+}

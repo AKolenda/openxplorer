@@ -48,9 +48,14 @@ impl BrowserWindow {
         if !session.is_active(run.tab) {
             return false;
         }
+        // The current step must still be the navigation itself: a search
+        // started there meanwhile is a step of its own, and keeps the page.
         session.tab(run.tab).is_some_and(|tab| {
             let history = &tab.history;
-            tab.uri() == run.uri && history.can_go_back() && !history.can_go_forward()
+            tab.uri() == run.uri
+                && history.current_search().is_none()
+                && history.can_go_back()
+                && !history.can_go_forward()
         })
     }
 
@@ -78,6 +83,8 @@ impl BrowserWindow {
         }
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
+        // A search the tab came from shows again, as Back shows it.
+        self.show_step_search();
         let path = self.imp().locations.borrow().display_location(&run.uri);
         let details = error.to_string();
         glib::spawn_future_local(glib::clone!(
