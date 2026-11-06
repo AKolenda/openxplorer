@@ -99,6 +99,8 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("transfer-panel.ui", "pause_button", "label", true, "Pause"),
     ("transfer-panel.ui", "pause_button", "tooltip-text", false, "Pause"),
     ("transfer-panel.ui", "progress_bar", "label", true, "Operation progress"),
+    ("transfer-panel.ui", "space_cancel_button", "label", false, "Cancel"),
+    ("transfer-panel.ui", "space_retry_button", "label", false, "Try Again"),
     ("update-dialog.ui", ".", "title", false, "Software updates"),
     ("update-dialog.ui", "check_button", "label", false, "Check again"),
     ("update-dialog.ui", "close_button", "label", false, "Close"),

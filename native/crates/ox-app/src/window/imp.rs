@@ -195,6 +195,9 @@ pub(crate) struct BrowserWindow {
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// Counts the re-reads of changed text matches, so a late one never
+    /// removes what a newer one kept; see [`super::live_search`].
+    pub(super) content_recheck: Cell<u64>,
     /// Set while the window itself empties the search box, which then
     /// does not leave search results as the user emptying it does; see
     /// [`super::search_steps`].
