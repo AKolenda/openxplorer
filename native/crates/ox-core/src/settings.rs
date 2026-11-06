@@ -370,7 +370,9 @@ impl Settings {
     /// Optimizes the folder at `uri` for `template`, as the Customize tab
     /// of its Properties does on OK or Apply (PROP-036): the folder, and
     /// its sub-folders when `subfolders` is set, show the template's view
-    /// of the style the folder had. Only the settings are written.
+    /// of the style the folder had, where `downloads` is the Downloads
+    /// folder, so Downloads keeps the Group by it shows (VIEW-022). Only
+    /// the settings are written.
     ///
     /// # Errors
     ///
@@ -379,12 +381,13 @@ impl Settings {
     pub fn customize_folder(
         &mut self,
         uri: &str,
+        downloads: Option<&str>,
         template: FolderTemplate,
         subfolders: bool,
     ) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
             let preferences = &mut data.preferences;
-            let style = template.style(&preferences.view_for(uri));
+            let style = template.style(&preferences.view_in(uri, downloads));
             if !view_properties::customize(&mut preferences.folder_views, uri, template, style, subfolders) {
                 return Err(SettingsError::invalid(crate::i18n::gettext(
                     "This folder's settings cannot be kept.",

@@ -431,18 +431,22 @@ impl AppContext {
     }
 
     /// Optimizes the folder at `uri` for `template`, and its sub-folders
-    /// with `subfolders`, off the main thread (PROP-036); `reply` hears
+    /// with `subfolders`, off the main thread (PROP-036), where
+    /// `downloads` is the Downloads folder; `reply` hears
     /// the outcome, after which every window shows the folders in their
     /// new style.
     pub(crate) fn customize_folder(
         &self,
         uri: String,
+        downloads: Option<String>,
         template: FolderTemplate,
         subfolders: bool,
         reply: impl FnOnce(Result<(), SettingsError>) + 'static,
     ) {
         let change: Change = Box::new(move |settings: &mut Settings| {
-            settings.customize_folder(&uri, template, subfolders).map(|_| ())
+            settings
+                .customize_folder(&uri, downloads.as_deref(), template, subfolders)
+                .map(|_| ())
         });
         self.change_settings(change, self.announcing_folder_views(reply));
     }

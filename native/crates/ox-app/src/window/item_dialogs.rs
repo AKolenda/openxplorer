@@ -405,8 +405,9 @@ impl BrowserWindow {
         subfolders: bool,
         reply: impl FnOnce(Result<(), SettingsError>) + 'static,
     ) {
+        let downloads = self.downloads_location();
         self.context()
-            .customize_folder(uri.to_owned(), template, subfolders, reply);
+            .customize_folder(uri.to_owned(), downloads, template, subfolders, reply);
     }
 
     /// Shows the new icon or folder picture of the item at `uri` in every
