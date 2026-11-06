@@ -234,6 +234,41 @@ fn a_destination_through_a_symbolic_link_is_a_folder() {
     assert_eq!(fs::read(dst.join("taken.txt")).unwrap(), b"existing");
 }
 
+/// The folder's own address reached through a symbolic link is the folder:
+/// a cut item pasted into it stays where it is, without asking and without
+/// its folder being removed as a merge that emptied it, and a copy is kept
+/// as "name - Copy" instead of meeting itself as a name conflict. The two
+/// addresses are the same folder, whatever the URI says.
+///
+/// parity: OPS-027
+#[test]
+fn a_link_to_the_item_s_own_folder_is_its_own_folder() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("a.txt"), b"only copy");
+    write(&src.join("Folder/inside.txt"), b"inside");
+    fs::create_dir(src.join("Empty")).unwrap();
+    let alias = dst.with_file_name("alias");
+    symlink(&src, &alias).unwrap();
+
+    let moved = scan(TransferMode::Move, &src, &["a.txt", "Folder", "Empty"], &alias);
+
+    assert!(moved.conflicts.is_empty());
+    assert!(moved.items.is_empty());
+    assert!(moved.merged_folders.is_empty());
+    run(&moved, &[]);
+    assert_eq!(fs::read(src.join("a.txt")).unwrap(), b"only copy");
+    assert_eq!(fs::read(src.join("Folder/inside.txt")).unwrap(), b"inside");
+    assert!(src.join("Empty").is_dir(), "the folder stays");
+
+    let copied = scan(TransferMode::Copy, &src, &["Folder"], &alias);
+
+    assert!(copied.conflicts.is_empty());
+    assert_eq!(copied.items[0].kind, PlannedKind::OwnFolderCopy);
+    run(&copied, &[]);
+    assert_eq!(fs::read(src.join("Folder - Copy/inside.txt")).unwrap(), b"inside");
+}
+
 /// "Skip N files with the same date and size" counts the conflicts whose
 /// two files have the same size and modification time.
 ///
