@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Windows 11's View > Show > Item check boxes (SEL-014), here View >
 //! Item check boxes and Settings > Item check boxes: one choice, saved,
-//! that every window follows. On by default, as in Windows 11.
+//! that every window follows. Off by default, so a selected item is only
+//! highlighted; Windows 11 has them on.
 //!
 //! The check boxes are the folder views' (`folder_view/cells/item_check.rs`
 //! and `folder_view/details/select_all.rs`); this is the toggle. The
 //! preference keeps its saved name, `selectionMarker`, from when this was a
 //! hover marker.
 //!
-//! "Show check boxes only while Ctrl is held" (`itemChecksOnCtrl`, off by
-//! default, as Windows has no such wait) keeps a hovered item's box
-//! transparent, and lets clicks through to its row, until Ctrl is held:
-//! the window carries `checks-on-ctrl` while that is so
-//! (folder-views.css). A checked box still shows; the Details header's
-//! select-all box is not affected.
+//! "Show check boxes only while Ctrl is held" (`itemChecksOnCtrl`, on by
+//! default) keeps a hovered item's box transparent, and lets clicks
+//! through to its row, until Ctrl is held: the window carries
+//! `checks-on-ctrl` while that is so (folder-views.css). A checked box
+//! still shows; the Details header's select-all box is not affected.
 
 use std::cell::Cell;
 use std::rc::Rc;

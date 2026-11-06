@@ -14,11 +14,10 @@
 //! Whether a check box shows is the stylesheet's (`.item-check` in
 //! folder-views.css: on a hovered or selected row or tile, else
 //! transparent), so a Details row shows it when hovered in any column.
-//! With "Show check boxes only while Ctrl is held" on (off by default, as
-//! in Windows 11, where a hovered item shows its box), a hovered row's box
-//! stays transparent and lets clicks through to the row until Ctrl is
-//! held (`window/item_check_boxes.rs`); a checked box still shows, and a
-//! click on it still deselects its item alone.
+//! With "Show check boxes only while Ctrl is held" on, the default, a
+//! hovered row's box stays transparent and lets clicks through to the row
+//! until Ctrl is held (`window/item_check_boxes.rs`); a checked box still
+//! shows, and a click on it still deselects its item alone.
 //! It replaces Dolphin's plus/minus selection toggle, which showed only
 //! on the icon of the item under the pointer.
 

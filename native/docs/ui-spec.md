@@ -1021,7 +1021,7 @@ are built, use these rules:
 | Filter bar | A strip below the column header, styled as the search-info bar (§4.15), with a 34 px field. |
 | Zoom | Ctrl + wheel and Ctrl + +/−, already mapped to text size (80–200 %) and icon size. There is no status-bar slider, because Explorer has none. |
 | Free space | "N GB free" at 12 px in the status bar's left group, after the selection text. |
-| Selection checkboxes | 16 × 16 checkbox before the row icon, on by default, shown on hover without Ctrl and for selected rows (Explorer "Item check boxes", on in a new Windows 11 install). |
+| Selection checkboxes | Optional 16 × 16 checkbox before the row icon, shown on hover and for selected rows (Explorer "Item check boxes", observed, unverified). |
 | Hidden files | View ▾ > Show > Hidden items toggle, as Windows 11 has it (2026-11-03; it was also in More options). Hidden entries at `opacity: .6`, like the cut style. |
 | Terminal panel | Bottom pane with the status-bar treatment: 1 px `@ox_border` top, `@ox_bg`. |
 
