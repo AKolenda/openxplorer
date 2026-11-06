@@ -96,13 +96,21 @@ async fn mount_location_as(
     let mounted = file
         .mount_enclosing_volume_future(gio::MountMountFlags::NONE, Some(&prompted.operation))
         .await;
-    if let Err(error) = mounted {
-        if !error.matches(gio::IOErrorEnum::AlreadyMounted) {
-            return Err(error.into());
-        }
-    }
+    accept_mount(mounted, choice)?;
     prompted.outcome = MountOutcome::Mounted;
     Ok(())
+}
+
+/// What GIO's answer to a mount means: a share that is already mounted
+/// counts as mounted, unless the user asked to sign in with a different
+/// account, which an existing connection cannot take; Windows refuses
+/// that too (its error 1219).
+fn accept_mount(mounted: Result<(), glib::Error>, choice: CredentialChoice) -> Result<(), NetworkError> {
+    match mounted {
+        Err(error) if !error.matches(gio::IOErrorEnum::AlreadyMounted) => Err(error.into()),
+        Err(_) if choice == CredentialChoice::Different => Err(NetworkError::ConnectedWithAnotherAccount),
+        Ok(()) | Err(_) => Ok(()),
+    }
 }
 
 /// Runs `read` on `uri`; when it fails because the location is not

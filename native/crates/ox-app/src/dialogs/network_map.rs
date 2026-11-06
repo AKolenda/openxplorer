@@ -139,7 +139,7 @@ pub(crate) fn map_network_dialog(
     dialog
 }
 
-/// "Connect to a Web site…": closes Map network drive and opens Add a
+/// "Connect to a Web site…": cancels Map network drive and opens Add a
 /// network location, as Windows' link starts the Add Network Location
 /// wizard. SFTP, FTP, WebDAV and NFS folders are mapped there; their
 /// addresses typed in Folder work too.
@@ -160,7 +160,8 @@ fn web_site_link(dialog: &Dialog) -> gtk::Button {
             return;
         };
         let parent = dialog.transient_for();
-        dialog.finish();
+        // Closing cancels, which also drops a connection still running.
+        dialog.close();
         if let Some(parent) = parent {
             let action = WindowAction::AddNetworkLocation.detailed_name();
             let _ = parent.activate_action(&action, None);
@@ -388,8 +389,9 @@ mod tests {
         parent.close();
     }
 
-    /// "Connect to a Web site…" closes Map network drive and opens Add a
-    /// network location, as Windows' link starts its wizard.
+    /// "Connect to a Web site…" cancels Map network drive, dropping a
+    /// connection still running, and opens Add a network location, as
+    /// Windows' link starts its wizard.
     ///
     /// parity: NET-001, NET-002
     #[gtk::test]
@@ -402,8 +404,19 @@ mod tests {
         add.connect_activate(move |_, _| count.set(count.get() + 1));
         actions.add_action(&add);
         parent.insert_action_group("win", Some(&actions));
-        let dialog = map_network_dialog(&parent, |_, _| {});
+        let dropped = Rc::new(Cell::new(false));
+        let flag = Rc::clone(&dropped);
+        let dialog = map_network_dialog(&parent, move |dialog, _| {
+            let guard = DropFlag(Rc::clone(&flag));
+            dialog.run("Connecting…", async move {
+                let _guard = guard;
+                std::future::pending::<()>().await;
+            });
+        });
         dialog.open();
+        settle();
+        descendants::<gtk::Entry>(&dialog)[0].set_text("\\\\nas\\Projects");
+        dialog.press("Finish");
         settle();
 
         let link = descendants::<gtk::Button>(&dialog)
@@ -415,6 +428,7 @@ mod tests {
 
         assert_eq!(opened.get(), 1, "Add a network location opens");
         assert!(!dialog.is_visible(), "Map network drive closes");
+        assert!(dropped.get(), "the running connection is dropped");
         parent.close();
     }
 
