@@ -27,6 +27,7 @@ mod attributes;
 mod classify;
 mod enumerate;
 mod error;
+mod extension;
 mod info;
 mod inspect;
 mod meta;
@@ -37,6 +38,7 @@ mod type_label;
 
 pub use enumerate::enumerate_folder;
 pub use error::EntryError;
+pub use extension::known_extension;
 pub use info::entry_from_info;
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
 pub use meta::EntryMeta;
@@ -161,8 +163,7 @@ pub struct Entry {
     /// Hidden by name, by the folder's `.hidden` list or by the backend
     /// (`standard::is-hidden`).
     pub is_hidden: bool,
-    /// A symbolic link, listed with its target's type
-    /// (`standard::is-symlink`).
+    /// A symbolic link (`standard::is-symlink`); see [`Entry::is_shortcut`].
     pub is_symlink: bool,
     /// For items in `trash:///`: where Restore puts them back.
     pub trash_orig_path: Option<PathBuf>,
@@ -186,6 +187,13 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Whether the item is a shortcut, as Windows Explorer has them
+    /// ([`is_shortcut`]): its name is all name, with no extension to keep
+    /// or ask about, and its Type reads "Shortcut".
+    pub fn is_shortcut(&self) -> bool {
+        is_shortcut(&self.uri, &self.name, self.is_symlink, self.is_virtual)
+    }
+
     /// The GIO icon for the item's type, for when there is no thumbnail and
     /// no Explorer-style artwork for its type.
     pub fn icon(&self) -> Option<gio::Icon> {
@@ -286,6 +294,20 @@ impl Entry {
     pub fn navigation_uri(&self) -> &str {
         self.target_uri.as_deref().unwrap_or(&self.uri)
     }
+}
+
+/// Whether the item named `name` at `uri` is a shortcut: a symbolic link,
+/// the app's shortcut, whose name has no known type's extension, such as
+/// "Report.txt - Shortcut", the name the app gives the shortcuts it makes
+/// (Windows hides a shortcut's own `.lnk`). A link named for a type
+/// ("photo.jpg", "libz.so") stays what Windows makes of a symbolic link:
+/// typed by that extension, renamed with it kept and asked about. A
+/// server, a share or an item of Recent is never one.
+pub(super) fn is_shortcut(uri: &str, name: &str, is_symlink: bool, is_virtual: bool) -> bool {
+    is_symlink
+        && !is_virtual
+        && crate::location::scheme(uri).as_deref() != Some("recent")
+        && known_extension(name).is_none()
 }
 
 #[cfg(test)]
