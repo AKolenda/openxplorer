@@ -476,7 +476,6 @@ impl BrowserWindow {
         }
         imp.tab_strip.set_visible(false);
         imp.new_tab_button.set_visible(false);
-        imp.open_windows_button.set_visible(false);
         for action in DISABLED_ACTIONS {
             self.set_action_enabled(action, false);
         }
