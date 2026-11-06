@@ -2,20 +2,24 @@
 //! The user's templates in the New menu: each file of the Templates folder
 //! as an item, each subfolder as a submenu (OPS-003).
 //!
-//! As Nautilus's New Document menu and Dolphin's Create New, the menu
-//! names a template by its file name without the extension, and choosing
-//! one opens the New from template dialog with it chosen, so the name can
-//! be changed before the file is made; nothing is ever overwritten
-//! (OPS-048). The list is read on GIO's worker threads when the window
-//! opens and again whenever a New menu opens, so a template added
-//! meanwhile appears.
+//! They are Linux's counterpart of the document types Windows registers
+//! for its New menu, so they follow Windows' four documents. As Nautilus's
+//! New Document menu and Dolphin's Create New, the menu names a template
+//! by its file name without the extension. Choosing one copies it into
+//! the folder at once under its file name, or the next free numbered one,
+//! and renames the copy in place, as the documents are; nothing is ever
+//! overwritten (OPS-048). The list is read on GIO's worker threads when
+//! the window opens and again whenever a New menu opens, so a template
+//! added meanwhile appears.
 
-use gtk::glib;
+use std::path::PathBuf;
+
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::ops::{list_templates, Template, TemplateList};
+use ox_core::places::{FolderLocations, KnownFolder};
 use ox_core::transfer::Cancellation;
 
-use super::template_dialog::templates_folder;
 use crate::icons::Icon;
 use crate::window::menu_popover::{MenuEntry, MenuItem};
 use crate::window::window_action::WindowAction;
@@ -63,6 +67,16 @@ fn entries_within(list: &TemplateList, within: &[&str]) -> Vec<MenuEntry> {
         files.push(MenuItem::submenu(folder, Icon::Folder, WindowAction::ShowNewMenu, submenu).into());
     }
     files
+}
+
+/// The user's Templates folder, read from `user-dirs.dirs` as the Python
+/// bridge reads it for every request.
+pub(super) async fn templates_folder() -> Option<PathBuf> {
+    let reading = gio::spawn_blocking(|| {
+        let paths = FolderLocations::from_environment().read_paths();
+        paths.path(KnownFolder::Templates).to_path_buf()
+    });
+    reading.await.ok()
 }
 
 /// The New menu's entries for the user templates of `list`.
