@@ -1,16 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 name: Capture sandbox checks
 on:
-  pull_request:
-    paths: &capture-paths
+  push:
+    branches: [main]
+    paths:
       - '.github/workflows/capture-checks.yml'
       - 'tools/native_capture.py'
       - 'tools/capture-screenshots.py'
       - 'tools/capture-native-tour.py'
       - 'tests/test_native_capture.py'
-  push:
-    branches: [main]
-    paths: *capture-paths
   workflow_dispatch:
 permissions:
   contents: read
