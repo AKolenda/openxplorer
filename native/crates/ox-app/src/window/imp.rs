@@ -195,6 +195,9 @@ pub(crate) struct BrowserWindow {
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// Counts the re-reads of changed text matches, so a late one never
+    /// removes what a newer one kept; see [`super::live_search`].
+    pub(super) content_recheck: Cell<u64>,
     /// In tests, a volume id and the root it mounts at, standing in for a
     /// drive the isolated session does not have.
     #[cfg(test)]

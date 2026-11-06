@@ -150,8 +150,10 @@ impl BrowserWindow {
 
     /// Reads the files of `changed` again off the main thread and removes
     /// from `rows` those whose text no longer matches `text`, unless the
-    /// search has moved on meanwhile.
+    /// search, or a newer listing of its folder, has moved on meanwhile.
     fn recheck_contents(&self, rows: &gio::ListStore, text: &str, changed: Vec<Entry>) {
+        let generation = self.imp().content_recheck.get().wrapping_add(1);
+        self.imp().content_recheck.set(generation);
         if changed.is_empty() {
             return;
         }
@@ -169,7 +171,8 @@ impl BrowserWindow {
             let Ok(unmatched) = check.await else { return };
             let Some(window) = window.upgrade() else { return };
             let is_shown = window.imp().search.borrow().results() == Some(&rows);
-            if !is_shown || unmatched.is_empty() {
+            let is_latest = window.imp().content_recheck.get() == generation;
+            if !is_shown || !is_latest || unmatched.is_empty() {
                 return;
             }
             for position in (0..rows.n_items()).rev() {
