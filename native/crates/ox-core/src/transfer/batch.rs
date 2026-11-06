@@ -51,6 +51,15 @@ impl Batch<'_> {
         }
     }
 
+    /// The URI of the folder a copy or move writes into; `None` for the
+    /// Recycle Bin and deletes.
+    pub(crate) fn destination_uri(&self) -> Option<String> {
+        match &self.action {
+            ItemAction::Transfer(placement) => Some(placement.destination_folder.uri()),
+            ItemAction::Remove(_) => None,
+        }
+    }
+
     /// The progress shown when item `index` starts. Trash and delete have
     /// no byte progress, so the batch position is the only honest fraction
     /// to show for them.

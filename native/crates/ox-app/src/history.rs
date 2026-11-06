@@ -106,6 +106,20 @@ impl History {
         true
     }
 
+    /// Forgets the current location, the last entry, and goes back to the
+    /// one before it, as if the navigation to it had never happened.
+    /// Returns false (and changes nothing) when the current location is
+    /// not the last entry or is the only one.
+    pub(crate) fn drop_last(&mut self) -> bool {
+        if self.position == 0 || self.position + 1 != self.entries.len() {
+            return false;
+        }
+        self.entries.pop();
+        self.position -= 1;
+        self.moves += 1;
+        true
+    }
+
     /// Replaces the current location without adding an entry, for example
     /// when a location resolves to a different canonical URI.
     pub(crate) fn replace_current(&mut self, uri: &str) {
@@ -160,6 +174,23 @@ mod tests {
         let mut history = History::new("file:///a");
         assert!(!history.push("file:///a"));
         assert!(!history.can_go_back());
+    }
+
+    /// A navigation that went nowhere is forgotten, and only the last one.
+    ///
+    /// parity: NAV-001
+    #[test]
+    fn the_last_navigation_can_be_forgotten() {
+        let mut history = History::new("file:///a");
+        assert!(!history.drop_last(), "the only location stays");
+        history.push("file:///b");
+        history.push("file:///c");
+        assert!(history.drop_last());
+        assert_eq!(history.current(), "file:///b");
+        assert!(!history.can_go_forward(), "nothing to go forward to");
+        history.go(-1);
+        assert!(!history.drop_last(), "not the last entry");
+        assert_eq!(history.entries(), ["file:///a", "file:///b"]);
     }
 
     /// parity: NAV-001, NAV-005

@@ -20,7 +20,7 @@ use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
 use super::item_failure::{FailedItem, FailureAnswer, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
-use super::limits::{Incoming, StorageRules, TreeTotals};
+use super::limits::{FreeSpace, Incoming, StorageRules, TreeTotals};
 use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
 use super::node::{Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 use super::relisting::SourceFolders;
@@ -378,7 +378,28 @@ impl TransferEngine {
                 });
             }
         };
-        let measured = incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
+        let measured = loop {
+            let shortfall = match incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)? {
+                FreeSpace::Fits(measured) => break measured,
+                FreeSpace::Short(shortfall) => shortfall,
+            };
+            // As Windows asks before it copies: "There is not enough
+            // space", with Try Again, which checks again, and Cancel.
+            let error = shortfall.error(&folder.display_name());
+            if cancel.is_cancelled() || !self.failures.asks_about(&error) {
+                return Err(error);
+            }
+            let question = FailedItem {
+                more_items: false,
+                needed: Some(shortfall.needed),
+                ..FailedItem::new(mode, folder.display_name(), "", Some(folder_uri), &error)
+            };
+            match self.failures.answer(&question) {
+                Some(FailureAnswer::Retry) => {}
+                Some(FailureAnswer::Cancel) => return Err(TransferError::Cancelled),
+                _ => return Err(error),
+            }
+        };
         self.report_batch_size(measured);
         let placement = Placement {
             mode,
@@ -447,7 +468,9 @@ impl TransferEngine {
     fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
         let mut staging = ItemStaging::default();
         let checkpoint = Accounting::checkpoint(&self.byte_counts);
-        self.failures.start_item(batch.mode(), self.display_name(uri));
+        let destination = batch.destination_uri();
+        self.failures
+            .start_item(batch.mode(), self.display_name(uri), destination.clone());
         let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
         // Whether the user saw the error of `outcome` in the question.
         let mut answered = false;
@@ -456,16 +479,21 @@ impl TransferEngine {
                 break;
             }
             let failed = FailedItem {
-                mode: batch.mode(),
-                name: self.display_name(uri),
-                error: error.to_string(),
                 more_items: index + 1 < batch.total,
+                ..FailedItem::new(
+                    batch.mode(),
+                    self.display_name(uri),
+                    uri,
+                    destination.as_deref(),
+                    error,
+                )
             };
             match self.failures.answer(&failed) {
                 Some(FailureAnswer::Retry) => {
                     self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
                     Accounting::roll_back(&self.byte_counts, checkpoint);
-                    self.failures.start_item(batch.mode(), self.display_name(uri));
+                    self.failures
+                        .start_item(batch.mode(), self.display_name(uri), destination.clone());
                     outcome = self.process_item(batch, index, uri, state, &mut staging);
                 }
                 Some(FailureAnswer::Cancel) => {

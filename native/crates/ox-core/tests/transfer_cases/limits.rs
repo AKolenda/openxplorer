@@ -124,6 +124,43 @@ fn a_copy_that_does_not_fit_is_refused_before_anything_is_written() {
     assert!(list(&fixture.destination_folder).is_empty());
 }
 
+/// A copy that does not fit asks first, as Windows does: "There is not
+/// enough space", with what it needs; Try Again checks again, and Cancel
+/// stops before anything is written.
+///
+/// parity: XFER-028, OPS-047
+#[test]
+fn a_copy_that_does_not_fit_asks_and_checks_again_on_try_again() {
+    use ox_core::transfer::{FailedItem, FailureAnswer, FailureCause, TransferError};
+
+    let fixture = Fixture::new();
+    let source = fixture.source_folder.join("video.mp4");
+    fs::write(&source, random_bytes(2048)).unwrap();
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&asked);
+    let mut engine = fixture
+        .engine(Arc::new(FatStick { free: Some(1024) }))
+        .with_failure_question(move |item: &FailedItem| {
+            let mut asked = log.lock().unwrap();
+            asked.push((item.cause, item.needed, item.destination_folder.is_some()));
+            if asked.len() == 1 {
+                FailureAnswer::Retry
+            } else {
+                FailureAnswer::Cancel
+            }
+        });
+
+    let refused = fixture.try_run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
+
+    assert_eq!(refused.unwrap_err(), TransferError::Cancelled);
+    assert_eq!(
+        *asked.lock().unwrap(),
+        [(FailureCause::NoSpace, Some(2048), true); 2],
+        "asked again after Try Again"
+    );
+    assert!(list(&fixture.destination_folder).is_empty());
+}
+
 /// parity: XFER-028
 #[test]
 fn a_file_over_4_gib_is_refused_on_fat_with_a_message_that_says_why() {
