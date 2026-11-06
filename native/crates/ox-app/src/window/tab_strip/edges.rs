@@ -138,16 +138,17 @@ impl TabStrip {
 /// The two curves at the foot of the tab in front at `tab`, in `colour`,
 /// on a strip `width` pixels wide: only beside an edge of the tab that
 /// shows, so a tab scrolled partly out of the strip has none on its cut
-/// side.
+/// side, and one scrolled out of it has none.
 fn draw_flares(snapshot: &gtk::Snapshot, tab: &graphene::Rect, width: f32, colour: &gdk::RGBA) {
     let bottom = tab.y() + tab.height();
     let start = tab.x();
     let end = start + tab.width();
+    let shows = |edge: f32| (-0.5..=width + 0.5).contains(&edge);
     let path = gsk::PathBuilder::new();
-    if start >= -0.5 {
+    if shows(start) {
         add_flare(&path, start, bottom, -FLARE);
     }
-    if end <= width + 0.5 {
+    if shows(end) {
         add_flare(&path, end, bottom, FLARE);
     }
     snapshot.append_fill(&path.to_path(), gsk::FillRule::Winding, colour);
