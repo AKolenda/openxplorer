@@ -446,7 +446,7 @@
         "id": "menus",
         "title": "Choose your context menu",
         "paragraphs": [
-          "The Windows 11-style compact menu is the default, as on the Menu key, with the classic menu behind Show more options, on Shift+F10 and on Shift+right-click; Settings can make the Windows 10-style classic menu the default instead. If you chose the classic menu in 2.0.11 or earlier, choose it again once: those versions saved it the same way as their default. Open with uses registered applications; identical editor names are deduplicated."
+          "The Windows 11-style compact menu is the default, as on the Menu key, with the classic menu behind Show more options, on Shift+F10 and on Shift+right-click; Settings can make the Windows 10-style classic menu the default instead. If you chose the classic menu in 2.0.11 or earlier, choose it again once: those versions saved it the same way as their default. Open with uses registered applications; identical editor names are deduplicated. Its chooser works like Windows 11's: the current default and suggested apps first, every other app under More apps, then Just once or Always (which makes the app the default for that file type); Choose an app on your PC runs a program file, and Use a custom command… runs a command line with the file."
         ]
       },
       {
@@ -494,7 +494,7 @@
         "id": "sizes",
         "title": "Measure folder sizes on demand",
         "paragraphs": [
-          "Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.",
+          "Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. A drive's Properties shows what Windows 11's does instead: its label, type and file system, its used and free space and capacity in bytes and GB, and a ring of the two, without counting anything on it; where it is mounted and from what are on its Hardware tab. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.",
           "Size counts logical file bytes; Size on disk counts the blocks the files take, which on a compressing filesystem such as ZFS is the compressed space. Neither is a ZFS dataset used/referenced value or a snapshot-exclusive block count."
         ]
       },

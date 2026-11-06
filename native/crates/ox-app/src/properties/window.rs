@@ -715,13 +715,6 @@ impl Rows {
         self.line.set(line + 1);
         label
     }
-
-    /// Adds `widget` across both columns.
-    pub(crate) fn add_wide(&self, widget: &impl IsA<gtk::Widget>) {
-        let line = self.line.get();
-        self.grid.attach(widget, 0, line, 2, 1);
-        self.line.set(line + 1);
-    }
 }
 
 /// A group box with a title, as Windows' Sharing and Customize tabs draw
