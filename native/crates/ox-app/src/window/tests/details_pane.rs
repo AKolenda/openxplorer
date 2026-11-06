@@ -189,8 +189,15 @@ fn the_panes_labels_are_no_tab_stops() {
     );
     let stops: Vec<String> = labels
         .iter()
-        .filter(|label| label.is_focusable())
+        .filter(|label| label.is_selectable() && (label.is_focusable() || label.can_focus()))
         .map(|label| label.text().to_string())
         .collect();
     assert!(stops.is_empty(), "labels that take Tab: {stops:?}");
+    assert!(
+        pane.child_focus(gtk::DirectionType::TabForward),
+        "a Tab into the pane"
+    );
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window).expect("a control has the keyboard");
+    assert!(focus.is::<gtk::Button>(), "lands on a button: {focus:?}");
+    assert!(focus.is_ancestor(pane));
 }

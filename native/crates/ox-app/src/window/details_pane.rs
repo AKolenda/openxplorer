@@ -479,15 +479,19 @@ fn property_name(name: &str) -> gtk::Label {
 }
 
 /// A property's value, which the pointer can select and copy. It is no
-/// Tab stop, as in Windows' pane, whose keyboard stops are its buttons: a
-/// selectable label that takes the keyboard while focus moves on its own
-/// (after a menu closes, say) has GTK 4.14 compare it with the widget
+/// Tab stop, as in Windows' pane, whose keyboard stops are its buttons:
+/// a selectable label that takes the keyboard while focus moves on its
+/// own (after a menu closes, say) has GTK 4.14 compare it with the widget
 /// that had the keyboard, which can be gone by then
-/// (`gtk_label_grab_focus`), a critical that tests make fatal.
+/// (`gtk_label_grab_focus`), a critical that tests make fatal. Not
+/// `focusable` alone: GTK still offers a Tab to a selectable label, which
+/// then claims it without taking the keyboard; without `can-focus` Tab
+/// passes it by.
 fn property_value(value: &str) -> gtk::Label {
     let label = property_label(value, "detail-value");
     label.set_selectable(true);
     label.set_focusable(false);
+    label.set_can_focus(false);
     label.set_hexpand(true);
     label
 }
