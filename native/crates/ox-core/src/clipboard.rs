@@ -7,18 +7,20 @@
 //! also reject reads whose owner changed while the payload was being
 //! fetched.
 //!
-//! A selection is published in four formats at once:
+//! A selection is published in five formats at once:
 //!
 //! | MIME type | Read by | Payload |
 //! |---|---|---|
 //! | [`CUSTOM`] | Python and native app windows | JSON with mode, URIs and token |
 //! | [`GNOME`] | Nautilus and other GTK apps | `copy` or `cut`, then one URI per line |
 //! | [`URI_LIST`] | every file manager | CRLF-terminated URIs |
+//! | [`TEXT`] | terminals and editors that take text | each item's path, one per line, when every path is one line |
 //! | [`KDE_CUT`] | Dolphin and other KDE apps | `1` for cut, `0` for copy |
 //!
 //! Paste tries [`CUSTOM`], then [`GNOME`], then [`URI_LIST`] with the
 //! [`KDE_CUT`] marker of the same clipboard owner. [`FileListFormat`] names
-//! these three formats, and [`decode()`] reads one of them.
+//! these three formats, and [`decode()`] reads one of them. [`TEXT`] is
+//! published for other applications only: text is never read back as files.
 
 mod decode;
 mod lines;
@@ -27,7 +29,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::location::{require_item_uri, LocationError};
+use crate::location::{breaks_a_line, require_item_uri, LocationContext, LocationError};
 
 pub use decode::{decode, FileListFormat};
 
@@ -39,6 +41,19 @@ pub const GNOME: &str = "x-special/gnome-copied-files";
 /// Standard URI list. Copy semantics unless accompanied by an exact KDE cut
 /// marker.
 pub const URI_LIST: &str = "text/uri-list";
+/// The items' addresses as plain text, one per line, unquoted, for
+/// terminals, editors and anything else that pastes text only.
+///
+/// GTK publishes it for a file list (the `text/plain` serializer of
+/// `gdk/gdkcontentserializer.c`), which is why copying in Nautilus and
+/// pasting into a terminal gives the files' paths. It carries
+/// [`LocationContext::copied_location`], so a local item is its path, an SMB
+/// item its `\\server\share\…` path and a phone's item `Pixel 7 / path`.
+/// Nothing is quoted: Windows' quoted form belongs to Copy as path. A
+/// selection with an address that holds a control character publishes no
+/// text at all, since pasting it into a terminal would paste more lines than
+/// the items it names ([`ClipboardFiles::encode`]).
+pub const TEXT: &str = "text/plain;charset=utf-8";
 /// KDE's cut marker, published beside [`URI_LIST`]: `1` for cut, `0` for
 /// copy.
 ///
@@ -147,7 +162,8 @@ pub struct ClipboardFiles {
 
 impl ClipboardFiles {
     /// Validates items, removes duplicates in selection order and assigns a
-    /// fresh owner token.
+    /// fresh owner token. `locations` names the devices and the home folder,
+    /// whose labels the [`TEXT`] payload shows.
     ///
     /// # Errors
     ///
@@ -156,11 +172,18 @@ impl ClipboardFiles {
     /// item is not a file or folder that can be copied, and
     /// [`ClipboardError::TooLarge`] when a published format would be over
     /// [`MAX_BYTES`], so a paste could not read it back.
-    pub fn new(mode: ClipboardMode, uris: &[String]) -> Result<Self, ClipboardError> {
+    pub fn new(
+        mode: ClipboardMode,
+        uris: &[String],
+        locations: &LocationContext,
+    ) -> Result<Self, ClipboardError> {
         let files = Self::with_token(mode, uris, new_token())?;
-        // The CUSTOM payload is the largest format: every URI in quotes,
-        // with a comma, against a newline or CRLF in the others.
-        if files.custom_json().len() > MAX_BYTES {
+        // The CUSTOM payload holds every URI in quotes with a comma, and the
+        // text every path, which a device label can make longer than its
+        // address; the other formats are smaller. A paste refuses a payload
+        // over MAX_BYTES, so publishing one would leave nothing to paste.
+        let text_bytes = files.text(locations).map_or(0, |text| text.len());
+        if files.custom_json().len() > MAX_BYTES || text_bytes > MAX_BYTES {
             return Err(ClipboardError::TooLarge);
         }
         Ok(files)
@@ -225,15 +248,17 @@ impl ClipboardFiles {
         self.uris.len() != original_len
     }
 
-    /// Encodes all four formats for a single system-clipboard owner.
+    /// Encodes the formats for a single system-clipboard owner: the four
+    /// file-list formats, and [`TEXT`] when every item's address is one line
+    /// and the whole of it fits a paste.
     ///
     /// A consumed, empty selection has no file formats and should clear the
     /// clipboard instead of publishing an invalid empty file list.
-    pub fn encode(&self) -> Vec<ClipboardPayload> {
+    pub fn encode(&self, locations: &LocationContext) -> Vec<ClipboardPayload> {
         if self.uris.is_empty() {
             return Vec::new();
         }
-        vec![
+        let mut payloads = vec![
             ClipboardPayload {
                 mime_type: CUSTOM,
                 bytes: self.custom_json(),
@@ -246,11 +271,52 @@ impl ClipboardFiles {
                 mime_type: URI_LIST,
                 bytes: encode_uri_list(&self.uris).into_bytes(),
             },
-            ClipboardPayload {
-                mime_type: KDE_CUT,
-                bytes: self.mode.kde_cut_marker().to_vec(),
-            },
-        ]
+        ];
+        if let Some(text) = self.text(locations) {
+            // A selection this app made was measured by ClipboardFiles::new,
+            // but one decoded from another owner was not, and the move that
+            // consumes a cut republishes what is left with the labels of this
+            // moment: a phone's label alone can make 100,000 short addresses
+            // into more text than a paste reads. Publishing that would
+            // advertise a format no paste accepts, so the text is left out
+            // and the file formats still name every item.
+            if text.len() <= MAX_BYTES {
+                payloads.push(ClipboardPayload {
+                    mime_type: TEXT,
+                    bytes: text.into_bytes(),
+                });
+            }
+        }
+        payloads.push(ClipboardPayload {
+            mime_type: KDE_CUT,
+            bytes: self.mode.kde_cut_marker().to_vec(),
+        });
+        payloads
+    }
+
+    /// The [`TEXT`] payload: each item's display address, one per line,
+    /// unquoted, without a trailing newline, as GTK's file-list text
+    /// serializer writes them; `None` when there is no such payload.
+    ///
+    /// Safety rule (one line per item): an address holding a character that
+    /// ends a line is no line, so the selection publishes no text rather than
+    /// a payload whose lines are not items, which a terminal would paste as
+    /// more than was copied. A control character is one, and so is U+2028 or
+    /// U+2029 ([`breaks_a_line`]), which an editor honours as a line break.
+    /// No URI can bring a control character, since [`require_item_uri`]
+    /// refuses an encoded one; a device's label could, and the app cleans a
+    /// label as it reads it. This is the guard behind the public `devices`
+    /// field that keeps such a name from ever becoming a second line.
+    fn text(&self, locations: &LocationContext) -> Option<String> {
+        let lines: Vec<String> = self
+            .uris
+            .iter()
+            .map(|uri| locations.copied_location(uri))
+            .collect();
+        if lines.iter().any(|line| line.chars().any(breaks_a_line)) {
+            return None;
+        }
+        Some(lines.join("\n"))
     }
 
     /// The [`CUSTOM`] payload: `{"mode": ..., "uris": [...], "token": ...}`.
