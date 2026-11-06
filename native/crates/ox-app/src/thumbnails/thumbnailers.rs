@@ -732,27 +732,22 @@ fn remove_tree(folder: &Path) -> bool {
     fs::remove_dir(folder).is_ok()
 }
 
-/// Removes everything in the open folder `folder`, `depth` folders below
-/// the workspace; whether it is empty now.
-fn empty_folder(folder: &std::os::fd::OwnedFd, depth: usize) -> bool {
+/// Removes what it can of everything in the open folder `folder`, `depth`
+/// folders below the workspace; the folder's own removal tells whether it
+/// all went.
+fn empty_folder(folder: &std::os::fd::OwnedFd, depth: usize) {
     use rustix::fs::{AtFlags, FileType, Mode, OFlags};
 
     let Ok(listing) = rustix::fs::Dir::read_from(folder) else {
-        return false;
+        return;
     };
     // The names are taken first, so removing them does not disturb the
     // listing.
-    let mut names = Vec::new();
-    for entry in listing {
-        let Ok(entry) = entry else {
-            return false;
-        };
-        let name = entry.file_name().to_owned();
-        if name.as_bytes() != b"." && name.as_bytes() != b".." {
-            names.push((name, entry.file_type()));
-        }
-    }
-    let mut emptied = true;
+    let names: Vec<_> = listing
+        .map_while(Result::ok)
+        .map(|entry| (entry.file_name().to_owned(), entry.file_type()))
+        .filter(|(name, _)| name.as_bytes() != b"." && name.as_bytes() != b"..")
+        .collect();
     for (name, kind) in names {
         let kind = if kind == FileType::Unknown {
             rustix::fs::statat(folder, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
@@ -761,20 +756,20 @@ fn empty_folder(folder: &std::os::fd::OwnedFd, depth: usize) -> bool {
             kind
         };
         if kind != FileType::Directory {
-            emptied &= rustix::fs::unlinkat(folder, name.as_c_str(), AtFlags::empty()).is_ok();
+            let _ = rustix::fs::unlinkat(folder, name.as_c_str(), AtFlags::empty());
             continue;
         }
-        if depth >= CLEANUP_DEPTH {
-            emptied = false;
-            continue;
+        if depth < CLEANUP_DEPTH {
+            let _ = rustix::fs::chmodat(folder, name.as_c_str(), Mode::RWXU, AtFlags::empty());
+            let flags = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
+            if let Ok(inner) = rustix::fs::openat(folder, name.as_c_str(), flags, Mode::empty()) {
+                empty_folder(&inner, depth + 1);
+            }
         }
-        let _ = rustix::fs::chmodat(folder, name.as_c_str(), Mode::RWXU, AtFlags::empty());
-        let flags = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
-        let inner = rustix::fs::openat(folder, name.as_c_str(), flags, Mode::empty())
-            .is_ok_and(|inner| empty_folder(&inner, depth + 1));
-        emptied &= inner && rustix::fs::unlinkat(folder, name.as_c_str(), AtFlags::REMOVEDIR).is_ok();
+        // An inner folder that could not be opened or emptied may be empty
+        // all the same: its removal is tried whatever happened above.
+        let _ = rustix::fs::unlinkat(folder, name.as_c_str(), AtFlags::REMOVEDIR);
     }
-    emptied
 }
 
 /// The picture a thumbnailer wrote at `path`, decoded to fit `edge`
