@@ -38,6 +38,7 @@ mod inspection;
 #[cfg(test)]
 pub(crate) use inspection::{row_label, row_tooltip};
 mod items;
+mod motion;
 
 use std::time::Duration;
 
@@ -49,6 +50,9 @@ use crate::icons::{self, Icon};
 use crate::integration;
 
 pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
+#[cfg(test)]
+pub(crate) use motion::Slide;
+pub(crate) use motion::OPENING_MOTION;
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
@@ -98,6 +102,7 @@ impl CheckMark {
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
+    use std::time::Instant;
 
     use gtk::glib::SourceId;
 
@@ -134,6 +139,18 @@ mod imp {
         /// Whether the menu opens beside its button because GTK cut it
         /// short below it (height.rs).
         pub(super) beside_button: Cell<bool>,
+        /// Which of the two names its opening motion took last
+        /// (motion.rs).
+        pub(super) opening_turn: Cell<bool>,
+        /// When the menu last began to open.
+        pub(super) opening_since: Cell<Option<Instant>>,
+        /// Whether GTK has placed the popup since the menu began to open.
+        pub(super) placed: Cell<bool>,
+        /// Which way the menu slides as it opens.
+        pub(super) slide: Cell<Option<super::motion::Slide>>,
+        /// The timer that lets the contents count as opaque again once
+        /// the menu has faded in.
+        pub(super) opaque_again: RefCell<Option<SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -170,6 +187,8 @@ mod imp {
             content.append(&rows);
             // Once shown, the menu fits the monitor its own popup is on.
             popover.connect_realize(super::MenuPopover::follow_monitor_changes);
+            // It slides in from where GTK places it (motion.rs).
+            popover.connect_realize(super::MenuPopover::follow_placement);
             popover.connect_map(super::MenuPopover::refit_if_shown);
             popover.set_child(Some(&content));
             self.strip.set(strip).expect("constructed runs once per object");
@@ -201,6 +220,8 @@ mod imp {
             // Before GTK places the menu, so it is placed at its full size.
             self.obj().open_below_button_again();
             self.obj().fit_to_monitor();
+            // It fades and slides in, as Windows 11's menus open.
+            self.obj().start_opening_motion();
             #[expect(
                 deprecated,
                 reason = "gtk-rs names the show vfunc after gtk_widget_show; the vfunc stays"
@@ -557,13 +578,21 @@ impl MenuPopover {
         } else {
             MarkColumn::None
         };
+        // A row without a glyph keeps the glyph's column empty where other
+        // rows have one, as Windows' classic menu lines up text-only rows
+        // with those that show an icon.
+        let glyphs = if items_of(&entries).any(shows_a_glyph) {
+            GlyphColumn::Shown
+        } else {
+            GlyphColumn::None
+        };
         for entry in &entries {
             let MenuEntry::Item(item) = entry else {
                 after_divider = true;
                 continue;
             };
             let can_choose = self.can_choose(item);
-            let row = item_row(item, self.check_mark(item), marks);
+            let row = item_row(item, self.check_mark(item), marks, glyphs);
             row.set_sensitive(can_choose);
             explain_availability(self, row.upcast_ref(), item, can_choose);
             if after_divider {
@@ -1053,6 +1082,20 @@ enum MarkColumn {
     Shown,
 }
 
+/// Whether a menu's rows keep a column for glyphs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GlyphColumn {
+    /// No row has a glyph.
+    None,
+    /// A row has one, so every row keeps the column.
+    Shown,
+}
+
+/// Whether `item`'s row draws a glyph: its own, or its application's icon.
+fn shows_a_glyph(item: &MenuItem) -> bool {
+    item.shows_glyph || item.application_icon.is_some()
+}
+
 /// The mark column of a row: a dot for a chosen choice (or an item that
 /// asks for one, such as the open Details pane), a check mark for a toggle
 /// that is on, as Windows 11 draws them, else an empty slot.
@@ -1076,7 +1119,7 @@ fn mark_slot(item: &MenuItem, check: CheckMark) -> gtk::Widget {
 /// A row's mark column when the menu has one, its glyph (the
 /// application's own icon for an item that opens one), its label and its
 /// shortcut.
-fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Box {
+fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::Box {
     let application_icon = item
         .application_icon
         .as_deref()
@@ -1099,10 +1142,11 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Bo
     });
     if let Some(glyph) = glyph {
         content.append(&glyph);
-    } else if marks == MarkColumn::None {
+    } else if marks == MarkColumn::None || glyphs == GlyphColumn::Shown {
         // A row without a glyph or a mark column, such as Windows
         // Explorer's text-only right-drag menu's (DND-027), keeps the
-        // glyph's column empty, so its text sits where other menus' does.
+        // glyph's column empty, so its text sits where other menus' does,
+        // as does a text-only row of a menu whose other rows have glyphs.
         let column = gtk::Box::builder()
             .width_request(ROW_GLYPH)
             .height_request(ROW_GLYPH)
@@ -1144,14 +1188,15 @@ fn cut_short_label(row: &gtk::ListBoxRow) -> Option<String> {
     label.layout().is_ellipsized().then(|| label.text().to_string())
 }
 
-/// The row for `item`, showing `check` in the menu's `marks` column.
-fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::ListBoxRow {
+/// The row for `item`, showing `check` in the menu's `marks` column, and
+/// its glyph, or an empty slot, in the `glyphs` column.
+fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::ListBoxRow {
     let role = match check {
         CheckMark::NotCheckable => gtk::AccessibleRole::MenuItem,
         CheckMark::Unchecked | CheckMark::Checked => gtk::AccessibleRole::MenuItemCheckbox,
     };
     let row = gtk::ListBoxRow::builder()
-        .child(&item_content(item, check, marks))
+        .child(&item_content(item, check, marks, glyphs))
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
