@@ -283,6 +283,25 @@ gridview.files.compact { padding: 4px 8px 8px 12px; }
 gridview.files.compact > child { padding: 0 8px 0 6px; margin: 0 2px 0 0; border-radius: 4px; }
 gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
 
+/* ---- Tiles and Content (Explorer's, VIEW-071) ---- */
+/* Tiles: the icon left of its name, type and size, 8px of padding round
+   a tile. Content: one row per item across the width, with a thin line
+   under each, as Windows 11 draws them. Their heights follow the text
+   size (src/theme/fonts.rs). */
+gridview.files.tiles > child { padding: 8px; margin: 1px 2px; }
+gridview.files.content > child {
+  padding: 0 12px;
+  margin: 0;
+  border-radius: 0;
+  border-bottom: 1px solid @ox_border;
+}
+/* GTK's theme gives every box in a tile a 12px margin; the lines beside
+   the icon have none. */
+gridview.files.tiles > child box, gridview.files.content > child box { margin: 0; }
+gridview.files > child .item-lines { border-spacing: 1px; }
+gridview.files > child .item-properties { border-spacing: 2px; margin-right: 24px; }
+gridview.files > child .item-properties > box { border-spacing: 4px; }
+
 /* The type-to-select hint is accent-coloured, and muted when no name
    matches (`.type-select-status[data-miss=true]`). */
 .typeahead-hint { color: @ox_accent; }

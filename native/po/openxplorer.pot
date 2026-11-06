@@ -735,12 +735,20 @@ msgstr ""
 msgid "This disconnects all SMB mounts for this server in your desktop session, including other applications. Close files on this server first."
 msgstr ""
 
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Date modified:"
+msgstr ""
+
 #: crates/ox-app/src/folder_view/cells.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Files"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/cells.rs crates/ox-app/src/window/input.rs
 msgid "Folder contents — type a filename prefix to select"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Size:"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/cells/expander.rs
@@ -1502,7 +1510,7 @@ msgstr ""
 msgid "Conductors"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Content"
 msgstr ""
 
@@ -4667,6 +4675,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Text Document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Tiles"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs

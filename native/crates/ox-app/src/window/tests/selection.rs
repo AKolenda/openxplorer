@@ -450,6 +450,42 @@ fn arrows_move_in_two_dimensions_in_the_icon_grid() {
     assert_eq!(selected(&test), [above], "Up remembers the column");
 }
 
+/// In Tiles the arrows move across and down the tiles, Down keeping to
+/// the column; in Content, one row per item, Down and Up move a row, and
+/// Home, End and Shift work as in the other views.
+///
+/// parity: VIEW-071, SEL-007, SEL-010
+#[gtk::test]
+fn arrows_move_through_tiles_and_content() {
+    let fixture = Fixture::with_files(PRIME_FOLDER);
+    let test = TestWindow::open(&fixture.uri());
+    let none = gdk::ModifierType::empty();
+    show_view(&test, "tiles");
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::Right, none);
+    assert_eq!(selected(&test), [1]);
+    let columns = test.window.folder_pane().icon_view().grid().max_columns();
+    assert!(columns >= 2, "tiles fill several columns");
+    press_key(&test, gdk::Key::Down, none);
+    assert_eq!(selected(&test), [1 + columns], "Down goes to the next row");
+    press_key(&test, gdk::Key::Up, none);
+    assert_eq!(selected(&test), [1]);
+
+    show_view(&test, "content");
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::Down, none);
+    assert_eq!(selected(&test), [1], "Down goes to the next row");
+    press_key(&test, gdk::Key::Down, gdk::ModifierType::SHIFT_MASK);
+    assert_eq!(selected(&test), [1, 2], "Shift extends");
+    press_key(&test, gdk::Key::End, none);
+    let last = u32::try_from(PRIME_FOLDER).expect("small") - 1;
+    assert_eq!(selected(&test), [last]);
+    press_key(&test, gdk::Key::Home, none);
+    assert_eq!(selected(&test), [0]);
+    test.window.type_text("file 0004");
+    assert_eq!(test.selected_names(), ["file 0004.txt"], "type-ahead selects");
+}
+
 /// parity: SEL-016
 #[gtk::test]
 fn a_created_item_is_selected_and_scrolled_into_view() {
