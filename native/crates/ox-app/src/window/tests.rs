@@ -36,6 +36,7 @@ mod file_ops_captures;
 pub(super) mod file_ops_support;
 mod focus;
 mod folder_location;
+mod folder_options;
 mod folder_tree;
 mod geometry;
 mod group_by;

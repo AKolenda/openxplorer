@@ -279,8 +279,8 @@ impl BrowserWindow {
 
     /// Follows the preferences of how items are shown: the date style
     /// (VIEW-004), redrawn if it changed, item check boxes (SEL-014), whether
-    /// they wait for Ctrl, expandable folders (VIEW-035) and hidden files
-    /// (VIEW-023).
+    /// they wait for Ctrl, expandable folders (VIEW-035), hidden files
+    /// (VIEW-023) and Folder Options' own choices (VIEW-021).
     pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
         self.show_item_check_boxes(preferences.selection_marker);
@@ -291,6 +291,7 @@ impl BrowserWindow {
         }
         self.follow_hidden_files(preferences.show_hidden);
         self.follow_file_name_extensions_preference();
+        self.follow_folder_options(&preferences);
         for (side, uri) in self.shown_panes() {
             let pane = self.pane_on(side);
             let style = preferences.view_for(&uri);

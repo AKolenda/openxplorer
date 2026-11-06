@@ -80,6 +80,7 @@ mod empty_page;
 mod environment;
 mod expand_arrows;
 mod expanding;
+mod explorer_options;
 mod external_requests;
 mod extract_into;
 mod file_drag;

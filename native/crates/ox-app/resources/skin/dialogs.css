@@ -26,6 +26,15 @@ window.ox.ox-dialog .dialog-title {
 }
 window.ox.ox-dialog .dialog-message { color: @ox_muted; margin-bottom: 12px; }
 window.ox.ox-dialog .field-label { color: @ox_text; margin: 8px 0 4px 0; }
+
+/* Folder Options: its options stand closer than a dialog's check boxes,
+   and the Advanced settings list is bordered, as Windows draws its tree. */
+window.ox.ox-dialog checkbutton.option-row { margin-top: 4px; }
+window.ox.ox-dialog .option-heading { margin-top: 6px; }
+window.ox.ox-dialog .advanced-settings {
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+}
 /* A text input: 35 high, 4px corners, the chrome fill and the stronger
    bottom edge that turns into a 2px accent line on focus. */
 window.ox.ox-dialog entry {
