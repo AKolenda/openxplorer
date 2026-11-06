@@ -67,11 +67,13 @@ pub(super) fn tab_menu(id: TabId, uri: &str, is_only_tab: bool) -> Vec<MenuEntry
 }
 
 impl BrowserWindow {
-    /// "Open windows…": opens the title bar's list of open windows
-    /// (`windowsMenu`), for the tab menu, `--windows` and the launcher's
-    /// "Open windows…" (TAB-044).
+    /// "Open windows…": opens the list of open windows (`windowsMenu`)
+    /// below the tab in front, for the tab menu, `--windows` and the
+    /// launcher's "Open windows…" (TAB-044). Windows 11's title bar has
+    /// no button for it, so neither has this one.
     pub(crate) fn show_open_windows(&self) {
-        self.imp().open_windows_button.popup();
+        let entries = super::title_bar::open_windows_menu(self);
+        self.imp().tab_strip.show_windows_menu(entries);
     }
 }
 

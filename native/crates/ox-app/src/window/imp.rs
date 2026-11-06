@@ -56,9 +56,9 @@ pub(crate) struct BrowserWindow {
     /// "+", right after the last tab.
     #[template_child]
     pub(super) new_tab_button: TemplateChild<gtk::Button>,
-    /// Lists the open windows.
+    /// The empty part of the title bar, after "+", where the tab row ends.
     #[template_child]
-    pub(super) open_windows_button: TemplateChild<gtk::MenuButton>,
+    pub(super) title_drag: TemplateChild<gtk::Box>,
     /// The history buttons, the address and the search box.
     #[template_child]
     pub(super) navigation_row: TemplateChild<gtk::Box>,

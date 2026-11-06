@@ -133,8 +133,8 @@ pub(crate) enum Icon {
     Delete,
     /// `delete_dismiss_20_regular`: Empty Recycle Bin.
     DeleteDismiss,
-    /// `desktop_20_regular`: the Desktop folder, the open-windows button and
-    /// its windows, Use system appearance, Discovered servers and Settings'
+    /// `desktop_20_regular`: the Desktop folder, the open-windows menu's
+    /// windows, Use system appearance, Discovered servers and Settings'
     /// Open windows….
     Desktop,
     /// Disconnect network drive in This PC's "…": an original icon
