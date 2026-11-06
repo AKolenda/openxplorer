@@ -4697,7 +4697,7 @@ msgstr ""
 msgid "Compress"
 msgstr ""
 
-#: crates/ox-app/src/window/conflict_window.rs
+#: crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Continue"
 msgstr ""
 
@@ -5384,11 +5384,19 @@ msgid "Delete or move files so you have enough space."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Destination"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Destination Folder Access Denied"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Do this for all current items"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/progress_window.rs
+msgid "Fewer details"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -5415,8 +5423,16 @@ msgstr ""
 msgid "Item Not Found"
 msgstr ""
 
+#: crates/ox-app/resources/ui/progress-window.ui crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/progress_window.rs
+msgid "More details"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "Skip"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Source"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6227,14 +6243,6 @@ msgid "Text size changed for this window, but could not be saved: {error}"
 msgstr ""
 
 #: crates/ox-app/src/window/progress_window.rs
-msgid "Fewer details"
-msgstr ""
-
-#: crates/ox-app/resources/ui/progress-window.ui crates/ox-app/src/window/progress_window.rs
-msgid "More details"
-msgstr ""
-
-#: crates/ox-app/src/window/progress_window.rs
 msgid "Replace or Skip Files"
 msgstr ""
 
@@ -7004,6 +7012,30 @@ msgstr ""
 msgid "Copying files"
 msgstr ""
 
+#: crates/ox-core/src/admin_copy.rs
+msgid "Administrator access is not available. Install your distribution's GVfs administrator backend to copy to this folder as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "Other users can change {path}, or it is on a drive whose permissions can't be checked, so items can't be safely copied there as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "{path} is not a folder, so items can't be copied there as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "{path} is on a removable drive or in a place where other users can mount drives, so items can't be safely copied there as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "{uri} is not a folder on this computer, so items can't be copied there as administrator."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_delete.rs
 msgid "Some items were not deleted:\n{items}"
@@ -7598,6 +7630,14 @@ msgstr ""
 
 #: crates/ox-core/src/gio_node.rs
 msgid "Filesystem roots cannot be changed as items."
+msgstr ""
+
+#: crates/ox-core/src/gio_node/into_admin.rs
+msgid "Items are moved into an administrator location by copying them and then removing the originals."
+msgstr ""
+
+#: crates/ox-core/src/gio_node/into_admin.rs
+msgid "Only files, folders and links can be copied as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -9199,6 +9239,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/transfer/engine.rs
 msgid "The item was copied to {uri}, but the original could not be removed. Check the copy, then delete the original. {error}"
+msgstr ""
+
+#: crates/ox-core/src/transfer/engine.rs
+msgid "This item can't be copied as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

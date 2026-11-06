@@ -40,7 +40,11 @@ use gtk::subclass::prelude::*;
 use ox_core::transfer::Cancellation;
 
 use super::fields::{check_box, field_caption, wrapped_label};
+use crate::icons::Icon;
 use crate::window::{BrowserWindow, ButtonStyle};
+
+/// The edge of an icon before a button's label, such as Continue's shield.
+const BUTTON_ICON_SIZE: i32 = 16;
 
 /// A button of one dialog, as [`Dialog::next_response`] reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -304,6 +308,28 @@ impl Dialog {
             self.set_default_widget(Some(&button));
         }
         answer
+    }
+
+    /// Adds a button like [`Self::add_button`] with `icon` before its
+    /// label, such as Continue's administrator shield. The label still
+    /// names the button for screen readers.
+    pub(crate) fn add_button_with_icon(&self, label: &str, icon: Icon, style: ButtonStyle) -> DialogButton {
+        let answer = self.add_button(label, style);
+        if let Some(button) = self.imp().buttons.borrow().get(answer.0) {
+            let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            content.set_halign(gtk::Align::Center);
+            content.append(&crate::icons::image(icon, BUTTON_ICON_SIZE));
+            content.append(&gtk::Label::new(Some(label)));
+            button.set_child(Some(&content));
+            button.update_property(&[gtk::accessible::Property::Label(label)]);
+        }
+        answer
+    }
+
+    /// Puts `widget` at the left of the footer, before the buttons, such
+    /// as a question's More details.
+    pub(crate) fn add_footer_start(&self, widget: &impl IsA<gtk::Widget>) {
+        self.imp().frame.add_footer_start(widget);
     }
 
     /// Lets `button` be pressed, or greys it out, such as Apply while

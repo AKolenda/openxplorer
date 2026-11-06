@@ -7,6 +7,7 @@
 use super::cancellation::Cancellation;
 use super::conflicts::Placement;
 use super::guard::SourceChange;
+use super::node::Node;
 use super::types::{progress_fraction, TransferMode};
 
 /// The settings shared by every item of one run.
@@ -41,7 +42,31 @@ pub(crate) enum Removal {
     PermanentDelete,
 }
 
-impl Batch<'_> {
+impl<'a> Batch<'a> {
+    /// This run, writing into `folder` instead: the destination folder
+    /// under `admin://` when the user answered Continue (OPS-047). The
+    /// folder the user chose stays the requested one. `None` for the
+    /// Recycle Bin and deletes.
+    pub(crate) fn writing_into<'b>(&self, folder: &'b dyn Node) -> Option<Batch<'b>>
+    where
+        'a: 'b,
+    {
+        let ItemAction::Transfer(placement) = &self.action else {
+            return None;
+        };
+        Some(Batch {
+            action: ItemAction::Transfer(Placement {
+                mode: placement.mode,
+                policy: placement.policy,
+                destination_folder: folder,
+                requested_folder: placement.requested_folder,
+                name: placement.name,
+            }),
+            cancel: self.cancel,
+            total: self.total,
+        })
+    }
+
     /// The mode of the run, which names it on the progress panel.
     pub(crate) fn mode(&self) -> TransferMode {
         match &self.action {
@@ -51,11 +76,11 @@ impl Batch<'_> {
         }
     }
 
-    /// The URI of the folder a copy or move writes into; `None` for the
-    /// Recycle Bin and deletes.
+    /// The URI of the folder the user chose for a copy or move, never its
+    /// `admin://` form; `None` for the Recycle Bin and deletes.
     pub(crate) fn destination_uri(&self) -> Option<String> {
         match &self.action {
-            ItemAction::Transfer(placement) => Some(placement.destination_folder.uri()),
+            ItemAction::Transfer(placement) => Some(placement.requested_folder.uri()),
             ItemAction::Remove(_) => None,
         }
     }
@@ -104,6 +129,7 @@ mod tests {
             mode,
             policy: ConflictPolicy::Skip,
             destination_folder: &folder,
+            requested_folder: &folder,
             name: None,
         };
         let cases = [

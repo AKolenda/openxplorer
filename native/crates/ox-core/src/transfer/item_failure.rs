@@ -6,7 +6,11 @@
 //! [`FailureCause`]: "Try Again" runs that item again, "Skip" leaves it
 //! out, "Skip" with "Do this for all current items" leaves out every later
 //! failing item without asking, and "Cancel" stops the run, keeping what
-//! is done. Skipped items are recorded like any failure, as answered
+//! is done. "Continue", which Windows offers when the destination folder
+//! needs an administrator, runs the item again into that folder under
+//! `admin://` once [`crate::admin_copy`] found it safe; with "Do this for
+//! all current items", every later item of the run goes there too.
+//! Skipped items are recorded like any failure, as answered
 //! (OPS-023), and their staging is removed as for any failed item. Without
 //! a question installed the error is recorded and the next item runs, as
 //! before.
@@ -107,6 +111,12 @@ impl FailedItem {
 pub enum FailureAnswer {
     /// Run the item again: "Try Again".
     Retry,
+    /// Run the item again with administrator rights, writing into the
+    /// destination folder under `admin://`: "Continue" (OPS-047).
+    Elevate,
+    /// As [`Self::Elevate`], and write every later item of the run the
+    /// same way: "Continue" with "Do this for all current items".
+    ElevateAll,
     /// Leave it out and go on.
     Skip,
     /// Leave it and every later failing item out, without asking: "Skip"
@@ -133,6 +143,9 @@ pub(crate) struct ItemFailures {
     left_out: Vec<(String, bool)>,
     /// The source URIs of those entries.
     left_out_sources: HashSet<String>,
+    /// The answer about an entry inside the running item that asked for
+    /// the whole item to run again as administrator.
+    elevation: Option<FailureAnswer>,
 }
 
 /// The top-level item of a run that is running.
@@ -186,6 +199,13 @@ impl ItemFailures {
         });
         self.left_out.clear();
         self.left_out_sources.clear();
+        self.elevation = None;
+    }
+
+    /// Continue or Continue for all, when the user answered it about an
+    /// entry inside the running item, which then failed as a whole.
+    pub(crate) fn take_elevation(&mut self) -> Option<FailureAnswer> {
+        self.elevation.take()
     }
 
     /// What to do about `entry`, the path of an entry below the running
@@ -235,6 +255,12 @@ impl ItemFailures {
             match self.answer(&failed) {
                 Some(FailureAnswer::Retry) => return EntryDecision::Retry,
                 Some(FailureAnswer::Cancel) => return EntryDecision::Cancel,
+                // The destination is the whole item's: it runs again as
+                // administrator, from the start.
+                Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) => {
+                    self.elevation = Some(answer);
+                    return EntryDecision::Fail;
+                }
                 Some(FailureAnswer::Skip | FailureAnswer::SkipAll) => answered = true,
                 None => {}
             }

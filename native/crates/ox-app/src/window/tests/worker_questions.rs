@@ -129,6 +129,127 @@ fn file_access_denied_answers_try_again_skip_or_cancel_to_the_worker() {
     }
 }
 
+/// The More details toggle of a question, and the rows it shows.
+fn details_of(dialog: &crate::dialog::Dialog) -> (gtk::Button, gtk::Grid) {
+    let toggle = descendants::<gtk::Button>(dialog)
+        .into_iter()
+        .find(|button| button.has_css_class("failure-details-toggle"))
+        .expect("More details");
+    let rows = descendants::<gtk::Grid>(dialog)
+        .into_iter()
+        .find(|grid| grid.has_css_class("failure-details"))
+        .expect("the details");
+    (toggle, rows)
+}
+
+/// The text of `toggle`: "More details" or "Fewer details".
+fn toggle_text(toggle: &gtk::Button) -> String {
+    descendants::<gtk::Label>(toggle)
+        .first()
+        .map(|label| label.text().to_string())
+        .unwrap_or_default()
+}
+
+/// A destination folder the user may not write to asks Windows' "Destination
+/// Folder Access Denied" about the folder, with Continue and its
+/// administrator shield, Skip and Cancel. Continue answers Continue, and
+/// with "Do this for all current items" Continue for all; a folder the
+/// administrator check refuses (this test's own) is answered without any
+/// password prompt, so the engine says why. More details is closed at
+/// first, shows the source and the destination, and stays as it was left.
+/// Tests run as a normal user: root may write anywhere.
+///
+/// parity: OPS-047
+#[gtk::test]
+fn destination_folder_access_denied_offers_continue_with_the_shield() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Gives the folder its write permission back, also when the test
+    /// fails, so the fixture can be removed.
+    struct Locked(std::path::PathBuf);
+    impl Drop for Locked {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    let fixture = Fixture::standard();
+    let locked = Locked(fixture.path("Documents"));
+    std::fs::set_permissions(&locked.0, std::fs::Permissions::from_mode(0o555)).expect("lock the folder");
+    let test = TestWindow::open(&fixture.uri());
+    let item = FailedItem {
+        mode: TransferMode::Copy,
+        name: "Notes 2.txt".into(),
+        error: "Error opening file: Permission denied".into(),
+        more_items: true,
+        cause: FailureCause::AccessDenied,
+        uri: fixture.uri_of("Notes 2.txt"),
+        destination_folder: Some(fixture.uri_of("Documents")),
+        needed: None,
+    };
+
+    for (for_all, expected, opens) in [
+        (false, FailureAnswer::Elevate, true),
+        (true, FailureAnswer::ElevateAll, false),
+    ] {
+        let asker = test.window.failure_asker(&Cancellation::new());
+        let question = item.clone();
+        let worker = thread::spawn(move || asker.ask(&question));
+        let dialog = open_dialog(&test);
+        assert_eq!(dialog.title_text(), "Destination Folder Access Denied");
+        assert_eq!(
+            dialog.message_text(),
+            "You'll need to provide administrator permission to copy to this folder"
+        );
+        assert!(
+            dialog.texts().iter().any(|text| text == "Documents"),
+            "it names the folder: {:?}",
+            dialog.texts()
+        );
+        assert_eq!(dialog.button_labels(), ["Continue", "Skip", "Cancel"]);
+        assert!(dialog.button_shows_icon("Continue", crate::icons::Icon::ShieldLock));
+        let (toggle, rows) = details_of(&dialog);
+        if opens {
+            assert!(!rows.is_visible(), "closed at first");
+            assert_eq!(toggle_text(&toggle), "More details");
+            toggle.emit_clicked();
+            wait_until("the choice to be saved", || {
+                test.context.settings_data().preferences.failure_details
+            });
+        } else {
+            assert!(rows.is_visible(), "open as it was left");
+        }
+        assert_eq!(toggle_text(&toggle), "Fewer details");
+        let texts: Vec<String> = descendants::<gtk::Label>(&rows)
+            .iter()
+            .map(|label| label.text().to_string())
+            .collect();
+        for wanted in ["Source", "Destination"] {
+            assert!(
+                texts.iter().any(|text| text.starts_with(wanted)),
+                "{wanted} in {texts:?}"
+            );
+        }
+        assert!(
+            texts.iter().any(|text| text.ends_with("Notes 2.txt")),
+            "where the item is: {texts:?}"
+        );
+        assert!(
+            texts.iter().any(|text| text.ends_with("Documents")),
+            "where it was going: {texts:?}"
+        );
+        descendants::<gtk::CheckButton>(&dialog)
+            .into_iter()
+            .next()
+            .expect("Do this for all current items")
+            .set_active(for_all);
+        dialog.press("Continue");
+        wait_for_no_dialog(&test);
+        wait_until("the worker to get its answer", || worker.is_finished());
+        assert_eq!(worker.join().expect("the worker finishes"), expected);
+    }
+}
+
 /// A file that is gone asks "Item Not Found" with where it was; one that
 /// is held asks "File In Use"; neither shows the system's text.
 ///

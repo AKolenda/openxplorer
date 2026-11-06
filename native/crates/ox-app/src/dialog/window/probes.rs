@@ -6,7 +6,29 @@ use gtk::subclass::prelude::*;
 
 use super::Dialog;
 
+/// The text of `button`: its label, or the label beside its icon.
+fn button_text(button: &gtk::Button) -> Option<String> {
+    if let Some(label) = button.label() {
+        return Some(label.into());
+    }
+    crate::test_support::harness::descendants::<gtk::Label>(button)
+        .first()
+        .map(|label| label.text().into())
+}
+
+/// Whether `button` shows `icon` before its label, for tests.
+fn shows_icon(button: &gtk::Button, icon: crate::icons::Icon) -> bool {
+    crate::test_support::harness::descendants::<gtk::Image>(button)
+        .iter()
+        .any(|image| image.icon_name().as_deref() == Some(icon.name()))
+}
+
 impl Dialog {
+    /// Whether the button labelled `label` shows `icon`, for tests.
+    pub(crate) fn button_shows_icon(&self, label: &str, icon: crate::icons::Icon) -> bool {
+        shows_icon(&self.button_labelled(label), icon)
+    }
+
     /// The text of the scrolled box, for tests.
     pub(crate) fn scrolled_text(&self) -> String {
         let scrolled = crate::window::children(&self.fields())
@@ -37,11 +59,7 @@ impl Dialog {
     /// The button labels in order, for tests.
     pub(crate) fn button_labels(&self) -> Vec<String> {
         let buttons = self.imp().buttons.borrow();
-        buttons
-            .iter()
-            .filter_map(gtk::Button::label)
-            .map(String::from)
-            .collect()
+        buttons.iter().filter_map(button_text).collect()
     }
 
     /// Whether the button labelled `label` can be pressed, for tests.
@@ -77,7 +95,7 @@ impl Dialog {
             .buttons
             .borrow()
             .iter()
-            .find(|button| button.label().as_deref() == Some(label))
+            .find(|button| button_text(button).as_deref() == Some(label))
             .cloned()
             .unwrap_or_else(|| panic!("the dialog has a {label} button"))
     }

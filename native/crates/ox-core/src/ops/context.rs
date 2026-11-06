@@ -224,7 +224,10 @@ impl OperationContext {
             engine = engine.with_move_by_copying_question(move |item: &MoveByCopyingItem| asker.ask(item));
         }
         if let Some(asker) = self.item_failure.clone() {
-            engine = engine.with_failure_question(move |item: &FailedItem| asker.ask(item));
+            // Continue is only ever answered in that question (OPS-047).
+            engine = engine
+                .with_failure_question(move |item: &FailedItem| asker.ask(item))
+                .with_elevation(crate::admin_copy::elevated_destination);
         }
         engine
     }

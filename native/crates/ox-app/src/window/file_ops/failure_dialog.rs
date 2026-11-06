@@ -5,19 +5,31 @@
 //! | Cause | Caption | Says | Buttons |
 //! |---|---|---|---|
 //! | The item may not be read or written | File Access Denied (Folder …) | You need permission to perform this action | Try Again · Skip · Cancel |
-//! | The destination folder may not be written | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder | Try Again · Skip · Cancel |
+//! | The destination folder may not be written | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder | Continue (shield) · Skip · Cancel |
 //! | Another program holds it | File In Use (Folder …) | The action can't be completed because the file is open in another program · Close the file and try again. | Try Again · Skip · Cancel |
 //! | It is gone | Item Not Found | Could not find this item · This is no longer located in <folder>. Verify the item's location and try again. | Try Again · Skip · Cancel |
 //! | Anything else | Interrupted Action | An unexpected error is keeping you from copying the file. … · the system's error | Try Again · Skip · Cancel |
 //!
 //! Each names the item as Windows does: its icon and name, then its Type,
-//! Size and Date modified (a folder's Date created). "Do this for all
-//! current items", shown while other items remain, makes Skip skip every
-//! later failure without asking. Windows' Continue, which copies into a
-//! folder the user may not write to as administrator, is not offered: a
-//! running copy has no administrator path, so Try Again, Skip and Cancel
-//! are. The system's own words are kept only for the unexpected error, as
-//! Windows shows its error text there.
+//! Size and Date modified (a folder's Date created; for the destination
+//! folder, the folder's). "Do this for all current items", shown while
+//! other items remain, makes Skip skip, and Continue continue, every later
+//! item without asking. The system's own words are kept only for the
+//! unexpected error, as Windows shows its error text there.
+//!
+//! Continue, with the administrator shield "Open as administrator" shows,
+//! copies or moves the item again into the destination folder under
+//! `admin://` ([`ox_core::admin_copy`]). The folder is checked first; one
+//! that may be written as administrator is mounted under `admin://`, which
+//! is where the desktop asks for the administrator's password, and the
+//! engine then runs the item there, checking the folder again. Closing that
+//! prompt shows the question again. A folder the check refuses is answered
+//! with Continue all the same, without a prompt, so the engine's refusal is
+//! asked about in "Interrupted Action" with its reason.
+//!
+//! More details, at the bottom of every question, shows where the item is
+//! and where it was going; whether it is open is kept, as the progress
+//! window keeps its own.
 //!
 //! A full drive asks in the progress window instead, as Windows' "There is
 //! not enough space" does ([`TransferPanel::ask_about_space`]).
@@ -37,10 +49,11 @@ use ox_core::format;
 use ox_core::i18n::{format_message, gettext};
 use ox_core::location::parent_location;
 use ox_core::ops::FailureAsker;
+use ox_core::settings::PreferencesUpdate;
 use ox_core::transfer::{Cancellation, FailedItem, FailureAnswer, FailureCause, TransferMode};
 
 use super::worker_question::worker_question;
-use crate::dialog::Dialog;
+use crate::dialog::{Dialog, PropertyGrid};
 use crate::icons::{self, FileType, Icon};
 use crate::window::transfer_panel::{location_name, SpaceTexts};
 use crate::window::BrowserWindow;
@@ -48,6 +61,9 @@ use crate::window::ButtonStyle;
 
 /// The edge of the item's icon.
 const ITEM_ICON_SIZE: i32 = 48;
+
+/// The edge of the More details chevron, as in the progress window.
+const CHEVRON_SIZE: i32 = 16;
 
 /// Which of Windows' questions an item gets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -288,6 +304,9 @@ fn item_card(name: &str, icon: Icon, lines: &[String]) -> gtk::Box {
     image.set_accessible_role(gtk::AccessibleRole::Presentation);
     icons::set_icon(&image, icon, ITEM_ICON_SIZE);
     let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    // The facts take the card's width rather than wrapping at their
+    // narrowest.
+    text.set_hexpand(true);
     let title = gtk::Label::new(Some(name));
     title.set_xalign(0.0);
     title.set_wrap(true);
@@ -314,6 +333,41 @@ fn icon_of(entry: Option<&Entry>, name: &str) -> Icon {
         Some(entry) => FileType::of(name, entry.content_type.as_deref()).icon(ITEM_ICON_SIZE),
         None => FileType::of(name, None).icon(ITEM_ICON_SIZE),
     }
+}
+
+/// The flat "More details" toggle at the bottom left of a question.
+fn details_toggle() -> gtk::Button {
+    let toggle = gtk::Button::new();
+    toggle.add_css_class("flat");
+    toggle.add_css_class("failure-details-toggle");
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let image = gtk::Image::new();
+    image.set_accessible_role(gtk::AccessibleRole::Presentation);
+    content.append(&image);
+    content.append(&gtk::Label::new(None));
+    toggle.set_child(Some(&content));
+    toggle
+}
+
+/// Shows or hides `panel`, and words and draws `toggle` to match:
+/// "More details" with a chevron down, or "Fewer details" with one up.
+fn set_details(toggle: &gtk::Button, panel: &impl IsA<gtk::Widget>, shown: bool) {
+    panel.set_visible(shown);
+    let (icon, text) = if shown {
+        (Icon::ChevronUp16, gettext("Fewer details"))
+    } else {
+        (Icon::ChevronDown16, gettext("More details"))
+    };
+    let content = toggle.child().and_downcast::<gtk::Box>();
+    if let Some(content) = content {
+        if let Some(image) = content.first_child().and_downcast::<gtk::Image>() {
+            icons::set_icon(&image, icon, CHEVRON_SIZE);
+        }
+        if let Some(label) = content.last_child().and_downcast::<gtk::Label>() {
+            label.set_text(&text);
+        }
+    }
+    toggle.update_state(&[gtk::accessible::State::Expanded(Some(shown))]);
 }
 
 /// The last part of `name`, an item's path below the item the run handles.
@@ -362,25 +416,122 @@ impl BrowserWindow {
             .filter(|line| !line.is_empty())
             .collect::<Vec<_>>()
             .join("\n\n");
-        let dialog = Dialog::new(self, &wording.caption, &text);
         let lines = entry.as_ref().map(facts_lines).unwrap_or_default();
-        dialog.add_field(&item_card(&name, icon_of(entry.as_ref(), &name), &lines));
-        let for_all = item
-            .more_items
-            .then(|| dialog.add_check_button(&gettext("Do this for all current items"), false));
-        let retry = dialog.add_button(&gettext("Try Again"), ButtonStyle::Accent);
-        let skip = dialog.add_button(&gettext("Skip"), ButtonStyle::Bordered);
-        dialog.add_cancel_button();
-        dialog.open();
-        let pressed = dialog.next_response().await;
-        let for_all = for_all.is_some_and(|check| check.is_active());
-        dialog.finish();
-        match pressed {
-            Some(button) if button == retry => FailureAnswer::Retry,
-            Some(button) if button == skip && for_all => FailureAnswer::SkipAll,
-            Some(button) if button == skip => FailureAnswer::Skip,
-            _ => FailureAnswer::Cancel,
+        let details = self.failure_details(item);
+        loop {
+            let dialog = Dialog::new(self, &wording.caption, &text);
+            dialog.add_field(&item_card(&name, icon_of(entry.as_ref(), &name), &lines));
+            let for_all = item
+                .more_items
+                .then(|| dialog.add_check_button(&gettext("Do this for all current items"), false));
+            self.add_details(&dialog, &details);
+            // Windows' Continue asks for administrator permission; the
+            // other questions keep Try Again.
+            let first = if question == Question::DestinationDenied {
+                dialog.add_button_with_icon(&gettext("Continue"), Icon::ShieldLock, ButtonStyle::Accent)
+            } else {
+                dialog.add_button(&gettext("Try Again"), ButtonStyle::Accent)
+            };
+            let skip = dialog.add_button(&gettext("Skip"), ButtonStyle::Bordered);
+            dialog.add_cancel_button();
+            dialog.open();
+            let pressed = dialog.next_response().await;
+            let for_all = for_all.is_some_and(|check| check.is_active());
+            dialog.finish();
+            return match pressed {
+                Some(button) if button == first && question == Question::DestinationDenied => {
+                    let destination = item.destination_folder.as_deref().unwrap_or_default();
+                    if !self.authorize_administrator(destination).await {
+                        // The administrator prompt was closed: ask again.
+                        continue;
+                    }
+                    if for_all {
+                        FailureAnswer::ElevateAll
+                    } else {
+                        FailureAnswer::Elevate
+                    }
+                }
+                Some(button) if button == first => FailureAnswer::Retry,
+                Some(button) if button == skip && for_all => FailureAnswer::SkipAll,
+                Some(button) if button == skip => FailureAnswer::Skip,
+                _ => FailureAnswer::Cancel,
+            };
         }
+    }
+
+    /// What More details shows about `item`: where it is, and the folder
+    /// a copy or move takes it to, as the user sees each location.
+    fn failure_details(&self, item: &FailedItem) -> Vec<(String, String)> {
+        let locations = self.imp().locations.borrow();
+        let mut rows = Vec::new();
+        if !item.uri.is_empty() {
+            rows.push((gettext("Source"), locations.display_location(&item.uri)));
+        }
+        if let Some(destination) = &item.destination_folder {
+            rows.push((gettext("Destination"), locations.display_location(destination)));
+        }
+        rows
+    }
+
+    /// Adds More details to `dialog`: a toggle at the bottom left that
+    /// shows or hides `rows` under the item, open as it was last left.
+    fn add_details(&self, dialog: &Dialog, rows: &[(String, String)]) {
+        if rows.is_empty() {
+            return;
+        }
+        let grid = PropertyGrid::new();
+        for (name, value) in rows {
+            grid.add_row(name, value);
+        }
+        let shown = self.context().settings_data().preferences.failure_details;
+        let panel = grid.widget().clone();
+        panel.add_css_class("failure-details");
+        dialog.add_field(&panel);
+        let toggle = details_toggle();
+        set_details(&toggle, &panel, shown);
+        let context = self.context().clone();
+        toggle.connect_clicked(move |toggle| {
+            let shown = !panel.is_visible();
+            set_details(toggle, &panel, shown);
+            context.remember_preferences(PreferencesUpdate {
+                failure_details: Some(shown),
+                ..PreferencesUpdate::default()
+            });
+        });
+        dialog.add_footer_start(&toggle);
+    }
+
+    /// Readies Continue for the destination folder at `destination`:
+    /// mounts the folder under `admin://`, where the desktop asks for the
+    /// administrator's password. False when the user closed that prompt.
+    ///
+    /// A folder that may not be written as administrator is not mounted,
+    /// so no password is asked for: the engine refuses it, with its
+    /// reason, in the next question.
+    async fn authorize_administrator(&self, destination: &str) -> bool {
+        let Ok(admin) = ox_core::admin_copy::elevated_destination(destination) else {
+            return true;
+        };
+        let file = gio::File::for_uri(&admin);
+        let probe = file
+            .query_info_future(
+                gio::FILE_ATTRIBUTE_STANDARD_TYPE,
+                gio::FileQueryInfoFlags::NONE,
+                glib::Priority::DEFAULT,
+            )
+            .await;
+        if !matches!(&probe, Err(error) if error.matches(gio::IOErrorEnum::NotMounted)) {
+            return true;
+        }
+        let operation = gtk::MountOperation::new(Some(self));
+        let mounted = file
+            .mount_enclosing_volume_future(gio::MountMountFlags::NONE, Some(&operation))
+            .await;
+        // Anything but the user closing the prompt is the engine's to
+        // report, in the next question.
+        !matches!(&mounted, Err(error)
+            if error.matches(gio::IOErrorEnum::Cancelled)
+                || error.matches(gio::IOErrorEnum::FailedHandled))
     }
 
     /// Which question `item` gets, and the URI of what it shows: the item,

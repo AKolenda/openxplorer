@@ -507,7 +507,8 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
         "it names the folder: {:?}",
         dialog.texts()
     );
-    assert_eq!(dialog.button_labels(), ["Try Again", "Skip", "Cancel"]);
+    assert_eq!(dialog.button_labels(), ["Continue", "Skip", "Cancel"]);
+    assert!(dialog.button_shows_icon("Continue", crate::icons::Icon::ShieldLock));
     dialog.press("Cancel");
     // Whether a result follows Cancel is not this test's concern: one that
     // shows is closed.

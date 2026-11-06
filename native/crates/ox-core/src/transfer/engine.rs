@@ -22,6 +22,7 @@ use super::item_failure::{FailedItem, FailureAnswer, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
 use super::limits::{FreeSpace, Incoming, StorageRules, TreeTotals};
 use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
+use super::names::child_node;
 use super::node::{Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 use super::relisting::SourceFolders;
 use super::request::{destination_folder, distinct_items};
@@ -39,6 +40,10 @@ type ProgressCallback = Box<dyn FnMut(Progress) + Send>;
 /// Waits between device cleanup attempts; tests record the delay instead.
 type SleepCallback = Box<dyn Fn(Duration) + Send + Sync>;
 
+/// The URI under which the destination folder with the given URI is
+/// written as administrator, or why it may not be (OPS-047).
+pub type ElevatedDestination = dyn Fn(&str) -> Result<String, TransferError> + Send + Sync;
+
 /// Runs copy, move, Trash and delete operations over [`Node`]s.
 pub struct TransferEngine {
     factory: NodeFactory,
@@ -54,6 +59,9 @@ pub struct TransferEngine {
     move_by_copying: MoveByCopying,
     /// What to do when an item fails (OPS-047).
     failures: ItemFailures,
+    /// Where Continue writes a destination folder as administrator; without
+    /// it Continue fails the item.
+    elevation: Option<Box<ElevatedDestination>>,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -191,6 +199,7 @@ impl TransferEngine {
             unstorable: Unstorable::default(),
             move_by_copying: MoveByCopying::default(),
             failures: ItemFailures::default(),
+            elevation: None,
         }
     }
 
@@ -254,6 +263,20 @@ impl TransferEngine {
         question: impl FnMut(&FailedItem) -> FailureAnswer + Send + 'static,
     ) -> Self {
         self.failures = ItemFailures::with_question(Box::new(question));
+        self
+    }
+
+    /// OPS-047: where the user's Continue writes a destination folder as
+    /// administrator. `elevation` returns the folder's `admin://` URI once
+    /// it is safe to write there ([`crate::admin_copy::elevated_destination`]),
+    /// or the refusal, which fails the item and is asked about like any
+    /// other failure.
+    #[must_use]
+    pub fn with_elevation(
+        mut self,
+        elevation: impl Fn(&str) -> Result<String, TransferError> + Send + Sync + 'static,
+    ) -> Self {
+        self.elevation = Some(Box::new(elevation));
         self
     }
 
@@ -409,6 +432,7 @@ impl TransferEngine {
             mode,
             policy,
             destination_folder: folder.as_ref(),
+            requested_folder: folder.as_ref(),
             name,
         };
         Ok(self.run_items(ItemAction::Transfer(placement), uris, cancel))
@@ -439,8 +463,11 @@ impl TransferEngine {
             total: uris.len(),
         };
         let mut state = RunState::default();
+        // The destination under `admin://` once the user answered Continue
+        // for all current items (OPS-047).
+        let mut elevated: Option<Box<dyn Node>> = None;
         for (index, uri) in uris.iter().enumerate() {
-            self.run_item(&batch, index, uri, &mut state);
+            self.run_item(&batch, index, uri, &mut state, &mut elevated);
             if state.result.cancelled {
                 break;
             }
@@ -467,19 +494,37 @@ impl TransferEngine {
     /// reported with its exact location.
     ///
     /// A failure the user may answer is asked about first (OPS-047):
-    /// Retry runs the item again once its staging is gone, Cancel stops
+    /// Retry runs the item again once its staging is gone, Continue runs it
+    /// again into the destination under `admin://` (and with Continue for
+    /// all, every later item of the run, through `elevated`), Cancel stops
     /// the run after recording it.
-    fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
+    fn run_item(
+        &mut self,
+        batch: &Batch,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+        elevated: &mut Option<Box<dyn Node>>,
+    ) {
         let mut staging = ItemStaging::default();
         let checkpoint = Accounting::checkpoint(&self.byte_counts);
+        // The question names the folder the user chose, never `admin://`.
         let destination = batch.destination_uri();
+        // This item's own destination under `admin://`, after Continue.
+        let mut item_folder: Option<Box<dyn Node>> = None;
         self.failures
             .start_item(batch.mode(), self.display_name(uri), destination.clone());
-        let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
+        let mut outcome = self.attempt(batch, elevated.as_deref(), index, uri, state, &mut staging);
         // Whether the user saw the error of `outcome` in the question.
         let mut answered = false;
         while let Err(error) = &outcome {
-            if batch.cancel.is_cancelled() || !self.failures.asks_about(error) {
+            if batch.cancel.is_cancelled() {
+                break;
+            }
+            // Continue answered about an entry inside the item: the item
+            // runs again as administrator without asking twice.
+            let asked_inside = self.failures.take_elevation();
+            if asked_inside.is_none() && !self.failures.asks_about(error) {
                 break;
             }
             let failed = FailedItem {
@@ -492,13 +537,38 @@ impl TransferEngine {
                     error,
                 )
             };
-            match self.failures.answer(&failed) {
+            let answer = match asked_inside {
+                Some(answer) => Some(answer),
+                None => self.failures.answer(&failed),
+            };
+            match answer {
                 Some(FailureAnswer::Retry) => {
                     self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
                     Accounting::roll_back(&self.byte_counts, checkpoint);
                     self.failures
                         .start_item(batch.mode(), self.display_name(uri), destination.clone());
-                    outcome = self.process_item(batch, index, uri, state, &mut staging);
+                    let folder = elevated.as_deref().or(item_folder.as_deref());
+                    outcome = self.attempt(batch, folder, index, uri, state, &mut staging);
+                }
+                Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) => {
+                    self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    Accounting::roll_back(&self.byte_counts, checkpoint);
+                    self.failures
+                        .start_item(batch.mode(), self.display_name(uri), destination.clone());
+                    outcome = match self.elevated_folder(batch) {
+                        Ok(folder) => {
+                            let slot = if answer == FailureAnswer::ElevateAll {
+                                &mut *elevated
+                            } else {
+                                &mut item_folder
+                            };
+                            let folder: &dyn Node = &**slot.insert(folder);
+                            self.attempt(batch, Some(folder), index, uri, state, &mut staging)
+                        }
+                        // Refused before anything was written: asked about
+                        // like any failure, so the user sees why.
+                        Err(error) => Err(error),
+                    };
                 }
                 Some(FailureAnswer::Cancel) => {
                     state.result.cancelled = true;
@@ -533,6 +603,44 @@ impl TransferEngine {
             Err(error) => self.record_failure(batch, uri, &error, answered, &mut state.result),
         }
         self.discard_leftover_stage(staging, &mut state.result);
+    }
+
+    /// Runs one attempt at the top-level item at `uri`, writing into
+    /// `elevated`, the destination folder under `admin://`, when the user
+    /// answered Continue.
+    fn attempt(
+        &mut self,
+        batch: &Batch,
+        elevated: Option<&dyn Node>,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+        staging: &mut ItemStaging,
+    ) -> Result<ItemOutcome, TransferError> {
+        let Some(elevated_batch) = elevated.and_then(|folder| batch.writing_into(folder)) else {
+            return self.process_item(batch, index, uri, state, staging);
+        };
+        self.move_by_copying.set_elevated(true);
+        let outcome = self.process_item(&elevated_batch, index, uri, state, staging);
+        self.move_by_copying.set_elevated(false);
+        outcome
+    }
+
+    /// The destination folder of `batch` under `admin://`, for Continue.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::NotSupported`] without an elevation or a
+    /// destination, the elevation's refusal, and the error of reaching the
+    /// folder there.
+    fn elevated_folder(&self, batch: &Batch) -> Result<Box<dyn Node>, TransferError> {
+        let (Some(elevation), Some(folder)) = (self.elevation.as_ref(), batch.destination_uri()) else {
+            return Err(TransferError::NotSupported(crate::i18n::gettext(
+                "This item can't be copied as administrator.",
+            )));
+        };
+        let admin = elevation(&folder)?;
+        destination_folder(&self.factory, &admin, batch.cancel)
     }
 
     /// Copies, moves, trashes or deletes one top-level item.
@@ -640,6 +748,9 @@ impl TransferEngine {
         let source = selected.node.as_ref();
         if selected.kind == NodeKind::Directory {
             guard_destination(source, placement.destination_folder)?;
+            // Written as administrator, the folder is also checked against
+            // the `file:` folder the user chose, whose links resolve.
+            guard_destination(source, placement.requested_folder)?;
         }
         self.unstorable.start_item(source, batch.cancel);
         // XFER-028: a name or link the destination cannot store.
@@ -662,6 +773,19 @@ impl TransferEngine {
             batch.cancel,
             source_change,
         )?;
+        // Written as administrator, the same tree is checked again where
+        // the user sees it: snapshot roots are known by their `file:` URIs.
+        if placement.requested_folder.uri() != placement.destination_folder.uri() {
+            let requested = child_node(placement.requested_folder, destination.name())?;
+            check_write_tree(
+                self.guard(),
+                source,
+                None,
+                Some(requested.as_ref()),
+                batch.cancel,
+                SourceChange::Kept,
+            )?;
+        }
         if placement.mode == TransferMode::Move {
             state.moved_from.remember(source);
             match self.move_item(source, destination, placement.policy, batch.cancel) {

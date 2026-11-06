@@ -141,6 +141,10 @@ speedgraph .speed-grid { color: alpha(@ox_text, .07); }
 .progress-action.paused speedgraph .speed-reached { color: alpha(@ox_caution, .14); }
 speedgraph .speed-label { font-size: 11px; }
 .progress-footer { padding: 6px 12px 10px 12px; border-top: 1px solid @ox_border; }
+/* More details of the questions about a failed item: where the item is and
+   where it was going (src/window/file_ops/failure_dialog.rs). */
+grid.failure-details { border-spacing: 16px 4px; margin-top: 12px; }
+grid.failure-details .property-name { color: @ox_muted; }
 /* "Replace or Skip Files": what the action found in the percentage's
    place, then three command rows, each a flat button with Windows'
    glyph colours: a green check, accent arrows (src/window/transfer_panel/
