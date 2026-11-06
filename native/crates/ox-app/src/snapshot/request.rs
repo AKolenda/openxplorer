@@ -102,7 +102,7 @@ impl SnapshotRequest {
         let theme = parse_variable(&lookup, THEME_VARIABLE, "light, dark or system", |value| {
             Theme::from_key(value)
         })?;
-        let view = parse_variable(&lookup, VIEW_VARIABLE, "details or an icon size", |value| {
+        let view = parse_variable(&lookup, VIEW_VARIABLE, "details, compact, tiles, content or an icon size", |value| {
             FolderView::from_key(value)
         })?;
         let size = parse_variable(&lookup, SIZE_VARIABLE, "<width>x<height>", WindowSize::parse)?;
@@ -249,12 +249,15 @@ mod tests {
 
     #[test]
     fn an_unknown_value_is_refused_with_its_variable() {
-        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (VIEW_VARIABLE, "tiles")]);
-        let message = refused.expect_err("tiles is not a view").to_string();
+        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (VIEW_VARIABLE, "filmstrip")]);
+        let message = refused.expect_err("filmstrip is not a view").to_string();
         assert_eq!(
             message,
-            "OPENXPLORER_VIEW cannot be “tiles”: expected details or an icon size"
+            "OPENXPLORER_VIEW cannot be “filmstrip”: expected details, compact, tiles, content or an icon size"
         );
+        let tiles = request(&[(SNAPSHOT_VARIABLE, "a.png"), (VIEW_VARIABLE, "tiles")]);
+        let tiles = tiles.expect("tiles is a view").expect("a snapshot is asked for");
+        assert_eq!(tiles.view, Some(FolderView::Tiles));
         let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SIZE_VARIABLE, "wide")]);
         assert!(refused.is_err(), "a size needs a width and a height");
     }
