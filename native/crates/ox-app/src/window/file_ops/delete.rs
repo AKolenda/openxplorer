@@ -291,7 +291,7 @@ impl BrowserWindow {
     /// `confirmation` words for what they are, one item's details under
     /// it, and Yes, which has focus and Enter presses, and No, which
     /// Escape also answers. True for Yes.
-    async fn confirm_deletion(
+    pub(super) async fn confirm_deletion(
         &self,
         items: &[DeleteItem],
         confirmation: impl FnOnce(DeleteSubject) -> DeleteConfirmation,

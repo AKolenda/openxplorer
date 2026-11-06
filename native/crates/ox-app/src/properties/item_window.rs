@@ -5,10 +5,12 @@
 //! on this computer adds Sharing (where Samba user shares can be used)
 //! and Customize, and a standard folder Location, in Windows 11's order:
 //! General, Sharing, Security, Location, Details, Previous Versions,
-//! Customize. The item's properties are read once, off the main thread,
-//! when the window opens; the versions and a file's media details are
-//! read the first time their tab is shown, and a folder's size is counted
-//! from the start.
+//! Customize. A drive, a folder the kernel mounts a file system at, has
+//! Windows' drive General tab instead of a folder's, and a Hardware tab
+//! after it ([`super::drive_tab`]). The item's properties are read once,
+//! off the main thread, when the window opens; the versions and a file's
+//! media details are read the first time their tab is shown, and a
+//! folder's size is counted from the start, never a drive's.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -25,10 +27,11 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::{is_conventional_snapshot, PreviousVersions};
 
 use super::details_tab::DetailsPanel;
+use super::drive_tab::{drive_general_tab, hardware_rows, DRIVE_ART};
 use super::folder_count::{count_folders, Totals};
 use super::general_tab::{general_tab, GeneralEdits, GeneralRights};
 use super::location_panel::LocationPanel;
-use super::metadata::{read_properties, ItemProperties};
+use super::metadata::{is_mount_point, read_properties, ItemProperties};
 use super::security_tab::{fill_security, SecurityContext, SecurityFacts};
 use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
@@ -70,7 +73,9 @@ struct ItemPages {
     /// Points the Sharing tab at a renamed folder.
     share_folder: Option<Rc<dyn Fn(std::path::PathBuf)>>,
     general: gtk::Box,
-    /// The General tab's edits, once it is filled.
+    /// A drive's Hardware tab.
+    hardware: Option<gtk::Box>,
+    /// The General tab's edits, once it is filled; a drive's has none.
     general_edits: RefCell<Option<Rc<GeneralEdits>>>,
     security: gtk::Box,
     customize: Option<gtk::Box>,
@@ -86,7 +91,13 @@ pub(crate) fn open_item_properties(
     context: PropertiesContext,
     initial: PropertiesTab,
 ) -> PropertiesWindow {
-    let art = (target.kind == ItemKind::Folder).then_some(Art::Folder);
+    let local_folder = local_folder(&target);
+    let is_drive = local_folder.is_some() && is_mount_point(&target.uri);
+    let art = if is_drive {
+        Some(DRIVE_ART)
+    } else {
+        (target.kind == ItemKind::Folder).then_some(Art::Folder)
+    };
     let window = PropertiesWindow::new(&target.dialog_title(), art, Some(opener));
     window.set_widget_name(&target.uri);
     let general = page();
@@ -96,7 +107,7 @@ pub(crate) fn open_item_properties(
         PropertiesTab::General.label(),
         &general,
     );
-    let local_folder = local_folder(&target);
+    let hardware = is_drive.then(|| add_hardware_tab(&window));
     let mut share_folder = None;
     if let Some((folder, usershares)) = local_folder.clone().zip(context.usershares.as_ref()) {
         let (sharing, follow) = sharing_panel(folder, usershares.clone());
@@ -155,6 +166,7 @@ pub(crate) fn open_item_properties(
         target,
         context,
         general,
+        hardware,
         general_edits: RefCell::new(None),
         security,
         customize,
@@ -174,6 +186,18 @@ pub(crate) fn open_item_properties(
         kept.take();
     });
     window
+}
+
+/// A drive's Hardware tab, in Windows' order: General, Tools, Hardware,
+/// Sharing, Security.
+fn add_hardware_tab(window: &PropertiesWindow) -> gtk::Box {
+    let hardware = page();
+    window.add_tab(
+        PropertiesTab::Hardware.page_name(),
+        PropertiesTab::Hardware.label(),
+        &hardware,
+    );
+    hardware
 }
 
 /// A file's Details tab, as Windows gives files and never folders.
@@ -326,6 +350,17 @@ impl ItemPages {
             }
             return;
         }
+        if let Some(mount) = &properties.mount {
+            window.set_art(DRIVE_ART);
+            clear(&self.general);
+            let general = drive_general_tab(&properties.entry.uri, mount, &self.context.locations);
+            self.general.append(&general);
+            if let Some(hardware) = &self.hardware {
+                hardware.append(&hardware_rows(mount));
+            }
+            self.fill_customize(window, &properties);
+            return;
+        }
         window.set_art(Art::for_entry(&properties.entry));
         let is_read_only = self.context.locations.is_snapshot_location(&properties.entry.uri)
             || is_conventional_snapshot(&properties.entry.uri);
@@ -360,6 +395,10 @@ impl ItemPages {
         if let Some(opens_with) = general.opens_with {
             follow_default_app(window, &opens_with, properties.entry.content_type.clone());
         }
+        self.fill_customize(window, &properties);
+    }
+
+    fn fill_customize(&self, window: &PropertiesWindow, properties: &ItemProperties) {
         if let Some(customize) = &self.customize {
             let tab = super::custom_icon::customize_tab(window, &self.uri, properties.custom_icon.as_deref());
             customize.append(&tab);

@@ -206,6 +206,10 @@ impl BrowserWindow {
                     )
                     .await;
                 let (name, kind) = match queried {
+                    // The root is Local Disk, as the sidebar names it.
+                    Ok(info) if info.display_name() == "/" => {
+                        (window.imp().locations.borrow().base_name(&uri), item_kind(&info))
+                    }
                     Ok(info) => (info.display_name().to_string(), item_kind(&info)),
                     // The General tab says why the item cannot be read.
                     Err(_) => (window.imp().locations.borrow().base_name(&uri), ItemKind::File),
