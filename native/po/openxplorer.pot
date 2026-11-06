@@ -7141,6 +7141,10 @@ msgstr ""
 msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
 msgstr ""
 
+#: crates/ox-core/src/clipboard.rs
+msgid "This file selection is too large to copy or cut."
+msgstr ""
+
 #: crates/ox-core/src/entry/classify.rs
 msgid "Computer"
 msgstr ""

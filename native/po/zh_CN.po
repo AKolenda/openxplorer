@@ -4177,6 +4177,9 @@ msgstr "拖动前请先解压 ZIP 内容。"
 msgid "This file selection is too large to drag."
 msgstr "此文件选择过大，无法拖动。"
 
+msgid "This file selection is too large to copy or cut."
+msgstr "此文件选择过大，无法复制或剪切。"
+
 #: crates/ox-app/src/window/file_drop.rs
 msgid "A folder cannot be copied into itself."
 msgstr "文件夹不能复制到其自身。"

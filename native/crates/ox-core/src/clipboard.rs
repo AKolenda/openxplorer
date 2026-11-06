@@ -109,6 +109,13 @@ pub enum ClipboardError {
     /// The selection is empty or has more than [`MAX_ITEMS`] items.
     #[error("{}", crate::i18n::gettext("Select between 1 and 100,000 items."))]
     ItemCount,
+    /// The selection's addresses are over [`MAX_BYTES`] in a published
+    /// format, which no paste would read back.
+    #[error(
+        "{}",
+        crate::i18n::gettext("This file selection is too large to copy or cut.")
+    )]
+    TooLarge,
     /// An item is not a file or folder that can be copied: a share or
     /// device root, a foreign scheme or an address with credentials.
     #[error(transparent)]
@@ -145,10 +152,18 @@ impl ClipboardFiles {
     /// # Errors
     ///
     /// [`ClipboardError::ItemCount`] when the selection has fewer than 1 or
-    /// more than [`MAX_ITEMS`] items, and [`ClipboardError::Location`] when an
-    /// item is not a file or folder that can be copied.
+    /// more than [`MAX_ITEMS`] items, [`ClipboardError::Location`] when an
+    /// item is not a file or folder that can be copied, and
+    /// [`ClipboardError::TooLarge`] when a published format would be over
+    /// [`MAX_BYTES`], so a paste could not read it back.
     pub fn new(mode: ClipboardMode, uris: &[String]) -> Result<Self, ClipboardError> {
-        Self::with_token(mode, uris, new_token())
+        let files = Self::with_token(mode, uris, new_token())?;
+        // The CUSTOM payload is the largest format: every URI in quotes,
+        // with a comma, against a newline or CRLF in the others.
+        if files.custom_json().len() > MAX_BYTES {
+            return Err(ClipboardError::TooLarge);
+        }
+        Ok(files)
     }
 
     /// [`ClipboardFiles::new`] with an owner token read from a clipboard.

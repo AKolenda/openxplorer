@@ -393,6 +393,28 @@ fn selections_outside_one_to_a_hundred_thousand_items_are_refused_as_a_transfer_
     }
 }
 
+/// 100,000 items with long names can be over [`MAX_BYTES`], which a
+/// paste would refuse to read: Copy and Cut refuse them instead of
+/// publishing a clipboard that pastes nothing.
+///
+/// parity: CLIP-004
+#[test]
+fn a_selection_too_large_to_paste_back_is_refused() {
+    // 40 CJK characters, nine encoded bytes each, make a 360-byte name.
+    let name = "%E6%96%87".repeat(40);
+    let uris: Vec<String> = (0..MAX_ITEMS)
+        .map(|number| format!("file:///home/demo/{name}{number}"))
+        .collect();
+
+    let error = ClipboardFiles::new(ClipboardMode::Copy, &uris).expect_err("over MAX_BYTES");
+
+    assert_eq!(error, ClipboardError::TooLarge);
+    assert_eq!(
+        error.to_string(),
+        "This file selection is too large to copy or cut."
+    );
+}
+
 /// parity: CLIP-004, OPS-035
 #[test]
 fn share_roots_cannot_be_copied_and_keep_the_location_message() {
