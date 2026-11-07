@@ -46,7 +46,7 @@ msgid "- Report an issue (in this Help window and in About this build) opens the
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it."
+msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it.\n- Copy a drive and paste it into a folder, or drag it there, to make a shortcut to it, such as Local Disk - Shortcut. The drive's files are not copied."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md

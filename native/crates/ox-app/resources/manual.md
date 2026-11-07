@@ -61,6 +61,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 - This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.
 - Use Eject or Safely remove on a drive's menu before unplugging it.
+- Copy a drive and paste it into a folder, or drag it there, to make a shortcut to it, such as Local Disk - Shortcut. The drive's files are not copied.
 
 ## Recycle Bin
 
