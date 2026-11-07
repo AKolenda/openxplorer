@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Share: the command bar button that Windows 11 has between Rename and
-//! Delete (CMD-037). It emails the selected files through the desktop's
+//! Delete (CMD-037), and the Share button of the details pane (PROP-009). It emails the selected files through the desktop's
 //! Email portal ([`ox_core::integration::compose_email`]), which opens the
 //! user's own email app with the files attached; nothing is sent until the
 //! user sends the message there.
@@ -187,6 +187,8 @@ impl BrowserWindow {
         self.command_bar().offer_share(offered);
         let enabled = offered && self.selected_sources().is_some();
         self.set_action_enabled(WindowAction::Share, enabled);
+        // The pane shows Share only for what it can share.
+        self.details_pane().offer_share(enabled);
     }
 
     /// The addresses of the files Share attaches for the selection

@@ -47,6 +47,11 @@ impl Bounds {
     pub(super) const fn right(self) -> i32 {
         self.x + self.width
     }
+
+    /// Where the bottom edge is.
+    pub(super) const fn bottom(self) -> i32 {
+        self.y + self.height
+    }
 }
 
 /// Rounds a widget coordinate to whole pixels.

@@ -84,6 +84,10 @@ const DISABLED_ACTIONS: [WindowAction; 17] = [
     WindowAction::Share,
 ];
 
+/// The width, in characters, of an Open dialog's type list, about the
+/// width of Windows' type box beside File name.
+const OPEN_TYPE_LIST_CHARS: i32 = 24;
+
 /// Shown when the File name box names nothing that exists.
 const NOT_FOUND: &str = crate::i18n::message_id("“{name}” was not found. Check the file name and try again.");
 
@@ -150,8 +154,10 @@ pub(crate) struct Picker {
     /// main thread.
     checking: Cell<bool>,
     /// The one item selected, in a dialog that chooses one, so a second
-    /// item clicked with Ctrl or Shift takes its place.
-    single: Cell<Option<u32>>,
+    /// item clicked with Ctrl or Shift takes its place. The item itself,
+    /// not its position: files another application creates or removes
+    /// move it in the list.
+    single: RefCell<Option<glib::Object>>,
     /// Set once the dialog is a modal child of the caller's window
     /// ([`super::caller_window`]).
     attached_to_caller: Rc<Cell<bool>>,
@@ -1218,15 +1224,21 @@ impl BrowserWindow {
                 }
                 let selected = selection.selection();
                 if selected.size() <= 1 {
-                    picker
-                        .single
-                        .set((selected.size() == 1).then(|| selected.minimum()));
+                    let only = (selected.size() == 1)
+                        .then(|| selection.item(selected.minimum()))
+                        .flatten();
+                    picker.single.replace(only);
                     return;
                 }
                 // The item just selected: the end of the changed range away
                 // from the one kept so far, as Shift+click selects up or
                 // down to the item clicked.
-                let kept = picker.single.get();
+                let kept = picker.single.borrow().as_ref().and_then(|kept| {
+                    let (rest, first) = gtk::BitsetIter::init_first(&selected)?;
+                    std::iter::once(first)
+                        .chain(rest)
+                        .find(|position| selection.item(*position).as_ref() == Some(kept))
+                });
                 let last = position + count.saturating_sub(1);
                 let newest = if kept.is_some_and(|kept| kept >= last) {
                     position
@@ -1235,7 +1247,7 @@ impl BrowserWindow {
                 };
                 let item = Some(newest).filter(|item| selected.contains(*item)).or(kept);
                 if let Some(item) = item {
-                    picker.single.set(Some(item));
+                    picker.single.replace(selection.item(item));
                     selection.select_item(item, true);
                 }
             }
@@ -1392,6 +1404,10 @@ impl BrowserWindow {
             row += 1;
             entry
         });
+        // Windows' Open dialog has no caption for its type list: the list
+        // sits right of File name, above Open and Cancel. "Save as type:"
+        // is the Save dialog's own row.
+        let opens_files = matches!(request.mode, ChooserMode::Open { directory: false, .. });
         let types = (!request.filters.is_empty()).then(|| {
             let labels: Vec<&str> = request
                 .filters
@@ -1400,13 +1416,17 @@ impl BrowserWindow {
                 .collect();
             let list = gtk::DropDown::from_strings(&labels);
             list.set_selected(u32::try_from(request.current_filter.unwrap_or(0)).unwrap_or(0));
-            let caption = if name.is_some() {
-                "Save as type:"
+            if opens_files {
+                place_open_type_list(&fields, &list);
             } else {
-                "File type:"
-            };
-            attach_field(&fields, row, caption, &list);
-            row += 1;
+                let caption = if name.is_some() {
+                    "Save as type:"
+                } else {
+                    "File type:"
+                };
+                attach_field(&fields, row, caption, &list);
+                row += 1;
+            }
             list
         });
         let choices = choice_controls(&fields, &mut row, &request);
@@ -1424,6 +1444,11 @@ impl BrowserWindow {
         buttons.append(&accept);
         buttons.append(&cancel);
         if row > 0 {
+            // The buttons are on a row of their own under the fields, at
+            // the right, as in Windows' Open and Save dialogs.
+            bar.set_orientation(gtk::Orientation::Vertical);
+            bar.set_spacing(12);
+            buttons.set_halign(gtk::Align::End);
             bar.append(&fields);
         } else {
             let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -1444,7 +1469,7 @@ impl BrowserWindow {
             asking: Cell::new(false),
             pending: RefCell::new(None),
             checking: Cell::new(false),
-            single: Cell::new(None),
+            single: RefCell::new(None),
             attached_to_caller: Rc::default(),
             caller: None,
         }
@@ -1536,6 +1561,53 @@ fn attach_field(
     control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
     fields.attach(&label, 0, row, 1, 1);
     fields.attach(control, 1, row, 1, 1);
+}
+
+/// Puts an Open dialog's type list right of File name, on row 0 of
+/// `fields`, without a caption, as Windows' Open dialog has it. A long
+/// type name is shortened in the closed list and shown whole in its
+/// popup, so the list keeps the width of Windows' type box.
+fn place_open_type_list(fields: &gtk::Grid, list: &gtk::DropDown) {
+    list.set_factory(Some(&type_name_factory(true)));
+    list.set_list_factory(Some(&type_name_factory(false)));
+    list.set_hexpand(false);
+    list.add_css_class("picker-type-list");
+    // Unlabeled on screen, still named for screen readers.
+    list.update_property(&[gtk::accessible::Property::Label("File type")]);
+    fields.attach(list, 2, 0, 1, 1);
+}
+
+/// Rows that show a type's name: `shortened` to the type list's width,
+/// with the whole name as a tooltip, or whole.
+fn type_name_factory(shortened: bool) -> gtk::SignalListItemFactory {
+    let factory = gtk::SignalListItemFactory::new();
+    factory.connect_setup(move |_, item| {
+        let label = gtk::Label::builder().xalign(0.0).build();
+        if shortened {
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            label.set_width_chars(OPEN_TYPE_LIST_CHARS);
+            label.set_max_width_chars(OPEN_TYPE_LIST_CHARS);
+        }
+        if let Some(item) = item.downcast_ref::<gtk::ListItem>() {
+            item.set_child(Some(&label));
+        }
+    });
+    factory.connect_bind(move |_, item| {
+        let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
+            return;
+        };
+        let name = item
+            .item()
+            .and_downcast::<gtk::StringObject>()
+            .map(|name| name.string());
+        if let (Some(label), Some(name)) = (item.child().and_downcast::<gtk::Label>(), name) {
+            label.set_label(&name);
+            if shortened {
+                label.set_tooltip_text(Some(&name));
+            }
+        }
+    });
+    factory
 }
 
 /// The files of a quoted list typed in an Open dialog's File name, each
@@ -1631,7 +1703,10 @@ mod tests {
         FILE_CHOOSER_INTERFACE, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_SUCCESS,
     };
 
-    use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
+    use crate::test_support::harness::{
+        capture, settle, wait_for as wait_a_while, wait_until, Fixture, TestWindow,
+    };
+    use crate::test_support::pointer::{screen_point, Button, Pointer};
     use crate::window::tests::file_ops_support::{is_triggered_by, window_shortcuts};
 
     /// A `dbus-daemon` of the test's own, stopped when dropped.
@@ -3557,6 +3632,616 @@ mod tests {
             Some((0, 6)),
             "the name is selected without its extension"
         );
+    }
+
+    /// The Save dialog's File name box.
+    fn name_box(window: &crate::window::BrowserWindow) -> gtk::Entry {
+        window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box")
+    }
+
+    /// Clicks the item called `name` in the dialog's list, as GTK's click
+    /// on it ends, with Ctrl (`toggle`) and Shift (`range`), and gives the
+    /// list the keyboard as the click does.
+    fn click_item(test: &TestWindow, name: &str, toggle: bool, range: bool) {
+        let position = test.position_of(name);
+        let pane = test.window.folder_pane();
+        pane.focus_view();
+        // The list binds its rows on a layout frame, which settle() does
+        // not wait for.
+        wait_until("the item on screen", || {
+            pane.owners().widget_at(position).is_some()
+        });
+        let cell = pane.owners().widget_at(position).expect("the item is on screen");
+        cell.activate_action("list.select-item", Some(&(position, toggle, range).to_variant()))
+            .expect("an item can be selected");
+        settle();
+    }
+
+    /// Creates `name` in the fixture as another application would, and
+    /// waits until the dialog's list shows it and has settled.
+    fn create_elsewhere(test: &TestWindow, fixture: &Fixture, name: &str) {
+        fixture.write(name);
+        wait_until("the new file in the list", || {
+            test.names().iter().any(|listed| listed == name) && test.window.is_listed()
+        });
+        // Longer than the watch's 350 ms quiet time, so a second refresh
+        // the change may cause has run too.
+        wait_a_while(std::time::Duration::from_millis(800));
+    }
+
+    /// How many pixels of `entry`, as it paints itself, are the blue of
+    /// selected text.
+    fn selection_blue(entry: &gtk::Entry) -> usize {
+        crate::test_support::harness::wait_for_frames(&entry.root().expect("on a window"), 3);
+        let paintable = gtk::WidgetPaintable::new(Some(entry));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(&snapshot, f64::from(entry.width()), f64::from(entry.height()));
+        let Some(node) = snapshot.to_node() else {
+            return 0;
+        };
+        let renderer = entry
+            .native()
+            .and_then(|native| native.renderer())
+            .expect("a drawn window");
+        let texture = renderer.render_texture(&node, None::<&gtk::graphene::Rect>);
+        let mut downloader = gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gdk::MemoryFormat::R8g8b8a8);
+        let (bytes, _) = downloader.download_bytes();
+        // C31's #0078d4.
+        bytes
+            .chunks_exact(4)
+            .filter(|pixel| {
+                pixel[3] > 200
+                    && pixel[0] < 30
+                    && (100..=140).contains(&pixel[1])
+                    && (190..=230).contains(&pixel[2])
+            })
+            .count()
+    }
+
+    /// As in Windows' Save dialog, the selected name is drawn selected
+    /// only while File name has the keyboard: with the keyboard in the
+    /// file list, the box shows no blue selection a key would not
+    /// replace, and the selection comes back with the keyboard.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_name_is_drawn_selected_only_while_the_name_box_has_the_keyboard() {
+        let fixture = Fixture::empty();
+        fixture.write("alpha.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "scan of the week.pdf".to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        assert!(window.focus_is_in_picker_name());
+        let focused = selection_blue(&name);
+        assert!(
+            focused > 100,
+            "the selected name is drawn selected ({focused} blue pixels)"
+        );
+
+        window.folder_pane().focus_view();
+        settle();
+        assert!(!window.focus_is_in_picker_name());
+        assert_eq!(
+            selection_blue(&name),
+            0,
+            "no selection is drawn without the keyboard"
+        );
+
+        name.grab_focus();
+        settle();
+        assert!(
+            selection_blue(&name) > 100,
+            "the selection shows again with the keyboard"
+        );
+        // The blue is the selection's, not the focused box's underline.
+        name.select_region(0, 0);
+        settle();
+        let underline = selection_blue(&name);
+        assert!(
+            focused > underline + 100,
+            "the selection draws more than the underline ({focused} against {underline})"
+        );
+    }
+
+    /// Resizing the dialog across every layout width, as a window manager
+    /// does when it places the dialog, leaves the keyboard in File name
+    /// and the name selected, with files appearing meanwhile.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn resizing_the_save_dialog_leaves_the_keyboard_in_the_name_box() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        let mut bands = Vec::new();
+        for (step, width) in [1300, 1100, 1000, 900, 640, 1300, 980].into_iter().enumerate() {
+            window.set_default_size(width, 640);
+            wait_a_while(std::time::Duration::from_millis(200));
+            let band = window.window_width();
+            if !bands.contains(&band) {
+                bands.push(band);
+            }
+            if step == 3 {
+                create_elsewhere(test, &fixture, "gamma.txt");
+            }
+            assert!(
+                window.focus_is_in_picker_name(),
+                "the keyboard stays in File name at {width} pixels, not on {:?}",
+                GtkWindowExt::focus(window).map(|focus| focus.type_())
+            );
+            assert_eq!(name.selection_bounds(), Some((0, 4)), "at {width} pixels");
+        }
+        assert_eq!(bands.len(), 5, "the dialog went through every width: {bands:?}");
+    }
+
+    /// A file another application creates in the folder lists it, as
+    /// Windows' dialog does, without taking the keyboard out of File name
+    /// or changing what was typed and selected there, and without
+    /// selecting anything in the list.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_file_created_elsewhere_leaves_the_keyboard_in_the_name_box() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt", "report.md"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        name.set_text("receipt 4.pdf");
+        name.select_region(0, 9);
+
+        for created in ["0 first.pdf", "scan 2.pdf", "zz last.pdf"] {
+            create_elsewhere(test, &fixture, created);
+            assert!(
+                window.focus_is_in_picker_name(),
+                "the keyboard stays in File name after {created} appears, not on {:?}",
+                GtkWindowExt::focus(window).map(|focus| focus.type_())
+            );
+            assert_eq!(name.text(), "receipt 4.pdf", "what was typed stays");
+            assert_eq!(name.selection_bounds(), Some((0, 9)), "and so does its selection");
+            assert!(
+                test.selected_names().is_empty(),
+                "nothing is selected in the list"
+            );
+        }
+        fs::remove_file(fixture.path("beta.txt")).expect("remove a file");
+        wait_until("the removed file to leave the list", || {
+            !test.names().iter().any(|listed| listed == "beta.txt")
+        });
+        wait_a_while(std::time::Duration::from_millis(800));
+        assert!(window.focus_is_in_picker_name(), "also after a file is removed");
+        assert_eq!(name.selection_bounds(), Some((0, 9)));
+    }
+
+    /// A file clicked in the list stays the one selected, and its name the
+    /// one in File name, while other applications create, rename and
+    /// remove files around it; the keyboard stays in the list.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_file_clicked_in_a_save_dialog_stays_selected_while_files_change() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt", "report.md", "zeta.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        click_item(test, "report.md", false, false);
+        let name = name_box(window);
+        assert_eq!(
+            name.text(),
+            "report.md",
+            "the clicked file's name is in File name"
+        );
+        assert_eq!(test.selected_names(), ["report.md"]);
+
+        create_elsewhere(test, &fixture, "0 first.pdf");
+        fs::rename(fixture.path("zeta.txt"), fixture.path("omega.txt")).expect("rename a file");
+        wait_until("the renamed file", || {
+            test.names().iter().any(|listed| listed == "omega.txt")
+        });
+        fs::remove_file(fixture.path("alpha.txt")).expect("remove a file");
+        wait_until("the removed file to leave the list", || {
+            !test.names().iter().any(|listed| listed == "alpha.txt")
+        });
+        wait_a_while(std::time::Duration::from_millis(800));
+        assert_eq!(
+            test.selected_names(),
+            ["report.md"],
+            "the clicked file stays selected"
+        );
+        assert_eq!(name.text(), "report.md");
+        assert!(
+            window.folder_pane().view_has_focus(),
+            "the keyboard stays in the list, not on {:?}",
+            GtkWindowExt::focus(window).map(|focus| focus.type_())
+        );
+    }
+
+    /// After files appear above the file kept selected, Shift+click in a
+    /// dialog for one file still keeps the item clicked: the item kept is
+    /// followed, not the place in the list it had.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn shift_click_keeps_the_item_clicked_after_files_appear() {
+        let fixture = Fixture::empty();
+        for name in ["b.txt", "c.txt", "d.txt", "e.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        wait_until("the folder's listing", || test.window.is_listed());
+        settle();
+        click_item(test, "e.txt", false, false);
+        create_elsewhere(test, &fixture, "a.txt");
+        create_elsewhere(test, &fixture, "a2.txt");
+        assert_eq!(test.selected_names(), ["e.txt"]);
+        click_item(test, "b.txt", false, true);
+        assert_eq!(
+            test.selected_names(),
+            ["b.txt"],
+            "the item clicked, above the one kept"
+        );
+    }
+
+    /// Clicks at (`x`, `y`) in `widget` with the private display's real
+    /// pointer, as a hand clicks.
+    fn click_at(pointer: &mut Pointer, widget: &impl IsA<gtk::Widget>, (x, y): (f64, f64)) {
+        let point = screen_point(pointer, widget, (x, y), (720, 500));
+        pointer.move_to(point.0, point.1);
+        pointer.press(Button::Primary);
+        pointer.release(Button::Primary);
+        wait_a_while(std::time::Duration::from_millis(300));
+    }
+
+    /// Types `text`, made of letters and spaces, on the private display's
+    /// real keyboard.
+    fn type_keys(pointer: &mut Pointer, text: &str) {
+        for character in text.chars() {
+            let key = if character == ' ' {
+                gdk::Key::space
+            } else {
+                gdk::Key::from_name(character.to_string()).expect("a letter key")
+            };
+            pointer.tap_key(key);
+        }
+        wait_a_while(std::time::Duration::from_millis(300));
+    }
+
+    /// The user's case, with the real keyboard and pointer: typing as the
+    /// dialog opens replaces the name without its extension, also after
+    /// other applications created files in the folder; a file clicked in
+    /// the list puts its name in File name; a click on the list's empty
+    /// space leaves the name in the box without drawing it selected, and
+    /// typing then goes to the list (type-to-select), never into a box
+    /// that looked as if it would take it.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn typing_in_a_save_dialog_replaces_the_name_while_files_appear() {
+        let mut pointer = Pointer::connect();
+        let fixture = Fixture::empty();
+        for name in ["invoice.pdf", "notes.txt", "scan 01.pdf"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        // The pointer rests over the folder, as it would after a click in
+        // the calling application, and does not click.
+        let over = screen_point(
+            &mut pointer,
+            &window.folder_pane().input_widget(),
+            (40.0, 40.0),
+            (720, 500),
+        );
+        pointer.move_to(over.0, over.1);
+        create_elsewhere(test, &fixture, "scan 02.pdf");
+        create_elsewhere(test, &fixture, "0 cover.pdf");
+        type_keys(&mut pointer, "receipt");
+        assert_eq!(name.text(), "receipt.pdf", "typing replaced the selected name");
+        assert!(test.selected_names().is_empty());
+
+        let row = window
+            .folder_pane()
+            .owners()
+            .widget_at(test.position_of("notes.txt"))
+            .expect("the row is on screen");
+        click_at(&mut pointer, &row, (8.0, f64::from(row.height()) / 2.0));
+        assert_eq!(test.selected_names(), ["notes.txt"]);
+        assert_eq!(
+            name.text(),
+            "notes.txt",
+            "a clicked file's name goes into File name"
+        );
+        create_elsewhere(test, &fixture, "scan 03.pdf");
+        assert_eq!(
+            test.selected_names(),
+            ["notes.txt"],
+            "the clicked file stays selected"
+        );
+        assert_eq!(name.text(), "notes.txt");
+
+        name.set_text("receipt.pdf");
+        name.grab_focus();
+        super::select_stem(&name);
+        let list = window.folder_pane().input_widget();
+        click_at(&mut pointer, &list, (40.0, f64::from(list.height()) - 20.0));
+        assert!(!window.focus_is_in_picker_name(), "the keyboard went to the list");
+        assert_eq!(
+            selection_blue(&name),
+            0,
+            "the box draws no selection it would not replace"
+        );
+        type_keys(&mut pointer, "inv");
+        assert_eq!(name.text(), "invoice.pdf", "typing selected a file in the list");
+        assert_eq!(test.selected_names(), ["invoice.pdf"]);
+        // Back to the screen's middle, where the display starts it, so the
+        // next tests' windows and menus do not open under a pointer this
+        // test left there: GTK 4.14 crashes in gdk_surface_request_motion
+        // when address_bar's « menu closes over it.
+        pointer.move_to(720, 500);
+    }
+
+    /// The Save dialog as it opens, with the keyboard in the file list
+    /// (as after a click on its empty space, which
+    /// [`typing_in_a_save_dialog_replaces_the_name_while_files_appear`]
+    /// makes with the real pointer) and after another application created
+    /// a file in the folder, light and dark, for review with
+    /// `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`, where the test
+    /// pointer's screen positions would not hold).
+    #[gtk::test]
+    fn the_save_dialog_name_box_is_captured_light_and_dark() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            let fixture = Fixture::empty();
+            for name in [
+                "Invoice 1031.pdf",
+                "Meeting notes.txt",
+                "Scan 01.pdf",
+                "Scan 02.pdf",
+            ] {
+                fixture.write(name);
+            }
+            let portal = Portal::new();
+            let _answer = dialog_on(
+                &portal,
+                &fixture,
+                "SaveFile",
+                vec![("current_name", "Scan 03.pdf".to_variant())],
+            );
+            let test = &portal.test;
+            let window = &test.window;
+            test.activate("theme", Some(theme));
+            wait_until("the folder's listing", || window.is_listed());
+            settle();
+            let name = name_box(window);
+            assert!(window.focus_is_in_picker_name());
+            capture(window, &format!("picker-save-name-opened-{theme}.png"));
+
+            window.folder_pane().focus_view();
+            settle();
+            assert!(!window.focus_is_in_picker_name());
+            assert_eq!(name.text(), "Scan 03.pdf");
+            capture(window, &format!("picker-save-name-list-clicked-{theme}.png"));
+
+            name.grab_focus();
+            super::select_stem(&name);
+            create_elsewhere(test, &fixture, "Scan 02 (back).pdf");
+            assert!(
+                window.focus_is_in_picker_name(),
+                "the keyboard is still in File name"
+            );
+            assert_eq!(name.selection_bounds(), Some((0, 7)));
+            capture(window, &format!("picker-save-name-file-appeared-{theme}.png"));
+        }
+    }
+
+    /// Two types, as an image viewer's Open and Save dialogs offer them.
+    fn image_types() -> glib::Variant {
+        let types = [
+            (
+                "Images (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.tiff)".to_owned(),
+                vec![(0_u32, "*.png".to_owned()), (0_u32, "*.jpg".to_owned())],
+            )
+                .to_variant(),
+            ("All files".to_owned(), vec![(0_u32, "*".to_owned())]).to_variant(),
+        ];
+        glib::Variant::array_from_iter_with_type(types[0].type_(), types.clone())
+    }
+
+    /// The captions of the dialog's bar.
+    fn bar_captions(window: &crate::window::BrowserWindow) -> Vec<String> {
+        crate::test_support::harness::descendants::<gtk::Label>(&*window.imp().picker_bar)
+            .iter()
+            .filter(|label| label.has_css_class("picker-label"))
+            .map(|label| label.label().to_string())
+            .collect()
+    }
+
+    /// Where `widget` is in `window`: its left, top, right and bottom.
+    fn bounds_in(
+        widget: &impl IsA<gtk::Widget>,
+        window: &crate::window::BrowserWindow,
+    ) -> (f32, f32, f32, f32) {
+        let bounds = widget.compute_bounds(window).expect("laid out in the window");
+        (
+            bounds.x(),
+            bounds.y(),
+            bounds.x() + bounds.width(),
+            bounds.y() + bounds.height(),
+        )
+    }
+
+    /// Windows' Open dialog (Properties > Customize > Choose File..., an
+    /// image viewer's Open): the type list sits right of File name without
+    /// a caption, "Save as type:" nowhere, and Open and Cancel on a row
+    /// below them at the right. A long type name keeps the list to the
+    /// width of Windows' type box.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn an_open_dialog_has_its_type_list_beside_file_name_and_no_caption() {
+        let fixture = Fixture::empty();
+        fixture.write("photo.png");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", vec![("filters", image_types())]);
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(
+            bar_captions(window),
+            ["File name:"],
+            "the type list has no caption"
+        );
+
+        let (name_left, name_top, name_right, name_bottom) = bounds_in(&name, window);
+        let (types_left, types_top, types_right, types_bottom) = bounds_in(&types, window);
+        let (accept_left, accept_top, _, _) = bounds_in(&picker.accept, window);
+        assert!(types_left > name_right, "the type list is right of File name");
+        let middle = |top: f32, bottom: f32| f32::midpoint(top, bottom);
+        assert!(
+            (middle(types_top, types_bottom) - middle(name_top, name_bottom)).abs() < 3.0,
+            "on File name's row"
+        );
+        assert!(
+            accept_top >= name_bottom.max(types_bottom),
+            "Open is on a row below"
+        );
+        assert!(
+            accept_left > name_left + (name_right - name_left) / 2.0,
+            "at the right"
+        );
+        assert!(
+            types_right - types_left < (name_right - name_left),
+            "a long type name does not widen the list past File name"
+        );
+    }
+
+    /// A Save dialog keeps "Save as type:" on its own row under File name,
+    /// with Save and Cancel on a row below them at the right, as Windows'
+    /// Save dialog does.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_save_dialog_keeps_save_as_type_under_file_name() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "photo.png".to_variant()),
+                ("filters", image_types()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(bar_captions(window), ["File name:", "Save as type:"]);
+        let (name_left, _, name_right, name_bottom) = bounds_in(&name, window);
+        let (types_left, types_top, types_right, types_bottom) = bounds_in(&types, window);
+        let (accept_left, accept_top, _, _) = bounds_in(&picker.accept, window);
+        assert!(types_top >= name_bottom, "Save as type is under File name");
+        assert!((types_left - name_left).abs() < 1.0 && (types_right - name_right).abs() < 1.0);
+        assert!(accept_top >= types_bottom, "Save is on a row below the fields");
+        assert!(
+            accept_left > name_left + (name_right - name_left) / 2.0,
+            "at the right"
+        );
+    }
+
+    /// Open and Save dialogs with a type list, light and dark, for review
+    /// with `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`).
+    #[gtk::test]
+    fn open_and_save_type_lists_are_captured_light_and_dark() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            for (method, extra) in [
+                ("OpenFile", None),
+                ("SaveFile", Some(("current_name", "Scan 03.png".to_variant()))),
+            ] {
+                let fixture = Fixture::empty();
+                for name in ["Beach.jpg", "Garden.png", "Scan 01.png", "Scan 02.png"] {
+                    fixture.write(name);
+                }
+                let portal = Portal::new();
+                let mut entries = vec![("filters", image_types())];
+                entries.extend(extra);
+                let _answer = dialog_on(&portal, &fixture, method, entries);
+                let test = &portal.test;
+                test.activate("theme", Some(theme));
+                wait_until("the folder's listing", || test.window.is_listed());
+                settle();
+                let mode = if method == "OpenFile" { "open" } else { "save" };
+                capture(&test.window, &format!("picker-type-list-{mode}-{theme}.png"));
+            }
+        }
     }
 
     /// Chromium's Save page as: choosing "Webpage, Single File" turns
