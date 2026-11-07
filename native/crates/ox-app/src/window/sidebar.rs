@@ -44,7 +44,7 @@ use super::{gestures, preferences};
 
 pub(super) use drop_spots::SidebarDropSpot;
 pub(super) use entries::{recent_and_bin_entries, sidebar_entries};
-use entries::{RowTarget, Section, SidebarEntry};
+use entries::{RowLevel, RowTarget, Section, SidebarEntry};
 
 /// Whether a row shows something hidden, listed while "Show all
 /// entries" is on (SIDE-010).
@@ -350,17 +350,30 @@ impl Sidebar {
             shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
         }
         // Alt+Enter opens the Properties of the focused row's folder or
-        // drive, as a drive's menu says.
+        // drive, as a drive's menu says, or This PC's where its menu has
+        // them. It never reaches the file list's selection.
         let properties = gtk::CallbackAction::new(glib::clone!(
             #[weak(rename_to = sidebar)]
             self,
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, _| {
-                let Some(uri) = sidebar.focused_row_folder() else {
+                let Some(entry) = sidebar.focused_entry() else {
                     return glib::Propagation::Proceed;
                 };
-                WindowAction::PropertiesOf.activate_from(&sidebar, Some(&uri.to_variant()));
+                match &entry.target {
+                    RowTarget::Location(uri) if !ox_core::location::is_virtual_location(uri) => {
+                        WindowAction::PropertiesOf.activate_from(&sidebar, Some(&uri.to_variant()));
+                    }
+                    RowTarget::Location(_)
+                        if entry.level == RowLevel::Group
+                            && entry.section == Section::ThisPc
+                            && crate::integration::system_information().is_some() =>
+                    {
+                        WindowAction::SystemProperties.activate_from(&sidebar, None);
+                    }
+                    _ => {}
+                }
                 glib::Propagation::Stop
             }
         ));
@@ -371,16 +384,11 @@ impl Sidebar {
         shortcuts
     }
 
-    /// The real folder or drive the focused row opens, if any: not a
-    /// page such as This PC or the Recycle Bin.
-    fn focused_row_folder(&self) -> Option<String> {
+    /// The entry of the focused row, if any.
+    fn focused_entry(&self) -> Option<SidebarEntry> {
         let row = self.list().focus_child().and_downcast::<gtk::ListBoxRow>()?;
         let index = usize::try_from(row.index()).ok()?;
-        let entries = self.imp().entries.borrow();
-        match &entries.get(index)?.target {
-            RowTarget::Location(uri) if !ox_core::location::is_virtual_location(uri) => Some(uri.clone()),
-            _ => None,
-        }
+        self.imp().entries.borrow().get(index).cloned()
     }
 
     /// The style the window's file list opens its right-click menu in;

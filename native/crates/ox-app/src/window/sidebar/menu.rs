@@ -31,7 +31,7 @@ use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
-use super::entries::{RowLevel, RowTarget, Section, SidebarEntry};
+use super::entries::{drive_menu, local_disk_menu, RowLevel, RowTarget, Section, SidebarEntry};
 use super::{HiddenRow, Sidebar};
 
 /// The menu of the pin that opens `uri`; `caching` says whether it is
@@ -139,10 +139,11 @@ pub(super) struct HeadMenuState {
 }
 
 /// The menu of This PC's or Network's row, which opens `uri`, laid out as
-/// Windows 11's navigation pane lays it out. Windows' Rename, Pin to Quick
-/// access, Pin to Start and Show more options are left out: the app
-/// cannot rename or pin a page, and has no Start menu or classic menu
-/// here. Network has no Add a network location, as in Windows, and no
+/// Windows 11's navigation pane lays it out. Windows' Pin to Quick access
+/// and Pin to Start are left out: the app cannot pin a page and has no
+/// Start menu. Rename and Delete, greyed out, go in the compact menu's
+/// icon strip and "Show more options" ends it ([`Sidebar::menu_at`]).
+/// Network has no Add a network location, as in Windows, and no
 /// Properties, whose Windows twin is the Network and Sharing Center.
 pub(super) fn head_menu(section: Section, uri: &str, state: &HeadMenuState) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
@@ -242,17 +243,21 @@ impl Sidebar {
         let (mut menu, strip) = match hidden {
             HiddenRow::Place => return Some((show_place_menu(entry), Vec::new())),
             HiddenRow::Section => (Vec::new(), Vec::new()),
-            HiddenRow::Shown => match &entry.menu {
-                // A drive's menu is the same wherever it opens (This PC's
-                // tiles too), in Windows 11's order.
-                Some(place @ PlaceMenu::Drive { .. }) => place.styled(facts_in(place, self), style),
-                // A pinned folder's compact menu is Windows 11's own.
-                _ if entry.pinned && style == MenuStyle::Compact => match &entry.target {
-                    RowTarget::Location(uri) => (self.compact_pin_menu(uri), self.edit_strip(entry)),
+            HiddenRow::Shown => {
+                let pinned = self.pinned_drive(entry);
+                match entry.menu.as_ref().or(pinned.as_ref()) {
+                    // A drive's menu is the same wherever it opens (This
+                    // PC's tiles and its Quick access pin too), in Windows
+                    // 11's order.
+                    Some(place @ PlaceMenu::Drive { .. }) => place.styled(facts_in(place, self), style),
+                    // A pinned folder's compact menu is Windows 11's own.
+                    _ if entry.pinned && style == MenuStyle::Compact => match &entry.target {
+                        RowTarget::Location(uri) => (self.compact_pin_menu(uri), self.edit_strip(entry)),
+                        _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+                    },
                     _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
-                },
-                _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
-            },
+                }
+            }
         };
         let strip = match style {
             MenuStyle::Compact => strip,
@@ -424,6 +429,24 @@ impl Sidebar {
         let place_menu = place.entries(caching_in(place, self));
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
+    }
+
+    /// The drive menu of the drive that the Quick access pin `entry`
+    /// opens, from the window's drives, shown in the pane or not: a pinned
+    /// drive keeps a drive's menu, not a folder's, whose Cut, Rename and
+    /// Delete would act on the whole drive.
+    fn pinned_drive(&self, entry: &SidebarEntry) -> Option<PlaceMenu> {
+        let RowTarget::Location(uri) = &entry.target else {
+            return None;
+        };
+        if !entry.pinned {
+            return None;
+        }
+        let window = self.root().and_downcast::<BrowserWindow>()?;
+        let drives = window.places().drives;
+        std::iter::once(local_disk_menu())
+            .chain(drives.iter().map(drive_menu))
+            .find(|place| matches!(place, PlaceMenu::Drive { uri: drive, .. } if same_location(drive, uri)))
     }
 
     /// What This PC's or Network's menu shows for `section` now.

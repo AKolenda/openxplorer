@@ -9,7 +9,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::places::NetworkKind;
 
-use super::file_ops_support::{is_enabled, is_triggered_by, shortcuts_of};
+use super::file_ops_support::{is_enabled, is_triggered_by, press_shortcut_where_focused, shortcuts_of};
 use super::geometry::{bounds, laid_out, Bounds};
 use super::support::{art_image_showing, arts_in, menu_button_with_class};
 use crate::icons::{Art, Connection, Icon};
@@ -270,6 +270,71 @@ fn a_drive_tile_opens_the_drive_and_one_tile_is_selected() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
 
+/// The names of the selected tiles of This PC, in both groups.
+fn selected_tiles(test: &TestWindow) -> Vec<String> {
+    landing::tile_groups(test.window.folder_pane().landing())
+        .into_iter()
+        .flat_map(|(_, tiles)| tiles)
+        .filter(gtk::prelude::FlowBoxChildExt::is_selected)
+        .filter_map(|tile| texts_in(&tile).into_iter().next())
+        .collect()
+}
+
+/// Select all, Invert selection and Select none act on the tiles of both
+/// groups, from "…" and from Ctrl+A and Escape, as in Windows 11's This
+/// PC, and a redraw keeps them; a click selects in one group again.
+///
+/// parity: HOME-003
+#[gtk::test]
+fn select_all_none_and_invert_act_on_the_tiles_of_both_groups() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    test.save_share("smb://nas/media", "Media (M:)");
+    wait_until("the Network locations group", || {
+        landing::tile_groups(test.window.folder_pane().landing()).len() == 2
+    });
+    let media = "Media (\\\\nas) (M:)";
+    let every = ["Local Disk", "Backup", "USB", media];
+    let (drives, backup) = drive_tile(&test, "Backup");
+    drives.select_child(&backup);
+
+    test.activate("invert-selection", None);
+    assert_eq!(selected_tiles(&test), ["Local Disk", "USB", media]);
+    test.activate("select-none", None);
+    assert!(selected_tiles(&test).is_empty(), "Select none");
+    test.activate("select-all", None);
+    assert_eq!(selected_tiles(&test), every, "Select all");
+
+    backup.child_focus(gtk::DirectionType::TabForward);
+    press_shortcut_where_focused(&test, gtk::gdk::Key::Escape, gtk::gdk::ModifierType::empty());
+    assert!(selected_tiles(&test).is_empty(), "Escape");
+    assert!(press_shortcut_where_focused(
+        &test,
+        gtk::gdk::Key::a,
+        gtk::gdk::ModifierType::CONTROL_MASK
+    ));
+    assert_eq!(selected_tiles(&test), every, "Ctrl+A");
+    test.window.render_places();
+    assert_eq!(selected_tiles(&test), every, "a redraw keeps them all");
+    assert!(drive_tile(&test, "Backup").1.has_focus(), "and the keyboard");
+
+    let (shares, media_tile) = drive_tile(&test, media);
+    shares.unselect_all();
+    shares.select_child(&media_tile);
+    assert_eq!(selected_tiles(&test), [media], "a click selects in one group");
+}
+
+/// Shrinks the window clear of the pointer, which rests in the screen's
+/// middle where Xvfb starts it, for a test that opens one menu after
+/// another or redraws This PC in place. GTK 4.18 keeps pointing at a
+/// closed menu or a redrawn page under the still pointer, and the next
+/// menu's grab then fails a critical on that.
+fn clear_of_the_resting_pointer(test: &TestWindow) {
+    test.window.set_default_size(680, 480);
+    wait_until("the smaller window", || test.window.width() <= 700);
+    wait_for_frames(&test.window, 2);
+}
+
 /// Right-clicks `tile` and returns the menu it opens in the folder pane.
 fn open_tile_menu(test: &TestWindow, tile: &gtk::FlowBoxChild) -> MenuPopover {
     let right_click = tile
@@ -306,6 +371,7 @@ fn close_menu(menu: &MenuPopover) {
 fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     let fixture = Fixture::standard();
     let test = this_pc_with_drives(&fixture);
+    clear_of_the_resting_pointer(&test);
     let (_, backup) = drive_tile(&test, "Backup");
 
     let menu = open_tile_menu(&test, &backup);
@@ -363,6 +429,57 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     let menu = open_tile_menu(&test, &backup);
     assert!(menu.row_labels().contains(&"Unpin from Quick access".to_owned()));
     close_menu(&menu);
+
+    // The drive's Quick access pin keeps the drive's menu: nothing in it
+    // cuts, renames or deletes the whole drive, even with This PC's
+    // section, and so the drive's own row, hidden.
+    let pinned = test
+        .window
+        .places()
+        .quick_access
+        .into_iter()
+        .find(|place| place.uri == fixture.uri())
+        .expect("the drive is pinned")
+        .label;
+    test.activate("hide-section", Some("thisPc"));
+    wait_until("This PC to be hidden", || {
+        let labels = test.window.sidebar().labels();
+        !labels.iter().any(|label| label == "This PC") && labels.contains(&pinned)
+    });
+    wait_for_frames(&test.window, 3);
+    let pin = test.window.sidebar().right_click_row(&pinned);
+    pin.popup();
+    wait_for_frames(&test.window, 2);
+    assert_eq!(
+        pin.strip_states(),
+        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+    );
+    assert!(pin.row_labels().contains(&"Unpin from Quick access".to_owned()));
+    pin.popdown();
+
+    // So does Local Disk's.
+    test.activate("pin-location", Some("file:///"));
+    let local_disk_pin = || {
+        test.window
+            .places()
+            .quick_access
+            .into_iter()
+            .find(|place| place.uri == "file:///")
+            .map(|place| place.label)
+    };
+    wait_until("Local Disk to be pinned", || {
+        local_disk_pin().is_some_and(|label| test.window.sidebar().labels().contains(&label))
+    });
+    let pinned = local_disk_pin().expect("Local Disk is pinned");
+    wait_for_frames(&test.window, 3);
+    let pin = test.window.sidebar().right_click_row(&pinned);
+    pin.popup();
+    wait_for_frames(&test.window, 2);
+    assert_eq!(
+        pin.strip_states(),
+        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+    );
+    pin.popdown();
 }
 
 /// This PC's Local Disk tile menu, compact and classic, and the file
@@ -415,6 +532,7 @@ fn the_drive_tile_menu_is_captured_light_and_dark() {
 fn a_drive_tile_has_the_drive_menu_and_its_properties() {
     let fixture = Fixture::standard();
     let test = this_pc_with_drives(&fixture);
+    clear_of_the_resting_pointer(&test);
     let (flow, backup) = drive_tile(&test, "Backup");
 
     let menu = open_tile_menu(&test, &backup);
@@ -501,6 +619,7 @@ fn a_server_row_shows_the_server_in_the_share_blue_on_the_network_bar() {
 #[gtk::test]
 fn a_this_pc_tile_menu_survives_the_page_being_drawn_again() {
     let test = laid_out(Page::ThisPc.uri());
+    clear_of_the_resting_pointer(&test);
     test.save_share("smb://nas/media", "Media (M:)");
     let share = Art::for_network_location(NetworkKind::Share, "Media (M:)", Connection::Disconnected);
     let landing = test.window.folder_pane().landing();
