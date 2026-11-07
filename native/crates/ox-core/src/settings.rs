@@ -62,7 +62,8 @@ pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT}
 
 pub use tree_options::FolderTreeOptions;
 pub use view_properties::{
-    may_remember, saved_style_for, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS,
+    may_remember, saved_style_for, template_for, FolderTemplate, FolderView, ViewProperties, ViewScope,
+    MAX_FOLDER_VIEWS,
 };
 
 use crate::location::same_location;
@@ -362,6 +363,36 @@ impl Settings {
                 properties,
                 scope,
             );
+            Ok(preferences.clone())
+        })
+    }
+
+    /// Optimizes the folder at `uri` for `template`, as the Customize tab
+    /// of its Properties does on OK or Apply (PROP-036): the folder, and
+    /// its sub-folders when `subfolders` is set, show the template's view
+    /// of the style the folder had, where `downloads` is the Downloads
+    /// folder, so Downloads keeps the Group by it shows (VIEW-022). Only
+    /// the settings are written.
+    ///
+    /// # Errors
+    ///
+    /// The settings cannot be written, or `uri` is not a folder whose
+    /// style may be kept.
+    pub fn customize_folder(
+        &mut self,
+        uri: &str,
+        downloads: Option<&str>,
+        template: FolderTemplate,
+        subfolders: bool,
+    ) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let preferences = &mut data.preferences;
+            let style = template.style(&preferences.view_in(uri, downloads));
+            if !view_properties::customize(&mut preferences.folder_views, uri, template, style, subfolders) {
+                return Err(SettingsError::invalid(crate::i18n::gettext(
+                    "This folder's settings cannot be kept.",
+                )));
+            }
             Ok(preferences.clone())
         })
     }
