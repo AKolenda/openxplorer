@@ -207,9 +207,9 @@ impl DetailsView {
     }
 
     /// The width `column`'s title needs to show its whole label: what its
-    /// label and sort indicator need, and the title's padding around them.
-    /// The title itself cannot say: GTK gives a title its column's fixed
-    /// width whatever it holds.
+    /// label and sort indicator need, and the title's padding and border
+    /// around them. The title itself cannot say: GTK gives a title its
+    /// column's fixed width whatever it holds.
     pub(crate) fn title_width(&self, column: SortColumn) -> i32 {
         let Some(header) = self.header() else { return 0 };
         let titles = self.titles(&header);
@@ -220,7 +220,11 @@ impl DetailsView {
             return 0;
         };
         let needed = content.measure(gtk::Orientation::Horizontal, -1).1;
-        let padding = (title.width() - content.width()).max(0);
+        // `width()` leaves out the title's own padding and border; its
+        // bounds, its border box, include them.
+        let outer = title.compute_bounds(&title).map_or(0.0, |bounds| bounds.width());
+        #[expect(clippy::cast_possible_truncation, reason = "a title's width fits in i32")]
+        let padding = ((f64::from(outer) - f64::from(title.width())).ceil() as i32).max(0);
         needed + padding
     }
 

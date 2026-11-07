@@ -123,6 +123,40 @@ fn ctrl_keypad_plus_fits_every_shown_details_column() {
     wait_until("the fitted widths to be reported", || reported.get());
 }
 
+/// A title wider than its column's values, as File extension's over
+/// "txt", is fitted with its padding too, so its whole label shows.
+///
+/// parity: VIEW-072
+#[gtk::test]
+fn a_title_wider_than_its_values_shows_whole_after_the_fit() {
+    let fixture = fixture();
+    let test = TestWindow::open(&fixture.uri());
+    let details = test.window.folder_pane().details().clone();
+    test.activate("details-column", Some("extension"));
+    let extension = details
+        .column(SortColumn::Extension)
+        .expect("a File extension column");
+    wait_until("File extension to show", || extension.is_visible());
+    wait_for_frames(&test.window, 3);
+
+    test.activate("fit-all-columns", None);
+
+    let header = details.header().expect("column titles");
+    let title = std::iter::successors(header.first_child(), WidgetExt::next_sibling)
+        .find(|title| {
+            title.is_visible()
+                && details.column_at(title_middle(title, &header)) == Some(SortColumn::Extension)
+        })
+        .expect("a File extension title");
+    let label = title.first_child().expect("the title's label");
+    // GTK gives the label what it asks for and the title clips it, so
+    // the room is the title's own content width, inside its padding.
+    let needed = label.measure(gtk::Orientation::Horizontal, -1).1;
+    wait_until("the whole File extension title to show", || {
+        title.width() >= needed
+    });
+}
+
 /// Grouped, the group headings do not count, and the items still fit;
 /// with the Details pane open the fit is the same.
 ///
