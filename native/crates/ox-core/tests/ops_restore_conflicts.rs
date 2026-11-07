@@ -207,8 +207,9 @@ fn keeping_both_numbers_the_restored_items_by_their_original_name() {
 /// Two items deleted from one place, restored together while the name
 /// is free: the first goes back, and the second is asked about as it
 /// meets the first, never failing without a question, as in Windows.
-/// Keep both numbers it; Replace keeps the first, as for a name this
-/// restore already replaced, and Undo takes back what was restored.
+/// Keep both numbers it; Replace puts the second in the first one's
+/// place and sends the first back to the Recycle Bin; Undo takes back
+/// what was restored.
 ///
 /// parity: OPS-041, OPS-028
 #[test]
@@ -250,16 +251,14 @@ fn two_items_from_one_free_place_ask_about_the_second() {
             both.sort();
             assert_eq!(both, [b"first".to_vec(), b"second!".to_vec()]);
         } else {
-            assert!(notes.is_file());
-            assert_eq!(outcome.created, [file_uri(&notes)]);
+            assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
             assert_eq!(
-                outcome.result.errors,
-                [
-                    "notes.txt: An item named “notes.txt” already exists in its original folder. \
-                  It was left in the Recycle Bin."
-                ]
+                Some(fs::read(&notes).unwrap().len() as u64),
+                conflict.incoming.size,
+                "the second item"
             );
-            assert_eq!(recycled_from(&notes, 1).len(), 1, "the second item stays");
+            assert_eq!(outcome.created, [file_uri(&notes)]);
+            assert_eq!(recycled_from(&notes, 1).len(), 1, "the first item went back");
         }
         let Some(record) = outcome.undo else {
             panic!("an Undo record");
@@ -270,6 +269,83 @@ fn two_items_from_one_free_place_ask_about_the_second() {
             fs::read_dir(&folder).unwrap().count(),
             0,
             "Undo empties {answer:?}"
+        );
+    }
+}
+
+/// The user's steps: in a folder, Twin.txt is created and deleted twice,
+/// then both Twin.txt items are restored together from the Recycle Bin.
+/// The second is asked about; Replace restores it over the first, which
+/// goes back to the Recycle Bin, with no report; Skip leaves the second
+/// in the Recycle Bin with no report. Three items answered Replace for
+/// all end with the last one restored and the others in the Recycle Bin.
+/// Undo leaves the folder as it was before the restore.
+///
+/// parity: OPS-041, OPS-026, OPS-028
+#[test]
+fn replace_restores_the_second_twin_over_the_first() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let context = OperationContext::default();
+    let cases: [(&str, &[&[u8]], Resolution); 3] = [
+        ("Replace", &[b"first", b"second!"], Resolution::Replace),
+        ("Skip", &[b"first", b"second!"], Resolution::Skip),
+        (
+            "ReplaceAll",
+            &[b"first", b"second!", b"third!!!"],
+            Resolution::Replace,
+        ),
+    ];
+    for (case, contents, answer) in cases {
+        let folder = temp.path().join(case);
+        fs::create_dir(&folder).unwrap();
+        let twin = folder.join("Twin.txt");
+        for written in contents {
+            fs::write(&twin, written).unwrap();
+            trash(&[&twin]);
+        }
+        let uris: Vec<String> = recycled_from(&twin, contents.len())
+            .into_iter()
+            .map(|item| item.uri)
+            .collect();
+
+        let plan = scan(&uris);
+        let answers = vec![answer; plan.conflicts.len()];
+        let outcome = restore(&plan, &answers, &context);
+
+        assert_eq!(plan.conflicts.len(), contents.len() - 1, "{case}");
+        assert!(
+            outcome.result.errors.is_empty(),
+            "{case}: {:?}",
+            outcome.result.errors
+        );
+        assert_eq!(plan.items[0].kind, PlannedKind::Free, "{case}");
+        let expected = if answer == Resolution::Skip {
+            plan.conflicts[0].existing.size
+        } else {
+            plan.conflicts.last().unwrap().incoming.size
+        };
+        assert_eq!(Some(fs::read(&twin).unwrap().len() as u64), expected, "{case}");
+        assert_eq!(outcome.created, [file_uri(&twin)], "{case}");
+        // "1 item(s) restored.": an item sent back is not counted.
+        assert_eq!(outcome.result.done.len(), 1, "{case}: {:?}", outcome.result.done);
+        assert_eq!(
+            recycled_from(&twin, contents.len() - 1).len(),
+            contents.len() - 1,
+            "{case}: the others are in the Recycle Bin"
+        );
+        assert_eq!(fs::read_dir(&folder).unwrap().count(), 1, "{case}");
+
+        let Some(record) = outcome.undo else {
+            panic!("{case}: an Undo record");
+        };
+        let reversal = block_on(reverse(&record, &context, |_| {})).expect("Undo runs");
+        assert!(reversal.result.errors.is_empty(), "{:?}", reversal.result.errors);
+        assert_eq!(fs::read_dir(&folder).unwrap().count(), 0, "Undo empties {case}");
+        assert_eq!(
+            recycled_from(&twin, contents.len()).len(),
+            contents.len(),
+            "{case}"
         );
     }
 }
@@ -303,18 +379,18 @@ fn replace_never_puts_a_file_in_place_of_a_folder() {
     assert_eq!(recycled_from(&report, 1).len(), 1);
 }
 
-/// Two items trashed from one place, both answered Replace: the first
-/// replaces the newer file, and the second stays in the Recycle Bin
-/// rather than sending the first back there, so Undo takes one item back
-/// and brings the newer file back.
+/// Two items trashed from one place, both answered Replace over a newer
+/// file: the second replaces the first, as in Windows, so it is the one
+/// restored and the first and the newer file are in the Recycle Bin;
+/// Undo takes it back and brings the newer file back.
 ///
 /// parity: OPS-041, OPS-028, OPS-029
 #[test]
-fn replacing_one_name_twice_restores_one_item_and_undo_brings_the_newer_file_back() {
+fn replacing_one_name_twice_restores_the_last_item_and_undo_brings_the_newer_file_back() {
     let _recycle_bin = use_recycle_bin();
     let temp = tempfile::tempdir().unwrap();
     let notes = temp.path().join("notes.txt");
-    for contents in [b"first".as_slice(), b"second".as_slice()] {
+    for contents in [b"first".as_slice(), b"second!".as_slice()] {
         fs::write(&notes, contents).unwrap();
         trash(&[&notes]);
     }
@@ -332,20 +408,17 @@ fn replacing_one_name_twice_restores_one_item_and_undo_brings_the_newer_file_bac
     let outcome = restore(&plan, &[Resolution::Replace; 2], &context);
 
     assert_eq!(plan.conflicts.len(), 2);
-    let restored = fs::read(&notes).unwrap();
-    assert!(restored == b"first" || restored == b"second", "{restored:?}");
-    assert_eq!(outcome.created, [file_uri(&notes)]);
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
     assert_eq!(
-        outcome.result.errors,
-        [
-            "notes.txt: An item named “notes.txt” already exists in its original folder. \
-          It was left in the Recycle Bin."
-        ]
+        Some(fs::read(&notes).unwrap().len() as u64),
+        plan.conflicts[1].incoming.size,
+        "the last item answered Replace"
     );
+    assert_eq!(outcome.created, [file_uri(&notes)]);
     assert_eq!(
         recycled_from(&notes, 2).len(),
         2,
-        "the newer file and the second item"
+        "the newer file and the first item"
     );
     let Some(record @ UndoRecord::Replace { .. }) = outcome.undo else {
         panic!("a Replace record: {:?}", outcome.undo);
