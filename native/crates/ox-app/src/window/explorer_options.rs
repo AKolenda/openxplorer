@@ -81,7 +81,7 @@ impl BrowserWindow {
         }
     }
 
-    /// Clear File Explorer history: forgets the recent files, the recent
+    /// Clear `OpenXplorer` history: forgets the recent files, the recent
     /// locations and the addresses typed in every window, at once as in
     /// Windows, and lists Recent files and Recent locations again where a
     /// window shows them.

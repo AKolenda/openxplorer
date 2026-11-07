@@ -4685,8 +4685,8 @@ msgid "Folder Views"
 msgstr "文件夹视图"
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Open File Explorer to:"
-msgstr "打开文件资源管理器时打开："
+msgid "Open OpenXplorer to:"
+msgstr "打开 OpenXplorer 时打开："
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "Remember each folder's view settings"

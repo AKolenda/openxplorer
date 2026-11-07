@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Why a window command is disabled, for the tooltip and accessible
-//! description of its menu item (CMD-031), as Windows 11 and Dolphin
-//! explain a greyed-out command.
+//! Why a window command is disabled, for the accessible description of
+//! its menu item, which shows no tooltip as Windows 11's menu rows show
+//! none, and the tooltip of an icon-only button (CMD-031).
 //!
 //! Each reason follows the rule that disables the command: the file
 //! commands' [`CommandFacts::refusal`](super::file_ops::CommandFacts),
