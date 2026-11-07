@@ -363,6 +363,18 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     let menu = open_tile_menu(&test, &backup);
     assert!(menu.row_labels().contains(&"Unpin from Quick access".to_owned()));
     close_menu(&menu);
+
+    // The drive's Quick access pin keeps the drive's menu: nothing in it
+    // cuts, renames or deletes the whole drive.
+    let pin = test.window.sidebar().right_click_row("Backup");
+    pin.popup();
+    wait_for_frames(&test.window, 2);
+    assert_eq!(
+        pin.strip_states(),
+        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+    );
+    assert!(pin.row_labels().contains(&"Unpin from Quick access".to_owned()));
+    pin.popdown();
 }
 
 /// This PC's Local Disk tile menu, compact and classic, and the file
