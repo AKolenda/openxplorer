@@ -30,7 +30,7 @@ use crate::locations::Page;
 use super::actions::{plain_action, text_action};
 use super::command_bar::{group_by_menu, new_menu, sort_menu};
 use super::disk_tools::is_installed;
-use super::group_headings::{heading_spot, HeadingSpot};
+use super::group_headings::heading_at;
 use super::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
@@ -135,14 +135,9 @@ impl BrowserWindow {
                 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
                 let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
                 let style = menu_style_for(window.preferred_menu_style(), gesture.current_event_state());
-                // On a group heading's chevron or title, the menu of the
-                // group's items, headed by the group's commands; the rest
-                // of a heading's row has none, as in Windows 11.
-                let heading = match heading_spot(&view, x, y) {
-                    Some(HeadingSpot::Rest) => return,
-                    Some(spot) => spot.heading().cloned(),
-                    None => None,
-                };
+                // On a group heading's row, the menu of the group's items,
+                // headed by the group's commands, as in Windows 11.
+                let heading = heading_at(&view, x, y);
                 window.open_context_menu(&view, &point, style, heading.as_ref());
             }
         ));
@@ -160,19 +155,13 @@ impl BrowserWindow {
     /// A right-click on an unselected item selects only it; on blank space
     /// it clears the selection.
     fn select_for_context_menu(&self, view: &gtk::Widget, x: f64, y: f64) {
-        // A right-click on a group heading's chevron or title selects the
-        // group's items, as in Windows 11; the rest of its row nothing.
-        match heading_spot(view, x, y) {
-            Some(HeadingSpot::Rest) => return,
-            Some(spot) => {
-                if let Some(heading) = spot.heading() {
-                    if let Some((model, index)) = heading.model().zip(heading.group_index()) {
-                        model.select_group(index, false, false);
-                    }
-                }
-                return;
+        // A right-click on a group heading's row selects the group's
+        // items, as in Windows 11.
+        if let Some(heading) = heading_at(view, x, y) {
+            if let Some((model, index)) = heading.model().zip(heading.group_index()) {
+                model.select_group(index, false, false);
             }
-            None => {}
+            return;
         }
         let model = self.folder_pane().model();
         match self.folder_pane().owners().position_at(view, x, y) {

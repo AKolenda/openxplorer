@@ -570,6 +570,14 @@ impl FolderPane {
             _ if self.model().n_items() == 0 => self.focus_empty_list(),
             _ => {
                 self.view_widget().grab_focus();
+                self.keep_focus_off_headings();
+                // Again once GTK has finished: a click on blank space
+                // hands the keyboard to the list's first row after this.
+                glib::idle_add_local_once(glib::clone!(
+                    #[weak(rename_to = pane)]
+                    self,
+                    move || pane.keep_focus_off_headings()
+                ));
             }
         }
     }
@@ -600,6 +608,34 @@ impl FolderPane {
         match self.view() {
             FolderView::Details => self.details().grouped(),
             _ => self.icon_view().grouped(),
+        }
+    }
+
+    /// Moves the keyboard from a group heading to an item when the list
+    /// takes it: GTK starts at the list's first row, which is a heading
+    /// in a grouped view, and the heading's outline would show while an
+    /// item is selected. As in Windows 11, the keyboard starts on the first
+    /// selected item shown, else the first item shown; a heading takes it
+    /// only from a click or an arrow.
+    fn keep_focus_off_headings(&self) {
+        let Some(layout) = self.grouped().and_then(|grouped| grouped.layout()) else {
+            return;
+        };
+        let on_item = self
+            .root()
+            .and_then(|root| root.focus())
+            .and_then(|focus| self.owners().position_of(&focus))
+            .is_some();
+        if on_item {
+            return;
+        }
+        let selected = self
+            .model()
+            .selected_positions()
+            .into_iter()
+            .find(|position| layout.shows(*position));
+        if let Some(position) = selected.or_else(|| layout.end_item(false)) {
+            self.focus_item(position);
         }
     }
 

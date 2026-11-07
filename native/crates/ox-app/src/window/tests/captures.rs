@@ -7,7 +7,7 @@
 //! `native-tabs-3-light.png`, `native-tabs-3-dark.png`,
 //! `native-this-pc.png`, `native-network.png`, `native-menu-new-*.png`,
 //! `native-menu-context-*.png`, `native-states-*.png` and
-//! `group-collapse-{details,tiles,content}-{hover,selected,collapsed,menu}-{light,dark}.png`
+//! `group-collapse-{details,tiles,content}-{selected,collapsed,menu}-{light,dark}.png`
 //! there. Without
 //! it, they only prove the window lays out in both themes and on both
 //! pages.
@@ -104,10 +104,10 @@ fn heading_title(test: &TestWindow, title: &str) -> gtk::Widget {
 }
 
 /// Details, Tiles and Content of a folder grouped by type, in both
-/// themes: the pointer over a heading (its whole row lit), a heading
-/// clicked (its group's items selected, the heading outlined), that group
-/// collapsed with its items still selected (the heading filled), and the
-/// heading's right-click menu.
+/// themes: a heading clicked (its group's items selected, the heading
+/// outlined), that group collapsed with its items still selected (the
+/// heading filled), and the heading's right-click menu. The pointer's
+/// hover needs a real pointer, so it is checked in a real session.
 ///
 /// parity: VIEW-022, VIEW-071
 #[gtk::test]
@@ -145,11 +145,6 @@ fn grouped_views_with_a_collapsed_group_are_captured() {
         for theme in THEMES {
             test.activate("theme", Some(theme));
             model.select_none();
-            heading.set_row_hovered(true);
-            wait_for(TRANSITION_TIME);
-            capture(&test.window, &format!("group-collapse-{view}-hover-{theme}.png"));
-            heading.set_row_hovered(false);
-
             click_on(&test, &heading_title(&test, &markdown), gtk::gdk::BUTTON_PRIMARY);
             assert_eq!(
                 model.selected_positions(),

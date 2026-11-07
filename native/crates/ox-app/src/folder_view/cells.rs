@@ -408,10 +408,10 @@ impl FileCell {
                 toggle_class(&cell, ROW_FOCUS_CLASS, in_row && slot.focused());
                 toggle_class(&cell, ROW_START_CLASS, slot.kind() == SlotKind::Heading);
                 toggle_class(&cell, ROW_END_CLASS, in_row && slot.ends_row());
-                cell.style_item_widget(in_row, in_row && slot.hovered(), in_row && slot.focused());
             }
         );
         show_state(slot);
+        self.mark_item_widget(slot.kind() != SlotKind::Blank);
         let handler = slot.connect_notify_local(None, move |slot, _| show_state(slot));
         imp.slot_watch.replace(Some(handler));
     }
@@ -427,25 +427,24 @@ impl FileCell {
         ] {
             toggle_class(self, class, false);
         }
-        self.style_item_widget(false, false, false);
+        self.mark_item_widget(false);
     }
 
-    /// Gives the row or tile GTK wraps the cell in the heading row's looks:
-    /// Details draws a heading's hover on its whole row, which follows the
-    /// pointer over the chevron and title alone. Done once GTK has bound
-    /// the cell, as changing a row's classes while GTK binds its cells
-    /// upsets the list (see `cells/cell_owners.rs`).
-    fn style_item_widget(&self, heading: bool, hovered: bool, focused: bool) {
+    /// Marks the row or tile GTK wraps the cell in as a heading's, or not,
+    /// once per bind: Details outlines a heading's row by that class.
+    /// Never on the pointer's account, as restyling GTK's rows under the
+    /// pointer can make it send the pointer's crossings again. Done once
+    /// GTK has bound the cell, as changing a row's classes while GTK binds
+    /// its cells upsets the list (see `cells/cell_owners.rs`).
+    fn mark_item_widget(&self, heading: bool) {
         glib::idle_add_local_once(glib::clone!(
             #[weak(rename_to = cell)]
             self,
             move || {
                 let item = std::iter::successors(cell.parent(), WidgetExt::parent)
                     .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()));
-                if let Some(item) = item {
+                if let Some(item) = item.filter(|item| item.has_css_class(HEADING_ROW_CLASS) != heading) {
                     toggle_class(&item, HEADING_ROW_CLASS, heading);
-                    toggle_class(&item, ROW_HOVER_CLASS, hovered);
-                    toggle_class(&item, ROW_FOCUS_CLASS, focused);
                 }
             }
         ));
@@ -481,8 +480,7 @@ impl FileCell {
             .hexpand(true)
             .css_classes(["group-header"])
             .build();
-        // The chevron and the title are what the pointer acts on, as in
-        // Windows 11; the line beside them is not.
+        // The chevron and the title, which the line follows.
         let hit = gtk::Box::builder()
             .spacing(8)
             .css_classes(["group-heading-hit"])
@@ -491,28 +489,27 @@ impl FileCell {
         hit.append(&title);
         row.append(&hit);
         row.append(&line);
-        // The pointer over any slot of a heading's row lights the whole
-        // row, as Windows 11 lights a heading across the view.
+        // The pointer anywhere over a heading's row, its heading or a slot
+        // carrying its line, lights the whole row, as in Windows 11. Only
+        // a change of state restyles anything.
         let motion = gtk::EventControllerMotion::new();
-        motion.connect_enter(glib::clone!(
+        let hover = glib::clone!(
             #[weak(rename_to = cell)]
             self,
-            move |_, _, _| {
+            move |hovered: bool| {
                 if let Some(slot) = cell.slot() {
-                    slot.set_row_hovered(true);
+                    if slot.hovered() != hovered {
+                        slot.set_row_hovered(hovered);
+                    }
                 }
             }
-        ));
-        motion.connect_leave(glib::clone!(
-            #[weak(rename_to = cell)]
-            self,
-            move |_| {
-                if let Some(slot) = cell.slot() {
-                    slot.set_row_hovered(false);
-                }
-            }
-        ));
-        hit.add_controller(motion);
+        );
+        let enter = hover.clone();
+        motion.connect_enter(move |_, _, _| enter(true));
+        let moved = hover.clone();
+        motion.connect_motion(move |_, _, _| moved(true));
+        motion.connect_leave(move |_| hover(false));
+        self.add_controller(motion);
         // The keyboard on a heading rings its whole row; the grid gives it
         // to the item widget around the cell.
         self.append(&row);

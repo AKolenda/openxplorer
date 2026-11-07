@@ -4,8 +4,8 @@
 //!
 //! Windows 11 heads each group with a chevron that collapses the group
 //! under its heading and expands it again. A click on the chevron does
-//! that at once; a click anywhere else on the heading's row selects every
-//! item of the group (Ctrl adds the group or takes it out, Shift extends
+//! that at once; a click anywhere else on the heading's row (its title or
+//! its line) selects every item of the group (Ctrl adds the group or takes it out, Shift extends
 //! the selection to it), and a double-click collapses or expands it, as
 //! Windows' list view does (`LVGS_SELECTED`; `LVHT_EX_GROUP_COLLAPSE` apart
 //! from `LVHT_EX_GROUP_HEADER`). With the keyboard on a heading, Left
@@ -41,9 +41,9 @@ pub(super) fn heading_near(widget: &gtk::Widget) -> Option<GroupSlot> {
     if let Some(cell) = ancestors().find_map(|widget| widget.downcast::<FileCell>().ok()) {
         return row_heading(cell);
     }
-    let item = ancestors()
-        .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()))
-        .unwrap_or_else(|| widget.clone());
+    // Only within the row or tile holding `widget`: the list itself, as
+    // blank space below the rows picks it, holds every heading.
+    let item = ancestors().find(|widget| ["row", "child"].contains(&widget.css_name().as_str()))?;
     super::widget_tree::descendants::<FileCell>(&item)
         .into_iter()
         .find_map(row_heading)
@@ -62,20 +62,9 @@ fn is_inside(widget: &gtk::Widget, class: &str) -> bool {
 pub(super) enum HeadingSpot {
     /// The chevron, which collapses or expands the group at once.
     Chevron(GroupSlot),
-    /// The title, which selects the group's items.
+    /// The rest of the row, its title and line, which selects the group's
+    /// items.
     Title(GroupSlot),
-    /// The rest of the row, which Windows 11 leaves alone.
-    Rest,
-}
-
-impl HeadingSpot {
-    /// The heading the pointer acts on, when it acts on one.
-    pub(super) fn heading(&self) -> Option<&GroupSlot> {
-        match self {
-            HeadingSpot::Chevron(heading) | HeadingSpot::Title(heading) => Some(heading),
-            HeadingSpot::Rest => None,
-        }
-    }
 }
 
 /// Where (`x`, `y`) in `view` is on a heading's row, `None` off one.
@@ -84,10 +73,8 @@ pub(super) fn heading_spot(view: &gtk::Widget, x: f64, y: f64) -> Option<Heading
     let heading = heading_near(&picked)?;
     Some(if is_inside(&picked, "group-chevron") {
         HeadingSpot::Chevron(heading)
-    } else if is_inside(&picked, "group-heading-hit") {
-        HeadingSpot::Title(heading)
     } else {
-        HeadingSpot::Rest
+        HeadingSpot::Title(heading)
     })
 }
 
@@ -215,13 +202,61 @@ impl BrowserWindow {
         Some(glib::Propagation::Stop)
     }
 
+    /// Details moves the keyboard with GTK's own keys; once an arrow, Home,
+    /// End, Page Up or Page Down has moved it onto a heading, the heading's
+    /// group is selected, as in Windows 11 (Shift extends the selection to
+    /// it, Ctrl moves the keyboard alone). Tiles and Content select it as
+    /// they move (`grid_keys.rs`).
+    pub(super) fn select_heading_after_key(&self, key: gdk::Key, modifiers: gdk::ModifierType) {
+        let moves = matches!(
+            key,
+            gdk::Key::Up
+                | gdk::Key::KP_Up
+                | gdk::Key::Down
+                | gdk::Key::KP_Down
+                | gdk::Key::Home
+                | gdk::Key::KP_Home
+                | gdk::Key::End
+                | gdk::Key::KP_End
+                | gdk::Key::Page_Up
+                | gdk::Key::KP_Page_Up
+                | gdk::Key::Page_Down
+                | gdk::Key::KP_Page_Down
+        );
+        let pane = self.folder_pane();
+        if !moves
+            || modifiers.contains(gdk::ModifierType::CONTROL_MASK)
+            || pane.view() != super::folder_pane::FolderView::Details
+            || pane.details().grouped().is_none()
+        {
+            return;
+        }
+        let before = self.focused_heading();
+        let extends = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || {
+                let Some(heading) = window
+                    .focused_heading()
+                    .filter(|now| Some(now) != before.as_ref())
+                else {
+                    return;
+                };
+                if let Some((model, index)) = heading.model().zip(heading.group_index()) {
+                    model.select_group(index, false, extends);
+                }
+            }
+        ));
+    }
+
     /// A press on a group heading's row at (`x`, `y`) in `view`, the
     /// `presses`th of a click, as Windows 11 takes it: on the chevron it
-    /// collapses or expands the group at once, without selecting; on the
-    /// title the first press selects the group's items (Ctrl adds them or
-    /// takes them out, Shift extends the selection to them) and gives the
-    /// heading the keyboard, and a double-click collapses or expands the
-    /// group. The rest of the row takes no click. Returns false when the
+    /// collapses or expands the group at once, without selecting; anywhere
+    /// else on the row, title and line alike, the first press selects the
+    /// group's items (Ctrl adds them or takes them out, Shift extends the
+    /// selection to them) and gives the heading the keyboard, and a
+    /// double-click collapses or expands the group. Returns false when the
     /// press is not on a heading's row.
     pub(super) fn press_heading(
         &self,

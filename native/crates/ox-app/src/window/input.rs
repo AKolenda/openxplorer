@@ -482,6 +482,7 @@ impl BrowserWindow {
         if let Some(handled) = self.group_heading_key(key, modifiers) {
             return handled;
         }
+        self.select_heading_after_key(key, modifiers);
         if let Some(handled) = self.grouped_grid_key(key, modifiers) {
             return handled;
         }

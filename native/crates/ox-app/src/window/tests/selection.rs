@@ -699,10 +699,10 @@ fn heading_parts(test: &TestWindow, index: usize) -> (gtk::Widget, gtk::Widget, 
     (chevron.upcast(), title.upcast(), line.upcast())
 }
 
-/// Clicks on a heading act as Windows 11's: the title selects every item
-/// of the group and gives the heading the keyboard, a double-click
-/// collapses or expands the group, the chevron collapses or expands it
-/// without selecting, and the rest of the row takes no click.
+/// Clicks on a heading act as Windows 11's: the title or the line selects
+/// every item of the group and gives the heading the keyboard, a
+/// double-click collapses or expands the group, and the chevron collapses
+/// or expands it without selecting.
 ///
 /// parity: VIEW-022, VIEW-071
 #[gtk::test]
@@ -724,7 +724,8 @@ fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
             .expect("a third group");
         let (_, title, line) = heading_parts(&test, 2);
         press_on(&test, &line, 1);
-        assert_eq!(selected(&test), [0], "{view}: the line takes no click");
+        assert_eq!(selected(&test), group, "{view}: the line selects the group");
+        test.window.folder_pane().model().select_only(0);
         press_on(&test, &title, 1);
         assert_eq!(selected(&test), group, "{view}: the title selects the group");
         assert_eq!(

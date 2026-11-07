@@ -71,7 +71,10 @@ mod slot_imp {
         #[property(get, set)]
         pub(super) focused: Cell<bool>,
         /// Whether the slot ends its heading's row at the right: the last
-        /// slot carrying its line, or a heading alone on its row.
+        /// slot carrying its line, or a heading alone on its row. A
+        /// property, so a cell drawing the row's right edge follows when
+        /// the columns change.
+        #[property(get, set)]
         pub(super) ends_row: Cell<bool>,
         /// The title of the group whose heading row holds the slot.
         pub(super) title: RefCell<String>,
@@ -147,21 +150,24 @@ impl GroupSlot {
         }
     }
 
-    /// Whether the slot ends its heading's row at the right.
-    pub(crate) fn ends_row(&self) -> bool {
-        self.imp().ends_row.get()
-    }
-
     /// Shows the pointer over the heading's row, or not, on every slot
     /// of the row.
     pub(crate) fn set_row_hovered(&self, hovered: bool) {
-        self.for_row(|slot| slot.set_hovered(hovered));
+        self.for_row(|slot| {
+            if slot.hovered() != hovered {
+                slot.set_hovered(hovered);
+            }
+        });
     }
 
     /// Shows the keyboard on the heading's row, or not, on every slot of
     /// the row.
     pub(crate) fn set_row_focused(&self, focused: bool) {
-        self.for_row(|slot| slot.set_focused(focused));
+        self.for_row(|slot| {
+            if slot.focused() != focused {
+                slot.set_focused(focused);
+            }
+        });
     }
 
     /// Runs `change` on the heading and every slot carrying its line.
@@ -319,16 +325,6 @@ mod imp {
 
         fn select_item(&self, position: u32, unselect_rest: bool) -> bool {
             let obj = self.obj();
-            let heading = obj.layout().and_then(|layout| match layout.slot(position) {
-                Some(crate::folder_view::group_slots::Slot::Heading(index)) => Some(index),
-                _ => None,
-            });
-            if let Some(index) = heading {
-                // The keyboard moving onto a heading selects its group, as
-                // in Windows 11.
-                obj.select_group(index, !unselect_rest, false);
-                return true;
-            }
             let Some(item) = obj.item_at(position) else {
                 return false;
             };
@@ -791,10 +787,15 @@ impl GroupedSelection {
                     usize::try_from((columns - group.shown() % columns) % columns).unwrap_or_default();
                 GroupObjects::fit(&mut objects.rules, rules, SlotKind::Rule, self, &group.title);
                 GroupObjects::fit(&mut objects.blanks, blanks, SlotKind::Blank, self, &group.title);
-                objects.heading.imp().ends_row.set(objects.rules.is_empty());
+                let alone = objects.rules.is_empty();
+                if objects.heading.ends_row() != alone {
+                    objects.heading.set_ends_row(alone);
+                }
                 let last = objects.rules.len().saturating_sub(1);
                 for (index, rule) in objects.rules.iter().enumerate() {
-                    rule.imp().ends_row.set(index == last);
+                    if rule.ends_row() != (index == last) {
+                        rule.set_ends_row(index == last);
+                    }
                 }
                 // The title alone: Windows 11 (since 22H2) shows no count.
                 if objects.heading.text() != group.title {

@@ -169,13 +169,9 @@ columnview.files .group-slot .group-header {
   border-spacing: 8px;
 }
 columnview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
-/* A heading's row lights up for the pointer over its chevron or title
-   only, and takes Windows' 1px outline while it has the keyboard, after
-   a click too (src/folder_view/cells.rs sets the row's classes). */
-columnview.files > listview > row.heading-row:hover { background-color: transparent; }
-columnview.files > listview > row.heading-row.row-hover { background-color: @ox_item_hover; }
-columnview.files > listview > row.heading-row:selected { background-color: @ox_item_selected; }
-columnview.files > listview > row.heading-row:selected.row-hover { background-color: @ox_item_selected_hover; }
+/* A heading's row lights up under the pointer like an item's, all of
+   it, and takes Windows' 1px outline while it has the keyboard, after a
+   click too (src/folder_view/cells.rs marks the row as a heading's). */
 columnview.files > listview > row.heading-row:focus-visible,
 columnview.files > listview > row.heading-row:focus-within {
   outline: 1px solid @ox_item_focus_outer;
@@ -385,8 +381,8 @@ gridview.files.tiles .group-slot .group-header.group-heading { margin-left: 12px
 gridview.files.content .group-slot .group-header.group-heading { margin-left: 16px; }
 gridview.files .group-slot .group-header { border-spacing: 8px; }
 /* A heading's row acts as one, as Windows 11's does (VIEW-022): the
-   pointer over its chevron or title lights the whole row in the items'
-   hover colour, the row is filled as selected while its group is
+   pointer anywhere over it lights the whole row in the items' hover
+   colour, the row is filled as selected while its group is
    collapsed with every item selected, and the keyboard on the heading
    draws a 1px outline round the whole row, after a click too. The heading and
    the slots carrying its line each draw their part (row-start, row-end),
