@@ -13,8 +13,8 @@ use glib::clone;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::ops::{
-    create_link, create_links, create_named_shortcuts, create_shortcuts, starting_label, summarize_links,
-    LinkRequest, NamedShortcuts, NewLink,
+    create_link, create_links, create_named_shortcuts, create_shortcuts, starting_label, LinkRequest,
+    NamedShortcuts, NewLink,
 };
 use ox_core::transfer::TransferMode;
 
@@ -54,7 +54,6 @@ impl BrowserWindow {
         let outcome = create_links(request, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });
@@ -74,7 +73,6 @@ impl BrowserWindow {
         let outcome = create_shortcuts(request, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: selected,
         });
@@ -83,7 +81,8 @@ impl BrowserWindow {
 
     /// Makes the shortcuts `request` names, such as a drive's pasted or
     /// dropped into a folder ("Local Disk - Shortcut"), as the window's
-    /// one operation and reports them, then selects them, as Windows
+    /// one operation, asking about a failure in the progress window
+    /// (OPS-047), then selects them, as Windows
     /// Explorer selects what a paste made; Undo moves them to the Trash.
     /// False when it could not start, after saying why, as while another
     /// operation runs: a paste or a drop then leaves its other items too.
@@ -99,7 +98,6 @@ impl BrowserWindow {
         let outcome = create_named_shortcuts(request, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });

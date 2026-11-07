@@ -12,16 +12,20 @@
 //! - Skip ("Skip this file") leaves both files as they are.
 //! - Both versions kept in the File Conflict window: the copied file gets
 //!   Windows' number, `report (2).png`, the first free one.
-//! - Replace: Windows overwrites the existing file. Here the existing
-//!   file goes to the Recycle Bin first, where the desktop's Trash works,
-//!   and the incoming file then takes its free name, so Undo can bring
-//!   the replaced file back. Should the incoming file not arrive, the
-//!   replaced one is restored at once. Where nothing can go to the
-//!   Recycle Bin (most shares and devices), or a file meets a folder, the
-//!   engine's own Replace runs, which overwrites a file reversibly and
-//!   refuses to replace a folder with a file or the other way round
-//!   (XFER-009, XFER-010); that replaced file is gone, so Undo leaves
-//!   its replacement in place.
+//! - Replace: Windows overwrites the existing file. Here, by default
+//!   ([`ReplacedFiles::RecycleBin`]), the existing file goes to the
+//!   Recycle Bin first, where the desktop's Trash works, and the incoming
+//!   file then takes its free name, so Undo can bring the replaced file
+//!   back. Should the incoming file not arrive, the replaced one is
+//!   restored at once. With [`ReplacedFiles::Overwrite`] (Settings >
+//!   Files & folders, as Windows does it), where nothing can go to the
+//!   Recycle Bin (most shares and devices), or where a file meets a
+//!   folder, the engine's own Replace runs: a copy is written into
+//!   private staging and swapped in at the end, a move renames over the
+//!   old file, and a folder is never replaced by a file or the other way
+//!   round (XFER-009, XFER-010). A cancelled copy leaves the old file as
+//!   it was. That replaced file is gone, so Undo leaves its replacement
+//!   in place.
 //!
 //! The items without a conflict go first, before the user answers
 //! ([`run_free_items`]), as Windows queues the conflicts "to the end of
@@ -38,11 +42,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use super::conflicts::{ConflictScan, NameConflict, PlannedItem, PlannedKind};
-use super::context::{on_worker, OperationContext};
+use super::context::{on_worker, OperationContext, ReplacedFiles};
 use super::error::OpsError;
 use super::folder_groups::FolderGroups;
 use super::recycle_bin::restore_trashed_since;
-use super::results::merge_results;
+use super::results::{merge_results, ItemQuestions};
 use super::run_transfer::{
     gio_transfer_engine, run_on_engine, run_renamed_on_engine, unix_seconds_now, TransferOutcome,
     TransferRequest,
@@ -250,6 +254,9 @@ struct Run<'a> {
     before: u64,
     /// The merged folders a move emptied and removed.
     removed_folders: Vec<String>,
+    /// Tells about each failure the engine did not ask about, such as a
+    /// replaced file left in the Recycle Bin, as it happens.
+    questions: ItemQuestions,
 }
 
 impl<'a> Run<'a> {
@@ -313,6 +320,7 @@ impl<'a> Run<'a> {
             place,
             before: earlier.before,
             removed_folders: earlier.removed_folders,
+            questions: ItemQuestions::new(context, scan.mode),
         }
     }
 
@@ -331,6 +339,7 @@ impl<'a> Run<'a> {
         } else {
             let folder = GioNode::new(&self.scan.destination_folder).display_name();
             super::results::record_failure(&mut self.total.result, &folder, &error);
+            self.questions.tell_unseen(&mut self.total.result);
         }
         Ok(())
     }
@@ -428,6 +437,7 @@ impl<'a> Run<'a> {
     fn add(&mut self, part: TransferOutcome) -> bool {
         self.landed.extend(part.result.landed.iter().cloned());
         merge_results(&mut self.total.result, part.result);
+        self.questions.tell_unseen(&mut self.total.result);
         self.total.result.cancelled
     }
 
@@ -484,7 +494,8 @@ impl<'a> Run<'a> {
     }
 
     /// The incoming item of `conflict` takes the existing one's place;
-    /// the replaced file goes to the Recycle Bin first where it can.
+    /// the replaced file goes to the Recycle Bin first where it can,
+    /// unless the user chose to overwrite it as Windows does.
     fn replace(&mut self, item: &PlannedItem, conflict: &NameConflict) -> Result<TransferOutcome, OpsError> {
         let request = |policy| TransferRequest {
             mode: self.scan.mode,
@@ -500,7 +511,9 @@ impl<'a> Run<'a> {
             && existing
                 .is_directory(Some(cancel))
                 .is_ok_and(|is_folder| !is_folder);
-        let keepable = both_files && path.is_some() && existing.can_trash(Some(cancel)).unwrap_or(false);
+        let recycles = self.context.replaced_files == ReplacedFiles::RecycleBin;
+        let keepable =
+            recycles && both_files && path.is_some() && existing.can_trash(Some(cancel)).unwrap_or(false);
         let (true, Some(path)) = (keepable, path) else {
             let part = run_on_engine(&mut self.engine, &request(ConflictPolicy::Replace), self.context)?;
             self.overwritten

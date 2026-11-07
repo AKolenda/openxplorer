@@ -17,6 +17,7 @@ mod clipboard;
 mod clipboard_interop;
 mod clipboard_switches;
 mod closing;
+mod column_fitting;
 mod command_bar;
 mod compact_density;
 mod context_menus;

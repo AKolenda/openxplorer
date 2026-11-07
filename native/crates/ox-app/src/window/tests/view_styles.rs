@@ -884,8 +884,8 @@ fn grouping_by_the_sort_key_heads_each_group() {
     test.window.folder_pane().model().select_only(1);
     let selected = test.selected_names();
     test.activate("group-by", Some("sort"));
-    let details = test.window.folder_pane().details().column_view().clone();
-    assert!(details.header_factory().is_some());
+    let details = test.window.folder_pane().details();
+    assert!(details.heads_groups());
     assert_eq!(
         test.selected_names(),
         selected,
@@ -896,7 +896,7 @@ fn grouping_by_the_sort_key_heads_each_group() {
     let first = model.item(0).expect("an item");
     assert_eq!((model.group_titles())(&first).as_deref(), Some("D"), "Documents");
     test.activate("group-by", Some("none"));
-    assert!(details.header_factory().is_none());
+    assert!(!details.heads_groups());
     assert_eq!(test.selected_names(), selected);
 }
 

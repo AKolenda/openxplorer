@@ -122,6 +122,7 @@ fn file_access_denied_answers_try_again_skip_or_cancel_to_the_worker() {
         uri: fixture.uri_of("Notes 2.txt"),
         destination_folder: Some(fixture.uri_of("Documents")),
         needed: None,
+        administrator: true,
     };
 
     for (button, for_all, expected) in [
@@ -200,6 +201,7 @@ fn destination_folder_access_denied_offers_continue_with_the_shield() {
         uri: fixture.uri_of("Notes 2.txt"),
         destination_folder: Some(fixture.uri_of("Documents")),
         needed: None,
+        administrator: true,
     };
 
     for (for_all, expected) in [(false, FailureAnswer::Elevate), (true, FailureAnswer::ElevateAll)] {
@@ -245,6 +247,46 @@ fn destination_folder_access_denied_offers_continue_with_the_shield() {
     drop(locked);
 }
 
+/// An operation outside the transfer engine, such as Redo removing a
+/// folder again, cannot run the item again as administrator: in a folder
+/// the user may not change, it asks "File Access Denied" with Try Again,
+/// not Continue, which would only fail again (Codex review of #286).
+///
+/// parity: OPS-047
+#[gtk::test]
+fn a_failure_without_an_administrator_path_offers_try_again_not_continue() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/tool.cfg");
+    let locked = Locked::new(fixture.path("Documents"));
+    let test = TestWindow::open(&fixture.uri());
+    let cancel = start_operation(&test);
+    let item = FailedItem {
+        mode: TransferMode::Delete,
+        name: "tool.cfg".into(),
+        error: "Error removing file: Permission denied".into(),
+        more_items: false,
+        cause: FailureCause::AccessDenied,
+        uri: fixture.uri_of("Documents/tool.cfg"),
+        destination_folder: None,
+        needed: None,
+        administrator: false,
+    };
+
+    let (worker, panel) = ask_in_action(&test, &cancel, &item);
+    assert_eq!(panel.caption_shown(), "File Access Denied");
+    let texts = panel.failure_texts();
+    assert!(
+        texts
+            .iter()
+            .any(|text| text == "You need permission to perform this action"),
+        "{texts:?}"
+    );
+    assert_eq!(panel.failure_button_labels(), ["Try Again", "Skip", "Cancel"]);
+    panel.press_failure("Skip");
+    assert_eq!(answer_of(worker, &panel), FailureAnswer::Skip);
+    drop(locked);
+}
+
 /// An item to delete from a folder the user may not change asks Windows'
 /// "File Access Denied", "You'll need to provide administrator permission
 /// to delete this file", with Continue and its shield. In a delete run
@@ -273,6 +315,7 @@ fn an_item_in_a_folder_only_an_administrator_may_change_offers_continue() {
         uri: fixture.uri_of("Documents/tool.cfg"),
         destination_folder: None,
         needed: None,
+        administrator: true,
     };
 
     for (for_all, expected) in [(false, FailureAnswer::Elevate), (true, FailureAnswer::ElevateAll)] {
@@ -372,6 +415,7 @@ fn a_gone_or_held_file_asks_in_windows_words() {
             uri: fixture.uri_of("Gone.txt"),
             destination_folder: Some(fixture.uri_of("Documents")),
             needed: None,
+            administrator: true,
         };
         let (worker, panel) = ask_in_action(&test, &cancel, &item);
         assert_eq!(panel.caption_shown(), caption);
@@ -433,6 +477,7 @@ fn a_full_drive_asks_in_the_progress_window() {
         uri: String::new(),
         destination_folder: Some(fixture.uri_of("Documents")),
         needed: Some(5_000_000),
+        administrator: true,
     };
 
     for (retry, expected) in [(true, FailureAnswer::Retry), (false, FailureAnswer::Cancel)] {

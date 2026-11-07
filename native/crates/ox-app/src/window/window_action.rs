@@ -98,6 +98,14 @@ pub(crate) enum WindowAction {
     Open,
     /// Selects every item (Ctrl+A).
     SelectAll,
+    /// Collapses the group whose heading the menu opened on (VIEW-022).
+    CollapseGroup,
+    /// Expands the group whose heading the menu opened on.
+    ExpandGroup,
+    /// Collapses every group of a grouped view.
+    CollapseAllGroups,
+    /// Expands every group of a grouped view.
+    ExpandAllGroups,
     /// Clears the selection.
     SelectNone,
     /// Selects exactly the items that were not selected.
@@ -142,6 +150,13 @@ pub(crate) enum WindowAction {
     /// Shows or hides the details column whose key is the string target
     /// (the column titles' menu, VIEW-033).
     DetailsColumn,
+    /// Fits the details column whose key is the string target to its
+    /// widest content and title ("Size column to fit" in the column
+    /// titles' menu, VIEW-072).
+    FitColumn,
+    /// Fits every shown details column to its widest content and title
+    /// ("Size all columns to fit", Ctrl+keypad plus, VIEW-072).
+    FitAllColumns,
     /// Stops the listing of the folder shown (VIEW-049).
     Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
@@ -500,6 +515,10 @@ impl WindowAction {
             WindowAction::MountVolume => "mount-volume",
             WindowAction::Open => "open",
             WindowAction::SelectAll => "select-all",
+            WindowAction::CollapseGroup => "collapse-group",
+            WindowAction::ExpandGroup => "expand-group",
+            WindowAction::CollapseAllGroups => "collapse-all-groups",
+            WindowAction::ExpandAllGroups => "expand-all-groups",
             WindowAction::SelectNone => "select-none",
             WindowAction::InvertSelection => "invert-selection",
             WindowAction::SelectMatching => "select-matching",
@@ -519,6 +538,8 @@ impl WindowAction {
             WindowAction::FileNameExtensions => "file-name-extensions",
             WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::DetailsColumn => "details-column",
+            WindowAction::FitColumn => "fit-column",
+            WindowAction::FitAllColumns => "fit-all-columns",
             WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SplitView => "split-view",

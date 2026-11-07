@@ -272,10 +272,15 @@ fn solid_frame_rule(scale: f64) -> String {
 }
 
 /// The details view's rows: `detail_row` pixels apart, less the 1-pixel
-/// margin above and below each row (`.file-row` in style.css).
+/// margin above and below each row (`.file-row` in style.css). A group's
+/// heading box is as tall, below its gap (`skin/folder-views.css`).
 fn details_row_rule(detail_row: i32) -> String {
     let row = detail_row - 2;
-    format!("columnview.files > listview > row {{ min-height: {row}px; }}")
+    format!(
+        "columnview.files > listview > row {{ min-height: {row}px; }}\n\
+         columnview.files > listview > row > cell > .group-slot, \
+         columnview.files > listview > row > cell > .group-rule {{ min-height: {row}px; }}"
+    )
 }
 
 /// Compact view's rows (`window.compact-density`, set by
@@ -288,7 +293,12 @@ fn details_row_rule(detail_row: i32) -> String {
 fn compact_density_rules(scale: f64, text_size: TextSize) -> [String; 2] {
     let row = compact_row(text_size) - 2;
     [
-        format!("window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}"),
+        format!(
+            "window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}\n\
+             window.compact-density columnview.files > listview > row > cell > .group-slot, \
+             window.compact-density columnview.files > listview > row > cell > .group-rule \
+             {{ min-height: {row}px; }}"
+        ),
         COMPACT_SIDEBAR_ROW.rule(scale),
     ]
 }
@@ -374,7 +384,7 @@ fn tiles_and_content_rules(text_size: TextSize) -> [String; 3] {
     [
         format!("gridview.files.tiles > child > .item-cell:not(.group-slot) {{ min-height: {tile}px; }}"),
         format!("gridview.files.content > child > .item-cell:not(.group-slot) {{ min-height: {row}px; }}"),
-        format!("gridview.files > child > .item-cell.group-slot {{ min-height: {heading}px; }}"),
+        format!("gridview.files > child > .item-cell.group-slot.heading-row {{ min-height: {heading}px; }}"),
     ]
 }
 
@@ -437,7 +447,9 @@ mod tests {
         );
         assert!(css
             .contains("gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }"));
-        assert!(css.contains("gridview.files > child > .item-cell.group-slot { min-height: 17px; }"));
+        assert!(
+            css.contains("gridview.files > child > .item-cell.group-slot.heading-row { min-height: 17px; }")
+        );
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 32px; }"));
         assert!(

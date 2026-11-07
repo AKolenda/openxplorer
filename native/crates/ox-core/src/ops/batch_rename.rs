@@ -16,10 +16,11 @@
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::rename::rename_item_blocking;
-use super::results::record_failure;
+use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
 use super::undo::{RenamedPair, UndoRecord};
 use crate::location::validate_name;
+use crate::transfer::TransferMode;
 
 /// The character the number replaces.
 pub const NUMBER_PLACEHOLDER: char = '#';
@@ -151,13 +152,22 @@ fn rename_batch_blocking(
     let names = batch.new_names()?;
     let mut outcome = TransferOutcome::default();
     let mut renamed = Vec::new();
-    for (item, name) in batch.items.iter().zip(&names) {
+    let mut questions = ItemQuestions::new(context, TransferMode::Move);
+    let count = batch.items.len();
+    for (index, (item, name)) in batch.items.iter().zip(&names).enumerate() {
         if context.cancel.is_cancelled() {
             outcome.result.cancelled = true;
             break;
         }
-        match rename_item_blocking(&item.uri, name, context) {
-            Ok(done) => {
+        let asked = AskedItem {
+            name: &item.name,
+            uri: &item.uri,
+            more_items: index + 1 < count,
+        };
+        // A failure is asked about in the progress window (OPS-047).
+        let attempt = || rename_item_blocking(&item.uri, name, context);
+        match questions.run(&mut outcome.result, asked, attempt) {
+            Some(done) => {
                 outcome.result.done.push(item.uri.clone());
                 outcome.created.push(done.uri.clone());
                 if !done.is_unchanged() {
@@ -167,7 +177,8 @@ fn rename_batch_blocking(
                     });
                 }
             }
-            Err(error) => record_failure(&mut outcome.result, &item.name, &error),
+            None if outcome.result.cancelled => break,
+            None => {}
         }
     }
     if !renamed.is_empty() {

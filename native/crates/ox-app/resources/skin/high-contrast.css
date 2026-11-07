@@ -38,6 +38,9 @@ gridview.files.content > child:focus-visible > .item-cell:not(.group-slot) {
   outline-offset: -2px;
   box-shadow: inset 0 0 0 3px @ox_bg;
 }
+gridview.files .item-cell.heading-row.row-focus.row-start.row-end { box-shadow: inset 0 0 0 1px @ox_text; }
+columnview.files > listview > row.heading-row:focus-within { outline-color: @ox_text; }
+columnview.files > listview > row.heading-row:focus-within > cell > .group-slot .group-header { box-shadow: inset 0 0 0 1px @ox_text; }
 /* Tiles and Content ring the focused item's cell above, not the grid's
    slot around it: this provider outranks the base rule that clears the
    slot's ring, so it clears it here too, or the item had two rings. */
