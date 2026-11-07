@@ -165,29 +165,29 @@ columnview.files .row-icon { margin-top: 1px; }
 
 /* A group's heading in the details view (VIEW-022), a row of its own:
    Windows 11's chevron (down while the group is expanded, right while it
-   is collapsed), the semibold title and count, then a line to the right
-   edge. The Name cell draws the chevron, the title and the start of the
-   line; each other column's cell carries the line on across its padding
-   (src/folder_view/details/group_headers.rs). The chevron changes at
-   once, with no animation, so reduced motion has nothing to stop. */
+   is collapsed), the semibold title, then a line to the right edge. The
+   Name cell holds the heading and lays it out across the whole row, over
+   the other columns, whatever Name's width (FileCell's
+   span_heading_across_row in src/folder_view/cells.rs); the other
+   columns' cells in the row draw nothing. The chevron changes at once,
+   with no animation, so reduced motion has nothing to stop. */
 columnview.files .group-slot .group-header {
-  padding: 0;
-  margin-right: 0;
+  padding: 0 0 0 14px;
+  margin: 0;
   border-spacing: 8px;
+  border-radius: 4px;
 }
 /* A heading's row: an 8px gap before every heading, the first one
    included, then a box as tall as an item's row (src/theme/fonts.rs sets
    its height). The gap is the top margin of the heading's cells, so the
    row has its whole height when GTK binds it, and the hover, the
-   selection and the keyboard's outline are drawn on the box alone: the
-   Name cell's heading (reaching back over the cell's padding to the
-   row's edge) and each other column's line. The grouped list adds no
-   padding of its own above the first heading. */
+   selection and the keyboard's outline are drawn on the heading's box
+   alone, across the row. The grouped list adds no padding of its own
+   above the first heading. */
 columnview.files.grouped > listview { padding-top: 1px; }
 columnview.files > listview > row > cell > .group-slot {
-  margin: 8px -16px 0 -14px;
-  padding-left: 14px;
-  border-radius: 4px 0 0 4px;
+  margin: 8px 0 0 0;
+  padding: 0;
 }
 columnview.files > listview > row.heading-row,
 columnview.files > listview > row.heading-row:hover,
@@ -204,48 +204,24 @@ columnview.files > listview > row.heading-row:focus-within {
 columnview.files.keyboard-in > listview > row.heading-row:focus:not(:focus-visible):not(.file-drop-active) {
   outline: none;
 }
-columnview.files > listview > row.heading-row:hover > cell > .group-slot,
-columnview.files > listview > row.heading-row:hover > cell > .group-rule { background-color: @ox_item_hover; }
-columnview.files > listview > row.heading-row:selected > cell > .group-slot,
-columnview.files > listview > row.heading-row:selected > cell > .group-rule,
-columnview.files > listview > row.heading-row.row-filled > cell > .group-slot,
-columnview.files > listview > row.heading-row.row-filled > cell > .group-rule { background-color: @ox_item_selected; }
-columnview.files > listview > row.heading-row:selected:hover > cell > .group-slot,
-columnview.files > listview > row.heading-row:selected:hover > cell > .group-rule,
-columnview.files > listview > row.heading-row.row-filled:hover > cell > .group-slot,
-columnview.files > listview > row.heading-row.row-filled:hover > cell > .group-rule {
+columnview.files > listview > row.heading-row:hover > cell > .group-slot .group-header { background-color: @ox_item_hover; }
+columnview.files > listview > row.heading-row:selected > cell > .group-slot .group-header,
+columnview.files > listview > row.heading-row.row-filled > cell > .group-slot .group-header { background-color: @ox_item_selected; }
+columnview.files > listview > row.heading-row:selected:hover > cell > .group-slot .group-header,
+columnview.files > listview > row.heading-row.row-filled:hover > cell > .group-slot .group-header {
   background-color: @ox_item_selected_hover;
 }
-columnview.files > listview > row.heading-row:focus-within > cell > .group-slot {
-  box-shadow: inset 1px 0 @ox_item_focus_outer, inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
-}
-columnview.files > listview > row.heading-row:focus-within > cell > .group-rule {
-  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
-}
-columnview.files > listview > row.heading-row:focus-within > cell:last-child > .group-rule {
-  box-shadow: inset -1px 0 @ox_item_focus_outer, inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
+columnview.files > listview > row.heading-row:focus-within > cell > .group-slot .group-header {
+  box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
 }
 columnview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
 columnview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
+/* Another column's cell in a heading's row: the gap and the height alone,
+   as the Name cell's heading is drawn over it. */
 columnview.files .group-rule {
   padding: 0;
-  /* Over the cells' padding on both sides, after the gap above the
-     heading; the minimum width keeps the label's whole width from going
-     below zero. */
-  margin: 8px -17px 0 -17px;
-  min-width: 34px;
-  background-image: linear-gradient(@ox_border, @ox_border);
-  background-size: 100% 1px;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-origin: content-box;
-  background-clip: content-box;
-}
-/* The last column's line reaches the row's right edge, rounded there. */
-columnview.files > listview > row > cell:last-child > .group-rule {
-  margin-right: -14px;
-  min-width: 31px;
-  border-radius: 0 4px 4px 0;
+  margin: 8px 0 0 0;
+  background: none;
 }
 .files .group-chevron { color: @ox_muted; }
 

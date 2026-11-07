@@ -1059,3 +1059,66 @@ fn a_column_shown_in_a_grouped_list_keeps_its_first_heading() {
         assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
     }
 }
+
+/// A Details heading's chevron, title and line span the whole row, over
+/// the other columns, as Windows 11 draws them whatever Name's width: the
+/// title is never cut to the Name column, and it never widens Name.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_details_heading_spans_its_row_over_the_columns() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    wait_until("the headings", || !headings(&test).is_empty());
+    let details = test.window.folder_pane().details().clone();
+    let column_view = details.column_view().clone();
+    let name = details.column(SortColumn::Name).expect("a Name column");
+    let boxes: Vec<gtk::Widget> = descendants::<gtk::Box>(&column_view)
+        .into_iter()
+        .filter(|heading| heading.has_css_class("group-header") && heading.is_mapped())
+        .map(Cast::upcast)
+        .collect();
+    assert!(!boxes.is_empty(), "headings on screen");
+    for heading in &boxes {
+        let row = std::iter::successors(heading.parent(), WidgetExt::parent)
+            .find(|widget| widget.css_name() == "row")
+            .expect("the heading's row");
+        let bounds = heading.compute_bounds(&row).expect("the heading is laid out");
+        assert!(bounds.x().abs() < 0.5, "the heading starts at the row's edge");
+        #[expect(clippy::cast_precision_loss, reason = "row widths are small")]
+        let row_width = row.width() as f32;
+        assert!(
+            (bounds.width() - row_width).abs() < 0.5,
+            "the heading spans the row: {} of {row_width}",
+            bounds.width()
+        );
+    }
+    // Name at its least width: each title still shows whole, laid out
+    // across the row rather than in Name's cell.
+    let titles: Vec<gtk::Label> = descendants::<gtk::Label>(&column_view)
+        .into_iter()
+        .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+        .collect();
+    let widest = titles
+        .iter()
+        .map(|title| title.measure(gtk::Orientation::Horizontal, -1).1)
+        .max()
+        .expect("titles");
+    name.set_fixed_width(1);
+    wait_for_frames(&test.window, 4);
+    let name_width = details
+        .column_view()
+        .first_child()
+        .and_then(|header| header.first_child())
+        .map_or(0, |title| title.width());
+    for title in &titles {
+        let (_, natural, _, _) = title.measure(gtk::Orientation::Horizontal, -1);
+        assert!(
+            title.width() >= natural,
+            "{:?} shows whole ({} of {natural}) with Name {name_width} wide, widest title {widest}",
+            title.text(),
+            title.width()
+        );
+    }
+}

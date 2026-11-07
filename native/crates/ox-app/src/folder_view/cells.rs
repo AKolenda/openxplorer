@@ -14,6 +14,7 @@ mod cell_owners;
 mod custom_icon;
 mod expander;
 mod folder_picture;
+mod heading_span;
 mod item_check;
 pub(crate) use item_check::own_clicks;
 mod row_tooltip;
@@ -34,6 +35,7 @@ use crate::folder_view::grid::{GroupSlot, SlotKind};
 use crate::folder_view::item::FileItem;
 use crate::icons::{self, Art, Icon};
 use crate::window::widget_tree::toggle_class;
+use heading_span::HeadingSpan;
 
 /// Gap between a row's icon and its name (`.name-cell{gap:11px}`).
 const ROW_ICON_GAP: i32 = 11;
@@ -235,6 +237,9 @@ mod imp {
         pub(super) folder_picture: super::FolderPicture,
         /// Whether the cell is an icon-view tile.
         pub(super) is_tile: Cell<bool>,
+        /// Whether the cell is a Details row's Name cell, whose group
+        /// heading spans the whole row.
+        pub(super) is_details_row: Cell<bool>,
         /// The running lookup of the custom icon or preview.
         pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
         /// Holds the icon, and on a tile spans it, with the check box in
@@ -365,8 +370,8 @@ impl FileCell {
                 return;
             }
             self.remove_css_class(GROUP_SLOT_CLASS);
-            if let Some(row) = imp.slot_row.borrow().as_ref() {
-                row.set_visible(false);
+            if let Some(span) = imp.slot_row.borrow().as_ref().and_then(WidgetExt::parent) {
+                span.set_visible(false);
             }
             for (widget, shown) in imp.hidden_for_slot.take() {
                 widget.set_visible(shown);
@@ -378,7 +383,7 @@ impl FileCell {
             let row = self.slot_row();
             let hidden: Vec<(gtk::Widget, bool)> =
                 std::iter::successors(self.first_child(), WidgetExt::next_sibling)
-                    .filter(|widget| *widget != row)
+                    .filter(|widget| Some(widget) != row.parent().as_ref())
                     .map(|widget| {
                         let shown = widget.is_visible();
                         widget.set_visible(false);
@@ -404,6 +409,9 @@ impl FileCell {
         hit.set_visible(is_heading);
         line.set_visible(kind != SlotKind::Blank);
         row.set_visible(true);
+        if let Some(span) = row.parent() {
+            span.set_visible(true);
+        }
         toggle_class(&row, HEADING_CLASS, is_heading);
         if is_heading {
             let text = slot.bind_property("text", &title, "label").sync_create().build();
@@ -516,6 +524,18 @@ impl FileCell {
         self.imp().slot.borrow().clone()
     }
 
+    /// Lays a Details heading out across its row again, once a column's
+    /// width changed where the Name cell's own did not.
+    pub(crate) fn respan_heading(&self) {
+        if !self.has_css_class(GROUP_SLOT_CLASS) {
+            return;
+        }
+        let span = self.imp().slot_row.borrow().as_ref().and_then(WidgetExt::parent);
+        if let Some(span) = span.and_downcast::<HeadingSpan>() {
+            span.respan();
+        }
+    }
+
     /// The heading row of a slot, made the first time a slot shows: the
     /// chevron, the title and the line. The window handles clicks on it
     /// (`window/group_headings.rs`).
@@ -573,7 +593,7 @@ impl FileCell {
         self.add_controller(motion);
         // The keyboard on a heading rings its whole row; the grid gives it
         // to the item widget around the cell.
-        self.append(&row);
+        self.append(&HeadingSpan::new(&row, imp.is_details_row.get()));
         imp.slot_row.replace(Some(row.clone()));
         row
     }
@@ -661,6 +681,7 @@ impl FileCell {
     /// The check box and the icon left of a one-line name that is cut off
     /// with an ellipsis.
     fn lay_out_as_row(&self) {
+        self.imp().is_details_row.set(true);
         self.set_orientation(gtk::Orientation::Horizontal);
         self.set_spacing(ROW_ICON_GAP);
         self.put_check_before_icon();

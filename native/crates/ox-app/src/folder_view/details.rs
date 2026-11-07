@@ -705,7 +705,32 @@ impl DetailsView {
             view_column.connect_fixed_width_notify(glib::clone!(
                 #[weak(rename_to = view)]
                 self,
-                move |_| view.restart_resize_timer()
+                move |_| {
+                    view.restart_resize_timer();
+                    view.respan_headings();
+                }
+            ));
+            view_column.connect_visible_notify(glib::clone!(
+                #[weak(rename_to = view)]
+                self,
+                move |_| view.respan_headings()
+            ));
+        }
+    }
+
+    /// Lays each group heading out across its row again: another column's
+    /// width can change the row's while Name's stays.
+    fn respan_headings(&self) {
+        let column_view = self.column_view();
+        let mut pending = vec![column_view.clone().upcast::<gtk::Widget>()];
+        while let Some(widget) = pending.pop() {
+            if let Some(cell) = widget.downcast_ref::<cells::FileCell>() {
+                cell.respan_heading();
+                continue;
+            }
+            pending.extend(std::iter::successors(
+                widget.first_child(),
+                WidgetExt::next_sibling,
             ));
         }
     }
