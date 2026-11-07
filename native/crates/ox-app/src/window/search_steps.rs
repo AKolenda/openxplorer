@@ -174,28 +174,26 @@ impl BrowserWindow {
 
     /// Puts back where the active tab was in its search results now that
     /// they are found again: what was selected, and how far they were
-    /// scrolled. Nothing changes when the user selected a result
-    /// meanwhile, or another tab is in front.
+    /// scrolled. Nothing changes when another tab is in front; the user
+    /// selecting meanwhile forgets it ([`Self::forget_results_view`]).
     pub(super) fn restore_results_view(&self) {
         let Some(view) = self.imp().results_view.take() else {
             return;
         };
         let is_active = self.imp().session.borrow().active_id() == Some(view.tab);
         let pane = self.folder_pane();
-        let model = pane.model();
-        let selected_now = model.selected_uris();
-        if !is_active || (!selected_now.is_empty() && selected_now != view.selected) {
+        if !is_active {
             return;
         }
-        model.select_uris(&view.selected);
+        pane.model().select_uris(&view.selected);
         pane.restore_scroll_position(view.scroll);
     }
 
     /// Forgets where the active tab was in its search results, before
-    /// they are found again: the user edited the search, or the tab went
-    /// elsewhere. Returns what it was.
-    pub(super) fn forget_results_view(&self) -> Option<ResultsView> {
-        self.imp().results_view.take()
+    /// they are found again: the user edited the search or the selection,
+    /// or the tab went elsewhere.
+    pub(super) fn forget_results_view(&self) {
+        self.imp().results_view.replace(None);
     }
 
     /// Empties the search box for the window's own reasons, such as
