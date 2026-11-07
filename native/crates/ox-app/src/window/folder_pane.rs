@@ -117,6 +117,10 @@ glib::wrapper! {
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
+/// The CSS class of the pane's overlay while the keyboard is on its empty
+/// list (`folder-views.css`).
+const KEYBOARD_ON_EMPTY_LIST: &str = "keyboard-on-empty-list";
+
 impl FolderPane {
     /// Builds the pages, empty and in the details view.
     fn build_parts(&self) {
@@ -244,6 +248,7 @@ impl FolderPane {
             self.focus_empty_list();
         }
         note.set_visible(show);
+        self.show_keyboard_on_empty_list();
         let lists: [gtk::Widget; 2] = [
             self.details().column_view().clone().upcast(),
             self.icon_view().grid().clone().upcast(),
@@ -255,6 +260,40 @@ impl FolderPane {
                 list.reset_relation(gtk::AccessibleRelation::DescribedBy);
             }
         }
+    }
+
+    /// Rings "This folder is empty." while the keyboard is on the empty
+    /// list, for the keyboard only, as the item rings are: the list has no
+    /// item to ring and draws no ring around itself (ACC-009, ACC-016).
+    pub(super) fn show_keyboard_on_empty_list(&self) {
+        let window = self.root().and_then(|root| root.downcast::<gtk::Window>().ok());
+        let keyboard = window.as_ref().is_some_and(GtkWindowExt::gets_focus_visible);
+        let focus = window.as_ref().and_then(GtkWindowExt::focus);
+        let view = self.view_widget();
+        // On the list itself, or anywhere in it while its rows are hidden:
+        // GTK keeps the keyboard on a hidden row then.
+        let rows_hidden = !self.shows_rows();
+        let on_list = focus.is_some_and(|focus| {
+            (focus == view || focus.is_ancestor(&view))
+                && (rows_hidden || focus.is::<gtk::ListView>() || focus.is::<gtk::GridView>())
+        });
+        // The note says "This folder is empty." or, while the rows are
+        // hidden, "Working on it..."; either way the list has no item to
+        // ring, so the note shows where the keyboard is.
+        let on_empty_list = keyboard && on_list && self.parts().empty_note.is_visible();
+        if let Some(overlay) = self.parts().stack.parent() {
+            if on_empty_list {
+                overlay.add_css_class(KEYBOARD_ON_EMPTY_LIST);
+            } else {
+                overlay.remove_css_class(KEYBOARD_ON_EMPTY_LIST);
+            }
+        }
+    }
+
+    /// The overlay over the pane's pages, for tests.
+    #[cfg(test)]
+    pub(super) fn parts_overlay(&self) -> Option<gtk::Widget> {
+        self.parts().stack.parent()
     }
 
     /// Whether "This folder is empty." shows.
@@ -518,6 +557,13 @@ impl FolderPane {
         self.parts().empty_area.clone().upcast()
     }
 
+    /// Whether the pane shows a folder's list, empty or not, rather than
+    /// the empty page or a landing page: one stop for Tab, whose arrows
+    /// move among the items.
+    pub(super) fn lists_items(&self) -> bool {
+        self.page() == Some(PanePage::Listing)
+    }
+
     /// True while keyboard focus is inside the visible view, or on the
     /// empty page while it shows.
     pub(super) fn view_has_focus(&self) -> bool {
@@ -593,6 +639,62 @@ impl FolderPane {
                 ));
             }
         }
+    }
+
+    /// Makes sure the item with the list's keyboard focus shows, for the
+    /// keyboard entering the list (Esc in the address bar, Tab): when the
+    /// keyboard rests on the list itself, it goes to the first selected
+    /// item, scrolled into view, else the first item shown; when it is on
+    /// an item scrolled out of view, that item is scrolled into view. GTK's
+    /// icon view takes the keyboard on itself until an item had it, and
+    /// draws nothing there, and a ring out of view shows nothing either;
+    /// Windows draws the focus on an item when the keyboard enters a list
+    /// (ACC-016).
+    pub(super) fn focus_an_item(&self) {
+        if !self.lists_items() || self.model().n_items() == 0 || !self.shows_rows() {
+            return;
+        }
+        if !self.view_has_focus() {
+            return;
+        }
+        let shown = self.positions_shown();
+        match (self.focused_position(), self.model().first_selected()) {
+            (Some(focused), _) if shown.contains(&focused) => {}
+            (Some(focused), _) => self.reveal(focused),
+            (None, Some(selected)) if shown.contains(&selected) => self.focus_item(selected),
+            (None, Some(selected)) => self.reveal(selected),
+            (None, None) => match shown.iter().min() {
+                Some(first_shown) => self.focus_item(*first_shown),
+                None => self.reveal(0),
+            },
+        }
+    }
+
+    /// The positions of the items whose rows or tiles show in the list's
+    /// visible part, at least half of each.
+    pub(super) fn positions_shown(&self) -> Vec<u32> {
+        let view = self.view_widget();
+        let Some(scroller) = view.ancestor(gtk::ScrolledWindow::static_type()) else {
+            return Vec::new();
+        };
+        #[expect(clippy::cast_precision_loss, reason = "pane heights are small")]
+        let height = scroller.height() as f32;
+        // The details view lays its rows out in a list inside it; the icon
+        // views lay their tiles out themselves.
+        let lists = std::iter::once(view.clone())
+            .chain(std::iter::successors(view.first_child(), WidgetExt::next_sibling))
+            .filter(|list| list.is::<gtk::ListBase>() || list.is::<gtk::ListView>());
+        lists
+            .flat_map(|list| std::iter::successors(list.first_child(), WidgetExt::next_sibling))
+            .filter(|item| item.is_mapped() && item.is_child_visible())
+            .filter(|item| {
+                item.compute_bounds(&scroller).is_some_and(|bounds| {
+                    let middle = bounds.y() + bounds.height() / 2.0;
+                    (0.0..height).contains(&middle)
+                })
+            })
+            .filter_map(|item| self.owners().position_holding(&view, item))
+            .collect()
     }
 
     /// Lets the window hold no keyboard focus, for a page that has nothing

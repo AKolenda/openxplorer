@@ -5,15 +5,13 @@
 //! it ends with in `v2.0.0:desktop/ui/app.js`: the Restore dialog checks the
 //! destination, then the transfer engine copies the version there with
 //! Keep both, with progress and Cancel in the transfer panel, so neither
-//! the live original nor the snapshot is replaced. The end is reported
-//! as every copy's is: a toast, or the Operation result dialog.
+//! the live original nor the snapshot is replaced. As for every copy, a
+//! failure is asked about in the progress window (OPS-047) and nothing is
+//! said once it ends.
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
-use ox_core::ops::{
-    run_transfer, starting_label, summarize, OperationContext, OperationSummary, TransferRequest,
-    RESULT_TITLE, STOPPED_TITLE,
-};
+use ox_core::ops::{run_transfer, starting_label, OperationContext, TransferRequest, STOPPED_TITLE};
 use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::properties::RestoreRequest;
@@ -61,7 +59,10 @@ impl BrowserWindow {
             destination_folder: Some(destination.clone()),
             policy: ConflictPolicy::KeepBoth,
         };
-        let operation = OperationContext::new(self.context().write_protection());
+        let mut operation = OperationContext::new(self.context().write_protection());
+        // OPS-047: an item that fails is asked about in the progress
+        // window, as for any copy.
+        operation.item_failure = Some(self.failure_asker(&operation.cancel));
         if !self.claim_transfer_panel(
             TransferKind::Files,
             starting_label(TransferMode::Copy),
@@ -81,22 +82,13 @@ impl BrowserWindow {
                 window.finish_archive_operation();
                 window.reload_tabs_showing(&destination);
                 match outcome {
-                    Ok(outcome) => window.report_transfer(&summarize(TransferMode::Copy, &outcome.result)),
+                    Ok(_) => {}
                     Err(error) if error.is_cancelled() => {}
                     Err(error) => window
                         .show_result_dialog(ox_core::i18n::gettext_static(STOPPED_TITLE), &error.to_string()),
                 }
             }
         ));
-    }
-
-    /// Shows how a copy ended: nothing for complete success or a
-    /// cancellation, as in Windows Explorer, else the Operation result
-    /// dialog.
-    fn report_transfer(&self, summary: &OperationSummary) {
-        if let OperationSummary::Report(text) = summary {
-            self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
-        }
     }
 }
 

@@ -49,6 +49,12 @@ impl MoveByCopying {
         self.elevated = elevated;
     }
 
+    /// True when the user answered No: a move it then refuses was the
+    /// user's own answer.
+    pub(crate) fn declined(&self) -> bool {
+        self.answer == Some(false)
+    }
+
     /// True when the user agreed that `item`, and every later such move of
     /// the operation, is finished by copying. The user is asked once.
     pub(crate) fn allowed(&mut self, item: impl FnOnce() -> MoveByCopyingItem) -> bool {

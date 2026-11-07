@@ -342,6 +342,14 @@ pub struct Preferences {
     /// was last left, across sessions; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub progress_details: bool,
+    /// Replace (a copy, move, paste, drag or Recycle Bin restore onto a
+    /// taken name) moves the file it replaces to the Recycle Bin first,
+    /// so Undo and a cancelled copy can bring it back. On by default, the
+    /// owner's choice; off, the incoming file overwrites the old one, as
+    /// in Windows 11, and the old file is gone. Stored as
+    /// `recycleReplacedFiles`, only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub recycle_replaced_files: bool,
     /// Explicitly enabled installed service actions, keyed by definition digest.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub enabled_service_actions: Vec<String>,
@@ -571,6 +579,7 @@ impl Default for Preferences {
             confirm_close_tabs: false,
             ask_to_run_programs: false,
             progress_details: false,
+            recycle_replaced_files: true,
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
@@ -659,6 +668,7 @@ impl Preferences {
         replace_if_some(&mut self.confirm_trash, update.confirm_trash);
         replace_if_some(&mut self.confirm_delete, update.confirm_delete);
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
+        replace_if_some(&mut self.recycle_replaced_files, update.recycle_replaced_files);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
     }
@@ -914,6 +924,8 @@ pub struct PreferencesUpdate {
     pub confirm_delete: Option<bool>,
     /// Ask before emptying the Recycle Bin.
     pub confirm_empty_trash: Option<bool>,
+    /// See [`Preferences::recycle_replaced_files`].
+    pub recycle_replaced_files: Option<bool>,
     /// Ask before closing a window with several tabs.
     pub confirm_close_tabs: Option<bool>,
     /// Ask whether to run a program or script that is opened.
@@ -1041,6 +1053,7 @@ impl PreferencesUpdate {
             confirm_trash: flag("confirmTrash"),
             confirm_delete: flag("confirmDelete"),
             confirm_empty_trash: flag("confirmEmptyTrash"),
+            recycle_replaced_files: flag("recycleReplacedFiles"),
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
             progress_details: flag("progressDetails"),
