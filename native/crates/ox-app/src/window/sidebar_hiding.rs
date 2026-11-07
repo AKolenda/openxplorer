@@ -21,7 +21,7 @@ use ox_core::settings::SettingsError;
 
 use crate::settings_store::Change;
 
-use super::actions::{text_action, toggle_action};
+use super::actions::{plain_action, text_action, toggle_action};
 use super::sidebar::entries::{place_entry, RowTarget, Section, SidebarEntry};
 use super::sidebar::HiddenRow;
 use super::window_action::WindowAction;
@@ -29,8 +29,8 @@ use super::BrowserWindow;
 
 impl BrowserWindow {
     /// Adds `win.sidebar-show-all`, `win.hide-section`,
-    /// `win.show-section`, `win.hide-place`, `win.show-place` and
-    /// `win.toggle-sidebar-section`.
+    /// `win.show-section`, `win.hide-place`, `win.show-place`,
+    /// `win.toggle-sidebar-section` and `win.sidebar-more-options`.
     pub(super) fn install_sidebar_hiding(&self) {
         self.add_action_entries([
             toggle_action(WindowAction::SidebarShowAll, false, |window, on| {
@@ -47,6 +47,9 @@ impl BrowserWindow {
             text_action(WindowAction::ShowPlace, BrowserWindow::show_hidden_place),
             text_action(WindowAction::ToggleSidebarSection, |window, key| {
                 window.sidebar().toggle_section(key);
+            }),
+            plain_action(WindowAction::SidebarMoreOptions, |window| {
+                window.sidebar().show_more_options();
             }),
         ]);
     }
