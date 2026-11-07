@@ -11,8 +11,8 @@
 
 use std::collections::BTreeMap;
 
-use gtk::glib;
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::file_ops::file_key_bindings;
@@ -63,16 +63,8 @@ impl Group {
     }
 }
 
-/// The group and name of the command a binding runs, by the action's
-/// detailed name; `None` for a name the window does not know.
-fn describe(name: &str) -> Option<(Group, String)> {
-    if let Some(number) = name.strip_prefix("win.show-tab-number::") {
-        let label = match number {
-            "0" => ox_core::i18n::gettext_static("Go to the last tab").to_owned(),
-            number => ox_core::i18n::format_message("Go to tab {number}", &[("number", number)]),
-        };
-        return Some((Group::TabsAndWindows, label));
-    }
+/// The group and name of a View command's binding, as [`describe`].
+fn describe_view(name: &str) -> Option<(Group, String)> {
     if let Some(view) = name.strip_prefix("win.view::") {
         let label = match view {
             "details" => ox_core::i18n::gettext_static("Details"),
@@ -83,6 +75,33 @@ fn describe(name: &str) -> Option<(Group, String)> {
         };
         return Some((Group::View, label.to_owned()));
     }
+    let label = match name {
+        "win.split-view" => ox_core::i18n::gettext_static("Split view"),
+        "win.folder-tree" => ox_core::i18n::gettext_static("Folder tree"),
+        "win.hidden" => ox_core::i18n::gettext_static("Show hidden files"),
+        "win.details-pane" => ox_core::i18n::gettext_static("Details pane"),
+        "win.preview-pane" => ox_core::i18n::gettext_static("Preview pane"),
+        "win.sidebar" => ox_core::i18n::gettext_static("Navigation pane"),
+        "win.full-screen" => ox_core::i18n::gettext_static("Full screen"),
+        "win.fit-all-columns" => ox_core::i18n::gettext_static("Size all columns to fit"),
+        _ => return None,
+    };
+    Some((Group::View, label.to_owned()))
+}
+
+/// The group and name of the command a binding runs, by the action's
+/// detailed name; `None` for a name the window does not know.
+fn describe(name: &str) -> Option<(Group, String)> {
+    if let Some(number) = name.strip_prefix("win.show-tab-number::") {
+        let label = match number {
+            "0" => ox_core::i18n::gettext_static("Go to the last tab").to_owned(),
+            number => ox_core::i18n::format_message("Go to tab {number}", &[("number", number)]),
+        };
+        return Some((Group::TabsAndWindows, label));
+    }
+    if let Some(found) = describe_view(name) {
+        return Some(found);
+    }
     let (group, label) = match name {
         "win.back" => (Group::Navigation, ox_core::i18n::gettext_static("Back")),
         "win.forward" => (Group::Navigation, ox_core::i18n::gettext_static("Forward")),
@@ -92,8 +111,6 @@ fn describe(name: &str) -> Option<(Group, String)> {
         ),
         "win.home" => (Group::Navigation, ox_core::i18n::gettext_static("Home folder")),
         "win.refresh" => (Group::Navigation, ox_core::i18n::gettext_static("Refresh")),
-        "win.split-view" => (Group::View, ox_core::i18n::gettext_static("Split view")),
-        "win.folder-tree" => (Group::View, ox_core::i18n::gettext_static("Folder tree")),
         "win.location" => (
             Group::Navigation,
             ox_core::i18n::gettext_static("Type an address"),
@@ -153,11 +170,6 @@ fn describe(name: &str) -> Option<(Group, String)> {
         "win.properties" => (Group::Files, ox_core::i18n::gettext_static("Properties")),
         "win.open-terminal" => (Group::Files, ox_core::i18n::gettext_static("Open Terminal")),
         "win.open-terminal-here" => (Group::Files, ox_core::i18n::gettext_static("Open Terminal here")),
-        "win.hidden" => (Group::View, ox_core::i18n::gettext_static("Show hidden files")),
-        "win.details-pane" => (Group::View, ox_core::i18n::gettext_static("Details pane")),
-        "win.preview-pane" => (Group::View, ox_core::i18n::gettext_static("Preview pane")),
-        "win.sidebar" => (Group::View, ox_core::i18n::gettext_static("Navigation pane")),
-        "win.full-screen" => (Group::View, ox_core::i18n::gettext_static("Full screen")),
         "win.search" => (Group::Search, ox_core::i18n::gettext_static("Search")),
         "win.search-tool" => (Group::Search, ox_core::i18n::gettext_static("Search tool")),
         "win.text-larger" => (Group::TextSize, ox_core::i18n::gettext_static("Larger text")),
@@ -168,15 +180,38 @@ fn describe(name: &str) -> Option<(Group, String)> {
     Some((group, label.to_owned()))
 }
 
-/// What the keys of `trigger`, alternatives split at `|`, read as: GTK's
-/// own labels, without the keypad's and `ISO_Left_Tab`'s duplicates.
-fn key_labels(trigger: &str) -> Vec<String> {
-    trigger
-        .split('|')
-        .filter(|keys| !keys.contains("KP_") && !keys.contains("ISO_Left_Tab"))
-        .filter_map(gtk::accelerator_parse)
-        .map(|(key, modifiers)| gtk::accelerator_get_label(key, modifiers).to_string())
-        .collect()
+/// What the keys of a command's `triggers`, alternatives split at `|`,
+/// read as: GTK's own labels, without `ISO_Left_Tab`'s duplicates. Keypad
+/// keys are left out as duplicates while the command has another key, and
+/// kept when it has none, as Size all columns to fit, which only the
+/// keypad's plus runs (VIEW-072).
+fn key_labels<'a>(triggers: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let keys: Vec<&str> = triggers
+        .into_iter()
+        .flat_map(|trigger| trigger.split('|'))
+        .filter(|keys| !keys.contains("ISO_Left_Tab"))
+        .collect();
+    let has_main_key = keys.iter().any(|keys| !keys.contains("KP_"));
+    let mut labels: Vec<String> = Vec::new();
+    let shown = keys
+        .into_iter()
+        .filter(|keys| !has_main_key || !keys.contains("KP_"));
+    for (key, modifiers) in shown.filter_map(gtk::accelerator_parse) {
+        let label = key_label(key, modifiers);
+        if !labels.contains(&label) {
+            labels.push(label);
+        }
+    }
+    labels
+}
+
+/// What a key reads as: GTK's label, except Ctrl with the keypad's plus,
+/// which reads as Windows lists it, "Ctrl+Plus (numeric keypad)".
+fn key_label(key: gdk::Key, modifiers: gdk::ModifierType) -> String {
+    if key == gdk::Key::KP_Add && modifiers == gdk::ModifierType::CONTROL_MASK {
+        return ox_core::i18n::gettext_static("Ctrl+Plus (numeric keypad)").to_owned();
+    }
+    gtk::accelerator_get_label(key, modifiers).to_string()
 }
 
 /// Every binding: the action's detailed name and its keys as GTK parses
@@ -213,6 +248,7 @@ pub(super) struct ShortcutRow {
 /// runs that [`describe`] does not know are returned too, for tests.
 fn shortcut_rows(app: &gtk::Application) -> (Vec<ShortcutRow>, Vec<String>) {
     let mut rows: Vec<ShortcutRow> = Vec::new();
+    let mut triggers: Vec<Vec<String>> = Vec::new();
     let mut unknown = Vec::new();
     for (name, keys) in bindings(app) {
         let Some((group, label)) = describe(&name) else {
@@ -230,13 +266,13 @@ fn shortcut_rows(app: &gtk::Application) -> (Vec<ShortcutRow>, Vec<String>) {
                 label,
                 keys: Vec::new(),
             });
+            triggers.push(Vec::new());
             rows.len() - 1
         };
-        for key in key_labels(&keys) {
-            if !rows[index].keys.contains(&key) {
-                rows[index].keys.push(key);
-            }
-        }
+        triggers[index].push(keys);
+    }
+    for (row, triggers) in rows.iter_mut().zip(&triggers) {
+        row.keys = key_labels(triggers.iter().map(String::as_str));
     }
     rows.sort_by_key(|row| row.group);
     (rows, unknown)
@@ -349,6 +385,33 @@ mod tests {
         assert_eq!(copy.keys, ["Ctrl+C"]);
         assert!(rows.iter().any(|row| row.label == "Keyboard shortcuts"));
         assert!(rows.iter().any(|row| row.label == "Help" && row.keys == ["F1"]));
+        let fit = rows
+            .iter()
+            .find(|row| row.label == "Size all columns to fit")
+            .expect("Size all columns to fit is listed");
+        assert_eq!(fit.group, Group::View);
+        assert_eq!(
+            fit.keys,
+            ["Ctrl+Plus (numeric keypad)"],
+            "its only key is the keypad's, named as Windows names it"
+        );
+        let larger = rows
+            .iter()
+            .find(|row| row.label == "Larger text")
+            .expect("Larger text");
+        assert!(
+            larger
+                .keys
+                .iter()
+                .all(|key| !key.contains("KP") && !key.contains("keypad")),
+            "Larger text has no keypad plus: {:?}",
+            larger.keys
+        );
+        let reset = rows
+            .iter()
+            .find(|row| row.label == "Reset text size")
+            .expect("Reset text size");
+        assert_eq!(reset.keys, ["Ctrl+0"], "keypad 0 stays a hidden duplicate");
         assert!(is_shown("Paste"));
         assert!(!is_shown("Rename"), "the search hides the other lines");
         dialog.finish();

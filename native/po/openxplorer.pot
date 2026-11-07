@@ -6446,6 +6446,10 @@ msgid "Context menu"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Ctrl+Plus (numeric keypad)"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Full screen"
 msgstr ""
 
@@ -6512,6 +6516,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Show hidden files"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/view_options.rs
+msgid "Size all columns to fit"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -7024,10 +7032,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/version_restore.rs
 msgid "Another file operation is still running."
-msgstr ""
-
-#: crates/ox-app/src/window/view_options.rs
-msgid "Size all columns to fit"
 msgstr ""
 
 #: crates/ox-app/src/window/view_options.rs
