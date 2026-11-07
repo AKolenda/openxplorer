@@ -252,8 +252,8 @@ impl ItemFailures {
         } else {
             format!("{}/{entry}", running.name)
         };
-        // After "Skip all", the entry is skipped as the user asked.
-        let mut answered = self.skip_all && self.question.is_some();
+        // "Skip all" answered this entry too.
+        let mut answered = self.skip_all;
         if !self.skip_all {
             // Other entries, or other items, may follow.
             let failed = FailedItem::new(
@@ -298,7 +298,13 @@ impl ItemFailures {
     /// own, such as "Move by copying?") are not, nor anything after "Skip
     /// all".
     pub(crate) fn asks_about(&self, error: &TransferError) -> bool {
-        asks_about_kind(error) && !self.skip_all && self.question.is_some()
+        askable(error) && !self.skip_all && self.question.is_some()
+    }
+
+    /// Whether an item that failed with `error` is left out by an earlier
+    /// "Skip all", which answered it: it is not reported afterwards.
+    pub(crate) fn skips_for_all(&self, error: &TransferError) -> bool {
+        askable(error) && self.skip_all
     }
 
     /// The user's answer about `item`, which [`Self::asks_about`] allowed;
@@ -307,13 +313,6 @@ impl ItemFailures {
         let answer = (self.question.as_mut()?)(item);
         self.skip_all = answer == FailureAnswer::SkipAll;
         Some(answer)
-    }
-
-    /// Whether an item that failed with `error` was left out without a
-    /// question because the user answered Skip with "Do this for all
-    /// current items": the user's own answer, as in Windows.
-    pub(crate) fn skipped_by_answer(&self, error: &TransferError) -> bool {
-        self.skip_all && self.question.is_some() && asks_about_kind(error)
     }
 
     /// Tells the user, in the question about failed items, about `item`,
@@ -330,10 +329,10 @@ impl ItemFailures {
     }
 }
 
-/// Whether a failure of this kind is asked about with Try Again, Skip and
-/// Cancel: not a name conflict, a cancellation, a problem that needs
-/// recovery by hand or something the location cannot do at all.
-fn asks_about_kind(error: &TransferError) -> bool {
+/// Whether an item that failed with `error` may be asked about: not a name
+/// conflict, a cancellation, a problem that needs recovery by hand or
+/// something the location cannot do at all.
+fn askable(error: &TransferError) -> bool {
     !matches!(
         error,
         TransferError::Cancelled

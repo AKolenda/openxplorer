@@ -37,6 +37,15 @@ impl AppContext {
         }
     }
 
+    /// Lists the share `uri`, mapped for this session only, under Network
+    /// as `label`, such as `Projects (Y:)`, until the app quits or its
+    /// server is signed out; nothing is saved.
+    pub(crate) fn remember_mapped_share(&self, uri: &str, label: &str) {
+        self.network().remember_mapped(uri, label);
+        self.network().remember_visited(uri);
+        self.notify_places_changed();
+    }
+
     /// The server `host` is being signed out: forgets the servers and
     /// shares browsed on it, and pauses its indexing until the next
     /// successful mount of it (`serverSigningOut` and `pause_server` in

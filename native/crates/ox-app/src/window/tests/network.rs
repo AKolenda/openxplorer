@@ -261,8 +261,7 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
 /// "…" > Add a network location opens the connect dialog under Windows'
 /// title, at a web address type (Windows' wizard adds websites and FTP
 /// sites), and saves what it connects under Network locations; Map
-/// network drive opens Windows' dialog at drive Z:, reconnecting at
-/// sign-in.
+/// network drive opens Windows' dialog at drive Z:, saving the share.
 ///
 /// parity: NET-001, NET-002, CMD-007
 #[gtk::test]
@@ -279,7 +278,7 @@ fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
             "map-network-location",
             "Map network drive",
             "Z:",
-            "Reconnect at sign-in",
+            "Save in the sidebar · reconnect when opened",
         ),
     ] {
         test.activate(action, None);

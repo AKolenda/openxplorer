@@ -671,10 +671,10 @@ impl TransferEngine {
                 }
             }
             Err(error) => {
-                // Skip with "Do this for all current items", or No to "Move
-                // by copying?", answered it already.
+                // An earlier "Skip all", or No to "Move by copying?",
+                // answered it already.
                 let answered = answered
-                    || self.failures.skipped_by_answer(&error)
+                    || self.failures.skips_for_all(&error)
                     || (matches!(error, TransferError::NotSupported(_)) && self.move_by_copying.declined());
                 self.record_failure(batch, uri, &error, answered, result);
             }

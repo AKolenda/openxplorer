@@ -245,6 +245,32 @@ fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
     assert!(rows.iter().all(|row| !row.is_saved));
 }
 
+/// A share Map network drive mapped for this session only keeps the
+/// label with its drive letter over the name of its mount, as a saved
+/// share does, while a browsed one is named after its mount; a saved
+/// share's label still wins.
+///
+/// parity: NET-001, NET-018
+#[test]
+fn a_share_mapped_for_this_session_keeps_its_letter() {
+    let mounts = [
+        active_mount("smb://nas/projects", "projects on nas"),
+        active_mount("smb://nas/media", "media on nas"),
+    ];
+    let visited = [
+        bookmark("smb://nas/projects", "projects (Y:)"),
+        bookmark("smb://nas/media", ""),
+    ];
+    let rows = merge_network_locations(&[], &mounts, &[], &visited);
+    let labels: Vec<&str> = rows.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(labels, ["projects (Y:)", "media on nas"]);
+    assert!(rows.iter().all(|row| row.is_connected && !row.is_saved));
+
+    let saved = [saved_share("smb://nas/projects", "Projects (Z:)")];
+    let rows = merge_network_locations(&saved, &mounts, &[], &visited);
+    assert_eq!(rows[0].label, "Projects (Z:)");
+}
+
 /// An SFTP folder browsed this session and the mount GIO reports for its
 /// server make one connected row, so the row the user opened offers
 /// Disconnect; a saved folder on the server keeps its own row.

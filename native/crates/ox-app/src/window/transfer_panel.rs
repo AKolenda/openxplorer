@@ -513,6 +513,13 @@ impl TransferPanel {
         self.imp().kind.get().unwrap_or(TransferKind::Files).glyph()
     }
 
+    /// The file dialog this action was started in, if it was: the
+    /// dialog owns the progress window while the action runs
+    /// ([`ProgressWindow::follow_dialog`]).
+    pub(super) fn dialog(&self) -> Option<BrowserWindow> {
+        self.imp().owner.upgrade().filter(BrowserWindow::is_picking)
+    }
+
     /// Records the progress window this action shows in.
     pub(super) fn show_in(&self, window: Option<&ProgressWindow>) {
         self.imp().window.set(window);

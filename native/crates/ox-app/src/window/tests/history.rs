@@ -52,7 +52,7 @@ fn tooltip(button: &gtk::Button) -> String {
 }
 
 /// The button before the address bar that runs `action` (`win.` omitted).
-fn navigation_button(test: &TestWindow, action: &str) -> gtk::Button {
+pub(super) fn navigation_button(test: &TestWindow, action: &str) -> gtk::Button {
     let detailed = format!("win.{action}");
     descendants::<gtk::Button>(&test.window)
         .into_iter()

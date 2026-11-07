@@ -129,6 +129,7 @@ fn file_access_denied_answers_try_again_skip_or_cancel_to_the_worker() {
         ("Skip", false, FailureAnswer::Skip),
         ("Skip", true, FailureAnswer::SkipAll),
         ("Cancel", false, FailureAnswer::Cancel),
+        ("Escape", false, FailureAnswer::Cancel),
     ] {
         let (worker, panel) = ask_in_action(&test, &cancel, &item);
         assert_eq!(panel.caption_shown(), "File Access Denied");
@@ -164,7 +165,11 @@ fn file_access_denied_answers_try_again_skip_or_cancel_to_the_worker() {
         assert!(!panel.failure_shows_shield());
         assert!(dialog_over(&test).is_none(), "no dialog over the window");
         assert!(panel.set_failure_for_all(for_all));
-        panel.press_failure(button);
+        if button == "Escape" {
+            assert!(panel.press_failure_escape(), "Escape answers the question");
+        } else {
+            panel.press_failure(button);
+        }
         assert_eq!(answer_of(worker, &panel), expected, "{button}");
     }
     test.window.end_operation();

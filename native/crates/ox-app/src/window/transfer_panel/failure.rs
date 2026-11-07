@@ -136,6 +136,23 @@ impl TransferPanel {
             buttons.append(&button);
         }
         question.append(&buttons);
+        // Escape answers as the old dialog's did: Cancel, or No where the
+        // question has no Cancel of its own.
+        let escape = if view.cancel {
+            FailureChoice::Cancel
+        } else {
+            FailureChoice::Second
+        };
+        question.add_controller(crate::modal::on_escape(glib::clone!(
+            #[weak(rename_to = panel)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_| {
+                panel.answer_failure(escape);
+                glib::Propagation::Stop
+            }
+        )));
         self.insert_child_after(&question, Some(&*imp.space_question));
         imp.failure_question.replace(Some(question));
         imp.failure_details.replace(Some(details.upcast()));
@@ -297,6 +314,24 @@ impl TransferPanel {
             .map(|(_, button)| button);
         let focus = gtk::prelude::GtkWindowExt::focus(&window);
         matches!((focus, first), (Some(focus), Some(first)) if focus == *first.upcast_ref::<gtk::Widget>())
+    }
+
+    /// Presses Escape in the question, as GTK runs its shortcut, for
+    /// tests; whether it was taken.
+    #[cfg(test)]
+    pub(crate) fn press_failure_escape(&self) -> bool {
+        let question = self.failure_question().expect("a question");
+        question
+            .observe_controllers()
+            .into_iter()
+            .filter_map(|controller| controller.ok().and_downcast::<gtk::ShortcutController>())
+            .flat_map(|controller| {
+                (0..controller.n_items())
+                    .filter_map(|index| controller.item(index).and_downcast::<gtk::Shortcut>())
+                    .collect::<Vec<_>>()
+            })
+            .filter_map(|shortcut| shortcut.action())
+            .any(|action| action.activate(gtk::ShortcutActionFlags::empty(), &question, None))
     }
 
     /// Presses the question's button labelled `label`, for tests.
