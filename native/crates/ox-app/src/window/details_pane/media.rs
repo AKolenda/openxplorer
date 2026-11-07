@@ -131,13 +131,14 @@ impl DetailsPane {
         let scale = self.scale_factor().max(1);
         glib::spawn_future_local(async move {
             let decoded = gio::spawn_blocking(move || {
-                let path = path.or_else(|| cached_thumbnail(uri.as_deref()?))?;
-                let (width, height) = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
-                let limits = if is_image {
-                    Limits::DISPLAY
-                } else {
-                    Limits::THUMBNAIL_FILE
+                // A file of the item's own (an image, a folder's picture)
+                // may be as large as a picture shown in the app; one from
+                // the thumbnail cache no larger than a thumbnail.
+                let (path, limits) = match path {
+                    Some(path) => (path, Limits::DISPLAY),
+                    None => (cached_thumbnail(uri.as_deref()?)?, Limits::THUMBNAIL_FILE),
                 };
+                let (width, height) = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
                 let file = gio::File::for_path(&path);
                 match picture_guard::decode_to_fit(&file, width, height, limits, None) {
                     Ok(picture) => Some((

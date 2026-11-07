@@ -16,7 +16,7 @@
 //! drawn at the size shown whatever size they declare. An animated GIF
 //! is fed only up to the end of its first frame, as Windows shows a GIF's
 //! first frame, so thousands of frames are never held. Reading stops
-//! once the time limit has passed. Every failure is a [`Refusal`], and
+//! once the time limit has passed, looked at between reads ([`TIME_LIMIT`]). Every failure is a [`Refusal`], and
 //! callers show the file's type icon instead, as Windows Explorer does
 //! for a picture it cannot preview.
 //!
@@ -26,7 +26,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gtk::gdk_pixbuf::{Pixbuf, PixbufLoader};
+use gtk::gdk_pixbuf::{Pixbuf, PixbufFormat, PixbufLoader};
 use gtk::gio;
 use gtk::prelude::*;
 
@@ -39,17 +39,30 @@ pub(crate) const MAX_PIXELS: u64 = 8192 * 8192;
 /// standard size is 1024 × 1024 (xx-large).
 pub(crate) const MAX_THUMBNAIL_FILE_PIXELS: u64 = 1024 * 1024;
 
-/// How long one picture may take to read and decode.
+/// How long one picture may take to read and decode. The limit is looked
+/// at between the reads of [`READ_CHUNK`] bytes, so it is best effort: a
+/// read that blocks (a server that stopped answering), or gdk-pixbuf
+/// decoding one chunk, is not interrupted, and the picture is refused only
+/// once that read or chunk is done.
 pub(crate) const TIME_LIMIT: Duration = Duration::from_secs(10);
 
 /// How much of a picture is read at a time.
 const READ_CHUNK: usize = 64 * 1024;
+
+/// The most pixels a JPEG may have to be decoded for display: 256
+/// megapixels (16384 × 16384). gdk-pixbuf's JPEG loader decodes a large
+/// one straight to an eighth of its sides or less when it is shown
+/// smaller, so it never holds more than [`MAX_PIXELS`]' worth; other
+/// formats are decoded whole first.
+pub(crate) const MAX_JPEG_PIXELS: u64 = 16_384 * 16_384;
 
 /// How much a picture may have.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Limits {
     /// The most pixels of a raster picture.
     pub max_pixels: u64,
+    /// The most pixels of a JPEG, which is decoded scaled down.
+    pub max_jpeg_pixels: u64,
     /// How long reading and decoding may take.
     pub time: Duration,
 }
@@ -58,12 +71,14 @@ impl Limits {
     /// The limits of a picture shown in the app.
     pub(crate) const DISPLAY: Self = Self {
         max_pixels: MAX_PIXELS,
+        max_jpeg_pixels: MAX_JPEG_PIXELS,
         time: TIME_LIMIT,
     };
 
     /// The limits of a file read from the thumbnail cache.
     pub(crate) const THUMBNAIL_FILE: Self = Self {
         max_pixels: MAX_THUMBNAIL_FILE_PIXELS,
+        max_jpeg_pixels: MAX_THUMBNAIL_FILE_PIXELS,
         time: TIME_LIMIT,
     };
 }
@@ -122,7 +137,7 @@ pub(crate) fn decode_to_fit(
     let stream = file.read(cancellable).map_err(|_| refusal_for(cancellable))?;
     let loader = PixbufLoader::new();
     let header = Rc::new(Header::default());
-    watch_header(&loader, &header, (width.max(1), height.max(1)), limits.max_pixels);
+    watch_header(&loader, &header, (width.max(1), height.max(1)), limits);
     let mut buffer = vec![0; READ_CHUNK];
     let mut first_frame = FirstFrame::default();
     let mut ending = Ending::default();
@@ -139,10 +154,11 @@ pub(crate) fn decode_to_fit(
         if read == 0 {
             break Ok(());
         }
-        let (chunk, done) = first_frame.take(&buffer[..read]);
-        ending.follow(chunk);
+        let (chunk, first_frame_done) = first_frame.take(&buffer[..read]);
+        let (chunk, png_done) = ending.take(chunk);
+        let done = first_frame_done || png_done;
         let written = loader.write(chunk).and_then(|()| {
-            if done {
+            if first_frame_done {
                 // The GIF trailer ends the picture after its first frame.
                 loader.write(&[GIF_TRAILER])
             } else {
@@ -204,13 +220,23 @@ fn refusal_for(cancellable: Option<&gio::Cancellable>) -> Refusal {
 }
 
 /// Records the size `loader` reads from the header into `header`, and
-/// tells the loader to load nothing when a raster picture has more than
-/// `max_pixels`, else to decode to fit `fit` (vector pictures always).
-fn watch_header(loader: &PixbufLoader, header: &Rc<Header>, fit: (i32, i32), max_pixels: u64) {
+/// tells the loader to load nothing when a raster picture has more pixels
+/// than `limits` allow its format, else to decode to fit `fit` (vector
+/// pictures always).
+fn watch_header(loader: &PixbufLoader, header: &Rc<Header>, fit: (i32, i32), limits: Limits) {
     let header = Rc::clone(header);
     loader.connect_size_prepared(move |loader, width, height| {
         header.size.set(Some((width, height)));
-        let is_vector = loader.format().is_some_and(|format| format.is_scalable());
+        let format = loader.format();
+        let is_vector = format.as_ref().is_some_and(PixbufFormat::is_scalable);
+        let is_jpeg = format
+            .as_ref()
+            .is_some_and(|format| format.name().as_deref() == Some("jpeg"));
+        let max_pixels = if is_jpeg {
+            limits.max_jpeg_pixels.max(limits.max_pixels)
+        } else {
+            limits.max_pixels
+        };
         if width <= 0 || height <= 0 || (!is_vector && pixels(width, height) > max_pixels) {
             header.refused.set(true);
             // A size of zero makes every gdk-pixbuf loader stop before it
@@ -249,30 +275,91 @@ pub(crate) fn fit_within(width: i32, height: i32, fit: (i32, i32)) -> (i32, i32)
 /// A PNG's signature.
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
-/// The end of what was fed to the loader: gdk-pixbuf draws a PNG cut
-/// short without an error, so a PNG must end with its IEND chunk, as
-/// Windows shows no thumbnail of a PNG cut short. (A JPEG cut short is
-/// drawn as far as it goes, grey below, as Windows draws it too.)
+/// Where a PNG ends: gdk-pixbuf draws a PNG cut short without an error,
+/// so a PNG must reach its IEND chunk, as Windows shows no thumbnail of a
+/// PNG cut short. What follows IEND (a tool's appended data) is not fed
+/// to the loader, and the picture is shown, as Windows shows it. The
+/// chunks are walked by their lengths, so bytes that only look like IEND
+/// inside a chunk's data count for nothing. (A JPEG cut short is drawn as
+/// far as it goes, gray below, as Windows draws it too.) Other formats
+/// pass through whole.
 #[derive(Debug, Default)]
 struct Ending {
     /// The first bytes fed, up to a PNG signature's length.
     start: Vec<u8>,
-    /// The last 12 bytes fed: IEND's length, type and CRC.
-    tail: Vec<u8>,
+    /// How many bytes were fed.
+    fed: u64,
+    /// Where the next chunk starts, while the file is a PNG not yet at
+    /// its IEND.
+    next_chunk: Option<u64>,
+    /// The next chunk's length and type, as far as they were fed.
+    chunk_header: Vec<u8>,
+    /// Where IEND ends, once its header was fed.
+    end_at: Option<u64>,
+    /// IEND was fed whole.
+    ended: bool,
 }
 
 impl Ending {
-    fn follow(&mut self, chunk: &[u8]) {
-        let wanted = PNG_SIGNATURE.len().saturating_sub(self.start.len());
-        self.start.extend_from_slice(&chunk[..wanted.min(chunk.len())]);
-        self.tail.extend_from_slice(chunk);
-        let extra = self.tail.len().saturating_sub(12);
-        self.tail.drain(..extra);
+    /// The part of `chunk` to feed, and whether the PNG ends with it.
+    fn take<'a>(&mut self, chunk: &'a [u8]) -> (&'a [u8], bool) {
+        let base = self.fed;
+        let length = u64::try_from(chunk.len()).unwrap_or(u64::MAX);
+        let past = base.saturating_add(length);
+        self.fed = past;
+        let mut index = 0;
+        while self.start.len() < PNG_SIGNATURE.len() && index < chunk.len() {
+            self.start.push(chunk[index]);
+            index += 1;
+            if self.start == PNG_SIGNATURE {
+                self.next_chunk = Some(base + index as u64);
+            }
+        }
+        loop {
+            if let Some(end) = self.end_at {
+                if end > past {
+                    return (chunk, false);
+                }
+                self.ended = true;
+                let cut = usize::try_from(end.saturating_sub(base)).unwrap_or(chunk.len());
+                return (&chunk[..cut.min(chunk.len())], true);
+            }
+            // Not a PNG, or its signature not yet whole: fed whole.
+            let Some(next) = self.next_chunk else {
+                return (chunk, false);
+            };
+            let wanted = next + self.chunk_header.len() as u64;
+            if wanted >= past {
+                return (chunk, false);
+            }
+            let from = usize::try_from(wanted - base).unwrap_or(chunk.len());
+            let count = (8 - self.chunk_header.len()).min(chunk.len() - from);
+            self.chunk_header.extend_from_slice(&chunk[from..from + count]);
+            if self.chunk_header.len() < 8 {
+                return (chunk, false);
+            }
+            let data = u64::from(u32::from_be_bytes([
+                self.chunk_header[0],
+                self.chunk_header[1],
+                self.chunk_header[2],
+                self.chunk_header[3],
+            ]));
+            let is_end = &self.chunk_header[4..8] == b"IEND";
+            self.chunk_header.clear();
+            // The header (8 bytes), the data and the CRC (4 bytes).
+            let chunk_end = next + 8 + data + 4;
+            if is_end {
+                self.next_chunk = None;
+                self.end_at = Some(chunk_end);
+            } else {
+                self.next_chunk = Some(chunk_end);
+            }
+        }
     }
 
-    /// False for a PNG that does not end with IEND.
+    /// False for a PNG that did not reach the end of its IEND chunk.
     fn is_complete(&self) -> bool {
-        self.start != PNG_SIGNATURE || self.tail.get(4..8) == Some(b"IEND".as_slice())
+        self.start != PNG_SIGNATURE || self.ended
     }
 }
 
@@ -290,9 +377,9 @@ enum GifState {
     /// Inside the header and logical screen descriptor, this many bytes
     /// left.
     Screen(usize),
-    /// Inside a colour table, `left` bytes left; an image's local table
+    /// Inside a color table, `left` bytes left; an image's local table
     /// is followed by its LZW code size, the global one by a block.
-    ColourTable {
+    ColorTable {
         /// The bytes left.
         left: usize,
         /// The table is an image's own.
@@ -374,12 +461,12 @@ impl FirstFrame {
                 if left > 0 {
                     GifState::Screen(left)
                 } else {
-                    colour_table_after(self.descriptor_flags.take().unwrap_or(0), false)
+                    color_table_after(self.descriptor_flags.take().unwrap_or(0), false)
                 }
             }
-            GifState::ColourTable { left, local } => {
+            GifState::ColorTable { left, local } => {
                 if left > 1 {
-                    GifState::ColourTable {
+                    GifState::ColorTable {
                         left: left - 1,
                         local,
                     }
@@ -400,7 +487,7 @@ impl FirstFrame {
                 let left = left - 1;
                 if left == 0 {
                     // The last byte is the packed field.
-                    colour_table_after(byte, true)
+                    color_table_after(byte, true)
                 } else {
                     GifState::ImageDescriptor(left)
                 }
@@ -434,12 +521,12 @@ impl FirstFrame {
     }
 }
 
-/// The colour table a packed field with `flags` announces (its top bit
+/// The color table a packed field with `flags` announces (its top bit
 /// set, 3 × 2^(n+1) bytes for its low three bits n), else the state that
 /// follows without one: an image's LZW code size (`local`) or a block.
-fn colour_table_after(flags: u8, local: bool) -> GifState {
+fn color_table_after(flags: u8, local: bool) -> GifState {
     if flags & 0x80 != 0 {
-        GifState::ColourTable {
+        GifState::ColorTable {
             left: 3 << ((flags & 0x07) + 1),
             local,
         }
@@ -493,7 +580,7 @@ mod tests {
 
     use super::*;
 
-    /// A picture `width` × `height` filled with one colour, saved as
+    /// A picture `width` × `height` filled with one color, saved as
     /// `kind` ("png" or "jpeg") in `folder`.
     fn saved_picture(folder: &Path, name: &str, kind: &str, width: i32, height: i32) -> PathBuf {
         let pixbuf = Pixbuf::new(Colorspace::Rgb, false, 8, width, height).expect("a picture");
@@ -564,6 +651,7 @@ mod tests {
         );
         let limits = Limits {
             max_pixels: 1200 * 600 - 1,
+            max_jpeg_pixels: 0,
             ..Limits::DISPLAY
         };
         assert_eq!(
@@ -573,6 +661,23 @@ mod tests {
                 height: 600
             }),
             "one pixel over the limit"
+        );
+        // A JPEG, decoded scaled down, may have more pixels than another
+        // format.
+        let limits = Limits {
+            max_pixels: 100 * 100 - 1,
+            max_jpeg_pixels: 100 * 100,
+            ..Limits::DISPLAY
+        };
+        let jpeg = saved_picture(folder.path(), "Pier.jpg", "jpeg", 100, 100);
+        let png = saved_picture(folder.path(), "Pier.png", "png", 100, 100);
+        assert!(decode(&jpeg, limits).is_ok(), "a JPEG within its own limit");
+        assert_eq!(
+            decode(&png, limits).map(|decoded| decoded.width),
+            Err(Refusal::TooLarge {
+                width: 100,
+                height: 100
+            })
         );
     }
 
@@ -591,6 +696,29 @@ mod tests {
                 "a PNG cut at {cut} of {} bytes",
                 bytes.len()
             );
+        }
+        // Bytes a tool appended after IEND do not spoil it, as Windows
+        // shows such a PNG too; they are not fed to the loader.
+        let mut appended = bytes.clone();
+        appended.extend_from_slice(b"appended by a tool, not a chunk at all");
+        std::fs::write(&path, &appended).expect("appended");
+        let decoded = decode(&path, Limits::DISPLAY).expect("a PNG with data after IEND");
+        assert_eq!((decoded.width, decoded.height), (300, 200));
+        // Its end is found however the reads split it.
+        for size in [1, 7, 13, 4096] {
+            let mut ending = Ending::default();
+            let mut fed = 0;
+            let mut done = false;
+            for chunk in appended.chunks(size) {
+                let (part, ends) = ending.take(chunk);
+                fed += part.len();
+                if ends {
+                    done = true;
+                    break;
+                }
+            }
+            assert!(done && ending.is_complete(), "reads of {size}");
+            assert_eq!(fed, bytes.len(), "reads of {size}: up to the end of IEND");
         }
         // Cut inside its header, it is no picture gdk-pixbuf can read.
         std::fs::write(&path, &bytes[..40]).expect("cut short");
@@ -693,15 +821,15 @@ mod tests {
         }
     }
 
-    /// The LZW data of `pixels` pixels of colour 0, with a minimum code
+    /// The LZW data of `pixels` pixels of color 0, with a minimum code
     /// size of 2, as GIF encoders write it.
-    fn lzw_of_one_colour(pixels: usize) -> Vec<u8> {
+    fn lzw_of_one_color(pixels: usize) -> Vec<u8> {
         const CLEAR: u16 = 4;
         const END: u16 = 5;
         let mut bits = Bits::default();
         let mut width = 3;
         bits.push(CLEAR, width);
-        // Runs of colour 0: code 0 is one pixel, and each new code one
+        // Runs of color 0: code 0 is one pixel, and each new code one
         // pixel longer than the last.
         let mut next = END + 1;
         let mut longest: Option<(u16, usize)> = None;
@@ -735,11 +863,11 @@ mod tests {
         let mut gif = b"GIF89a".to_vec();
         gif.extend_from_slice(&side.to_le_bytes());
         gif.extend_from_slice(&side.to_le_bytes());
-        // A global table of 4 colours.
+        // A global table of 4 colors.
         gif.extend_from_slice(&[0x81, 0, 0]);
         gif.extend_from_slice(&[0x33, 0x66, 0x99, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0x80, 0x80, 0x80]);
         gif.extend_from_slice(b"\x21\xFF\x0BNETSCAPE2.0\x03\x01\x00\x00\x00");
-        let data = lzw_of_one_colour(usize::from(side) * usize::from(side));
+        let data = lzw_of_one_color(usize::from(side) * usize::from(side));
         for _ in 0..frames {
             gif.extend_from_slice(&[0x21, 0xF9, 0x04, 0x00, 0x02, 0x00, 0x00, 0x00]);
             gif.push(0x2C);

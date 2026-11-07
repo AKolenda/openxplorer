@@ -22,6 +22,7 @@
 //! [`PreviewPolicy`] says which items of a folder get previews, from the
 //! Settings the user chose (VIEW-058).
 
+mod network_fs;
 mod service;
 mod slots;
 mod thumbnailers;
@@ -98,6 +99,17 @@ impl PreviewPolicy {
         }
     }
 
+    /// The preview request for `entry` at `pixels` device pixels, when
+    /// [`Self::allows`] it; with network previews off it asks for a file
+    /// on this computer's own disks only.
+    pub(crate) fn request(self, entry: &Entry, pixels: i32) -> Option<PreviewRequest> {
+        let request = PreviewRequest::for_entry(entry, pixels).filter(|_| self.allows(entry))?;
+        Some(PreviewRequest {
+            local_only: !self.remote,
+            ..request
+        })
+    }
+
     /// Whether `entry` may show a preview: a file of a known type within
     /// the size limit.
     pub(crate) fn allows(self, entry: &Entry) -> bool {
@@ -144,6 +156,13 @@ pub(crate) struct PreviewRequest {
     pub modified: Option<u64>,
     /// The edge of the picture wanted, in device pixels.
     pub pixels: i32,
+    /// Only a file on this computer's own disks gets a preview: one on a
+    /// network file system (a kernel share, sshfs, `GVfs`'s mounts) keeps its
+    /// icon, as network previews are off ([`network_fs`]).
+    pub local_only: bool,
+    /// The file the item stands for, when it is another (a recent item's,
+    /// a search result's), which [`Self::local_only`] looks at too.
+    pub target_uri: Option<String>,
 }
 
 impl PreviewRequest {
@@ -155,6 +174,8 @@ impl PreviewRequest {
             content_type: entry.content_type.clone()?,
             modified: entry.modified,
             pixels,
+            local_only: false,
+            target_uri: entry.target_uri.clone(),
         })
     }
 
@@ -199,6 +220,9 @@ fn pixbuf_may_read(content_type: &str, declared: &HashSet<String>) -> bool {
 /// The preview `request` asks for, or `None` when the item keeps its icon.
 pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
     let key = request.key();
+    if request.local_only && is_on_network(&request.uri, request.target_uri.as_deref()).await {
+        return None;
+    }
     if let Some(texture) = KEPT.with_borrow(|kept| kept.get(&key).cloned()) {
         return Some(texture);
     }
@@ -217,6 +241,28 @@ pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
         kept.insert(key, texture.clone());
     });
     Some(texture)
+}
+
+/// Whether the item at `uri`, or the file `target` it stands for, is on a
+/// network file system, asked off the main thread, which a server that
+/// does not answer would hold up. A URI without a local path is left to
+/// [`PreviewPolicy::allows`], which tells servers and devices by their
+/// URIs.
+async fn is_on_network(uri: &str, target: Option<&str>) -> bool {
+    let paths: Vec<PathBuf> = std::iter::once(uri)
+        .chain(target)
+        .filter_map(|uri| gio::File::for_uri(uri).path())
+        .collect();
+    if paths.is_empty() {
+        return false;
+    }
+    gio::spawn_blocking(move || {
+        paths
+            .iter()
+            .any(|path| network_fs::is_on_network_filesystem(path))
+    })
+    .await
+    .unwrap_or(true)
 }
 
 /// The cached thumbnail of the item, made first if it is missing.
@@ -245,8 +291,9 @@ async fn thumbnail_of(request: &PreviewRequest) -> Option<PathBuf> {
             FAILED.with_borrow_mut(|failed| failed.insert(version));
             None
         }
-        // Asked again next time: the user may turn them back on.
-        Err(Missing::TurnedOff) => None,
+        // Asked again next time: the user may turn them back on, or the
+        // disk be less busy.
+        Err(Missing::TurnedOff | Missing::Later) => None,
     }
 }
 
@@ -259,6 +306,9 @@ enum Missing {
     /// The user turned the desktop's thumbnailers off for its type, which
     /// they may turn back on at any time.
     TurnedOff,
+    /// Decoding the picture took longer than its time limit; it is tried
+    /// again the next time it is shown.
+    Later,
 }
 
 /// Makes the missing thumbnail of the item: by the thumbnailer service
@@ -327,6 +377,7 @@ async fn make_thumbnail_with(
             // has nobody left to show a picture to: forking a program for
             // any of them would only cost one.
             Err(writer::Failure::Unreadable) => {}
+            Err(writer::Failure::TimedOut) => return Err(Missing::Later),
             Err(writer::Failure::Unwritable | writer::Failure::Refused | writer::Failure::Cancelled) => {
                 return Err(Missing::Failed);
             }
@@ -524,6 +575,8 @@ mod tests {
             content_type: content_type.to_owned(),
             modified: Some(1_700_000_000),
             pixels: 128,
+            local_only: false,
+            target_uri: None,
         }
     }
 

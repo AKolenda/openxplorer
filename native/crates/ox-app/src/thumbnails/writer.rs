@@ -49,10 +49,14 @@ pub(super) enum Failure {
     /// for its type, or its bytes are no picture.
     Unreadable,
     /// The picture was read and refused ([`picture_guard`]): its header
-    /// asks for more pixels than the limit, it is damaged or cut short, or
-    /// it took too long. Another thumbnailer would read the same picture,
-    /// so none is asked, and the item keeps its icon.
+    /// asks for more pixels than the limit, or it is damaged or cut short.
+    /// Another thumbnailer would read the same picture, so none is asked,
+    /// and the item keeps its icon.
     Refused,
+    /// Reading or decoding the picture took longer than its time limit,
+    /// which a busy disk or a slow mount may cause: no other thumbnailer
+    /// is asked now, and it may be tried again later.
+    TimedOut,
     /// The picture was read, but the cache would not take its thumbnail:
     /// the item is a thumbnail of the cache itself, whose pictures of
     /// pictures would grow it from within, or the folder could not be
@@ -81,7 +85,8 @@ pub(super) fn write_thumbnail(
         match refusal {
             Refusal::Unreadable => Failure::Unreadable,
             Refusal::Cancelled => Failure::Cancelled,
-            Refusal::TooLarge { .. } | Refusal::Damaged | Refusal::TimedOut => Failure::Refused,
+            Refusal::TooLarge { .. } | Refusal::Damaged => Failure::Refused,
+            Refusal::TimedOut => Failure::TimedOut,
         }
     })?;
     if cancellation.is_cancelled() {

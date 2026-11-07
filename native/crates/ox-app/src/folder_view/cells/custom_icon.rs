@@ -22,7 +22,7 @@ use super::folder_picture::{FOLDER_PICTURE, SMALLEST_PICTURE_ICON};
 use super::FileCell;
 use crate::folder_view::item::FileItem;
 use crate::picture_guard::{self, Limits};
-use crate::thumbnails::{self, PreviewPolicy, PreviewRequest};
+use crate::thumbnails::{self, PreviewPolicy};
 
 /// The metadata key Files stores a custom icon under.
 pub(crate) const CUSTOM_ICON: &str = "metadata::custom-icon";
@@ -78,10 +78,7 @@ impl FileCell {
         let entry = item.entry();
         let uri = entry.uri.clone();
         let pixels = imp.icon_size.get() * self.scale_factor().max(1);
-        let preview = previews
-            .allows(entry)
-            .then(|| PreviewRequest::for_entry(entry, pixels))
-            .flatten();
+        let preview = previews.request(entry, pixels);
         if !uri.starts_with("file:") && preview.is_none() {
             return;
         }
