@@ -254,6 +254,68 @@ fn every_kind_of_properties_keeps_the_width() {
     drive.close();
 }
 
+/// A writable local drive other than the system drive, when this
+/// computer has one: the memory drive at /dev/shm.
+fn other_drive() -> Option<&'static str> {
+    let mounts = ox_core::network::read_mount_table().unwrap_or_default();
+    mounts
+        .iter()
+        .rev()
+        .find(|mount| mount.path == "/dev/shm")
+        .filter(|mount| !mount.options.split(',').any(|option| option == "ro"))
+        .map(|_| "file:///dev/shm")
+}
+
+/// Opens Properties of the drive `uri` from `test`.
+fn drive_properties(test: &TestWindow, uri: &str) -> PropertiesWindow {
+    test.activate("properties-of", Some(uri));
+    crate::test_support::harness::wait_until("the drive's Properties", || {
+        !test.window.properties_windows().is_empty()
+    });
+    let window = test.window.properties_windows().remove(0);
+    crate::test_support::harness::wait_until("the drive's details", || {
+        super::item_dialogs::value_after(&window, "Type:").is_some()
+    });
+    wait_for_frames(&window, 6);
+    window
+}
+
+/// A drive other than the system drive has Customize, as in Windows 11,
+/// after Previous Versions; its six tabs share two rows evenly, and the
+/// window keeps Windows' width.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn another_drive_has_customize_and_its_tabs_share_the_rows() {
+    let Some(uri) = other_drive() else {
+        eprintln!("skipped: no writable /dev/shm drive here");
+        return;
+    };
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Short")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Short");
+    let folder = properties_of_selection(&test, "Short Properties");
+    let width = shown_width(&folder);
+    folder.close();
+
+    let drive = drive_properties(&test, uri);
+    let labels = drive.tab_labels();
+    assert_eq!(labels.first().map(String::as_str), Some("General"));
+    assert_eq!(labels.last().map(String::as_str), Some("Customize"), "{labels:?}");
+    assert!(
+        labels.iter().any(|label| label == "Hardware"),
+        "a drive: {labels:?}"
+    );
+    assert_eq!(drive.width(), width, "the width stays");
+    let rows = tab_rows(&drive);
+    let most = rows.iter().copied().max().unwrap_or(0);
+    let fewest = rows.iter().copied().min().unwrap_or(0);
+    assert!(most - fewest <= 1, "the rows share the tabs evenly: {rows:?}");
+    assert_every_tab_keeps(&drive, width, "another drive");
+    drive.close();
+}
+
 /// How many tabs each row of `window`'s tabs holds, top to bottom. The
 /// tab shown stands a little taller than its row, so tabs whose tops are
 /// within a few pixels share a row.
@@ -438,10 +500,10 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
     window.close();
 }
 
-/// General of a folder, a file, several items, a drive and seven tabs
-/// in two rows, light and dark, for review with `OX_NATIVE_CAPTURE_DIR`
-/// (and `GDK_SCALE=2`):
-/// `properties-kind-{folder,file,several,drive,wrapped}-{light,dark}.png`.
+/// General of a folder, a file, several items, the system drive, another
+/// drive (when /dev/shm is one) and seven tabs in two rows, light and
+/// dark, for review with `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):
+/// `properties-kind-{folder,file,several,drive,other-drive,wrapped}-{light,dark}.png`.
 ///
 /// parity: PROP-001
 #[gtk::test]
@@ -475,6 +537,11 @@ fn every_kind_of_properties_is_captured() {
         wait_for_frames(&drive, 6);
         capture_dialog(&drive, &format!("properties-kind-drive-{theme}.png"));
         drive.close();
+        if let Some(uri) = other_drive() {
+            let other = drive_properties(&test, uri);
+            capture_dialog(&other, &format!("properties-kind-other-drive-{theme}.png"));
+            other.close();
+        }
         let wrapped = seven_tab_properties(&test);
         capture_dialog(&wrapped, &format!("properties-kind-wrapped-{theme}.png"));
         wrapped.close();
