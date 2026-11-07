@@ -595,3 +595,22 @@ fn a_thumbnail_toggle_keeps_the_applied_columns() {
         "choosing the columns in Settings still reaches the shared view"
     );
 }
+
+/// Optimizing Downloads on the Customize tab changes its view but keeps
+/// the Group by date modified it shows until the user chooses another.
+/// parity: PROP-036
+#[test]
+fn a_template_keeps_downloads_grouped_by_date() {
+    const DOWNLOADS: &str = "file:///home/someone/Downloads";
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    save_preferences(&mut store, &json!({"perFolderViews": true}));
+
+    let saved = store
+        .customize_folder(DOWNLOADS, Some(DOWNLOADS), FolderTemplate::Pictures, false)
+        .unwrap();
+
+    let style = saved.view_in(DOWNLOADS, Some(DOWNLOADS));
+    assert_eq!(style.mode, "icons");
+    assert_eq!(style.grouping(), GroupBy::Modified);
+}
