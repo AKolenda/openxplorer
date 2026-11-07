@@ -1904,7 +1904,7 @@ msgstr ""
 msgid "CD Drive"
 msgstr ""
 
-#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/drive_shortcuts.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Local Disk"
 msgstr ""
 
@@ -6234,10 +6234,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/place_editor.rs
 msgid "The folder's name"
-msgstr ""
-
-#: crates/ox-app/src/window/place_menus.rs
-msgid "A whole drive cannot be copied. Open it and select what to copy."
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs

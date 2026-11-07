@@ -9,7 +9,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::places::NetworkKind;
 
-use super::file_ops_support::{is_enabled, is_triggered_by, shortcuts_of};
+use super::file_ops_support::{is_enabled, is_triggered_by, press_shortcut_where_focused, shortcuts_of};
 use super::geometry::{bounds, laid_out, Bounds};
 use super::support::{art_image_showing, arts_in, menu_button_with_class};
 use crate::icons::{Art, Connection, Icon};
@@ -295,7 +295,7 @@ fn close_menu(menu: &MenuPopover) {
 
 /// A drive tile's menu is the file list's right-click menu, in its
 /// style, with Windows 11's drive items in Windows' order: Copy and Rename
-/// in the strip, greyed out, then Open, Open in new tab, Open in new
+/// in the strip, Copy enabled and Rename greyed out, then Open, Open in new tab, Open in new
 /// window, what the drive allows (Disconnect here), Pin to Quick access
 /// and Properties, and Show more options, which opens the classic menu
 /// in its place with Open in Terminal and the cache item. Pin to Quick
@@ -312,7 +312,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     assert_eq!(menu.style(), MenuStyle::Compact, "the file list's default style");
     assert_eq!(
         menu.strip_states(),
-        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        [("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     assert_eq!(
         menu.row_labels(),
@@ -520,4 +520,104 @@ fn a_this_pc_tile_menu_survives_the_page_being_drawn_again() {
     close_menu(&menu);
 
     assert!(still_open, "the redraw does not close the menu");
+}
+
+/// The drive tile named `name`, selected with the keyboard on it, as a
+/// click selects it.
+fn select_tile(test: &TestWindow, name: &str) {
+    let (flow, tile) = drive_tile(test, name);
+    flow.select_child(&tile);
+    tile.grab_focus();
+}
+
+/// The names in `folder`, sorted.
+fn names_in(folder: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(folder)
+        .expect("the folder lists")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// A drive selected on This PC can be copied, as in Windows 11: the
+/// command bar's Copy is enabled, Cut is not, and a paste of it into a
+/// folder makes a shortcut named after the drive, which points to the
+/// drive; a second paste makes "(2)". Nothing on the drive is copied.
+///
+/// parity: HOME-003, CLIP-001, CMD-038
+#[gtk::test]
+fn a_copied_drive_tile_pastes_as_a_shortcut_named_after_the_drive() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+    select_tile(&test, "Backup");
+
+    wait_until("Copy to be enabled", || is_enabled(&test, "copy"));
+    assert!(!is_enabled(&test, "cut"), "a drive is never cut");
+    assert!(!is_enabled(&test, "rename") && !is_enabled(&test, "trash"));
+    assert!(press_shortcut_where_focused(
+        &test,
+        gtk::gdk::Key::c,
+        gtk::gdk::ModifierType::CONTROL_MASK
+    ));
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the shortcut to be selected", || {
+        test.selected_names() == ["Backup - Shortcut"]
+    });
+    wait_until("Paste to be enabled again", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the second shortcut", || {
+        fixture.path("Projects/Backup - Shortcut (2)").is_symlink()
+    });
+
+    assert_eq!(
+        names_in(&fixture.path("Projects")),
+        ["Backup - Shortcut", "Backup - Shortcut (2)"],
+        "two shortcuts and nothing copied"
+    );
+    for name in ["Backup - Shortcut", "Backup - Shortcut (2)"] {
+        let target = std::fs::read_link(fixture.path(&format!("Projects/{name}"))).expect("a link");
+        assert_eq!(target, fixture.path(""), "{name} points to the drive");
+    }
+}
+
+/// Copy on a drive's menu, wherever it opens, copies the drive, and Cut
+/// is not offered: Ctrl+X on a selected drive tile puts nothing on the
+/// clipboard, as Windows Explorer cuts no drive.
+///
+/// parity: HOME-003, CLIP-001
+#[gtk::test]
+fn a_drive_is_copied_from_its_menu_and_never_cut() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+    // Text is no file list: Paste stays off unless Ctrl+X puts the drive
+    // on the clipboard.
+    test.window.clipboard().set_text("Synthetic text");
+    select_tile(&test, "USB");
+    press_shortcut_where_focused(&test, gtk::gdk::Key::x, gtk::gdk::ModifierType::CONTROL_MASK);
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    assert!(!is_enabled(&test, "paste"), "Ctrl+X cut nothing");
+
+    test.activate("copy-folder", Some("file:///"));
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the shortcut to Local Disk", || {
+        fixture.path("Projects/Local Disk - Shortcut").is_symlink()
+    });
+
+    let target = std::fs::read_link(fixture.path("Projects/Local Disk - Shortcut")).expect("a link");
+    assert_eq!(target, std::path::PathBuf::from("/"));
+    assert_eq!(names_in(&fixture.path("Projects")), ["Local Disk - Shortcut"]);
 }

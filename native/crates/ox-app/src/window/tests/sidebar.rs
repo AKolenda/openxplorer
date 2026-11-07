@@ -678,11 +678,12 @@ fn this_pc_and_network_menus_list_windows_items_in_its_order() {
 /// column and dividers. In Windows 11's compact style This PC, Network
 /// and the Recycle Bin show Rename and Delete greyed out in the icon
 /// strip, as Windows greys This PC's; Local Disk shows a drive's Copy and
-/// Rename, greyed out, as on This PC's tiles; a folder the user pinned
-/// shows the file list's Cut, Copy, Paste, Rename and Delete, each where
-/// it can run on the row's location. "Show more options" opens the
-/// classic menu in its place, with the strip's commands as rows, and the
-/// Settings choice of the classic menu opens it at once.
+/// Rename, Copy enabled and Rename greyed out, as on This PC's tiles; a
+/// folder the user pinned shows the file list's Cut, Copy, Paste, Rename
+/// and Delete, each where it can run on the row's location. "Show more
+/// options" opens the classic menu in its place, with the strip's
+/// commands as rows, and the Settings choice of the classic menu opens it
+/// at once.
 ///
 /// parity: SIDE-014, SIDE-033, CMD-008
 #[gtk::test]
@@ -725,12 +726,13 @@ fn sidebar_menus_take_the_file_menus_style_strip_and_show_more_options() {
         assert_eq!(strip, greyed, "{label}");
         assert_eq!(last.as_deref(), Some("Show more options"), "{label}");
     }
-    // A drive's strip is Windows 11's, Copy and Rename, greyed out.
+    // A drive's strip is Windows 11's, Copy and Rename; Copy copies the
+    // drive for a paste to make a shortcut to it, and Rename is greyed out.
     let (style, strip, _) = strip_of("Local Disk");
     assert_eq!(style, file_style);
     assert_eq!(
         strip,
-        vec![("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        vec![("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     let (_, strip, _) = strip_of("Pinned strip");
     let can = |name: &str| strip.iter().any(|(shown, on)| shown == name && *on);

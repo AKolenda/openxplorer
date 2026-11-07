@@ -284,6 +284,19 @@ impl BrowserWindow {
     /// commands are disabled, so a share root or a previous version says
     /// why it cannot be copied or cut.
     pub(crate) fn copy_selection(&self, mode: ClipboardMode) {
+        // A drive, focused in the sidebar or selected on This PC, is
+        // copied as Windows Explorer copies it, for a paste to make a
+        // shortcut to it; it is never cut.
+        if let Some(drive) = self
+            .sidebar()
+            .focused_drive()
+            .or_else(|| self.selected_drive_tile())
+        {
+            if mode == ClipboardMode::Copy {
+                self.copy_folder_at(mode, &drive);
+            }
+            return;
+        }
         let items = self.folder_pane().model().selected_items();
         let command_facts = self.command_facts();
         // The Recycle Bin's items can only be restored or deleted, which is

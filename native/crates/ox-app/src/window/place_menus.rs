@@ -153,16 +153,14 @@ fn cache_entries(uri: &str, caching: Option<Caching>) -> Vec<MenuEntry> {
         .collect()
 }
 
-/// Why a drive cannot be copied from its menu: pasting it would copy
-/// everything on it.
-const DRIVE_NOT_COPIED: &str =
-    crate::i18n::message_id("A whole drive cannot be copied. Open it and select what to copy.");
-
 /// Why a drive cannot be renamed from its menu.
 const DRIVE_NOT_RENAMED: &str = crate::i18n::message_id("Drive names cannot be changed here.");
 
-/// Copy and Rename, the icon strip Windows 11 shows on a drive, greyed out:
-/// the app neither copies a whole drive nor changes a drive's name.
+/// Copy and Rename, the icon strip Windows 11 shows on a drive. Copy
+/// copies the drive as Windows Explorer does: a paste of it into a folder
+/// makes a shortcut to the drive there, never a copy of what it holds
+/// ([`super::drive_shortcuts`]). Rename is greyed out: the app changes no
+/// drive's name.
 fn drive_strip(uri: &str) -> Vec<MenuItem> {
     vec![
         MenuItem::with_text_target(
@@ -171,7 +169,7 @@ fn drive_strip(uri: &str) -> Vec<MenuItem> {
             WindowAction::CopyFolder,
             uri,
         )
-        .disabled_because(true, ox_core::i18n::gettext_static(DRIVE_NOT_COPIED)),
+        .with_shortcut("Ctrl+C"),
         MenuItem::with_text_target(
             &ox_core::i18n::gettext("Rename"),
             Icon::Rename,

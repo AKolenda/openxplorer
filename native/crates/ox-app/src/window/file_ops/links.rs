@@ -13,7 +13,8 @@ use glib::clone;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::ops::{
-    create_link, create_links, create_shortcuts, starting_label, summarize_links, LinkRequest, NewLink,
+    create_link, create_links, create_named_shortcuts, create_shortcuts, starting_label, summarize_links,
+    LinkRequest, NamedShortcuts, NewLink,
 };
 use ox_core::transfer::TransferMode;
 
@@ -75,6 +76,25 @@ impl BrowserWindow {
             summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: request.uris.clone(),
+        });
+        self.conclude_operation(finished).await;
+    }
+
+    /// Makes the shortcuts `request` names, such as a drive's pasted or
+    /// dropped into a folder ("Local Disk - Shortcut"), as the window's
+    /// one operation and reports them, then selects them, as Windows
+    /// Explorer selects what a paste made; Undo moves them to the Trash.
+    /// Does nothing while another operation runs.
+    pub(in crate::window) async fn run_named_shortcuts(&self, request: &NamedShortcuts) {
+        let Some(context) = self.begin_operation(starting_label(TransferMode::Copy)) else {
+            return;
+        };
+        let outcome = create_named_shortcuts(request, &context).await;
+        self.end_operation();
+        let finished = outcome.map(|outcome| FinishedOperation {
+            summary: summarize_links(&outcome.result),
+            undo: outcome.undo,
+            select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
     }

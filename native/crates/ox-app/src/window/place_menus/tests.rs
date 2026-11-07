@@ -344,8 +344,8 @@ fn a_drive_menu_follows_windows_11_in_the_compact_style() {
         .collect();
     assert_eq!(
         strip,
-        [("Copy".to_owned(), true), ("Rename".to_owned(), true)],
-        "greyed out: the app neither copies a whole drive nor renames one"
+        [("Copy".to_owned(), false), ("Rename".to_owned(), true)],
+        "Copy copies the drive for a paste to make a shortcut to it; Rename is greyed out"
     );
     let pinned = PlaceFacts {
         pinned: true,

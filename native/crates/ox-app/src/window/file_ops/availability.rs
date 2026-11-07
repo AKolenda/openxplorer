@@ -159,6 +159,10 @@ pub(crate) struct FolderFacts {
 
 /// Everything the rules read.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is one independent fact that updateToolbar reads, not a state"
+)]
 pub(crate) struct CommandFacts {
     /// The selection.
     pub(crate) selection: SelectionFacts,
@@ -173,6 +177,9 @@ pub(crate) struct CommandFacts {
     pub(crate) can_undo: bool,
     /// Redo has something to take back.
     pub(crate) can_redo: bool,
+    /// A drive's tile is selected on This PC, which Copy copies: a paste
+    /// of it makes a shortcut to the drive, as in Windows Explorer.
+    pub(crate) drive_selected: bool,
 }
 
 impl CommandFacts {
@@ -187,7 +194,7 @@ impl CommandFacts {
         let can_change = selection.count > 0 && !busy && !selection.has_read_only;
         match command {
             FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
-            FileCommand::Copy => can_copy,
+            FileCommand::Copy => can_copy || (self.drive_selected && !self.is_busy),
             FileCommand::Cut | FileCommand::Duplicate | FileCommand::Rename => {
                 can_copy && !selection.has_read_only
             }
@@ -364,6 +371,7 @@ impl BrowserWindow {
             clipboard: operations.clipboard,
             can_undo: context.journal_label(JournalDirection::Undo).is_some(),
             can_redo: context.journal_label(JournalDirection::Redo).is_some(),
+            drive_selected: self.selected_drive_tile().is_some(),
         }
     }
 
@@ -448,6 +456,24 @@ mod tests {
                 FileCommand::Duplicate,
             ]
         );
+    }
+
+    /// A drive selected on This PC can be copied, never cut, renamed or
+    /// deleted, as in Windows Explorer; Copy waits for nothing but a
+    /// running operation.
+    #[test]
+    fn a_selected_drive_enables_copy_alone() {
+        let drive = CommandFacts {
+            drive_selected: true,
+            ..CommandFacts::default()
+        };
+        let mut busy = drive;
+        busy.is_busy = true;
+
+        assert_eq!(enabled(&drive), [FileCommand::Copy]);
+        assert_eq!(drive.refusal(FileCommand::Copy), None);
+        assert!(drive.refusal(FileCommand::Cut).is_some());
+        assert!(!busy.allows(FileCommand::Copy));
     }
 
     /// Every disabled command says why, and an enabled one says nothing.

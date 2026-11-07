@@ -242,6 +242,42 @@ fn file_drag_source() -> gtk::DragSource {
     source
 }
 
+/// Lets This PC's `tile` of the drive at `uri` be dragged, as Windows
+/// Explorer lets a drive be dragged into a folder to make a shortcut to it
+/// there ("Create link in Documents"). The tile finds its window when the
+/// drag starts, as it is drawn before it is in one.
+pub(super) fn attach_drive_tile_drag(tile: &gtk::FlowBoxChild, uri: &str) {
+    let source = file_drag_source();
+    let uri = uri.to_owned();
+    let window_of = |source: &gtk::DragSource| {
+        source
+            .widget()
+            .and_then(|widget| widget.root())
+            .and_downcast::<BrowserWindow>()
+    };
+    source.connect_prepare(move |source, _, _| {
+        let button = pressed_button(source)?;
+        let content = window_of(source)?.drive_tile_drag_content(uri.clone())?;
+        source.set_actions(offered_actions(button, source.current_event_state()));
+        Some(content)
+    });
+    source.connect_drag_begin(move |source, drag| {
+        mark_drag_button(drag);
+        if let Some(window) = window_of(source) {
+            window.begin_file_drag(drag);
+        }
+    });
+    source.connect_drag_end(move |source, drag, _| {
+        super::drag_surface::keep_finished_drag(drag);
+        SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
+        label::forget_drag_label();
+        if let Some(window) = window_of(source) {
+            window.end_file_drag();
+        }
+    });
+    tile.add_controller(source);
+}
+
 /// True when a menu or other popover inside `widget` is open.
 pub(super) fn has_open_popover(widget: &gtk::Widget) -> bool {
     let mut child = widget.first_child();
@@ -305,6 +341,19 @@ impl BrowserWindow {
         ));
         self.follow_file_drag(&source);
         self.sidebar().list().add_controller(source);
+    }
+
+    /// What dragging This PC's tile of the drive at `uri` offers: the
+    /// drive, which a drop into a folder makes a shortcut to
+    /// ([`super::drive_shortcuts`]); `None` while an operation runs.
+    fn drive_tile_drag_content(&self, uri: String) -> Option<gdk::ContentProvider> {
+        if !(is_draggable_location(&uri) && self.may_start_drag()) {
+            return None;
+        }
+        self.offer_drag(
+            DragPayload::new(vec![uri], local_path),
+            Art::Glyph(crate::icons::Icon::HardDrive),
+        )
     }
 
     /// Shows the feedback of `source`'s drags as they start and end.
@@ -372,7 +421,14 @@ impl BrowserWindow {
         if !may_leave {
             return None;
         }
-        self.offer_drag(DragPayload::new(vec![uri], local_path), Art::Folder)
+        // A drive is dragged as a drive, as This PC's tiles drag it.
+        let is_drive = !self.split_drives(std::slice::from_ref(&uri)).drives.is_empty();
+        let art = if is_drive {
+            Art::Glyph(crate::icons::Icon::HardDrive)
+        } else {
+            Art::Folder
+        };
+        self.offer_drag(DragPayload::new(vec![uri], local_path), art)
     }
 
     /// True while nothing holds drags back: no file operation runs or is

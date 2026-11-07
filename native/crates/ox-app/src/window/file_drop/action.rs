@@ -42,7 +42,7 @@ use ox_core::transfer::stores_symbolic_links;
 use super::drive::{answer_or, answer_within, on_same_drive, DRIVE_PROBES};
 use super::DropDestination;
 use crate::icons::Icon;
-use crate::window::file_drag::{drag_button, DragButton};
+use crate::window::file_drag::{drag_button, dragged_now, DragButton};
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;
 use crate::window::zip_copies::is_zip_copy;
@@ -406,6 +406,19 @@ pub(crate) fn drop_menu_offer(uris: &[String], folder: &str, origin: DragOrigin)
     }
 }
 
+/// What the drop menu offers for drives dropped on `folder`: "Create
+/// shortcuts here" alone, in bold, as a drive can only be linked to in
+/// Windows Explorer, where the folder takes shortcuts; else Cancel alone.
+/// It reads the folder's file system, so call it off the GTK thread.
+pub(crate) fn drives_menu_offer(folder: &str) -> DropMenuOffer {
+    DropMenuOffer {
+        copies: false,
+        moves: false,
+        shortcuts: takes_shortcuts(folder),
+        default: Some(DropAction::Link),
+    }
+}
+
 /// True when the item at `uri` is directly in `folder`.
 pub(crate) fn is_in_folder(uri: &str, folder: &str) -> bool {
     parent_location(uri).is_some_and(|parent| same_location(&parent, folder))
@@ -485,15 +498,26 @@ fn drop_menu_entries(offer: DropMenuOffer) -> Vec<MenuEntry> {
 impl BrowserWindow {
     /// What `drop` would run now, or `None` when it is refused. Nothing
     /// is read from disk: this runs at every motion of a drag.
+    ///
+    /// A drag of this app's drives, and nothing else, makes shortcuts to
+    /// them, "Create link in Documents", as a drive's drop effect in
+    /// Windows Explorer is a link; a drag that asks still opens the drop
+    /// menu, which then offers only "Create shortcuts here".
     pub(super) fn drop_run(&self, drop: &impl OfferedDrop) -> Option<DropRun> {
         let first_offered = self.first_offer(drop);
-        DropAction::for_button_drop(
+        let run = DropAction::for_button_drop(
             drop.button(),
             drop.origin(),
             first_offered,
             drop.offered(),
             self.held_drop_keys(),
-        )
+        )?;
+        let drags_drives = drop.origin() == DragOrigin::ThisApp && self.are_all_drives(&dragged_now());
+        Some(match run {
+            DropRun::Run(DropAction::Ask(_)) => run,
+            _ if drags_drives => DropRun::Run(DropAction::Link),
+            _ => run,
+        })
     }
 
     /// The action `drop` shows now, or `None` when it is refused. For
@@ -544,6 +568,7 @@ impl BrowserWindow {
     /// answers. What it offers is read first, off the GTK thread; a menu
     /// that a newer drop replaced meanwhile is not opened.
     pub(super) fn ask_drop_action(&self, uris: Vec<String>, folder: String, origin: DragOrigin) {
+        let drives = self.are_all_drives(&uris);
         let pending = PendingDrop { uris, folder };
         self.imp().pending_drop.replace(Some(pending.clone()));
         // No tooltip of the row under the pointer covers the menu.
@@ -561,7 +586,11 @@ impl BrowserWindow {
                     DropMenuOffer::COPY_ONLY
                 };
                 let offer = answer_or(&DRIVE_PROBES, OFFER_TIMEOUT, fallback, move || {
-                    drop_menu_offer(&uris, &folder, origin)
+                    if drives {
+                        drives_menu_offer(&folder)
+                    } else {
+                        drop_menu_offer(&uris, &folder, origin)
+                    }
                 })
                 .await;
                 let still_waiting = window.imp().pending_drop.borrow().as_ref() == Some(&pending);

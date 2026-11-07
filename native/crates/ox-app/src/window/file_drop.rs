@@ -546,6 +546,29 @@ impl BrowserWindow {
         if uris.iter().any(|uri| same_location(uri, &folder)) {
             return Err(DropRefusal::IntoItself);
         }
+        // Safety rule "a drive is never copied whole": a dropped drive
+        // becomes a shortcut, whatever the drop's action, as a drive's
+        // drop effect in Windows Explorer is a link; the other items
+        // follow the action once the shortcuts are made
+        // ([`super::drive_shortcuts`]). A drop that asks opens the drop
+        // menu first, which offers drives "Create shortcuts here" alone.
+        let split = self.split_drives(&uris);
+        if !split.drives.is_empty() && !matches!(action, DropAction::Ask(_)) {
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                async move {
+                    window.make_drive_shortcuts(split.drives, folder.clone()).await;
+                    if split.others.is_empty() {
+                        return;
+                    }
+                    if let Err(refusal) = window.drop_into_folder(&split.others, folder, action) {
+                        window.show_message(&refusal.to_string());
+                    }
+                }
+            ));
+            return Ok(());
+        }
         let mode = match action {
             DropAction::Copy => TransferMode::Copy,
             DropAction::Move => TransferMode::Move,

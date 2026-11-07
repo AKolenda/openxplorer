@@ -371,6 +371,23 @@ impl Sidebar {
         shortcuts
     }
 
+    /// The drive whose row has the keyboard, if a drive's row has it:
+    /// what Ctrl+C copies there, as Windows Explorer copies the focused
+    /// item of its navigation pane.
+    pub(in crate::window) fn focused_drive(&self) -> Option<String> {
+        let row = self.list().focus_child().and_downcast::<gtk::ListBoxRow>()?;
+        let focus = self.root().and_then(|root| root.focus())?;
+        if !(focus == *row.upcast_ref::<gtk::Widget>() || focus.is_ancestor(&row)) {
+            return None;
+        }
+        let index = usize::try_from(row.index()).ok()?;
+        let entries = self.imp().entries.borrow();
+        match &entries.get(index)?.menu {
+            Some(super::place_menus::PlaceMenu::Drive { uri, .. }) => Some(uri.clone()),
+            _ => None,
+        }
+    }
+
     /// The real folder or drive the focused row opens, if any: not a
     /// page such as This PC or the Recycle Bin.
     fn focused_row_folder(&self) -> Option<String> {
