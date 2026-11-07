@@ -23,9 +23,10 @@
 //! button named by its text, reachable with Tab, with the glyph Windows
 //! shows: a check mark, a turning arrow and two documents.
 //!
-//! While it asks, the window's "More details" shows greyed and the
-//! details stay hidden, whatever was remembered, as in Windows 11: the
-//! files are compared only in the File Conflict window.
+//! While it asks, the window's "More details" / "Fewer details" toggle
+//! shows greyed, still worded as it was left, and the details stay
+//! hidden, as in Windows: the files are compared only in the File
+//! Conflict window.
 
 use gtk::glib;
 use gtk::prelude::*;

@@ -16,10 +16,11 @@
 //! remembered across sessions, as in Windows ("'More details' is sticky
 //! … across sessions", a Windows team reply under that post), in the
 //! `progressDetails` preference. While the window's one action asks
-//! Replace or Skip Files, the toggle shows greyed, as Windows 11 shows
-//! it: the two files are compared only in the File Conflict window that
-//! "Compare info for both files" opens. The remembered choice comes back
-//! with the progress once the question is answered.
+//! Replace or Skip Files, the toggle shows greyed, as Windows shows it,
+//! still worded as it was left, and the details stay hidden: the two
+//! files are compared only in the File Conflict window that "Compare info
+//! for both files" opens. The details come back with the progress once
+//! the question is answered.
 //!
 //! The window shows once an action has run for [`SHOW_DELAY`], so a
 //! quick operation shows nothing, and it does not take the focus (the UX
@@ -278,16 +279,12 @@ impl ProgressWindow {
     }
 
     /// Offers "More details" / "Fewer details", or shows it greyed and
-    /// out of the keyboard's reach, worded "More details", while the one
-    /// action asks Replace or Skip Files, as Windows 11 does. Offered
-    /// again, it words the remembered choice.
+    /// out of the keyboard's reach while the one action asks Replace or
+    /// Skip Files, as Windows does. Greyed, it keeps the remembered
+    /// wording ("Fewer details" when the details were left open), as
+    /// Windows' greyed toggle does, though the details stay hidden.
     fn offer_details(&self, offered: bool) {
-        let imp = self.imp();
-        if imp.details_button.is_sensitive() == offered {
-            return;
-        }
-        imp.details_button.set_sensitive(offered);
-        self.word_details(offered && imp.details.get());
+        self.imp().details_button.set_sensitive(offered);
     }
 
     /// Shows the window now, without taking the focus, for an action
@@ -382,17 +379,7 @@ impl ProgressWindow {
     fn set_details(&self, shown: bool) {
         let imp = self.imp();
         imp.details.set(shown);
-        self.word_details(shown && imp.details_button.is_sensitive());
-        for action in self.actions() {
-            action.show_details(shown);
-        }
-    }
-
-    /// Words the toggle "Fewer details" when `expanded`, else "More
-    /// details", with its chevron.
-    fn word_details(&self, expanded: bool) {
-        let imp = self.imp();
-        let (icon, text) = if expanded {
+        let (icon, text) = if shown {
             (Icon::ChevronUp16, ox_core::i18n::gettext_static("Fewer details"))
         } else {
             (Icon::ChevronDown16, ox_core::i18n::gettext_static("More details"))
@@ -400,7 +387,10 @@ impl ProgressWindow {
         icons::set_icon(&imp.details_icon, icon, CHEVRON_SIZE);
         imp.details_label.set_text(text);
         imp.details_button
-            .update_state(&[gtk::accessible::State::Expanded(Some(expanded))]);
+            .update_state(&[gtk::accessible::State::Expanded(Some(shown))]);
+        for action in self.actions() {
+            action.show_details(shown);
+        }
     }
 
     /// Whether the details show.

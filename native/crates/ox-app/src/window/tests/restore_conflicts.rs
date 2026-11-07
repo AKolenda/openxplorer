@@ -250,9 +250,10 @@ fn restore_conflicts_are_captured_light_and_dark() {
     }
 }
 
-/// While Replace or Skip Files shows, "More details" is greyed, as in
-/// Windows 11, even with the details remembered open: it reads "More
-/// details", Tab passes it, and nothing compares the files under the
+/// While Replace or Skip Files shows, the toggle is greyed, as in
+/// Windows, with the details remembered open: it still reads "Fewer
+/// details", as Windows' greyed toggle does, Tab passes it, and the
+/// details stay hidden, so nothing compares the files under the
 /// question; "Compare info for both files" still opens the File Conflict
 /// window. Saves `replace-skip-details-*.png`.
 ///
@@ -287,7 +288,7 @@ fn the_question_greys_more_details_and_compares_the_files_only_in_the_file_confl
 
         assert!(window.shows_details(), "the remembered choice is kept");
         assert!(!window.offers_details(), "the toggle is greyed");
-        assert_eq!(window.details_text(), "More details");
+        assert_eq!(window.details_text(), "Fewer details");
         let shown = texts(&window);
         assert!(!shown.iter().any(|text| compared.contains(text)), "{shown:?}");
         let tabbed = focus_after_tabs(&window, 8);

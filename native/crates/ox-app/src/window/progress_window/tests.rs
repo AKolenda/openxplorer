@@ -362,10 +362,11 @@ fn row(window: &ProgressWindow, text: &str) -> gtk::Button {
         .unwrap_or_else(|| panic!("a button {text:?}"))
 }
 
-/// While the one action asks Replace or Skip Files, "More details" shows
-/// greyed, as in Windows 11: worded "More details" even when remembered
-/// open, out of Tab's reach, and the details stay hidden. Answered, the
-/// toggle and the remembered choice come back with the progress.
+/// While the one action asks Replace or Skip Files, the toggle shows
+/// greyed, as in Windows: still worded "Fewer details" when remembered
+/// open, as Windows' greyed toggle is, out of Tab's reach, and the
+/// details stay hidden. Answered, the toggle and the details come back
+/// with the progress.
 ///
 /// parity: OPS-021, OPS-026
 #[gtk::test]
@@ -406,7 +407,7 @@ fn replace_or_skip_greys_more_details_until_it_is_answered() {
     row(&window, "Skip this file").emit_clicked();
     wait_until("the answer", || answered.get());
 
-    assert_eq!(asked, (false, "More details".to_owned()), "greyed while asking");
+    assert_eq!(asked, (false, "Fewer details".to_owned()), "greyed while asking");
     assert!(details_hidden, "no comparison under the question");
     assert!(!toggle_reached, "Tab passes the greyed toggle");
     assert!(window.offers_details(), "offered again with the progress");

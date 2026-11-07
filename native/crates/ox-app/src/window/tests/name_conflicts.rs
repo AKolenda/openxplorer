@@ -398,6 +398,9 @@ fn closing_the_file_conflict_window_returns_to_the_question() {
 
     crate::test_support::harness::wait_for_frames(&progress, 4);
     click(&mut pointer, &button(&progress, "Skip this file"));
+    // Back to the screen's centre, where Xvfb starts it: a pointer left
+    // over a closing window crashes GTK 4.14 in a later test.
+    pointer.move_to(720, 500);
     assert_no_report_of_skipped_files(&test);
     assert_eq!(
         fs::read(fixture.path("Notes 2.txt")).unwrap(),
