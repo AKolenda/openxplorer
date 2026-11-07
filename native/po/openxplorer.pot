@@ -30,7 +30,7 @@ msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, B
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network drive, below the navigation pane or in the \"…\" menu of This PC and Network, connects a share such as \\\\server\\share under a drive letter, as in Windows; Reconnect at sign-in saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network drive, below the navigation pane or in the \"…\" menu of This PC and Network, connects a share such as \\\\server\\share under a drive letter, as in Windows, offering only the letters still free; Save in the sidebar · reconnect when opened (Windows has Reconnect at sign-in) saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -627,10 +627,6 @@ msgstr ""
 
 #: crates/ox-app/src/dialogs/network_map.rs
 msgid "OpenXplorer will ask for your username and password if needed. Remember my credentials is selected by default. No passwords are saved in OpenXplorer settings. A label such as “Z:” is only a label, not a system-wide drive letter."
-msgstr ""
-
-#: crates/ox-app/src/dialogs/network_map.rs
-msgid "Reconnect at sign-in"
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_map.rs
