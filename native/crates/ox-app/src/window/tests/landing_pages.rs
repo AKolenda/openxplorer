@@ -360,9 +360,9 @@ fn close_menu(menu: &MenuPopover) {
 
 /// A drive tile's menu is the file list's right-click menu, in its
 /// style, with Windows 11's drive items in Windows' order: Copy and Rename
-/// in the strip, greyed out, then Open, Open in new tab, Open in new
-/// window, what the drive allows (Disconnect here), Pin to Quick access
-/// and Properties, and Show more options, which opens the classic menu
+/// in the strip, Copy enabled and Rename greyed out, then Open, Open in
+/// new tab, Open in new window, what the drive allows (Disconnect here),
+/// Pin to Quick access and Properties, and Show more options, which opens the classic menu
 /// in its place with Open in Terminal and the cache item. Pin to Quick
 /// access pins the drive, and its menu then offers Unpin.
 ///
@@ -378,7 +378,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     assert_eq!(menu.style(), MenuStyle::Compact, "the file list's default style");
     assert_eq!(
         menu.strip_states(),
-        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        [("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     assert_eq!(
         menu.row_labels(),
@@ -452,7 +452,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     wait_for_frames(&test.window, 2);
     assert_eq!(
         pin.strip_states(),
-        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        [("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     assert!(pin.row_labels().contains(&"Unpin from Quick access".to_owned()));
     pin.popdown();
@@ -477,7 +477,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     wait_for_frames(&test.window, 2);
     assert_eq!(
         pin.strip_states(),
-        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        [("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     pin.popdown();
 }
@@ -831,4 +831,145 @@ fn the_right_click_menus_are_captured_compact_and_classic() {
             close_menu(&menu);
         }
     }
+}
+
+/// The drive tile named `name`, selected with the keyboard on it, as a
+/// click selects it.
+fn select_tile(test: &TestWindow, name: &str) {
+    let (flow, tile) = drive_tile(test, name);
+    flow.select_child(&tile);
+    tile.grab_focus();
+}
+
+/// The names in `folder`, sorted.
+fn names_in(folder: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(folder)
+        .expect("the folder lists")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// A drive selected on This PC can be copied, as in Windows 11: the
+/// command bar's Copy is enabled, Cut is not, and a paste of it into a
+/// folder makes a shortcut named after the drive, which points to the
+/// drive; a second paste makes "(2)". Nothing on the drive is copied.
+///
+/// parity: HOME-003, CLIP-001, CMD-038
+#[gtk::test]
+fn a_copied_drive_tile_pastes_as_a_shortcut_named_after_the_drive() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+    select_tile(&test, "Backup");
+
+    wait_until("Copy to be enabled", || is_enabled(&test, "copy"));
+    assert!(!is_enabled(&test, "cut"), "a drive is never cut");
+    assert!(!is_enabled(&test, "rename") && !is_enabled(&test, "trash"));
+    assert!(press_shortcut_where_focused(
+        &test,
+        gtk::gdk::Key::c,
+        gtk::gdk::ModifierType::CONTROL_MASK
+    ));
+    // Only this app's own format and the path as text: no other file
+    // manager may paste the drive as a folder and copy all of it.
+    let formats = test.window.clipboard().formats();
+    assert!(formats.contain_mime_type(ox_core::clipboard::CUSTOM));
+    assert!(formats.contain_mime_type(ox_core::clipboard::TEXT));
+    for generic in [ox_core::clipboard::GNOME, ox_core::clipboard::URI_LIST] {
+        assert!(!formats.contain_mime_type(generic), "{generic} is not offered");
+    }
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the shortcut to be selected", || {
+        test.selected_names() == ["Backup - Shortcut"]
+    });
+    wait_until("Paste to be enabled again", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the second shortcut", || {
+        fixture.path("Projects/Backup - Shortcut (2)").is_symlink()
+    });
+
+    assert_eq!(
+        names_in(&fixture.path("Projects")),
+        ["Backup - Shortcut", "Backup - Shortcut (2)"],
+        "two shortcuts and nothing copied"
+    );
+    for name in ["Backup - Shortcut", "Backup - Shortcut (2)"] {
+        let target = std::fs::read_link(fixture.path(&format!("Projects/{name}"))).expect("a link");
+        assert_eq!(target, fixture.path(""), "{name} points to the drive");
+    }
+}
+
+/// Copy on a drive's menu, wherever it opens, copies the drive, and Cut
+/// is not offered: Ctrl+X on a selected drive tile puts nothing on the
+/// clipboard, as Windows Explorer cuts no drive.
+///
+/// parity: HOME-003, CLIP-001
+#[gtk::test]
+fn a_drive_is_copied_from_its_menu_and_never_cut() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+    // Text is no file list: Paste stays off unless Ctrl+X puts the drive
+    // on the clipboard.
+    test.window.clipboard().set_text("Synthetic text");
+    select_tile(&test, "USB");
+    press_shortcut_where_focused(&test, gtk::gdk::Key::x, gtk::gdk::ModifierType::CONTROL_MASK);
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    assert!(!is_enabled(&test, "paste"), "Ctrl+X cut nothing");
+
+    test.activate("copy-folder", Some("file:///"));
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the shortcut to Local Disk", || {
+        fixture.path("Projects/Local Disk - Shortcut").is_symlink()
+    });
+
+    let target = std::fs::read_link(fixture.path("Projects/Local Disk - Shortcut")).expect("a link");
+    assert_eq!(target, std::path::PathBuf::from("/"));
+    assert_eq!(names_in(&fixture.path("Projects")), ["Local Disk - Shortcut"]);
+}
+
+/// Select all on This PC, then Copy, copies every drive, and a paste
+/// makes a shortcut to each, as Windows Explorer does with several drives
+/// selected; nothing on them is copied.
+///
+/// parity: HOME-003, CLIP-001, CMD-038
+#[gtk::test]
+fn every_selected_drive_pastes_as_its_own_shortcut() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+
+    test.activate("select-all", None);
+    wait_until("Copy to be enabled", || is_enabled(&test, "copy"));
+    assert!(!is_enabled(&test, "cut"), "drives are never cut");
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the three shortcuts", || {
+        names_in(&fixture.path("Projects")).len() == 3
+    });
+
+    assert_eq!(
+        names_in(&fixture.path("Projects")),
+        ["Backup - Shortcut", "Local Disk - Shortcut", "USB - Shortcut"]
+    );
+    let target = |name: &str| std::fs::read_link(fixture.path(&format!("Projects/{name}"))).expect("a link");
+    assert_eq!(target("Local Disk - Shortcut"), std::path::PathBuf::from("/"));
+    assert_eq!(target("Backup - Shortcut"), fixture.path(""));
+    assert_eq!(target("USB - Shortcut"), fixture.path("Documents"));
 }

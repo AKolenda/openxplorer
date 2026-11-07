@@ -19,6 +19,24 @@ window.ox.ox-dialog.solid-csd {
   box-shadow: inset 0 0 0 3px @ox_border;
 }
 window.ox.ox-dialog .dialog-content { padding: 24px 24px 18px 24px; }
+/* A dialog window with a title bar of its own (Dialog::with_title_bar):
+   Format and Map network drive, as Windows draws them,
+   with the title and a full-height close button on the dialog's colour,
+   like the Properties window's. Its content starts under the bar. */
+window.ox.ox-dialog.titled .dialog-titlebar {
+  min-height: 32px;
+  padding-left: 12px;
+  background-color: @ox_bg;
+  border-radius: 8px 8px 0 0;
+}
+window.ox.ox-dialog.titled.solid-csd .dialog-titlebar { border-radius: 0; }
+window.ox.ox-dialog.titled:backdrop .dialog-titlebar { background-color: @ox_bg; color: @ox_text_tertiary; }
+window.ox.ox-dialog.titled .dialog-titlebar button.caption {
+  min-width: 46px;
+  min-height: 32px;
+  border-radius: 0 8px 0 0;
+}
+window.ox.ox-dialog.titled .dialog-content { padding-top: 12px; }
 window.ox.ox-dialog .dialog-title {
   font-size: 20px;
   font-weight: 600;
@@ -27,14 +45,6 @@ window.ox.ox-dialog .dialog-title {
 window.ox.ox-dialog .dialog-message { color: @ox_muted; margin-bottom: 12px; }
 window.ox.ox-dialog .field-label { color: @ox_text; margin: 8px 0 4px 0; }
 
-/* Folder Options: its options stand closer than a dialog's check boxes,
-   and the Advanced settings list is bordered, as Windows draws its tree. */
-window.ox.ox-dialog checkbutton.option-row { margin-top: 4px; }
-window.ox.ox-dialog .option-heading { margin-top: 6px; }
-window.ox.ox-dialog .advanced-settings {
-  border: 1px solid @ox_border;
-  border-radius: 4px;
-}
 /* A text input: 35 high, 4px corners, the chrome fill and the stronger
    bottom edge that turns into a 2px accent line on focus. */
 window.ox.ox-dialog entry {
