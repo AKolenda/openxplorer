@@ -121,7 +121,7 @@ pub(crate) fn map_network_dialog(
         ox_core::i18n::gettext_static(MAP_QUESTION),
         ox_core::i18n::gettext_static(MAP_MESSAGE)
     );
-    let dialog = Dialog::new(parent, &ox_core::i18n::gettext("Map network drive"), &message);
+    let dialog = Dialog::with_title_bar(parent, &ox_core::i18n::gettext("Map network drive"), &message);
     let letters = free_letters(taken);
     let drive = gtk::DropDown::from_strings(&letters);
     drive.set_halign(gtk::Align::Start);
@@ -210,7 +210,7 @@ pub(crate) fn network_location_dialog(
     on_connect: impl Fn(&Dialog, MapRequest) + 'static,
 ) -> Dialog {
     let title = ox_core::i18n::gettext("Add a network location");
-    let dialog = Dialog::new(parent, &title, ox_core::i18n::gettext_static(MESSAGE));
+    let dialog = Dialog::with_title_bar(parent, &title, ox_core::i18n::gettext_static(MESSAGE));
     let fields = ServerFields::add_to(&dialog);
     fields.choose(Protocol::WebDavs);
     let label = address_field(&dialog, "Display name (optional)", "Projects (Z:)");
