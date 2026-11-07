@@ -89,6 +89,8 @@ pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes};
 pub(crate) use item_window::{open_item_properties, PropertiesContext};
 #[cfg(test)]
 pub(crate) use location_panel::LocationPanel;
+#[cfg(test)]
+pub(crate) use metadata::is_mount_point;
 pub(crate) use restore::RestoreRequest;
 pub(crate) use selection_view::open_selection_properties;
 pub(crate) use sharing_panel::system_usershares;
@@ -115,6 +117,10 @@ pub(crate) struct PropertiesTarget {
     pub kind: ItemKind,
     /// The standard folder the item is, which adds the Location tab.
     pub known_folder: Option<KnownFolder>,
+    /// Whether a mount point shows as a drive (General with its space,
+    /// and Hardware), as Windows shows a volume of This PC; else it shows
+    /// as the folder it is, as when reached in a folder's listing.
+    pub as_drive: bool,
 }
 
 impl PropertiesTarget {
