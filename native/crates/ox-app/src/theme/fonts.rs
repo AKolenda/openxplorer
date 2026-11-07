@@ -431,7 +431,9 @@ mod tests {
         );
         assert!(css
             .contains("gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }"));
-        assert!(css.contains("gridview.files > child > .item-cell.group-slot.heading-row { min-height: 17px; }"));
+        assert!(
+            css.contains("gridview.files > child > .item-cell.group-slot.heading-row { min-height: 17px; }")
+        );
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 32px; }"));
         assert!(
