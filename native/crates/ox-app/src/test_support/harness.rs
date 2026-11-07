@@ -385,6 +385,38 @@ impl TestWindow {
             !self.context.settings_data().preferences.per_folder_views
         });
     }
+
+    /// Turns Settings' "Paste a picture from the clipboard as a new file"
+    /// on, as another process would, and waits until the window reads it,
+    /// for tests of that opt-in (CLIP-015).
+    pub(crate) fn paste_pictures_as_files(&self) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                paste_pictures_as_files: Some(true),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("pictures to paste as files", || {
+            self.context.settings_data().preferences.paste_pictures_as_files
+        });
+    }
+
+    /// Turns Settings' "Also copy file paths as text when copying files"
+    /// on, as another process would, and waits until the window reads it,
+    /// for tests of that opt-in (CLIP-004).
+    pub(crate) fn copy_paths_as_text(&self) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                copy_paths_as_text: Some(true),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("paths to be copied as text", || {
+            self.context.settings_data().preferences.copy_paths_as_text
+        });
+    }
 }
 
 impl Drop for TestWindow {

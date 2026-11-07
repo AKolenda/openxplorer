@@ -2,10 +2,12 @@
 //! Files & folders: Dolphin's view options, item counts in a folder's Size
 //! (VIEW-037), as its "Number of items", folder sizes (the Python "Folder
 //! sizes" section, SET-008), and previews (VIEW-058), as Dolphin's
-//! Previews settings offer them, folded away. Windows 11's Compact view
-//! (VIEW-067) is built here and shown on the Appearance page. Each switch
-//! saves its preference or the folder views' options at once, and every
-//! window follows.
+//! Previews settings offer them, folded away, and two clipboard extras
+//! that Windows 11 File Explorer lacks, both off by default: a picture
+//! pasted as a new file (CLIP-015) and the paths copied as text beside the
+//! files (CLIP-004). Windows 11's Compact view (VIEW-067) is built here and
+//! shown on the Appearance page. Each switch saves its preference or the
+//! folder views' options at once, and every window follows.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -90,6 +92,21 @@ const PREVIEW_DOCUMENTS: RowText = RowText {
     keywords: "preview documents and other files thumbnails types plugins pdf office fonts",
 };
 
+const PASTE_PICTURES: RowText = RowText {
+    title: "Paste a picture from the clipboard as a new file",
+    description: "Paste in a folder saves a copied picture, such as a screenshot, as a new \
+                  image file. Off: Paste is unavailable for a picture, as in Windows.",
+    keywords: "paste picture image screenshot clipboard png new file ctrl+v save",
+};
+
+const COPY_PATHS: RowText = RowText {
+    title: "Also copy file paths as text when copying files",
+    description: "Copy and Cut also put the items' paths on the clipboard, so a text editor or \
+                  terminal pastes them. Off: only the files are copied, as in Windows; \
+                  Copy as path still copies paths.",
+    keywords: "copy cut paths text clipboard terminal editor plain ctrl+c paste location",
+};
+
 const COMPACT_DENSITY: RowText = RowText {
     title: "Compact view",
     description: "Rows in the file list and the navigation pane stand closer, so more items fit.",
@@ -142,6 +159,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let files = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     files.append_group(&folder_views_group(page));
     files.append_group(&details_group(page));
+    files.append_group(&clipboard_group(page));
     files.append_group(&previews_group(page));
     files
 }
@@ -234,6 +252,39 @@ fn details_group(page: &SettingsPage) -> SettingsGroup {
         group.add_row(&row);
     }
     add_folder_size_rows(page, &group);
+    group
+}
+
+/// The clipboard's extras beyond Windows, each off by default.
+fn clipboard_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Clipboard"));
+    let rows = [
+        (
+            PASTE_PICTURES,
+            PreferenceBinding {
+                read: |preferences| preferences.paste_pictures_as_files,
+                write: |on| PreferencesUpdate {
+                    paste_pictures_as_files: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            COPY_PATHS,
+            PreferenceBinding {
+                read: |preferences| preferences.copy_paths_as_text,
+                write: |on| PreferencesUpdate {
+                    copy_paths_as_text: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+    ];
+    for (text, binding) in rows {
+        let row = SettingRow::new(text);
+        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+        group.add_row(&row);
+    }
     group
 }
 

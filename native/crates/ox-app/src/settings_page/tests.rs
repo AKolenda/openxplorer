@@ -763,6 +763,34 @@ fn the_compact_view_switch_saves_the_choice() {
     });
 }
 
+/// The clipboard's extras beyond Windows are off by default, as Windows
+/// 11 File Explorer neither pastes a picture as a file nor copies paths
+/// beside the files; each switch saves its choice, which the open window
+/// then follows.
+///
+/// parity: CLIP-004, CLIP-015
+#[gtk::test]
+fn the_clipboard_switches_are_off_by_default_and_save_the_choice() {
+    let settings = SettingsTest::open();
+    let pictures = switch_of(&settings.row("Paste a picture from the clipboard as a new file"));
+    let paths = switch_of(&settings.row("Also copy file paths as text when copying files"));
+    assert!(!pictures.is_active(), "pictures do not paste by default");
+    assert!(!paths.is_active(), "paths are not copied as text by default");
+
+    pictures.set_active(true);
+    wait_until("picture paste to be saved", || {
+        settings.saved_preferences().paste_pictures_as_files
+    });
+    paths.set_active(true);
+    wait_until("paths as text to be saved", || {
+        settings.saved_preferences().copy_paths_as_text
+    });
+    wait_until("the window to follow", || {
+        let preferences = settings.test.context.settings_data().preferences;
+        preferences.paste_pictures_as_files && preferences.copy_paths_as_text
+    });
+}
+
 /// The rows of preferences the Python app follows save its keys and
 /// values, so a change made here reaches it.
 ///

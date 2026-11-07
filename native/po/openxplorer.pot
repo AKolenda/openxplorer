@@ -3332,6 +3332,10 @@ msgid "A frame of each video, made by the desktop's thumbnailer."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Also copy file paths as text when copying files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Also in network folders"
 msgstr ""
 
@@ -3339,8 +3343,16 @@ msgstr ""
 msgid "Calculate folder sizes"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Clipboard"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs
 msgid "Compact view"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Copy and Cut also put the items' paths on the clipboard, so a text editor or terminal pastes them. Off: only the files are copied, as in Windows; Copy as path still copies paths."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3397,6 +3409,14 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "PDFs, office documents, fonts and every other type the desktop can preview."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Paste a picture from the clipboard as a new file"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Paste in a folder saves a copied picture, such as a screenshot, as a new image file. Off: Paste is unavailable for a picture, as in Windows."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3460,6 +3480,10 @@ msgid "check box checkbox select multiple toggle hover selection marker plus min
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "copy cut paths text clipboard terminal editor plain ctrl+c paste location"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "density spacing padding rows tight dense smaller"
 msgstr ""
 
@@ -3473,6 +3497,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "folder sizes scans run on demand outside the browsing worker pool compressed zfs space snapshot usage hidden files links nested filesystem mounts snapshot collections 1 million entries 5 minutes partial total cancel recalculate"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "paste picture image screenshot clipboard png new file ctrl+v save"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs

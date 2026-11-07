@@ -10,8 +10,10 @@
 //! crashed on KDE Plasma when GTK returned selection data of length -1) is
 //! the reason every foreign clipboard here must leave the window running.
 //! A foreign clipboard with files enables Paste for those files, a picture
-//! is pasted as one new file (CLIP-015), and one with neither is no data,
-//! which leaves Paste disabled (CLIP-016).
+//! is pasted as one new file once Settings' "Paste a picture from the
+//! clipboard as a new file" is on (CLIP-015) and is no data while it is
+//! off, as by default, and one with neither is no data, which leaves Paste
+//! disabled (CLIP-016).
 
 use std::fs;
 use std::time::Duration;
@@ -269,14 +271,16 @@ fn an_empty_clipboard_disables_paste() {
     wait_until("Paste to be disabled", || !is_enabled(&test, "paste"));
 }
 
-/// A picture on the clipboard is not a file list, but it is a paste: the
-/// owner's PNG bytes become one file named after the local time.
+/// A picture on the clipboard is not a file list, but with "Paste a
+/// picture from the clipboard as a new file" on it is a paste: the owner's
+/// PNG bytes become one file named after the local time.
 ///
 /// parity: CLIP-015, CLIP-016
 #[gtk::test]
 fn a_picture_on_the_clipboard_pastes_as_an_image_file() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.paste_pictures_as_files();
     let one_blue_pixel = glib::Bytes::from_static(&[0, 120, 212, 255]);
     let image = gdk::MemoryTexture::new(1, 1, gdk::MemoryFormat::R8g8b8a8, &one_blue_pixel, 4);
 
@@ -301,6 +305,48 @@ fn a_picture_on_the_clipboard_pastes_as_an_image_file() {
     });
 }
 
+/// By default a picture is no data, as in Windows 11 File Explorer: Paste
+/// and Paste into folder stay disabled and Ctrl+V writes nothing and says
+/// nothing. Turning "Paste a picture from the clipboard as a new file" on
+/// enables Paste for the same clipboard at once, without copying again.
+///
+/// parity: CLIP-015, CLIP-016
+#[gtk::test]
+fn a_picture_is_no_data_until_settings_turn_picture_paste_on() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    let owner = ScriptedOwner::new(
+        "image/png",
+        Script::Late {
+            delay: Duration::from_millis(10),
+            payload: png.to_vec(),
+        },
+    );
+    let progress = owner.progress();
+
+    take_clipboard(&test, &owner);
+    wait_for(Duration::from_millis(200));
+
+    assert!(!progress.was_asked.get(), "the picture is not even read");
+    assert!(!is_enabled(&test, "paste"), "Paste is unavailable");
+    assert!(!is_enabled(&test, "paste-into"), "Paste into folder too");
+    test.window.paste_from_keyboard();
+    wait_for(Duration::from_millis(200));
+    assert_eq!(test.window.shown_message(), "", "nothing is said");
+    assert!(names_ending(&fixture, "Documents", "png").is_empty());
+
+    test.paste_pictures_as_files();
+
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.window.paste_from_keyboard();
+    let names = pasted_names(&fixture, "Documents", "png", 1);
+    assert_eq!(
+        fs::read(fixture.path(&format!("Documents/{}", names[0]))).expect("the pasted picture"),
+        png
+    );
+}
+
 /// A picture offered in a format the app keeps is written from the owner's
 /// own bytes under that format's extension, never re-encoded.
 ///
@@ -309,6 +355,7 @@ fn a_picture_on_the_clipboard_pastes_as_an_image_file() {
 fn a_jpeg_on_the_clipboard_is_written_as_it_was_copied() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.paste_pictures_as_files();
     let jpeg = [0xff, 0xd8, 0xff, 0xe0, b'\r', b'\n', 0x00, 0xff, 0xd9];
 
     take_clipboard(&test, &offering("image/jpeg", &jpeg));
@@ -367,6 +414,7 @@ fn a_file_list_wins_over_the_text_paths_copied_beside_it() {
 fn a_picture_over_the_size_limit_is_no_data_and_says_why() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.paste_pictures_as_files();
     let huge = vec![0x89; MAX_BYTES + 1];
     let owner = ScriptedOwner::new(
         "image/png",
@@ -397,6 +445,7 @@ fn a_picture_over_the_size_limit_is_no_data_and_says_why() {
 fn a_picture_conversion_the_owner_refuses_is_no_data() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.paste_pictures_as_files();
     let refusing_owner = ScriptedOwner::new("image/png", Script::Fail);
     let progress = refusing_owner.progress();
 
@@ -419,6 +468,7 @@ fn a_picture_conversion_the_owner_refuses_is_no_data() {
 fn pasting_the_same_picture_twice_never_overwrites_the_first_file() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.paste_pictures_as_files();
     let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
 
     take_clipboard(&test, &offering("image/png", &png));
@@ -447,6 +497,7 @@ fn pasting_the_same_picture_twice_never_overwrites_the_first_file() {
 fn paste_into_a_folder_writes_the_picture_there() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.paste_pictures_as_files();
     select_names(&test, &["Documents"]);
     let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -541,16 +592,18 @@ fn a_read_overtaken_by_an_owner_change_is_dropped() {
     assert!(!fixture.path("Documents/Notes 10.txt").exists());
 }
 
-/// A reader that takes text only, such as a terminal or an editor, pastes
-/// the items this app copied as their paths, although the same clipboard
-/// also holds the file list: text is published beside the files, never
-/// instead of them.
+/// With "Also copy file paths as text when copying files" on, a reader
+/// that takes text only, such as a terminal or an editor, pastes the items
+/// this app copied as their paths, although the same clipboard also holds
+/// the file list: text is published beside the files, never instead of
+/// them.
 ///
 /// parity: CLIP-004
 #[gtk::test]
 fn a_text_reader_gets_the_copied_items_paths() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.copy_paths_as_text();
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
     let clipboard = test.window.clipboard();
