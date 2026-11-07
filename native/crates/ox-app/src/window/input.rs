@@ -252,10 +252,19 @@ impl BrowserWindow {
                 self,
                 move |_, position| window.activate_from_view(position)
             ));
-            pane.icon_view().grid().connect_activate(glib::clone!(
+            let icons = pane.icon_view();
+            icons.grid().connect_activate(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, position| window.activate_from_view(position)
+                #[weak]
+                icons,
+                move |_, slot| {
+                    // Grouped Tiles and Content list headings among the
+                    // items (VIEW-071).
+                    if let Some(position) = icons.item_at(slot) {
+                        window.activate_from_view(position);
+                    }
+                }
             ));
         }
     }
@@ -461,6 +470,9 @@ impl BrowserWindow {
         if is_plain_tab(key, modifiers) && self.tab_to_other_pane() {
             return glib::Propagation::Stop;
         }
+        if let Some(handled) = self.grouped_grid_key(key, modifiers) {
+            return handled;
+        }
         let shortcut =
             gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK;
         if modifiers.intersects(shortcut) {
@@ -587,9 +599,13 @@ impl BrowserWindow {
             return self.is_beside_item(view, x, y);
         }
         // The details view's rows are an inner list view; its titles are
-        // not inside it. The icon grid is the list itself.
-        view.pick(x, y, gtk::PickFlags::DEFAULT)
-            .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
+        // not inside it. The icon grid is the list itself, and a group's
+        // heading row in grouped Tiles and Content is blank space too.
+        view.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
+            &picked == view
+                || picked.ancestor(gtk::ListView::static_type()).is_some()
+                || crate::folder_view::cells::is_in_group_slot(&picked)
+        })
     }
 
     /// Whether (`x`, `y`) in `view` is on the empty part of an unselected
