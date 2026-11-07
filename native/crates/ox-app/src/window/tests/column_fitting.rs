@@ -16,8 +16,9 @@ use crate::folder_view::details::DetailsView;
 use crate::folder_view::icon_size::IconSize;
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{application, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::pointer::{screen_point, Button, Pointer};
 use crate::window::folder_pane::FolderView;
-use crate::window::menu_popover::ItemAvailability;
+use crate::window::menu_popover::{ItemAvailability, MenuPopover};
 use crate::window::window_action::WindowAction;
 
 /// A fictional name long enough to need a wider Name column.
@@ -219,4 +220,87 @@ fn the_titles_menu_sizes_one_column_or_all_to_fit() {
 fn title_middle(title: &gtk::Widget, header: &gtk::Widget) -> f64 {
     let bounds = title.compute_bounds(header).expect("a laid-out title");
     f64::from(bounds.x() + bounds.width() / 2.0)
+}
+
+/// Where the pointer first looks for the window.
+const PROBE: (i32, i32) = (8, 8);
+
+/// The titles' menu open on `header`, if any.
+fn open_titles_menu(header: &gtk::Widget) -> Option<MenuPopover> {
+    std::iter::successors(header.first_child(), WidgetExt::next_sibling)
+        .filter_map(|child| child.downcast::<MenuPopover>().ok())
+        .find(WidgetExt::is_mapped)
+}
+
+/// A real right-click on a column title opens the titles' menu, and a real
+/// click on "Size all columns to fit" fits the columns. The menu never
+/// opened from a real right-click before: its gesture waited for the
+/// press after the titles had it.
+///
+/// parity: VIEW-072, VIEW-033
+#[gtk::test]
+fn a_real_right_click_on_a_title_opens_the_menu_that_sizes_all_columns() {
+    let fixture = fixture();
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    wait_for_frames(&test.window, 3);
+    let details = test.window.folder_pane().details().clone();
+    let header = details.header().expect("column titles");
+    let size_title = std::iter::successors(header.first_child(), WidgetExt::next_sibling)
+        .find(|title| {
+            title.is_visible() && details.column_at(title_middle(title, &header)) == Some(SortColumn::Size)
+        })
+        .expect("a Size title");
+    let on_title = screen_point(&mut pointer, &size_title, (20.0, 10.0), PROBE);
+
+    pointer.move_to(on_title.0, on_title.1);
+    pointer.press(Button::Secondary);
+    pointer.release(Button::Secondary);
+    wait_until("the titles' menu", || open_titles_menu(&header).is_some());
+    let menu = open_titles_menu(&header).expect("the titles' menu");
+    assert_eq!(menu.items()[0].target, Some("size".to_variant()));
+    let row = menu.row_list().row_at_index(1).expect("Size all columns to fit");
+    let middle = (20.0, f64::from(row.height()) / 2.0);
+    let on_row = screen_point(&mut pointer, &row, middle, on_title);
+    pointer.move_to(on_row.0, on_row.1);
+    pointer.press(Button::Primary);
+    pointer.release(Button::Primary);
+
+    wait_until("the menu to close", || open_titles_menu(&header).is_none());
+    assert_all_fitted(&details);
+}
+
+/// The real keys: Ctrl held with plus on the number pad fits the columns,
+/// and Ctrl with plus on the main keyboard makes the text larger without
+/// changing a column.
+///
+/// parity: VIEW-072, VIEW-043
+#[gtk::test]
+fn the_real_ctrl_keypad_plus_fits_and_the_main_ctrl_plus_resizes_text() {
+    let fixture = fixture();
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    wait_for_frames(&test.window, 3);
+    let details = test.window.folder_pane().details().clone();
+    test.window.folder_pane().focus_view();
+    let text_size = test.window.skin().text_size();
+
+    pointer.hold_key(gdk::Key::Control_L);
+    pointer.tap_key(gdk::Key::KP_Add);
+    pointer.let_go_key(gdk::Key::Control_L);
+    wait_until("the columns to fit", || {
+        details
+            .column(SortColumn::Name)
+            .is_some_and(|name| !name.expands())
+    });
+    assert_all_fitted(&details);
+    assert_eq!(test.window.skin().text_size(), text_size);
+
+    let fitted_widths = shown_widths(&details);
+    pointer.hold_key(gdk::Key::Control_L);
+    pointer.tap_key(gdk::Key::equal);
+    pointer.let_go_key(gdk::Key::Control_L);
+    wait_until("the text to grow", || test.window.skin().text_size() != text_size);
+    assert_eq!(shown_widths(&details), fitted_widths, "Ctrl+= fits nothing");
+    test.activate("text-reset", None);
 }

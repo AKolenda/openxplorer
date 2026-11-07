@@ -206,15 +206,22 @@ impl DetailsView {
         }
     }
 
-    /// The width `column`'s title needs to show its whole label: its
-    /// natural width, padding included.
+    /// The width `column`'s title needs to show its whole label: what its
+    /// label and sort indicator need, and the title's padding around them.
+    /// The title itself cannot say: GTK gives a title its column's fixed
+    /// width whatever it holds.
     pub(crate) fn title_width(&self, column: SortColumn) -> i32 {
         let Some(header) = self.header() else { return 0 };
         let titles = self.titles(&header);
         let Some((_, title)) = titles.into_iter().find(|(shown, _)| *shown == column) else {
             return 0;
         };
-        title.measure(gtk::Orientation::Horizontal, -1).1
+        let Some(content) = title.first_child() else {
+            return 0;
+        };
+        let needed = content.measure(gtk::Orientation::Horizontal, -1).1;
+        let padding = (title.width() - content.width()).max(0);
+        needed + padding
     }
 
     /// The shown column whose title is under `x`, a position in the

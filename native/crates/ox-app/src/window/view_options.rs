@@ -121,6 +121,10 @@ impl BrowserWindow {
             let Some(header) = details.header() else { continue };
             let click = gtk::GestureClick::new();
             click.set_button(gdk::BUTTON_SECONDARY);
+            // A real right-click on a title never reached this gesture in
+            // the bubble phase, so the menu did not open: it takes the
+            // press before the titles do.
+            click.set_propagation_phase(gtk::PropagationPhase::Capture);
             click.connect_pressed(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
