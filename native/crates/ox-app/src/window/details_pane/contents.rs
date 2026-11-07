@@ -10,10 +10,11 @@
 //! [`SETTLE`] before anything is read, so arrowing through a folder
 //! reads only the file it stops on; it cancels the read of the one
 //! before, and anything that arrives for an earlier selection is dropped.
-//! A text file is read up to [`TEXT_LIMIT`]; a picture over
-//! [`PICTURE_PIXEL_LIMIT`] is refused from its header before it is
-//! decoded; a PDF's pages are drawn by `pdftoppm` in the thumbnailers'
-//! sandbox a few at a time, at most [`PDF_PAGE_LIMIT`].
+//! A text file is read up to [`TEXT_LIMIT`]; a picture is decoded within
+//! the app's limits for pictures ([`picture_guard`]); a PDF's pages are
+//! drawn by `pdftoppm` in the thumbnailers' sandbox and limits a few at a
+//! time, at most [`PDF_PAGE_LIMIT`] and [`PDF_PIXEL_BUDGET`]. With network
+//! previews off, a file on a network file system is not read.
 
 use std::fs;
 use std::io::Read;
@@ -21,10 +22,11 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::Duration;
 
-use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
+
+use crate::picture_guard::{self, Limits};
 
 use super::preview_page::{decode_text, PreviewPage, NO_PREVIEW, TEXT_LIMIT};
 use super::DetailsPane;
@@ -32,12 +34,12 @@ use super::DetailsPane;
 /// How long a selection must stay before its file is read.
 const SETTLE: Duration = Duration::from_millis(90);
 
-/// The most pixels a previewed picture may have: 64 megapixels, as the
-/// thumbnails' cap. A larger one is refused before it is decoded.
-const PICTURE_PIXEL_LIMIT: u64 = 64 * 1024 * 1024;
-
 /// The most pages of a PDF drawn.
-const PDF_PAGE_LIMIT: u32 = 50;
+const PDF_PAGE_LIMIT: u32 = 30;
+
+/// The most pixels of PDF pages kept: 24 megapixels, about 96 MB, which
+/// is about 40 pages at 2x and every one of [`PDF_PAGE_LIMIT`] at 1x.
+const PDF_PIXEL_BUDGET: u64 = 24 * 1024 * 1024;
 
 /// How many PDF pages each run of `pdftoppm` draws: the first show soon,
 /// and a long document goes on in the background.
@@ -240,13 +242,12 @@ impl DetailsPane {
     /// Reads `page`, the selection of `generation`, off the main thread
     /// and shows it if the selection is still the same.
     fn read_page(&self, generation: u64, page: &PreviewPage, cancellation: gio::Cancellable) {
-        let path = match page {
-            PreviewPage::Text { uri, .. }
-            | PreviewPage::Picture { uri, .. }
-            | PreviewPage::Pdf { uri, .. } => gio::File::for_uri(uri).path(),
-            PreviewPage::Message(_) | PreviewPage::Media => None,
+        let file = match page {
+            PreviewPage::Text(file) | PreviewPage::Picture(file) | PreviewPage::Pdf(file) => file,
+            PreviewPage::Message(_) | PreviewPage::Media => return,
         };
-        let Some(path) = path else {
+        let local_only = file.local_only;
+        let Some(path) = gio::File::for_uri(&file.uri).path() else {
             self.contents().show_message(NO_PREVIEW);
             return;
         };
@@ -256,8 +257,13 @@ impl DetailsPane {
         let page = page.clone();
         glib::spawn_future_local(async move {
             match page {
-                PreviewPage::Text { .. } => {
-                    let read = gio::spawn_blocking(move || read_text(&path, &cancellation)).await;
+                PreviewPage::Text(_) => {
+                    let read = gio::spawn_blocking(move || {
+                        allowed(&path, local_only)
+                            .then(|| read_text(&path, &cancellation))
+                            .flatten()
+                    })
+                    .await;
                     let Some(pane) = pane.upgrade().filter(|pane| pane.is_current(generation)) else {
                         return;
                     };
@@ -266,9 +272,14 @@ impl DetailsPane {
                         _ => pane.contents().show_message(NO_PREVIEW),
                     }
                 }
-                PreviewPage::Picture { .. } => {
+                PreviewPage::Picture(_) => {
                     let edge = width.max(height) * scale;
-                    let decoded = gio::spawn_blocking(move || decode_picture(&path, edge)).await;
+                    let decoded = gio::spawn_blocking(move || {
+                        allowed(&path, local_only)
+                            .then(|| decode_picture(&path, edge, &cancellation))
+                            .flatten()
+                    })
+                    .await;
                     let Some(pane) = pane.upgrade().filter(|pane| pane.is_current(generation)) else {
                         return;
                     };
@@ -277,8 +288,8 @@ impl DetailsPane {
                         _ => pane.contents().show_message(NO_PREVIEW),
                     }
                 }
-                PreviewPage::Pdf { .. } => {
-                    pdf_pages(pane, generation, path, width * scale, cancellation).await;
+                PreviewPage::Pdf(_) => {
+                    pdf_pages(pane, generation, path, local_only, width * scale, cancellation).await;
                 }
                 PreviewPage::Message(_) | PreviewPage::Media => {}
             }
@@ -396,19 +407,25 @@ impl DetailsPane {
 
 /// Draws the PDF at `path` page by page for `pane`'s selection
 /// `generation`, `width` pixels wide, until it ends, [`PDF_PAGE_LIMIT`]
-/// pages are shown, or the selection changes.
+/// pages or [`PDF_PIXEL_BUDGET`] pixels are shown, or the selection
+/// changes; with `local_only`, not on a network file system.
 async fn pdf_pages(
     pane: glib::WeakRef<DetailsPane>,
     generation: u64,
     path: std::path::PathBuf,
+    local_only: bool,
     width: i32,
     cancellation: gio::Cancellable,
 ) {
     let mut first = 1;
-    while first <= PDF_PAGE_LIMIT {
+    let mut pixels = 0_u64;
+    while first <= PDF_PAGE_LIMIT && pixels < PDF_PIXEL_BUDGET {
         let last = (first + PDF_BATCH - 1).min(PDF_PAGE_LIMIT);
         let (path, cancel) = (path.clone(), cancellation.clone());
         let drawn = gio::spawn_blocking(move || {
+            if first == 1 && !allowed(&path, local_only) {
+                return None;
+            }
             crate::thumbnails::pdf_pages(&path, first, last, width, &cancel)
                 .map(|pages| pages.iter().map(gdk::Texture::for_pixbuf).collect::<Vec<_>>())
         })
@@ -426,6 +443,8 @@ async fn pdf_pages(
         };
         for page in &pages {
             pane.add_pdf_page(page);
+            let size = |side: i32| u64::try_from(side).unwrap_or_default();
+            pixels += size(page.width()) * size(page.height());
         }
         if u32::try_from(pages.len()).unwrap_or(0) < last - first + 1 {
             return;
@@ -434,20 +453,32 @@ async fn pdf_pages(
     }
 }
 
-/// The text the Preview pane shows of the file at `path`: its first
-/// [`TEXT_LIMIT`] bytes, decoded by [`decode_text`]; `None` for a binary
-/// file, one that is not a plain file, or a cancelled read. The file is
-/// opened without following a link or waiting on a pipe. Blocks.
-fn read_text(path: &Path, cancellation: &gio::Cancellable) -> Option<String> {
-    let flags = rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK;
+/// Whether the file at `path` may be read: with `local_only` (network
+/// previews off), only when the file system it is on, after its links,
+/// is no network one, as its thumbnail ([`crate::thumbnails`]). Blocks.
+fn allowed(path: &Path, local_only: bool) -> bool {
+    !local_only || !crate::thumbnails::is_on_network_filesystem(path)
+}
+
+/// The plain file at `path`, opened for reading: a link is followed, but
+/// a pipe or a device is not waited on (the open does not block) and is
+/// refused by the opened descriptor's own type, so nothing swapped in
+/// after a check is read. Blocks.
+fn open_plain_file(path: &Path) -> Option<fs::File> {
     let file = fs::OpenOptions::new()
         .read(true)
-        .custom_flags(flags.bits().cast_signed())
+        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed())
         .open(path)
         .ok()?;
-    if !file.metadata().ok()?.is_file() {
-        return None;
-    }
+    file.metadata().ok()?.is_file().then_some(file)
+}
+
+/// The text the Preview pane shows of the file at `path`: its first
+/// [`TEXT_LIMIT`] bytes, decoded by [`decode_text`]; `None` for a binary
+/// file, one that is not a plain file ([`open_plain_file`]), or a
+/// cancelled read. Blocks.
+fn read_text(path: &Path, cancellation: &gio::Cancellable) -> Option<String> {
+    let file = open_plain_file(path)?;
     let mut bytes = Vec::with_capacity(64 * 1024);
     let mut chunk = vec![0; 64 * 1024];
     let mut reader = file.take(u64::try_from(TEXT_LIMIT).unwrap_or(u64::MAX) + 1);
@@ -467,20 +498,15 @@ fn read_text(path: &Path, cancellation: &gio::Cancellable) -> Option<String> {
 }
 
 /// The picture at `path` decoded to fit `edge` pixels square, or at its
-/// own size when smaller, and turned upright; `None` when it is not a
-/// picture gdk-pixbuf reads, or its header says it has more than
-/// [`PICTURE_PIXEL_LIMIT`] pixels. Blocks.
-fn decode_picture(path: &Path, edge: i32) -> Option<gdk::Texture> {
-    // A pipe or a device named like a picture would hold the read.
-    if !fs::metadata(path).ok()?.is_file() {
-        return None;
-    }
-    let (_, width, height) = Pixbuf::file_info(path)?;
-    let pixels = u64::try_from(width).ok()? * u64::try_from(height).ok()?;
-    if pixels == 0 || pixels > PICTURE_PIXEL_LIMIT {
-        return None;
-    }
-    let pixbuf = Pixbuf::from_file_at_scale(path, width.min(edge), height.min(edge), true).ok()?;
-    let pixbuf = pixbuf.apply_embedded_orientation().unwrap_or(pixbuf);
-    Some(gdk::Texture::for_pixbuf(&pixbuf))
+/// own size when smaller, and turned upright, within the app's limits for
+/// a picture shown ([`picture_guard`]: its pixels, a GIF's first frame
+/// only, a time limit, and `cancellation`); `None` when it is not a plain
+/// file ([`open_plain_file`]) or a picture gdk-pixbuf reads, or was
+/// refused. Blocks.
+fn decode_picture(path: &Path, edge: i32, cancellation: &gio::Cancellable) -> Option<gdk::Texture> {
+    let mut file = open_plain_file(path)?;
+    let decoded =
+        picture_guard::decode_reader_to_fit(&mut file, edge, edge, Limits::DISPLAY, Some(cancellation))
+            .ok()?;
+    Some(gdk::Texture::for_pixbuf(&decoded.pixbuf))
 }

@@ -540,16 +540,21 @@ const PDF_PROGRAM: &str = "pdftoppm";
 /// each page's number.
 const PDF_PAGE: &str = "page";
 
+/// How many times its width a PDF page drawn may be tall: a taller page
+/// (a long receipt, or a page made to exhaust memory) is cut there.
+const PDF_PAGE_ASPECT_LIMIT: i32 = 4;
+
 /// The sandbox the Preview pane draws PDF pages in, looked for once per
 /// run: `None` when bubblewrap or poppler's `pdftoppm` is missing, or
 /// cannot run here, so no page is drawn outside a sandbox.
 static PDF_SANDBOX: OnceLock<Option<Sandbox>> = OnceLock::new();
 
 /// The pages `first` to `last` of the local PDF at `path`, drawn
-/// `width` pixels wide by poppler's `pdftoppm` in the thumbnailers'
-/// sandbox ([`Sandbox`]: no network, no session bus, the PDF alone of the
-/// user's files) and read back with the care a thumbnailer's picture is
-/// ([`read_picture`]). Fewer pages than asked for means the document
+/// `width` pixels wide and at most [`PDF_PAGE_ASPECT_LIMIT`] times as tall
+/// by poppler's `pdftoppm` in the thumbnailers' sandbox ([`Sandbox`]: no
+/// network, no session bus, the PDF alone of the user's files, within the
+/// thumbnailers' memory, file-size, processor and time limits) and read
+/// back with the care a thumbnailer's picture is ([`read_picture`]). Fewer pages than asked for means the document
 /// ended; `None` when none could be drawn, nothing draws PDFs here, or
 /// `cancellation` was cancelled. Blocks: run it off the main thread.
 pub(crate) fn pdf_pages(
@@ -562,6 +567,7 @@ pub(crate) fn pdf_pages(
     let sandbox = PDF_SANDBOX.get_or_init(pdf_sandbox).as_ref()?;
     let workspace = Workspace::new()?;
     let output = format!("{INSIDE}/{PDF_PAGE}");
+    let tallest = width.saturating_mul(PDF_PAGE_ASPECT_LIMIT).to_string();
     let (first, last, width) = (first.to_string(), last.to_string(), width.to_string());
     let words = [
         PDF_PROGRAM,
@@ -574,6 +580,8 @@ pub(crate) fn pdf_pages(
         &width,
         "-scale-to-y",
         "-1",
+        "-H",
+        &tallest,
         "%i",
         &output,
     ];
@@ -582,7 +590,7 @@ pub(crate) fn pdf_pages(
         types: Vec::new(),
     };
     let command = sandbox.command(&program, path, workspace.path(), 0);
-    run(&command, cancellation)?;
+    run_with(&command, sandbox.needs_runtime_dir(), cancellation)?;
     // pdftoppm names each page `page-7.png`, its number padded with zeros
     // to the width of the last page's.
     let mut pages: Vec<(u32, PathBuf)> = fs::read_dir(workspace.path())

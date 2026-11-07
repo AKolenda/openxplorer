@@ -125,6 +125,13 @@ fn the_preview_pane_shows_text_and_says_when_it_cannot() {
     binary.extend((0..4096_u32).map(|n| (n * 7 % 251) as u8));
     std::fs::write(fixture.path("setup.exe"), &binary).expect("binary");
     std::fs::write(fixture.path("Bundle.zip"), b"PK\x03\x04\x14\0\0\0\0\0").expect("zip");
+    let wide = "x".repeat(199) + "\n";
+    std::fs::write(
+        fixture.path("wide.log"),
+        wide.repeat(2 * 1024 * 1024 / wide.len()),
+    )
+    .expect("log");
+    std::os::unix::fs::symlink(fixture.path("Notes 2.txt"), fixture.path("Link.txt")).expect("link");
     let test = preview_window(&fixture);
     let pane = test.window.imp().details_pane.get();
 
@@ -134,6 +141,12 @@ fn the_preview_pane_shows_text_and_says_when_it_cannot() {
 
     test.select_named("Notes 2.txt");
     wait_until("the text", || {
+        pane.preview_text().as_deref() == Some("Synthetic test data\n")
+    });
+
+    // A link to a text file shows the file's text.
+    test.select_named("Link.txt");
+    wait_until("the linked text", || {
         pane.preview_text().as_deref() == Some("Synthetic test data\n")
     });
 
@@ -147,11 +160,14 @@ fn the_preview_pane_shows_text_and_says_when_it_cannot() {
     wait_until("the log's beginning", || pane.preview_text().is_some());
     let shown = pane.preview_text().expect("text");
     assert!(log.starts_with(&shown), "the beginning, unchanged");
-    assert!(
-        shown.len() <= 1024 * 1024 && shown.len() > 1000 * 1024,
-        "{}",
-        shown.len()
-    );
+    assert_eq!(shown.lines().count(), 20_000, "its first 20,000 lines");
+    // A log of long lines stops at the first mebibyte instead.
+    test.select_named("wide.log");
+    wait_until("the wide log", || {
+        pane.preview_text().is_some_and(|text| text.starts_with("xxx"))
+    });
+    let shown = pane.preview_text().expect("text").len();
+    assert!(shown <= 1024 * 1024 && shown > 1000 * 1024, "{shown}");
 
     for name in ["setup.exe", "Bundle.zip", "Documents"] {
         test.select_named(name);

@@ -213,7 +213,12 @@ impl BrowserWindow {
             network: &network,
             condensed_dates: pane.options().condensed_dates,
             preview_rules: PreviewRules {
-                remote: self.is_remote_folder(&folder_uri),
+                // A recent item or a search result is judged by its own
+                // location too, as its thumbnail is.
+                remote: self.is_remote_folder(&folder_uri)
+                    || selection
+                        .iter()
+                        .any(|item| self.is_remote_folder(&item.entry().uri)),
                 remote_previews: self
                     .context()
                     .settings_data()

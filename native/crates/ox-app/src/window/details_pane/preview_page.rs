@@ -34,6 +34,10 @@ pub(in crate::window) const TEXT_LIMIT: usize = 1024 * 1024;
 /// pane that wraps anyway and keeps the text's layout quick.
 const LINE_LIMIT: usize = 4096;
 
+/// The most lines shown, after long ones are broken: a file of many short
+/// lines (a log, a CSV) shows its first ones, as its first mebibyte.
+pub(in crate::window) const LINE_COUNT_LIMIT: usize = 20_000;
+
 /// The share of a text's bytes that may be invalid UTF-8 or control
 /// characters before it counts as binary: one in fifty.
 const BINARY_SHARE: usize = 50;
@@ -66,20 +70,36 @@ pub(in crate::window) enum PreviewPage {
     /// [`SELECT_A_FILE`] (message ids, translated when shown).
     Message(&'static str),
     /// The beginning of the text file at `uri`, as it was at `modified`.
-    Text { uri: String, modified: Option<u64> },
+    Text(PreviewFile),
     /// The picture at `uri`.
-    Picture { uri: String, modified: Option<u64> },
+    Picture(PreviewFile),
     /// The pages of the local PDF at `uri`.
-    Pdf { uri: String, modified: Option<u64> },
+    Pdf(PreviewFile),
     /// The details pane's own preview: the player of an audio or video
     /// file, as the Preview pane showed it before.
     Media,
 }
 
+/// The file a page shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window) struct PreviewFile {
+    /// The file.
+    pub uri: String,
+    /// When it was changed, so a changed file is read again.
+    pub modified: Option<u64>,
+    /// Network previews are off: the file is read only once the file
+    /// system it is really on (after its links) is found to be no network
+    /// one, as its thumbnail is (VIEW-058). That is asked off the main
+    /// thread, where a server that does not answer holds nothing up.
+    pub local_only: bool,
+}
+
 /// What [`preview_page`] reads besides the selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::window) struct PreviewRules {
-    /// The folder is on a network share, a phone or a camera.
+    /// The folder or the selected item is on a network share, a phone or
+    /// a camera, by its location: a recent item or a search result is
+    /// judged by its own.
     pub remote: bool,
     /// The user lets such folders show previews (Settings' network
     /// previews, which thumbnails follow too).
@@ -106,14 +126,17 @@ pub(in crate::window) fn preview_page(selection: &[FileItem], rules: PreviewRule
     }
     let content_type = entry.content_type.as_deref().unwrap_or_default();
     let kind = content_type.split('/').next().unwrap_or_default();
-    let uri = entry.uri.clone();
-    let modified = entry.modified;
+    let file = PreviewFile {
+        uri: entry.uri.clone(),
+        modified: entry.modified,
+        local_only: !rules.remote_previews,
+    };
     if is_text(content_type, &entry.name) {
-        PreviewPage::Text { uri, modified }
+        PreviewPage::Text(file)
     } else if kind == "image" {
-        PreviewPage::Picture { uri, modified }
+        PreviewPage::Picture(file)
     } else if content_type == "application/pdf" || extension_of(&entry.name) == "pdf" {
-        PreviewPage::Pdf { uri, modified }
+        PreviewPage::Pdf(file)
     } else if kind == "audio" || kind == "video" {
         PreviewPage::Media
     } else {
@@ -158,7 +181,15 @@ pub(in crate::window) fn decode_text(bytes: &[u8], truncated: bool) -> Option<St
     if text.contains('\0') || controls * BINARY_SHARE > text.chars().count().max(1) {
         return None;
     }
-    Some(break_long_lines(&text))
+    Some(first_lines(&break_long_lines(&text)))
+}
+
+/// The first [`LINE_COUNT_LIMIT`] lines of `text`.
+fn first_lines(text: &str) -> String {
+    match text.match_indices('\n').nth(LINE_COUNT_LIMIT - 1) {
+        Some((end, _)) => text[..=end].to_owned(),
+        None => text.to_owned(),
+    }
 }
 
 /// `bytes` as UTF-16 code units made by `unit`, with a dangling byte or
@@ -261,17 +292,17 @@ mod tests {
             ("server.log", "application/octet-stream"),
         ] {
             assert!(
-                matches!(page_of(name, content_type), PreviewPage::Text { .. }),
+                matches!(page_of(name, content_type), PreviewPage::Text(_)),
                 "{name}"
             );
         }
         assert!(matches!(
             page_of("Beach.jpg", "image/jpeg"),
-            PreviewPage::Picture { .. }
+            PreviewPage::Picture(_)
         ));
         assert!(matches!(
             page_of("Report.pdf", "application/pdf"),
-            PreviewPage::Pdf { .. }
+            PreviewPage::Pdf(_)
         ));
         assert_eq!(page_of("Song.mp3", "audio/mpeg"), PreviewPage::Media);
         assert_eq!(page_of("Clip.mp4", "video/mp4"), PreviewPage::Media);
@@ -306,7 +337,7 @@ mod tests {
             remote_previews: true,
             ..off
         };
-        assert!(matches!(preview_page(&notes, on), PreviewPage::Text { .. }));
+        assert!(matches!(preview_page(&notes, on), PreviewPage::Text(_)));
     }
 
     /// parity: VIEW-070
@@ -344,5 +375,37 @@ mod tests {
         let lines: Vec<usize> = text.lines().map(str::len).collect();
         assert_eq!(lines, [LINE_LIMIT, LINE_LIMIT, 5]);
         assert_eq!(break_long_lines("short\nlines"), "short\nlines");
+    }
+
+    /// A file of many short lines shows its first ones only.
+    ///
+    /// parity: VIEW-070
+    #[test]
+    fn only_the_first_lines_are_shown() {
+        let many = "x\n".repeat(LINE_COUNT_LIMIT + 10);
+        let text = decode_text(many.as_bytes(), false).expect("text");
+        assert_eq!(text.lines().count(), LINE_COUNT_LIMIT);
+        assert!(text.ends_with('\n'));
+        assert_eq!(first_lines("a\nb"), "a\nb");
+    }
+
+    /// With network previews off a file is checked for a network file
+    /// system before it is read; with them on it is not.
+    ///
+    /// parity: VIEW-070
+    #[test]
+    fn a_local_files_page_asks_for_its_file_system_with_network_previews_off() {
+        let PreviewPage::Text(file) = page_of("Notes.txt", "text/plain") else {
+            panic!("text");
+        };
+        assert!(file.local_only);
+        let on = PreviewRules {
+            remote: false,
+            remote_previews: true,
+        };
+        let PreviewPage::Text(file) = preview_page(&[item("Notes.txt", "text/plain")], on) else {
+            panic!("text");
+        };
+        assert!(!file.local_only);
     }
 }
