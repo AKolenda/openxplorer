@@ -15,9 +15,22 @@
 use gtk::glib;
 use gtk::prelude::*;
 
+use super::folder_pane::PanePage;
 use super::gestures;
+use super::landing;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+
+/// Select all, Select none or Invert selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SelectionChange {
+    /// Select all: every shown item.
+    All,
+    /// Select none.
+    Clear,
+    /// Invert selection: every shown item that was not selected.
+    Invert,
+}
 
 /// A window-wide key and what it does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,7 +89,7 @@ impl BrowserWindow {
             return glib::Propagation::Proceed;
         }
         match key {
-            WindowKey::SelectAll => self.folder_pane().model().select_all(),
+            WindowKey::SelectAll => self.change_selection(SelectionChange::All),
             WindowKey::ClearSelection => self.clear_selection(),
         }
         glib::Propagation::Stop
@@ -85,7 +98,22 @@ impl BrowserWindow {
     /// Clears the selection and the typed prefix (`clearSelection`).
     pub(super) fn clear_selection(&self) {
         self.reset_typeahead();
-        self.folder_pane().model().select_none();
+        self.change_selection(SelectionChange::Clear);
+    }
+
+    /// Changes the selection of what the active pane shows: This PC's
+    /// tiles, in both its groups, else the folder's items.
+    pub(super) fn change_selection(&self, change: SelectionChange) {
+        let pane = self.folder_pane();
+        if pane.page() == Some(PanePage::Landing) && landing::change_tile_selection(pane.landing(), change) {
+            return;
+        }
+        let model = pane.model();
+        match change {
+            SelectionChange::All => model.select_all(),
+            SelectionChange::Clear => model.select_none(),
+            SelectionChange::Invert => model.invert_selection(),
+        }
     }
 
     /// A pointer press anywhere in the window starts a new typed prefix,
