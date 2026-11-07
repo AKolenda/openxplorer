@@ -575,6 +575,15 @@ fn every_kind_of_properties_draws_windows_dialog_text() {
     options.close();
 }
 
+/// Gives the shared skin its text size back however a test ends.
+struct TextSizeGuard(crate::text_size::TextSize);
+
+impl Drop for TextSizeGuard {
+    fn drop(&mut self) {
+        crate::test_support::harness::skin().set_text_size(self.0);
+    }
+}
+
 /// A group box's title sits centred on the box's top line, as Windows
 /// draws it, at every text size: the lift follows the title's height, so
 /// the title neither hangs below the line at 200 % nor floats above it at
@@ -587,7 +596,7 @@ fn group_titles_sit_on_the_box_line_at_every_text_size() {
     fs::create_dir(fixture.path("Holiday 2025")).expect("a folder");
     let test = TestWindow::open(&fixture.uri());
     let skin = crate::test_support::harness::skin();
-    let before = skin.text_size();
+    let before = TextSizeGuard(skin.text_size());
     test.select_named("Holiday 2025");
     let window = properties_of_selection(&test, "Holiday 2025 Properties");
     window.select_tab("customize");
@@ -624,7 +633,7 @@ fn group_titles_sit_on_the_box_line_at_every_text_size() {
             }
         }
     }
-    skin.set_text_size(before);
+    drop(before);
     window.close();
     assert!(misplaced.is_empty(), "titles off the line: {misplaced:?}");
 }
