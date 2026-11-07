@@ -163,6 +163,9 @@ pub(crate) struct BrowserWindow {
     /// What the command bar's "…" menu keeps of the places the sidebar
     /// was last drawn from, until they are first drawn.
     pub(super) more_menu_places: RefCell<Option<super::location_view::MoreMenuPlaces>>,
+    /// The place menu last opened on a page (a This PC tile), its folder
+    /// pane and where in it, for "Show more options".
+    pub(super) place_menu: RefCell<Option<super::place_menus::OpenPlaceMenu>>,
     /// What every window shares: the skin, settings and places. It
     /// comes from the application, so [`super::BrowserWindow::new`]
     /// sets it.
@@ -202,6 +205,17 @@ pub(crate) struct BrowserWindow {
     /// does not leave search results as the user emptying it does; see
     /// [`super::search_steps`].
     pub(super) clears_search_box: Cell<bool>,
+    /// Where the active tab was in its search results, put back once they
+    /// are found again after it came back to the front; see
+    /// [`super::search_steps`].
+    pub(super) results_view: RefCell<Option<super::search_steps::ResultsView>>,
+    /// Set while the window puts a tab's search back in the search box,
+    /// which unlike the user editing it keeps what the tab had selected.
+    pub(super) restores_results: Cell<bool>,
+    /// The files a search of names and contents last read or listed in the
+    /// searched folder, and their size and modification time; see
+    /// [`super::live_search`].
+    pub(super) contents_checked: RefCell<std::collections::HashMap<String, super::live_search::FileStamp>>,
     /// In tests, a volume id and the root it mounts at, standing in for a
     /// drive the isolated session does not have.
     #[cfg(test)]

@@ -9,14 +9,20 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::{same_location, TRASH_URI};
-use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
+use ox_core::settings::{
+    BookmarkAction, BookmarkKind, BookmarkRequest, ContextMenu as ContextMenuChoice, PreferencesUpdate,
+    Settings,
+};
 
 use super::file_ops_support::{is_enabled, open_dialog, wait_for_no_dialog};
 use super::support::middle_click_at;
 use crate::icons::{Art, ArtImage, Icon};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
-use crate::window::menu_popover::{MenuEntry, MenuPopover};
+use crate::test_support::harness::{
+    capture, capture_with_menus, descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow,
+    ThemeGuard,
+};
+use crate::window::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use crate::window::sidebar::entries::{RowLevel, RowTarget, Section, SidebarEntry};
 use crate::window::sidebar::SidebarDropSpot;
 use crate::window::{gestures, WindowAction};
@@ -575,6 +581,267 @@ fn hidden_sections_and_places_are_listed_dimmed_and_shown_again() {
     let preferences = test.context.settings_data().preferences;
     assert!(preferences.hidden_sidebar_sections.is_empty());
     assert!(preferences.hidden_sidebar_places.is_empty());
+}
+
+/// This PC's menu, as Windows 11's navigation pane lists it: Collapse
+/// (Expand while collapsed), Open in new tab, Open in new window, Add a
+/// network location, Map network drive…, Disconnect network drive, then
+/// the app's Hide section and Show more options. Network's is the same
+/// without Add a network location. Properties is left out where the test session has no system
+/// information app, as in "…". The items run their commands: Collapse
+/// folds the section and Map network drive… opens Windows' dialog.
+///
+/// parity: SIDE-001, SIDE-033, NET-001
+#[gtk::test]
+fn this_pc_and_network_menus_list_windows_items_in_its_order() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    assert!(
+        crate::integration::system_information().is_none(),
+        "the test session has no system information app"
+    );
+    let sidebar = test.window.sidebar();
+    let menu_labels = |label: &str| {
+        wait_for_frames(&test.window, 3);
+        let menu = sidebar.right_click_row(label);
+        let labels = menu.row_labels();
+        menu.popdown();
+        labels
+    };
+    assert_eq!(
+        menu_labels("This PC"),
+        [
+            "Collapse",
+            "Open in new tab",
+            "Open in new window",
+            "Add a network location",
+            "Map network drive…",
+            "Disconnect network drive",
+            "-",
+            "Hide section \u{201c}This PC\u{201d}",
+            "-",
+            "Show more options",
+        ]
+    );
+    assert_eq!(
+        menu_labels("Network"),
+        [
+            "Collapse",
+            "Open in new tab",
+            "Open in new window",
+            "Map network drive…",
+            "Disconnect network drive",
+            "-",
+            "Hide section \u{201c}Network\u{201d}",
+            "-",
+            "Show more options",
+        ]
+    );
+    let menu = sidebar.right_click_row("This PC");
+    let actions: Vec<(String, Option<String>)> = menu
+        .items()
+        .into_iter()
+        .map(|item| {
+            let target = item.target.as_ref().and_then(glib::Variant::get::<String>);
+            (item.label, target)
+        })
+        .collect();
+    menu.popdown();
+    let this_pc = Page::ThisPc.uri().to_owned();
+    assert_eq!(actions[1], ("Open in new tab".to_owned(), Some(this_pc.clone())));
+    assert_eq!(actions[2], ("Open in new window".to_owned(), Some(this_pc)));
+
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    assert!(
+        !menu.row("Disconnect network drive").is_sensitive(),
+        "no network drive is connected"
+    );
+    menu.click_row("Collapse");
+    wait_until("This PC to collapse", || sidebar.section_is_collapsed("thisPc"));
+    assert_eq!(menu_labels("This PC")[0], "Expand");
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    menu.click_row("Expand");
+    wait_until("This PC to expand", || !sidebar.section_is_collapsed("thisPc"));
+
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    menu.click_row("Map network drive…");
+    let dialog = super::network::open_form_dialog();
+    assert_eq!(dialog.title_text(), "Map network drive");
+    dialog.press("Cancel");
+}
+
+/// Every sidebar menu takes the file list's right-click menu: the same
+/// popover in the same style, so the same width, padding, rows, icon
+/// column and dividers. In Windows 11's compact style This PC, Network
+/// and the Recycle Bin show Rename and Delete greyed out in the icon
+/// strip, as Windows greys This PC's; Local Disk shows a drive's Copy and
+/// Rename, greyed out, as on This PC's tiles; a folder the user pinned
+/// shows the file list's Cut, Copy, Paste, Rename and Delete, each where
+/// it can run on the row's location. "Show more options" opens the
+/// classic menu in its place, with the strip's commands as rows, and the
+/// Settings choice of the classic menu opens it at once.
+///
+/// parity: SIDE-014, SIDE-033, CMD-008
+#[gtk::test]
+fn sidebar_menus_take_the_file_menus_style_strip_and_show_more_options() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Pinned strip")).expect("fixture subfolder");
+    let test = TestWindow::open(&fixture.uri_of("Pinned strip"));
+    test.activate("pin-folder", None);
+    wait_until("the pin", || {
+        test.window
+            .sidebar()
+            .labels()
+            .contains(&"Pinned strip".to_owned())
+    });
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    let sidebar = test.window.sidebar();
+    let strip_of = |label: &str| {
+        wait_for_frames(&test.window, 3);
+        let menu = sidebar.right_click_row(label);
+        menu.popup();
+        wait_for_frames(&test.window, 2);
+        let style = menu.style();
+        let strip = menu.strip_states();
+        let last = menu.row_labels().last().cloned();
+        menu.popdown();
+        (style, strip, last)
+    };
+
+    test.window.right_click(Some(0));
+    let file_menu = test.window.context_menu();
+    let file_style = file_menu.style();
+    file_menu.popdown();
+    assert_eq!(file_style, MenuStyle::Compact);
+
+    let greyed = vec![("Rename".to_owned(), false), ("Delete".to_owned(), false)];
+    for label in ["This PC", "Network", "Recycle Bin"] {
+        let (style, strip, last) = strip_of(label);
+        assert_eq!(style, file_style, "{label}");
+        assert_eq!(strip, greyed, "{label}");
+        assert_eq!(last.as_deref(), Some("Show more options"), "{label}");
+    }
+    // A drive's strip is Windows 11's, Copy and Rename, greyed out.
+    let (style, strip, _) = strip_of("Local Disk");
+    assert_eq!(style, file_style);
+    assert_eq!(
+        strip,
+        vec![("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+    );
+    let (_, strip, _) = strip_of("Pinned strip");
+    let can = |name: &str| strip.iter().any(|(shown, on)| shown == name && *on);
+    assert!(
+        can("Cut") && can("Copy") && can("Rename") && can("Delete"),
+        "{strip:?}"
+    );
+
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    menu.click_row("Show more options");
+    wait_until("the classic menu", || {
+        menu.style() == MenuStyle::Classic && menu.is_visible()
+    });
+    let rows = menu.row_labels();
+    assert!(menu.strip_labels().is_empty());
+    assert!(!rows.contains(&"Show more options".to_owned()), "{rows:?}");
+    for command in ["Rename", "Delete"] {
+        assert!(!menu.row(command).is_sensitive(), "{command}");
+    }
+    menu.popdown();
+
+    let classic = PreferencesUpdate {
+        context_menu: Some(ContextMenuChoice::Win10),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&classic)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the classic style", || {
+        test.context.settings_data().preferences.context_menu == ContextMenuChoice::Win10
+    });
+    let (style, strip, last) = strip_of("Local Disk");
+    assert_eq!(style, MenuStyle::Classic);
+    assert!(strip.is_empty());
+    assert_ne!(last.as_deref(), Some("Show more options"));
+}
+
+/// Windows 11's navigation pane has no button below its list; the Python
+/// app's "Map network drive" button is gone, and the list and the folder
+/// tree reach the pane's foot.
+///
+/// parity: SIDE-001, NET-001
+#[gtk::test]
+fn nothing_is_pinned_below_the_navigation_pane() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    let maps = descendants::<gtk::Button>(sidebar).into_iter().any(|button| {
+        button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
+    });
+    assert!(!maps, "no Map network drive button");
+    let last = sidebar.last_child().expect("the pane has its panes");
+    assert!(last.is::<gtk::Paned>(), "the list and the folder tree come last");
+}
+
+/// The navigation pane without a button below its list, and the file
+/// list's right-click menu beside the sidebar's menus (This PC, Network,
+/// Local Disk, a pinned folder, the Recycle Bin, and This PC's classic
+/// menu), each open over the window, light and dark: with
+/// `OX_NATIVE_CAPTURE_DIR` set, saved there as `native-sidebar-*.png`
+/// and `native-menu-<row>-*.png` for visual review. Without it, they only
+/// prove the menus open in both themes.
+#[gtk::test]
+fn the_sidebar_and_its_menus_are_captured_light_and_dark() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = TestWindow::open(&fixture.uri_of("Projects"));
+    test.activate("pin-folder", None);
+    wait_until("the pin", || {
+        test.window.sidebar().labels().contains(&"Projects".to_owned())
+    });
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    // Tall enough to show the pane's foot below This PC and Network, and
+    // the menus opened there whole.
+    test.window.set_default_size(960, 900);
+    wait_until("the taller window", || test.window.height() >= 860);
+    let rows = [
+        ("this-pc", "This PC"),
+        ("network", "Network"),
+        ("local-disk", "Local Disk"),
+        ("pinned", "Projects"),
+        ("recycle-bin", "Recycle Bin"),
+    ];
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        capture(&test.window, &format!("native-sidebar-{theme}.png"));
+        test.window.folder_model().select_only(0);
+        test.window.right_click(Some(0));
+        let file_menu = test.window.context_menu();
+        capture_with_menus(&test.window, &format!("native-menu-file-{theme}.png"));
+        file_menu.popdown();
+        wait_until("the file menu to close", || !file_menu.is_mapped());
+        for (name, label) in rows {
+            wait_for_frames(&test.window, 3);
+            let menu = test.window.sidebar().right_click_row(label);
+            capture_with_menus(&test.window, &format!("native-menu-{name}-{theme}.png"));
+            if name == "this-pc" {
+                menu.click_row("Show more options");
+                wait_until("the classic menu", || {
+                    menu.style() == MenuStyle::Classic && menu.is_mapped()
+                });
+                capture_with_menus(&test.window, &format!("native-menu-this-pc-classic-{theme}.png"));
+            }
+            menu.popdown();
+            wait_until("the menu to close", || !menu.is_mapped());
+        }
+    }
 }
 
 /// With the desktop's file history off, Recent files leaves the sidebar

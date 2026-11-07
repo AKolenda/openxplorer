@@ -492,27 +492,44 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
     }
 
     test.activate("paste", None);
-    let dialog = open_dialog(&test);
+    // Windows asks in the progress window, in place of the action's
+    // progress.
+    let window = crate::window::progress_window::ProgressWindow::of(&test.context);
+    wait_until("the action to ask", || {
+        window
+            .actions()
+            .iter()
+            .any(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+    });
+    let panel = window
+        .actions()
+        .into_iter()
+        .find(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+        .expect("the asking action");
     assert_eq!(
-        dialog.title().unwrap_or_default(),
+        panel.caption_shown(),
         "Destination Folder Access Denied",
         "Windows' question about a folder that may not be written to"
     );
-    assert_eq!(
-        dialog.message_text(),
-        "You'll need to provide administrator permission to copy to this folder"
+    let texts = panel.failure_texts();
+    assert!(
+        texts
+            .iter()
+            .any(|text| text == "You'll need to provide administrator permission to copy to this folder"),
+        "{texts:?}"
     );
     assert!(
-        dialog.texts().iter().any(|text| text == "Locked"),
-        "it names the folder: {:?}",
-        dialog.texts()
+        texts.iter().any(|text| text == "Locked"),
+        "it names the folder: {texts:?}"
     );
-    assert_eq!(dialog.button_labels(), ["Try Again", "Skip", "Cancel"]);
-    dialog.press("Cancel");
+    assert_eq!(panel.failure_button_labels(), ["Continue", "Skip", "Cancel"]);
+    assert!(panel.failure_shows_shield());
+    assert!(dialog_over(&test).is_none(), "no dialog over the window");
+    panel.press_failure("Cancel");
     // Whether a result follows Cancel is not this test's concern: one that
     // shows is closed.
     wait_until("the paste to end", || {
-        is_enabled(&test, "new-folder") || dialog_over(&test).is_some_and(|report| report != dialog)
+        is_enabled(&test, "new-folder") || dialog_over(&test).is_some()
     });
     if let Some(report) = dialog_over(&test) {
         report.press("OK");

@@ -10,14 +10,32 @@
 //! from a folder opened from them shows them again: the step keeps what
 //! was searched for and how, and the search runs again. Emptying the box
 //! (Escape, its ×, or the strip's Clear search) goes back to the folder
-//! as Back does. Editing a shown search changes its step in place.
+//! as Back does. Editing a shown search changes its step in place. A tab
+//! on results that comes back to the front searches again, and once the
+//! results are found puts back what was selected in them and how far
+//! they were scrolled ([`ResultsView`]).
 
 use gtk::subclass::prelude::*;
 
 use crate::history::SearchStep;
 
-use super::session::Direction;
+use super::session::{Direction, TabId};
 use super::BrowserWindow;
+
+/// Where a tab on search results was in them when another tab came to
+/// the front: the results are found again when it comes back, and this
+/// is put back once they are.
+#[derive(Debug, Clone)]
+pub(super) struct ResultsView {
+    /// The tab.
+    pub(super) tab: TabId,
+    /// The URIs of the results it had selected.
+    pub(super) selected: Vec<String>,
+    /// The URI of the result that had keyboard focus.
+    pub(super) focused: Option<String>,
+    /// Its vertical scroll position.
+    pub(super) scroll: f64,
+}
 
 /// How a search that runs is recorded in the tab's history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +136,15 @@ impl BrowserWindow {
     /// was searched: its text in the box, its scope and options in the
     /// strip. It runs again once the typing pause is over.
     pub(super) fn show_step_search(&self) {
+        self.show_step_search_restoring(None);
+    }
+
+    /// [`Self::show_step_search`] for a tab that comes back to the front:
+    /// once its results are found again, `view` puts back where it was in
+    /// them ([`Self::restore_results_view`]). Putting the text back is
+    /// not the user editing it, which starts again from no selection at
+    /// the top.
+    pub(super) fn show_step_search_restoring(&self, view: Option<ResultsView>) {
         let step = {
             let session = self.imp().session.borrow();
             session
@@ -125,14 +152,48 @@ impl BrowserWindow {
                 .and_then(|tab| tab.history.current_search().cloned())
         };
         let Some(step) = step else {
+            self.imp().results_view.replace(None);
             return;
         };
+        self.imp().results_view.replace(view);
         let mut search = self.imp().search.borrow_mut();
         search.set_scope(step.scope);
         search.set_search_in(step.search_in);
         search.set_facets(step.facets);
         drop(search);
+        self.imp().restores_results.set(true);
         self.search_box().set_query(&step.query);
+        self.imp().restores_results.set(false);
+    }
+
+    /// Whether the window is putting a tab's search back in the box,
+    /// rather than the user editing it.
+    pub(super) fn is_restoring_results(&self) -> bool {
+        self.imp().restores_results.get()
+    }
+
+    /// Puts back where the active tab was in its search results now that
+    /// they are found again: what was selected, and how far they were
+    /// scrolled. Nothing changes when another tab is in front; the user
+    /// selecting meanwhile forgets it ([`Self::forget_results_view`]).
+    pub(super) fn restore_results_view(&self) {
+        let Some(view) = self.imp().results_view.take() else {
+            return;
+        };
+        let is_active = self.imp().session.borrow().active_id() == Some(view.tab);
+        let pane = self.folder_pane();
+        if !is_active {
+            return;
+        }
+        pane.model().select_uris(&view.selected);
+        pane.restore_scroll_position(view.scroll);
+    }
+
+    /// Forgets where the active tab was in its search results, before
+    /// they are found again: the user edited the search or the selection,
+    /// or the tab went elsewhere.
+    pub(super) fn forget_results_view(&self) {
+        self.imp().results_view.replace(None);
     }
 
     /// Empties the search box for the window's own reasons, such as

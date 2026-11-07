@@ -144,17 +144,7 @@ impl BrowserWindow {
     pub(super) fn is_busy_for_tab_moves(&self) -> bool {
         // A file dialog keeps its one tab: a second one would make closing
         // it ask about tabs, behind the caller's back (INT-032).
-        self.is_writing_files() || self.shows_dialog() || self.is_picking()
-    }
-
-    /// True while a dialog of this window is open.
-    pub(super) fn shows_dialog(&self) -> bool {
-        let this = self.upcast_ref::<gtk::Window>();
-        let toplevels = gtk::Window::list_toplevels();
-        toplevels
-            .iter()
-            .filter_map(|widget| widget.downcast_ref::<gtk::Window>())
-            .any(|window| window.is_visible() && window.transient_for().as_ref() == Some(this))
+        self.is_writing_files() || self.has_open_dialog() || self.is_picking()
     }
 
     /// What tab `id` takes along when it moves, with the selection and

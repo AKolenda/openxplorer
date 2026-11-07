@@ -250,6 +250,21 @@ impl BrowserWindow {
         }));
     }
 
+    /// The connected network shares, one per mount, for the navigation
+    /// pane's Disconnect network drive, as "…" lists them.
+    pub(super) fn network_drives(&self) -> Vec<NetworkDrive> {
+        if self.imp().more_menu_places.borrow().is_none() {
+            let places = self.places();
+            self.remember_more_menu_places(&places);
+        }
+        self.imp()
+            .more_menu_places
+            .borrow()
+            .as_ref()
+            .map(|sources| sources.network_drives.clone())
+            .unwrap_or_default()
+    }
+
     /// Shows in "…" what the location shown allows, as Windows 11's "…"
     /// does: in This PC and Network the network drive commands; in a
     /// folder Undo and Redo while each can run, named for the step, and
