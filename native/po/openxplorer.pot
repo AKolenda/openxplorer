@@ -30,7 +30,7 @@ msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, B
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network drive, below the navigation pane or in the \"…\" menu of This PC and Network, connects a share such as \\\\server\\share under a drive letter, as in Windows, offering only the letters still free; Save in the sidebar · reconnect when opened (Windows has Reconnect at sign-in) saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network drive, on the right-click menu of This PC and Network in the navigation pane or in their \"…\" menu, connects a share such as \\\\server\\share under a drive letter, as in Windows, offering only the letters still free; Save in the sidebar · reconnect when opened (Windows has Reconnect at sign-in) saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -588,7 +588,7 @@ msgstr ""
 msgid "Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server."
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Add a network location"
 msgstr ""
 
@@ -621,7 +621,7 @@ msgstr ""
 msgid "Folder:"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs
 msgid "Map network drive"
 msgstr ""
 
@@ -751,11 +751,11 @@ msgstr ""
 msgid "Size:"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells/expander.rs
+#: crates/ox-app/src/folder_view/cells/expander.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Collapse"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells/expander.rs
+#: crates/ox-app/src/folder_view/cells/expander.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Expand"
 msgstr ""
 
@@ -4488,7 +4488,7 @@ msgstr ""
 msgid "{len} windows have {tabs} tabs open. Close them all and quit?"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Copy"
 msgstr ""
 
@@ -4540,7 +4540,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -5026,7 +5026,7 @@ msgid "Only a folder can be pinned to Quick access."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
-msgid "Only a search result has a file location to open."
+msgid "Only a search result or a recent file has a file location to open."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
@@ -6237,11 +6237,19 @@ msgid "The folder's name"
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
+msgid "A whole drive cannot be copied. Open it and select what to copy."
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
 msgid "Clear recent files"
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
 msgid "Clear recent locations"
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
+msgid "Drive names cannot be changed here."
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
@@ -6589,6 +6597,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
 msgid "Huge icons"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Map network drive…"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
