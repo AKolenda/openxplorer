@@ -7,7 +7,8 @@
 //! dropped. Pictures are decoded once at icon size and kept, so scrolling
 //! back to an item does not decode its picture again. An item without a
 //! custom icon shows its preview in the same place, when it has one
-//! ([`crate::thumbnails`]).
+//! ([`crate::thumbnails`]). A folder without one shows the picture chosen
+//! for it ([`super::folder_picture`]).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -18,6 +19,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 
+use super::folder_picture::{FOLDER_PICTURE, SMALLEST_PICTURE_ICON};
 use super::FileCell;
 use crate::folder_view::item::FileItem;
 use crate::thumbnails::{self, PreviewPolicy, PreviewRequest};
@@ -42,7 +44,7 @@ thread_local! {
 
 /// The decoded picture at `icon_uri`, decoding it off the main thread the
 /// first time.
-async fn icon_texture(icon_uri: String) -> Option<gdk::Texture> {
+pub(crate) async fn icon_texture(icon_uri: String) -> Option<gdk::Texture> {
     if let Some(texture) = DECODED.with_borrow(|decoded| decoded.get(&icon_uri).cloned()) {
         return Some(texture);
     }
@@ -63,12 +65,15 @@ async fn icon_texture(icon_uri: String) -> Option<gdk::Texture> {
 
 impl FileCell {
     /// Shows the art again, then looks up `item`'s custom icon and, if it
-    /// has none and `previews` allow one, its preview (VIEW-057). A
-    /// lookup still running for the item shown before is dropped.
+    /// has none, a folder's picture (PROP-037): on the folder on a tile of
+    /// Medium icons or larger, in the icon's place on smaller ones and in
+    /// rows; or, where `previews` allow one, its preview (VIEW-057).
+    /// A lookup still running for the item shown before is dropped.
     pub(crate) fn look_up_picture(&self, item: &FileItem, previews: PreviewPolicy) {
         self.cancel_picture_lookup();
         let imp = self.imp();
         imp.custom_icon.set_visible(false);
+        imp.folder_picture.show_texture(None);
         imp.image.set_opacity(1.0);
         let entry = item.entry();
         let uri = entry.uri.clone();
@@ -80,9 +85,28 @@ impl FileCell {
         if !uri.starts_with("file:") && preview.is_none() {
             return;
         }
+        let is_folder = entry.is_dir;
+        let on_the_folder = imp.is_tile.get() && imp.icon_size.get() >= SMALLEST_PICTURE_ICON;
         let cell = self.downgrade();
         let lookup = glib::spawn_future_local(async move {
-            let mut texture = custom_icon(&uri).await;
+            let own = own_pictures(&uri).await;
+            let mut texture = match own.icon {
+                Some(icon) => icon_texture(icon).await,
+                None => None,
+            };
+            // A folder's picture sits on the folder at Medium icons and
+            // larger, and takes the small icon's place in Details, List
+            // and Small icons, as Windows draws it there.
+            if let Some(picture) = own.folder_picture.filter(|_| texture.is_none() && is_folder) {
+                if on_the_folder {
+                    if let (Some(cell), Some(picture)) = (cell.upgrade(), icon_texture(picture).await) {
+                        cell.imp().folder_picture.show_texture(Some(&picture));
+                        cell.imp().picture_lookup.take();
+                    }
+                    return;
+                }
+                texture = icon_texture(picture).await;
+            }
             if texture.is_none() {
                 if let Some(request) = preview {
                     texture = thumbnails::preview(request).await;
@@ -107,6 +131,13 @@ impl FileCell {
         }
     }
 
+    /// Whether the cell shows its folder's picture on the folder, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn shows_folder_picture(&self) -> bool {
+        self.imp().folder_picture.shows_picture()
+    }
+
     /// Whether the cell shows a custom icon or a preview, for tests.
     #[cfg(test)]
     pub(crate) fn shows_custom_icon(&self) -> bool {
@@ -114,20 +145,40 @@ impl FileCell {
     }
 }
 
-/// The custom icon of the local item at `uri`, if it has one.
-async fn custom_icon(uri: &str) -> Option<gdk::Texture> {
+/// The pictures a local item names for itself: its custom icon and, for
+/// a folder, the picture on its icon.
+#[derive(Debug, Default)]
+struct OwnPictures {
+    icon: Option<String>,
+    folder_picture: Option<String>,
+}
+
+/// The custom icon and folder picture of the local item at `uri`, read
+/// in one query.
+async fn own_pictures(uri: &str) -> OwnPictures {
     if !uri.starts_with("file:") {
-        return None;
+        return OwnPictures::default();
     }
     let file = gio::File::for_uri(uri);
-    let info = file
-        .query_info_future(CUSTOM_ICON, gio::FileQueryInfoFlags::NONE, glib::Priority::LOW)
+    let Ok(info) = file
+        .query_info_future(
+            &format!("{CUSTOM_ICON},{FOLDER_PICTURE}"),
+            gio::FileQueryInfoFlags::NONE,
+            glib::Priority::LOW,
+        )
         .await
-        .ok()?;
-    let icon_uri = info
-        .attribute_string(CUSTOM_ICON)
-        .filter(|icon| !icon.is_empty())?;
-    icon_texture(icon_uri.to_string()).await
+    else {
+        return OwnPictures::default();
+    };
+    let named = |key: &str| {
+        info.attribute_string(key)
+            .filter(|picture| !picture.is_empty())
+            .map(|picture| picture.to_string())
+    };
+    OwnPictures {
+        icon: named(CUSTOM_ICON),
+        folder_picture: named(FOLDER_PICTURE),
+    }
 }
 
 /// The picture at `uri` at icon size, if it is a local image of a

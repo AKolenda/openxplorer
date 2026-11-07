@@ -177,6 +177,27 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
   background-color: @ox_selected;
   color: @ox_text;
 }
+/* The template list, then the folder picture's stacked
+   buttons beside its preview, as Windows 11 spaces them. */
+.ox-properties dropdown.folder-template { margin: 2px 0 6px 0; }
+/* Windows' combo box: a push button's frame around the choice and its
+   chevron. */
+.ox-properties dropdown.folder-template > button {
+  min-height: 21px;
+  padding: 0 6px 0 8px;
+  border-radius: 4px;
+  border: 1px solid @ox_control_stroke;
+  border-bottom-color: @ox_control_stroke_bottom;
+  background-color: @ox_control_fill;
+  color: @ox_text;
+  box-shadow: none;
+}
+.ox-properties dropdown.folder-template > button:hover { background-color: @ox_control_fill_hover; }
+.ox-properties dropdown.folder-template > button:checked,
+.ox-properties dropdown.folder-template > button:active { background-color: @ox_control_fill_pressed; }
+.ox-properties dropdown.folder-template > button arrow { -gtk-icon-size: 12px; color: @ox_muted; }
+.ox-properties .properties-button-column { border-spacing: 6px; margin: 8px 0 2px 0; }
+.ox-properties .folder-picture-preview { margin: 0 8px 0 0; }
 
 /* Forms inside a tab or a Properties dialog (Snapshot source, Location,
    the mount assistant, Advanced Sharing, several items' Security): the

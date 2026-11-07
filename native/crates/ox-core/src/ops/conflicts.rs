@@ -62,9 +62,10 @@ impl NameConflict {
             && incoming.modified == existing.modified
     }
 
-    /// The name both items have.
+    /// The name both items have, as the destination has it: a Recycle
+    /// Bin item's own URI need not end in the name it is restored under.
     pub fn name(&self) -> String {
-        GioNode::new(&self.incoming_uri).display_name()
+        GioNode::new(&self.existing_uri).display_name()
     }
 }
 
@@ -310,7 +311,7 @@ fn is_inside(uri: &str, folder: &str) -> bool {
 }
 
 /// The type, size and date of `node`, read without following a link.
-fn facts(node: &GioNode, cancel: &Cancellation) -> Result<ItemFacts, OpsError> {
+pub(super) fn facts(node: &GioNode, cancel: &Cancellation) -> Result<ItemFacts, OpsError> {
     let info = unless_cancelled(cancel, || node.info(Some(cancel)))??;
     let is_folder = info.kind == NodeKind::Directory;
     let modified = info
