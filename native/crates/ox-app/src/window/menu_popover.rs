@@ -36,7 +36,7 @@ mod height;
 #[cfg(test)]
 mod inspection;
 #[cfg(test)]
-pub(crate) use inspection::{row_label, row_tooltip};
+pub(crate) use inspection::row_label;
 mod items;
 mod motion;
 
@@ -628,11 +628,16 @@ impl MenuPopover {
         let can_choose = self.can_choose(item);
         let button = gtk::Button::builder()
             .child(&icons::image(item.glyph, ROW_GLYPH))
-            .tooltip_text(item_tooltip(item))
+            .tooltip_text(&item.label)
             .sensitive(can_choose)
             .build();
         button.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-        explain_availability(self, button.upcast_ref(), item, can_choose);
+        // The strip's buttons show only a glyph, so, as Windows 11's, they
+        // name their command in a tooltip, which also says why one is
+        // disabled.
+        if let Some(reason) = explain_availability(self, button.upcast_ref(), item, can_choose) {
+            button.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
+        }
         let item = item.clone();
         button.connect_clicked(glib::clone!(
             #[weak(rename_to = popover)]
@@ -1041,11 +1046,6 @@ fn items_of(entries: &[MenuEntry]) -> impl Iterator<Item = &MenuItem> {
     })
 }
 
-/// The tooltip of `item`: its label, which a narrow menu may cut short.
-fn item_tooltip(item: &MenuItem) -> String {
-    item.label.clone()
-}
-
 /// Why `item` cannot be chosen, when something says: the reason this
 /// menu gave, or its action's in the window of `menu`.
 fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
@@ -1054,22 +1054,20 @@ fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
             return Some(reason.to_owned());
         }
     }
-    let tooltip = item_tooltip(item);
-    if tooltip != item.label {
-        return None;
-    }
     item.action.disabled_reason(menu.upcast_ref()).map(str::to_owned)
 }
 
-/// Adds to the tooltip of `control`, which shows `item` in `menu`, why it
-/// cannot be chosen, and tells screen readers too.
-fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
-    let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten();
-    let Some(reason) = reason else {
-        return;
-    };
-    control.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
+/// Tells screen readers why `control`, which shows `item` in `menu`,
+/// cannot be chosen, and returns that reason.
+fn explain_availability(
+    menu: &MenuPopover,
+    control: &gtk::Widget,
+    item: &MenuItem,
+    can_choose: bool,
+) -> Option<String> {
+    let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten()?;
     control.update_property(&[gtk::accessible::Property::Description(&reason)]);
+    Some(reason)
 }
 
 /// Whether a menu's rows keep a column for check marks and dots before
@@ -1180,14 +1178,6 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: Gl
     content
 }
 
-/// The whole label of `row` while the menu cuts it short, else `None`.
-fn cut_short_label(row: &gtk::ListBoxRow) -> Option<String> {
-    let content = row.child()?;
-    let label = crate::window::widget_tree::children(&content)
-        .find_map(|child| child.downcast::<gtk::Label>().ok())?;
-    label.layout().is_ellipsized().then(|| label.text().to_string())
-}
-
 /// The row for `item`, showing `check` in the menu's `marks` column, and
 /// its glyph, or an empty slot, in the `glyphs` column.
 fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::ListBoxRow {
@@ -1200,22 +1190,10 @@ fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphC
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // No tooltip that would only repeat the label (`b.title=it.label` in
-    // app.js), as Windows 11's menus show none: only a label the menu cuts
-    // short shows whole, which adds what the row cannot show. A disabled
-    // row's own tooltip, saying why ([`explain_availability`]), comes
-    // first.
-    row.set_has_tooltip(true);
-    row.connect_query_tooltip(|row, _, _, _, tooltip| {
-        if row.tooltip_text().is_some() {
-            return false;
-        }
-        let Some(label) = cut_short_label(row) else {
-            return false;
-        };
-        tooltip.set_text(Some(&label));
-        true
-    });
+    // No tooltip, as Windows 11's menus show none on their rows (not
+    // `b.title=it.label` in app.js): not for a label the menu cuts short,
+    // nor for a disabled row, which tells screen readers why in its
+    // accessible description ([`explain_availability`]).
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }
