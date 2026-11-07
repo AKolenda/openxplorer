@@ -25,23 +25,32 @@
 //!   ([`replace_through_recycle_bin`]); should it not arrive, the
 //!   replaced item comes back at once. Where nothing can go to the
 //!   Recycle Bin, or a file meets a folder, nothing is replaced and the
-//!   item stays in the Recycle Bin, so no restore ever overwrites.
+//!   item stays in the Recycle Bin.
+//! - With [`ReplacedFiles::Overwrite`] (Settings > Files & folders), a
+//!   file restored over a file overwrites it, as Windows does, and the
+//!   replaced file is gone ([`restore_over`]). The item first comes out
+//!   of the Recycle Bin under a private name beside the file it replaces
+//!   and then takes that name in one rename, so a restore stopped before
+//!   that leaves the old file as it was. A folder in the way still goes
+//!   to the Recycle Bin: the setting is about files, and a folder is
+//!   never deleted as a side effect of Replace.
 //! - Both kept in the File Conflict window: the restored item takes
 //!   Windows' number, `report (2).txt`, the first free one.
 //! - A folder meeting a folder of its name is a conflict too: the insides
 //!   of a trashed folder are part of that item, so they cannot be merged
 //!   one by one.
 //!
-//! Every step moves the item natively and never overwrites
-//! ([`super::recycle_bin`]), and Undo puts the restored items back in
-//! the Recycle Bin, then restores the replaced ones.
+//! Every step moves the item natively and, but for that chosen
+//! overwrite, never overwrites ([`super::recycle_bin`]), and Undo puts
+//! the restored items back in the Recycle Bin, then restores the replaced
+//! ones that went there.
 
 use std::path::PathBuf;
 
 use gio::prelude::*;
 
 use super::conflicts::{facts, ConflictScan, NameConflict, PlannedItem, PlannedKind};
-use super::context::{on_worker, OperationContext};
+use super::context::{on_worker, OperationContext, ReplacedFiles};
 use super::error::OpsError;
 use super::recycle_bin::{
     forget_removed_items, move_out, path_name, recreate_original_folder, restore_item, top_level_item,
@@ -55,7 +64,7 @@ use super::undo::{Operation, UndoRecord};
 use crate::entry::{entry_from_info, ATTRIBUTES};
 use crate::gio_node::GioNode;
 use crate::location::{kept_both_name, ItemKind};
-use crate::transfer::{Cancellation, Node, TransferMode};
+use crate::transfer::{staging_name, Cancellation, Node, TransferMode};
 
 /// The plan of restoring the Recycle Bin items `uris`: each item goes
 /// into the folder it was deleted from, and each one whose original name
@@ -455,6 +464,29 @@ fn replace(
     let same_kind = facts(&existing, cancel).is_ok_and(|now| {
         now.is_folder == conflict.incoming.is_folder && now.is_folder == conflict.existing.is_folder
     });
+    let overwrites = context.replaced_files == ReplacedFiles::Overwrite
+        && same_kind
+        && !conflict.incoming.is_folder
+        && existing.path().is_some();
+    if overwrites {
+        match restore_over(item, &existing, context) {
+            Ok(restored) => {
+                // An item this restore already put there is overwritten:
+                // it is gone, and no longer restored.
+                if let Some(at) = restored_there {
+                    let (earlier, _) = so_far.placed.remove(at);
+                    so_far.outcome.result.done.retain(|done| *done != earlier);
+                }
+                so_far.outcome.result.done.push(item.uri.clone());
+                so_far.placed.push((item.uri.clone(), restored.clone()));
+                if !so_far.outcome.created.contains(&restored) {
+                    so_far.outcome.created.push(restored);
+                }
+            }
+            Err(error) => record_failure(&mut so_far.outcome.result, &name, &error),
+        }
+        return;
+    }
     let kept = existing
         .path()
         .filter(|_| same_kind && existing.can_trash(Some(cancel)).unwrap_or(false));
@@ -503,6 +535,56 @@ fn replace(
             merge_results(&mut so_far.outcome.result, part.result);
         }
         Err(error) => record_failure(&mut so_far.outcome.result, &name, &error),
+    }
+}
+
+/// Restores the item of `item` over the file `existing`, which is gone
+/// afterwards, as Windows overwrites it ([`ReplacedFiles::Overwrite`]),
+/// and returns the restored item's URI.
+///
+/// The item first comes out of the Recycle Bin under a private staging
+/// name beside `existing`, never overwriting, and then takes `existing`'s
+/// name in one native rename. A cancellation before that rename leaves
+/// both where they were; once the item is out of the Recycle Bin, the
+/// rename runs to the end, so the public name is never left empty. Should
+/// it fail, the item goes back to the Recycle Bin.
+///
+/// # Errors
+///
+/// The write protection, cancellation, or a failed move; nothing was
+/// replaced then. [`OpsError::Failed`] names the staged item when it could
+/// not go back to the Recycle Bin either.
+fn restore_over(
+    item: &PlannedItem,
+    existing: &GioNode,
+    context: &OperationContext,
+) -> Result<String, OpsError> {
+    context.cancel.check()?;
+    context.protection.check(&existing.uri())?;
+    let trashed = top_level_item(&item.uri)?;
+    let folder = gio::File::for_uri(&existing.uri())
+        .parent()
+        .ok_or_else(|| OpsError::failed(crate::i18n::gettext("Filesystem roots cannot be replaced.")))?;
+    let staged = folder.child(staging_name()?);
+    let taken = || {
+        OpsError::failed(crate::i18n::gettext(
+            "Could not reserve a temporary replacement name.",
+        ))
+    };
+    move_out(&trashed, &staged, context, taken, |_| Ok(()))?;
+    let staged = GioNode::from_file(staged);
+    // From here on the swap runs to the end, even after a cancellation.
+    match staged.replace_native(existing, None) {
+        Ok(()) => Ok(existing.uri()),
+        Err(error) => {
+            if staged.trash(&Cancellation::new()).is_err() {
+                return Err(OpsError::failed(crate::i18n::format_message(
+                    "The restored item is at {uri}. Check it, then rename or delete it. {error}",
+                    &[("uri", &staged.uri()), ("error", &error.to_string())],
+                )));
+            }
+            Err(error.into())
+        }
     }
 }
 
