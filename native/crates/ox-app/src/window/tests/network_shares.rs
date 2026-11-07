@@ -105,6 +105,44 @@ fn a_connected_share_is_saved_listed_and_opened() {
     assert!(labels.contains(&"Projects (Z:)".to_owned()), "{labels:?}");
 }
 
+/// A share mapped for this session only keeps its drive letter under
+/// Network without being saved, and Map network drive then offers the
+/// next free letter, so two shares mapped with the default letter never
+/// share it, as in Windows.
+///
+/// parity: NET-001, NET-018
+#[gtk::test]
+fn a_share_mapped_for_this_session_keeps_its_letter() {
+    let test = TestWindow::open(Page::Network.uri());
+    test.activate("map-network-location", None);
+    let dialog = open_form_dialog();
+    let share = ConnectedShare {
+        uri: "smb://example.invalid/projects".to_owned(),
+        label: "projects (Z:)".to_owned(),
+    };
+
+    test.window
+        .keep_mapped_share(&dialog, share, ShareKeeping::ThisSessionOnly);
+
+    wait_until("the opened share", || {
+        test.window.current_uri().as_deref() == Some("smb://example.invalid/projects")
+    });
+    assert!(test.context.settings_data().shares.is_empty(), "nothing is saved");
+    let labels = test.window.sidebar().labels();
+    assert!(labels.contains(&"projects (Z:)".to_owned()), "{labels:?}");
+
+    test.activate("map-network-location", None);
+    let again = open_form_dialog();
+    let chosen = descendants::<gtk::DropDown>(&again)
+        .first()
+        .and_then(gtk::DropDown::selected_item)
+        .and_downcast::<gtk::StringObject>()
+        .map(|chosen| chosen.string().to_string());
+    assert_eq!(chosen.as_deref(), Some("Y:"), "Z: is taken");
+    again.press("Cancel");
+    wait_until("Cancel to close the dialog", || !again.is_visible());
+}
+
 /// A tab inside a kernel CIFS/SMB3 mount is a network location: its
 /// address says so and its icon stands on the network bar, as soon as the
 /// mount is known.

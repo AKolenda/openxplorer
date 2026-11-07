@@ -261,7 +261,8 @@ fn a_move_to_another_filesystem_copies_then_removes_the_source() {
 
 /// An unreadable item asks what to do: Retry runs it again once it can be
 /// read, "Skip all" leaves it and every later failure out without asking,
-/// and what failed is still reported.
+/// and each failure left out counts as answered, so none is reported
+/// afterwards.
 ///
 /// parity: OPS-047
 #[test]
@@ -312,7 +313,10 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     assert_eq!(*asked.lock().expect("question log"), ["a.txt", "b.txt"]);
     assert_eq!(result.done, [file_uri(&paths[0]), file_uri(&paths[2])]);
     assert_eq!(result.errors.len(), 2, "{result:?}");
-    assert_eq!(result.presented, result.errors[..1], "d.txt was left out unasked");
+    assert_eq!(
+        result.presented, result.errors,
+        "Skip for all current items answered d.txt too"
+    );
     assert!(!result.cancelled);
     assert_eq!(list(&fixture.destination_folder), ["a.txt", "c.txt"]);
     fixture.assert_no_staging();
@@ -378,7 +382,8 @@ fn an_entry_inside_a_folder_is_asked_about_by_itself() {
 }
 
 /// "Skip all" about an entry inside a folder leaves out every later entry
-/// that cannot be copied without asking again, and "Cancel" stops the run:
+/// that cannot be copied without asking again, all of them answered, and
+/// "Cancel" stops the run:
 /// nothing of the cancelled folder is published and its staging is gone.
 ///
 /// parity: OPS-047
@@ -405,9 +410,8 @@ fn skip_all_and_cancel_about_an_entry_inside_a_folder() {
     assert_eq!(*asked.lock().expect("count"), 1, "asked once");
     assert_eq!(result.errors.len(), 3, "{result:?}");
     assert_eq!(
-        result.presented,
-        result.errors[..1],
-        "the later pipes were unasked"
+        result.presented, result.errors,
+        "Skip all answered the later pipes too"
     );
     assert_eq!(list(&fixture.destination_folder.join("tree")), ["a.txt"]);
     fixture.assert_no_staging();

@@ -30,7 +30,7 @@ msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, B
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network drive, on the right-click menu of This PC and Network in the navigation pane or in their \"…\" menu, connects a share such as \\\\server\\share under a drive letter, as in Windows; Reconnect at sign-in saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\\\server\\share or smb://server/share in the address bar.\n- Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.\n- Map network drive, on the right-click menu of This PC and Network in the navigation pane or in their \"…\" menu, connects a share such as \\\\server\\share under a drive letter, as in Windows, offering only the letters still free; Save in the sidebar · reconnect when opened (Windows has Reconnect at sign-in) saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -426,7 +426,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/transfer_panel/failure.rs
 msgid "Cancel"
 msgstr ""
 
@@ -627,10 +627,6 @@ msgstr ""
 
 #: crates/ox-app/src/dialogs/network_map.rs
 msgid "OpenXplorer will ask for your username and password if needed. Remember my credentials is selected by default. No passwords are saved in OpenXplorer settings. A label such as “Z:” is only a label, not a system-wide drive letter."
-msgstr ""
-
-#: crates/ox-app/src/dialogs/network_map.rs
-msgid "Reconnect at sign-in"
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_map.rs
@@ -4746,7 +4742,7 @@ msgstr ""
 msgid "Already in {folder}"
 msgstr ""
 
-#: crates/ox-app/src/window/conflict_window.rs
+#: crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Continue"
 msgstr ""
 
@@ -5366,11 +5362,11 @@ msgstr ""
 msgid "The desktop clipboard could not be claimed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
 msgid "No"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
 msgid "Yes"
 msgstr ""
 
@@ -5427,11 +5423,11 @@ msgid "Delete or move files so you have enough space."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Destination Folder Access Denied"
+msgid "Destination"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Do this for all current items"
+msgid "Destination Folder Access Denied"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -5462,6 +5458,10 @@ msgstr ""
 msgid "Skip"
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Source"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Space free: {size}"
@@ -5478,6 +5478,14 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "There is not enough space on {drive}."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "This file can't be moved to the Recycle Bin. Do you want to permanently delete it?"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "This folder can't be moved to the Recycle Bin. Do you want to permanently delete it?"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5500,6 +5508,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "You'll need to provide administrator permission to copy to this folder"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You'll need to provide administrator permission to delete this file"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You'll need to provide administrator permission to delete this folder"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -6847,6 +6863,10 @@ msgid_plural "Recycling {count} items from {source}"
 msgstr[0] ""
 msgstr[1] ""
 
+#: crates/ox-app/src/window/transfer_panel/failure.rs
+msgid "Do this for all current items"
+msgstr ""
+
 #: crates/ox-app/src/window/transfer_panel/question.rs
 msgid "Compare info for both files"
 msgstr ""
@@ -7073,6 +7093,34 @@ msgstr ""
 
 #: crates/ox-app/src/write_inhibitor.rs
 msgid "Copying files"
+msgstr ""
+
+#: crates/ox-core/src/admin_copy.rs
+msgid "Administrator access is not available. Install your distribution's GVfs administrator backend to change this folder as administrator."
+msgstr ""
+
+#: crates/ox-core/src/admin_copy.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/transfer/engine.rs
+msgid "Filesystem roots cannot be copied, moved or trashed as items."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "Other users can change {path}, or it is on a drive whose permissions can't be checked, so items there can't be safely changed as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "{path} is not a folder, so items can't be copied there as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "{path} is on a removable drive or in a place where other users can mount drives, so items there can't be safely changed as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_copy.rs
+msgid "{uri} is not on this computer, so it can't be changed as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7669,6 +7717,14 @@ msgstr ""
 
 #: crates/ox-core/src/gio_node.rs
 msgid "Filesystem roots cannot be changed as items."
+msgstr ""
+
+#: crates/ox-core/src/gio_node/into_admin.rs
+msgid "Items are moved into an administrator location by copying them and then removing the originals."
+msgstr ""
+
+#: crates/ox-core/src/gio_node/into_admin.rs
+msgid "Only files, folders and links can be copied as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8522,10 +8578,6 @@ msgstr ""
 msgid "Delete Multiple Items"
 msgstr ""
 
-#: crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/transfer/engine.rs
-msgid "Filesystem roots cannot be copied, moved or trashed as items."
-msgstr ""
-
 #: crates/ox-core/src/ops/links.rs
 msgid "Enter a name for the link."
 msgstr ""
@@ -9275,6 +9327,19 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/transfer/engine.rs
 msgid "The item was copied to {uri}, but the original could not be removed. Check the copy, then delete the original. {error}"
+msgstr ""
+
+#: crates/ox-core/src/transfer/engine.rs
+msgid "This item can't be copied as administrator."
+msgstr ""
+
+#: crates/ox-core/src/transfer/engine.rs
+msgid "This item can't be deleted as administrator."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/transfer/engine.rs
+msgid "{uri} already exists, so the items can't be merged into it as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

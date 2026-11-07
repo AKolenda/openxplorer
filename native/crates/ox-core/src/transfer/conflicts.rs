@@ -25,6 +25,11 @@ pub(crate) struct Placement<'a> {
     pub(crate) policy: ConflictPolicy,
     /// The folder the items go into.
     pub(crate) destination_folder: &'a dyn Node,
+    /// The folder the user chose: `destination_folder` itself, or its
+    /// `file:` form when the item is written as administrator through
+    /// `admin://` (OPS-047), so a move into the item's own folder and an
+    /// item replacing itself are still recognised.
+    pub(crate) requested_folder: &'a dyn Node,
     /// The name the item gets instead of its own, when the user answered
     /// a conflict with Rename; `None` keeps each item's name.
     pub(crate) name: Option<&'a OsStr>,
@@ -54,7 +59,8 @@ impl Placement<'_> {
         // XFER-012: moving an item into its own folder would change nothing,
         // and with Keep both it would even rename the user's item, so it is
         // skipped.
-        if self.mode == TransferMode::Move && destination.uri() == source.uri() {
+        let itself = self.is_itself(source, destination.as_ref(), self.name.unwrap_or(name))?;
+        if self.mode == TransferMode::Move && itself {
             return Ok(None);
         }
         if !destination.exists(Some(cancel)) {
@@ -68,7 +74,7 @@ impl Placement<'_> {
             )));
         }
         // OPS-028: Dolphin refuses to overwrite an item with itself.
-        if self.policy == ConflictPolicy::Replace && destination.uri() == source.uri() {
+        if self.policy == ConflictPolicy::Replace && itself {
             return Err(TransferError::failed(crate::i18n::gettext(
                 "An item cannot replace itself.",
             )));
@@ -79,6 +85,23 @@ impl Placement<'_> {
             ConflictPolicy::KeepBoth => self.free_copy_name(name, kind, cancel).map(Some),
             ConflictPolicy::Replace => Ok(Some(destination)),
         }
+    }
+
+    /// Whether `destination`, called `name`, is `source` itself, in the
+    /// destination folder or in the folder the user chose.
+    fn is_itself(
+        &self,
+        source: &dyn Node,
+        destination: &dyn Node,
+        name: &OsStr,
+    ) -> Result<bool, TransferError> {
+        if destination.uri() == source.uri() {
+            return Ok(true);
+        }
+        if self.requested_folder.uri() == self.destination_folder.uri() {
+            return Ok(false);
+        }
+        Ok(child_node(self.requested_folder, name)?.uri() == source.uri())
     }
 
     /// XFER-008: the first free Windows-style duplicate name, starting at

@@ -13,7 +13,9 @@
 //! each name's leading dot, which is how Linux hides an item, with the
 //! normal refusal when that name is taken. The boxes stay greyed until
 //! every item is read, and each stays greyed unless every item may be
-//! changed that way.
+//! changed that way. Once the Security tab changed the items'
+//! permissions, Read-only shows what the files have then, and a choice not
+//! applied yet stays.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -26,7 +28,7 @@ use ox_core::permissions::{apply_outside_in_background, ModeChange, PermissionRe
 use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
-use super::metadata::ItemProperties;
+use super::metadata::{read_properties, ItemProperties};
 use super::selection_view::selection_title;
 use super::window::{ApplyFuture, Pending, PropertiesWindow};
 use crate::window::BrowserWindow;
@@ -66,6 +68,17 @@ impl MixedCheck {
         self.now.set(now);
         self.wanted.set(now);
         self.show();
+    }
+
+    /// Takes `now` as what every item has after another tab changed them:
+    /// a choice the user made and has not applied stays, compared with
+    /// `now`; otherwise the box shows `now`.
+    fn follow(&self, now: Option<bool>) {
+        if self.wanted.get() == self.now.get() {
+            self.reset(now);
+        } else {
+            self.now.set(now);
+        }
     }
 
     fn show(&self) {
@@ -110,6 +123,12 @@ struct Item {
     /// Renaming asks about a changed extension, except for a link to a
     /// folder, whose name has none (OPS-049).
     links_to_folder: bool,
+}
+
+/// Whether a file with permissions `mode` is read-only: its owner may
+/// not write to it.
+fn is_read_only(mode: Option<u32>) -> bool {
+    mode.is_some_and(|mode| mode & 0o200 == 0)
 }
 
 /// What every one of several items has: `Some` of the state they share,
@@ -203,16 +222,30 @@ impl SelectionAttributes {
                 })
                 .collect(),
         );
-        let read_only = shared(
-            items
-                .iter()
-                .map(|item| item.mode.is_some_and(|mode| mode & 0o200 == 0)),
-        );
+        let read_only = shared(items.iter().map(|item| is_read_only(item.mode)));
         self.read_only.reset(read_only.filter(|_| !self.has_folder));
         self.hidden
             .reset(shared(items.iter().map(|item| item.entry.name.starts_with('.'))));
         self.read_only.check.set_sensitive(can_change_permissions);
         self.hidden.check.set_sensitive(can_rename);
+    }
+
+    /// Reads the items' permissions again after the Security tab changed
+    /// them, and shows the Read-only they have now, keeping a choice not
+    /// applied yet. A folder's Read-only is never known, so it stays.
+    pub(super) async fn follow_permissions(&self) {
+        if self.has_folder {
+            return;
+        }
+        let uris: Vec<String> = self.items.borrow().iter().map(|item| item.uri.clone()).collect();
+        let mut modes = Vec::with_capacity(uris.len());
+        for uri in uris {
+            let Ok(properties) = read_properties(uri).await else {
+                return;
+            };
+            modes.push(properties.mode);
+        }
+        self.read_only.follow(shared(modes.into_iter().map(is_read_only)));
     }
 
     /// Runs `renamed` with the old and new location of each item Hidden
