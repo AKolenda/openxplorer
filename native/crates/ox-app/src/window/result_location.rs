@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "Open file location" on a search result: its folder opens in this tab,
-//! a new tab or a new window, with the result selected (SRCH-015,
-//! SRCH-016).
+//! "Open file location" on a search result or a Recent row: its folder
+//! opens in this tab, a new tab or a new window, with the file selected
+//! (SRCH-015, SRCH-016, SIDE-026).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use ox_core::entry::Entry;
 use ox_core::location::{parent_location, LocationError};
 
 use super::session::{TabId, TabPlacement};
@@ -23,16 +24,26 @@ pub(super) enum LocationTarget {
 }
 
 impl BrowserWindow {
-    /// "Open file location" on a search result: opens the folder it is in
-    /// where `target` says, with the result selected and scrolled into
-    /// view (SRCH-015, SRCH-016). A new tab opens behind, so the search
-    /// stays in front, as Dolphin opens it.
+    /// "Open file location" on a search result or a Recent row: opens the
+    /// folder its file is in where `target` says, with the file selected
+    /// and scrolled into view (SRCH-015, SRCH-016). A new tab opens
+    /// behind, so the search stays in front, as Dolphin opens it.
     pub(super) fn open_result_location(&self, target: LocationTarget) {
         let items = self.folder_pane().model().selected_items();
         let [item] = items.as_slice() else {
             return;
         };
-        self.open_item_location(item.entry().uri.clone(), target);
+        if let Some(uri) = self.located_file(item.entry()) {
+            self.open_item_location(uri.to_owned(), target);
+        }
+    }
+
+    /// The file whose folder "Open file location" opens for `entry`: a
+    /// search result itself, or the file a Recent row stands for, as
+    /// Windows offers it on Home's Recent files. `None` for anything else.
+    pub(super) fn located_file<'a>(&self, entry: &'a Entry) -> Option<&'a str> {
+        let search_result = self.is_searching().then_some(entry.uri.as_str());
+        entry.meta.recent_target.as_deref().or(search_result)
     }
 
     /// Opens the folder that holds `uri` where `target` says, with `uri`
