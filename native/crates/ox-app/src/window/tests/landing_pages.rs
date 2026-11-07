@@ -280,7 +280,7 @@ fn selected_tiles(test: &TestWindow) -> Vec<String> {
 
 /// Select all, Invert selection and Select none act on the tiles of both
 /// groups, from "…" and from Ctrl+A and Escape, as in Windows 11's This
-/// PC; a click selects in one group again.
+/// PC, and a redraw keeps them; a click selects in one group again.
 ///
 /// parity: HOME-003
 #[gtk::test]
@@ -312,6 +312,9 @@ fn select_all_none_and_invert_act_on_the_tiles_of_both_groups() {
         gtk::gdk::ModifierType::CONTROL_MASK
     ));
     assert_eq!(selected_tiles(&test), every, "Ctrl+A");
+    test.window.render_places();
+    assert_eq!(selected_tiles(&test), every, "a redraw keeps them all");
+    assert!(drive_tile(&test, "Backup").1.has_focus(), "and the keyboard");
 
     let (shares, media_tile) = drive_tile(&test, media);
     shares.unselect_all();

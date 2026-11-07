@@ -854,11 +854,6 @@ impl Kept {
     }
 
     fn restore(&self, page: &gtk::Box) {
-        across_groups(|| {
-            for (flow, child) in self.selected.iter().filter_map(|key| Self::tile(page, key)) {
-                flow.select_child(&child);
-            }
-        });
         match &self.focus {
             Some(KeptFocus::Tile(key)) => {
                 if let Some((_, child)) = Self::tile(page, key) {
@@ -875,6 +870,16 @@ impl Kept {
             }
             None => {}
         }
+        // Focusing a tile selects it alone, so the selection comes back
+        // after the keyboard.
+        across_groups(|| {
+            for flow in tile_boxes(page) {
+                flow.unselect_all();
+            }
+            for (flow, child) in self.selected.iter().filter_map(|key| Self::tile(page, key)) {
+                flow.select_child(&child);
+            }
+        });
     }
 }
 
