@@ -396,3 +396,32 @@ fn without_a_mount_table_nothing_is_written() {
         Err(others_can_change(&destination))
     );
 }
+
+/// An item is deleted as administrator under `admin://` only when the
+/// folder that holds it passes: a file in a closed folder does, one in a
+/// folder others can change (sticky or group-writable) does not, nor does
+/// a filesystem root.
+///
+/// parity: OPS-047, XFER-015
+#[test]
+fn an_item_is_deleted_as_administrator_only_from_a_closed_folder() {
+    let (_folder, root) = workspace();
+    let closed = folder(&root.join("usr/local"), 0o755);
+    let file = closed.join("tool.cfg");
+    fs::write(&file, "settings").expect("write the file");
+    let rules = on_ext4(&root);
+    assert_eq!(elevated_item_with(&uri(&file), &rules), Ok(admin(&file)));
+    assert_eq!(elevated_item_with(&admin(&file), &rules), Ok(admin(&file)));
+
+    for mode in [0o1777, 0o775] {
+        let open = folder(&root.join(format!("shared {mode:o}")), mode);
+        let theirs = open.join("notes.txt");
+        fs::write(&theirs, "notes").expect("write the file");
+        assert_eq!(
+            elevated_item_with(&uri(&theirs), &rules),
+            Err(others_can_change(&open)),
+            "{mode:o}"
+        );
+    }
+    assert!(elevated_item_with("file:///", &rules).is_err());
+}

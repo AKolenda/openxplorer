@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The questions about an item that failed for a reason other than a
-//! name conflict (OPS-047), in Windows 11's words.
+//! name conflict (OPS-047), in Windows 11's words, asked in the progress
+//! window in place of the action's progress ([`TransferPanel::ask_about_failure`]),
+//! as Windows 8 and later ask them.
 //!
 //! | Cause | Caption | Says | Buttons |
 //! |---|---|---|---|
 //! | The item may not be read or written | File Access Denied (Folder …) | You need permission to perform this action | Try Again · Skip · Cancel |
+//! | The folder that holds an item to delete may not be written | File Access Denied (Folder …) | You'll need to provide administrator permission to delete this file (folder) | Continue (shield) · Skip · Cancel |
 //! | The destination folder may not be written | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder | Continue (shield) · Skip · Cancel |
 //! | Another program holds it | File In Use (Folder …) | The action can't be completed because the file is open in another program · Close the file and try again. | Try Again · Skip · Cancel |
 //! | It is gone | Item Not Found | Could not find this item · This is no longer located in <folder>. Verify the item's location and try again. | Try Again · Skip · Cancel |
@@ -15,31 +18,36 @@
 //! folder, the folder's). "Do this for all current items", shown while
 //! other items remain, makes Skip skip, and Continue continue, every later
 //! item without asking. The system's own words are kept only for the
-//! unexpected error, as Windows shows its error text there.
+//! unexpected error, as Windows shows its error text there. The progress
+//! window's More details shows where the item is and where it was going.
 //!
 //! Continue, with the administrator shield "Open as administrator" shows,
-//! copies or moves the item again into the destination folder under
-//! `admin://` ([`ox_core::admin_copy`]). The folder is checked first; one
-//! that may be written as administrator is mounted under `admin://`, which
-//! is where the desktop asks for the administrator's password, and the
-//! engine then runs the item there, checking the folder again. Closing that
-//! prompt shows the question again. A folder the check refuses is answered
-//! with Continue all the same, without a prompt, so the engine's refusal is
-//! asked about in "Interrupted Action" with its reason.
+//! runs the item again under `admin://`, the access Open as administrator
+//! uses: a copy or move into the destination folder there
+//! ([`ox_core::admin_copy::elevated_destination`]), a delete of the item
+//! there ([`ox_core::admin_copy::elevated_item`]), a whole folder through
+//! the administrator deletion helper. The location is checked first; one
+//! that passes is mounted under `admin://`, which is where the desktop asks
+//! for the administrator's password, and the engine checks it again before
+//! it runs. Closing that prompt asks the question again. A location the
+//! check refuses is answered with Continue all the same, without a prompt,
+//! so the engine's refusal is asked about in "Interrupted Action" with its
+//! reason. The Recycle Bin has no administrator path, so Continue in a
+//! Recycle Bin run first asks, in the same place, whether to delete the
+//! item permanently ("Are you sure you want to permanently delete this
+//! file?", unless the settings say not to ask), and answers for that item
+//! alone.
 //!
-//! More details, at the bottom of every question, shows where the item is
-//! and where it was going; whether it is open is kept, as the progress
-//! window keeps its own.
-//!
-//! A full drive asks in the progress window instead, as Windows' "There is
+//! A full drive asks in the progress window too, as Windows' "There is
 //! not enough space" does ([`TransferPanel::ask_about_space`]).
 //!
 //! The engine asks from its worker thread and waits (see
 //! `worker_question`); a question the window cannot show is answered with
-//! Skip, the rule without a question. Cancel, Escape and closing the dialog
-//! cancel the operation, keeping what is done.
+//! Skip, the rule without a question. Cancel and closing the progress
+//! window cancel the operation, keeping what is done.
 //!
 //! [`TransferPanel::ask_about_space`]: crate::window::transfer_panel::TransferPanel::ask_about_space
+//! [`TransferPanel::ask_about_failure`]: crate::window::transfer_panel::TransferPanel::ask_about_failure
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -48,28 +56,27 @@ use ox_core::entry::{entry_from_info, Entry, ATTRIBUTES};
 use ox_core::format;
 use ox_core::i18n::{format_message, gettext};
 use ox_core::location::parent_location;
-use ox_core::ops::FailureAsker;
-use ox_core::settings::PreferencesUpdate;
+use ox_core::ops::{permanent_delete_confirmation, DeleteSubject, FailureAsker};
 use ox_core::transfer::{Cancellation, FailedItem, FailureAnswer, FailureCause, TransferMode};
 
 use super::worker_question::worker_question;
-use crate::dialog::{Dialog, PropertyGrid};
 use crate::icons::{self, FileType, Icon};
-use crate::window::transfer_panel::{location_name, SpaceTexts};
+use crate::window::transfer_panel::{
+    location_name, FailureChoice, FailureView, FirstButton, SpaceTexts, TransferPanel,
+};
 use crate::window::BrowserWindow;
-use crate::window::ButtonStyle;
 
 /// The edge of the item's icon.
 const ITEM_ICON_SIZE: i32 = 48;
-
-/// The edge of the More details chevron, as in the progress window.
-const CHEVRON_SIZE: i32 = 16;
 
 /// Which of Windows' questions an item gets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Question {
     /// "File Access Denied", or "Folder Access Denied".
     AccessDenied,
+    /// "File Access Denied" for an item to delete in a folder only an
+    /// administrator may change.
+    AdminDelete,
     /// "Destination Folder Access Denied".
     DestinationDenied,
     /// "File In Use", or "Folder In Use".
@@ -102,6 +109,19 @@ fn wording(question: Question, item: &FailedItem, is_folder: bool, folder: &str)
                 gettext("File Access Denied")
             },
             gettext("You need permission to perform this action"),
+            String::new(),
+        ),
+        Question::AdminDelete => (
+            if is_folder {
+                gettext("Folder Access Denied")
+            } else {
+                gettext("File Access Denied")
+            },
+            if is_folder {
+                gettext("You'll need to provide administrator permission to delete this folder")
+            } else {
+                gettext("You'll need to provide administrator permission to delete this file")
+            },
             String::new(),
         ),
         Question::DestinationDenied => (
@@ -335,41 +355,6 @@ fn icon_of(entry: Option<&Entry>, name: &str) -> Icon {
     }
 }
 
-/// The flat "More details" toggle at the bottom left of a question.
-fn details_toggle() -> gtk::Button {
-    let toggle = gtk::Button::new();
-    toggle.add_css_class("flat");
-    toggle.add_css_class("failure-details-toggle");
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    let image = gtk::Image::new();
-    image.set_accessible_role(gtk::AccessibleRole::Presentation);
-    content.append(&image);
-    content.append(&gtk::Label::new(None));
-    toggle.set_child(Some(&content));
-    toggle
-}
-
-/// Shows or hides `panel`, and words and draws `toggle` to match:
-/// "More details" with a chevron down, or "Fewer details" with one up.
-fn set_details(toggle: &gtk::Button, panel: &impl IsA<gtk::Widget>, shown: bool) {
-    panel.set_visible(shown);
-    let (icon, text) = if shown {
-        (Icon::ChevronUp16, gettext("Fewer details"))
-    } else {
-        (Icon::ChevronDown16, gettext("More details"))
-    };
-    let content = toggle.child().and_downcast::<gtk::Box>();
-    if let Some(content) = content {
-        if let Some(image) = content.first_child().and_downcast::<gtk::Image>() {
-            icons::set_icon(&image, icon, CHEVRON_SIZE);
-        }
-        if let Some(label) = content.last_child().and_downcast::<gtk::Label>() {
-            label.set_text(&text);
-        }
-    }
-    toggle.update_state(&[gtk::accessible::State::Expanded(Some(shown))]);
-}
-
 /// The last part of `name`, an item's path below the item the run handles.
 fn last_name(name: &str) -> &str {
     name.rsplit('/').next().unwrap_or(name)
@@ -391,8 +376,8 @@ impl BrowserWindow {
         ))
     }
 
-    /// Asks about `item`; Cancel, Escape and closing the dialog cancel the
-    /// operation.
+    /// Asks about `item` in its operation's action; Cancel and closing the
+    /// progress window cancel the operation.
     async fn ask_about_failure(&self, item: &FailedItem, cancel: &Cancellation) -> FailureAnswer {
         if item.cause == FailureCause::NoSpace {
             return self.ask_about_space(item, cancel).await;
@@ -409,54 +394,91 @@ impl BrowserWindow {
             (Question::DestinationDenied, None) => location_name(&shown_uri),
             _ => last_name(&item.name).to_owned(),
         };
-        // Windows' caption is the dialog's heading here, as the dialogs
-        // draw no title bar of their own; its instruction follows.
         let text = [wording.heading.as_str(), wording.message.as_str()]
             .into_iter()
             .filter(|line| !line.is_empty())
             .collect::<Vec<_>>()
             .join("\n\n");
         let lines = entry.as_ref().map(facts_lines).unwrap_or_default();
-        let details = self.failure_details(item);
+        let card = || item_card(&name, icon_of(entry.as_ref(), &name), &lines).upcast::<gtk::Widget>();
+        let panel = self.panel_for_operation(cancel);
+        let administrator = matches!(question, Question::DestinationDenied | Question::AdminDelete);
         loop {
-            let dialog = Dialog::new(self, &wording.caption, &text);
-            dialog.add_field(&item_card(&name, icon_of(entry.as_ref(), &name), &lines));
-            let for_all = item
-                .more_items
-                .then(|| dialog.add_check_button(&gettext("Do this for all current items"), false));
-            self.add_details(&dialog, &details);
             // Windows' Continue asks for administrator permission; the
             // other questions keep Try Again.
-            let first = if question == Question::DestinationDenied {
-                dialog.add_button_with_icon(&gettext("Continue"), Icon::ShieldLock, ButtonStyle::Accent)
+            let first = if administrator {
+                FirstButton::Administrator(gettext("Continue"))
             } else {
-                dialog.add_button(&gettext("Try Again"), ButtonStyle::Accent)
+                FirstButton::Plain(gettext("Try Again"))
             };
-            let skip = dialog.add_button(&gettext("Skip"), ButtonStyle::Bordered);
-            dialog.add_cancel_button();
-            dialog.open();
-            let pressed = dialog.next_response().await;
-            let for_all = for_all.is_some_and(|check| check.is_active());
-            dialog.finish();
-            return match pressed {
-                Some(button) if button == first && question == Question::DestinationDenied => {
-                    let destination = item.destination_folder.as_deref().unwrap_or_default();
-                    if !self.authorize_administrator(destination).await {
+            let view = FailureView {
+                caption: wording.caption.clone(),
+                text: text.clone(),
+                card: card(),
+                details: self.failure_details(item),
+                for_all: item.more_items,
+                first,
+                second: gettext("Skip"),
+                cancel: true,
+            };
+            let (choice, for_all) = panel.ask_about_failure(view).await;
+            return match choice {
+                FailureChoice::First if administrator => {
+                    // The Recycle Bin has no administrator path: the item
+                    // is deleted permanently, once the user agrees.
+                    let trash = item.mode == TransferMode::Trash;
+                    if trash && !self.agrees_to_delete_permanently(&panel, is_folder, card()).await {
+                        continue;
+                    }
+                    let admin = if question == Question::DestinationDenied {
+                        let destination = item.destination_folder.as_deref().unwrap_or_default();
+                        ox_core::admin_copy::elevated_destination(destination)
+                    } else {
+                        ox_core::admin_copy::elevated_item(&item.uri)
+                    };
+                    if !self.authorize_administrator(admin.ok()).await {
                         // The administrator prompt was closed: ask again.
                         continue;
                     }
-                    if for_all {
+                    if for_all && !trash {
                         FailureAnswer::ElevateAll
                     } else {
                         FailureAnswer::Elevate
                     }
                 }
-                Some(button) if button == first => FailureAnswer::Retry,
-                Some(button) if button == skip && for_all => FailureAnswer::SkipAll,
-                Some(button) if button == skip => FailureAnswer::Skip,
-                _ => FailureAnswer::Cancel,
+                FailureChoice::First => FailureAnswer::Retry,
+                FailureChoice::Second if for_all => FailureAnswer::SkipAll,
+                FailureChoice::Second => FailureAnswer::Skip,
+                FailureChoice::Cancel => FailureAnswer::Cancel,
             };
         }
+    }
+
+    /// Asks in `panel`, as Windows asks before a permanent delete, whether
+    /// the item `card` shows, a folder when `is_folder`, may be deleted
+    /// permanently; true at once when the settings say not to ask
+    /// (SET-010).
+    async fn agrees_to_delete_permanently(
+        &self,
+        panel: &TransferPanel,
+        is_folder: bool,
+        card: gtk::Widget,
+    ) -> bool {
+        if !self.context().settings_data().preferences.confirm_delete {
+            return true;
+        }
+        let confirmation = permanent_delete_confirmation(DeleteSubject::of(1, is_folder));
+        let view = FailureView {
+            caption: gettext(confirmation.title),
+            text: confirmation.body,
+            card,
+            details: Vec::new(),
+            for_all: false,
+            first: FirstButton::Plain(gettext("Yes")),
+            second: gettext("No"),
+            cancel: false,
+        };
+        panel.ask_about_failure(view).await.0 == FailureChoice::First
     }
 
     /// What More details shows about `item`: where it is, and the folder
@@ -473,43 +495,16 @@ impl BrowserWindow {
         rows
     }
 
-    /// Adds More details to `dialog`: a toggle at the bottom left that
-    /// shows or hides `rows` under the item, open as it was last left.
-    fn add_details(&self, dialog: &Dialog, rows: &[(String, String)]) {
-        if rows.is_empty() {
-            return;
-        }
-        let grid = PropertyGrid::new();
-        for (name, value) in rows {
-            grid.add_row(name, value);
-        }
-        let shown = self.context().settings_data().preferences.failure_details;
-        let panel = grid.widget().clone();
-        panel.add_css_class("failure-details");
-        dialog.add_field(&panel);
-        let toggle = details_toggle();
-        set_details(&toggle, &panel, shown);
-        let context = self.context().clone();
-        toggle.connect_clicked(move |toggle| {
-            let shown = !panel.is_visible();
-            set_details(toggle, &panel, shown);
-            context.remember_preferences(PreferencesUpdate {
-                failure_details: Some(shown),
-                ..PreferencesUpdate::default()
-            });
-        });
-        dialog.add_footer_start(&toggle);
-    }
-
-    /// Readies Continue for the destination folder at `destination`:
-    /// mounts the folder under `admin://`, where the desktop asks for the
-    /// administrator's password. False when the user closed that prompt.
+    /// Readies Continue for `admin`, the `admin://` location the item is
+    /// written to or deleted from: mounts it, which is where the desktop
+    /// asks for the administrator's password. False when the user closed
+    /// that prompt.
     ///
-    /// A folder that may not be written as administrator is not mounted,
-    /// so no password is asked for: the engine refuses it, with its
-    /// reason, in the next question.
-    async fn authorize_administrator(&self, destination: &str) -> bool {
-        let Ok(admin) = ox_core::admin_copy::elevated_destination(destination) else {
+    /// A location that may not be changed as administrator (`None`) is not
+    /// mounted, so no password is asked for: the engine refuses it, with
+    /// its reason, in the next question.
+    async fn authorize_administrator(&self, admin: Option<String>) -> bool {
+        let Some(admin) = admin else {
             return true;
         };
         let file = gio::File::for_uri(&admin);
@@ -543,6 +538,16 @@ impl BrowserWindow {
                     let writes = matches!(item.mode, TransferMode::Copy | TransferMode::Move);
                     if writes && !can_write(destination).await {
                         return (Question::DestinationDenied, destination.clone());
+                    }
+                }
+                // An item to delete from a folder the user may not change.
+                let removes = matches!(item.mode, TransferMode::Trash | TransferMode::Delete);
+                let folder = parent_location(&item.uri);
+                if removes && item.uri.starts_with("file:") {
+                    if let Some(folder) = folder {
+                        if !can_write(&folder).await {
+                            return (Question::AdminDelete, item.uri.clone());
+                        }
                     }
                 }
                 (Question::AccessDenied, item.uri.clone())
@@ -627,6 +632,23 @@ mod tests {
         assert_eq!(
             destination.heading,
             "You'll need to provide administrator permission to copy to this folder"
+        );
+        let delete = item(TransferMode::Delete, FailureCause::AccessDenied);
+        let file = wording(Question::AdminDelete, &delete, false, "");
+        assert_eq!(
+            (file.caption.as_str(), file.heading.as_str()),
+            (
+                "File Access Denied",
+                "You'll need to provide administrator permission to delete this file"
+            )
+        );
+        let folder = wording(Question::AdminDelete, &delete, true, "");
+        assert_eq!(
+            (folder.caption.as_str(), folder.heading.as_str()),
+            (
+                "Folder Access Denied",
+                "You'll need to provide administrator permission to delete this folder"
+            )
         );
         let in_use = wording(Question::InUse, &copy(FailureCause::InUse), false, "");
         assert_eq!(

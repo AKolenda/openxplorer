@@ -94,17 +94,26 @@ const ADMIN_SCHEME: &str = "admin";
 /// location or the folder is not on this computer, and a refusal naming
 /// the folder when the module documentation's rules refuse it.
 pub fn elevated_destination(folder_uri: &str) -> Result<String, TransferError> {
-    let admin = gio::Vfs::default()
-        .supported_uri_schemes()
-        .iter()
-        .any(|scheme| scheme == ADMIN_SCHEME);
-    if !admin {
-        return Err(TransferError::NotSupported(gettext(
-            "Administrator access is not available. Install your distribution's GVfs \
-             administrator backend to copy to this folder as administrator.",
-        )));
+    if !admin_supported() {
+        return Err(no_admin());
     }
     elevated_destination_with(folder_uri, &Rules::default())
+}
+
+/// Whether `GVfs` offers `admin://` here.
+fn admin_supported() -> bool {
+    gio::Vfs::default()
+        .supported_uri_schemes()
+        .iter()
+        .any(|scheme| scheme == ADMIN_SCHEME)
+}
+
+/// The refusal without `admin://`.
+fn no_admin() -> TransferError {
+    TransferError::NotSupported(gettext(
+        "Administrator access is not available. Install your distribution's GVfs \
+         administrator backend to change this folder as administrator.",
+    ))
 }
 
 /// [`elevated_destination`] under `rules`, without asking whether `GVfs`
@@ -113,8 +122,45 @@ fn elevated_destination_with(folder_uri: &str, rules: &Rules) -> Result<String, 
     // An `admin://` folder is checked by its path like any other.
     let path = local_folder(&as_file_uri(folder_uri))?;
     let resolved = Checks::new(rules, &path)?.check(&path)?;
-    let uri =
-        glib::filename_to_uri(&resolved, None).map_err(|error| TransferError::failed(error.to_string()))?;
+    admin_uri_of(&resolved)
+}
+
+/// The `admin://` URI under which the item at `uri`, a `file:` item on
+/// this computer, is deleted as administrator: Continue in a Recycle Bin or
+/// delete run (OPS-047), once the folder that holds it passes the module
+/// documentation's rules. Only root can then change that folder or its
+/// path, so `gvfsd-admin`'s removal of a file by its path cannot be
+/// redirected; a folder is removed by [`crate::admin_delete`]'s helper,
+/// which walks it pinned. The URI names the item with every link on its
+/// folder's path resolved.
+///
+/// # Errors
+///
+/// As [`elevated_destination`]'s refusals, and a refusal for a filesystem
+/// root.
+pub fn elevated_item(uri: &str) -> Result<String, TransferError> {
+    if !admin_supported() {
+        return Err(no_admin());
+    }
+    elevated_item_with(uri, &Rules::default())
+}
+
+/// [`elevated_item`] under `rules`, without asking whether `GVfs` has
+/// `admin://`.
+fn elevated_item_with(uri: &str, rules: &Rules) -> Result<String, TransferError> {
+    let path = local_folder(&as_file_uri(uri))?;
+    let (Some(folder), Some(name)) = (path.parent(), path.file_name()) else {
+        return Err(TransferError::failed(gettext(
+            "Filesystem roots cannot be copied, moved or trashed as items.",
+        )));
+    };
+    let resolved = Checks::new(rules, folder)?.check(folder)?;
+    admin_uri_of(&resolved.join(name))
+}
+
+/// The `admin://` URI of the local `path`.
+fn admin_uri_of(path: &Path) -> Result<String, TransferError> {
+    let uri = glib::filename_to_uri(path, None).map_err(|error| TransferError::failed(error.to_string()))?;
     let local = uri.strip_prefix("file://").unwrap_or(&uri);
     Ok(format!("{ADMIN_SCHEME}://{local}"))
 }
@@ -139,8 +185,9 @@ fn check_elevated_folder_with(uri: &str, rules: &Rules) -> Result<(), TransferEr
     Ok(())
 }
 
-/// `uri` with an `admin://` scheme read as the `file:` location it names.
-fn as_file_uri(uri: &str) -> String {
+/// `uri` with an `admin://` scheme read as the `file:` location it names;
+/// any other URI as it is.
+pub fn as_file_uri(uri: &str) -> String {
     match uri.strip_prefix("admin://") {
         Some(rest) => format!("file://{rest}"),
         None => uri.to_owned(),
@@ -383,7 +430,7 @@ fn is_trusted_filesystem(mount: &Mount) -> bool {
 fn others_can_change(path: &Path) -> TransferError {
     TransferError::failed(format_message(
         "Other users can change {path}, or it is on a drive whose permissions can't be checked, \
-         so items can't be safely copied there as administrator.",
+         so items there can't be safely changed as administrator.",
         &[("path", &path.display().to_string())],
     ))
 }
@@ -393,7 +440,7 @@ fn others_can_change(path: &Path) -> TransferError {
 fn users_can_mount(path: &Path) -> TransferError {
     TransferError::failed(format_message(
         "{path} is on a removable drive or in a place where other users can mount drives, \
-         so items can't be safely copied there as administrator.",
+         so items there can't be safely changed as administrator.",
         &[("path", &path.display().to_string())],
     ))
 }

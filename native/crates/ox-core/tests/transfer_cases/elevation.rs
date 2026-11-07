@@ -48,6 +48,14 @@ impl DeniedDestination {
 }
 
 impl Provider for DeniedDestination {
+    fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
+        // A folder that may take new folders may lose them too.
+        if !self.files_only {
+            self.check(node.local_path())?;
+        }
+        node.local_delete()
+    }
+
     fn create_directory(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         if !self.files_only {
             self.check(node.local_path())?;
@@ -143,6 +151,19 @@ impl Elevation {
             })
             .with_move_by_copying_question(|_: &MoveByCopyingItem| {
                 panic!("Continue already agreed to finish the move by copying")
+            })
+            .with_elevated_item({
+                let elevations = Arc::clone(&self.elevations);
+                let destination = file_uri(&self.fixture.destination_folder);
+                let elevated = file_uri(&self.elevated);
+                let refusal = refusal.clone();
+                move |item: &str| {
+                    elevations.lock().expect("elevation log").push(item.to_owned());
+                    match &refusal {
+                        Some(refusal) => Err(TransferError::failed(refusal.clone())),
+                        None => Ok(item.replacen(&destination, &elevated, 1)),
+                    }
+                }
             })
             .with_elevation(move |folder: &str| {
                 elevations.lock().expect("elevation log").push(folder.to_owned());
@@ -388,4 +409,54 @@ fn a_replace_as_administrator_merges_only_into_folders_the_check_accepts() {
         }
         fs::set_permissions(&existing, fs::Permissions::from_mode(0o755)).expect("reset the mode");
     }
+}
+
+/// Continue in a delete run deletes the item as administrator, a file or a
+/// whole folder; with Do this for all current items every later item is
+/// deleted that way without asking.
+///
+/// parity: OPS-047, XFER-015
+#[test]
+fn continue_deletes_items_as_administrator() {
+    for (answer, questions) in [(FailureAnswer::Elevate, 2), (FailureAnswer::ElevateAll, 1)] {
+        let test = Elevation::new();
+        let fixture = &test.fixture;
+        let file = fixture.destination_folder.join("tool.cfg");
+        write(&file, "settings");
+        let folder = fixture.destination_folder.join("Plugins");
+        fs::create_dir(&folder).expect("a folder");
+        write(&folder.join("plugin.so"), "plugin");
+        let mut engine = test.engine(&[answer, answer], None);
+
+        let result = fixture.run(&mut engine, &[&file, &folder], Request::Delete);
+
+        assert!(result.errors.is_empty(), "{answer:?}: {result:?}");
+        assert!(!file.exists() && !folder.exists(), "{answer:?}");
+        assert_eq!(result.done.len(), 2, "{answer:?}: {result:?}");
+        assert_eq!(test.asked().len(), questions, "{answer:?}");
+        assert_eq!(test.elevations(), 2, "{answer:?}");
+    }
+}
+
+/// An item that may not be deleted as administrator is refused before
+/// anything is deleted, and the refusal is asked about.
+///
+/// parity: OPS-047, XFER-015
+#[test]
+fn a_refused_delete_as_administrator_keeps_the_item() {
+    let test = Elevation::new();
+    let fixture = &test.fixture;
+    let file = fixture.destination_folder.join("tool.cfg");
+    write(&file, "settings");
+    let refusal = "Other users can change the folder.";
+    let mut engine = test.engine(&[FailureAnswer::Elevate, FailureAnswer::Skip], Some(refusal));
+
+    let result = fixture.run(&mut engine, &[&file], Request::Delete);
+
+    assert_eq!(read(&file), "settings");
+    let asked = test.asked();
+    assert_eq!(asked.len(), 2);
+    assert_eq!(asked[0].cause, FailureCause::AccessDenied);
+    assert_eq!(asked[1].error, refusal);
+    assert_eq!(result.errors.len(), 1, "{result:?}");
 }

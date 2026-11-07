@@ -422,7 +422,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/transfer_panel/failure.rs
 msgid "Cancel"
 msgstr ""
 
@@ -5323,11 +5323,11 @@ msgstr ""
 msgid "The desktop clipboard could not be claimed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
 msgid "No"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
 msgid "Yes"
 msgstr ""
 
@@ -5392,14 +5392,6 @@ msgid "Destination Folder Access Denied"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Do this for all current items"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/progress_window.rs
-msgid "Fewer details"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "File Access Denied"
 msgstr ""
 
@@ -5421,10 +5413,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Item Not Found"
-msgstr ""
-
-#: crates/ox-app/resources/ui/progress-window.ui crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/progress_window.rs
-msgid "More details"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs
@@ -5473,6 +5461,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "You'll need to provide administrator permission to copy to this folder"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You'll need to provide administrator permission to delete this file"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You'll need to provide administrator permission to delete this folder"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -6243,6 +6239,14 @@ msgid "Text size changed for this window, but could not be saved: {error}"
 msgstr ""
 
 #: crates/ox-app/src/window/progress_window.rs
+msgid "Fewer details"
+msgstr ""
+
+#: crates/ox-app/resources/ui/progress-window.ui crates/ox-app/src/window/progress_window.rs
+msgid "More details"
+msgstr ""
+
+#: crates/ox-app/src/window/progress_window.rs
 msgid "Replace or Skip Files"
 msgstr ""
 
@@ -6784,6 +6788,10 @@ msgid_plural "Recycling {count} items from {source}"
 msgstr[0] ""
 msgstr[1] ""
 
+#: crates/ox-app/src/window/transfer_panel/failure.rs
+msgid "Do this for all current items"
+msgstr ""
+
 #: crates/ox-app/src/window/transfer_panel/question.rs
 msgid "Compare info for both files"
 msgstr ""
@@ -7013,12 +7021,16 @@ msgid "Copying files"
 msgstr ""
 
 #: crates/ox-core/src/admin_copy.rs
-msgid "Administrator access is not available. Install your distribution's GVfs administrator backend to copy to this folder as administrator."
+msgid "Administrator access is not available. Install your distribution's GVfs administrator backend to change this folder as administrator."
+msgstr ""
+
+#: crates/ox-core/src/admin_copy.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/transfer/engine.rs
+msgid "Filesystem roots cannot be copied, moved or trashed as items."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_copy.rs
-msgid "Other users can change {path}, or it is on a drive whose permissions can't be checked, so items can't be safely copied there as administrator."
+msgid "Other users can change {path}, or it is on a drive whose permissions can't be checked, so items there can't be safely changed as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7028,7 +7040,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_copy.rs
-msgid "{path} is on a removable drive or in a place where other users can mount drives, so items can't be safely copied there as administrator."
+msgid "{path} is on a removable drive or in a place where other users can mount drives, so items there can't be safely changed as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8491,10 +8503,6 @@ msgstr ""
 msgid "Delete Multiple Items"
 msgstr ""
 
-#: crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/transfer/engine.rs
-msgid "Filesystem roots cannot be copied, moved or trashed as items."
-msgstr ""
-
 #: crates/ox-core/src/ops/links.rs
 msgid "Enter a name for the link."
 msgstr ""
@@ -9243,6 +9251,10 @@ msgstr ""
 
 #: crates/ox-core/src/transfer/engine.rs
 msgid "This item can't be copied as administrator."
+msgstr ""
+
+#: crates/ox-core/src/transfer/engine.rs
+msgid "This item can't be deleted as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

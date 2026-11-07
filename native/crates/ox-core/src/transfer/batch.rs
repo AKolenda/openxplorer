@@ -76,6 +76,11 @@ impl<'a> Batch<'a> {
         }
     }
 
+    /// Whether the run trashes or deletes its items.
+    pub(crate) fn is_removal(&self) -> bool {
+        matches!(self.action, ItemAction::Remove(_))
+    }
+
     /// The URI of the folder the user chose for a copy or move, never its
     /// `admin://` form; `None` for the Recycle Bin and deletes.
     pub(crate) fn destination_uri(&self) -> Option<String> {

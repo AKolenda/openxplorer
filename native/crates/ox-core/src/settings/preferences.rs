@@ -342,12 +342,6 @@ pub struct Preferences {
     /// was last left, across sessions; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub progress_details: bool,
-    /// The questions about a failed item ("Destination Folder Access
-    /// Denied" and the others) show "More details": the item's source and
-    /// destination. Kept as it was last left, like the progress window's;
-    /// stored only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub failure_details: bool,
     /// Explicitly enabled installed service actions, keyed by definition digest.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub enabled_service_actions: Vec<String>,
@@ -565,7 +559,6 @@ impl Default for Preferences {
             confirm_close_tabs: false,
             ask_to_run_programs: false,
             progress_details: false,
-            failure_details: false,
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
@@ -724,7 +717,6 @@ impl Preferences {
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.progress_details, update.progress_details);
-        replace_if_some(&mut self.failure_details, update.failure_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
         let icon_size = update
@@ -905,8 +897,6 @@ pub struct PreferencesUpdate {
     pub ask_to_run_programs: Option<bool>,
     /// Show the progress window's details.
     pub progress_details: Option<bool>,
-    /// Show the details of the questions about a failed item.
-    pub failure_details: Option<bool>,
     /// Replaces the allowlist of installed service actions.
     pub enabled_service_actions: Option<Vec<String>>,
     /// Use the desktop's font, or the Windows font stack.
@@ -1027,7 +1017,6 @@ impl PreferencesUpdate {
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
             progress_details: flag("progressDetails"),
-            failure_details: flag("failureDetails"),
             enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
@@ -1427,27 +1416,6 @@ mod tests {
         let mut read = Preferences::default();
         read.apply(&PreferencesUpdate::from_json(&stored).unwrap());
         assert!(read.progress_details, "read back from the stored settings");
-    }
-
-    /// The failure questions' "More details" stays as it was last left,
-    /// like the progress window's; stored only when open.
-    ///
-    /// parity: OPS-047
-    #[test]
-    fn the_failure_questions_details_are_remembered_and_stored_only_when_open() {
-        let mut preferences = Preferences::default();
-        assert!(!preferences.failure_details);
-        assert!(serde_json::to_value(&preferences)
-            .unwrap()
-            .get("failureDetails")
-            .is_none());
-
-        preferences.apply(&PreferencesUpdate::from_json(&json!({"failureDetails": true})).unwrap());
-        let stored = serde_json::to_value(&preferences).unwrap();
-        assert_eq!(stored["failureDetails"], json!(true));
-        let mut read = Preferences::default();
-        read.apply(&PreferencesUpdate::from_json(&stored).unwrap());
-        assert!(read.failure_details, "read back from the stored settings");
     }
 
     /// parity: SET-016

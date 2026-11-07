@@ -65,6 +65,9 @@ pub struct TransferEngine {
     /// Asked about every existing folder a Replace written as
     /// administrator merges into.
     elevated_merge_check: Option<Box<WriteGuard>>,
+    /// The `admin://` URI an item of a Recycle Bin or delete run is
+    /// deleted under after Continue, or why it may not be.
+    elevated_item: Option<Box<ElevatedDestination>>,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -169,6 +172,9 @@ struct RunState {
     result: TransferResult,
     /// Folders that moves took items from, relisted at the end (MTP).
     moved_from: SourceFolders,
+    /// Continue for all current items was answered in a Recycle Bin or
+    /// delete run: every later item is deleted as administrator (OPS-047).
+    elevated_removal: bool,
 }
 
 /// How an item that did not fail ended.
@@ -204,6 +210,7 @@ impl TransferEngine {
             failures: ItemFailures::default(),
             elevation: None,
             elevated_merge_check: None,
+            elevated_item: None,
         }
     }
 
@@ -281,6 +288,20 @@ impl TransferEngine {
         elevation: impl Fn(&str) -> Result<String, TransferError> + Send + Sync + 'static,
     ) -> Self {
         self.elevation = Some(Box::new(elevation));
+        self
+    }
+
+    /// OPS-047: where the user's Continue deletes an item of a Recycle Bin
+    /// or delete run as administrator: `elevation` returns the item's
+    /// `admin://` URI once it is safe to delete it there
+    /// ([`crate::admin_copy::elevated_item`]), or the refusal, which fails
+    /// the item and is asked about like any other failure.
+    #[must_use]
+    pub fn with_elevated_item(
+        mut self,
+        elevation: impl Fn(&str) -> Result<String, TransferError> + Send + Sync + 'static,
+    ) -> Self {
+        self.elevated_item = Some(Box::new(elevation));
         self
     }
 
@@ -538,7 +559,13 @@ impl TransferEngine {
         let mut item_folder: Option<Box<dyn Node>> = None;
         self.failures
             .start_item(batch.mode(), self.display_name(uri), destination.clone());
-        let mut outcome = self.attempt(batch, elevated.as_deref(), index, uri, state, &mut staging);
+        // This item is deleted as administrator, after Continue.
+        let mut removal_elevated = state.elevated_removal && batch.is_removal();
+        let mut outcome = if removal_elevated {
+            self.remove_elevated(batch, index, uri, state)
+        } else {
+            self.attempt(batch, elevated.as_deref(), index, uri, state, &mut staging)
+        };
         // Whether the user saw the error of `outcome` in the question.
         let mut answered = false;
         while let Err(error) = &outcome {
@@ -572,7 +599,16 @@ impl TransferEngine {
                     self.failures
                         .start_item(batch.mode(), self.display_name(uri), destination.clone());
                     let folder = elevated.as_deref().or(item_folder.as_deref());
-                    outcome = self.attempt(batch, folder, index, uri, state, &mut staging);
+                    outcome = if removal_elevated {
+                        self.remove_elevated(batch, index, uri, state)
+                    } else {
+                        self.attempt(batch, folder, index, uri, state, &mut staging)
+                    };
+                }
+                Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) if batch.is_removal() => {
+                    removal_elevated = true;
+                    state.elevated_removal |= answer == FailureAnswer::ElevateAll;
+                    outcome = self.remove_elevated(batch, index, uri, state);
                 }
                 Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) => {
                     self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
@@ -648,6 +684,38 @@ impl TransferEngine {
         let outcome = self.process_item(&elevated_batch, index, uri, state, staging);
         self.move_by_copying.set_elevated(false);
         outcome
+    }
+
+    /// Deletes the item at `uri` of the Recycle Bin or delete run `batch`
+    /// permanently as administrator, under `admin://`: Continue (OPS-047).
+    /// The Recycle Bin has no administrator path, so the app confirmed the
+    /// permanent delete first. A folder goes to the privileged helper of
+    /// [`crate::admin_delete`], anything else to `gvfsd-admin`.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::NotSupported`] without an item elevation, its
+    /// refusal, and every error of a permanent delete.
+    fn remove_elevated(
+        &mut self,
+        batch: &Batch,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+    ) -> Result<ItemOutcome, TransferError> {
+        let Some(elevation) = self.elevated_item.as_ref() else {
+            return Err(TransferError::NotSupported(crate::i18n::gettext(
+                "This item can't be deleted as administrator.",
+            )));
+        };
+        let admin = elevation(uri)?;
+        let delete = Batch {
+            action: ItemAction::Remove(Removal::PermanentDelete),
+            cancel: batch.cancel,
+            total: batch.total,
+        };
+        let mut staging = ItemStaging::default();
+        self.process_item(&delete, index, &admin, state, &mut staging)
     }
 
     /// The destination folder of `batch` under `admin://`, for Continue.

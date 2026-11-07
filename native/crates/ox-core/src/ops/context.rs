@@ -93,7 +93,9 @@ impl WriteProtection {
         match &self.guard {
             Some(guard) => {
                 let guard = Arc::clone(guard);
-                engine.with_write_guard(move |uri: &str| guard(uri))
+                // An `admin://` item is the local item of the same path:
+                // the guard knows protected locations by their `file:` URIs.
+                engine.with_write_guard(move |uri: &str| guard(&crate::admin_copy::as_file_uri(uri)))
             }
             None => engine,
         }
@@ -228,7 +230,8 @@ impl OperationContext {
             engine = engine
                 .with_failure_question(move |item: &FailedItem| asker.ask(item))
                 .with_elevation(crate::admin_copy::elevated_destination)
-                .with_elevated_merge_check(crate::admin_copy::check_elevated_folder);
+                .with_elevated_merge_check(crate::admin_copy::check_elevated_folder)
+                .with_elevated_item(crate::admin_copy::elevated_item);
         }
         engine
     }
