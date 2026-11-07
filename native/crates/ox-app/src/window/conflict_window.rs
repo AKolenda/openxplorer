@@ -656,6 +656,10 @@ fn load_pictures(conflict: &NameConflict, pictures: &[gtk::Image; 2], size: i32)
                 content_type: content_type.to_string(),
                 modified,
                 pixels: size * scale,
+                // The dialog shows the two files it asks about, wherever
+                // they are, as before.
+                local_only: false,
+                target_uri: None,
             };
             if let Some(texture) = preview(request).await {
                 picture.set_paintable(Some(&texture));
