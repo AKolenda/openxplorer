@@ -13,6 +13,7 @@
 mod cell_owners;
 mod custom_icon;
 mod expander;
+mod folder_picture;
 mod item_check;
 pub(crate) use item_check::own_clicks;
 mod row_tooltip;
@@ -24,8 +25,9 @@ use gtk::subclass::prelude::*;
 use gtk::{glib, pango};
 
 pub(crate) use cell_owners::CellOwners;
-pub(crate) use custom_icon::CUSTOM_ICON;
+pub(crate) use custom_icon::{icon_texture, CUSTOM_ICON};
 pub(crate) use expander::connect_expanders;
+pub(crate) use folder_picture::{folder_picture_of, FolderPicture, FOLDER_PICTURE};
 pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip, TooltipCell};
 
 use crate::folder_view::item::FileItem;
@@ -182,6 +184,11 @@ mod imp {
         /// The item's custom icon (PROP-016) or preview (VIEW-057), shown
         /// in place of the art.
         pub(super) custom_icon: gtk::Picture,
+        /// The folder's picture on its icon (PROP-037), on a tile of
+        /// Medium icons or larger.
+        pub(super) folder_picture: super::FolderPicture,
+        /// Whether the cell is an icon-view tile.
+        pub(super) is_tile: Cell<bool>,
         /// The running lookup of the custom icon or preview.
         pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
         /// Holds the icon, and on a tile spans it, with the check box in
@@ -228,6 +235,8 @@ mod imp {
             self.custom_icon.set_content_fit(gtk::ContentFit::Contain);
             self.custom_icon.set_visible(false);
             self.icon_frame.add_overlay(&self.custom_icon);
+            self.folder_picture.set_visible(false);
+            self.icon_frame.add_overlay(&self.folder_picture);
             cell.append(&self.icon_frame);
             cell.append(&self.label);
         }
@@ -253,6 +262,7 @@ impl FileCell {
         let imp = cell.imp();
         imp.icon_size.set(icon_size);
         imp.custom_icon.set_size_request(icon_size, icon_size);
+        imp.folder_picture.place_on_icon(icon_size);
         // A folder until bound, so the cell has its full size from the start.
         imp.image.set_art(Art::Folder, icon_size);
         match layout {
@@ -366,6 +376,7 @@ impl FileCell {
         // the frame spans the tile, and the icon stays centred in it at its
         // own size, so nothing moves.
         let imp = self.imp();
+        imp.is_tile.set(true);
         imp.icon_frame.set_halign(gtk::Align::Fill);
         imp.image.set_halign(gtk::Align::Center);
         imp.custom_icon.set_halign(gtk::Align::Center);

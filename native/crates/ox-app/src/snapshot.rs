@@ -23,7 +23,11 @@
 //!   such as selecting an item or opening its context menu (see
 //!   [`scene`]); menus they open are drawn over the window in the picture;
 //! - `OPENXPLORER_HOTSPOTS`: writes the rectangles of the picture's
-//!   controls to this JSON file (see [`hotspots`]).
+//!   controls to this JSON file (see [`hotspots`]);
+//! - `OPENXPLORER_PROPERTIES`: once the scene has run, shows this tab
+//!   (`general`, `security`, `customize`, ...) of the Properties window
+//!   the scene opened last and saves that window instead, once it has
+//!   read its item.
 //!
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it
@@ -63,6 +67,9 @@ pub(crate) use request::{SnapshotRequest, WindowSize};
 /// Frames drawn after the listing, so late layout changes (column widths,
 /// collapsed crumbs, icons) are in the picture.
 const SETTLE_FRAMES: u32 = 6;
+
+/// How long a Properties window is given to read its item and draw it.
+const PROPERTIES_PATIENCE: Duration = Duration::from_millis(1500);
 
 /// How long the first listing may take before the window is saved anyway.
 const LISTING_PATIENCE: Duration = Duration::from_secs(20);
@@ -123,6 +130,7 @@ pub(crate) fn save_when_listed(
     let milestones = Milestones::default();
     let timing = RefCell::new(SaveTiming::starting_now());
     let done = RefCell::new(Some(done));
+    let properties_shown = Cell::new(false);
     window.add_tick_callback(move |window, _| {
         if let Some(size) = request.size {
             fit_content(window.upcast_ref(), size);
@@ -159,6 +167,22 @@ pub(crate) fn save_when_listed(
                     reason,
                 }),
             }
+        } else if let Some(tab) = request.properties.as_deref() {
+            match properties_on_tab(window, tab) {
+                Ok(_) if !properties_shown.replace(true) => {
+                    // The window reads its item off the main thread first.
+                    timing.replace(SaveTiming::after(PROPERTIES_PATIENCE));
+                    return glib::ControlFlow::Continue;
+                }
+                Ok(properties) => {
+                    eprintln!("{}", milestones.summary());
+                    save_window(properties.upcast_ref(), &request.png)
+                }
+                Err(reason) => Err(SnapshotError::Scene {
+                    step: format!("OPENXPLORER_PROPERTIES={tab}"),
+                    reason,
+                }),
+            }
         } else {
             eprintln!("{}", milestones.summary());
             save_scene(window.upcast_ref(), &request)
@@ -188,6 +212,31 @@ fn save_scene(window: &gtk::Window, request: &SnapshotRequest) -> Result<(), Sna
         path: path.clone(),
         source,
     })
+}
+
+/// The Properties window the scene opened last, showing `tab`.
+fn properties_on_tab(
+    window: &BrowserWindow,
+    tab: &str,
+) -> Result<crate::properties::PropertiesWindow, String> {
+    let properties = window
+        .properties_windows()
+        .pop()
+        .ok_or_else(|| "no Properties window is open".to_owned())?;
+    properties.select_tab(tab);
+    if properties.selected_tab().as_deref() == Some(tab) {
+        Ok(properties)
+    } else {
+        Err(format!("the Properties window has no tab “{tab}”"))
+    }
+}
+
+/// Saves `window`, a window of its own such as Properties, with the menus
+/// open over it.
+fn save_window(window: &gtk::Window, png: &std::path::Path) -> Result<(), SnapshotError> {
+    let content = content_bounds(window).ok_or(SnapshotError::NotDrawn)?;
+    let menus = open_menus(window);
+    render_png_with_menus(window, &menus, content, png)
 }
 
 /// Where the window's first listing is on a frame.

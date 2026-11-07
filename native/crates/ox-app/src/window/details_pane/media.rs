@@ -17,17 +17,20 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
 
-use super::content::{Field, MediaPreview};
+use super::content::MediaPreview;
 use super::DetailsPane;
+use crate::folder_view::cells::CUSTOM_ICON;
 use crate::icons::{Art, ArtImage};
 
 /// Images larger than this are not decoded for the pane.
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 /// The art above the controls of an audio file.
 const AUDIO_ART_SIZE: i32 = 64;
-/// The largest picture or player the preview area holds.
-const PREVIEW_WIDTH: i32 = 220;
-const PREVIEW_HEIGHT: i32 = 146;
+/// The largest picture or player the preview area holds: the width of
+/// the widest pane inside its padding, and a height that leaves room for
+/// the Details rows, as Windows' pane does.
+const PREVIEW_WIDTH: i32 = 216;
+const PREVIEW_HEIGHT: i32 = 180;
 
 impl DetailsPane {
     /// Shows `media` in the preview area, or the item's art without one.
@@ -38,14 +41,14 @@ impl DetailsPane {
         let imp = self.imp();
         let media = media.filter(|_| self.is_visible());
         if imp.shown_media.borrow().as_ref() == media {
-            // The rows were drawn again without the media's.
-            for (field, value) in imp.media_rows.borrow().iter() {
-                self.add_property(*field, value);
-            }
+            // The rows it found stay with the Details rows.
             return;
         }
         imp.shown_media.replace(media.cloned());
-        imp.media_rows.borrow_mut().clear();
+        if !imp.media_rows.borrow().is_empty() {
+            imp.media_rows.borrow_mut().clear();
+            self.redraw_properties();
+        }
         let generation = imp.media_generation.get().wrapping_add(1);
         imp.media_generation.set(generation);
         self.set_preview_widget(None);
@@ -54,10 +57,11 @@ impl DetailsPane {
         };
         match media {
             MediaPreview::Image { path, size } if *size <= MAX_IMAGE_BYTES => {
-                self.load_picture(generation, Some(path.clone()), None);
+                self.load_picture(generation, Some(path.clone()), None, true);
             }
             MediaPreview::Image { .. } => {}
-            MediaPreview::Document { uri } => self.load_picture(generation, None, Some(uri.clone())),
+            MediaPreview::Document { uri } => self.load_picture(generation, None, Some(uri.clone()), false),
+            MediaPreview::Folder { uri } => self.load_folder_picture(generation, uri.clone()),
             MediaPreview::Recording { path, is_video, art } => self.show_player(path, *is_video, *art),
         }
     }
@@ -71,14 +75,55 @@ impl DetailsPane {
         if imp.preview_area.center_widget().as_ref() != Some(widget) {
             imp.preview_area.set_center_widget(Some(widget));
         }
+        // A picture of the content takes the height its shape needs; the
+        // art keeps the area's own height.
+        let is_picture = widget.is::<gtk::Picture>();
+        crate::window::widget_tree::toggle_class(&*imp.preview_area, "has-picture", is_picture);
+    }
+
+    /// Reads the picture of the folder at `uri` ([`folder_picture`]) and
+    /// shows it, if the selection is still `generation`'s; the folder
+    /// keeps its art without one.
+    fn load_folder_picture(&self, generation: u64, uri: String) {
+        let pane = self.downgrade();
+        glib::spawn_future_local(async move {
+            let picture = folder_picture(&uri).await;
+            let Some(pane) = pane.upgrade() else {
+                return;
+            };
+            let path = picture.and_then(|picture| local_picture_path(&picture));
+            if pane.imp().media_generation.get() == generation && path.is_some() {
+                pane.load_picture(generation, path, None, false);
+            }
+        });
+    }
+
+    /// Reads again the picture of the item at `uri`, if the pane shows
+    /// it: its custom icon or folder picture changed. True when it did.
+    pub(in crate::window) fn reread_picture_of(&self, uri: &str) -> bool {
+        let imp = self.imp();
+        let shown = imp.shown_media.borrow().clone();
+        let Some(media) = shown.filter(|media| media.is_of(uri)) else {
+            return false;
+        };
+        imp.shown_media.replace(None);
+        self.show_media(Some(&media));
+        true
     }
 
     /// Decodes the image at `path`, or the cached thumbnail of the item at
     /// `uri`, scaled to the preview area, and shows it if the selection is
-    /// still `generation`'s. An image's own size comes from its header.
-    fn load_picture(&self, generation: u64, path: Option<PathBuf>, uri: Option<String>) {
+    /// still `generation`'s; an image's own size, from its header, joins
+    /// the rows when `names_dimensions`.
+    fn load_picture(
+        &self,
+        generation: u64,
+        path: Option<PathBuf>,
+        uri: Option<String>,
+        names_dimensions: bool,
+    ) {
         let pane = self.downgrade();
-        let is_image = path.is_some();
+        let is_image = names_dimensions;
         let scale = self.scale_factor().max(1);
         glib::spawn_future_local(async move {
             let decoded = gio::spawn_blocking(move || {
@@ -98,7 +143,11 @@ impl DetailsPane {
             }
             let picture = gtk::Picture::for_paintable(&texture);
             picture.set_content_fit(gtk::ContentFit::Contain);
-            picture.set_size_request(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+            // As wide as the pane allows, which is narrower in a narrow
+            // window: the picture shrinks with it, never widening it.
+            picture.set_can_shrink(true);
+            picture.set_hexpand(true);
+            picture.set_size_request(-1, preview_height(texture.width(), texture.height()));
             picture.add_css_class("detail-picture");
             picture.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
                 "Preview",
@@ -106,7 +155,7 @@ impl DetailsPane {
             pane.set_preview_widget(Some(picture.upcast_ref()));
             if let Some((width, height)) = size.filter(|_| is_image) {
                 pane.add_media_property(
-                    Field::Dimensions,
+                    "Dimensions",
                     ox_core::i18n::format_message(
                         "{width} × {height} pixels",
                         &[("width", &width.to_string()), ("height", &height.to_string())],
@@ -122,13 +171,14 @@ impl DetailsPane {
         let stream = gtk::MediaFile::for_filename(path);
         let player: gtk::Widget = if is_video {
             let video = gtk::Video::builder().media_stream(&stream).build();
-            video.set_size_request(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+            video.set_hexpand(true);
+            video.set_size_request(-1, PREVIEW_HEIGHT);
             video.upcast()
         } else {
             let column = gtk::Box::new(gtk::Orientation::Vertical, 6);
             column.append(&ArtImage::new(art, AUDIO_ART_SIZE));
             column.append(&gtk::MediaControls::new(Some(&stream)));
-            column.set_size_request(PREVIEW_WIDTH, -1);
+            column.set_hexpand(true);
             column.upcast()
         };
         self.set_preview_widget(Some(&player));
@@ -144,19 +194,51 @@ impl DetailsPane {
             };
             let micros = stream.duration();
             if pane.imp().media_generation.get() == generation && stream.is_prepared() && micros > 0 {
-                pane.add_media_property(Field::Length, length_text(micros));
+                pane.add_media_property("Length", length_text(micros));
             }
         });
     }
 }
 
 impl DetailsPane {
-    /// Adds the row of `field` that the media shown says, and keeps it for
-    /// when the rows are drawn again.
-    fn add_media_property(&self, field: Field, value: String) {
-        self.add_property(field, &value);
-        self.imp().media_rows.borrow_mut().push((field, value));
+    /// Adds the row `name` that the media shown says, unless the reader
+    /// gave it already, and keeps it for when the rows are drawn again.
+    fn add_media_property(&self, name: &'static str, value: String) {
+        self.imp().media_rows.borrow_mut().push((name, value));
+        self.redraw_properties();
     }
+}
+
+/// The picture the pane shows for the local folder at `uri` in place of
+/// its art, as Windows' Details pane shows a customized folder: its
+/// custom icon (PROP-016, `metadata::custom-icon`, which the file list
+/// draws too), read at low priority.
+///
+/// Shared hook (PROP-037): the Customize tab's folder picture, read by
+/// `folder_view::cells::folder_picture_of` on the customize-tab branch,
+/// comes first once both branches are merged:
+/// `if let Some(picture) = folder_picture_of(uri).await { return Some(picture); }`.
+/// Both are announced the same way: OK or Apply on the Customize tab
+/// calls `BrowserWindow::refresh_item_icon` in every window, which has
+/// the pane read its picture again ([`DetailsPane::reread_picture_of`]).
+async fn folder_picture(uri: &str) -> Option<String> {
+    let info = gio::File::for_uri(uri)
+        .query_info_future(CUSTOM_ICON, gio::FileQueryInfoFlags::NONE, glib::Priority::LOW)
+        .await
+        .ok()?;
+    info.attribute_string(CUSTOM_ICON)
+        .filter(|picture| !picture.is_empty())
+        .map(|picture| picture.to_string())
+}
+
+/// The local file a picture's location names: a `file:` URI or a path.
+fn local_picture_path(picture: &str) -> Option<PathBuf> {
+    if picture.starts_with('/') {
+        return Some(PathBuf::from(picture));
+    }
+    gio::File::for_uri(picture)
+        .path()
+        .filter(|_| picture.starts_with("file:"))
 }
 
 /// The valid cached thumbnail of the item at `uri`.
@@ -169,6 +251,17 @@ fn cached_thumbnail(uri: &str) -> Option<PathBuf> {
         )
         .ok()?;
     thumbnail_path(&info)
+}
+
+/// The height of a picture `width` by `height` pixels shown as wide as
+/// the preview allows, at most [`PREVIEW_HEIGHT`]: a wide photo takes no
+/// more room than it needs, as in Windows' pane.
+fn preview_height(width: i32, height: i32) -> i32 {
+    if width <= 0 || height <= 0 {
+        return PREVIEW_HEIGHT;
+    }
+    let scaled = i64::from(PREVIEW_WIDTH) * i64::from(height) / i64::from(width);
+    i32::try_from(scaled.clamp(1, i64::from(PREVIEW_HEIGHT))).unwrap_or(PREVIEW_HEIGHT)
 }
 
 /// A length in microseconds as `1:02:03` or `2:03`.
@@ -185,6 +278,18 @@ fn length_text(micros: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_picture_is_as_tall_as_its_shape_needs() {
+        assert_eq!(preview_height(4000, 3000), 162);
+        assert_eq!(preview_height(320, 200), 135);
+        assert_eq!(
+            preview_height(1000, 3000),
+            PREVIEW_HEIGHT,
+            "a tall picture is held"
+        );
+        assert_eq!(preview_height(0, 0), PREVIEW_HEIGHT);
+    }
 
     #[test]
     fn a_length_reads_as_a_clock() {
