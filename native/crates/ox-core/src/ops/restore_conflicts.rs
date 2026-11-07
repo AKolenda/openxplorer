@@ -377,7 +377,8 @@ pub async fn restore_free_items(
             let asked = AskedItem {
                 name: &name,
                 uri: &item.uri,
-                more_items: index + 1 < free.len(),
+                // The conflicts asked about next are current items too.
+                more_items: index + 1 < free.len() || scan.has_conflicts(),
             };
             let restore = || match restore_into(&item.uri, &item.destination_folder, &context) {
                 Ok(restored) => Ok(Some(restored)),

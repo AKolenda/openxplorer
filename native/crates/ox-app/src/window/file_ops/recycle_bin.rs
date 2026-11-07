@@ -127,7 +127,13 @@ impl BrowserWindow {
                 break;
             }
             let taken = so_far.take_taken();
-            scan = Self::restore_scan(&taken, into, &context.cancel).await?;
+            // Cancel while the taken items are planned again keeps what
+            // was restored, and Undo with it.
+            scan = match Self::restore_scan(&taken, into, &context.cancel).await {
+                Ok(scan) => scan,
+                Err(error) if error.is_cancelled() => return Ok(so_far.into_outcome()),
+                Err(error) => return Err(error),
+            };
             so_far = restore_free_items(&scan, so_far, context).await?;
         }
         // Another program keeps taking the names: each item still waiting
