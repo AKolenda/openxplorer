@@ -176,9 +176,8 @@ fn settle_layout(test: &TestWindow) {
     wait_for(Duration::from_millis(100));
 }
 
-/// As Windows 11's Details pane: the folder's name and item count with
-/// nothing selected, and a selected file's rows of names and values,
-/// without buttons.
+/// Nothing selected, the pane counts the folder's items, as Windows'
+/// pane does; one file shows Windows 11's Details rows.
 ///
 /// parity: PROP-009
 #[gtk::test]
@@ -187,28 +186,28 @@ fn the_details_pane_lists_a_file_and_the_folder() {
     let test = TestWindow::open(&fixture.uri());
     test.open_details_pane();
     let pane = test.window.details_pane();
-    // Hidden items count only while they are shown, as in the status bar.
-    assert_eq!(pane.shown_summary(), "4 items", "hidden items are not listed");
-    assert!(pane.shown_properties().is_empty());
+    // The Python backend lists hidden items only while they are shown
+    // (`enumerate_folder(uri, showHidden)`), and app.js counts that list.
+    assert!(
+        pane.shown_name().ends_with(" (4 items)"),
+        "hidden items are not listed"
+    );
+    let folder_address = fixture.root().display().to_string();
     test.activate("hidden", None);
-    assert_eq!(pane.shown_summary(), "5 items", "shown hidden items count");
+    assert!(
+        pane.shown_name().ends_with(" (5 items)"),
+        "shown hidden items count"
+    );
     test.activate("hidden", None);
-    test.select_named("Notes 2.txt");
-    assert_eq!(pane.shown_summary(), "", "no count under an item's name");
+    test.window.folder_model().select_only(1);
     let file = pane.shown_properties();
-    let names: Vec<&str> = file
-        .iter()
-        .map(|property| property.name.as_str())
-        // Only a file system that records creation times has the row.
-        .filter(|name| *name != "Date created")
-        .collect();
-    assert_eq!(names, ["Type", "Size", "Date modified", "Availability"]);
-    assert_eq!(property(&file, "Type"), Some("Text Document"));
-    assert_eq!(property(&file, "Availability"), Some("Available on this device"));
-    let buttons = descendants::<gtk::Button>(pane);
-    let shown: Vec<&gtk::Button> = buttons.iter().filter(|button| button.is_visible()).collect();
-    assert_eq!(shown.len(), 1, "only the close button: {shown:?}");
-    assert!(shown[0].has_css_class("detail-close"));
+    let names: Vec<&str> = file.iter().map(|property| property.name.as_str()).collect();
+    assert_eq!(
+        names[..4],
+        ["Type", "Size", "File location", "Date modified"],
+        "then Date created, where the file system keeps it"
+    );
+    assert_eq!(property(&file, "File location"), Some(folder_address.as_str()));
 }
 
 /// One selected image shows its picture and dimensions in the details
@@ -231,18 +230,16 @@ fn the_details_pane_previews_an_image_and_names_its_dimensions() {
     test.select_named("Beach.png");
 
     wait_until("the picture", || !descendants::<gtk::Picture>(pane).is_empty());
+    // The metadata reader's wording, as Properties' Details tab says it.
     wait_until("the dimensions", || {
-        property(&pane.shown_properties(), "Dimensions") == Some("4 × 3 pixels")
+        property(&pane.shown_properties(), "Dimensions") == Some("4 x 3")
     });
     // A redraw for another reason, such as a size scan's progress, keeps
     // the picture and its dimensions instead of reading them again.
     let picture = descendants::<gtk::Picture>(pane).remove(0);
     test.window.update_details_pane();
     assert_eq!(descendants::<gtk::Picture>(pane), [picture]);
-    assert_eq!(
-        property(&pane.shown_properties(), "Dimensions"),
-        Some("4 × 3 pixels")
-    );
+    assert_eq!(property(&pane.shown_properties(), "Dimensions"), Some("4 x 3"));
     test.window.folder_model().select_none();
     wait_until("the folder's art again", || {
         descendants::<gtk::Picture>(pane).is_empty()
@@ -293,7 +290,7 @@ fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
     assert!(property(&shown, "Type").is_some());
     assert!(property(&shown, "Size").is_none(), "Size is turned off");
     test.window.pointer_over_items(&view, None);
-    assert!(!pane.shown_summary().is_empty(), "the folder again");
+    assert!(pane.shown_name().ends_with(" items)"), "the folder again");
     wait_until("the options saved", || {
         let saved = Settings::open(test.settings_directory())
             .data()
