@@ -213,7 +213,20 @@ impl FolderPane {
     /// Hides or shows the list's rows (and the details view's column
     /// titles), keeping the list's place, model and selection.
     pub(super) fn hide_rows(&self, hide: bool) {
-        self.parts().views.set_child_visible(!hide);
+        let parts = self.parts();
+        if parts.views.is_child_visible() != hide {
+            return;
+        }
+        parts.views.set_child_visible(!hide);
+        // GTK keeps each widget's last drawing and redraws only the widgets
+        // marked as changed, marking a widget's parents with it. The views,
+        // hidden, stay marked, as nothing draws them; shown again, GTK
+        // stops marking at them, so the page stack kept its drawing without
+        // them and the list stayed blank, column titles too, in every
+        // folder after (GTK 4.14, a slow share's "Working on it..."). The
+        // stack, which shows them, is marked here as a container marks
+        // itself when it shows a child.
+        parts.stack.queue_draw();
     }
 
     /// False while "Working on it..." hides the previous folder's rows.

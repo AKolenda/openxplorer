@@ -39,7 +39,7 @@ pub(super) fn click_gesture(widget: &impl IsA<gtk::Widget>, button: u32) -> gtk:
 
 /// Emits `key-pressed` with `key` on the first key controller of `widget`;
 /// whether a handler took the key.
-fn press_key(widget: &impl IsA<gtk::Widget>, key: gdk::Key) -> bool {
+pub(super) fn press_key(widget: &impl IsA<gtk::Widget>, key: gdk::Key) -> bool {
     let keys = controllers::<gtk::EventControllerKey>(widget);
     let controller = keys.first().expect("the widget has a key controller");
     let no_keycode = 0_u32;
@@ -102,12 +102,16 @@ fn an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded() {
     );
 }
 
+/// Left and Right stop at the last crumb and at the chevron before the
+/// first, which takes the keyboard as the crumbs do.
+///
 /// parity: NAV-018
 #[gtk::test]
-fn left_and_right_stop_at_the_first_and_last_crumb() {
+fn left_and_right_stop_at_the_first_chevron_and_the_last_crumb() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     let crumbs = test.window.address_bar().crumb_buttons();
+    let (chevron, _) = test.window.address_bar().strip_buttons();
     let first = crumbs.first().expect("crumbs");
     let last = crumbs.last().expect("crumbs");
     let before_last = &crumbs[crumbs.len() - 2];
@@ -119,7 +123,11 @@ fn left_and_right_stop_at_the_first_and_last_crumb() {
     assert!(before_last.has_focus());
     first.grab_focus();
     press_key(&crumb_box(&test), gdk::Key::Left);
-    assert!(first.has_focus(), "Left stops at the first crumb");
+    assert!(chevron.has_focus(), "Left goes on to the chevron");
+    press_key(&crumb_box(&test), gdk::Key::Left);
+    assert!(chevron.has_focus(), "and stops there");
+    press_key(&crumb_box(&test), gdk::Key::Right);
+    assert!(first.has_focus());
 }
 
 /// parity: NAV-018

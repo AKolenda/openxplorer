@@ -198,7 +198,7 @@ impl TransferPanel {
     /// True while the action asks about taken names or a full drive.
     pub(crate) fn is_asking(&self) -> bool {
         let imp = self.imp();
-        imp.question.get_visible() || imp.space_question.get_visible()
+        imp.question.get_visible() || imp.space_question.get_visible() || self.asks_about_failure()
     }
 
     /// What the action says about a full drive, for tests.
@@ -228,7 +228,7 @@ impl TransferPanel {
 
     /// Says `summary` in the percentage's place, wrapping, and hides the
     /// bar, the details and Pause, as the action does while it asks.
-    fn show_asking(&self, summary: &str) {
+    pub(super) fn show_asking(&self, summary: &str) {
         let imp = self.imp();
         imp.percent_label.set_text(summary);
         imp.percent_label.set_wrap(true);
@@ -320,7 +320,8 @@ impl TransferPanel {
     }
 
     /// The question ends: the progress shows again.
-    fn end_question(&self) {
+    pub(super) fn end_question(&self) {
+        self.remove_failure_question();
         let imp = self.imp();
         imp.cancel_button.set_visible(true);
         imp.question_answer.replace(None);
@@ -345,6 +346,7 @@ impl TransferPanel {
     pub(super) fn stop_asking(&self) {
         self.answer(None);
         self.answer_space(false);
+        self.answer_failure(super::failure::FailureChoice::Cancel);
         if let Some(conflicts) = self.imp().conflict_window.upgrade() {
             conflicts.cancel();
         }
