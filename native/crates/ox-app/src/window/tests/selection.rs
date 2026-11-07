@@ -599,11 +599,16 @@ fn a_group_collapses_under_its_heading_and_its_items_are_passed_by() {
             !grouped.is_selected(heading_slot),
             "{view}: an expanded heading shows no fill"
         );
+        assert!(!heading.filled(), "{view}: nor by its own state");
         press_key(&test, gdk::Key::Left, none);
         assert!(heading.collapsed(), "{view}: Left collapses it again");
         assert!(
             grouped.is_selected(heading_slot),
             "{view}: a collapsed heading whose items are selected is filled"
+        );
+        assert!(
+            heading.filled(),
+            "{view}: filled by the heading's own state, whatever GTK shows as selected"
         );
         assert!(
             test.window.focused_heading().is_some(),

@@ -70,6 +70,10 @@ mod slot_imp {
         /// shows with the focus ring.
         #[property(get, set)]
         pub(super) focused: Cell<bool>,
+        /// Whether the heading's row is filled as selected: its group is
+        /// collapsed and every item of it selected, as Windows 11 fills it.
+        #[property(get, set)]
+        pub(super) filled: Cell<bool>,
         /// Whether the slot ends its heading's row at the right: the last
         /// slot carrying its line, or a heading alone on its row. A
         /// property, so a cell drawing the row's right edge follows when
@@ -519,6 +523,14 @@ impl GroupedSelection {
             })
             .unwrap_or_default();
         let before = imp.groups_selected.replace(now.clone());
+        // The row's own fill, which does not wait for GTK to show the slots
+        // as selected: GTK may not, for slots that cannot be selected.
+        for (index, filled) in now.iter().enumerate() {
+            let slots = self.heading(index).into_iter().chain(self.rules(index));
+            for slot in slots.filter(|slot| slot.filled() != *filled) {
+                slot.set_filled(*filled);
+            }
+        }
         (0..now.len())
             .filter(|index| before.get(*index) != now.get(*index))
             .collect()

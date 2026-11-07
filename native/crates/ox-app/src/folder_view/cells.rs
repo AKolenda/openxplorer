@@ -148,6 +148,10 @@ const ROW_HOVER_CLASS: &str = "row-hover";
 /// keyboard.
 const ROW_FOCUS_CLASS: &str = "row-focus";
 
+/// The CSS class of a heading row's cells, and of a Details heading's
+/// row, while the heading's group is collapsed with every item selected.
+const ROW_FILLED_CLASS: &str = "row-filled";
+
 /// The CSS class of the cell starting a heading's row: the heading.
 const ROW_START_CLASS: &str = "row-start";
 
@@ -419,10 +423,11 @@ impl FileCell {
                 toggle_class(&cell, ROW_FOCUS_CLASS, in_row && slot.focused());
                 toggle_class(&cell, ROW_START_CLASS, slot.kind() == SlotKind::Heading);
                 toggle_class(&cell, ROW_END_CLASS, in_row && slot.ends_row());
+                toggle_class(&cell, ROW_FILLED_CLASS, in_row && slot.filled());
+                cell.mark_item_widget(in_row, in_row && slot.filled());
             }
         );
         show_state(slot);
-        self.mark_item_widget(slot.kind() != SlotKind::Blank);
         let handler = slot.connect_notify_local(None, move |slot, _| show_state(slot));
         imp.slot_watch.replace(Some(handler));
     }
@@ -438,22 +443,30 @@ impl FileCell {
         ] {
             toggle_class(self, class, false);
         }
-        self.mark_item_widget(false);
+        self.mark_item_widget(false, false);
     }
 
     /// Marks the row or tile GTK wraps the cell in as a heading's, or not,
-    /// once per bind: Details outlines a heading's row by that class.
-    /// Never on the pointer's account, as restyling GTK's rows under the
+    /// and as filled while its folded group is all selected: Details draws
+    /// a heading's row by these classes. Never on the pointer's account, as restyling GTK's rows under the
     /// pointer can make it send the pointer's crossings again. Done once
     /// GTK has bound the cell, as changing a row's classes while GTK binds
     /// its cells upsets the list (see `cells/cell_owners.rs`).
-    fn mark_item_widget(&self, heading: bool) {
+    fn mark_item_widget(&self, heading: bool, filled: bool) {
         glib::idle_add_local_once(glib::clone!(
             #[weak(rename_to = cell)]
             self,
             move || {
                 let item = std::iter::successors(cell.parent(), WidgetExt::parent)
                     .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()));
+                // Details fills a folded, selected heading's row by this
+                // class, as its line cells cannot see the heading.
+                if let Some(item) = item
+                    .as_ref()
+                    .filter(|item| item.has_css_class(ROW_FILLED_CLASS) != filled)
+                {
+                    toggle_class(item, ROW_FILLED_CLASS, filled);
+                }
                 if let Some(item) = item.filter(|item| item.has_css_class(HEADING_ROW_CLASS) != heading) {
                     toggle_class(&item, HEADING_ROW_CLASS, heading);
                     // A Details heading's box is drawn across the columns
