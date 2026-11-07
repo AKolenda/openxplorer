@@ -532,7 +532,7 @@ where it differs; ✓ means the target equals the current app.
 | Group separator | 1 px `@ox_border`, margin `12 13`; between the groups of Windows 11's pane only: Home │ pinned folders │ This PC and Network │ saved searches, Recent files, Recent locations and Recycle Bin (none between This PC and Network) | NavigationView separator margin `0,3,0,4` (NV#L247); Windows 11's navigation pane divides Home and Gallery, the pins, and This PC with Network (observed, unverified) | Applied (2026-11-06). |
 | Headings | T06 | L-TYPE casing | visible, P3 |
 | Quick access drop | block `border: 1px solid @ox_accent` (2 px in high contrast), background `@ox_selected`, heading in `@ox_accent`; insertion line 2 px `@ox_accent`, radius 2; dashed 30 px tail row when empty ✓ | — | Keep (rule 1). |
-| Bottom area | `border-top: 1px solid @ox_border`; padding `9 0 11`; button 34 high, glyph 17 in `@ox_accent`, "Map network drive" at 12 px ✓ | — | Keep. |
+| Bottom area | None: the list and the folder tree reach the pane's foot. The Python app's "Map network drive" button (`.sidebar-bottom`) is gone; Map network drive is on This PC's and Network's right-click menus and in their "…" (NET-001, CMD-007) | Windows 11's navigation pane has nothing pinned below its tree; Map network drive is on This PC's and Network's menus and in This PC's "…" (observed, unverified) | Applied (2026-11-07). |
 | Network rows | network art (folder or server glyph on a green pipe, `networkIcon`) ✓ | — | Keep. |
 
 ### 4.5 Details view

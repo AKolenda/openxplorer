@@ -113,6 +113,21 @@ impl BrowserWindow {
         self.pin(uri, label);
     }
 
+    /// Pins the location `uri` to Quick access, named as the window names
+    /// it: a drive's Pin to Quick access.
+    pub(super) fn pin_location(&self, uri: &str) {
+        let label = self.imp().locations.borrow().title_for(uri);
+        self.pin(uri.to_owned(), label);
+    }
+
+    /// Whether `uri` is pinned to Quick access.
+    pub(super) fn is_pinned(&self, uri: &str) -> bool {
+        self.places()
+            .quick_access
+            .iter()
+            .any(|place| same_location(&place.uri, uri))
+    }
+
     /// Adds a Quick access pin; as in Windows Explorer, only a failure
     /// is shown, and a folder pinned already stays as it is.
     fn pin(&self, uri: String, label: String) {
