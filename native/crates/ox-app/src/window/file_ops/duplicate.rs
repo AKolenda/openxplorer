@@ -8,7 +8,7 @@
 //! the window's one operation with the transfer panel; the duplicates are
 //! selected afterwards and Undo moves them to the Trash.
 
-use ox_core::ops::{duplicate_items, starting_label, summarize_duplicate};
+use ox_core::ops::{duplicate_items, starting_label};
 use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
@@ -40,7 +40,6 @@ impl BrowserWindow {
         let outcome = duplicate_items(uris, &context, progress).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_duplicate(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });
