@@ -7,8 +7,9 @@
 //! General, Sharing, Security, Location, Details, Previous Versions,
 //! Customize. A drive, a folder the kernel mounts a file system at, has
 //! Windows' drive General tab instead of a folder's, and a Hardware tab
-//! after it ([`super::drive_tab`]). The item's properties are read once,
-//! off the main thread, when the window opens; the versions and a file's
+//! after it ([`super::drive_tab`]), and no Customize, as in Windows 11.
+//! The item's properties are read once, off the main thread, when the
+//! window opens; the versions and a file's
 //! media details are read the first time their tab is shown, and a
 //! folder's size is counted from the start, never a drive's.
 
@@ -142,7 +143,8 @@ pub(crate) fn open_item_properties(
     );
     let is_read_only =
         context.locations.is_snapshot_location(&target.uri) || is_conventional_snapshot(&target.uri);
-    let customize = (local_folder.is_some() && !is_read_only).then(|| {
+    // As in Windows 11, a drive's Properties have no Customize tab.
+    let customize = (local_folder.is_some() && !is_read_only && !is_drive).then(|| {
         let customize = page();
         window.add_tab(
             PropertiesTab::Customize.page_name(),

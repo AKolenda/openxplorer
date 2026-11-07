@@ -212,9 +212,8 @@ fn properties_with_a_long_name_are_captured() {
 }
 
 /// Properties of a folder, a file, several items and a drive (the root,
-/// Local Disk) all keep one width, on every tab: a drive's six tabs take
-/// a second row, as Windows' property sheets do, rather than widening
-/// the window.
+/// Local Disk) all keep one width, on every tab. The system drive has
+/// no Customize tab, as in Windows 11, and its five tabs fit one row.
 ///
 /// parity: PROP-001
 #[gtk::test]
@@ -245,16 +244,106 @@ fn every_kind_of_properties_keeps_the_width() {
     let drive = test.wait_for_properties("Local Disk Properties");
     wait_for_frames(&drive, 6);
     assert_eq!(drive.width(), width, "a drive");
-    // Each row of tabs starts at its own height.
-    let rows: std::collections::BTreeSet<u32> = drive
-        .tab_buttons()
-        .iter()
-        .filter_map(|tab| tab.compute_bounds(&drive))
-        .map(|bounds| bounds.y().to_bits())
-        .collect();
-    assert!(rows.len() > 1, "a drive's tabs take more than one row: {rows:?}");
+    assert_eq!(
+        drive.tab_labels(),
+        ["General", "Hardware", "Sharing", "Security", "Previous Versions"],
+        "a drive has no Customize tab"
+    );
+    assert_eq!(tab_rows(&drive), [5], "a drive's five tabs fit one row");
     assert_every_tab_keeps(&drive, width, "a drive");
     drive.close();
+}
+
+/// How many tabs each row of `window`'s tabs holds, top to bottom. The
+/// tab shown stands a little taller than its row, so tabs whose tops are
+/// within a few pixels share a row.
+fn tab_rows(window: &PropertiesWindow) -> Vec<usize> {
+    let mut tops: Vec<f32> = window
+        .tab_buttons()
+        .iter()
+        .filter(|tab| tab.is_visible())
+        .filter_map(|tab| tab.compute_bounds(window))
+        .map(|bounds| bounds.y())
+        .collect();
+    tops.sort_by(f32::total_cmp);
+    let mut rows: Vec<(f32, usize)> = Vec::new();
+    for top in tops {
+        match rows.last_mut() {
+            Some((first, count)) if top - *first < 8.0 => *count += 1,
+            _ => rows.push((top, 1)),
+        }
+    }
+    rows.into_iter().map(|(_, count)| count).collect()
+}
+
+/// A Properties window with Windows' seven drive tabs (General, Tools,
+/// Hardware, Sharing, Security, Previous Versions, Quota), too many for
+/// one row at Windows' width.
+fn seven_tab_properties(test: &TestWindow) -> PropertiesWindow {
+    let window = PropertiesWindow::new("Data (D:) Properties", None, Some(&test.window));
+    for label in [
+        "General",
+        "Tools",
+        "Hardware",
+        "Sharing",
+        "Security",
+        "Previous Versions",
+        "Quota",
+    ] {
+        let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        page.append(&gtk::Label::new(Some(label)));
+        window.add_tab(&label.to_lowercase(), label, &page);
+    }
+    window.present();
+    wait_for_frames(&window, 6);
+    window
+}
+
+/// Tabs too many for one row wrap as Windows' multi-row tabs do: the
+/// rows share the tabs evenly, each row is stretched to the full width,
+/// never one tab alone on a row, and the row of the tab shown sits next
+/// to the page; the window keeps Windows' width.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn wrapped_tabs_share_the_rows_evenly() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Short")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Short");
+    let folder = properties_of_selection(&test, "Short Properties");
+    let width = shown_width(&folder);
+    folder.close();
+
+    let window = seven_tab_properties(&test);
+    assert_eq!(window.width(), width, "the width stays");
+    // As Windows' C: drive: Security, Previous Versions and Quota behind,
+    // General, Tools, Hardware and Sharing in front, next to the page.
+    assert_eq!(tab_rows(&window), [3, 4], "the rows share the tabs evenly");
+    // Every row reaches both edges of the row of tabs.
+    let tabs = window.tab_buttons();
+    let row_area = tabs[0].parent().expect("the row of tabs");
+    let row_width = f32::from(i16::try_from(row_area.width()).expect("a row's width"));
+    let mut lefts = 0;
+    let mut rights = 0;
+    for bounds in tabs.iter().filter_map(|tab| tab.compute_bounds(&row_area)) {
+        lefts += usize::from(bounds.x() <= 0.0);
+        rights += usize::from(bounds.x() + bounds.width() >= row_width - 1.0);
+    }
+    assert_eq!((lefts, rights), (2, 2), "each row is stretched to the full width");
+
+    // Showing Quota, on the other row, brings its row next to the page.
+    let general_top = |window: &PropertiesWindow| {
+        window.tab_buttons()[0]
+            .compute_bounds(window)
+            .expect("bounds")
+            .y()
+    };
+    let before = general_top(&window);
+    tabs[6].set_active(true);
+    wait_for_frames(&window, 4);
+    assert!(general_top(&window) < before - 8.0, "General's row moves up");
+    window.close();
 }
 
 /// The row of tabs is one stop of the Tab key, on the tab shown, which
@@ -349,9 +438,10 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
     window.close();
 }
 
-/// General of a folder, a file, several items and a drive, light and
-/// dark, for review with `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):
-/// `properties-kind-{folder,file,several,drive}-{light,dark}.png`.
+/// General of a folder, a file, several items, a drive and seven tabs
+/// in two rows, light and dark, for review with `OX_NATIVE_CAPTURE_DIR`
+/// (and `GDK_SCALE=2`):
+/// `properties-kind-{folder,file,several,drive,wrapped}-{light,dark}.png`.
 ///
 /// parity: PROP-001
 #[gtk::test]
@@ -385,5 +475,8 @@ fn every_kind_of_properties_is_captured() {
         wait_for_frames(&drive, 6);
         capture_dialog(&drive, &format!("properties-kind-drive-{theme}.png"));
         drive.close();
+        let wrapped = seven_tab_properties(&test);
+        capture_dialog(&wrapped, &format!("properties-kind-wrapped-{theme}.png"));
+        wrapped.close();
     }
 }

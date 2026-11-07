@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! [`TabRows`]: tabs in as many rows as the window's width needs, as
-//! Windows' property sheets lay them out. Tabs fill a row in order until
-//! the next one does not fit; with more than one row, each row is
-//! stretched to the full width, and the row holding the tab shown sits
+//! Windows' property sheets lay them out. There are as few rows as the
+//! tabs fit in, the tabs spread over them evenly in order; with more than
+//! one row, each row is stretched to the full width, and the row holding the tab shown sits
 //! next to the page, the others above it in their order.
 
 use gtk::glib;
@@ -162,22 +162,151 @@ impl TabRows {
     }
 }
 
-/// The tabs of each row, in order, for rows `width` wide: a row takes
-/// tabs until the next one does not fit, and always at least one.
+/// The tabs of each row, in order, for rows `width` wide. As in
+/// Windows' multi-row tabs, there are as few rows as fit the tabs, and
+/// the tabs are spread over them as evenly as fits: never one tab alone
+/// on a row while another row is full. Of the even spreads, the one with
+/// more tabs in the first rows wins, then the one whose widest row is
+/// narrowest.
 fn rows(tabs: &[Tab], width: i32) -> Vec<Vec<usize>> {
-    let mut rows: Vec<Vec<usize>> = Vec::new();
+    let widths: Vec<i32> = tabs.iter().map(|tab| tab.width).collect();
+    rows_of(&widths, width)
+}
+
+/// [`rows`] for tabs `widths` wide.
+fn rows_of(widths: &[i32], width: i32) -> Vec<Vec<usize>> {
+    if widths.is_empty() {
+        return Vec::new();
+    }
+    let count = greedy_row_count(widths, width);
+    if count <= 1 {
+        return vec![(0..widths.len()).collect()];
+    }
+    let mut best: Option<(Spread, Vec<usize>)> = None;
+    let mut sizes = Vec::with_capacity(count);
+    spreads(widths, width, count, &mut sizes, &mut |sizes| {
+        let spread = Spread::of(widths, sizes);
+        if best.as_ref().is_none_or(|(kept, _)| spread < *kept) {
+            best = Some((spread, sizes.to_vec()));
+        }
+    });
+    let Some((_, sizes)) = best else {
+        // Some tab is wider than the row: one tab a row, in order.
+        return (0..widths.len()).map(|at| vec![at]).collect();
+    };
+    let mut start = 0;
+    sizes
+        .iter()
+        .map(|&size| {
+            let row = (start..start + size).collect();
+            start += size;
+            row
+        })
+        .collect()
+}
+
+/// How many rows filling each until the next tab does not fit takes: the
+/// fewest rows the tabs fit in, in order.
+fn greedy_row_count(widths: &[i32], width: i32) -> usize {
+    let mut count = 0;
     let mut used = 0;
-    for (at, tab) in tabs.iter().enumerate() {
-        match rows.last_mut() {
-            Some(row) if used + tab.width <= width => {
-                row.push(at);
-                used += tab.width;
-            }
-            _ => {
-                rows.push(vec![at]);
-                used = tab.width;
-            }
+    for &tab in widths {
+        if count == 0 || used + tab > width {
+            count += 1;
+            used = tab;
+        } else {
+            used += tab;
         }
     }
-    rows
+    count
+}
+
+/// How even a spread of tabs over rows is; smaller is better.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct Spread {
+    /// The most tabs in a row less the fewest.
+    count_gap: usize,
+    /// The rows' sizes, reversed, so more tabs in the first rows wins, as
+    /// Windows' C: drive has four tabs in front and three behind.
+    front: Vec<std::cmp::Reverse<usize>>,
+    /// The widest row's tabs.
+    widest: i32,
+}
+
+impl Spread {
+    fn of(widths: &[i32], sizes: &[usize]) -> Self {
+        let mut start = 0;
+        let mut widest = 0;
+        for &size in sizes {
+            widest = widest.max(widths[start..start + size].iter().sum());
+            start += size;
+        }
+        let most = sizes.iter().copied().max().unwrap_or(0);
+        let fewest = sizes.iter().copied().min().unwrap_or(0);
+        Self {
+            count_gap: most - fewest,
+            front: sizes.iter().map(|&size| std::cmp::Reverse(size)).collect(),
+            widest,
+        }
+    }
+}
+
+/// Calls `found` with each way of cutting `widths`, in order, into `rows`
+/// rows of at least one tab, every row fitting `width`.
+fn spreads(
+    widths: &[i32],
+    width: i32,
+    rows: usize,
+    sizes: &mut Vec<usize>,
+    found: &mut impl FnMut(&[usize]),
+) {
+    if rows == 1 {
+        if !widths.is_empty() && widths.iter().sum::<i32>() <= width {
+            sizes.push(widths.len());
+            found(sizes);
+            sizes.pop();
+        }
+        return;
+    }
+    let mut used = 0;
+    for size in 1..=widths.len().saturating_sub(rows - 1) {
+        used += widths[size - 1];
+        if used > width {
+            break;
+        }
+        sizes.push(size);
+        spreads(&widths[size..], width, rows - 1, sizes, found);
+        sizes.pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rows_of;
+
+    /// Five tabs that need two rows take three and two, not four and one.
+    #[test]
+    fn rows_share_the_tabs_evenly() {
+        let widths = [60, 70, 60, 70, 120];
+        assert_eq!(rows_of(&widths, 300), vec![vec![0, 1, 2], vec![3, 4]]);
+        // Windows' C: drive: General, Tools, Hardware, Sharing in front,
+        // Security, Previous Versions, Quota behind.
+        let drive = [59, 48, 68, 62, 62, 119, 52];
+        assert_eq!(rows_of(&drive, 380), vec![vec![0, 1, 2, 3], vec![4, 5, 6]]);
+    }
+
+    /// Tabs that fit take one row; seven tabs over three rows take three,
+    /// two and two.
+    #[test]
+    fn rows_are_as_few_as_fit() {
+        assert_eq!(rows_of(&[50, 50, 50], 300), vec![vec![0, 1, 2]]);
+        let widths = [80; 7];
+        assert_eq!(rows_of(&widths, 250), vec![vec![0, 1, 2], vec![3, 4], vec![5, 6]]);
+    }
+
+    /// A tab wider than the row still shows, alone on its row.
+    #[test]
+    fn a_wide_tab_takes_its_own_row() {
+        assert_eq!(rows_of(&[400, 50], 300), vec![vec![0], vec![1]]);
+    }
 }
