@@ -75,6 +75,7 @@ mod details_pane;
 mod disabled_reasons;
 mod disk_tools;
 mod drag_surface;
+mod drive_shortcuts;
 mod empty_page;
 mod environment;
 mod expand_arrows;

@@ -106,7 +106,9 @@ mod unfinished;
 pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
 pub use changed_copies::changed_copies;
 pub use conflicts::{scan_name_conflicts, ConflictScan, ItemFacts, NameConflict, PlannedItem, PlannedKind};
-pub use context::{FailureAsker, MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
+pub use context::{
+    FailureAsker, MoveByCopyingAsker, OperationContext, ReplacedFiles, UnstorableAsker, WriteProtection,
+};
 pub use create::{create_folder_path, create_item, create_numbered_folder, CreatedFolderPath, CreatedItem};
 pub use delete_plan::{
     permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, DeletePlan, DeleteSubject,
@@ -136,7 +138,10 @@ pub use restore_conflicts::{
     scan_drag_out_conflicts, scan_restore_conflicts, tell_taken_items, RestoreSoFar,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
-pub use shortcuts::{create_shortcut, create_shortcuts, shortcut_name, NO_LINKS_HERE};
+pub use shortcuts::{
+    create_named_shortcuts, create_shortcut, create_shortcut_named, create_shortcuts, shortcut_name,
+    NamedShortcuts, ShortcutTarget, NO_LINKS_HERE,
+};
 pub use tab_transfer::{
     Acceptance, Delivery, KeptReason, TabMessage, TabMoveOutcome, TabTransferError, TabTransferToken,
     TabTransfers, WindowId, MAX_PENDING_TAB_TRANSFERS, TAB_TRANSFER_LIFETIME,

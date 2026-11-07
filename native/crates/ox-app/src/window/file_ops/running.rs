@@ -18,8 +18,8 @@ use std::time::Duration;
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::ops::{
-    run_transfer, starting_label, OperationContext, OpsError, TransferOutcome, TransferRequest, UndoRecord,
-    STOPPED_TITLE,
+    run_transfer, starting_label, OperationContext, OpsError, ReplacedFiles, TransferOutcome,
+    TransferRequest, UndoRecord, STOPPED_TITLE,
 };
 use ox_core::transfer::{Cancellation, Progress};
 
@@ -128,6 +128,18 @@ impl BrowserWindow {
         Ok((OperationContext::new(self.context().write_protection()), hold))
     }
 
+    /// What Replace does with the file it replaces: by default it goes to
+    /// the Recycle Bin; with Settings > Files & folders' "When replacing a
+    /// file, move the old one to the Recycle Bin" off, it is overwritten,
+    /// as in Windows 11.
+    pub(crate) fn replaced_files(&self) -> ReplacedFiles {
+        if self.context().settings_data().preferences.recycle_replaced_files {
+            ReplacedFiles::RecycleBin
+        } else {
+            ReplacedFiles::Overwrite
+        }
+    }
+
     /// Starts an exclusive operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
@@ -150,6 +162,7 @@ impl BrowserWindow {
         // OPS-047: an item that fails asks whether to retry, skip or
         // cancel.
         context.item_failure = Some(self.failure_asker(&context.cancel));
+        context.replaced_files = self.replaced_files();
         if !self.claim_transfer_panel(TransferKind::Files, label, &context.cancel) {
             return None;
         }
