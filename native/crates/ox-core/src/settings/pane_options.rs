@@ -9,7 +9,7 @@ use serde_json::Value;
 
 /// How the details pane behaves. Stored as `detailsPaneOptions`, which
 /// the Python app does not read.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetailsPaneOptions {
     /// The pane describes the item under the pointer, and the selection
@@ -17,21 +17,11 @@ pub struct DetailsPaneOptions {
     pub follow_hover: bool,
     /// The names of the fields the user turned off, such as `Size`.
     pub hidden_fields: Vec<String>,
-    /// Dates show the day only; off, they add the time.
+    /// Dates show the day only; off (the default, as Windows' pane
+    /// shows them), they add the time.
     pub condensed_dates: bool,
     /// Audio and video start playing when previewed.
     pub auto_play: bool,
-}
-
-impl Default for DetailsPaneOptions {
-    fn default() -> Self {
-        Self {
-            follow_hover: false,
-            hidden_fields: Vec::new(),
-            condensed_dates: true,
-            auto_play: false,
-        }
-    }
 }
 
 impl DetailsPaneOptions {
@@ -83,7 +73,7 @@ mod tests {
         let options = DetailsPaneOptions {
             follow_hover: true,
             hidden_fields: vec!["Size".to_owned()],
-            condensed_dates: false,
+            condensed_dates: true,
             auto_play: true,
         };
         let stored = serde_json::to_value(&options).expect("serialises");
@@ -91,7 +81,7 @@ mod tests {
         assert_eq!(DetailsPaneOptions::from_json(&stored), Some(options));
         let odd = DetailsPaneOptions::from_json(&json!({"followHover": "yes", "hiddenFields": [1, "Type"]}))
             .expect("an object");
-        assert!(!odd.follow_hover && odd.condensed_dates);
+        assert!(!odd.follow_hover && !odd.condensed_dates);
         assert!(!odd.shows("Type") && odd.shows("Size"));
         assert_eq!(DetailsPaneOptions::from_json(&json!([])), None);
     }
