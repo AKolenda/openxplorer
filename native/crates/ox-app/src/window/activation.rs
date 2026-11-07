@@ -27,6 +27,7 @@ use super::run_on_open::RunChoice;
 use super::session::TabId;
 use super::session::TabPlacement;
 use super::slow_location::OpeningKind;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 mod outcome;
@@ -240,10 +241,17 @@ impl BrowserWindow {
     /// trusted, one item of a tab opens at a time, and the result belongs
     /// to the tab that asked. It is dropped when that tab moved elsewhere
     /// or closed meanwhile; a folder opens in that tab even when another
-    /// one is in front by then (OPEN-001, OPEN-004).
+    /// one is in front by then (OPEN-001, OPEN-004). With Folder Options'
+    /// "Open each folder in its own window", a folder opens in a new
+    /// window instead, by double-click, Enter or Open alike, as in Windows.
     pub(super) fn activate_item(&self, position: u32) {
         // A double-click opens; it never also renames (OPS-011).
         self.cancel_slow_click_rename();
+        let own_window = self.opens_folders_in_own_window();
+        if let Some(uri) = self.folder_in_view(position).filter(|_| own_window) {
+            WindowAction::OpenWindow.activate_from(self, Some(&uri.to_variant()));
+            return;
+        }
         let Some(item) = self.folder_pane().model().item(position) else {
             return;
         };

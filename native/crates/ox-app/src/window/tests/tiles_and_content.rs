@@ -48,14 +48,15 @@ fn cell_bounds(test: &TestWindow, position: u32) -> gtk::graphene::Rect {
 }
 
 /// View > Tiles (Ctrl+Shift+7) shows each item's type and, for a file, its
-/// size under its name; View > Content (Ctrl+Shift+8) shows the type under
-/// the name and the date modified and size at the right. A folder has no
-/// size.
+/// size under its name, written as the status bar writes it; View >
+/// Content (Ctrl+Shift+8) shows the type under the name and the date
+/// modified and size at the right. A folder has no size.
 ///
 /// parity: VIEW-071
 #[gtk::test]
 fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
     let fixture = Fixture::standard();
+    std::fs::write(fixture.path("Survey.bin"), vec![0; 1_300_000]).expect("fixture file");
     let test = TestWindow::open(&fixture.uri());
     let view = WindowAction::View.detailed_name();
     let keys = |target: &str| application().accels_for_action(&format!("{view}::{target}"));
@@ -68,6 +69,12 @@ fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
         assert_eq!(lines.kind, "Text Document", "{view:?}");
         assert_eq!(lines.size, "20 bytes", "{view:?}: the fixture's 20-byte file");
         assert!(!lines.modified.is_empty(), "{view:?}: a date modified");
+        let survey = cell_named(&test, "Survey.bin").shown_item_lines();
+        let survey = survey.unwrap_or_else(|| panic!("{view:?} shows the large file's lines"));
+        assert_eq!(
+            survey.size, "1.23 MB",
+            "{view:?}: three digits, as the status bar"
+        );
         let folder = cell_named(&test, "Documents").shown_item_lines();
         let folder = folder.unwrap_or_else(|| panic!("{view:?} shows the folder's lines"));
         assert_eq!(
