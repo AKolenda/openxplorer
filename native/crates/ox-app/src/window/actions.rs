@@ -250,6 +250,11 @@ impl BrowserWindow {
             ),
             plain_action(WindowAction::PinSelected, BrowserWindow::pin_selected),
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
+            text_action(WindowAction::PinLocation, BrowserWindow::pin_location),
+            plain_action(
+                WindowAction::PlaceMoreOptions,
+                BrowserWindow::show_place_more_options,
+            ),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
             plain_action(WindowAction::Share, BrowserWindow::share),
             plain_action(WindowAction::About, BrowserWindow::show_about),
