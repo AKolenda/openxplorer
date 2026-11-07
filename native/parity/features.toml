@@ -57,7 +57,7 @@ schema = 1
 id = "NAV-001"
 area = "NAV"
 title = "Back and Forward buttons walk per-tab history"
-behaviour = "Back and Forward move one step in the active tab's own history without adding entries. Back is disabled at index 0, Forward at the last entry. Each tab has independent history. As in Windows 11 File Explorer, their tooltips name where they lead, by the title its tab would have: 'Back to Downloads (Alt + Left Arrow)', 'Forward to Documents (Alt + Right Arrow)'; where they lead nowhere, 'Back (Alt + Left Arrow)' and 'Forward (Alt + Right Arrow)'."
+behaviour = "Back and Forward move one step in the active tab's own history without adding entries. Back is disabled at index 0, Forward at the last entry. Each tab has independent history. As in Windows 11 File Explorer, their tooltips name where they lead, by the title its tab would have, without a keyboard shortcut: 'Back to Downloads', 'Forward to Documents'; where they lead nowhere, 'Back' and 'Forward'. Alt+Left and Alt+Right still go back and forward."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -90,7 +90,7 @@ bridge = ["list"]
 dolphin = "Go > Back/Forward; Dolphin Back/Forward toolbar buttons with history dropdown on long-press/right-click.; Back/Forward, Alt+Left/Alt+Right; go_back: Alt+Left, Back key, Backspace; go_forward: Alt+Right, Forward key"
 gnome = "GtkButton in header; per-tab history model"
 native = "done"
-native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_say_their_keys_and_follow_each_tabs_own_history): the buttons' tooltips naming where they lead or only their key (native/crates/ox-app/src/window/navigation_buttons.rs, show_navigation_tooltips, run whenever the location is rendered), their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
+native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_name_where_they_lead_and_follow_each_tabs_own_history): the buttons' tooltips naming where they lead or only the button's name (native/crates/ox-app/src/window/navigation_buttons.rs, show_navigation_tooltips, run whenever the location is rendered), their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
 
 [[feature]]
 id = "NAV-002"
@@ -260,7 +260,7 @@ native_note = "Native navigation never keeps a redirecting location as its own s
 id = "NAV-010"
 area = "NAV"
 title = "Up button and Alt+Up go to the parent folder"
-behaviour = "The Up button (tooltip 'Up to \"Desktop\" (Alt + Up Arrow)', naming the parent as Windows 11 File Explorer does, or 'Up (Alt + Up Arrow)' where Up is disabled) and Alt+ArrowUp navigate to the parent location: local folder to its parent, SMB folder to its share, share to the server (smb://host/), device folder to the device root. Up is disabled on Home/This PC/Network/Settings pages and at any root (/, SMB server, device root)."
+behaviour = "The Up button (tooltip 'Up to \"Desktop\"', naming the parent without a keyboard shortcut as Windows 11 File Explorer does, or 'Up' where Up is disabled) and Alt+ArrowUp navigate to the parent location: local folder to its parent, SMB folder to its share, share to the server (smb://host/), device folder to the device root. Up is disabled on Home/This PC/Network/Settings pages and at any root (/, SMB server, device root)."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -280,7 +280,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin: Alt+Up goes up.; Go > Up (Alt+Up); Up, Alt+Up; go_up: Alt+Up"
 native = "done"
-native_note = "Parents: native/crates/ox-core/src/location/display.rs and native/crates/ox-core/tests/location_javascript.rs (parent_locations_match_app_js). native/crates/ox-app/src/window/tests/history.rs (up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots): the tooltip naming the parent, and 'Up (Alt + Up Arrow)' at /, Alt+Up from the file list, and Up disabled on This PC, Network and at /."
+native_note = "Parents: native/crates/ox-core/src/location/display.rs and native/crates/ox-core/tests/location_javascript.rs (parent_locations_match_app_js). native/crates/ox-app/src/window/tests/history.rs (up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots): the tooltip naming the parent, and 'Up' at /, Alt+Up from the file list, and Up disabled on This PC, Network and at /."
 
 [[feature]]
 id = "NAV-011"
@@ -325,7 +325,7 @@ native_note = "native/crates/ox-app/src/window/navigation_buttons.rs binds Alt+H
 id = "NAV-013"
 area = "NAV"
 title = "Refresh button, F5 and Ctrl+R reload the folder"
-behaviour = "Refresh (tooltip 'Refresh \"Documents\" (F5)', naming the folder as Windows 11 File Explorer does) refreshes the environment (sidebar, mounts) and reloads the active listing without clearing it first. F5 and Ctrl+R reload the listing and work even while focus is in a text field. During a search, F5/Ctrl+R instead asks the backend to refresh the first cache root covering the folder and re-runs the search."
+behaviour = "Refresh (tooltip 'Refresh \"Documents\"', naming the folder without a keyboard shortcut as Windows 11 File Explorer does) refreshes the environment (sidebar, mounts) and reloads the active listing without clearing it first. F5 and Ctrl+R reload the listing and work even while focus is in a text field. During a search, F5/Ctrl+R instead asks the backend to refresh the first cache root covering the folder and re-runs the search."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -344,7 +344,7 @@ python_tests = ["v2.0.0:desktop/tests/ui_rc3_contract.py::Selection restored aft
 bridge = ["list", "environment", "cacheRefresh", "search", "cancel"]
 dolphin = "View > Reload (F5); Dolphin: F5 reload.; view_redisplay: F5, Refresh key"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/history.rs (refresh_says_f5_and_f5_and_ctrl_r_work_even_from_text_fields): the tooltip, and F5 and Ctrl+R as application accelerators, which run before a focused text field; native/crates/ox-app/src/window/tests/listing.rs (refresh_keeps_the_rows_scroll_position_focus_and_selection): the listing is reloaded in place; native/crates/ox-app/src/window/tests/search.rs (refresh_while_searching_runs_the_search_again). Refresh also rereads the settings (pins and saved shares); drives and mounts are live through GIO's volume monitor."
+native_note = "native/crates/ox-app/src/window/tests/history.rs (refresh_names_its_folder_and_f5_and_ctrl_r_work_even_from_text_fields): the tooltip, and F5 and Ctrl+R as application accelerators, which run before a focused text field; native/crates/ox-app/src/window/tests/listing.rs (refresh_keeps_the_rows_scroll_position_focus_and_selection): the listing is reloaded in place; native/crates/ox-app/src/window/tests/search.rs (refresh_while_searching_runs_the_search_again). Refresh also rereads the settings (pins and saved shares); drives and mounts are live through GIO's volume monitor."
 
 [[feature]]
 id = "NAV-014"
@@ -6259,7 +6259,7 @@ native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_cli
 id = "CMD-016"
 area = "CMD"
 title = "Shortcut hints in menus and tooltips"
-behaviour = "Menu items show their keys: Open 'Enter', Cut 'Ctrl+X', Copy 'Ctrl+C', Paste 'Ctrl+V', Rename 'F2', Delete/Move to Trash 'Delete', Properties 'Alt+Enter', Refresh 'F5', Folder 'Ctrl+Shift+N', New window 'Ctrl+N', Larger text 'Ctrl++', Smaller text 'Ctrl+−', Reset text size 'Ctrl+0', Show more options 'Shift+F10'. Button tooltips: Windows 11 File Explorer's 'Back to <folder> (Alt + Left Arrow)', 'Forward to <folder> (Alt + Right Arrow)', 'Up to \"<folder>\" (Alt + Up Arrow)', 'Refresh \"<folder>\" (F5)' (NAV-001, NAV-010, NAV-013), 'New tab (Ctrl+T)', 'Cut (Ctrl+X)', 'Copy (Ctrl+C)', 'Paste files (Ctrl+V)', 'Rename (F2)', 'Move to Trash (Delete)' or 'Delete permanently (Delete)', 'Settings (Ctrl+,)'."
+behaviour = "Menu items show their keys: Open 'Enter', Cut 'Ctrl+X', Copy 'Ctrl+C', Paste 'Ctrl+V', Rename 'F2', Delete/Move to Trash 'Delete', Properties 'Alt+Enter', Refresh 'F5', Folder 'Ctrl+Shift+N', New window 'Ctrl+N', Larger text 'Ctrl++', Smaller text 'Ctrl+−', Reset text size 'Ctrl+0', Show more options 'Shift+F10'. Button tooltips: Windows 11 File Explorer's 'Back to <folder>', 'Forward to <folder>', 'Up to \"<folder>\"', 'Refresh \"<folder>\"' without keys (NAV-001, NAV-010, NAV-013), 'New tab (Ctrl+T)', 'Cut (Ctrl+X)', 'Copy (Ctrl+C)', 'Paste files (Ctrl+V)', 'Rename (F2)', 'Move to Trash (Delete)' or 'Delete permanently (Delete)', 'Settings (Ctrl+,)'."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
