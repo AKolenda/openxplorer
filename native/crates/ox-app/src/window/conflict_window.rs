@@ -245,7 +245,7 @@ impl FileConflictWindow {
         self.connect_checks();
         self.connect_answers(&continue_button, &cancel_button);
         for (conflict, row) in scan.conflicts.iter().zip(self.imp().rows.borrow().iter()) {
-            load_pictures(conflict, row);
+            load_pictures(conflict, &row.pictures, THUMBNAIL_SIZE);
         }
     }
 
@@ -613,21 +613,85 @@ fn conflict_row(conflict: &NameConflict, source: &str, destination: &str) -> (gt
     )
 }
 
-/// Shows each side's thumbnail when the cache has or can make one, and
+/// The edge of the pictures "More details" shows under the question.
+const DETAILS_PICTURE_SIZE: i32 = 48;
+
+/// What "More details" shows under the "Replace or Skip Files" question,
+/// in place of the speed graph: the name both files have, then each
+/// side's picture, folder, date and size, the incoming file first, as
+/// the File Conflict window shows them, without check boxes. It shows the
+/// first conflict of `scan`; the items going from the folder `source` into
+/// `destination`.
+pub(crate) fn compared_files(scan: &ConflictScan, source: &str, destination: &str) -> Option<gtk::Box> {
+    let conflict = scan.conflicts.first()?;
+    let compared = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    compared.add_css_class("conflict-details");
+    let name = conflict.name();
+    let title = gtk::Label::new(Some(&format_message("Name: {name}", &[("name", &name)])));
+    title.set_xalign(0.0);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    compared.append(&title);
+    let sides = gtk::Grid::new();
+    sides.set_column_homogeneous(true);
+    sides.set_column_spacing(12);
+    let side = |facts: ItemFacts, place: String| {
+        let picture = gtk::Image::new();
+        picture.set_pixel_size(DETAILS_PICTURE_SIZE);
+        picture.set_valign(gtk::Align::Start);
+        picture.set_accessible_role(gtk::AccessibleRole::Presentation);
+        let (date, size) = side_lines(facts);
+        let lines = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        lines.set_valign(gtk::Align::Start);
+        lines.set_hexpand(true);
+        for text in [&place, &date, &size] {
+            let line = gtk::Label::new(Some(text));
+            line.set_xalign(0.0);
+            // A long folder name wraps rather than losing its end.
+            line.set_wrap(true);
+            line.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+            line.set_natural_wrap_mode(gtk::NaturalWrapMode::None);
+            lines.append(&line);
+        }
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        content.add_css_class("conflict-details-side");
+        content.append(&picture);
+        content.append(&lines);
+        (content, picture)
+    };
+    let (incoming, incoming_picture) = side(
+        conflict.incoming,
+        format_message("From {folder}", &[("folder", &location_name(source))]),
+    );
+    let (existing, existing_picture) = side(
+        conflict.existing,
+        format_message("Already in {folder}", &[("folder", &location_name(destination))]),
+    );
+    sides.attach(&incoming, 0, 0, 1, 1);
+    sides.attach(&existing, 1, 0, 1, 1);
+    compared.append(&sides);
+    load_pictures(
+        conflict,
+        &[incoming_picture, existing_picture],
+        DETAILS_PICTURE_SIZE,
+    );
+    Some(compared)
+}
+
+/// Shows each side's thumbnail, `size` pixels square, when the cache has or can make one, and
 /// the type's icon until then or without one.
-fn load_pictures(conflict: &NameConflict, row: &RowChecks) {
+fn load_pictures(conflict: &NameConflict, pictures: &[gtk::Image; 2], size: i32) {
     let sides = [
         (&conflict.incoming_uri, conflict.incoming),
         (&conflict.existing_uri, conflict.existing),
     ];
-    for ((uri, facts), picture) in sides.into_iter().zip(row.pictures.iter()) {
+    for ((uri, facts), picture) in sides.into_iter().zip(pictures.iter()) {
         let name = conflict.name();
         let icon = if facts.is_folder {
             Icon::FileFolder
         } else {
-            FileType::of(&name, None).icon(THUMBNAIL_SIZE)
+            FileType::of(&name, None).icon(size)
         };
-        icons::set_icon(picture, icon, THUMBNAIL_SIZE);
+        icons::set_icon(picture, icon, size);
         if facts.is_folder || !uri.starts_with("file://") {
             continue;
         }
@@ -654,7 +718,7 @@ fn load_pictures(conflict: &NameConflict, row: &RowChecks) {
                 uri,
                 content_type: content_type.to_string(),
                 modified,
-                pixels: THUMBNAIL_SIZE * scale,
+                pixels: size * scale,
             };
             if let Some(texture) = preview(request).await {
                 picture.set_paintable(Some(&texture));
