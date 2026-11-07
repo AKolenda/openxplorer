@@ -36,11 +36,11 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 use entries::{
-    background_menu, classic_look, compact_background_menu, item_menu, recycle_bin_background_menu,
-    recycle_bin_item_menu, zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu,
-    ItemFacts, ItemLocation, ItemShape,
+    background_menu, compact_background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu,
+    zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation,
+    ItemShape,
 };
-pub(super) use entries::{SendToDrive, SendToTargets};
+pub(super) use entries::{classic_look, more_options_item, SendToDrive, SendToTargets};
 
 /// How far into a row, and from the view's corner without one, a menu
 /// opened from the keyboard points.
@@ -140,7 +140,7 @@ impl BrowserWindow {
     }
 
     /// The style the Settings choice "Right-click menu" asks for.
-    fn preferred_menu_style(&self) -> MenuStyle {
+    pub(super) fn preferred_menu_style(&self) -> MenuStyle {
         match self.context().settings_data().preferences.context_menu {
             MenuStyleChoice::Win10 => MenuStyle::Classic,
             MenuStyleChoice::Win11 => MenuStyle::Compact,
@@ -531,7 +531,7 @@ fn disk_tool_of(entry: &Entry) -> Option<DiskTool> {
 
 /// The style of a right-click menu: `preferred`, or the classic menu when
 /// Shift is held, as Shift+right-click opens it in Windows 11 Explorer.
-fn menu_style_for(preferred: MenuStyle, modifiers: gdk::ModifierType) -> MenuStyle {
+pub(super) fn menu_style_for(preferred: MenuStyle, modifiers: gdk::ModifierType) -> MenuStyle {
     if modifiers.contains(gdk::ModifierType::SHIFT_MASK) {
         MenuStyle::Classic
     } else {
