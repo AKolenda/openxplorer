@@ -488,8 +488,10 @@ fn tabs_taller_than_the_screen_scroll_inside_the_window() {
     test.activate("properties", None);
     let filled = test.wait_for_properties("Notes 2.txt Properties");
     general(&filled);
+    wait_for_frames(&filled, 4);
+    let fitting = filled.scroller().vadjustment();
     assert!(
-        filled.scroller().parent().is_none(),
+        fitting.upper() <= fitting.page_size() + 1.0,
         "tabs that fit do not scroll"
     );
     filled.close();
@@ -2469,7 +2471,11 @@ fn change_icon_lists_the_themes_folder_icons() {
         .iter()
         .find(|tile| tile.tooltip_text().as_deref() == Some("folder-oxtest"))
         .expect("the theme's folder icon");
-    descendants::<gtk::FlowBox>(&dialog)[0].select_child(tile);
+    descendants::<gtk::FlowBox>(&dialog)
+        .into_iter()
+        .find(|grid| grid.has_css_class("properties-icon-grid"))
+        .expect("the grid of icons")
+        .select_child(tile);
     dialog.ok_button().emit_clicked();
 
     wait_until("Change Icon to close", || dialog.is_closed());

@@ -320,6 +320,7 @@ impl BrowserWindow {
         self.attach_file_drag(view);
         self.attach_details_hover(view);
         self.attach_file_drop_zone(view, DropZone::FolderView);
+        view.add_controller(keyboard_marker(view));
     }
 
     /// Gives the empty page's whole area in `pane` what an empty folder takes in
@@ -659,6 +660,31 @@ impl BrowserWindow {
             Activation::File | Activation::Archive | Activation::Refused(_) => None,
         }
     }
+}
+
+/// The class a folder view has while the keyboard is in it, which its
+/// focused row or tile outlines (folder-views.css).
+pub(super) const KEYBOARD_IN_CLASS: &str = "keyboard-in";
+
+/// Marks `view` with [`KEYBOARD_IN_CLASS`] while the window's keyboard
+/// focus is inside it, and only then: as in Windows 11 File Explorer, the
+/// focused item draws its outline only while the list has the keyboard,
+/// whatever state GTK leaves on the row it last focused once the
+/// keyboard moves to the navigation pane or the address bar.
+fn keyboard_marker(view: &gtk::Widget) -> gtk::EventControllerFocus {
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_contains_focus_notify(glib::clone!(
+        #[weak]
+        view,
+        move |focus| {
+            if focus.contains_focus() {
+                view.add_css_class(KEYBOARD_IN_CLASS);
+            } else {
+                view.remove_css_class(KEYBOARD_IN_CLASS);
+            }
+        }
+    ));
+    focus
 }
 
 #[cfg(test)]

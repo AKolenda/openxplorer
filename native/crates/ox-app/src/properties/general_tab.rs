@@ -356,6 +356,8 @@ impl GeneralEdits {
         read_only.set_inconsistent(entry.is_dir);
         read_only.set_sensitive(rights.can_change_permissions);
         let hidden = gtk::CheckButton::with_mnemonic(&ox_core::i18n::gettext("Hidden"));
+        super::window::wrap_check_label(&read_only);
+        super::window::wrap_check_label(&hidden);
         hidden.set_active(entry.name.starts_with('.'));
         hidden.set_sensitive(rights.can_rename);
         let edits = Rc::new(Self {

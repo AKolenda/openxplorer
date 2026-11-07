@@ -7,10 +7,13 @@
 //! General, Sharing, Security, Location, Details, Previous Versions,
 //! Customize. A drive, a folder the kernel mounts a file system at that
 //! This PC lists or the root, has Windows' drive General tab instead of a
-//! folder's, and a Hardware tab after it ([`super::drive_tab`]); any other
-//! mount point is a Mounted Volume, a folder whose General tab names the
-//! volume, as Windows shows a drive mounted in a folder. The item's properties are read once,
-//! off the main thread, when the window opens; the versions and a file's
+//! folder's, and a Hardware tab after it ([`super::drive_tab`]); as in
+//! Windows 11, the system drive, the root, has no Customize, and another
+//! drive has it where its choice can be kept ([`drive_keeps_customization`]).
+//! Any other mount point is a Mounted Volume, a folder whose General tab
+//! names the volume, as Windows shows a drive mounted in a folder. The
+//! item's properties are read once, off the main thread, when the window
+//! opens; the versions and a file's
 //! media details are read the first time their tab is shown, and a
 //! folder's size is counted from the start, never a drive's.
 
@@ -33,7 +36,7 @@ use super::drive_tab::{drive_general_tab, hardware_rows, DRIVE_ART};
 use super::folder_count::{count_folders, Totals};
 use super::general_tab::{general_tab, GeneralEdits, GeneralRights};
 use super::location_panel::LocationPanel;
-use super::metadata::{is_mount_point, read_properties, ItemProperties};
+use super::metadata::{drive_keeps_customization, is_mount_point, read_properties, ItemProperties};
 use super::security_tab::{fill_security, SecurityContext, SecurityFacts};
 use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
@@ -101,6 +104,7 @@ pub(crate) fn open_item_properties(
         (target.kind == ItemKind::Folder).then_some(Art::Folder)
     };
     let window = PropertiesWindow::new(&target.dialog_title(), art, Some(opener));
+    window.hold_sheet_size();
     window.set_widget_name(&target.uri);
     window.set_shows_drive(target.as_drive);
     let general = page();
@@ -145,7 +149,10 @@ pub(crate) fn open_item_properties(
     );
     let is_read_only =
         context.locations.is_snapshot_location(&target.uri) || is_conventional_snapshot(&target.uri);
-    let customize = (local_folder.is_some() && !is_read_only).then(|| {
+    // As in Windows 11, the system drive has no Customize tab; another
+    // drive has one where its choice can be kept.
+    let can_customize = !is_drive || drive_keeps_customization(&target.uri);
+    let customize = (local_folder.is_some() && !is_read_only && can_customize).then(|| {
         let customize = page();
         window.add_tab(
             PropertiesTab::Customize.page_name(),
