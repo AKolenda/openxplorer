@@ -266,6 +266,9 @@ pub(crate) enum WindowAction {
     /// Opens the classic context menu where the compact one was ("Show
     /// more options").
     ShowMoreOptions,
+    /// Opens the navigation pane's classic menu where its compact one
+    /// was ("Show more options" in a sidebar menu).
+    SidebarMoreOptions,
     /// Opens the Sort menu where the folder's context menu was (its
     /// "Sort by", CMD-012).
     ShowSortMenu,
@@ -563,6 +566,7 @@ impl WindowAction {
             WindowAction::ClearRecentLocations => "clear-recent-locations",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
+            WindowAction::SidebarMoreOptions => "sidebar-more-options",
             WindowAction::ShowSortMenu => "show-sort-menu",
             WindowAction::ShowViewMenu => "show-view-menu",
             WindowAction::Unpin => "unpin",

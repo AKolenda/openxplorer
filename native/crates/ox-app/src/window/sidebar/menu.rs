@@ -19,13 +19,14 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{is_smb_location, same_location};
+use ox_core::location::{is_smb_location, is_smb_share_root, is_virtual_location, same_location};
 use ox_core::search::Caching;
 
 use crate::icons::{Art, Icon};
 use crate::window::cache_folder::cache_item;
 use crate::window::command_bar::{disconnect_network_drive, NetworkDrive};
-use crate::window::menu_popover::{MenuEntry, MenuItem};
+use crate::window::context_menu::{classic_look, more_options_item};
+use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
 use crate::window::place_menus::caching_in;
 use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
@@ -206,13 +207,28 @@ pub(super) fn head_menu(section: Section, uri: &str, state: &HeadMenuState) -> V
 }
 
 impl Sidebar {
-    /// The menu of the row at `y` in the list: a pin's, or a drive's or a
-    /// network location's; on empty space, "Add entry…" (SIDE-031);
-    /// `None` for a row without one.
+    /// The menu of the row at `y` in the list, in the classic style: a
+    /// pin's, a drive's or a network location's, This PC's or Network's;
+    /// on empty space, "Add entry…" (SIDE-031); `None` for a row without
+    /// one. For tests.
+    #[cfg(test)]
     pub(in crate::window) fn menu_entries_at(&self, y: f64) -> Option<Vec<MenuEntry>> {
+        self.menu_at(y, MenuStyle::Classic).map(|(entries, _)| entries)
+    }
+
+    /// The menu of the row at `y` in `style`, as the file list's
+    /// right-click menu is built: in the compact style the edit commands
+    /// Windows 11 shows for the row go in the icon strip on top and
+    /// "Show more options" ends the menu; in the classic style they are
+    /// rows, drawn as the classic file menu draws its rows.
+    pub(in crate::window) fn menu_at(
+        &self,
+        y: f64,
+        style: MenuStyle,
+    ) -> Option<(Vec<MenuEntry>, Vec<MenuItem>)> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let Some(row) = self.list().row_at_y(y as i32) else {
-            return Some(empty_space_menu(self.imp().anything_hidden.get()));
+            return Some((empty_space_menu(self.imp().anything_hidden.get()), Vec::new()));
         };
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
@@ -224,10 +240,20 @@ impl Sidebar {
             .get(index)
             .copied()
             .unwrap_or_default();
-        let mut menu = match hidden {
-            HiddenRow::Place => return Some(show_place_menu(entry)),
-            HiddenRow::Section => Vec::new(),
-            HiddenRow::Shown => self.row_menu(entry).unwrap_or_default(),
+        let (mut menu, strip) = match hidden {
+            HiddenRow::Place => return Some((show_place_menu(entry), Vec::new())),
+            HiddenRow::Section => (Vec::new(), Vec::new()),
+            HiddenRow::Shown => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+        };
+        let strip = match style {
+            MenuStyle::Compact => strip,
+            MenuStyle::Classic => {
+                if !strip.is_empty() && !menu.is_empty() {
+                    menu.push(MenuEntry::Divider);
+                }
+                menu.extend(strip.into_iter().map(MenuEntry::from));
+                Vec::new()
+            }
         };
         if let (Some(hide), HiddenRow::Shown) = (hide_place_item(entry), hidden) {
             if !menu.is_empty() {
@@ -241,7 +267,66 @@ impl Sidebar {
             }
             menu.push(section_item(key, name, hidden == HiddenRow::Section));
         }
-        (!menu.is_empty()).then_some(menu)
+        if menu.is_empty() && strip.is_empty() {
+            return None;
+        }
+        let menu = match style {
+            MenuStyle::Compact if hidden == HiddenRow::Shown => {
+                menu.extend([
+                    MenuEntry::Divider,
+                    more_options_item(WindowAction::SidebarMoreOptions),
+                ]);
+                menu
+            }
+            MenuStyle::Compact => menu,
+            MenuStyle::Classic => classic_look(menu),
+        };
+        Some((menu, strip))
+    }
+
+    /// The icon strip of the row `entry` in the compact style, as Windows
+    /// 11's navigation pane shows one: This PC, Network, Home, Recent
+    /// files, Recent locations and the Recycle Bin have Rename and Delete,
+    /// greyed out as Windows greys This PC's, since none can be renamed
+    /// or deleted; a folder, a drive or a network location has the file
+    /// list's Cut, Copy, Paste, Rename and Delete, acting on the row's
+    /// location, each where it can run. Only a folder the user pinned
+    /// can be cut, renamed or deleted: a drive, a share and the standard
+    /// folders cannot.
+    fn edit_strip(&self, entry: &SidebarEntry) -> Vec<MenuItem> {
+        let RowTarget::Location(uri) = &entry.target else {
+            return Vec::new();
+        };
+        let item = |label: &str, glyph: Icon, action: WindowAction, allowed: bool| {
+            MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+                .disabled_when(!allowed)
+        };
+        let fixed_place = entry.level == RowLevel::Group
+            || matches!(entry.section, Section::Home | Section::RecentAndBin)
+            || is_virtual_location(uri);
+        if fixed_place {
+            return vec![
+                item("Rename", Icon::Rename, WindowAction::RenameFolder, false),
+                item("Delete", Icon::Delete, WindowAction::TrashFolder, false),
+            ];
+        }
+        let window = self.root().and_downcast::<BrowserWindow>();
+        let own_pin = entry.pinned && window.as_ref().is_some_and(|window| is_own_pin(window, uri));
+        let share_root = is_smb_share_root(uri);
+        let changeable = own_pin && !share_root;
+        let can_paste = window.as_ref().is_some_and(|window| window.can_paste_into(uri));
+        vec![
+            item("Cut", Icon::Cut, WindowAction::CutFolder, changeable),
+            item("Copy", Icon::Copy, WindowAction::CopyFolder, !share_root),
+            item(
+                "Paste",
+                Icon::ClipboardPaste,
+                WindowAction::PasteIntoFolder,
+                can_paste,
+            ),
+            item("Rename", Icon::Rename, WindowAction::RenameFolder, changeable),
+            item("Delete", Icon::Delete, WindowAction::TrashFolder, changeable),
+        ]
     }
 
     /// The menu of `entry` itself: a saved search's, a pin's, or a drive's
@@ -256,12 +341,7 @@ impl Sidebar {
                 return None;
             };
             let caching = window.as_ref().and_then(|window| window.caching_of(uri));
-            let editable = window.is_some_and(|window| {
-                let quick_access = window.places().quick_access;
-                quick_access
-                    .iter()
-                    .any(|place| place.known_folder.is_none() && same_location(&place.uri, uri))
-            });
+            let editable = window.is_some_and(|window| is_own_pin(&window, uri));
             return Some(pin_menu(uri, caching, editable));
         }
         if entry.level == RowLevel::Group {
@@ -316,6 +396,16 @@ impl Sidebar {
         }
         menu
     }
+}
+
+/// Whether `uri` is a Quick access pin of the user's own, not a standard
+/// folder (SIDE-011).
+fn is_own_pin(window: &BrowserWindow, uri: &str) -> bool {
+    window
+        .places()
+        .quick_access
+        .iter()
+        .any(|place| place.known_folder.is_none() && same_location(&place.uri, uri))
 }
 
 /// The menu of the sidebar's empty space: "Add entry…" (SIDE-031), "Show

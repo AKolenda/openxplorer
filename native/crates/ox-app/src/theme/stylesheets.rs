@@ -234,7 +234,7 @@ mod tests {
         let item_rings = [
             "columnview.files > listview > row",
             "gridview.files > child",
-            ".sidebar list > row",
+            ".sidebar list.places > row",
             ".folder-tree listview > row",
         ]
         .map(|item| format!("{item}:focus-visible {item_ring}"));
@@ -259,9 +259,9 @@ mod tests {
     fn higher_contrast_thickens_drop_outlines_and_outlines_the_open_place() {
         let code = without_comments(HIGH_CONTRAST_RULES);
         for rule in [
-            ".sidebar list > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }",
-            ".sidebar list > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
-            ".sidebar list > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
+            ".sidebar list.places > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }",
+            ".sidebar list.places > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
+            ".sidebar list.places > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
             ".tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }",
             "box-shadow: inset 0 0 0 2px @ox_focus_outer; }",
             "outline: 2px solid @ox_text;\n  outline-offset: -2px;\n  box-shadow: inset 0 0 0 3px @ox_bg;",

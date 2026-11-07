@@ -9,7 +9,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::{same_location, TRASH_URI};
-use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
+use ox_core::settings::{
+    BookmarkAction, BookmarkKind, BookmarkRequest, ContextMenu as ContextMenuChoice, PreferencesUpdate,
+    Settings,
+};
 
 use super::file_ops_support::{is_enabled, open_dialog, wait_for_no_dialog};
 use super::support::middle_click_at;
@@ -19,7 +22,7 @@ use crate::test_support::harness::{
     capture, capture_with_menus, descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow,
     ThemeGuard,
 };
-use crate::window::menu_popover::{MenuEntry, MenuPopover};
+use crate::window::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use crate::window::sidebar::entries::{RowLevel, RowTarget, Section, SidebarEntry};
 use crate::window::sidebar::SidebarDropSpot;
 use crate::window::{gestures, WindowAction};
@@ -583,8 +586,8 @@ fn hidden_sections_and_places_are_listed_dimmed_and_shown_again() {
 /// This PC's menu, as Windows 11's navigation pane lists it: Collapse
 /// (Expand while collapsed), Open in new tab, Open in new window, Add a
 /// network location, Map network drive…, Disconnect network drive, then
-/// the app's Hide section. Network's is the same without Add a network
-/// location. Properties is left out where the test session has no system
+/// the app's Hide section and Show more options. Network's is the same
+/// without Add a network location. Properties is left out where the test session has no system
 /// information app, as in "…". The items run their commands: Collapse
 /// folds the section and Map network drive… opens Windows' dialog.
 ///
@@ -616,6 +619,8 @@ fn this_pc_and_network_menus_list_windows_items_in_its_order() {
             "Disconnect network drive",
             "-",
             "Hide section \u{201c}This PC\u{201d}",
+            "-",
+            "Show more options",
         ]
     );
     assert_eq!(
@@ -628,6 +633,8 @@ fn this_pc_and_network_menus_list_windows_items_in_its_order() {
             "Disconnect network drive",
             "-",
             "Hide section \u{201c}Network\u{201d}",
+            "-",
+            "Show more options",
         ]
     );
     let menu = sidebar.right_click_row("This PC");
@@ -666,6 +673,104 @@ fn this_pc_and_network_menus_list_windows_items_in_its_order() {
     dialog.press("Cancel");
 }
 
+/// Every sidebar menu takes the file list's right-click menu: the same
+/// popover in the same style, so the same width, padding, rows, icon
+/// column and dividers. In Windows 11's compact style This PC, Network
+/// and the Recycle Bin show Rename and Delete greyed out in the icon
+/// strip, as Windows greys This PC's; Local Disk and a folder the user
+/// pinned show the file list's Cut, Copy, Paste, Rename and Delete, each
+/// where it can run on the row's location. "Show more options" opens the
+/// classic menu in its place, with the strip's commands as rows, and the
+/// Settings choice of the classic menu opens it at once.
+///
+/// parity: SIDE-014, SIDE-033, CMD-008
+#[gtk::test]
+fn sidebar_menus_take_the_file_menus_style_strip_and_show_more_options() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Pinned strip")).expect("fixture subfolder");
+    let test = TestWindow::open(&fixture.uri_of("Pinned strip"));
+    test.activate("pin-folder", None);
+    wait_until("the pin", || {
+        test.window
+            .sidebar()
+            .labels()
+            .contains(&"Pinned strip".to_owned())
+    });
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    let sidebar = test.window.sidebar();
+    let strip_of = |label: &str| {
+        wait_for_frames(&test.window, 3);
+        let menu = sidebar.right_click_row(label);
+        menu.popup();
+        wait_for_frames(&test.window, 2);
+        let style = menu.style();
+        let strip = menu.strip_states();
+        let last = menu.row_labels().last().cloned();
+        menu.popdown();
+        (style, strip, last)
+    };
+
+    test.window.right_click(Some(0));
+    let file_menu = test.window.context_menu();
+    let file_style = file_menu.style();
+    file_menu.popdown();
+    assert_eq!(file_style, MenuStyle::Compact);
+
+    let greyed = vec![("Rename".to_owned(), false), ("Delete".to_owned(), false)];
+    for label in ["This PC", "Network", "Recycle Bin"] {
+        let (style, strip, last) = strip_of(label);
+        assert_eq!(style, file_style, "{label}");
+        assert_eq!(strip, greyed, "{label}");
+        assert_eq!(last.as_deref(), Some("Show more options"), "{label}");
+    }
+    let (style, strip, _) = strip_of("Local Disk");
+    assert_eq!(style, file_style);
+    let names: Vec<&str> = strip.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, ["Cut", "Copy", "Paste", "Rename", "Delete"]);
+    let can = |name: &str| strip.iter().any(|(shown, on)| shown == name && *on);
+    assert!(
+        can("Copy") && !can("Cut") && !can("Rename") && !can("Delete"),
+        "{strip:?}"
+    );
+    let (_, strip, _) = strip_of("Pinned strip");
+    let can = |name: &str| strip.iter().any(|(shown, on)| shown == name && *on);
+    assert!(
+        can("Cut") && can("Copy") && can("Rename") && can("Delete"),
+        "{strip:?}"
+    );
+
+    let menu = sidebar.right_click_row("This PC");
+    menu.popup();
+    menu.click_row("Show more options");
+    wait_until("the classic menu", || {
+        menu.style() == MenuStyle::Classic && menu.is_visible()
+    });
+    let rows = menu.row_labels();
+    assert!(menu.strip_labels().is_empty());
+    assert!(!rows.contains(&"Show more options".to_owned()), "{rows:?}");
+    for command in ["Rename", "Delete"] {
+        assert!(!menu.row(command).is_sensitive(), "{command}");
+    }
+    menu.popdown();
+
+    let classic = PreferencesUpdate {
+        context_menu: Some(ContextMenuChoice::Win10),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&classic)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the classic style", || {
+        test.context.settings_data().preferences.context_menu == ContextMenuChoice::Win10
+    });
+    let (style, strip, last) = strip_of("Local Disk");
+    assert_eq!(style, MenuStyle::Classic);
+    assert!(strip.is_empty());
+    assert_ne!(last.as_deref(), Some("Show more options"));
+}
+
 /// Windows 11's navigation pane has no button below its list; the Python
 /// app's "Map network drive" button is gone, and the list and the folder
 /// tree reach the pane's foot.
@@ -684,27 +789,59 @@ fn nothing_is_pinned_below_the_navigation_pane() {
     assert!(last.is::<gtk::Paned>(), "the list and the folder tree come last");
 }
 
-/// The navigation pane without a button below its list, and This PC's
-/// menu open over the window, light and dark: with
+/// The navigation pane without a button below its list, and the file
+/// list's right-click menu beside the sidebar's menus (This PC, Network,
+/// Local Disk, a pinned folder, the Recycle Bin, and This PC's classic
+/// menu), each open over the window, light and dark: with
 /// `OX_NATIVE_CAPTURE_DIR` set, saved there as `native-sidebar-*.png`
-/// and `native-this-pc-menu-*.png` for visual review. Without it, they
-/// only prove the menu opens in both themes.
+/// and `native-menu-<row>-*.png` for visual review. Without it, they only
+/// prove the menus open in both themes.
 #[gtk::test]
-fn the_sidebar_and_this_pc_menu_are_captured_light_and_dark() {
+fn the_sidebar_and_its_menus_are_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    // Tall enough to show the pane's foot below This PC and Network.
-    test.window.set_default_size(960, 760);
-    wait_until("the taller window", || test.window.height() >= 700);
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = TestWindow::open(&fixture.uri_of("Projects"));
+    test.activate("pin-folder", None);
+    wait_until("the pin", || {
+        test.window.sidebar().labels().contains(&"Projects".to_owned())
+    });
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    // Tall enough to show the pane's foot below This PC and Network, and
+    // the menus opened there whole.
+    test.window.set_default_size(960, 900);
+    wait_until("the taller window", || test.window.height() >= 860);
+    let rows = [
+        ("this-pc", "This PC"),
+        ("network", "Network"),
+        ("local-disk", "Local Disk"),
+        ("pinned", "Projects"),
+        ("recycle-bin", "Recycle Bin"),
+    ];
     for theme in ["light", "dark"] {
         test.activate("theme", Some(theme));
         capture(&test.window, &format!("native-sidebar-{theme}.png"));
-        wait_for_frames(&test.window, 3);
-        let menu = test.window.sidebar().right_click_row("This PC");
-        capture_with_menus(&test.window, &format!("native-this-pc-menu-{theme}.png"));
-        menu.popdown();
-        wait_until("the menu to close", || !menu.is_mapped());
+        test.window.folder_model().select_only(0);
+        test.window.right_click(Some(0));
+        let file_menu = test.window.context_menu();
+        capture_with_menus(&test.window, &format!("native-menu-file-{theme}.png"));
+        file_menu.popdown();
+        wait_until("the file menu to close", || !file_menu.is_mapped());
+        for (name, label) in rows {
+            wait_for_frames(&test.window, 3);
+            let menu = test.window.sidebar().right_click_row(label);
+            capture_with_menus(&test.window, &format!("native-menu-{name}-{theme}.png"));
+            if name == "this-pc" {
+                menu.click_row("Show more options");
+                wait_until("the classic menu", || {
+                    menu.style() == MenuStyle::Classic && menu.is_mapped()
+                });
+                capture_with_menus(&test.window, &format!("native-menu-this-pc-classic-{theme}.png"));
+            }
+            menu.popdown();
+            wait_until("the menu to close", || !menu.is_mapped());
+        }
     }
 }
 
