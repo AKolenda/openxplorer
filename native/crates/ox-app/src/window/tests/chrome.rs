@@ -328,19 +328,20 @@ fn the_more_menu_items_work_and_show_no_tooltip_repeating_their_name() {
         let row = more.row(label);
         assert!(row.is_sensitive(), "{label}");
         assert_eq!(row.tooltip_text(), None, "{label}");
+        assert!(!row.has_tooltip(), "{label}");
     }
     more_button.popdown();
 }
 
-/// A row whose label the menu cuts short shows its whole label as a
-/// tooltip, which then adds what the row cannot show; a row shown whole
-/// shows none.
+/// No menu row shows a tooltip, as Windows 11's menus show none: not a
+/// row whose label the menu cuts short, nor a disabled row, which tells
+/// screen readers why in its accessible description instead.
 ///
-/// parity: CMD-005
+/// parity: CMD-005, CMD-031
 #[gtk::test]
-fn a_menu_row_cut_short_shows_its_whole_label_as_a_tooltip() {
+fn no_menu_row_shows_a_tooltip_even_cut_short_or_disabled() {
     use crate::icons::Icon;
-    use crate::window::menu_popover::{row_tooltip, MenuItem};
+    use crate::window::menu_popover::MenuItem;
     use crate::window::window_action::WindowAction;
 
     let fixture = Fixture::standard();
@@ -351,11 +352,22 @@ fn a_menu_row_cut_short_shows_its_whole_label_as_a_tooltip() {
     more.set_entries(vec![
         MenuItem::new(&long, Icon::Document, WindowAction::SelectAll).into(),
         MenuItem::new("Select all", Icon::Document, WindowAction::SelectAll).into(),
+        MenuItem::new("Not here", Icon::Document, WindowAction::SelectAll)
+            .disabled_because(true, "Not in this folder")
+            .into(),
     ]);
     more_button.popup();
     wait_for_frames(&test.window, 3);
-    assert_eq!(row_tooltip(&more.row(&long)), Some(long.clone()));
-    assert_eq!(row_tooltip(&more.row("Select all")), None);
+    for label in [long.as_str(), "Select all", "Not here"] {
+        let row = more.row(label);
+        assert_eq!(row.tooltip_text(), None, "{label}");
+        assert!(!row.has_tooltip(), "{label}");
+    }
+    assert_eq!(
+        more.disabled_reason_of("Not here").as_deref(),
+        Some("Not in this folder")
+    );
+    assert_eq!(more.disabled_reason_of("Select all"), None);
     more_button.popdown();
 }
 
