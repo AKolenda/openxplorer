@@ -32,6 +32,7 @@ use crate::test_support::harness::{
 };
 use crate::window::activation::{activation_for, Activation};
 use crate::window::folder_pane::PanePage;
+use crate::window::landing;
 use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
 use crate::window::Dialog;
@@ -622,32 +623,32 @@ fn open_in_new_window_shows_the_place_in_another_window() {
     opened[0].close();
 }
 
-/// This PC lists saved locations with their state, or says how to add
-/// one.
+/// This PC lists saved locations as tiles in their own group, which it
+/// leaves out while none is saved, as Windows 11 leaves out an empty
+/// group; Map network drive is in "..." (CMD-007).
 ///
 /// parity: HOME-005
 #[gtk::test]
-fn this_pc_lists_saved_locations_or_says_how_to_map_one() {
+fn this_pc_lists_saved_locations_in_their_own_group() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
-    let empty =
-        "No network locations saved. Use “Map network drive” to connect to a share and add it to the \
-                 sidebar.";
-    assert!(shows(landing, empty));
-    assert!(shows(landing, "Map network drive"));
+    assert_eq!(landing::section_titles(landing), ["Devices and drives"]);
 
     test.save_share("smb://fileserver/backup", "Backup (S:)");
     // Named as Windows 11 names a mapped drive: its label, its server and
-    // its letter; the full address is the card's tooltip.
+    // its letter; the full address is the tile's tooltip.
     let name = "Backup (\\\\fileserver) (S:)";
-    wait_until("the saved share's card", || shows(landing, name));
+    wait_until("the saved share's tile", || shows(landing, name));
+    assert_eq!(
+        landing::section_titles(landing),
+        ["Devices and drives", "Network locations"]
+    );
     assert!(shows(landing, "Connect on open"), "{:?}", texts_in(landing));
-    let card = descendants::<gtk::Button>(landing)
+    let tile = descendants::<gtk::FlowBoxChild>(landing)
         .into_iter()
-        .find(|card| card.has_css_class("drive-card") && shows(card, name))
-        .expect("the share's card");
-    assert_eq!(card.tooltip_text().as_deref(), Some("\\\\fileserver\\backup"));
-    assert!(!shows(landing, empty));
+        .find(|tile| shows(tile, name))
+        .expect("the share's tile");
+    assert_eq!(tile.tooltip_text().as_deref(), Some("\\\\fileserver\\backup"));
 }
 
 /// A share's card name, as Windows 11 writes a mapped drive: "Backup
@@ -676,11 +677,11 @@ fn a_share_card_is_named_with_its_server_and_letter_as_windows_does() {
     );
 }
 
-/// Local Disk's card shows how full it is once GIO has measured it.
+/// Local Disk's tile shows how full it is once GIO has measured it.
 ///
 /// parity: HOME-003, HOME-004
 #[gtk::test]
-fn the_local_disk_card_shows_its_capacity() {
+fn the_local_disk_tile_shows_its_capacity() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
 

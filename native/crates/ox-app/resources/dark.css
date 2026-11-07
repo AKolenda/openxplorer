@@ -82,6 +82,7 @@
 /* Status */
 @define-color ox_critical_fill #c42b1c;            /* C33 close hover, full drives */
 @define-color ox_on_critical #ffffff;              /* the close glyph on C33 */
+@define-color ox_folder_picture_edge #ffffff;      /* a folder picture's photo edge */
 @define-color ox_success #6ccb5f;                  /* C34 connected */
 @define-color ox_caution #fce100;                  /* WinUI SystemFillColorCaution */
 

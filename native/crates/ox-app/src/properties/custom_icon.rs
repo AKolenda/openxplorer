@@ -1,15 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The Customize tab of a folder (PROP-016), laid out as Windows 11's
-//! "Folder icons" group: "Change Icon..." opens Windows' Change Icon
-//! dialog ([`super::change_icon`]), whose icon shows beside it at once and
-//! becomes the folder's icon on OK or Apply. Restore Default, beside it
-//! while the folder has its own icon, goes back to the standard folder.
-//! The choice is stored as `GVfs` metadata (`metadata::custom-icon`, the
-//! key Files uses), so both file managers show it.
+//! The Customize tab of a folder, laid out as Windows 11's, with its three
+//! groups in Windows' order:
 //!
-//! Windows' "What kind of folder do you want?" and "Folder pictures" are
-//! left out: the app has no folder templates, and a folder's icon never
-//! shows a picture of its content.
+//! - "What kind of folder do you want?" ([`folder_type`], PROP-036):
+//!   "Optimize this folder for:" General items, Documents, Pictures, Music
+//!   or Videos, and "Also apply this template to all subfolders";
+//! - "Folder pictures" ([`folder_picture`], PROP-037): "Choose File..."
+//!   puts a picture on the folder's icon in the larger icon views, and
+//!   "Restore Default" takes it off;
+//! - "Folder icons" (PROP-016): "Change Icon..." opens Windows' Change
+//!   Icon dialog ([`super::change_icon`]), whose icon shows beside it at
+//!   once and becomes the folder's icon. Restore Default, beside it while
+//!   the folder has its own icon, goes back to the standard folder. The choice is stored as `GVfs` metadata
+//!   (`metadata::custom-icon`, the key Files uses), so both file managers
+//!   show it.
+//!
+//! Every choice waits for OK or Apply, and none writes into the folder:
+//! the template goes to the app's settings, beside each folder's view,
+//! and the pictures to the user's `GVfs` metadata store.
+
+mod folder_picture;
+mod folder_type;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -79,7 +90,7 @@ impl Pending for IconChoice {
                 .map_err(|error| error.to_string())?;
             self.current.replace(icon);
             if let Some(opener) = self.window.upgrade().and_then(|window| window.opener()) {
-                opener.refresh_item_icon(&uri);
+                opener.announce_item_icon(&uri);
             }
             Ok(())
         })
@@ -94,6 +105,8 @@ pub(super) fn customize_tab(
     current: Option<&str>,
 ) -> gtk::Box {
     let page = super::window::page();
+    page.append(&folder_type::folder_type_group(window, uri));
+    page.append(&folder_picture::folder_picture_group(window, uri));
     let (frame, content) = group(&ox_core::i18n::gettext("Folder icons"));
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     let text = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -151,14 +164,25 @@ fn choose_icon(button: &gtk::Button, choice: &Rc<IconChoice>) {
 }
 
 /// Stores `icon` as the custom icon of the item at `uri`, or removes it
-/// for `None`. GIO's Rust binding cannot unset an attribute, so removing
-/// runs `gio set -t unset`, as Files' "Reset" does through GIO.
+/// for `None`.
 ///
 /// # Errors
 ///
 /// GIO's error, or the failure of `gio set`.
 pub(crate) async fn set_custom_icon(uri: &str, icon: Option<String>) -> Result<(), glib::Error> {
-    let Some(icon) = icon else {
+    set_metadata(uri, CUSTOM_ICON, icon).await
+}
+
+/// Stores `value` under the `GVfs` metadata `key` of the item at `uri`, or
+/// removes the key for `None`. GIO's Rust binding cannot unset an
+/// attribute, so removing runs `gio set -t unset`, as Files' "Reset" does
+/// through GIO.
+///
+/// # Errors
+///
+/// GIO's error, or the failure of `gio set`.
+pub(super) async fn set_metadata(uri: &str, key: &str, value: Option<String>) -> Result<(), glib::Error> {
+    let Some(value) = value else {
         let unset = gio::Subprocess::newv(
             &[
                 "gio".as_ref(),
@@ -166,7 +190,7 @@ pub(crate) async fn set_custom_icon(uri: &str, icon: Option<String>) -> Result<(
                 "-t".as_ref(),
                 "unset".as_ref(),
                 uri.as_ref(),
-                CUSTOM_ICON.as_ref(),
+                key.as_ref(),
             ],
             gio::SubprocessFlags::STDOUT_SILENCE | gio::SubprocessFlags::STDERR_SILENCE,
         )?;
@@ -174,8 +198,28 @@ pub(crate) async fn set_custom_icon(uri: &str, icon: Option<String>) -> Result<(
     };
     let file = gio::File::for_uri(uri);
     let info = gio::FileInfo::new();
-    info.set_attribute_string(CUSTOM_ICON, &icon);
+    info.set_attribute_string(key, &value);
     file.set_attributes_future(&info, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
         .await
         .map(|_| ())
+}
+
+/// Asks for a picture, titled `title`, and hands its location to `chosen`.
+pub(super) fn choose_picture(button: &gtk::Button, title: &str, chosen: impl FnOnce(String) + 'static) {
+    let images = gtk::FileFilter::new();
+    images.set_name(Some(&ox_core::i18n::gettext("Images")));
+    images.add_mime_type("image/*");
+    let filters = gio::ListStore::new::<gtk::FileFilter>();
+    filters.append(&images);
+    let dialog = gtk::FileDialog::builder()
+        .title(title)
+        .modal(true)
+        .filters(&filters)
+        .build();
+    let window = button.root().and_downcast::<gtk::Window>();
+    glib::spawn_future_local(async move {
+        if let Ok(file) = dialog.open_future(window.as_ref()).await {
+            chosen(file.uri().to_string());
+        }
+    });
 }

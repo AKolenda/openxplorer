@@ -248,7 +248,9 @@ impl PropertiesWindow {
         imp.scroller.set_vexpand(true);
         column.append(&imp.notebook);
         column.append(&self.footer());
-        self.set_child(Some(&column));
+        // Windows' Properties keep one width for every item: a long name,
+        // location or value wraps or ends in "…" instead of widening it.
+        self.set_child(Some(&super::fixed_width::FixedWidth::new(&column, WINDOW_WIDTH)));
         self.add_controller(crate::modal::escape_closes());
         self.add_controller(self.refresh_key());
         self.update_relation(&[gtk::accessible::Relation::LabelledBy(&[imp.title.upcast_ref()])]);
@@ -297,6 +299,10 @@ impl PropertiesWindow {
         imp.title.set_xalign(0.0);
         imp.title.set_hexpand(true);
         imp.title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        // A long name ends in "…" in the title bar, as in Windows, rather
+        // than widening the window: the label asks for no more than a
+        // character and takes the bar's room.
+        imp.title.set_max_width_chars(1);
         imp.title.add_css_class("properties-title");
         bar.append(&imp.title);
         let close = gtk::Button::builder()
@@ -703,6 +709,26 @@ impl Rows {
             .selectable(true)
             .wrap(true)
             .wrap_mode(gtk::pango::WrapMode::WordChar)
+            .css_classes(["property-value"])
+            .build();
+        self.add_control(name, &value);
+        value
+    }
+
+    /// Adds `name:` and the selectable `value` on one line, ending in "…"
+    /// when it is wider than the window, with the whole value as its
+    /// tooltip: Windows' one-line read-only fields, such as Location and
+    /// Object name, which keep the window's size. Selecting it copies
+    /// the whole value.
+    pub(crate) fn add_line(&self, name: &str, value: &str) -> gtk::Label {
+        let value = gtk::Label::builder()
+            .label(value)
+            .xalign(0.0)
+            .hexpand(true)
+            .selectable(true)
+            .single_line_mode(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .tooltip_text(value)
             .css_classes(["property-value"])
             .build();
         self.add_control(name, &value);
