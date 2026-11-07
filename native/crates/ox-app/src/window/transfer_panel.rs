@@ -317,13 +317,7 @@ impl TransferPanel {
         self.show_percent();
         let owner = imp.owner.upgrade();
         if let Some(owner) = &owner {
-            let progress = ProgressWindow::of(owner.context());
-            progress.add(self);
-            // A file dialog owns the progress of what it started, as it
-            // owns its Properties windows.
-            if owner.is_picking() {
-                owner.own_in_dialog(progress.upcast_ref());
-            }
+            ProgressWindow::of(owner.context()).add(self);
         }
         let session = match &owner {
             Some(owner) => OperationSession::start(owner),
@@ -503,6 +497,13 @@ impl TransferPanel {
     /// The glyph of the kind of write, for the progress window's icon.
     pub(crate) fn glyph(&self) -> Icon {
         self.imp().kind.get().unwrap_or(TransferKind::Files).glyph()
+    }
+
+    /// The file dialog this action was started in, if it was: the
+    /// dialog owns the progress window while the action runs
+    /// ([`ProgressWindow::follow_dialog`]).
+    pub(super) fn dialog(&self) -> Option<BrowserWindow> {
+        self.imp().owner.upgrade().filter(BrowserWindow::is_picking)
     }
 
     /// Records the progress window this action shows in.

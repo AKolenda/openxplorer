@@ -4709,48 +4709,47 @@ mod tests {
     }
 
     /// The progress of a copy started in a file dialog belongs to the
-    /// dialog, as its Properties do; it is modeless, so it holds back no
-    /// drag or drop in the dialog. A browsing window's progress stays a
-    /// window of its own (OPS-019).
+    /// dialog while it runs, as its Properties do; it is modeless, so it
+    /// holds back no drag or drop in the dialog. A browsing window's
+    /// progress stays a window of its own (OPS-019), also once the
+    /// dialog's copy ends beside it.
     ///
     /// parity: INT-032, OPS-019
     #[gtk::test]
     fn the_progress_of_a_copy_in_a_dialog_belongs_to_the_dialog() {
         use crate::window::progress_window::ProgressWindow;
         use crate::window::transfer_panel::{TransferKind, TransferPanel};
+        use crate::window::BrowserWindow;
 
         let fixture = Fixture::standard();
-        let browsing = TestWindow::open(&fixture.uri());
-        let progress = ProgressWindow::of(&browsing.context);
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let app = window.application().expect("the dialog's application");
+        let browsing = BrowserWindow::new(&app, &portal.test.context);
+        browsing.add_tab(&fixture.uri()).expect("a tab");
+        let progress = ProgressWindow::of(&portal.test.context);
         progress.set_show_delay(std::time::Duration::ZERO);
-        let elsewhere = TransferPanel::for_window(&browsing.window);
-        elsewhere.start(
-            TransferKind::Files,
-            "Preparing copy…",
-            ox_core::transfer::Cancellation::new(),
-        );
+        let start = |owner: &BrowserWindow| {
+            let action = TransferPanel::for_window(owner);
+            action.start(
+                TransferKind::Files,
+                "Preparing copy…",
+                ox_core::transfer::Cancellation::new(),
+            );
+            action
+        };
+
+        let elsewhere = start(&browsing);
         wait_until("the progress window", || progress.is_visible());
         assert_eq!(
             progress.transient_for(),
             None,
             "a browsing window's progress stands alone"
         );
-        elsewhere.finish();
-        wait_until("the progress window to close", || !progress.is_visible());
 
-        let portal = Portal::new();
-        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
-        let window = &portal.test.window;
-        wait_until("the folder's listing", || window.is_listed());
-        let progress = ProgressWindow::of(&portal.test.context);
-        progress.set_show_delay(std::time::Duration::ZERO);
-        let action = TransferPanel::for_window(window);
-        action.start(
-            TransferKind::Files,
-            "Preparing copy…",
-            ox_core::transfer::Cancellation::new(),
-        );
-        wait_until("the progress window", || progress.is_visible());
+        let action = start(window);
         assert_eq!(
             progress.transient_for().as_ref(),
             Some(window.upcast_ref::<gtk::Window>()),
@@ -4758,7 +4757,17 @@ mod tests {
         );
         assert!(!progress.is_modal());
         assert!(!window.has_open_dialog(), "no dialog over the dialog");
+
         action.finish();
+        settle();
+        assert_eq!(
+            progress.transient_for(),
+            None,
+            "the browsing window's progress stands alone again"
+        );
+        elsewhere.finish();
+        wait_until("the progress window to close", || !progress.is_visible());
+        browsing.destroy();
     }
 
     /// Properties opened from a Browse dialog, light and dark, for review
