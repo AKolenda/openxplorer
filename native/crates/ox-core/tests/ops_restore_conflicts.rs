@@ -49,7 +49,7 @@ fn trash(items: &[&Path]) {
 
 /// Every Recycle Bin item that came from `path`, waiting up to five
 /// seconds for `count` of them: the backend may list an item late, and a
-/// GVfs daemon that is still starting may refuse the first reads.
+/// Recycle Bin daemon that is still starting may refuse the first reads.
 fn recycled_from(path: &Path, count: usize) -> Vec<RecycledItem> {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
