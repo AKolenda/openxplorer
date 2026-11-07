@@ -29,7 +29,8 @@ pub(crate) enum Category {
     General,
     /// Theme, text size, the right-click menu and the pane widths.
     Appearance,
-    /// Folder views, the details view, previews and folder sizes.
+    /// Folder views, the details view, the clipboard, previews and folder
+    /// sizes.
     FilesAndFolders,
     /// How ZIP and TAR archives open.
     Archives,
