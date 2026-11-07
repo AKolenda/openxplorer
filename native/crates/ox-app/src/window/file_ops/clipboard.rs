@@ -40,10 +40,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::clipboard::{
-    decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, IMAGE_MIME_TYPES, KDE_CUT, MAX_BYTES,
-    TEXT, TEXTURE_EXTENSION,
+    decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, CUSTOM, IMAGE_MIME_TYPES, KDE_CUT,
+    MAX_BYTES, TEXT, TEXTURE_EXTENSION,
 };
-use ox_core::location::LocationContext;
+use ox_core::location::{is_device_location, LocationContext};
 
 use crate::window::BrowserWindow;
 
@@ -275,16 +275,25 @@ fn cut_uris(files: Option<&ClipboardFiles>) -> HashSet<String> {
 /// `locations` names the devices and the home folder of the paths the text
 /// format shows; that format is published only when `paths_as_text` is
 /// true (CLIP-004), as Windows 11 File Explorer copies only the files.
+///
+/// Safety rule "a drive is never copied whole" (CLIP-001): `with_drives`,
+/// a list that names a drive, is published in this app's own format and
+/// as text alone, never as GNOME's or the standard file list, which other
+/// file managers would paste as a folder, copying everything on the drive.
+/// This app pastes it as a shortcut to each drive, as Windows Explorer
+/// does ([`crate::window::drive_shortcuts`]).
 fn publish(
     clipboard: &gdk::Clipboard,
     files: &ClipboardFiles,
     locations: &LocationContext,
     paths_as_text: bool,
+    with_drives: bool,
 ) -> Result<(), glib::BoolError> {
     let providers: Vec<gdk::ContentProvider> = files
         .encode(locations)
         .into_iter()
         .filter(|payload| paths_as_text || payload.mime_type != TEXT)
+        .filter(|payload| !with_drives || is_for_this_app_or_text(payload.mime_type))
         .map(|payload| {
             gdk::ContentProvider::for_bytes(payload.mime_type, &glib::Bytes::from_owned(payload.bytes))
         })
@@ -293,12 +302,37 @@ fn publish(
     clipboard.set_content(Some(&content))
 }
 
+/// Whether `mime_type` is this app's own format or text, which no file
+/// manager pastes as files.
+fn is_for_this_app_or_text(mime_type: &str) -> bool {
+    mime_type == CUSTOM || mime_type == TEXT
+}
+
 impl BrowserWindow {
     /// Copy (Ctrl+C) or Cut (Ctrl+X): puts the selection on the desktop's
     /// clipboard (`copySelection`). The keys run this even where the
     /// commands are disabled, so a share root or a previous version says
     /// why it cannot be copied or cut.
     pub(crate) fn copy_selection(&self, mode: ClipboardMode) {
+        // A drive focused in the sidebar, or the drives selected on This
+        // PC, are copied as Windows Explorer copies them, for a paste to
+        // make a shortcut to each; a drive is never cut.
+        let drives = match self.sidebar().focused_drive() {
+            Some(drive) => vec![drive],
+            None => self.selected_drive_tiles(),
+        };
+        if !drives.is_empty() {
+            // A phone's or a camera's root has no path a shortcut could
+            // point to, so it is not copied, as its Copy is greyed out.
+            let copied: Vec<String> = drives
+                .into_iter()
+                .filter(|uri| !is_device_location(uri))
+                .collect();
+            if mode == ClipboardMode::Copy && !copied.is_empty() {
+                self.copy_items(mode, &copied);
+            }
+            return;
+        }
         let items = self.folder_pane().model().selected_items();
         let command_facts = self.command_facts();
         // The Recycle Bin's items can only be restored or deleted, which is
@@ -356,11 +390,13 @@ impl BrowserWindow {
     /// Makes `files` the desktop's clipboard and shows `note`, such as
     /// what was left out, when there is one.
     pub(crate) fn put_files_on_clipboard_noting(&self, files: ClipboardFiles, note: Option<&str>) {
+        let with_drives = !self.split_drives(files.uris()).drives.is_empty();
         let published = publish(
             &self.clipboard(),
             &files,
             &self.imp().locations.borrow(),
             self.copies_paths_as_text(),
+            with_drives,
         );
         if published.is_err() {
             self.show_message(ox_core::i18n::gettext_static(
@@ -422,6 +458,7 @@ impl BrowserWindow {
             &current,
             &self.imp().locations.borrow(),
             self.copies_paths_as_text(),
+            !self.split_drives(current.uris()).drives.is_empty(),
         )
         .is_ok()
         {

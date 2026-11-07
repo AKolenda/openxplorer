@@ -49,8 +49,10 @@ const LAYOUTS_NOTE: &str = crate::i18n::message_id(
 );
 /// The intro's glyph.
 const INTRO_GLYPH: i32 = 32;
-/// The height of the list, as Windows' list fills the tab.
-const LIST_HEIGHT: i32 = 230;
+/// The least height of the list, which grows to fill the tab as Windows'
+/// list does; it leaves room for two rows of tabs at the default text
+/// size.
+const LIST_HEIGHT: i32 = 216;
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};

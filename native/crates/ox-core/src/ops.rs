@@ -141,7 +141,10 @@ pub use restore_conflicts::{
     scan_restore_conflicts, RestoreSoFar,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
-pub use shortcuts::{create_shortcut, create_shortcuts, shortcut_name, NO_LINKS_HERE};
+pub use shortcuts::{
+    create_named_shortcuts, create_shortcut, create_shortcut_named, create_shortcuts, shortcut_name,
+    NamedShortcuts, ShortcutTarget, NO_LINKS_HERE,
+};
 pub use tab_transfer::{
     Acceptance, Delivery, KeptReason, TabMessage, TabMoveOutcome, TabTransferError, TabTransferToken,
     TabTransfers, WindowId, MAX_PENDING_TAB_TRANSFERS, TAB_TRANSFER_LIFETIME,
