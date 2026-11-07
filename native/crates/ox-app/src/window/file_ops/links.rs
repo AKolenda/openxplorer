@@ -64,8 +64,9 @@ impl BrowserWindow {
     /// (Send to ▸ Desktop (create shortcut), CMD-038), as the window's one
     /// operation and reports them; Undo moves them to the Trash. Does
     /// nothing while another operation runs. The shortcuts are elsewhere,
-    /// so the items stay selected, as in Windows Explorer.
-    pub(in crate::window) async fn run_shortcuts(&self, request: &LinkRequest) {
+    /// so the rows at `selected`, the items' own rows, stay selected, as in
+    /// Windows Explorer.
+    pub(in crate::window) async fn run_shortcuts(&self, request: &LinkRequest, selected: Vec<String>) {
         let Some(context) = self.begin_operation(starting_label(TransferMode::Copy)) else {
             return;
         };
@@ -74,7 +75,7 @@ impl BrowserWindow {
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_links(&outcome.result),
             undo: outcome.undo,
-            select_after: request.uris.clone(),
+            select_after: selected,
         });
         self.conclude_operation(finished).await;
     }

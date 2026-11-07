@@ -150,6 +150,11 @@ impl History {
         Some((&step.uri, step.search.is_some()))
     }
 
+    /// The search step `index` shows, if it shows one.
+    pub(crate) fn search_at(&self, index: usize) -> Option<&SearchStep> {
+        self.steps.get(index)?.search.as_ref()
+    }
+
     /// The locations a saved session keeps, oldest first, and the
     /// current one's index among them. Searches are not saved, as Windows
     /// restores folders only: a search step becomes its folder, and is
