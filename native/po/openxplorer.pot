@@ -6117,44 +6117,28 @@ msgstr ""
 msgid "Finish the current operation before disconnecting."
 msgstr ""
 
-#: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Back (Alt + Left Arrow)"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Back to {place} (Alt + Left Arrow)"
+msgid "Back to {place}"
 msgstr ""
 
 #: crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Forward"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Forward (Alt + Right Arrow)"
+msgid "Forward to {place}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Forward to {place} (Alt + Right Arrow)"
+msgid "Refresh \"{place}\""
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Refresh \"{place}\" (F5)"
-msgstr ""
-
-#: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Refresh (F5)"
-msgstr ""
-
-#: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Up (Alt + Up Arrow)"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/navigation_buttons.rs
-msgid "Up to \"{place}\" (Alt + Up Arrow)"
+msgid "Up to \"{place}\""
 msgstr ""
 
 #: crates/ox-app/src/window/network_info_bar.rs
