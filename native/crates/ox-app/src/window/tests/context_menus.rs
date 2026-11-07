@@ -124,6 +124,53 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
+/// The classic menu is drawn as Windows 11 draws "Show more options":
+/// no row shows shortcut text, Open is in bold, and a row Windows draws
+/// as text alone, such as Open or Cut, keeps the glyph's column empty, so
+/// its text lines up with the rows that keep a glyph, such as Properties.
+///
+/// parity: LOOK-019, CMD-008
+#[gtk::test]
+fn the_classic_menu_shows_no_shortcut_text_bolds_open_and_lines_up_text_only_rows() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win10);
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    assert_eq!(menu.style(), MenuStyle::Classic);
+    let label_of = |row: &gtk::ListBoxRow| {
+        crate::window::widget_tree::descendants::<gtk::Label>(row)
+            .into_iter()
+            .next()
+            .expect("a label")
+    };
+    let shortcuts: Vec<String> = menu
+        .rows()
+        .iter()
+        .flat_map(crate::window::widget_tree::descendants::<gtk::Label>)
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect();
+    assert_eq!(shortcuts, Vec::<String>::new(), "no shortcut text");
+    assert_eq!(menu.emphasised_labels(), ["Open"]);
+    let images = |label: &str| crate::window::widget_tree::descendants::<gtk::Image>(&menu.row(label)).len();
+    assert_eq!(images("Open"), 0, "Open is text alone");
+    assert_eq!(images("Cut"), 0, "Cut is text alone");
+    assert_eq!(images("Properties"), 1, "Properties keeps its glyph");
+    let left = |label: &str| {
+        let row = menu.row(label);
+        let text = label_of(&row);
+        text.compute_point(&row, &gtk::graphene::Point::zero())
+            .map(|point| point.x())
+    };
+    wait_until("the rows laid out", || {
+        menu.row("Open").width() > 0 && left("Open").is_some_and(|x| x > 0.0)
+    });
+    assert_eq!(left("Open"), left("Properties"), "the text lines up");
+    assert_eq!(left("Cut"), left("Properties"));
+    menu.popdown();
+}
+
 /// Windows 11's compact menu is the default: the edit commands in its
 /// strip and "Show more options" last, with nothing added after it.
 ///

@@ -46,7 +46,7 @@ pub(crate) enum CaptionSide {
     /// before the colon.
     #[default]
     Start,
-    /// The end, after the open-windows button: the part after the colon.
+    /// The end, after the empty drag area: the part after the colon.
     End,
 }
 

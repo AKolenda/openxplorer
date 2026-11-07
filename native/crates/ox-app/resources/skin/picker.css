@@ -25,6 +25,31 @@
   border-bottom-color: @ox_accent;
   box-shadow: inset 0 -1px @ox_accent;
 }
+/* As Windows' edit boxes hide their selection without the keyboard, the
+   name selected in File name is drawn selected only while the box has the
+   keyboard; base.css draws selected text blue even without it (C31). The
+   selection is kept and shows again when the keyboard comes back. */
+window.ox .picker-bar entry:not(:focus-within) > text > selection {
+  background-color: transparent;
+  color: inherit;
+}
+/* The type list is a box like File name, as Windows' combo box beside or
+   under it. */
+window.ox .picker-bar dropdown > button {
+  min-height: 30px;
+  padding: 0 8px 0 11px;
+  border-radius: 4px;
+  background-color: @ox_field_bg;
+  border: 1px solid @ox_border;
+  border-bottom-color: @ox_input_bottom;
+}
+window.ox .picker-bar dropdown > button:hover {
+  background-color: @ox_control_fill_hover;
+}
+window.ox .picker-bar dropdown > button:focus-visible {
+  border-bottom-color: @ox_accent;
+  box-shadow: inset 0 -1px @ox_accent;
+}
 /* Windows' 80px-wide dialog buttons, 32px high. */
 window.ox .picker-bar button.picker-button {
   min-width: 80px;

@@ -244,7 +244,7 @@ impl BrowserWindow {
     /// again too, or, on a share, when it is shown again, so a share that
     /// sends no change notices shows the new item too. Nothing is
     /// selected or renamed.
-    fn mark_changed(&self, folder: &str) {
+    pub(super) fn mark_changed(&self, folder: &str) {
         let showing: Vec<TabId> = {
             let session = self.imp().session.borrow();
             let panes = session.panes().filter(|tab| same_location(tab.uri(), folder));
