@@ -153,6 +153,14 @@ fn file_access_denied_answers_try_again_skip_or_cancel_to_the_worker() {
             "no raw system text: {texts:?}"
         );
         assert_eq!(panel.failure_button_labels(), ["Try Again", "Skip", "Cancel"]);
+        assert!(
+            !panel.failure_text_is_selectable(),
+            "plain text, nothing selected"
+        );
+        assert!(
+            panel.failure_focus_is_on_first_button(),
+            "the keyboard on the first button"
+        );
         assert!(!panel.failure_shows_shield());
         assert!(dialog_over(&test).is_none(), "no dialog over the window");
         assert!(panel.set_failure_for_all(for_all));
@@ -206,6 +214,14 @@ fn destination_folder_access_denied_offers_continue_with_the_shield() {
             "{texts:?}"
         );
         assert_eq!(panel.failure_button_labels(), ["Continue", "Skip", "Cancel"]);
+        assert!(
+            !panel.failure_text_is_selectable(),
+            "plain text, nothing selected"
+        );
+        assert!(
+            panel.failure_focus_is_on_first_button(),
+            "the keyboard on the first button"
+        );
         assert!(panel.failure_shows_shield());
         let window = ProgressWindow::of(&test.context);
         assert_eq!(panel.failure_details_shown(), window.shows_details());
@@ -266,6 +282,14 @@ fn an_item_in_a_folder_only_an_administrator_may_change_offers_continue() {
         );
         assert!(texts.iter().any(|text| text == "tool.cfg"), "{texts:?}");
         assert_eq!(panel.failure_button_labels(), ["Continue", "Skip", "Cancel"]);
+        assert!(
+            !panel.failure_text_is_selectable(),
+            "plain text, nothing selected"
+        );
+        assert!(
+            panel.failure_focus_is_on_first_button(),
+            "the keyboard on the first button"
+        );
         assert!(panel.failure_shows_shield());
         assert!(panel.set_failure_for_all(for_all));
         panel.press_failure("Continue");

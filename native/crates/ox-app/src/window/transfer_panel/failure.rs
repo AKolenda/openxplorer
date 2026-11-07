@@ -84,7 +84,9 @@ impl TransferPanel {
         question.append(&view.card);
         let details = PropertyGrid::new();
         for (name, value) in &view.details {
-            details.add_row(name, value);
+            // Plain text, never focused or selected when the question
+            // shows (PropertyGrid's values are selectable elsewhere).
+            details.add_row(name, value).set_selectable(false);
         }
         let details = details.widget().clone();
         details.add_css_class("failure-details");
@@ -105,6 +107,9 @@ impl TransferPanel {
             FirstButton::Administrator(label) => shield_button(label),
         };
         first.add_css_class("accent");
+        // Windows puts the keyboard on the first button: Continue or Try
+        // Again, which Enter and Space press.
+        let focused = first.clone();
         let second = gtk::Button::with_label(&view.second);
         second.add_css_class("bordered");
         let mut answers = vec![(first, FailureChoice::First), (second, FailureChoice::Second)];
@@ -137,6 +142,7 @@ impl TransferPanel {
         }
         if let Some(window) = imp.window.upgrade() {
             window.show_question();
+            gtk::prelude::GtkWindowExt::set_focus(&window, Some(&focused));
         }
         let choice = receiver.recv().await.unwrap_or(FailureChoice::Cancel);
         let for_all = for_all.is_some_and(|check| check.is_active());
@@ -259,6 +265,30 @@ impl TransferPanel {
             .borrow()
             .as_ref()
             .is_some_and(gtk::Widget::is_visible)
+    }
+
+    /// Whether any text of the question can be selected, for tests.
+    #[cfg(test)]
+    pub(crate) fn failure_text_is_selectable(&self) -> bool {
+        let question = self.failure_question().expect("a question");
+        crate::window::widget_tree::descendants::<gtk::Label>(&question)
+            .iter()
+            .any(gtk::Label::is_selectable)
+    }
+
+    /// Whether the keyboard is on the question's first button, for tests.
+    #[cfg(test)]
+    pub(crate) fn failure_focus_is_on_first_button(&self) -> bool {
+        let Some(window) = self.imp().window.upgrade() else {
+            return false;
+        };
+        let first = self
+            .failure_buttons()
+            .into_iter()
+            .next()
+            .map(|(_, button)| button);
+        let focus = gtk::prelude::GtkWindowExt::focus(&window);
+        matches!((focus, first), (Some(focus), Some(first)) if focus == *first.upcast_ref::<gtk::Widget>())
     }
 
     /// Presses the question's button labelled `label`, for tests.

@@ -332,7 +332,8 @@ fn item_card(name: &str, icon: Icon, lines: &[String]) -> gtk::Box {
     title.set_xalign(0.0);
     title.set_wrap(true);
     title.set_wrap_mode(gtk::pango::WrapMode::WordChar);
-    title.set_selectable(true);
+    // Plain text, as Windows shows it: a selectable label would take the
+    // focus and show its text selected when the question appears.
     title.add_css_class("failed-item-name");
     text.append(&title);
     for line in lines {
