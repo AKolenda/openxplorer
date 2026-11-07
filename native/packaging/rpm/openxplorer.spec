@@ -143,11 +143,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 
 %changelog
 * Sat Nov 07 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.15-1
-- OpenXplorer 2.0.15: Windows 11's layout for the command bar, menus,
-  views, This PC, Properties, dialogs and progress window, Continue as
-  administrator when an operation is denied, sandboxed desktop
-  thumbnailers, pictures pasted as files, and no blank file list after a
-  slow share opens.
+- OpenXplorer 2.0.15: Windows 11's layout for the command bar, right-click
+  menus with labeled buttons, address bar suggestions, views, This PC,
+  Properties, dialogs and progress window, Continue as administrator when
+  an operation is denied, sandboxed desktop thumbnailers, pictures pasted
+  as files, and no blank file list after a slow share opens.
 
 * Thu Nov 05 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.14-1
 - OpenXplorer 2.0.14: a notice when a new release is out, administrator
