@@ -36,7 +36,7 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties tabrows.properties-tabs > button.properties-tab {
   min-height: 20px;
   min-width: 0;
-  padding: 1px 6px;
+  padding: 1px 5px;
   margin: 2px 0 0 0;
   border: 1px solid @ox_border;
   border-bottom-width: 0;

@@ -250,7 +250,30 @@ fn every_kind_of_properties_keeps_the_width() {
         ["General", "Hardware", "Sharing", "Security", "Previous Versions"],
         "a drive has no Customize tab"
     );
-    assert_eq!(tab_rows(&drive), [5], "a drive's five tabs fit one row");
+    // In Noto Sans its five tabs fit one row, as Windows' five do; a
+    // wider font, such as the DejaVu Sans of the distribution checks,
+    // wraps them onto a second.
+    let tabs = drive.tab_buttons();
+    let natural: i32 = tabs
+        .iter()
+        .map(|tab| tab.measure(gtk::Orientation::Horizontal, -1).1 - 1)
+        .sum::<i32>()
+        + 1;
+    let strip = tabs[0].parent().expect("the row of tabs").width();
+    let rows = tab_rows(&drive);
+    if natural <= strip {
+        assert_eq!(
+            rows,
+            [5],
+            "a drive's five tabs fit one row ({natural} of {strip})"
+        );
+    } else {
+        assert_eq!(
+            rows.len(),
+            2,
+            "a drive's five tabs take two rows ({natural} of {strip})"
+        );
+    }
     assert_every_tab_keeps(&drive, width, "a drive");
     drive.close();
 }
@@ -515,6 +538,27 @@ fn other_windows_on_the_properties_window_keep_their_own_size() {
         shown_height < sheet_height,
         "it takes its content's height ({shown_height}), not Properties' ({sheet_height})"
     );
+}
+
+/// A lone tab shown, as Security's Edit... shows its Security tab, stays
+/// selected when it is clicked: it is in no group of tabs to keep it on.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn a_lone_tab_stays_selected_when_clicked() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let dialog = PropertiesWindow::new("Permissions for Short", None, Some(&test.window));
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    dialog.add_tab("security", "Security", &page);
+    dialog.show_single_tab();
+    dialog.present();
+    wait_for_frames(&dialog, 4);
+    let tab = dialog.tab_buttons().remove(0);
+    assert!(tab.is_active(), "the tab is selected");
+    tab.emit_clicked();
+    assert!(tab.is_active(), "a click leaves it selected");
+    dialog.close();
 }
 
 /// How many tabs each row of `window`'s tabs holds, top to bottom. The

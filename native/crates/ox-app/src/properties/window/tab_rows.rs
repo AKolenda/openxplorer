@@ -46,7 +46,8 @@ mod imp {
             if orientation == gtk::Orientation::Horizontal {
                 // At least the widest tab; at best all of them on one row.
                 let minimum = tabs.iter().map(|tab| tab.width).max().unwrap_or(0);
-                let natural = tabs.iter().map(|tab| tab.width).sum::<i32>();
+                let overlaps = i32::try_from(tabs.len().saturating_sub(1)).unwrap_or(0);
+                let natural = tabs.iter().map(|tab| tab.width).sum::<i32>() - overlaps;
                 return (minimum, natural.max(minimum), -1, -1);
             }
             let width = if for_size < 0 { i32::MAX } else { for_size };
@@ -73,8 +74,10 @@ mod imp {
             let mut y = 0;
             for row in &rows {
                 let row_height = row.iter().map(|&at| tabs[at].height).max().unwrap_or(0);
-                let used: i32 = row.iter().map(|&at| tabs[at].width).sum();
                 let count = i32::try_from(row.len()).unwrap_or(1).max(1);
+                // A tab after another overlaps it by a pixel, so
+                // neighbours share one border line.
+                let used: i32 = row.iter().map(|&at| tabs[at].width).sum::<i32>() - (count - 1);
                 let spare = if stretch { (width - used).max(0) } else { 0 };
                 let mut x = 0;
                 for (place, &at) in row.iter().enumerate() {
@@ -83,14 +86,10 @@ mod imp {
                     // taking what rounding leaves.
                     let extra = spare / count + i32::from(place < spare % count);
                     let tab_width = tabs[at].width + extra;
-                    // A tab after another overlaps its right edge by a
-                    // pixel, so neighbours share one border line.
-                    let overlap = i32::from(place > 0);
-                    tabs[at].widget.size_allocate(
-                        &gtk::Allocation::new(x - overlap, y, tab_width + overlap, row_height),
-                        -1,
-                    );
-                    x += tab_width;
+                    tabs[at]
+                        .widget
+                        .size_allocate(&gtk::Allocation::new(x, y, tab_width, row_height), -1);
+                    x += tab_width - 1;
                 }
                 y += row_height;
             }
@@ -173,11 +172,15 @@ fn rows(tabs: &[Tab], width: i32) -> Vec<Vec<usize>> {
     rows_of(&widths, width)
 }
 
-/// [`rows`] for tabs `widths` wide.
+/// [`rows`] for tabs `widths` wide. A tab after another overlaps it by a
+/// pixel, so each takes a pixel less of the row, as if the row were a
+/// pixel wider.
 fn rows_of(widths: &[i32], width: i32) -> Vec<Vec<usize>> {
     if widths.is_empty() {
         return Vec::new();
     }
+    let narrower: Vec<i32> = widths.iter().map(|width| width - 1).collect();
+    let (widths, width) = (narrower.as_slice(), width - 1);
     let count = greedy_row_count(widths, width);
     if count <= 1 {
         return vec![(0..widths.len()).collect()];

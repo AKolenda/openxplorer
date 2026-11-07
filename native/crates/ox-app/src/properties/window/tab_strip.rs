@@ -66,6 +66,10 @@ impl PropertiesWindow {
             move |button| {
                 if button.is_active() {
                     window.imp().notebook.set_current_page(Some(index));
+                } else if window.imp().tab_buttons.borrow().len() == 1 {
+                    // A lone tab, as Security's Edit... shows, is in no
+                    // group: a click must not leave it unselected.
+                    button.set_active(true);
                 }
             }
         ));
