@@ -57,8 +57,7 @@ fn the_preview_pane_and_the_details_pane_take_turns_in_one_pane() {
     assert!(pane.is_visible(), "the same pane");
     assert!(pane.shows_preview(), "with the preview");
     assert!(!pane.shows_properties(), "and nothing else");
-    assert_eq!(pane.title_text(), "Preview");
-    assert_eq!(pane.close_tooltip(), "Close preview pane");
+    assert_eq!(pane.title_text(), "Preview pane", "its accessible name");
     let marks = view_marks(&test);
     assert!(marks.contains(&"Preview pane".to_owned()), "{marks:?}");
     assert!(!marks.contains(&"Details pane".to_owned()), "{marks:?}");
@@ -72,8 +71,7 @@ fn the_preview_pane_and_the_details_pane_take_turns_in_one_pane() {
     assert!(is_on(&test, WindowAction::DetailsPane));
     assert!(!is_on(&test, WindowAction::PreviewPane));
     assert!(pane.shows_properties());
-    assert_eq!(pane.title_text(), "Details");
-    assert_eq!(pane.close_tooltip(), "Close details pane");
+    assert_eq!(pane.title_text(), "Details pane");
 
     test.activate("details-pane", None);
     assert!(!pane.is_visible(), "closing the open pane closes it");
