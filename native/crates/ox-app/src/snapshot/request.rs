@@ -36,6 +36,9 @@ const SEARCH_VARIABLE: &str = "OPENXPLORER_SEARCH";
 const SCENE_VARIABLE: &str = "OPENXPLORER_SCENE";
 /// The JSON file to write the controls' rectangles to.
 const HOTSPOTS_VARIABLE: &str = "OPENXPLORER_HOTSPOTS";
+/// The variable naming the tab of the Properties window to save in the
+/// browser window's place.
+const PROPERTIES_VARIABLE: &str = "OPENXPLORER_PROPERTIES";
 
 /// The size of a window's title bar and contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +82,10 @@ pub(crate) struct SnapshotRequest {
     pub scene: Vec<SceneStep>,
     /// Where to write the controls' rectangles, or `None` for nowhere.
     pub hotspots: Option<PathBuf>,
+    /// The tab of the Properties window the scene opened last to save in
+    /// place of the browser window (`general`, `customize`, ...), or
+    /// `None` to save the browser window.
+    pub properties: Option<String>,
 }
 
 impl SnapshotRequest {
@@ -132,6 +139,14 @@ impl SnapshotRequest {
             search: non_empty(&lookup, SEARCH_VARIABLE),
             scene: scene.unwrap_or_default(),
             hotspots: non_empty(&lookup, HOTSPOTS_VARIABLE).map(PathBuf::from),
+            properties: parse_variable(
+                &lookup,
+                PROPERTIES_VARIABLE,
+                "a Properties tab such as customize",
+                |tab| {
+                    (tab.len() <= 32 && tab.chars().all(|c| c.is_ascii_lowercase())).then(|| tab.to_owned())
+                },
+            )?,
         }))
     }
 }
@@ -210,6 +225,7 @@ mod tests {
             search: None,
             scene: Vec::new(),
             hotspots: None,
+            properties: None,
         };
         assert_eq!(asked.expect("valid variables"), Some(expected));
     }

@@ -1373,7 +1373,7 @@ msgstr ""
 msgid "Change Icon for {folder} Folder"
 msgstr ""
 
-#: crates/ox-app/src/properties/change_icon.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/properties/change_icon.rs crates/ox-app/src/properties/custom_icon.rs crates/ox-core/src/search/facets.rs
 msgid "Images"
 msgstr ""
 
@@ -1390,11 +1390,63 @@ msgid "Folder icons"
 msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
+msgid "You can change the folder icon. If you change the icon, it will no longer show a preview of the folder's contents."
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_picture.rs
+msgid "Browse"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_picture.rs
+msgid "Choose File..."
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_picture.rs
+msgid "Choose a file to show on this folder icon."
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_picture.rs
+msgid "Folder pictures"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon.rs crates/ox-app/src/properties/custom_icon/folder_picture.rs
 msgid "Restore Default"
 msgstr ""
 
-#: crates/ox-app/src/properties/custom_icon.rs
-msgid "You can change the folder icon. If you change the icon, it will no longer show a preview of the folder's contents."
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs
+msgid "Also apply this template to all subfolders"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
+msgid "Documents"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs
+msgid "General items"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-core/src/places/known_folders.rs
+msgid "Music"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs
+msgid "Optimize this folder for:"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs
+msgid "Pictures"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs
+msgid "The folder's window has closed."
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
+msgid "Videos"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs
+msgid "What kind of folder do you want?"
 msgstr ""
 
 #: crates/ox-app/src/properties/details_rows.rs
@@ -3351,10 +3403,6 @@ msgstr ""
 msgid "Photos, drawings and other images."
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs
-msgid "Pictures"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Pictures, videos and documents show their contents instead of an icon."
 msgstr ""
@@ -3401,10 +3449,6 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "The Size column says how many items a folder on this computer holds."
-msgstr ""
-
-#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
-msgid "Videos"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -4797,10 +4841,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Desktop (create shortcut)"
-msgstr ""
-
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
-msgid "Documents"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
@@ -8855,10 +8895,6 @@ msgid "Downloads"
 msgstr ""
 
 #: crates/ox-core/src/places/known_folders.rs
-msgid "Music"
-msgstr ""
-
-#: crates/ox-core/src/places/known_folders.rs
 msgid "Public"
 msgstr ""
 
@@ -9048,6 +9084,10 @@ msgstr ""
 
 #: crates/ox-core/src/session/error.rs
 msgid "Tab history must contain 1–200 locations."
+msgstr ""
+
+#: crates/ox-core/src/settings.rs
+msgid "This folder's settings cannot be kept."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
