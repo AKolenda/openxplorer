@@ -1,81 +1,30 @@
 # 2.0.15 — 2026-11-07
 
+OpenXplorer now looks and works much more like Windows 11's File Explorer, from the command bar, menus and status bar to Properties, This PC and the progress window. It also makes previews with the desktop's own thumbnailers in a sandbox, can paste a picture as a file, and offers to continue as administrator when a copy, move or delete is denied. Much of this release is the work of @addition-official and @clansty.
+
 ## Security
-* Previews made by the desktop's own thumbnailers, new in this release, run in bubblewrap, as GNOME's Files runs them: with no network, no session bus and no other processes, a private empty home and `/tmp`, and only the previewed item of your files, read-only. Where bubblewrap is missing or can't run, no outside thumbnailer is started.
+* Previews made by the desktop's own thumbnailers, new in this release, run in bubblewrap, as GNOME's Files runs them: with no network, no session bus and no other processes, a private empty home and `/tmp`, and only the previewed item of your files, read-only. Together they may use at most 2 GiB of memory, 64 processes and one processor's worth of time, at a lower priority than the app. Where bubblewrap is missing or can't run, no outside thumbnailer is started.
+* A picture whose header asks for more than 64 megapixels (256 for a JPEG), a damaged picture, or one that takes longer than about 10 seconds to decode keeps its type icon instead of being decoded, in thumbnails, the Details pane's preview and custom icons, and is not handed to a thumbnailer either.
 * **Continue**, offered when a copy, move or delete is denied, checks the location with the same refusals as the **Open as administrator** folder delete before it asks for a password: a folder other accounts can change, or one on a drive users can mount, is refused and the reason is shown. It uses the existing administrator paths and adds no new privilege mechanism. GVfs has no administrator Recycle Bin, so in a Recycle Bin delete Continue first asks whether to delete the item permanently.
 
 ## What's Changed
-* fix(sidebar): Open Recent files from the navigation pane, with Open file location on its rows by @AKolenda in https://github.com/AKolenda/openxplorer/pull/273
-* feat(folder-options): Show Folder Options as its own compact modal window, as Windows 11 does by @addition-official in https://github.com/AKolenda/openxplorer/pull/269
-* feat(sidebar): Give This PC, Network and drives Windows 11's menus, and remove the Map network drive button by @addition-official in https://github.com/AKolenda/openxplorer/pull/268
-* fix(properties): Show a folder that is a mount point as a folder by @addition-official in https://github.com/AKolenda/openxplorer/pull/267
-* fix(views): Keep a folder's groups in Tiles and Content, with Windows 11's spacing by @addition-official in https://github.com/AKolenda/openxplorer/pull/266
-* fix(view): Draw the file list again after "Working on it..." hid it on a slow share by @AKolenda in https://github.com/AKolenda/openxplorer/pull/274
-* fix(recycle-bin): Replace the first of two items restored to one name with the second by @addition-official in https://github.com/AKolenda/openxplorer/pull/272
-* fix(properties): Give every Properties window one fixed size, with tabs in even rows by @addition-official in https://github.com/AKolenda/openxplorer/pull/271
-* feat(transfers): Continue as administrator when a copy, move or delete is denied, asked in the progress window by @addition-official in https://github.com/AKolenda/openxplorer/pull/263
-* fix(dialogs): Make windows opened inside a file dialog its children, as in Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/270
-* fix(look): Outline the file list's focused item only while the list has the keyboard, as Windows 11 does by @addition-official in https://github.com/AKolenda/openxplorer/pull/264
-* fix(menus): Stop a hovered submenu opening after the keyboard moves on, and keep Recent rows selected after Send to by @AKolenda in https://github.com/AKolenda/openxplorer/pull/261
-* fix(this-pc): Make Select all, Select none and Invert selection work on This PC's drives by @AKolenda in https://github.com/AKolenda/openxplorer/pull/259
-* fix(search): Keep search results in middle-clicked tabs, a tab's selection on results, and files whose text matches again by @AKolenda in https://github.com/AKolenda/openxplorer/pull/260
-* fix(address): Let the keyboard reach the « and the chevron before the crumbs by @AKolenda in https://github.com/AKolenda/openxplorer/pull/257
-* fix(network): Offer only free drive letters in Map network drive and keep a session mapping's letter by @AKolenda in https://github.com/AKolenda/openxplorer/pull/258
-* fix(transfers): Bring a replaced file back when its copy is cancelled, and say nothing about failures Skip all answered by @AKolenda in https://github.com/AKolenda/openxplorer/pull/252
-* fix(properties): Keep Read-only in step with a change made on the Security tab by @AKolenda in https://github.com/AKolenda/openxplorer/pull/256
-* fix(views): Show Tiles and Content sizes as the status bar does, and open folders in their own window from Open too by @AKolenda in https://github.com/AKolenda/openxplorer/pull/253
-* fix(recycle-bin): Ask about the second of two items restored to the same free name by @AKolenda in https://github.com/AKolenda/openxplorer/pull/254
-* fix(properties): Keep a template given to subfolders when only the folder changes later by @AKolenda in https://github.com/AKolenda/openxplorer/pull/255
-* feat(details-pane): Lay out the Details pane as Windows 11 does, with Share, Properties and photo details by @addition-official in https://github.com/AKolenda/openxplorer/pull/250
-* fix(thumbnails): Let thumbnailers outside /usr and on NixOS find their files in the sandbox by @AKolenda in https://github.com/AKolenda/openxplorer/pull/251
-* fix(dialogs): Draw the Save dialog's name selected only with the keyboard, and lay out Open and Save dialogs as Windows does by @addition-official in https://github.com/AKolenda/openxplorer/pull/247
-* fix(selection): Select a Details row clicked anywhere on it, as Windows 11's full-row select does by @addition-official in https://github.com/AKolenda/openxplorer/pull/249
-* feat(recycle-bin): Ask Replace or Skip Files when a restore meets a taken name by @addition-official in https://github.com/AKolenda/openxplorer/pull/248
-* feat(properties): Finish the Customize tab as Windows 11 lays it out by @addition-official in https://github.com/AKolenda/openxplorer/pull/246
-* feat(thumbnails): Make previews with the desktop's own thumbnailers by @clansty in https://github.com/AKolenda/openxplorer/pull/238
-* feat(this-pc): Show This PC as Windows 11 does (preview for the owner) by @AKolenda in https://github.com/AKolenda/openxplorer/pull/245
-* feat(clipboard): Paste a picture as a new file by @clansty in https://github.com/AKolenda/openxplorer/pull/240
-* fix(properties): Keep Windows' width and height for every item, however long its name by @addition-official in https://github.com/AKolenda/openxplorer/pull/243
-* feat(rename): Select the name Windows 11 selects when renaming, and treat shortcuts as Windows does by @addition-official in https://github.com/AKolenda/openxplorer/pull/242
-* feat(sidebar): Order and line up the navigation pane like Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/241
-* fix(thumbnails): Preview pictures whose MIME type no gdk-pixbuf loader declares by @clansty in https://github.com/AKolenda/openxplorer/pull/237
-* feat(clipboard): Copy the items' paths as text beside the file list by @clansty in https://github.com/AKolenda/openxplorer/pull/239
-* ci(workflows): Keep only the newest build's packages and run heavy checks only when started by hand by @AKolenda in https://github.com/AKolenda/openxplorer/pull/244
-* feat(terminal): Open in Terminal in kitty by @clansty in https://github.com/AKolenda/openxplorer/pull/236
-* fix(paste): Take pasted items into a folder opened through a symbolic link by @clansty in https://github.com/AKolenda/openxplorer/pull/235
-* feat(look): Name file types and lay out the Details pane as Windows 11 does by @AKolenda in https://github.com/AKolenda/openxplorer/pull/233
-* feat(look): Draw the title bar and tab strip like Windows 11's File Explorer by @AKolenda in https://github.com/AKolenda/openxplorer/pull/234
-* feat(menus): Round, space and fade in menus like Windows 11, with a bold Open and no shortcut text in the classic menu by @AKolenda in https://github.com/AKolenda/openxplorer/pull/232
-* feat(options): Lay out Folder Options like Windows 11, with Browse folders, Privacy, the View tree and a Search tab by @AKolenda in https://github.com/AKolenda/openxplorer/pull/231
-* feat(views): Add Windows 11's Tiles and Content views, with Ctrl+Shift+7 and 8 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/228
-* feat(network): Map network drive, Enter network credentials and Disconnect in Windows 11's words by @AKolenda in https://github.com/AKolenda/openxplorer/pull/230
-* feat(properties): Show several items' names, Read-only and Hidden, and Change Icon's icon grid, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/229
-* feat(look): Draw the file list's sort chevron, hover, selection and focus ring like Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/227
-* feat(dnd): Say "Move to Documents" while dragging, and start a rubber band beside a Details name, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/226
-* feat(address): Lay out the address bar like Windows 11: a chevron before the crumbs, « for long paths and every subfolder in the menus by @AKolenda in https://github.com/AKolenda/openxplorer/pull/225
-* feat(transfers): Ask about failed items in Windows 11's words, and say nothing afterwards about what was answered by @AKolenda in https://github.com/AKolenda/openxplorer/pull/224
-* fix(search): Keep a contents search's text matches when its folder changes, and fix the CI test flakes by @AKolenda in https://github.com/AKolenda/openxplorer/pull/222
-* feat(dnd): Copy, cut and drag up to 100,000 items, and never open a folder held under a drag, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/223
-* feat(search): Make search results a step in the tab's history, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/221
-* feat(rename): Refuse Windows' forbidden characters and offer "x (2)" for a taken name, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/212
-* feat(dnd): Show Windows' menu on a right-button drag and drop by @addition-official in https://github.com/AKolenda/openxplorer/pull/204
-* feat(look): Match Windows 11's density: 32 px rows, 48 px bars and 16 px icons, about 22 rows in a 900 px window by @AKolenda in https://github.com/AKolenda/openxplorer/pull/219
-* feat(network): List Network like Windows 11, its computers as items, with the info bar when discovery is off by @AKolenda in https://github.com/AKolenda/openxplorer/pull/220
-* feat(menus): Fly submenus out to the side on hover, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/217
-* feat(transfers): Ask Replace or Skip Files in the progress window, as in Windows by @addition-official in https://github.com/AKolenda/openxplorer/pull/205
-* feat(open-with): Choose apps like Windows 11: Current default, Suggested apps, More apps, Just once and Always by @AKolenda in https://github.com/AKolenda/openxplorer/pull/218
-* feat(properties): Show a drive's Properties as Windows 11 does, with used/free space and a ring, never counting its files by @AKolenda in https://github.com/AKolenda/openxplorer/pull/216
-* feat(recycle-bin): Empty and restore from the command bar, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/213
-* feat(new-menu): List New as Windows 11 does and create every file in place by @AKolenda in https://github.com/AKolenda/openxplorer/pull/215
-* feat(keys): Make F3, Space, the address bar and the Back/Forward/Up buttons work as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/210
-* feat(defaults): Start like Windows 11, with the Details pane closed and en-US dates as 9/13/2026 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/214
-* feat(menus): Add Send to to Show more options, as in Windows by @addition-official in https://github.com/AKolenda/openxplorer/pull/203
-* feat(status-bar): Read like Windows 11's status bar: item count, selection and the view toggles by @AKolenda in https://github.com/AKolenda/openxplorer/pull/211
-* feat(ops): Delete like Windows 11: no prompt for the Recycle Bin, Windows' Yes/No questions for permanent deletes by @AKolenda in https://github.com/AKolenda/openxplorer/pull/209
-* fix(transfers): Show compress and extract progress in the progress window by @addition-official in https://github.com/AKolenda/openxplorer/pull/202
-* feat(command-bar): Lay out "...", View and This PC as in Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/200
-* feat(properties): Add a Details tab to file Properties, as in Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/206
-* chore(deps): bump rusqlite from 0.40.2 to 0.41.0 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/169
+* **Look:** Windows 11's density, with 32 px rows, 48 px bars and 16 px icons, about 22 rows in a 900 px window. The title bar and tab strip, the file list's sort chevron, hover, selection and focus ring, and the menus' rounded corners, spacing and fade-in are drawn as in Windows 11. The classic menu shows a bold Open and no shortcut text, menu rows show no tooltips, and the Back, Forward, Up and Refresh tooltips name where they lead. File types are named as Windows names them ("ODS Spreadsheet", "PNG File").
+* **Command bar and status bar:** "…", View and This PC's commands are laid out as in Windows 11, and the Recycle Bin has Empty Recycle Bin and Restore all items there. The status bar reads like Windows 11's: the item count, the selection and its size, and the Details and Large icons toggles.
+* **Views:** new Tiles and Content views (Ctrl+Shift+7 and Ctrl+Shift+8), which keep a folder's groups. Groups collapse and expand under their headings in Details, Tiles and Content. In Details, a click anywhere on a row selects it, a rubber band can start beside a name, and Ctrl+plus on the number pad or the column titles' menu sizes the columns to fit. New users start with the Details pane closed and en-US dates written as 9/13/2026.
+* **Details pane:** laid out as in Windows 11: the picture, the name, Share, Properties and the file's details, photo details included.
+* **Navigation pane:** in Windows 11's order: Home, the pinned folders, then This PC and Network. This PC, Network and drives have Windows 11's right-click menus, and the Map network drive button below the pane is gone (it stays in those menus and in "…"). **Recent files** now opens, and its rows offer Open file location.
+* **This PC and Network:** This PC shows drives and network locations as tiles with a capacity bar, in collapsible groups. Network lists the computers on your network as items, with an info bar when discovery is off. A drive can be copied and pasted or dragged into a folder as a shortcut, as in Windows. Map network drive, Enter network credentials and Disconnect use Windows 11's layout and words, and Map network drive offers only free drive letters.
+* **Address bar and keys:** a chevron before the crumbs lists the top-level places, a long path folds its first crumbs into «, and a crumb's menu lists every subfolder. The keyboard reaches the « and the chevron, and every Tab stop shows where the keyboard is. F3 goes to search, Space only selects, and scrolling over the address bar no longer changes folder. The file list's focused item is outlined only while the list has the keyboard.
+* **Menus and dragging:** submenus fly out to the side on hover. Show more options has Send to: a compressed folder, a shortcut on the desktop, Documents, a mail recipient, drives and Bluetooth devices. A right-button drag asks Copy here, Move here or Create shortcuts here, and a drag says what a drop will do ("Move to Documents"). New lists Windows 11's items and creates each file at once, ready to rename. Open with chooses an app as Windows 11 does: the current default, suggested apps, More apps, Just once and Always.
+* **Copying, moving and deleting:** Delete sends items to the Recycle Bin without asking, and a permanent delete asks Windows' Yes or No question. Copy, cut and drag take up to 100,000 items, and a folder held under a drag no longer opens. The progress window asks Replace or Skip Files, with a File Conflict window to compare both files, and asks about every failed item in Windows 11's words, with nothing reported afterwards; the Operation result dialog is gone. Compress and extract show their progress there too. A new setting lets Replace overwrite the old file as Windows does; by default it still goes to the Recycle Bin first, and cancelling the copy brings it back.
+* **Renaming:** the part of the name Windows 11 selects is selected, shortcuts are treated as Windows treats them, Windows' forbidden characters are refused as you type, and a taken name offers "name (2)".
+* **Properties:** every Properties window has Windows 11's fixed size and 9-point text. Files gain a Details tab, local folders the whole Customize tab (folder templates, a folder picture and Change Icon's grid of icons), drives Windows 11's used and free space ring without counting their files, and several items show their names, Read-only and Hidden. A folder that is a mount point shows as a folder, and Read-only stays in step with a change made on the Security tab.
+* **Folder Options:** its own compact window, with Windows 11's General, View and Search tabs: Browse folders, Privacy, the View tree and the search options.
+* **Open and Save dialogs:** laid out as Windows lays them out. The name is drawn selected only while it has the keyboard, and a window opened from inside a dialog belongs to it.
+* **Recycle Bin:** a restore that meets a taken name asks Replace or Skip Files, also when two items go back to the same name.
+* **Search:** results are a step in the tab's history ("Search Results in Documents"), so Back and Forward move between a folder and its results, also in a middle-clicked tab, and files whose text matches are kept.
+* **Thumbnails and clipboard:** the desktop's own thumbnailers make previews of videos and other files, also when installed outside `/usr` or on NixOS, and pictures no gdk-pixbuf loader declares get previews. Paste writes a picture on the clipboard, such as a screenshot, as a new image file, and Copy and Cut also put the items' paths on the clipboard as text; Settings › Files & folders › Clipboard can turn either off. Open in Terminal can start kitty, and pasting into a folder opened through a symbolic link works.
+* **Fixes:** the file list is drawn again after "Working on it..." on a slow share, instead of staying blank. A hovered submenu no longer opens after the keyboard moves on. Select all, Select none and Invert selection work on This PC's drives. A template given to subfolders is kept when only the folder changes later. Tiles and Content write sizes as the status bar does.
 
 ## Packages
 Download them from the assets below.
