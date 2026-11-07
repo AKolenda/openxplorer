@@ -59,7 +59,6 @@ mod button_style;
 mod cache_folder;
 mod caller_window;
 mod caption_buttons;
-mod card_grid;
 mod closing;
 mod command_bar;
 mod compact_density;

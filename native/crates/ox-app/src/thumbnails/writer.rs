@@ -6,6 +6,14 @@
 //! written to a temporary file and renamed into place, readable by its
 //! owner only, in folders only its owner may enter. Other desktop
 //! programs, Files and Dolphin included, then find it too.
+//!
+//! A desktop thumbnailer's picture ([`super::thumbnailers`]) is written
+//! the same way, sharing [`save_thumbnail`]: such a program writes a plain
+//! PNG, so the app adds the keys that keep a thumbnail valid.
+//!
+//! A failure says whether any thumbnailer of the desktop's is worth
+//! asking at all ([`Failure`]): a picture the app cannot read leaves room
+//! for one, while a picture it read and the cache refused does not.
 
 use std::fs;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
@@ -28,34 +36,74 @@ pub(super) struct Source {
     pub modified: u64,
 }
 
+/// Why no thumbnail was written, which tells the caller whether another
+/// thumbnailer is worth asking: a picture of a type gdk-pixbuf does not
+/// read may still have one of the desktop's, but the cache refuses the
+/// same thumbnail whatever makes it, and a dropped request has no reader
+/// left to show it to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Failure {
+    /// The picture could not be read or decoded: the app has no loader
+    /// for its type, or its bytes are no picture.
+    Unreadable,
+    /// The picture was read, but the cache would not take its thumbnail:
+    /// the item is a thumbnail of the cache itself, whose pictures of
+    /// pictures would grow it from within, or the folder could not be
+    /// written. Another thumbnailer fails the same way, so none is asked.
+    Unwritable,
+    /// The request was dropped, or its reader cancelled, before the
+    /// picture was read or the thumbnail written.
+    Cancelled,
+}
+
 /// Makes the thumbnail of `source` in `flavor` under the cache folder
-/// `cache_dir`; `None` when the picture cannot be read or the thumbnail
-/// not written. Blocks: run it off the main thread.
+/// `cache_dir`. Blocks: run it off the main thread.
 pub(super) fn write_thumbnail(
     cache_dir: &Path,
     source: &Source,
     flavor: ThumbnailFlavor,
     cancellation: &gio::Cancellable,
-) -> Option<PathBuf> {
-    let target = thumbnail_file(cache_dir, &source.uri, flavor);
-    let folder = target.parent()?;
-    // A thumbnail of a thumbnail would grow the cache from itself.
-    if source.uri.starts_with(
-        &glib::filename_to_uri(cache_dir.join("thumbnails"), None)
-            .ok()?
-            .to_string(),
-    ) {
-        return None;
-    }
-    let pixbuf = scaled_picture(&source.uri, flavor.pixels(), cancellation)?;
+) -> Result<PathBuf, Failure> {
+    let Some(pixbuf) = scaled_picture(&source.uri, flavor.pixels(), cancellation) else {
+        // A read that stopped because it was cancelled is no reason to
+        // fall back to another thumbnailer.
+        return Err(if cancellation.is_cancelled() {
+            Failure::Cancelled
+        } else {
+            Failure::Unreadable
+        });
+    };
     if cancellation.is_cancelled() {
-        return None;
+        return Err(Failure::Cancelled);
     }
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(folder)
-        .ok()?;
+    save_thumbnail(cache_dir, source, flavor, &pixbuf)
+}
+
+/// Writes the picture `pixbuf` as the thumbnail of `source` in `flavor`
+/// under the cache folder `cache_dir`, as the Thumbnail Managing Standard
+/// asks. Blocks.
+///
+/// [`write_thumbnail`] hands over the picture it decoded, and
+/// [`super::thumbnailers`] the one a desktop thumbnailer wrote: either way
+/// the cache gets the same keys, so Files and Dolphin find the thumbnail
+/// valid too.
+pub(super) fn save_thumbnail(
+    cache_dir: &Path,
+    source: &Source,
+    flavor: ThumbnailFlavor,
+    pixbuf: &Pixbuf,
+) -> Result<PathBuf, Failure> {
+    let target = thumbnail_file(cache_dir, &source.uri, flavor);
+    let Some(folder) = target.parent() else {
+        return Err(Failure::Unwritable);
+    };
+    // A thumbnail of a thumbnail would grow the cache from itself.
+    if inside_cache(cache_dir, &source.uri) {
+        return Err(Failure::Unwritable);
+    }
+    if create_folder(folder).is_none() {
+        return Err(Failure::Unwritable);
+    }
     let temporary = folder.join(format!(".{}.openxplorer.tmp", glib::random_int()));
     let modified = source.modified.to_string();
     let options = [
@@ -64,14 +112,13 @@ pub(super) fn write_thumbnail(
         ("tEXt::Software", "OpenXplorer"),
     ];
     let saved = pixbuf.savev(&temporary, "png", &options).is_ok()
-        && !cancellation.is_cancelled()
         && fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600)).is_ok()
         && fs::rename(&temporary, &target).is_ok();
     if !saved {
         let _ = fs::remove_file(&temporary);
-        return None;
+        return Err(Failure::Unwritable);
     }
-    Some(target)
+    Ok(target)
 }
 
 /// The thumbnail of `uri` in `flavor` under `cache_dir`, if one exists
@@ -89,18 +136,46 @@ pub(super) fn find_thumbnail(
     is_current.then_some(path)
 }
 
+/// Whether `uri` names an item of the thumbnail cache under `cache_dir`: a
+/// thumbnail of a thumbnail would grow the cache from itself, so such an
+/// item keeps its icon, and neither the app nor a program of the desktop's
+/// is asked for a picture of it.
+pub(super) fn inside_cache(cache_dir: &Path, uri: &str) -> bool {
+    glib::filename_to_uri(cache_dir.join("thumbnails"), None)
+        .is_ok_and(|cache| uri.starts_with(cache.as_str()))
+}
+
+/// The folder `folder` and its parents, enterable by its owner only, as
+/// the standard asks of the cache folders.
+fn create_folder(folder: &Path) -> Option<()> {
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(folder)
+        .ok()
+}
+
+/// The PNG in `bytes`, decoded to fit `edge` pixels square as
+/// [`scaled_picture`] decodes a file: a desktop thumbnailer's picture,
+/// which the app read into memory itself and checked the size of (see
+/// [`super::thumbnailers`]). Only gdk-pixbuf's PNG loader reads it.
+pub(super) fn scaled_png(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
+    let loader = scaling(PixbufLoader::with_type("png").ok()?, edge);
+    for chunk in bytes.chunks(READ_CHUNK) {
+        if loader.write(chunk).is_err() {
+            let _ = loader.close();
+            return None;
+        }
+    }
+    finish(&loader)
+}
+
 /// The picture at `uri`, turned upright and decoded to fit `edge` pixels
 /// square, or at its own size when smaller: a large photo is never held
 /// in memory at full size.
 fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Option<Pixbuf> {
     let stream = gio::File::for_uri(uri).read(Some(cancellation)).ok()?;
-    let loader = PixbufLoader::new();
-    loader.connect_size_prepared(move |loader, width, height| {
-        if width > edge || height > edge {
-            let (width, height) = fit(width, height, edge);
-            loader.set_size(width, height);
-        }
-    });
+    let loader = scaling(PixbufLoader::new(), edge);
     let mut buffer = vec![0; READ_CHUNK];
     loop {
         let Ok(read) = stream.read(&mut buffer, Some(cancellation)) else {
@@ -115,6 +190,23 @@ fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Opti
             return None;
         }
     }
+    finish(&loader)
+}
+
+/// `loader`, made to decode its picture to fit `edge` pixels square, or
+/// at its own size when smaller.
+fn scaling(loader: PixbufLoader, edge: i32) -> PixbufLoader {
+    loader.connect_size_prepared(move |loader, width, height| {
+        if width > edge || height > edge {
+            let (width, height) = fit(width, height, edge);
+            loader.set_size(width, height);
+        }
+    });
+    loader
+}
+
+/// The picture `loader` was given, turned upright.
+fn finish(loader: &PixbufLoader) -> Option<Pixbuf> {
     loader.close().ok()?;
     let pixbuf = loader.pixbuf()?;
     Some(pixbuf.apply_embedded_orientation().unwrap_or(pixbuf))
@@ -134,7 +226,10 @@ mod tests {
     use super::*;
 
     /// A picture's thumbnail lands where the standard puts it, with the
-    /// keys that keep it valid, and is no larger than its flavor.
+    /// keys that keep it valid, and is no larger than its flavor; a
+    /// picture of the cache's own folder and a cancelled read are refused
+    /// as such, which is what tells the caller not to ask another
+    /// thumbnailer.
     ///
     /// parity: VIEW-057
     #[gtk::test]
@@ -170,10 +265,29 @@ mod tests {
         let mode = fs::metadata(&written).expect("the file").permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
 
+        // A picture of the cache's own folder is read, but its thumbnail
+        // is refused: that is what tells the caller no other thumbnailer
+        // can help.
+        let inner = cache
+            .join("thumbnails")
+            .join(ThumbnailFlavor::Normal.as_str())
+            .join("x.png");
+        let inside = Source {
+            uri: gio::File::for_path(&inner).uri().to_string(),
+            modified: 1_700_000_000,
+        };
+        assert_eq!(
+            save_thumbnail(&cache, &inside, ThumbnailFlavor::Normal, &thumbnail),
+            Err(Failure::Unwritable)
+        );
+
         let cancelled = gio::Cancellable::new();
         cancelled.cancel();
         let other_cache = folder.path().join("cancelled-cache");
-        assert!(write_thumbnail(&other_cache, &source, ThumbnailFlavor::Normal, &cancelled).is_none());
+        assert_eq!(
+            write_thumbnail(&other_cache, &source, ThumbnailFlavor::Normal, &cancelled),
+            Err(Failure::Cancelled)
+        );
         assert!(!other_cache.exists(), "a cancelled read leaves no cache file");
     }
 }

@@ -26,6 +26,7 @@
 //! | `drive_tab` | A drive's General and Hardware tabs |
 //! | `drive_facts` | A drive's label, type and file system |
 //! | `space_ring` | [`SpaceRing`](space_ring::SpaceRing): the ring of a drive's used and free space |
+//! | `fixed_width` | [`FixedWidth`](fixed_width::FixedWidth): the window's content at Windows' width |
 //! | `folder_count` | A folder's size and content, counting up |
 //! | `security_tab` | The Security tab and its Edit and Advanced dialogs |
 //! | `security_model` | Windows' permission names over Linux bits |
@@ -51,6 +52,7 @@ mod details_rows;
 mod details_tab;
 mod drive_facts;
 mod drive_tab;
+mod fixed_width;
 mod folder_count;
 mod folder_sizes;
 mod general_tab;
@@ -81,8 +83,9 @@ const READING: &str = crate::i18n::message_id("Reading file properties…");
 
 #[cfg(test)]
 pub(crate) use custom_icon::set_custom_icon;
+pub(crate) use details_rows::pane_media_rows;
 pub(crate) use details_tab::focus_detail_row;
-pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNED};
+pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes};
 pub(crate) use item_window::{open_item_properties, PropertiesContext};
 #[cfg(test)]
 pub(crate) use location_panel::LocationPanel;

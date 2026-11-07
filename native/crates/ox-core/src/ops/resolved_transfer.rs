@@ -34,7 +34,7 @@
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use super::conflicts::{ConflictScan, NameConflict, PlannedItem, PlannedKind};
@@ -57,7 +57,7 @@ use crate::transfer::{
 };
 
 /// The most numbers tried for a kept-both name.
-const MAX_KEPT_NUMBER: u32 = 10_000;
+pub(super) const MAX_KEPT_NUMBER: u32 = 10_000;
 
 /// The user's answer about one conflict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,7 +218,7 @@ fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsE
 }
 
 /// Refuses answers that are not one per conflict.
-fn check_answers(scan: &ConflictScan, answers: &[Resolution]) -> Result<(), OpsError> {
+pub(super) fn check_answers(scan: &ConflictScan, answers: &[Resolution]) -> Result<(), OpsError> {
     if answers.len() == scan.conflicts.len() {
         return Ok(());
     }
@@ -507,41 +507,18 @@ impl<'a> Run<'a> {
                 .extend(part.result.landed.iter().map(|landed| landed.destination.clone()));
             return Ok(part);
         };
-        self.context.protection.check(&conflict.existing_uri)?;
-        let since = unix_seconds_now();
-        let trashed = gio_transfer_engine(self.context, |_| {}).run(
-            Operation::Trash,
-            std::slice::from_ref(&conflict.existing_uri),
-            cancel,
+        let context = self.context;
+        let skip = request(ConflictPolicy::Skip);
+        let engine = &mut self.engine;
+        let (part, kept) = replace_through_recycle_bin(
+            &existing,
+            &path,
+            context,
+            || run_on_engine(engine, &skip, context),
+            |part| part.result.done.contains(&item.uri),
         )?;
-        if trashed.done.is_empty() {
-            // The existing file could not go: nothing was replaced.
-            let mut result = trashed;
-            result.skipped.clear();
-            return Ok(TransferOutcome {
-                result,
-                ..TransferOutcome::default()
-            });
-        }
-        let placed = run_on_engine(&mut self.engine, &request(ConflictPolicy::Skip), self.context);
-        let arrived = placed
-            .as_ref()
-            .is_ok_and(|part| part.result.done.contains(&item.uri));
-        if arrived {
+        if kept {
             self.kept.push(path);
-            return placed;
-        }
-        // The incoming file did not take the name: the replaced file comes
-        // back from the Recycle Bin.
-        let mut part = placed.unwrap_or_else(|error| failed(&existing.display_name(), &error));
-        let restored = restore_trashed_since(std::slice::from_ref(&path), since, self.context);
-        if !restored.is_ok_and(|result| result.errors.is_empty()) {
-            let message = crate::i18n::format_message(
-                "{name}: The file it was to replace is in the Recycle Bin. Restore it from there.",
-                &[("name", &existing.display_name())],
-            );
-            part.result.recovery.push(message.clone());
-            part.result.errors.push(message);
         }
         Ok(part)
     }
@@ -664,8 +641,66 @@ fn grouped(items: &[PlannedItem], keep: impl Fn(&PlannedItem) -> bool) -> Vec<(S
         .collect()
 }
 
+/// Replace as the name-conflict answers do it where the desktop's Trash
+/// works: the existing item goes to the Recycle Bin, then `place` puts
+/// the incoming item at its free name. Should the incoming item not
+/// arrive (`arrived` says), the replaced one comes back from the Recycle
+/// Bin at once. The step's outcome, and true when the replaced item
+/// stays in the Recycle Bin, whose local `path` Undo then restores.
+///
+/// Copy, move and Restore from the Recycle Bin all replace this way.
+///
+/// # Errors
+///
+/// The write protection refusing the existing item, or the Trash
+/// request failing before anything changed.
+pub(super) fn replace_through_recycle_bin(
+    existing: &GioNode,
+    path: &Path,
+    context: &OperationContext,
+    place: impl FnOnce() -> Result<TransferOutcome, OpsError>,
+    arrived: impl FnOnce(&TransferOutcome) -> bool,
+) -> Result<(TransferOutcome, bool), OpsError> {
+    let existing_uri = existing.uri();
+    context.protection.check(&existing_uri)?;
+    let since = unix_seconds_now();
+    let trashed = gio_transfer_engine(context, |_| {}).run(
+        Operation::Trash,
+        std::slice::from_ref(&existing_uri),
+        &context.cancel,
+    )?;
+    if trashed.done.is_empty() {
+        // The existing item could not go: nothing was replaced.
+        let mut result = trashed;
+        result.skipped.clear();
+        let outcome = TransferOutcome {
+            result,
+            ..TransferOutcome::default()
+        };
+        return Ok((outcome, false));
+    }
+    let placed = place();
+    if placed.as_ref().is_ok_and(arrived) {
+        return placed.map(|part| (part, true));
+    }
+    // The incoming item did not take the name: the replaced item comes
+    // back from the Recycle Bin.
+    let mut part = placed.unwrap_or_else(|error| failed(&existing.display_name(), &error));
+    let path = path.to_path_buf();
+    let restored = restore_trashed_since(std::slice::from_ref(&path), since, context);
+    if !restored.is_ok_and(|result| result.errors.is_empty()) {
+        let message = crate::i18n::format_message(
+            "{name}: The file it was to replace is in the Recycle Bin. Restore it from there.",
+            &[("name", &existing.display_name())],
+        );
+        part.result.recovery.push(message.clone());
+        part.result.errors.push(message);
+    }
+    Ok((part, false))
+}
+
 /// An outcome in which the item called `name` failed with `error`.
-fn failed(name: &str, error: &OpsError) -> TransferOutcome {
+pub(super) fn failed(name: &str, error: &OpsError) -> TransferOutcome {
     let mut result = TransferResult::default();
     super::results::record_failure(&mut result, name, error);
     TransferOutcome {

@@ -54,15 +54,6 @@ pub(super) enum PlaceMenu {
         /// The volume's id for the mount request.
         id: String,
     },
-    /// A mounted drive or device's card on This PC.
-    DriveCard {
-        /// Its root.
-        uri: String,
-        /// A drive or a phone.
-        kind: VolumeKind,
-        /// What the mount allows.
-        controls: MountControls,
-    },
     /// A network location in the sidebar (`networkLocationMenu`).
     Network(NetworkLocation),
     /// A saved share's card on This PC (`shares()`).
@@ -378,9 +369,7 @@ impl PlaceMenu {
     /// The location the menu is about, which may be cached for search.
     fn location(&self) -> Option<&str> {
         match self {
-            PlaceMenu::Drive { uri, .. }
-            | PlaceMenu::DriveCard { uri, .. }
-            | PlaceMenu::SavedShare { uri } => Some(uri),
+            PlaceMenu::Drive { uri, .. } | PlaceMenu::SavedShare { uri } => Some(uri),
             PlaceMenu::Network(location) => Some(&location.uri),
             PlaceMenu::Volume { .. }
             | PlaceMenu::RecycleBin { .. }
@@ -400,7 +389,6 @@ impl PlaceMenu {
                 WindowAction::MountVolume,
                 id,
             )],
-            PlaceMenu::DriveCard { uri, kind, controls } => removal_items(uri, *kind, *controls),
             PlaceMenu::Network(location) => network_entries(location, caching),
             PlaceMenu::RecycleBin { has_items } => recycle_bin_entries(*has_items),
             PlaceMenu::RecentFiles => recent_files_entries(),
@@ -490,19 +478,6 @@ fn menu_owner(card: &gtk::Widget) -> gtk::Widget {
 pub(super) fn caching_in(menu: &PlaceMenu, widget: &impl IsA<gtk::Widget>) -> Option<Caching> {
     let window = widget.root().and_downcast::<BrowserWindow>()?;
     window.caching_of(menu.location()?)
-}
-
-/// Gives `card` the context menu `menu` on a right-click.
-pub(super) fn attach_place_menu(card: &impl IsA<gtk::Widget>, menu: PlaceMenu) {
-    let right_click = gtk::GestureClick::new();
-    right_click.set_button(gdk::BUTTON_SECONDARY);
-    right_click.connect_pressed(move |gesture, _, x, y| {
-        gesture.set_state(gtk::EventSequenceState::Claimed);
-        if let Some(card) = gesture.widget() {
-            popup_place_menu(&menu, &card, x, y);
-        }
-    });
-    card.add_controller(right_click);
 }
 
 #[cfg(test)]

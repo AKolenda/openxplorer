@@ -45,7 +45,8 @@
 //! | `duplicate` | Duplicate |
 //! | `journal` | Undo and Redo |
 //! | `links` | Create links, from a drop |
-//! | `clipboard` | Cut, Copy and the desktop's file clipboard |
+//! | `clipboard` | Cut, Copy and the desktop's clipboard: files and pictures |
+//! | `pasted_content` | A picture pasted as a new file (CLIP-015) |
 //! | `transfer` | Pasting into a folder, with the name-conflict check |
 //! | `unstorable_dialog` | The question about names and links the destination cannot store |
 //! | `shortcuts` | The file commands' keys, which text fields keep |
@@ -71,6 +72,7 @@ mod name_dialog;
 mod names;
 mod new_items;
 mod numbered_rename;
+mod pasted_content;
 mod progress;
 mod recycle_bin;
 mod rename;
@@ -83,11 +85,11 @@ mod unfinished;
 mod unstorable_dialog;
 mod worker_question;
 
-use ox_core::clipboard::ClipboardFiles;
 use ox_core::ops::TemplateList;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+pub(super) use clipboard::{ClipboardContent, ClipboardKind};
 pub(super) use jobs::MAX_JOBS;
 pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
@@ -100,9 +102,11 @@ pub(crate) struct FileOperations {
     running: Option<Cancellation>,
     /// Independent copy, move and delete jobs, with their own panels.
     jobs: Vec<jobs::Job>,
-    /// The file list on the desktop's clipboard, as last read; `None`
-    /// when it holds no files (`state.clipboard`, CLIP-009).
-    clipboard: Option<ClipboardFiles>,
+    /// What the desktop's clipboard offers Paste, as last read
+    /// (`state.clipboard`, CLIP-009): a file list, a picture, or nothing
+    /// at all (CLIP-015, CLIP-016). Only the kind is kept, so a large
+    /// picture the clipboard holds is not held here as well.
+    clipboard: ClipboardKind,
     /// How many times the clipboard changed while the window watched, so
     /// a read that an owner change overtook is dropped.
     clipboard_generation: u64,
