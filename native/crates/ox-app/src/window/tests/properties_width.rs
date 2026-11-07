@@ -5,6 +5,7 @@
 use std::fs;
 
 use gtk::glib;
+use gtk::glib::subclass::types::ObjectSubclassIsExt;
 use gtk::prelude::*;
 
 use super::item_dialogs::general;
@@ -254,20 +255,64 @@ fn every_kind_of_properties_keeps_the_width() {
     drive.close();
 }
 
-/// A writable local drive other than the system drive, when this
-/// computer has one: the memory drive at /dev/shm.
-fn other_drive() -> Option<&'static str> {
+/// File systems that are no disk: the kernel's own and memory drives.
+const NOT_A_DISK: [&str; 9] = [
+    "proc",
+    "sysfs",
+    "devtmpfs",
+    "devpts",
+    "cgroup",
+    "cgroup2",
+    "securityfs",
+    "debugfs",
+    "tracefs",
+];
+
+/// A drive other than the system drive that keeps a Customize choice,
+/// when this computer has one: the root of a local mount, writable and
+/// not the root, a disk's file system (such as /boot/efi or /home) before
+/// a memory drive (such as /dev/shm).
+fn other_drive() -> Option<String> {
     let mounts = ox_core::network::read_mount_table().unwrap_or_default();
-    mounts
+    let candidates: Vec<String> = mounts
         .iter()
-        .rev()
-        .find(|mount| mount.path == "/dev/shm")
-        .filter(|mount| !mount.options.split(',').any(|option| option == "ro"))
-        .map(|_| "file:///dev/shm")
+        .filter(|mount| {
+            let filesystem = mount.filesystem.as_str();
+            mount.root == "/"
+                && mount.path != "/"
+                && !NOT_A_DISK.contains(&filesystem)
+                && !ox_core::location::is_network_filesystem(filesystem)
+                && !filesystem.starts_with("fuse")
+                && !mount.options.split(',').any(|option| option == "ro")
+        })
+        .filter(|mount| std::path::Path::new(&mount.path).is_dir())
+        .map(|mount| {
+            let uri = gtk::gio::File::for_path(&mount.path).uri().to_string();
+            (mount.filesystem == "tmpfs", uri)
+        })
+        .fold(Vec::new(), |mut found, (is_memory, uri)| {
+            if is_memory {
+                found.push(uri);
+            } else {
+                found.insert(0, uri);
+            }
+            found
+        });
+    candidates.into_iter().next()
 }
 
-/// Opens Properties of the drive `uri` from `test`.
+/// Opens Properties of the drive `uri` from `test`, listed on This PC as
+/// the volume monitor would list it, so it shows as a drive however a
+/// folder that is a mount point shows.
 fn drive_properties(test: &TestWindow, uri: &str) -> PropertiesWindow {
+    test.window
+        .imp()
+        .volumes
+        .replace(vec![crate::test_support::mounted_volume(
+            "Data",
+            uri,
+            crate::volumes::VolumeKind::Drive,
+        )]);
     test.activate("properties-of", Some(uri));
     crate::test_support::harness::wait_until("the drive's Properties", || {
         !test.window.properties_windows().is_empty()
@@ -288,7 +333,7 @@ fn drive_properties(test: &TestWindow, uri: &str) -> PropertiesWindow {
 #[gtk::test]
 fn another_drive_has_customize_and_its_tabs_share_the_rows() {
     let Some(uri) = other_drive() else {
-        eprintln!("skipped: no writable /dev/shm drive here");
+        eprintln!("skipped: no writable local drive other than the root here");
         return;
     };
     let fixture = Fixture::standard();
@@ -299,7 +344,7 @@ fn another_drive_has_customize_and_its_tabs_share_the_rows() {
     let width = shown_width(&folder);
     folder.close();
 
-    let drive = drive_properties(&test, uri);
+    let drive = drive_properties(&test, &uri);
     let labels = drive.tab_labels();
     assert_eq!(labels.first().map(String::as_str), Some("General"));
     assert_eq!(labels.last().map(String::as_str), Some("Customize"), "{labels:?}");
@@ -501,7 +546,7 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
 }
 
 /// General of a folder, a file, several items, the system drive, another
-/// drive (when /dev/shm is one) and seven tabs in two rows, light and
+/// drive (when the computer has one) and seven tabs in two rows, light and
 /// dark, for review with `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):
 /// `properties-kind-{folder,file,several,drive,other-drive,wrapped}-{light,dark}.png`.
 ///
@@ -538,7 +583,7 @@ fn every_kind_of_properties_is_captured() {
         capture_dialog(&drive, &format!("properties-kind-drive-{theme}.png"));
         drive.close();
         if let Some(uri) = other_drive() {
-            let other = drive_properties(&test, uri);
+            let other = drive_properties(&test, &uri);
             capture_dialog(&other, &format!("properties-kind-other-drive-{theme}.png"));
             other.close();
         }
