@@ -55,11 +55,29 @@ const DROP_TARGET_CSS_CLASS: &str = "file-drop-active";
 /// content in: a column view's `row` and a grid view's `child`.
 const ITEM_WIDGET_NAMES: [&str; 2] = ["row", "child"];
 
+/// Turns the position a list item shows in its view into the listing's
+/// position, `None` for a slot that shows no item: grouped Tiles and
+/// Content list headings among the items (VIEW-071).
+pub(crate) type PositionMap = Rc<dyn Fn(u32) -> Option<u32>>;
+
 /// A cell's content widget and the list item that shows it.
-#[derive(Debug)]
 struct CellOwner {
     cell: glib::WeakRef<gtk::Widget>,
     list_item: glib::WeakRef<gtk::ListItem>,
+    /// Maps the list item's position, for a view that lists more than
+    /// the items.
+    positions: Option<PositionMap>,
+}
+
+impl std::fmt::Debug for CellOwner {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CellOwner")
+            .field("cell", &self.cell)
+            .field("list_item", &self.list_item)
+            .field("maps_positions", &self.positions.is_some())
+            .finish()
+    }
 }
 
 impl CellOwner {
@@ -83,15 +101,26 @@ impl CellOwner {
 
     /// The cell, while its list item shows `position`.
     fn cell_showing(&self, position: u32) -> Option<gtk::Widget> {
-        let list_item = self.list_item.upgrade()?;
-        if bound_position(&list_item) != Some(position) {
+        if self.bound_position() != Some(position) {
             return None;
         }
         self.cell.upgrade()
     }
+
+    /// The position of the item the list item shows, or `None` while it
+    /// shows none.
+    fn bound_position(&self) -> Option<u32> {
+        let list_item = self.list_item.upgrade()?;
+        let position = bound_position(&list_item)?;
+        match &self.positions {
+            Some(positions) => positions(position),
+            None => Some(position),
+        }
+    }
 }
 
-/// The position `list_item` shows, or `None` while it shows no item.
+/// The position `list_item` shows in its view, or `None` while it shows
+/// nothing.
 fn bound_position(list_item: &gtk::ListItem) -> Option<u32> {
     let position = list_item.position();
     let is_bound = position != gtk::INVALID_LIST_POSITION && list_item.item().is_some();
@@ -144,11 +173,23 @@ impl CellOwners {
     /// Records that `cell` is the content widget of `list_item`, and
     /// forgets cells that are gone.
     pub(crate) fn register(&self, cell: &impl IsA<gtk::Widget>, list_item: &gtk::ListItem) {
+        self.register_mapped(cell, list_item, None);
+    }
+
+    /// [`Self::register`] for a view whose list item positions `positions`
+    /// maps to the listing's.
+    pub(crate) fn register_mapped(
+        &self,
+        cell: &impl IsA<gtk::Widget>,
+        list_item: &gtk::ListItem,
+        positions: Option<PositionMap>,
+    ) {
         let mut owners = self.owners.borrow_mut();
         owners.retain(CellOwner::is_alive);
         owners.push(CellOwner {
             cell: cell.as_ref().downgrade(),
             list_item: list_item.downgrade(),
+            positions,
         });
     }
 
@@ -175,8 +216,9 @@ impl CellOwners {
 
     /// The item the registered `cell` shows, while it shows one.
     pub(crate) fn item_of(&self, cell: &impl IsA<gtk::Widget>) -> Option<FileItem> {
-        let list_item = self.owner_of(cell.as_ref())?;
-        list_item.item().and_downcast::<FileItem>()
+        let owners = self.owners.borrow();
+        let owner = owners.iter().find(|owner| owner.has_cell(cell.as_ref()))?;
+        owner.list_item.upgrade()?.item().and_downcast::<FileItem>()
     }
 
     /// Styles `cell`, which shows `item`: dimmed while a cut has `item` on
@@ -187,6 +229,13 @@ impl CellOwners {
         toggle_class(cell, CUT_CSS_CLASS, self.cut_uris.borrow().contains(uri));
         toggle_class(cell, DRAGGED_CSS_CLASS, self.dragged_uris.borrow().contains(uri));
         toggle_class(cell, HIDDEN_CSS_CLASS, item.entry().is_hidden);
+    }
+
+    /// Takes an item's styles off `cell`, which shows no item now.
+    pub(crate) fn unstyle_cell(cell: &impl IsA<gtk::Widget>) {
+        for class in [CUT_CSS_CLASS, DRAGGED_CSS_CLASS, HIDDEN_CSS_CLASS] {
+            toggle_class(cell, class, false);
+        }
     }
 
     /// Styles every cell on screen again after the state changed.
@@ -341,25 +390,22 @@ impl CellOwners {
     pub(crate) fn position_at(&self, view: &impl IsA<gtk::Widget>, x: f64, y: f64) -> Option<u32> {
         let view = view.as_ref();
         let picked = view.pick(x, y, gtk::PickFlags::DEFAULT)?;
-        let list_item = self.owner_near(view, picked)?;
-        bound_position(&list_item)
+        self.position_near(view, picked)
     }
 
     /// The position of the item whose row or tile holds `widget`, inside
     /// `view`.
     pub(crate) fn position_holding(&self, view: &impl IsA<gtk::Widget>, widget: gtk::Widget) -> Option<u32> {
-        let list_item = self.owner_near(view.as_ref(), widget)?;
-        bound_position(&list_item)
+        self.position_near(view.as_ref(), widget)
     }
 
     /// The position of the item whose row or tile is, or contains,
     /// `widget`, such as the one with keyboard focus.
     pub(crate) fn position_of(&self, widget: &gtk::Widget) -> Option<u32> {
         // A list's own first child is a row, so the walk stops below it.
-        let list_item = std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+        std::iter::successors(Some(widget.clone()), WidgetExt::parent)
             .take_while(|widget| !widget.is::<gtk::ListBase>())
-            .find_map(|widget| self.owner_within(&widget))?;
-        bound_position(&list_item)
+            .find_map(|widget| self.position_within(&widget))
     }
 
     /// The content widget showing `position`, if it is on screen.
@@ -387,10 +433,7 @@ impl CellOwners {
         let view = view.as_ref();
         let mut shown: Vec<(u32, gtk::Widget)> = Vec::new();
         for owner in self.owners.borrow().iter() {
-            let Some(list_item) = owner.list_item.upgrade() else {
-                continue;
-            };
-            let (Some(position), Some(cell)) = (bound_position(&list_item), owner.cell.upgrade()) else {
+            let (Some(position), Some(cell)) = (owner.bound_position(), owner.cell.upgrade()) else {
                 continue;
             };
             let row = item_widget(&cell).filter(|row| row.is_ancestor(view));
@@ -483,45 +526,54 @@ impl CellOwners {
         }
     }
 
-    /// The list item whose content widget is `widget`.
-    fn owner_of(&self, widget: &gtk::Widget) -> Option<gtk::ListItem> {
-        let owners = self.owners.borrow();
-        let owner = owners.iter().find(|owner| owner.has_cell(widget))?;
-        owner.list_item.upgrade()
+    /// The index of the owner whose content widget is `widget`.
+    fn owner_index_of(&self, widget: &gtk::Widget) -> Option<usize> {
+        self.owners
+            .borrow()
+            .iter()
+            .position(|owner| owner.has_cell(widget))
     }
 
-    /// The list item of the nearest widget from `picked` up to, but not
-    /// including, `view` that holds a registered cell.
+    /// The position of the item the owner at `index` shows.
+    fn position_at_owner(&self, index: usize) -> Option<u32> {
+        self.owners.borrow().get(index)?.bound_position()
+    }
+
+    /// The position of the item of the nearest widget from `picked` up
+    /// to, but not including, `view` that holds a registered cell.
     ///
     /// When none of them does, the row that holds `picked` (the child of a
     /// list) is searched for a registered cell among all its cells and
     /// their children: how GTK nests a column view's row, its cells and
     /// their content differs between GTK releases, and a press anywhere in
     /// a row is on its item.
-    fn owner_near(&self, view: &gtk::Widget, picked: gtk::Widget) -> Option<gtk::ListItem> {
+    fn position_near(&self, view: &gtk::Widget, picked: gtk::Widget) -> Option<u32> {
         let ancestors: Vec<gtk::Widget> = std::iter::successors(Some(picked), WidgetExt::parent)
             .take_while(|widget| widget != view)
             .collect();
-        if let Some(owner) = ancestors.iter().find_map(|widget| self.owner_within(widget)) {
-            return Some(owner);
-        }
-        let row = ancestors
+        let index = ancestors
             .iter()
-            .find(|widget| widget.parent().is_some_and(|parent| parent.is::<gtk::ListBase>()))?;
-        self.owner_in_row(row)
+            .find_map(|widget| self.owner_index_within(widget))
+            .or_else(|| {
+                let row = ancestors
+                    .iter()
+                    .find(|widget| widget.parent().is_some_and(|parent| parent.is::<gtk::ListBase>()))?;
+                self.owner_index_in_row(row)
+            })?;
+        self.position_at_owner(index)
     }
 
-    /// The list item of the first registered cell inside `row`, up to three
-    /// levels down.
-    fn owner_in_row(&self, row: &gtk::Widget) -> Option<gtk::ListItem> {
+    /// The index of the owner of the first registered cell inside `row`,
+    /// up to three levels down.
+    fn owner_index_in_row(&self, row: &gtk::Widget) -> Option<usize> {
         let mut level = vec![row.clone()];
         for _ in 0..3 {
             let mut next = Vec::new();
             for widget in &level {
                 let mut child = widget.first_child();
                 while let Some(current) = child {
-                    if let Some(owner) = self.owner_of(&current) {
-                        return Some(owner);
+                    if let Some(index) = self.owner_index_of(&current) {
+                        return Some(index);
                     }
                     child = current.next_sibling();
                     next.push(current);
@@ -532,16 +584,22 @@ impl CellOwners {
         None
     }
 
-    /// The list item whose content widget is `widget`, its first child or
-    /// that child's first child. GTK wraps a content widget in a row
-    /// widget, and in a column view in a cell widget too, which a click in
-    /// the padding picks.
-    fn owner_within(&self, widget: &gtk::Widget) -> Option<gtk::ListItem> {
+    /// The position of the item whose content widget is `widget`, its
+    /// first child or that child's first child.
+    fn position_within(&self, widget: &gtk::Widget) -> Option<u32> {
+        self.position_at_owner(self.owner_index_within(widget)?)
+    }
+
+    /// The index of the owner whose content widget is `widget`, its first
+    /// child or that child's first child. GTK wraps a content widget in a
+    /// row widget, and in a column view in a cell widget too, which a click
+    /// in the padding picks.
+    fn owner_index_within(&self, widget: &gtk::Widget) -> Option<usize> {
         let first_child = widget.first_child();
         let grandchild = first_child.as_ref().and_then(WidgetExt::first_child);
         [Some(widget.clone()), first_child, grandchild]
             .iter()
             .flatten()
-            .find_map(|candidate| self.owner_of(candidate))
+            .find_map(|candidate| self.owner_index_of(candidate))
     }
 }

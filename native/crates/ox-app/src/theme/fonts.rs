@@ -7,7 +7,7 @@
 //! from one table of base sizes (the values in `v2.0.0:desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
-use crate::folder_view::icon_size::{compact_row, content_row, tiles_cell};
+use crate::folder_view::icon_size::{compact_row, content_row, tiles_cell, CONTENT_CHROME, TILES_CHROME};
 use crate::text_size::{self, TextSize};
 
 /// The stylesheet for `text_size`: every font size, the bars, rows, menus
@@ -345,14 +345,15 @@ fn compact_rule(text_size: TextSize) -> String {
 
 /// The heights of Tiles' tiles and Content's rows at `text_size`
 /// ([`tiles_cell`], [`content_row`]), less what lies outside their content
-/// box: a tile's 8 pixels of padding above and below and the 2-pixel gap,
-/// a row's 1-pixel line under it.
+/// box ([`TILES_CHROME`], [`CONTENT_CHROME`]). Both views size and draw an
+/// item on its cell, not on the grid's slot, which a group's heading has
+/// too (VIEW-071).
 fn tiles_and_content_rules(text_size: TextSize) -> [String; 2] {
-    let tile = tiles_cell(text_size).height - 18;
-    let row = content_row(text_size) - 1;
+    let tile = tiles_cell(text_size).height - TILES_CHROME;
+    let row = content_row(text_size) - CONTENT_CHROME;
     [
-        format!("gridview.files.tiles > child {{ min-height: {tile}px; }}"),
-        format!("gridview.files.content > child {{ min-height: {row}px; }}"),
+        format!("gridview.files.tiles > child > .item-cell:not(.group-slot) {{ min-height: {tile}px; }}"),
+        format!("gridview.files.content > child > .item-cell:not(.group-slot) {{ min-height: {row}px; }}"),
     ]
 }
 
@@ -410,8 +411,11 @@ mod tests {
         assert!(css.contains("columnview.files > listview > row { min-height: 30px; }"));
         assert!(css.contains("gridview.files.icons-large > child { min-width: 96px; min-height: 144px; }"));
         assert!(css.contains("gridview.files.icons-56 > child { min-width: 56px; min-height: 104px; }"));
-        assert!(css.contains("gridview.files.tiles > child { min-height: 51px; }"));
-        assert!(css.contains("gridview.files.content > child { min-height: 57px; }"));
+        assert!(
+            css.contains("gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 53px; }")
+        );
+        assert!(css
+            .contains("gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }"));
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 32px; }"));
         assert!(
