@@ -192,7 +192,9 @@ impl BrowserWindow {
         // it on the list itself after a click on a heading (seen in Tiles
         // and Content on KDE Plasma's Wayland session). The heading last
         // clicked or moved to keeps it then, unless an item has it.
-        if self.folder_pane().owners().position_of(&focus).is_some() {
+        // Only on the list itself, not on a Details column title.
+        let on_list = focus == view || (focus.css_name() == "listview" && focus.parent() == Some(view));
+        if !on_list || self.folder_pane().owners().position_of(&focus).is_some() {
             return None;
         }
         self.imp().key_heading.borrow().clone().filter(|heading| {
