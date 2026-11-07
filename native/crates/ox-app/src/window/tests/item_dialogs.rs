@@ -488,8 +488,10 @@ fn tabs_taller_than_the_screen_scroll_inside_the_window() {
     test.activate("properties", None);
     let filled = test.wait_for_properties("Notes 2.txt Properties");
     general(&filled);
+    wait_for_frames(&filled, 4);
+    let fitting = filled.scroller().vadjustment();
     assert!(
-        filled.scroller().parent().is_none(),
+        fitting.upper() <= fitting.page_size() + 1.0,
         "tabs that fit do not scroll"
     );
     filled.close();

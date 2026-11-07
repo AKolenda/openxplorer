@@ -361,6 +361,109 @@ fn another_drive_has_customize_and_its_tabs_share_the_rows() {
     drive.close();
 }
 
+/// Properties of every kind of item, open one after another and shown
+/// by kind, in `theme` when given: a file, a shortcut, two files, a
+/// folder, the system drive, a mount point opened by its path, another
+/// drive (when the computer has one) and seven tabs in two rows.
+fn every_kind(theme: Option<&str>, each: &mut dyn FnMut(&str, &PropertiesWindow)) {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Holiday 2025")).expect("a folder");
+    fs::write(fixture.path("Packing list.txt"), "fictional").expect("a file");
+    fs::write(fixture.path("Tickets.txt"), "fictional").expect("a file");
+    std::os::unix::fs::symlink(
+        fixture.path("Tickets.txt"),
+        fixture.path("Tickets.txt - Shortcut"),
+    )
+    .expect("a shortcut");
+    let test = &TestWindow::open(&fixture.uri());
+    if let Some(theme) = theme {
+        test.activate("theme", Some(theme));
+    }
+    let mut show = |kind: &str, window: PropertiesWindow| {
+        wait_for_frames(&window, 6);
+        each(kind, &window);
+        window.close();
+    };
+    test.select_named("Packing list.txt");
+    show(
+        "file",
+        properties_of_selection(test, "Packing list.txt Properties"),
+    );
+    test.select_named("Tickets.txt - Shortcut");
+    show(
+        "shortcut",
+        properties_of_selection(test, "Tickets.txt - Shortcut Properties"),
+    );
+    show(
+        "several",
+        properties_of_two(test, "Packing list.txt", "Tickets.txt"),
+    );
+    test.select_named("Holiday 2025");
+    show("folder", properties_of_selection(test, "Holiday 2025 Properties"));
+    show("drive", drive_properties(test, "file:///"));
+    if let Some(uri) = other_drive() {
+        // By its path, as a folder's mount point opens from elsewhere.
+        test.window.imp().volumes.replace(Vec::new());
+        test.activate("properties-of", Some(&uri));
+        crate::test_support::harness::wait_until("the mount point's Properties", || {
+            !test.window.properties_windows().is_empty()
+        });
+        show("mount-point", test.window.properties_windows().remove(0));
+        show("other-drive", drive_properties(test, &uri));
+    }
+    show("wrapped", seven_tab_properties(test));
+}
+
+/// Every Properties window has Windows' one fixed size, whatever it
+/// shows: a file, a shortcut, several items, a folder, a drive or a mount
+/// point, with one row of tabs or two, on every tab. Windows sizes a
+/// property sheet once and never changes it.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn every_kind_of_properties_has_one_size() {
+    let mut sizes = Vec::new();
+    every_kind(None, &mut |kind, window| {
+        let scrolling = window.scroller().vadjustment();
+        let mut look = |what: String| {
+            sizes.push((what.clone(), (window.width(), window.height())));
+            assert!(
+                scrolling.upper() <= scrolling.page_size() + 1.0,
+                "{what}: fits without scrolling ({} of {})",
+                scrolling.upper(),
+                scrolling.page_size()
+            );
+        };
+        look(kind.to_owned());
+        for name in TABS {
+            if window.tab_page(name).is_none() {
+                continue;
+            }
+            window.select_tab(name);
+            wait_for_frames(window, 4);
+            look(format!("{kind} {name}"));
+        }
+    });
+    let expected = (PropertiesWindow::WIDTH, sizes[0].1 .1);
+    let others: Vec<_> = sizes.iter().filter(|(_, size)| *size != expected).collect();
+    assert!(others.is_empty(), "every window is {expected:?}: {others:?}");
+}
+
+/// Every kind of Properties, light and dark, for review side by side with
+/// `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):
+/// `properties-size-{kind}-{light,dark}.png`.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn every_kind_of_properties_size_is_captured() {
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        every_kind(Some(theme), &mut |kind, window| {
+            capture_dialog(window, &format!("properties-size-{kind}-{theme}.png"));
+        });
+    }
+}
+
 /// How many tabs each row of `window`'s tabs holds, top to bottom. The
 /// tab shown stands a little taller than its row, so tabs whose tops are
 /// within a few pixels share a row.

@@ -34,6 +34,13 @@ use crate::window::BrowserWindow;
 
 /// The width of a Properties window, as Windows 11 draws it at 100 %.
 const WINDOW_WIDTH: i32 = 400;
+/// The height of every Properties window under its title bar, whatever
+/// it shows: Windows sizes a property sheet once, for its largest page,
+/// and never changes it. This holds the tallest page here, a drive's
+/// Customize under two rows of tabs, at the default text size; shorter
+/// pages leave room at the bottom, as in Windows, and taller ones (at a
+/// larger text size) scroll.
+const WINDOW_HEIGHT: i32 = 528;
 /// The space around the tabs and their page (`.properties-notebook`).
 const PAGE_MARGIN: i32 = 11;
 /// The size of the item's picture in the title bar.
@@ -234,8 +241,36 @@ impl PropertiesWindow {
         dialog.set_modal(true);
         dialog.set_destroy_with_parent(true);
         dialog.add_css_class("ox-properties-dialog");
+        dialog.fit_content();
         dialog
     }
+
+    /// The Properties window's content holder.
+    fn holder(&self) -> Option<super::fixed_width::FixedWidth> {
+        self.child().and_downcast()
+    }
+
+    /// Lets a dialog take its content's height, as Windows' Permissions
+    /// and Advanced Sharing dialogs fit theirs: the tabs leave the
+    /// scroller until they outgrow the screen ([`Self::scroll_tabs`]), as a
+    /// window that holds a scroller no longer grows to the rows a tab
+    /// reads after it shows.
+    fn fit_content(&self) {
+        let imp = self.imp();
+        if let Some(holder) = self.holder() {
+            holder.set_height(0);
+        }
+        let Some(tab_area) = imp.scroller.parent().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        imp.scroller.set_child(None::<&gtk::Widget>);
+        tab_area.remove(&imp.scroller);
+        tab_area.append(&imp.notebook);
+    }
+
+    /// The width of every Properties window, its border included.
+    #[cfg(test)]
+    pub(crate) const WIDTH: i32 = WINDOW_WIDTH + 2;
 
     fn build(&self) {
         let imp = self.imp();
@@ -258,18 +293,20 @@ impl PropertiesWindow {
             .build();
         self.build_tab_strip();
         tab_area.append(&imp.tab_strip);
-        tab_area.append(&imp.notebook);
-        // The tabs move into the scroller only once they outgrow the screen
-        // (Self::scroll_tabs): a window that holds a scroller no longer
-        // grows to the rows a tab reads after it shows.
         imp.scroller.set_hscrollbar_policy(gtk::PolicyType::Never);
         imp.scroller.set_propagate_natural_height(true);
         imp.scroller.set_vexpand(true);
+        // Windows' Properties keep one size for every item: the pages
+        // scroll inside it when a larger text size needs more room.
+        imp.scroller.set_child(Some(&imp.notebook));
+        tab_area.append(&imp.scroller);
         column.append(&tab_area);
         column.append(&self.footer());
-        // Windows' Properties keep one width for every item: a long name,
-        // location or value wraps or ends in "…" instead of widening it.
-        self.set_child(Some(&super::fixed_width::FixedWidth::new(&column, WINDOW_WIDTH)));
+        // A long name, location or value wraps or ends in "…" instead of
+        // widening the window.
+        let holder = super::fixed_width::FixedWidth::new(&column, WINDOW_WIDTH);
+        holder.set_height(WINDOW_HEIGHT);
+        self.set_child(Some(&holder));
         self.add_controller(crate::modal::escape_closes());
         self.add_controller(self.refresh_key());
         self.add_controller(self.tab_keys());
@@ -444,6 +481,14 @@ impl PropertiesWindow {
     /// Lets the window be at most `height` tall: taller tabs scroll.
     pub(crate) fn fit_to_height(&self, height: i32) {
         self.imp().tallest.set(Some(height));
+        // A window of Windows' fixed size is held within the screen too,
+        // its title bar and border included, its tabs scrolling inside it.
+        if let Some(holder) = self.holder().filter(|holder| holder.height() > 0) {
+            let title_bar = self
+                .titlebar()
+                .map_or(0, |bar| bar.measure(gtk::Orientation::Vertical, -1).1);
+            holder.set_height(WINDOW_HEIGHT.min(height - title_bar - 2));
+        }
     }
 
     /// Holds the window at its tallest, its tabs scrolling inside it.
