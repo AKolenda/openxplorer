@@ -479,7 +479,7 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
         }
     ));
     connect_header_keys(&header, tiles);
-    connect_header_menu(&header, group, tiles);
+    connect_header_menu(&header, group, page);
     header
 }
 
@@ -520,36 +520,26 @@ fn heading_menu(group: Group, collapsed: bool) -> Vec<MenuEntry> {
     ]
 }
 
-/// Opens `header`'s menu at `x`, `y` in it, in the right-click menu's
-/// style, or the classic one when `classic` asks for it. The menu hangs
-/// from the folder pane, which outlives a redraw of This PC.
-fn popup_heading_menu(
-    header: &gtk::Button,
-    group: Group,
-    tiles: &gtk::FlowBox,
-    x: f64,
-    y: f64,
-    classic: bool,
-) {
+/// Opens a heading's menu for `group` of This PC drawn in `page`, at
+/// `point` in `page`, in the right-click menu's style, or the classic one
+/// when `classic` asks for it. It reads the group's state from `page`,
+/// and hangs from the folder pane, both of which outlive a redraw of This
+/// PC: a press in the other pane of a split tab makes that pane active,
+/// which draws This PC again before the heading sees the press.
+fn popup_heading_menu(page: &gtk::Box, group: Group, point: gtk::graphene::Point, classic: bool) {
     let style = if classic {
         MenuStyle::Classic
     } else {
-        header
-            .root()
+        page.root()
             .and_downcast::<BrowserWindow>()
             .map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
     };
-    let owner = header
+    let owner = page
         .ancestor(super::folder_pane::FolderPane::static_type())
-        .unwrap_or_else(|| header.clone().upcast());
-    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-    let point = header
-        .compute_point(&owner, &gtk::graphene::Point::new(x as f32, y as f32))
-        .unwrap_or_else(|| gtk::graphene::Point::new(x as f32, y as f32));
-    let popover = MenuPopover::new(classic_or_compact(
-        heading_menu(group, !tiles.is_visible()),
-        style,
-    ));
+        .unwrap_or_else(|| page.clone().upcast());
+    let point = page.compute_point(&owner, &point).unwrap_or(point);
+    let collapsed = page.has_css_class(group.collapsed_class());
+    let popover = MenuPopover::new(classic_or_compact(heading_menu(group, collapsed), style));
     popover.set_style_and_strip(style, Vec::new());
     popover.set_offset(0, 0);
     popover.set_position(gtk::PositionType::Bottom);
@@ -564,22 +554,54 @@ fn popup_heading_menu(
     popover.popup();
 }
 
-/// Gives `header` its menu: a right-click (Shift for the classic style),
-/// the Menu key and Shift+F10.
-fn connect_header_menu(header: &gtk::Button, group: Group, tiles: &gtk::FlowBox) {
+/// Where `gesture`'s press on `group`'s heading landed, in `page`: from
+/// the heading it pressed
+/// while that is still drawn there, else from the press's place in the
+/// window, as This PC was drawn again under it.
+fn press_point_in(
+    page: &gtk::Box,
+    group: Group,
+    gesture: &gtk::GestureClick,
+    x: f64,
+    y: f64,
+) -> Option<gtk::graphene::Point> {
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let at = gtk::graphene::Point::new(x as f32, y as f32);
+    if let Some(header) = gesture.widget().filter(|header| header.is_ancestor(page)) {
+        return header.compute_point(page, &at);
+    }
+    let native = page.native()?;
+    if let Some((surface_x, surface_y)) = gesture.current_event().and_then(|event| event.position()) {
+        let (offset_x, offset_y) = native.surface_transform();
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let in_native =
+            gtk::graphene::Point::new((surface_x - offset_x) as f32, (surface_y - offset_y) as f32);
+        return native.compute_point(page, &in_native);
+    }
+    // No event to read, as when a test emits the press: the group's
+    // heading as drawn now, at the same place in it.
+    let header =
+        super::widget_tree::children(page).find(|child| child.has_css_class(group.header_class()))?;
+    header.compute_point(page, &at)
+}
+
+/// Gives `header`, drawn in `page`, its menu: a right-click (Shift for the
+/// classic style), opened on the press as a tile's menu is, the Menu key
+/// and Shift+F10.
+fn connect_header_menu(header: &gtk::Button, group: Group, page: &gtk::Box) {
     let right_click = gtk::GestureClick::new();
     right_click.set_button(gtk::gdk::BUTTON_SECONDARY);
-    right_click.connect_released(glib::clone!(
+    right_click.connect_pressed(glib::clone!(
         #[weak]
-        header,
-        #[weak]
-        tiles,
+        page,
         move |gesture, _, x, y| {
             gesture.set_state(gtk::EventSequenceState::Claimed);
             let shift = gesture
                 .current_event_state()
                 .contains(gtk::gdk::ModifierType::SHIFT_MASK);
-            popup_heading_menu(&header, group, &tiles, x, y, shift);
+            if let Some(point) = press_point_in(&page, group, gesture, x, y) {
+                popup_heading_menu(&page, group, point, shift);
+            }
         }
     ));
     header.add_controller(right_click);
@@ -587,15 +609,16 @@ fn connect_header_menu(header: &gtk::Button, group: Group, tiles: &gtk::FlowBox)
     for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
         let action = gtk::CallbackAction::new(glib::clone!(
             #[weak]
-            tiles,
+            page,
             #[upgrade_or]
             glib::Propagation::Proceed,
-            move |widget, _| {
-                let Some(header) = widget.downcast_ref::<gtk::Button>() else {
+            move |header, _| {
+                #[expect(clippy::cast_precision_loss, reason = "a heading is a few pixels high")]
+                let below = gtk::graphene::Point::new(24.0, header.height() as f32);
+                let Some(point) = header.compute_point(&page, &below) else {
                     return glib::Propagation::Proceed;
                 };
-                let height = f64::from(header.height());
-                popup_heading_menu(header, group, &tiles, 24.0, height, classic);
+                popup_heading_menu(&page, group, point, classic);
                 glib::Propagation::Stop
             }
         ));

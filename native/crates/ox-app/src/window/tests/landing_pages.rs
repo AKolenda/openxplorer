@@ -643,13 +643,7 @@ fn a_this_pc_tile_menu_survives_the_page_being_drawn_again() {
 
 /// Right-clicks `header` and returns the menu it opens in the folder pane.
 fn open_heading_menu(test: &TestWindow, header: &gtk::Button) -> MenuPopover {
-    let right_click = header
-        .observe_controllers()
-        .into_iter()
-        .filter_map(|controller| controller.ok().and_downcast::<gtk::GestureClick>())
-        .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
-        .expect("the heading opens its menu on a right-click");
-    right_click.emit_by_name::<()>("released", &[&1_i32, &5.0_f64, &5.0_f64]);
+    press_heading(header);
     let menu = descendants::<MenuPopover>(test.window.folder_pane())
         .into_iter()
         .find(gtk::prelude::WidgetExt::is_visible)
@@ -722,8 +716,21 @@ fn a_group_heading_menu_collapses_and_expands_the_groups() {
     close_menu(&menu);
 }
 
-/// With This PC in both panes of a split tab, a heading menu's Collapse
-/// group acts on its own pane: This PC beside it keeps its groups open.
+/// Presses the secondary button on `header`, as a right-click does.
+fn press_heading(header: &gtk::Button) {
+    let right_click = header
+        .observe_controllers()
+        .into_iter()
+        .filter_map(|controller| controller.ok().and_downcast::<gtk::GestureClick>())
+        .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
+        .expect("the heading opens its menu on a right-click");
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
+}
+
+/// With This PC in both panes of a split tab, a right-click on a heading
+/// of the inactive pane opens its menu there, although making that pane
+/// active draws This PC again under the press, and Collapse group acts
+/// on that pane alone: This PC beside it keeps its groups open.
 ///
 /// parity: VIEW-059
 #[gtk::test]
@@ -732,25 +739,44 @@ fn a_group_heading_menu_acts_on_its_own_pane_only() {
     let test = this_pc_with_drives(&fixture);
     test.activate("split-view", None);
     test.window.render_places();
-    let beside = test.window.pane_on(test.window.active_side().other()).clone();
-    let groups_shown = |landing: &gtk::Box| {
-        landing::tile_groups(landing)
+    let first = test.window.active_side();
+    let second = first.other();
+    let groups_shown = |side| {
+        landing::tile_groups(test.window.pane_on(side).landing())
             .iter()
             .map(|(flow, _)| flow.is_visible())
             .collect::<Vec<bool>>()
     };
-    wait_until("This PC beside it", || {
-        groups_shown(beside.landing()).first() == Some(&true)
+    wait_until("This PC in both panes", || {
+        groups_shown(second).first() == Some(&true) && groups_shown(first).first() == Some(&true)
     });
+    wait_for_frames(&test.window, 2);
+    let pressed = landing::group_headers(test.window.pane_on(second).landing())
+        .into_iter()
+        .next()
+        .expect("This PC heads its groups");
 
-    let menu = open_heading_menu(&test, &first_header(&test));
+    // The press makes its pane active first, which draws This PC again.
+    test.window.activate_pane(second);
+    assert_eq!(test.window.active_side(), second);
+    assert!(
+        pressed.parent().is_none(),
+        "This PC was drawn again under the press"
+    );
+    wait_for_frames(&test.window, 2);
+    press_heading(&pressed);
+    let menu = descendants::<MenuPopover>(test.window.pane_on(second))
+        .into_iter()
+        .find(gtk::prelude::WidgetExt::is_visible)
+        .expect("the heading's menu is open in its pane");
+    wait_for_frames(&test.window, 2);
     menu.click_row("Collapse group");
     wait_until("the group to collapse", || {
-        groups_shown(test.window.folder_pane().landing()).first() == Some(&false)
+        groups_shown(second).first() == Some(&false)
     });
     close_menu(&menu);
 
-    assert_eq!(groups_shown(beside.landing()).first(), Some(&true));
+    assert_eq!(groups_shown(first).first(), Some(&true));
 }
 
 /// The right-click menus of a file, a folder, several items and a drive,

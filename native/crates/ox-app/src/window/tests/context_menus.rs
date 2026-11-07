@@ -1140,34 +1140,48 @@ fn a_pinned_folder_menu_copies_compresses_and_creates_in_that_folder() {
     });
 }
 
-/// New in a pinned folder's menu still makes the item while that folder
-/// shows search results: the search ends first, as New is off during a
-/// search.
+/// New in a pinned folder's menu still makes the item while a search
+/// shows: one in that folder, or one kept from another folder ("Keep
+/// search when changing folders"). The search ends first, as New is off
+/// during a search.
 ///
 /// parity: SIDE-014
 #[gtk::test]
-fn new_in_a_pinned_folder_ends_a_search_in_it_first() {
+fn new_in_a_pinned_folder_ends_a_search_first() {
     let fixture = Fixture::standard();
     fs::create_dir(fixture.path("Pinned work")).expect("fixture subfolder");
     fs::write(fixture.path("Pinned work/plan.txt"), "plan").expect("fixture file");
     let pinned = fixture.uri_of("Pinned work");
+    let new_folder_in = |uri: &str| {
+        let new_menu =
+            crate::window::place_commands::new_menu_in(uri, crate::window::command_bar::new_menu(Vec::new()));
+        let MenuEntry::Item(folder_item) = &new_menu[0] else {
+            panic!("New › Folder is an item");
+        };
+        folder_item
+            .target
+            .as_ref()
+            .and_then(|target| target.str().map(str::to_owned))
+            .expect("a text target")
+    };
+
     let test = TestWindow::open(&pinned);
     test.search_for("plan");
     assert!(test.window.is_searching());
-
-    let new_folder =
-        crate::window::place_commands::new_menu_in(&pinned, crate::window::command_bar::new_menu(Vec::new()));
-    let MenuEntry::Item(folder_item) = &new_folder[0] else {
-        panic!("New › Folder is an item");
-    };
-    let target = folder_item
-        .target
-        .as_ref()
-        .and_then(|target| target.str().map(str::to_owned))
-        .expect("a text target");
-    test.activate("new-in", Some(&target));
+    test.activate("new-in", Some(&new_folder_in(&pinned)));
     wait_until("the new folder inside it", || {
         fixture.path("Pinned work/New folder").is_dir()
     });
     assert!(!test.window.is_searching());
+
+    test.activate("go-to", Some(&fixture.uri()));
+    test.wait_for_listing("the first folder");
+    test.search_for("notes");
+    test.window.search_strip().set_keeps_search(true);
+    test.activate("new-in", Some(&new_folder_in(&pinned)));
+    wait_until("a second new folder in the pinned one", || {
+        fixture.path("Pinned work/New folder (2)").is_dir()
+    });
+    assert_eq!(test.window.current_uri().as_deref(), Some(pinned.as_str()));
+    test.window.search_strip().set_keeps_search(false);
 }

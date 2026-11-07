@@ -311,12 +311,10 @@ fn extraction_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 }
 
 /// One "Open in <editor>" per installed code editor (`uniqueEditors`,
-/// with the editor's own icon), as Windows lists "Edit in Notepad": for
-/// files only, one at a time, outside a previous version.
+/// with the editor's own icon), as Windows lists "Edit in Notepad" for a
+/// file and an editor's own "Open with Code" for a folder: one item at a
+/// time, outside a previous version.
 fn editor_items(facts: &ItemFacts) -> Vec<MenuEntry> {
-    if facts.shape == ItemShape::Folder {
-        return Vec::new();
-    }
     facts
         .editors
         .iter()
@@ -1807,6 +1805,18 @@ mod tests {
         assert_eq!(editor.target, Some("code.desktop".to_variant()));
         let disabled_for_several = disabled(&item_menu(&several, MenuStyle::Classic).entries);
         assert!(disabled_for_several.contains(&"Open in Visual Studio Code".to_owned()));
+        // A folder opens in the editor too, as a project, in either style.
+        let folder = ItemFacts {
+            editors: facts.editors.clone(),
+            ..folder()
+        };
+        for style in [MenuStyle::Classic, MenuStyle::Compact] {
+            let names = labels(&item_menu(&folder, style).entries);
+            assert!(
+                names.contains(&"Open in Visual Studio Code".to_owned()),
+                "{names:?}"
+            );
+        }
     }
 
     /// In the compact menu the applications go into one "Open with"

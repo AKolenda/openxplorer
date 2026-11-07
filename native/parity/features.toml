@@ -6151,7 +6151,7 @@ python_tests = [
 ]
 bridge = ["clipboardSet", "operate", "rename", "previousVersions", "properties", "preferences"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_opens_the_compact_menu_with_show_more_options_last) and native/crates/ox-app/src/window/context_menu.rs (shift_right_click_opens_the_classic_menu); native/crates/ox-app/src/window/context_menu/entries.rs (the_compact_menu_puts_the_edit_commands_in_its_strip, each_code_editor_is_offered_after_open_with_for_one_item: the compact list shares the Open group, editors included); native/crates/ox-app/src/window/tests/context_menus.rs (the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one)."
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_opens_the_compact_menu_with_show_more_options_last) and native/crates/ox-app/src/window/context_menu.rs (shift_right_click_opens_the_classic_menu); native/crates/ox-app/src/window/context_menu/entries.rs (the_compact_menu_puts_the_edit_commands_in_its_strip, the_compact_menu_keeps_the_applications_in_open_with: the editors, a folder's too, sit above Show more options, where Windows lists Edit in Notepad; each_code_editor_is_offered_after_open_for_one_item_as_edit_in_notepad); native/crates/ox-app/src/window/tests/context_menus.rs (the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one)."
 
 [[feature]]
 id = "CMD-011"

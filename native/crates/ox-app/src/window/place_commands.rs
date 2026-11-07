@@ -88,8 +88,9 @@ impl BrowserWindow {
     }
 
     /// New in a folder: opens the folder, then once it is listed runs the
-    /// New menu's action there. A search in that folder ends first, as New
-    /// is off while search results are shown.
+    /// New menu's action there. A search ends first, as New is off while
+    /// search results are shown: one in that folder, or one kept from the
+    /// folder before ("Keep search when changing folders").
     fn new_in(&self, target: &str) {
         let mut parts = target.splitn(3, PART);
         let (Some(uri), Some(action), Some(inner)) = (parts.next(), parts.next(), parts.next()) else {
@@ -100,7 +101,8 @@ impl BrowserWindow {
                 self.show_message(&error.to_string());
                 return;
             }
-        } else if self.is_searching() {
+        }
+        if self.is_searching() {
             self.end_search();
         }
         let (uri, action, inner) = (uri.to_owned(), action.to_owned(), inner.to_owned());
@@ -117,6 +119,10 @@ impl BrowserWindow {
                         || window.current_uri().as_deref() != Some(uri.as_str())
                     {
                         return glib::ControlFlow::Break;
+                    }
+                    if window.is_searching() {
+                        window.end_search();
+                        return glib::ControlFlow::Continue;
                     }
                     if !window.is_listed() {
                         return glib::ControlFlow::Continue;
