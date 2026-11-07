@@ -44,10 +44,12 @@ use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
+use super::menu_popover::MenuStyle;
 use super::place_menus::{popup_place_menu, PlaceMenu};
 use super::selection_keys::SelectionChange;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
+use super::BrowserWindow;
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
@@ -220,9 +222,21 @@ impl Tile {
         self.open.action.activate_from(&self.child, Some(&target));
     }
 
-    /// Opens the tile's menu at `x`, `y` in the tile.
-    fn popup_menu(&self, x: f64, y: f64) {
-        popup_place_menu(&self.menu, &self.child, x, y);
+    /// Opens the tile's menu at `x`, `y` in the tile, in `style`.
+    fn popup_menu(&self, x: f64, y: f64, style: MenuStyle) {
+        popup_place_menu(&self.menu, &self.child, x, y, style);
+    }
+
+    /// The style the window's file list opens its right-click menu in,
+    /// the classic one when `classic` asks for it (Shift held, Shift+F10).
+    fn menu_style(&self, classic: bool) -> MenuStyle {
+        if classic {
+            return MenuStyle::Classic;
+        }
+        self.child
+            .root()
+            .and_downcast::<BrowserWindow>()
+            .map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
     }
 }
 
@@ -636,7 +650,10 @@ fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
                 }
                 focus_tile(&child);
                 if let Some(tile) = tile_of(&tiles, &child) {
-                    tile.popup_menu(x, y);
+                    let shift = gesture
+                        .current_event_state()
+                        .contains(gtk::gdk::ModifierType::SHIFT_MASK);
+                    tile.popup_menu(x, y, tile.menu_style(shift));
                 }
             }
         ));
@@ -648,25 +665,25 @@ fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
 /// Alt+Enter opens its Properties.
 fn connect_keys(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
     let shortcuts = gtk::ShortcutController::new();
-    let menu = gtk::CallbackAction::new(glib::clone!(
-        #[strong]
-        tiles,
-        move |flow, _| {
-            let Some(flow) = flow.downcast_ref::<gtk::FlowBox>() else {
-                return glib::Propagation::Proceed;
-            };
-            let Some(tile) = selected_tile(flow, &tiles) else {
-                return glib::Propagation::Proceed;
-            };
-            let width = f64::from(tile.child.width());
-            let height = f64::from(tile.child.height());
-            tile.popup_menu(width / 2.0, height / 2.0);
-            glib::Propagation::Stop
-        }
-    ));
-    for key in [MENU_KEY, CLASSIC_MENU_KEY] {
+    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+        let menu = gtk::CallbackAction::new(glib::clone!(
+            #[strong]
+            tiles,
+            move |flow, _| {
+                let Some(flow) = flow.downcast_ref::<gtk::FlowBox>() else {
+                    return glib::Propagation::Proceed;
+                };
+                let Some(tile) = selected_tile(flow, &tiles) else {
+                    return glib::Propagation::Proceed;
+                };
+                let width = f64::from(tile.child.width());
+                let height = f64::from(tile.child.height());
+                tile.popup_menu(width / 2.0, height / 2.0, tile.menu_style(classic));
+                glib::Propagation::Stop
+            }
+        ));
         let trigger = gtk::ShortcutTrigger::parse_string(key);
-        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(menu.clone())));
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(menu)));
     }
     let properties = gtk::CallbackAction::new(glib::clone!(
         #[strong]
