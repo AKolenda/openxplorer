@@ -402,10 +402,17 @@ fn folder_entries(directory: &gio::File, cancel: &Cancellation) -> Result<Vec<gi
 /// The name of a subfolder whose templates are listed: a folder, not
 /// hidden and not a link, with a UTF-8 name.
 fn subfolder_name(info: &gio::FileInfo) -> Option<String> {
-    let is_folder = info.file_type() == gio::FileType::Directory && !info.is_symlink() && !info.is_hidden();
+    let is_folder = info.file_type() == gio::FileType::Directory && !is_link_or_hidden(info);
     is_folder
         .then(|| info.name().to_str().map(str::to_owned))
         .flatten()
+}
+
+/// Whether `info` is a link or a hidden item. Read as attributes, so a
+/// backend that leaves either out (`GVfs`'s SMB sets `standard::is-hidden`
+/// only on dot names) counts as neither, without GIO's critical warning.
+fn is_link_or_hidden(info: &gio::FileInfo) -> bool {
+    info.boolean("standard::is-symlink") || info.boolean("standard::is-hidden")
 }
 
 /// The file name of a qualifying template: a regular file, not hidden and
@@ -413,7 +420,7 @@ fn subfolder_name(info: &gio::FileInfo) -> Option<String> {
 /// launcher, which would describe a program rather than hold a document.
 /// A name that is not valid UTF-8 is skipped: a template id is text.
 fn template_name(info: &gio::FileInfo) -> Option<String> {
-    let is_plain_file = info.file_type() == gio::FileType::Regular && !info.is_symlink() && !info.is_hidden();
+    let is_plain_file = info.file_type() == gio::FileType::Regular && !is_link_or_hidden(info);
     let size = u64::try_from(info.size()).unwrap_or(u64::MAX);
     if !is_plain_file || size > MAX_TEMPLATE_BYTES {
         return None;
