@@ -101,7 +101,7 @@ pub(crate) use space_ring::SpaceRing;
 pub(crate) use version_row::SnapshotTarget;
 #[cfg(test)]
 pub(crate) use versions_panel::VersionsPanel;
-pub(crate) use window::PropertiesWindow;
+pub(crate) use window::{group, page, push_button, ApplyFuture, Pending, PropertiesWindow};
 
 /// The item a Properties dialog describes.
 #[derive(Debug, Clone, PartialEq, Eq)]
