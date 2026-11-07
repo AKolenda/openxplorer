@@ -28,7 +28,8 @@ use super::cancellation::Cancellation;
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::modes::{
-    open_directory_nofollow, restore_directory_modes, set_mode, DirectoryModes, PRIVATE_DIRECTORY_MODE,
+    open_directory_nofollow, restore_directory_modes, set_admin_mode, set_mode, DirectoryModes, ModeTarget,
+    PRIVATE_DIRECTORY_MODE,
 };
 use super::names::{backup_name, child_node};
 use super::node::{Node, NodeKind, WriteGuard};
@@ -72,8 +73,12 @@ pub(crate) fn publish_staged(
     let Some(root) = modes.take(&source.uri()) else {
         return source.publish(destination, Some(cancel));
     };
+    let path = match root.target {
+        ModeTarget::Local(path) => path,
+        ModeTarget::Admin(_) => return publish_admin_folder(source, destination, modes, root.mode, cancel),
+    };
     let staged = StagedFolder {
-        directory: open_directory_nofollow(&root.path)?,
+        directory: open_directory_nofollow(&path)?,
         mode: root.mode,
     };
     let moved = move_with_owner_access(source, destination, modes, cancel, &staged);
@@ -88,6 +93,30 @@ pub(crate) fn publish_staged(
         // failed rename is what gets reported.
         Err(error) => Err(error.into()),
     }
+}
+
+/// OPS-047: publishes a folder built under `admin://`. Its descendants get
+/// their final modes while it is still owner-only in its private staging
+/// folder; once renamed into place it gets its own through `gvfsd-admin`,
+/// by the path [`crate::admin_copy`] vouched for. Root needs no owner
+/// write to rename it.
+fn publish_admin_folder(
+    source: &dyn Node,
+    destination: &dyn Node,
+    modes: &mut DirectoryModes,
+    mode: u32,
+    cancel: &Cancellation,
+) -> Result<(), TransferError> {
+    if !modes.is_empty() {
+        restore_directory_modes(source, modes, cancel)?;
+    }
+    source.publish(destination, Some(cancel))?;
+    set_admin_mode(&destination.uri(), mode).map_err(|error| {
+        TransferError::RecoveryRequired(crate::i18n::format_message(
+            "The copied folder exists at {uri}, but its final permissions could not be restored. {error}",
+            &[("uri", &destination.uri()), ("error", &error.to_string())],
+        ))
+    })
 }
 
 /// Restores the descendants' final modes, gives the staged root owner write

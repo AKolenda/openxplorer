@@ -266,6 +266,26 @@ fn a_drive_users_may_mount_is_refused() {
     assert_eq!(check(&destination, &rules), Err(users_can_mount(&destination)));
 }
 
+/// An `fstab` that exists but cannot be read, kept private for the
+/// credentials in it, could hold an entry a user may mount over the
+/// destination, so nothing is written as administrator. Tests run as a
+/// normal user: root reads any file.
+///
+/// parity: OPS-047
+#[test]
+fn an_fstab_that_cannot_be_read_refuses() {
+    let (_folder, root) = workspace();
+    let destination = folder(&root.join("Apps"), 0o755);
+    let rules = on_ext4(&root);
+    let fstab = fake_system(&root).join("etc/fstab");
+    fs::create_dir_all(fstab.parent().expect("etc")).expect("create etc");
+    fs::write(&fstab, "").expect("write fstab");
+    assert!(check(&destination, &rules).is_ok(), "a readable fstab passes");
+
+    fs::set_permissions(&fstab, fs::Permissions::from_mode(0o000)).expect("hide fstab");
+    assert_eq!(check(&destination, &rules), Err(others_can_change(&destination)));
+}
+
 /// A removable drive mounted inside the destination, or a user `fstab`
 /// mount point inside it, is refused; the system's own mounts inside it
 /// are not.

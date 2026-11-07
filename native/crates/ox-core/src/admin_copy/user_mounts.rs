@@ -94,11 +94,17 @@ impl UserMounts {
     /// Reads `fstab` and `utab` under `system`. Either may be missing:
     /// without `/etc/fstab` no entry lets a user mount anything, and
     /// without `utab` no mount was made by a user through `mount`. One
-    /// that exists but cannot be read is treated the same way; the device
-    /// checks still apply to every mount.
-    pub(super) fn read(system: &Path) -> Self {
-        let read = |path: &str| fs::read(system.join(path)).unwrap_or_default();
-        let fstab = parse_fstab(&read("etc/fstab"))
+    /// that exists but cannot be read (an `fstab` kept private for the
+    /// credentials in it) could hold an entry a user may mount, so `None`
+    /// then: nothing is written as administrator.
+    pub(super) fn read(system: &Path) -> Option<Self> {
+        let read = |path: &str| match fs::read(system.join(path)) {
+            Ok(table) => Some(table),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(Vec::new()),
+            Err(_) => None,
+        };
+        let (fstab, utab) = (read("etc/fstab")?, read("run/mount/utab")?);
+        let fstab = parse_fstab(&fstab)
             .into_iter()
             .map(|(source, target)| FstabEntry {
                 points: with_links_resolved(target),
@@ -106,11 +112,11 @@ impl UserMounts {
                 source_path: source.starts_with(b"/").then_some(source),
             })
             .collect();
-        Self {
+        Some(Self {
             system: system.to_owned(),
             fstab,
-            utab: parse_utab(&read("run/mount/utab")),
-        }
+            utab: parse_utab(&utab),
+        })
     }
 
     /// Whether `mount` may be a drive an ordinary user mounted or supplied.

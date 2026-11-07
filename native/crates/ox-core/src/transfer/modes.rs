@@ -14,12 +14,20 @@
 //! - XFER-005: while a copy is being built, every staged folder is
 //!   owner-only (`0700`); the source's exact modes are restored
 //!   children-first, just before the completed subtree is published.
+//! - OPS-047: an item written as administrator under `admin://` has no
+//!   path the app may open, so its staged folders get their modes from
+//!   `gvfsd-admin`, by path: [`crate::admin_copy`] let the copy in only
+//!   where nobody but root can change the path. The staging folder and
+//!   every folder built in it are owner-only too, and a published folder
+//!   gets the source's mode without set-user-ID, set-group-ID, sticky,
+//!   group write or other write, as a file copied there does.
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions, Permissions};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
+use gio::prelude::*;
 use rustix::fs::OFlags;
 
 use super::cancellation::Cancellation;
@@ -29,6 +37,34 @@ use crate::private_storage::KernelOpenFlags;
 
 /// Owner-only access for staging folders.
 pub(crate) const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
+
+/// The permission bits an item written as administrator may keep: never
+/// set-user-ID, set-group-ID or sticky on an item root now owns, and
+/// nothing another account could change in a folder only root may
+/// (OPS-047).
+pub(crate) const ADMIN_MODE_MASK: u32 = 0o755;
+
+/// Whether `node` is written as administrator, under `admin://`.
+pub(crate) fn is_admin(node: &(impl Node + ?Sized)) -> bool {
+    node.uri().starts_with("admin:")
+}
+
+/// OPS-047: gives the `admin://` item `uri` the permission bits `mode`
+/// through `gvfsd-admin`, without following a link. It sets them by path,
+/// which only root can change once [`crate::admin_copy`] let the item in.
+///
+/// # Errors
+///
+/// The backend's refusal.
+pub(crate) fn set_admin_mode(uri: &str, mode: u32) -> Result<(), TransferError> {
+    gio::File::for_uri(uri).set_attribute_uint32(
+        "unix::mode",
+        mode & ADMIN_MODE_MASK,
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        None::<&gio::Cancellable>,
+    )?;
+    Ok(())
+}
 
 /// Opens a directory for `fchmod` without following a symbolic link.
 ///
@@ -64,7 +100,9 @@ pub(crate) fn path_for_unix_modes(node: &(impl Node + ?Sized)) -> Option<PathBuf
 /// Makes an engine-created local staging folder owner-only (`0700`) and
 /// returns the identity of the folder that got the mode. Does nothing for
 /// `GVfs` backends (MTP, AFC, SMB), even when they expose a FUSE path, and
-/// returns `None` for them. The ZIP extractor in [`crate::archive`]
+/// returns `None` for them. A folder under `admin://` is made owner-only
+/// through `gvfsd-admin` before anything is written into it (OPS-047),
+/// and has no identity the app can read. The ZIP extractor in [`crate::archive`]
 /// secures its staging folder with this too, as
 /// `v2.0.0:desktop/zip_extraction.py` calls `_secure_local_staging`.
 ///
@@ -76,6 +114,9 @@ pub(crate) fn secure_local_staging(
     node: &(impl Node + ?Sized),
 ) -> Result<Option<ItemIdentity>, TransferError> {
     let Some(path) = path_for_unix_modes(node) else {
+        if is_admin(node) {
+            set_admin_mode(&node.uri(), PRIVATE_DIRECTORY_MODE)?;
+        }
         return Ok(None);
     };
     let directory = apply_mode(&path, PRIVATE_DIRECTORY_MODE)?;
@@ -93,11 +134,31 @@ fn apply_mode(path: &Path, mode: u32) -> Result<File, TransferError> {
     Ok(directory)
 }
 
-/// A staged local folder's final mode, applied just before publishing.
+/// Where a staged folder's final mode is applied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ModeTarget {
+    /// A local folder, at this path, through a descriptor.
+    Local(PathBuf),
+    /// A folder written as administrator, at this `admin://` URI, through
+    /// `gvfsd-admin` (OPS-047).
+    Admin(String),
+}
+
+impl ModeTarget {
+    /// Gives the folder `mode`.
+    fn apply(&self, mode: u32) -> Result<(), TransferError> {
+        match self {
+            ModeTarget::Local(path) => apply_mode(path, mode).map(drop),
+            ModeTarget::Admin(uri) => set_admin_mode(uri, mode),
+        }
+    }
+}
+
+/// A staged folder's final mode, applied just before publishing.
 #[derive(Debug)]
 pub(crate) struct PendingMode {
-    /// The staged folder's local path.
-    pub(crate) path: PathBuf,
+    /// Where the staged folder is.
+    pub(crate) target: ModeTarget,
     /// The exact mode to restore (the source's permission bits).
     pub(crate) mode: u32,
 }
@@ -109,9 +170,9 @@ pub(crate) struct DirectoryModes {
 }
 
 impl DirectoryModes {
-    /// Remembers the mode `uri` (at `path`) must get when published.
-    pub(crate) fn record(&mut self, uri: String, path: PathBuf, mode: u32) {
-        self.pending.insert(uri, PendingMode { path, mode });
+    /// Remembers the mode `uri` (at `target`) must get when published.
+    pub(crate) fn record(&mut self, uri: String, target: ModeTarget, mode: u32) {
+        self.pending.insert(uri, PendingMode { target, mode });
     }
 
     /// Removes and returns the pending mode for `uri`.
@@ -161,7 +222,7 @@ pub(crate) fn restore_directory_modes(
         }
     }
     if let Some(pending) = modes.take(&source.uri()) {
-        apply_mode(&pending.path, pending.mode)?;
+        pending.target.apply(pending.mode)?;
     }
     Ok(())
 }
@@ -192,10 +253,13 @@ mod tests {
     fn pending_modes_are_taken_once() {
         let mut modes = DirectoryModes::default();
         assert!(modes.is_empty());
-        modes.record("file:///a".into(), PathBuf::from("/a"), 0o755);
+        modes.record("file:///a".into(), ModeTarget::Local(PathBuf::from("/a")), 0o755);
         assert!(!modes.is_empty());
         let pending = modes.take("file:///a").expect("recorded");
-        assert_eq!((pending.path, pending.mode), (PathBuf::from("/a"), 0o755));
+        assert_eq!(
+            (pending.target, pending.mode),
+            (ModeTarget::Local(PathBuf::from("/a")), 0o755)
+        );
         assert!(modes.take("file:///a").is_none());
     }
 }

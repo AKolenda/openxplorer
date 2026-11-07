@@ -11,8 +11,6 @@
 //! into `admin://` is never native for the same reason: the engine copies
 //! it this way and removes the original as the user (XFER-013).
 
-use std::io::{Read, Write};
-
 use gio::prelude::*;
 
 use crate::i18n::gettext;
@@ -38,7 +36,9 @@ pub(super) fn no_native_move() -> TransferError {
 /// Copies the file or link `source` into the new item `target` under
 /// `admin://`, reporting the bytes written to `progress`. The target is
 /// created exclusively, so an existing item is never overwritten
-/// (XFER-002); a link is copied as a link (XFER-017).
+/// (XFER-002), and owner-only until it is complete, so nobody else reads
+/// what the source kept private; a link is copied as a link (XFER-017).
+/// Every read and write can be cancelled, a stalled share's included.
 ///
 /// # Errors
 ///
@@ -73,27 +73,26 @@ pub(super) fn copy_into_admin(
     let total = u64::try_from(info.size()).unwrap_or(0);
     // Read as the user: following a link here only reads what the user
     // may read anyway.
-    let mut input = source.read(cancellable)?.into_read();
-    let mut output = target
-        .create(gio::FileCreateFlags::NONE, cancellable)?
-        .into_write();
+    let input = source.read(cancellable)?;
+    let output = target.create(gio::FileCreateFlags::PRIVATE, cancellable)?;
     let mut buffer = vec![0; CHUNK];
     let mut written = 0_u64;
     progress(0, total);
     loop {
         cancel.check()?;
-        let read = input.read(&mut buffer).map_err(|error| io_error(&error))?;
+        let read = input.read(&mut buffer[..], cancellable)?;
         if read == 0 {
             break;
         }
-        output
-            .write_all(&buffer[..read])
-            .map_err(|error| io_error(&error))?;
+        let (_, error) = output.write_all(&buffer[..read], cancellable)?;
+        if let Some(error) = error {
+            return Err(error.into());
+        }
         written += read as u64;
         progress(written, total.max(written));
     }
-    output.flush().map_err(|error| io_error(&error))?;
-    drop(output);
+    output.close(cancellable)?;
+    input.close(cancellable)?;
     keep_metadata(target, &info, cancel);
     Ok(())
 }
@@ -124,11 +123,6 @@ fn keep_metadata(target: &gio::File, source: &gio::FileInfo, cancel: &Cancellati
         let mode = source.attribute_uint32("unix::mode") & 0o755;
         let _ = target.set_attribute_uint32("unix::mode", mode, flags, cancellable);
     }
-}
-
-/// `error` as the engine reports a failed read or write.
-fn io_error(error: &std::io::Error) -> TransferError {
-    TransferError::failed(error.to_string())
 }
 
 #[cfg(test)]

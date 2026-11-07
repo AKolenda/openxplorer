@@ -295,11 +295,8 @@ impl<'a> Checks<'a> {
     /// cannot be believed.
     fn new(rules: &'a Rules, shown: &Path) -> Result<Self, TransferError> {
         let mounts = rules.mounts().ok_or_else(|| others_can_change(shown))?;
-        Ok(Self {
-            rules,
-            mounts,
-            users: UserMounts::read(&rules.system()),
-        })
+        let users = UserMounts::read(&rules.system()).ok_or_else(|| others_can_change(shown))?;
+        Ok(Self { rules, mounts, users })
     }
 
     /// Checks the destination `path` and returns it with every link on
