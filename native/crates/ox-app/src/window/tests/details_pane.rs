@@ -271,8 +271,10 @@ fn search_results_are_counted_as_the_list_shows_them() {
 #[gtk::test]
 fn a_folders_new_picture_shows_in_the_pane_at_once() {
     let fixture = Fixture::standard();
-    let pixels = gtk::glib::Bytes::from_owned(vec![0x60_u8; 8 * 8 * 4]);
-    let texture = gtk::gdk::MemoryTexture::new(8, 8, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 32);
+    // Larger than any thumbnail (2000 × 2000): a folder's own picture is
+    // decoded within a shown picture's limits, not a cached thumbnail's.
+    let pixels = gtk::glib::Bytes::from_owned(vec![0x60_u8; 2000 * 2000 * 4]);
+    let texture = gtk::gdk::MemoryTexture::new(2000, 2000, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 8000);
     texture.save_to_png(fixture.path("Star.png")).expect("a picture");
     let test = window_with_pane(&fixture);
     let pane = test.window.details_pane();

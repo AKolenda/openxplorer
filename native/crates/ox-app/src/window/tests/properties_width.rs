@@ -472,6 +472,172 @@ fn every_kind_of_properties_has_one_size() {
     assert!(others.is_empty(), "every window is {expected:?}: {others:?}");
 }
 
+/// The size of `label`'s font and the height of one line of its text,
+/// in pixels.
+fn text_size_and_line(label: &gtk::Label) -> (f64, i32) {
+    let font = label.pango_context().font_description().expect("a font");
+    let size = f64::from(font.size()) / f64::from(gtk::pango::SCALE);
+    let layout = label.layout();
+    let lines = layout.line_count().max(1);
+    (size, layout.pixel_size().1 / lines)
+}
+
+/// The shown labels of `window` with text.
+fn shown_labels(window: &PropertiesWindow) -> Vec<gtk::Label> {
+    descendants::<gtk::Label>(window)
+        .into_iter()
+        .filter(|label| label.is_mapped() && !label.text().is_empty())
+        .collect()
+}
+
+/// Every Properties window, of every kind and on every tab, draws its
+/// text at Windows 11's 9-point dialog size, 12 pixels at 100 %, not the
+/// browser window's 13; no text but a long value's field ends in "…" and
+/// none is cut by its box, and
+/// one line of text stands as high on every window. Folder Options is
+/// not an item's Properties and keeps its own size.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn every_kind_of_properties_draws_windows_dialog_text() {
+    let mut lines: Vec<(String, i32)> = Vec::new();
+    every_kind(None, &mut |kind, window| {
+        let mut look = |what: String| {
+            let labels = shown_labels(window);
+            assert!(!labels.is_empty(), "{what}: text");
+            for label in &labels {
+                let text = label.text();
+                let (size, _) = text_size_and_line(label);
+                assert!((size - 12.0).abs() < 0.01, "{what}: {text:?} is {size} pixels");
+                // Only a value as long as a path may end in "…": a
+                // one-line field (Location, Object name) with the whole
+                // value as its tooltip, as Windows clips its read-only
+                // fields, or a path in Details, whose length here
+                // follows the fixture's temporary folder.
+                let field = label.tooltip_text().as_deref() == Some(text.as_str()) || text.starts_with('/');
+                assert!(
+                    field || !label.layout().is_ellipsized(),
+                    "{what}: {text:?} ends in \"…\""
+                );
+                let (_, height) = label.layout().pixel_size();
+                assert!(
+                    label.height() >= height,
+                    "{what}: {text:?} is cut ({} of {height})",
+                    label.height()
+                );
+                if label.layout().line_count() > 1 {
+                    eprintln!(
+                        "{what}: wraps onto {} lines: {text:?}",
+                        label.layout().line_count()
+                    );
+                }
+            }
+            let line = labels
+                .iter()
+                .find(|label| label.has_css_class("property-name"))
+                .unwrap_or(&labels[0]);
+            lines.push((what, text_size_and_line(line).1));
+        };
+        look(format!("{kind} general"));
+        for name in TABS.into_iter().skip(1) {
+            if window.tab_page(name).is_none() {
+                continue;
+            }
+            window.select_tab(name);
+            wait_for_frames(window, 4);
+            look(format!("{kind} {name}"));
+        }
+    });
+    eprintln!("one line of text: {lines:?}");
+    let first = lines[0].1;
+    let others: Vec<_> = lines.iter().filter(|(_, line)| *line != first).collect();
+    assert!(
+        others.is_empty(),
+        "a line is {first} pixels high on every window: {others:?}"
+    );
+
+    // Folder Options keeps its own size: the browser window's text here,
+    // or its own where the skin gives it one.
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = PropertiesWindow::new("Folder Options", None, Some(&test.window));
+    options.add_css_class("ox-folder-options");
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    page.append(&gtk::Label::new(Some("Open File Explorer to:")));
+    options.add_tab("general", "General", &page);
+    options.present();
+    wait_for_frames(&options, 6);
+    let (size, _) = text_size_and_line(&shown_labels(&options)[0]);
+    let browser = test.window.pango_context().font_description().expect("a font");
+    let browser = f64::from(browser.size()) / f64::from(gtk::pango::SCALE);
+    let own = (size - browser).abs() < 0.01 || (size - 11.0).abs() < 0.01;
+    assert!(own, "Folder Options keeps its own size: {size} pixels");
+    options.close();
+}
+
+/// Gives the shared skin its text size back however a test ends.
+struct TextSizeGuard(crate::text_size::TextSize);
+
+impl Drop for TextSizeGuard {
+    fn drop(&mut self) {
+        crate::test_support::harness::skin().set_text_size(self.0);
+    }
+}
+
+/// A group box's title sits centred on the box's top line, as Windows
+/// draws it, at every text size: the lift follows the title's height, so
+/// the title neither hangs below the line at 200 % nor floats above it at
+/// 80 %.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn group_titles_sit_on_the_box_line_at_every_text_size() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Holiday 2025")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    let skin = crate::test_support::harness::skin();
+    let before = TextSizeGuard(skin.text_size());
+    test.select_named("Holiday 2025");
+    let window = properties_of_selection(&test, "Holiday 2025 Properties");
+    window.select_tab("customize");
+    // The Customize page fills its groups after it is shown.
+    let groups = || -> Vec<gtk::Frame> {
+        descendants::<gtk::Frame>(&window)
+            .into_iter()
+            .filter(|frame| frame.is_mapped() && frame.has_css_class("properties-group"))
+            .collect()
+    };
+    crate::test_support::harness::wait_until("Customize's three group boxes", || groups().len() == 3);
+    let mut misplaced = Vec::new();
+    for percent in ox_core::settings::TEXT_SIZES {
+        skin.set_text_size(crate::text_size::TextSize::from_percent(percent));
+        wait_for_frames(&window, 4);
+        let groups = groups();
+        assert_eq!(groups.len(), 3, "{percent}%: Customize's three group boxes");
+        for frame in groups {
+            let title = frame.label_widget().expect("a title");
+            let line = frame.compute_bounds(&window).expect("the box").y();
+            let bounds = title.compute_bounds(&window).expect("the title");
+            let centre = bounds.y() + bounds.height() / 2.0;
+            // The lift is in em, and a font's line is a different share
+            // of its em: centred to a pixel in Noto Sans, it sits up to
+            // 3 pixels high at 200 % in DejaVu Sans (the distribution
+            // CI's font). A sixth of the title's height still lets the
+            // line through its middle, and still catches a fixed lift,
+            // which is 8 pixels off at 200 %.
+            if (centre - line).abs() > bounds.height() / 6.0 {
+                misplaced.push(format!(
+                    "{percent}%: {:?} centred at {centre}, line at {line}",
+                    frame.label()
+                ));
+            }
+        }
+    }
+    drop(before);
+    window.close();
+    assert!(misplaced.is_empty(), "titles off the line: {misplaced:?}");
+}
+
 /// Every kind of Properties, light and dark, for review side by side with
 /// `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):
 /// `properties-size-{kind}-{light,dark}.png`.
