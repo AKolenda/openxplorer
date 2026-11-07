@@ -95,21 +95,24 @@ fn grouped_step(
     last: u32,
     page: u32,
 ) -> Option<u32> {
+    // A page counts the heading rows it passes too, so it moves about as
+    // far as the view shows; it always moves at least one row of items.
     let rows = |down: bool, count: u32| {
-        let mut at = from;
-        for _ in 0..count.max(1) {
-            match layout.row_step(at, column, down) {
-                Some(next) => at = next,
-                None => break,
+        let start = layout.row_of(from)?;
+        let mut at = layout.row_step(from, column, down)?;
+        while let Some(next) = layout.row_step(at, column, down) {
+            if layout.row_of(next)?.abs_diff(start) > count.max(1) {
+                break;
             }
+            at = next;
         }
-        (at != from).then_some(at)
+        Some(at)
     };
     match movement {
         GroupedMove::Back => from.checked_sub(1),
         GroupedMove::Forward => (from < last).then_some(from + 1),
-        GroupedMove::Up => rows(false, 1),
-        GroupedMove::Down => rows(true, 1),
+        GroupedMove::Up => layout.row_step(from, column, false),
+        GroupedMove::Down => layout.row_step(from, column, true),
         GroupedMove::PageUp => rows(false, page),
         GroupedMove::PageDown => rows(true, page),
         GroupedMove::First => (from != 0).then_some(0),
@@ -215,7 +218,8 @@ mod tests {
     use crate::folder_view::group_slots::{group_runs, SlotLayout};
 
     /// Every key moves between items in grouped Tiles; none lands on a
-    /// heading, and Page Down stops at the last row.
+    /// heading, a page counts the heading rows it passes, and Page Down
+    /// stops at the last row.
     ///
     /// parity: VIEW-071
     #[test]
@@ -237,9 +241,18 @@ mod tests {
             "a shorter row's last item"
         );
         assert_eq!(step(GroupedMove::Down, 3, 1), Some(4));
-        assert_eq!(step(GroupedMove::PageDown, 0, 0), Some(4), "two rows down");
+        assert_eq!(
+            step(GroupedMove::PageDown, 0, 0),
+            Some(3),
+            "two rows down, not past the heading under them"
+        );
         assert_eq!(step(GroupedMove::PageDown, 4, 1), Some(6), "to the last row");
-        assert_eq!(step(GroupedMove::PageUp, 6, 1), Some(3));
+        assert_eq!(
+            step(GroupedMove::PageUp, 6, 1),
+            Some(4),
+            "a heading row counts in the page"
+        );
+        assert_eq!(step(GroupedMove::PageUp, 4, 0), Some(3), "at least one row");
         assert_eq!(step(GroupedMove::First, 5, 0), Some(0));
         assert_eq!(step(GroupedMove::Last, 5, 0), Some(6));
         assert_eq!(step(GroupedMove::Last, 6, 0), None);

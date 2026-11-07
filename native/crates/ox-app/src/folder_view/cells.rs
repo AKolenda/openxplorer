@@ -726,6 +726,15 @@ pub(crate) fn connect_mapped_file_cells(
     });
 }
 
+/// Whether `widget` is part of a grid slot that shows no item (a group's
+/// heading, its line or a blank), or the grid's child holding one: blank
+/// space for clicks and the rubber band (VIEW-071).
+pub(crate) fn is_in_group_slot(widget: &gtk::Widget) -> bool {
+    std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+        .chain(widget.first_child())
+        .any(|widget| widget.is::<FileCell>() && widget.has_css_class(GROUP_SLOT_CLASS))
+}
+
 /// Makes `list_item` show `slot`, which no one selects, opens or tabs to,
 /// or an item again with `None`.
 fn show_slot_item(list_item: &gtk::ListItem, cell: &FileCell, slot: Option<&GroupSlot>) {

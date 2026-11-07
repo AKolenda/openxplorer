@@ -179,6 +179,11 @@ impl SlotLayout {
         Some(self.slot_of(position)? % self.columns)
     }
 
+    /// The slot row the item at `position` is in, heading rows counted.
+    pub(crate) fn row_of(&self, position: u32) -> Option<u32> {
+        Some(self.slot_of(position)? / self.columns)
+    }
+
     /// Where Up (`down` false) or Down from the item at `position` goes,
     /// keeping to `column`: the item in that column of the next row of
     /// items, over a heading into the next group, or that row's last item

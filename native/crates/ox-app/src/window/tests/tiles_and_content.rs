@@ -242,7 +242,8 @@ fn details_headings(test: &TestWindow) -> Vec<String> {
 
 /// A grouped folder keeps its groups in Tiles and Content, as in Windows
 /// 11: each group starts a row under a heading with the title and count
-/// Details shows; a file added to a group counts in its heading; Group by
+/// Details shows, which is blank space for clicks and the rubber band; a
+/// file added to a group counts in its heading; Group by
 /// (None) takes the headings away, and the items stay selectable and
 /// open as before.
 ///
@@ -267,6 +268,12 @@ fn tiles_and_content_keep_the_folders_groups_under_headings() {
             "{view:?}: under its own heading"
         );
         let pane = test.window.folder_pane();
+        let on_heading = (f64::from(first_file.x()) + 20.0, f64::from(first_file.y()) - 12.0);
+        assert!(
+            test.window
+                .is_blank_space(&pane.view_widget(), on_heading.0, on_heading.1),
+            "{view:?}: a click or a band starts from a heading as from blank space"
+        );
         assert_eq!(
             pane.owners().position_of(&cell_named(&test, "Notes 2").upcast()),
             Some(1)

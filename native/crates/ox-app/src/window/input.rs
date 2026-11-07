@@ -600,9 +600,13 @@ impl BrowserWindow {
             return self.is_beside_item(view, x, y);
         }
         // The details view's rows are an inner list view; its titles are
-        // not inside it. The icon grid is the list itself.
-        view.pick(x, y, gtk::PickFlags::DEFAULT)
-            .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
+        // not inside it. The icon grid is the list itself, and a group's
+        // heading row in grouped Tiles and Content is blank space too.
+        view.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
+            &picked == view
+                || picked.ancestor(gtk::ListView::static_type()).is_some()
+                || crate::folder_view::cells::is_in_group_slot(&picked)
+        })
     }
 
     /// Whether (`x`, `y`) in `view` is on the empty part of an unselected
