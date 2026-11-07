@@ -476,11 +476,8 @@ impl TransferEngine {
         self.failures
             .start_item(batch.mode(), self.display_name(uri), destination.clone());
         let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
-        // Whether the user saw the error of `outcome` in the question, or
-        // answered it with an earlier "Skip all".
-        let mut answered = outcome
-            .as_ref()
-            .is_err_and(|error| self.failures.skips_for_all(error));
+        // Whether the user saw the error of `outcome` in the question.
+        let mut answered = false;
         while let Err(error) = &outcome {
             if batch.cancel.is_cancelled() || !self.failures.asks_about(error) {
                 break;
@@ -533,7 +530,11 @@ impl TransferEngine {
                     self.record_failure(batch, uri, &error, false, &mut state.result);
                 }
             }
-            Err(error) => self.record_failure(batch, uri, &error, answered, &mut state.result),
+            Err(error) => {
+                // An earlier "Skip all" answered it too.
+                let answered = answered || self.failures.skips_for_all(&error);
+                self.record_failure(batch, uri, &error, answered, &mut state.result);
+            }
         }
         self.discard_leftover_stage(staging, &mut state.result);
     }
