@@ -540,8 +540,8 @@ fn stop_name(stop: Option<Stop>) -> String {
 /// to take the keyboard), the status bar's view buttons, the tab in front
 /// and its Close button, New tab, the navigation buttons, then the address
 /// bar (the chevron first, each crumb, the history chevron), the search
-/// box, the command bar, the navigation pane as one stop, the pane's footer
-/// where it has one and back to the file list. Every stop draws its focus,
+/// box, the command bar, the navigation pane as one stop and back to the
+/// file list. Every stop draws its focus,
 /// light and dark: no key leaves the keyboard where nothing shows it. In a
 /// narrow window the « takes the chevron's place as the address bar's first
 /// stop. The keys are real ones on the private display, so GTK's own key
@@ -559,25 +559,32 @@ fn tab_after_escaping_the_address_goes_round_in_explorers_order_with_every_stop_
     }
     // Large icons is where the user found the list taking the keyboard on
     // itself; the open Details pane, with no file selected, took it on its
-    // scrolled window. Neither drew anything.
-    for theme in ["light", "dark"] {
-        for view in ["large", "details"] {
-            for details_pane in [true, false] {
-                let test = TestWindow::open(&file_uri(&inside));
-                test.activate("theme", Some(theme));
-                test.activate("view", Some(view));
-                test.wait_for_listing("Inside A");
-                if details_pane {
-                    test.open_details_pane();
-                }
-                test.window.present();
-                wait_for_frames(&test.window, 3);
-                let mut pointer = Pointer::connect();
-                let pane = if details_pane { "pane" } else { "nopane" };
-                walk_the_tab_order(&test, &mut pointer, &format!("{theme}-{view}-{pane}"));
-            }
+    // scrolled window. Neither drew anything. Each theme, view and pane
+    // state shows up with each value of the others once, which keeps the
+    // walk short.
+    let mut pointer = Pointer::connect();
+    for (theme, view, details_pane) in [
+        ("light", "large", true),
+        ("light", "details", false),
+        ("dark", "large", false),
+        ("dark", "details", true),
+    ] {
+        let test = TestWindow::open(&file_uri(&inside));
+        test.activate("theme", Some(theme));
+        test.activate("view", Some(view));
+        test.wait_for_listing("Inside A");
+        if details_pane {
+            test.open_details_pane();
         }
+        test.window.present();
+        wait_for_frames(&test.window, 3);
+        let pane = if details_pane { "pane" } else { "nopane" };
+        walk_the_tab_order(&test, &mut pointer, &format!("{theme}-{view}-{pane}"));
     }
+    // The pointer goes back to the screen's centre, where Xvfb starts it:
+    // GTK 4.14 crashes in a later test that closes a popover under a
+    // pointer left over the screen elsewhere.
+    pointer.move_to(720, 500);
 }
 
 /// A point of `address` with no button under it, right of the crumbs: the
@@ -688,7 +695,6 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
                 Stop::Commands,
                 Stop::Places,
             ])
-            .chain(test.window.sidebar().footer().map(|_| Stop::SidebarFooter))
             .collect::<Vec<_>>(),
         "Windows' order from the file list round to it"
     );
@@ -707,8 +713,20 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
     the_shift_tab_and_the_overflow_stops(test, pointer, theme);
 }
 
-/// The address bar's stops among `visited`: the chevron, each crumb, then
-/// the history chevron.
+/// The address bar's first stop: the chevron, or the « shown in its place
+/// while the first crumbs are collapsed (how many fit depends on how long
+/// the test's own path is).
+fn first_address_stop(test: &TestWindow) -> gtk::Widget {
+    let (chevron, overflow) = test.window.address_bar().strip_buttons();
+    if overflow.is_mapped() {
+        overflow.upcast()
+    } else {
+        chevron.upcast()
+    }
+}
+
+/// The address bar's stops among `visited`: the chevron or «, each crumb
+/// shown, then the history chevron.
 fn address_stops_follow_the_crumbs(test: &TestWindow, visited: &[(Stop, gtk::Widget)]) {
     let address = test.window.address_bar();
     let in_address: Vec<gtk::Widget> = visited
@@ -716,17 +734,22 @@ fn address_stops_follow_the_crumbs(test: &TestWindow, visited: &[(Stop, gtk::Wid
         .filter(|(stop, _)| *stop == Stop::Address)
         .map(|(_, widget)| widget.clone())
         .collect();
-    let (chevron, _) = address.strip_buttons();
-    let crumbs: Vec<gtk::Widget> = address.crumb_buttons().into_iter().map(Cast::upcast).collect();
+    let hidden = address.hidden_crumbs();
+    let crumbs: Vec<gtk::Widget> = address
+        .crumb_buttons()
+        .into_iter()
+        .filter(|crumb| !hidden.contains(crumb))
+        .map(Cast::upcast)
+        .collect();
     assert_eq!(
         in_address.first(),
-        Some(chevron.upcast_ref()),
-        "the chevron is the first stop"
+        Some(&first_address_stop(test)),
+        "the chevron or « is the first stop"
     );
     assert_eq!(
         &in_address[1..=crumbs.len()],
         crumbs.as_slice(),
-        "then every crumb"
+        "then every crumb shown"
     );
     assert!(
         in_address
@@ -740,12 +763,11 @@ fn address_stops_follow_the_crumbs(test: &TestWindow, visited: &[(Stop, gtk::Wid
 /// narrow window the « is the address bar's first stop, and shows it.
 fn the_shift_tab_and_the_overflow_stops(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
     let address = test.window.address_bar();
-    let (chevron, _) = address.strip_buttons();
     // Shift+Tab goes back: from the chevron to the navigation buttons.
     while test.window.focused_stop() != Some(Stop::Address) {
         tab_and_see_the_ring(test, pointer, false);
     }
-    assert_eq!(focused(test).as_ref(), Some(chevron.upcast_ref()));
+    assert_eq!(focused(test), Some(first_address_stop(test)));
     tab_and_see_the_ring(test, pointer, true);
     assert_eq!(test.window.focused_stop(), Some(Stop::Navigation));
 

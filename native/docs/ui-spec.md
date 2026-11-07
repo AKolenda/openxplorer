@@ -685,9 +685,8 @@ outline whenever the list has the keyboard, after a click too (below).
 Tab and Shift+Tab follow Windows Explorer's order, not GTK's widget tree
 (ACC-016, `window/tab_order.rs`): the address bar (chevron or «, each
 crumb, history chevron), the search box, the command bar, the navigation
-pane as one stop, the folder tree, the pane's footer (Map network drive)
-where it has one, the file list as one stop on its current item, the first
-one when no item had the keyboard (each pane of a split tab), the Details
+pane as one stop, the folder tree, the file list as one stop on its
+current item, the first one when no item had the keyboard (each pane of a split tab), the Details
 pane (its scrolled window, ringed, when it has no control to focus), the
 status bar's buttons, the Open or Save bar, the tab in front and its Close
 button, New tab, then Back, Forward, Up and Refresh, wrapping round. The
