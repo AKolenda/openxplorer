@@ -160,14 +160,18 @@ impl BrowserWindow {
     /// outcome of a run that finished; `None` when another operation runs,
     /// the check failed or the user cancelled.
     pub(crate) async fn transfer_with_conflicts(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, true, false).await
+        self.transfer_checked(incoming, true, None).await
     }
 
     /// [`Self::transfer_with_conflicts`] for Send to (CMD-038): the copies
-    /// go to another folder, so the sent items stay selected, as in
-    /// Windows Explorer.
-    pub(in crate::window) async fn send_copies(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, true, true).await
+    /// go to another folder, so the rows at `selected`, the sent items' own
+    /// rows, stay selected, as in Windows Explorer.
+    pub(in crate::window) async fn send_copies(
+        &self,
+        incoming: IncomingItems,
+        selected: Vec<String>,
+    ) -> Option<TransferOutcome> {
+        self.transfer_checked(incoming, true, Some(selected)).await
     }
 
     /// [`Self::transfer_with_conflicts`] for a move that is one step of a
@@ -175,12 +179,12 @@ impl BrowserWindow {
     /// of an extraction into an existing folder come from a private folder
     /// that is removed afterwards, so the journal does not record it.
     pub(crate) async fn transfer_without_undo(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, false, false).await
+        self.transfer_checked(incoming, false, None).await
     }
 
     /// Checks, asks, runs and reports `incoming`; the journal records it
-    /// when `undoable`. Afterwards the copies are selected, or with
-    /// `keeps_selection` the items that were sent.
+    /// when `undoable`. Afterwards the copies are selected, or the rows
+    /// `kept` lists.
     ///
     /// The job claims its action in the progress window first, as Windows
     /// shows "Copying 1 item from Downloads to Desktop" before it asks, so
@@ -190,10 +194,9 @@ impl BrowserWindow {
         &self,
         incoming: IncomingItems,
         undoable: bool,
-        keeps_selection: bool,
+        kept: Option<Vec<String>>,
     ) -> Option<TransferOutcome> {
         let incoming = incoming.without_items_already_there()?;
-        let kept = keeps_selection.then(|| incoming.uris.clone());
         let origin = self.current_uri();
         let mode = incoming.mode;
         let destination = incoming.destination_folder.clone();

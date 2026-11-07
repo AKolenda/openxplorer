@@ -644,7 +644,7 @@ fn text_size_keys_work_inside_dialogs() {
     let _theme = ThemeGuard::keep();
     let before = test.window.skin().text_size();
     let rename = crate::dialog::Dialog::new(&test.window, "Rename", "");
-    let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
+    let map = crate::dialogs::map_network_dialog(&test.window, &[], |_, _| {});
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let properties = test.wait_for_properties("Notes 2.txt Properties");
