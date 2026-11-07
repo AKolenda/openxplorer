@@ -69,6 +69,34 @@ fn a_file_found_by_its_text_stays_until_its_text_changes_or_it_goes() {
     wait_until("the deleted file to go", || !shows("agenda.txt"));
 }
 
+/// A file whose text stopped matching comes back once it matches again,
+/// and a new file is added once its text matches, while the results of
+/// a search of names and contents show: neither name holds the word.
+///
+/// parity: SRCH-036
+#[gtk::test]
+fn a_file_whose_text_matches_again_comes_back() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("minutes.txt"), "Notes from the meeting").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    test.window
+        .search_strip()
+        .choose_search_in(SearchIn::NamesAndContents);
+    let shows = |name: &str| test.names().contains(&name.to_owned());
+    wait_until("the search of contents to finish", || {
+        shows("minutes.txt") && !test.status_count().starts_with("Searching")
+    });
+
+    fs::write(fixture.path("minutes.txt"), "The budget was approved.").expect("fixture file");
+    wait_until("the changed file to go", || !shows("minutes.txt"));
+    fs::write(fixture.path("minutes.txt"), "Notes from the meeting").expect("fixture file");
+    wait_until("the file to come back", || shows("minutes.txt"));
+
+    fs::write(fixture.path("memo.txt"), "Notes for later").expect("fixture file");
+    wait_until("the new file found by its text", || shows("memo.txt"));
+}
+
 /// The kind option narrows the results at once, and ending the search
 /// forgets it.
 ///
