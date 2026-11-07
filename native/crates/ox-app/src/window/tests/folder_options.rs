@@ -10,6 +10,7 @@ use ox_core::location::{same_location, RECENT_LOCATIONS_URI, RECENT_URI};
 use ox_core::search::SearchIn;
 use ox_core::settings::{RecentEntry, Settings};
 
+use super::file_ops_support::select_names;
 use super::view_styles::{close_folder_options, open_folder_options, option_check, tab_button};
 use crate::test_support::harness::{wait_until, Fixture, OpenedWindows, TestWindow};
 
@@ -23,11 +24,12 @@ fn hides_place(test: &TestWindow, uri: &str) -> bool {
 }
 
 /// General: Browse folders' "Open each folder in its own window" opens a
-/// folder opened from the file list in a new window and leaves this one
-/// where it is; Click items as follows offers only Double-click, which
-/// is chosen; Privacy's check boxes hide Recent files and Recent
-/// locations from the navigation pane; and Clear forgets the recent files
-/// and the typed addresses at once, before OK.
+/// folder opened from the file list, by double-click or by Open on its
+/// context menu, in a new window and leaves this one where it is; Click
+/// items as follows offers only Double-click, which is chosen; Privacy's
+/// check boxes hide Recent files and Recent locations from the navigation
+/// pane; and Clear forgets the recent files and the typed addresses at
+/// once, before OK.
 ///
 /// parity: VIEW-020
 #[gtk::test]
@@ -87,16 +89,23 @@ fn the_general_tab_opens_folders_in_their_own_window_and_clears_history() {
             && hides_place(&test, RECENT_URI)
             && hides_place(&test, RECENT_LOCATIONS_URI)
     });
-    test.window.activate_from_view(test.position_of("Documents"));
-    let opened = OpenedWindows::only(&[&test.window]);
-    wait_until("the folder in the new window", || {
-        opened.window().current_uri() == Some(fixture.uri_of("Documents"))
-    });
-    assert_eq!(
-        test.window.current_uri(),
-        Some(fixture.uri()),
-        "this window stays"
-    );
+    let double_click = || test.window.activate_from_view(test.position_of("Documents"));
+    let open = || {
+        select_names(&test, &["Documents"]);
+        test.activate("open", None);
+    };
+    for (way, open_documents) in [("double-click", &double_click as &dyn Fn()), ("Open", &open)] {
+        open_documents();
+        let opened = OpenedWindows::only(&[&test.window]);
+        wait_until("the folder in the new window", || {
+            opened.window().current_uri() == Some(fixture.uri_of("Documents"))
+        });
+        assert_eq!(
+            test.window.current_uri(),
+            Some(fixture.uri()),
+            "{way}: this window stays"
+        );
+    }
 }
 
 /// View: "Show status bar" and "Show pop-up description for folder and

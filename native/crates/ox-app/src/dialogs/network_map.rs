@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Map network drive, as Windows 11 asks it: a drive letter, a folder and
-//! whether to reconnect, and the link to Add a network location, which
+//! whether to keep the share, and the link to Add a network location, which
 //! connects a share with a Type list and a display name of its own.
 //!
 //! Ports `connectDialog` in `v2.0.0:desktop/ui/app.js` (NET-001), with the other
@@ -27,9 +27,9 @@ const MAP_MESSAGE: &str = crate::i18n::message_id(
 const WEB_SITE_LINK: &str =
     crate::i18n::message_id("Connect to a Web site that you can use to store your documents and pictures.");
 
-/// The letters of the Drive list, Z: first and chosen, as Windows offers
-/// them; C: is the system drive. On Linux a letter is only the end of the
-/// share's label, such as `Projects (Z:)`.
+/// The letters of the Drive list, Z: first, as Windows offers them; C: is
+/// the system drive. On Linux a letter is only the end of the share's
+/// label, such as `Projects (Z:)`.
 const DRIVE_LETTERS: [&str; 25] = [
     "Z:", "Y:", "X:", "W:", "V:", "U:", "T:", "S:", "R:", "Q:", "P:", "O:", "N:", "M:", "L:", "K:", "J:",
     "I:", "H:", "G:", "F:", "E:", "D:", "B:", "A:",
@@ -48,9 +48,10 @@ system-wide drive letter.");
 /// Whether a mapped share is kept in the sidebar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ShareKeeping {
-    /// Saved under Network and connected again when opened: Map network
-    /// drive's "Reconnect at sign-in", and Add a network location's "Save
-    /// in the sidebar · reconnect when opened", both the default.
+    /// Saved under Network and connected again when opened: "Save in the
+    /// sidebar · reconnect when opened" in Map network drive (where
+    /// Windows has "Reconnect at sign-in") and Add a network location,
+    /// the default in both.
     SaveInSidebar,
     /// Listed under Network for this session only.
     ThisSessionOnly,
@@ -90,13 +91,29 @@ impl MapRequest {
     }
 }
 
-/// Windows 11's Map network drive over `parent`: the Drive list, the
-/// Folder, "Reconnect at sign-in", "Connect using different credentials"
-/// and the link to Add a network location. Its Finish button calls
-/// `on_connect` with the dialog, to run the connection in, and what was
-/// chosen.
+/// The drive letter that ends `label`, as in `Projects (Z:)`, if any.
+pub(crate) fn drive_letter(label: &str) -> Option<&'static str> {
+    let letter = label.strip_suffix(')')?.rsplit_once(" (")?.1;
+    DRIVE_LETTERS.into_iter().find(|known| *known == letter)
+}
+
+/// The letters the Drive list offers when `taken` are mapped already:
+/// only the free ones, the highest first and chosen, as Windows lists them.
+fn free_letters(taken: &[&str]) -> Vec<&'static str> {
+    DRIVE_LETTERS
+        .into_iter()
+        .filter(|letter| !taken.contains(letter))
+        .collect()
+}
+
+/// Windows 11's Map network drive over `parent`: the Drive list of the
+/// letters not `taken`, the Folder, whether to save the share, "Connect
+/// using different credentials" and the link to Add a network location.
+/// Its Finish button calls `on_connect` with the dialog, to run the
+/// connection in, and what was chosen.
 pub(crate) fn map_network_dialog(
     parent: &impl IsA<gtk::Window>,
+    taken: &[&str],
     on_connect: impl Fn(&Dialog, MapRequest) + 'static,
 ) -> Dialog {
     let message = format!(
@@ -105,7 +122,8 @@ pub(crate) fn map_network_dialog(
         ox_core::i18n::gettext_static(MAP_MESSAGE)
     );
     let dialog = Dialog::new(parent, &ox_core::i18n::gettext("Map network drive"), &message);
-    let drive = gtk::DropDown::from_strings(&DRIVE_LETTERS);
+    let letters = free_letters(taken);
+    let drive = gtk::DropDown::from_strings(&letters);
     drive.set_halign(gtk::Align::Start);
     dialog.add_labelled(ox_core::i18n::gettext_static("Drive:"), &drive);
     let folder = address_field(&dialog, ox_core::i18n::gettext_static("Folder:"), "");
@@ -113,7 +131,13 @@ pub(crate) fn map_network_dialog(
         "Example: {address}",
         &[("address", "\\\\server\\share")],
     ));
-    let reconnect = dialog.add_check_button(&ox_core::i18n::gettext("Reconnect at sign-in"), true);
+    // Windows' "Reconnect at sign-in" mounts the drive when the user signs
+    // in; OpenXplorer mounts nothing until the share is opened, so the box
+    // says what it does, in Add a network location's words.
+    let reconnect = dialog.add_check_button(
+        &ox_core::i18n::gettext("Save in the sidebar · reconnect when opened"),
+        true,
+    );
     let different = dialog.add_check_button(
         &ox_core::i18n::gettext("Connect using different credentials"),
         false,
@@ -136,7 +160,7 @@ pub(crate) fn map_network_dialog(
         let request = MapRequest {
             address: folder.text().trim().to_owned(),
             label: String::new(),
-            drive: letter.and_then(|letter| DRIVE_LETTERS.get(letter).copied()),
+            drive: letter.and_then(|letter| letters.get(letter).copied()),
             keeping,
             credentials,
         };
@@ -302,8 +326,8 @@ mod tests {
     }
 
     /// Map network drive asks as Windows 11 does: a drive letter, Z:
-    /// first, the folder with Windows' example, "Reconnect at sign-in"
-    /// checked and "Connect using different credentials" not, then Finish
+    /// first, the folder with Windows' example, "Save in the sidebar ·
+    /// reconnect when opened" (Windows' "Reconnect at sign-in") checked and "Connect using different credentials" not, then Finish
     /// and Cancel. The letter ends the share's label.
     ///
     /// parity: NET-001
@@ -311,7 +335,7 @@ mod tests {
     fn map_network_drive_asks_for_a_drive_and_a_folder_as_windows_does() {
         let parent = gtk::Window::new();
         let requests = Heard::default();
-        let dialog = map_network_dialog(&parent, recorder(&requests));
+        let dialog = map_network_dialog(&parent, &[], recorder(&requests));
         dialog.open();
         settle();
 
@@ -322,7 +346,7 @@ mod tests {
             "Drive:",
             "Folder:",
             "Example: \\\\server\\share",
-            "Reconnect at sign-in",
+            "Save in the sidebar · reconnect when opened",
             "Connect using different credentials",
             WEB_SITE_LINK,
         ] {
@@ -370,8 +394,42 @@ mod tests {
         parent.close();
     }
 
-    /// Another letter names the share, an unchecked "Reconnect at
-    /// sign-in" maps it for this session only, and "Connect using
+    /// The Drive list leaves out the letters other shares were mapped to
+    /// and chooses the highest free one, as Windows does, so two shares
+    /// mapped with the default letter never share it.
+    ///
+    /// parity: NET-001
+    #[gtk::test]
+    fn the_drive_list_offers_only_free_letters_the_highest_chosen() {
+        assert_eq!(drive_letter("Projects (Z:)"), Some("Z:"));
+        assert_eq!(drive_letter("Media (nas) (X:)"), Some("X:"));
+        assert_eq!(drive_letter("Projects (C:)"), None, "not a mapped letter");
+        assert_eq!(drive_letter("Projects"), None);
+
+        let parent = gtk::Window::new();
+        let requests = Heard::default();
+        let dialog = map_network_dialog(&parent, &["Z:", "X:"], recorder(&requests));
+        let drive = &descendants::<gtk::DropDown>(&dialog)[0];
+        let letters = drive.model().expect("the letters");
+        let offered: Vec<String> = (0..letters.n_items())
+            .filter_map(|position| letters.item(position).and_downcast::<gtk::StringObject>())
+            .map(|letter| letter.string().to_string())
+            .collect();
+        assert_eq!(offered.len(), 23);
+        assert_eq!(&offered[..3], ["Y:", "W:", "V:"]);
+        assert_eq!(drive.selected(), 0, "Y: is chosen");
+        descendants::<gtk::Entry>(&dialog)[0].set_text("\\\\nas\\Media");
+
+        dialog.press("Finish");
+        settle();
+
+        assert_eq!(requests.borrow()[0].drive, Some("Y:"));
+        dialog.close();
+        parent.close();
+    }
+
+    /// Another letter names the share, an unchecked "Save in the sidebar"
+    /// maps it for this session only, and "Connect using
     /// different credentials" asks for an account even where one is
     /// known.
     ///
@@ -380,7 +438,7 @@ mod tests {
     fn the_letter_reconnecting_and_different_credentials_are_kept() {
         let parent = gtk::Window::new();
         let requests = Heard::default();
-        let dialog = map_network_dialog(&parent, recorder(&requests));
+        let dialog = map_network_dialog(&parent, &[], recorder(&requests));
         descendants::<gtk::DropDown>(&dialog)[0].set_selected(1);
         let checks = descendants::<gtk::CheckButton>(&dialog);
         checks[0].set_active(false);
@@ -419,7 +477,7 @@ mod tests {
         parent.insert_action_group("win", Some(&actions));
         let dropped = Rc::new(Cell::new(false));
         let flag = Rc::clone(&dropped);
-        let dialog = map_network_dialog(&parent, move |dialog, _| {
+        let dialog = map_network_dialog(&parent, &[], move |dialog, _| {
             let guard = DropFlag(Rc::clone(&flag));
             dialog.run("Connecting…", async move {
                 let _guard = guard;
@@ -519,7 +577,7 @@ mod tests {
         let parent = gtk::Window::new();
         let dropped = Rc::new(Cell::new(false));
         let flag = Rc::clone(&dropped);
-        let dialog = map_network_dialog(&parent, move |dialog, _| {
+        let dialog = map_network_dialog(&parent, &[], move |dialog, _| {
             let guard = DropFlag(Rc::clone(&flag));
             dialog.run("Connecting…", async move {
                 let _guard = guard;
@@ -551,7 +609,7 @@ mod tests {
         let started = Rc::new(Cell::new(false));
         let answered = Rc::new(Cell::new(false));
         let (begun, heard) = (Rc::clone(&started), Rc::clone(&answered));
-        let dialog = map_network_dialog(&parent, move |dialog, _| {
+        let dialog = map_network_dialog(&parent, &[], move |dialog, _| {
             begun.set(true);
             let heard = Rc::clone(&heard);
             dialog.run("Connecting…", async move {

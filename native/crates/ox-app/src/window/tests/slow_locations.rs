@@ -13,8 +13,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::network::NetworkError;
 
+use super::icons::pixel_rows;
 use crate::test_support::harness::{
-    settle, wait_for, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES,
+    settle, wait_for, wait_for_frames, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES,
 };
 use crate::test_support::held;
 use crate::window::address_bar::AddressMode;
@@ -876,5 +877,80 @@ fn the_list_keeps_the_keyboard_across_a_slow_opening() {
     assert!(
         test.window.folder_pane().view_has_focus(),
         "the list has the keyboard again"
+    );
+}
+
+/// How many colours the window draws now where the details view's column
+/// titles are: one while nothing is drawn there. The window is painted as
+/// it goes to the screen, from the drawings GTK keeps of its widgets, so a
+/// drawing GTK failed to renew shows as it would on screen.
+fn colours_drawn_on_the_titles(test: &TestWindow) -> usize {
+    wait_for_frames(&test.window, 3);
+    let titles = test
+        .window
+        .folder_pane()
+        .details()
+        .header()
+        .expect("the details view has column titles");
+    let outer = test.window.compute_bounds(&test.window).expect("a drawn window");
+    let bounds = titles.compute_bounds(&test.window).expect("laid-out titles");
+    let area = gtk::graphene::Rect::new(
+        bounds.x() - outer.x(),
+        bounds.y() - outer.y(),
+        bounds.width(),
+        bounds.height(),
+    );
+    let native = test.window.upcast_ref::<gtk::Native>();
+    let paintable = gtk::WidgetPaintable::new(Some(native));
+    let snapshot = gtk::Snapshot::new();
+    paintable.snapshot(
+        &snapshot,
+        f64::from(paintable.intrinsic_width()),
+        f64::from(paintable.intrinsic_height()),
+    );
+    let node = snapshot.to_node().expect("the window draws");
+    let renderer = native.renderer().expect("a drawn window");
+    let texture = renderer.render_texture(&node, Some(&area));
+    let colours: std::collections::HashSet<_> = pixel_rows(&texture).concat().into_iter().collect();
+    colours.len()
+}
+
+/// The rows "Working on it..." hid while a slow folder opened are drawn
+/// again once it is listed, column titles and all, and so are those of
+/// the folder gone back to. GTK 4.14 left the whole list blank from then
+/// on, in every folder, with the status bar counting its items.
+///
+/// parity: VIEW-068
+#[gtk::test]
+fn rows_hidden_while_a_slow_folder_opens_are_drawn_again() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Plan.txt");
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    assert!(colours_drawn_on_the_titles(&test) > 1, "the titles are drawn");
+    let documents = fixture.uri_of("Documents");
+    let hold = held::hold(&documents);
+
+    test.window.activate_item(test.position_of("Documents"));
+    wait_for_working(&test);
+    assert!(test.window.folder_pane().rows_hidden());
+    assert_eq!(colours_drawn_on_the_titles(&test), 1, "the titles are hidden");
+
+    drop(hold);
+    wait_until("the opened folder", || {
+        test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
+    });
+    assert_eq!(test.names(), ["Plan.txt"]);
+    assert!(
+        colours_drawn_on_the_titles(&test) > 1,
+        "the opened folder's titles are drawn"
+    );
+
+    test.activate("back", None);
+    test.wait_for_listing("the first folder again");
+    assert_eq!(test.names(), STANDARD_NAMES);
+    assert!(
+        colours_drawn_on_the_titles(&test) > 1,
+        "the first folder's titles are drawn"
     );
 }
