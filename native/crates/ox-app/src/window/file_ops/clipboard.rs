@@ -388,7 +388,12 @@ impl BrowserWindow {
         // such as one owner's URI list with another's cut marker, so such a
         // read holds no data. It is not remembered either: the change
         // started a read of its own, which a stale answer must not undo.
-        if self.clipboard_generation() != generation {
+        // The same holds when "Paste a picture from the clipboard as a new
+        // file" changed during the read (CLIP-015): the owner is the same,
+        // but the read looked, or did not look, for a picture under the old
+        // setting, and the change started a read under the new one
+        // (follow_picture_paste_preference).
+        if self.clipboard_generation() != generation || self.pastes_pictures_as_files() != pictures {
             return ClipboardContent::Nothing;
         }
         self.remember_clipboard(&content);

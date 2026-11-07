@@ -17,6 +17,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, TEXT, URI_LIST};
 
+use super::clipboard_interop::scripted_owner::{Script, ScriptedOwner};
 use super::file_ops_support::{is_enabled, select_names};
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 
@@ -90,6 +91,51 @@ fn turning_picture_paste_off_turns_paste_off_at_once() {
     test.set_paste_pictures_as_files(false);
 
     wait_until("Paste to be disabled", || !is_enabled(&test, "paste"));
+}
+
+/// A picture read that started while picture paste was on and answers
+/// after the setting was turned off is dropped: the read the change started
+/// decides, so Paste stays off. The clipboard's owner never changed, so the
+/// owner check alone would let the late answer through.
+///
+/// parity: CLIP-015
+#[gtk::test]
+fn a_picture_read_overtaken_by_turning_picture_paste_off_is_dropped() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let slow_owner = ScriptedOwner::new(
+        "image/png",
+        Script::Late {
+            delay: Duration::from_millis(1500),
+            payload: PNG.to_vec(),
+        },
+    );
+    let progress = slow_owner.progress();
+    test.window
+        .clipboard()
+        .set_content(Some(&slow_owner))
+        .expect("the test owns the clipboard");
+    wait_until("the window to read the picture", || progress.was_asked.get());
+
+    test.set_paste_pictures_as_files(false);
+    assert!(
+        !progress.has_answered.get(),
+        "the setting changed while the picture was still being read"
+    );
+    wait_until("the slow owner to answer", || progress.has_answered.get());
+    // The overtaken read ends after the owner's answer reaches it.
+    wait_for(Duration::from_millis(300));
+
+    assert!(
+        !is_enabled(&test, "paste"),
+        "Paste follows the setting, which is off"
+    );
+    test.window.paste_from_keyboard();
+    wait_for(Duration::from_millis(300));
+    assert!(
+        pictures_in(&fixture, "Documents").is_empty(),
+        "nothing is written"
+    );
 }
 
 /// With "Also copy file paths as text when copying files" off, Copy and
