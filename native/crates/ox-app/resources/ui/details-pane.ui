@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  The details pane, laid out as Windows 11 File Explorer's and section 4.8
-  of native/docs/ui-spec.md: a header with a close button, the picture
-  without a frame, the name, the folder's item count and the rows of names
-  and values (src/window/details_pane.rs). It has no buttons.
+  The details pane, laid out as Windows 11 Explorer's Details pane
+  (View > Show > Details pane, Alt+Shift+P; PROP-009): from top to
+  bottom a large preview of the selection, its small icon and name, the
+  Share button, a "Details" heading over a name and value list, and the
+  Properties button; with nothing selected, the folder's name and count
+  over Windows' hint box (src/window/details_pane.rs). Like Windows' pane it
+  has no close button: View > Details pane, the command bar's Details
+  toggle and Alt+Shift+P hide it.
 
   Every text wraps with a natural width of a few words (max-width-chars
   10), so a long name or path wraps inside the pane instead of widening it.
@@ -19,9 +23,8 @@
       <class name="details"/>
     </style>
     <child>
-      <!-- The pane scrolls when the window is too short for it
-           (.details{overflow:auto}), so its wrapped properties never set
-           the window's height. -->
+      <!-- The pane scrolls when the window is too short for it, so its
+           wrapped properties never set the window's height. -->
       <object class="GtkScrolledWindow" id="scroller">
         <property name="hscrollbar-policy">never</property>
         <property name="child">
@@ -31,73 +34,161 @@
               <class name="details-inner"/>
             </style>
             <child>
-              <object class="GtkBox">
+              <object class="GtkCenterBox" id="preview_area">
                 <style>
-                  <class name="detail-header"/>
+                  <class name="detail-preview"/>
+                </style>
+                <property name="center-widget">
+                  <!-- The item's large art (an ArtImage,
+                       src/icons/art_image.rs); a picture of the file's
+                       content, or several items' art stacked, takes its
+                       place. -->
+                  <object class="OxArtImage" id="preview"/>
+                </property>
+              </object>
+            </child>
+            <child>
+              <!-- The small icon and the name, as Windows 11 heads its
+                   pane. -->
+              <object class="GtkBox" id="title_row">
+                <property name="spacing">8</property>
+                <style>
+                  <class name="detail-title"/>
                 </style>
                 <child>
-                  <object class="GtkLabel" id="i18n_1">
-                    <property name="label" translatable="yes">Details</property>
-                    <property name="xalign">0</property>
-                    <property name="hexpand">true</property>
+                  <object class="OxArtImage" id="small_art">
+                    <property name="valign">start</property>
+                    <property name="accessible-role">presentation</property>
                   </object>
                 </child>
                 <child>
-                  <object class="GtkButton" id="close_button">
-                    <property name="tooltip-text" translatable="yes">Close details pane</property>
-                    <accessibility>
-                      <property name="label" translatable="yes">Close details pane</property>
-                    </accessibility>
+                  <object class="GtkLabel" id="name">
+                    <property name="hexpand">true</property>
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                    <property name="max-width-chars">10</property>
+                    <!-- Selectable with the pointer, but no Tab stop: see
+                         property_value in src/window/details_pane.rs. -->
+                    <property name="selectable">true</property>
+                    <property name="focusable">false</property>
+                    <property name="can-focus">false</property>
                     <style>
-                      <class name="detail-close"/>
+                      <class name="detail-name"/>
                     </style>
                   </object>
                 </child>
               </object>
             </child>
             <child>
-              <object class="GtkCenterBox" id="preview_area">
+              <!-- With nothing selected, Windows' hint in a rounded box,
+                   where a selection's Details rows go. -->
+              <object class="GtkBox" id="hint_row">
+                <property name="spacing">8</property>
+                <property name="visible">false</property>
                 <style>
-                  <class name="detail-preview"/>
+                  <class name="detail-hint"/>
                 </style>
-                <property name="center-widget">
-                  <!-- The item's or folder's art (an ArtImage,
-                       src/icons/art_image.rs); several items' art is
-                       stacked in its place. -->
-                  <object class="OxArtImage" id="preview"/>
+                <child>
+                  <object class="GtkImage" id="hint_glyph">
+                    <property name="valign">start</property>
+                    <property name="accessible-role">presentation</property>
+                    <style>
+                      <class name="glyph"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="i18n_4">
+                    <property name="label" translatable="yes">Select a single file to get more information.</property>
+                    <property name="hexpand">true</property>
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                    <property name="max-width-chars">10</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <!-- Shares the selected files (win.share), where the desktop can. -->
+              <object class="GtkButton" id="share_button">
+                <property name="halign">start</property>
+                <style>
+                  <class name="detail-button"/>
+                  <class name="bordered"/>
+                </style>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">8</property>
+                    <child>
+                      <object class="GtkImage" id="share_glyph">
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="accessible-role">presentation</property>
+                        <style>
+                          <class name="glyph"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="i18n_1">
+                        <property name="label" translatable="yes">Share</property>
+                      </object>
+                    </child>
+                  </object>
                 </property>
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="name">
+              <object class="GtkLabel" id="details_heading">
+                <property name="label" translatable="yes">Details</property>
                 <property name="xalign">0</property>
                 <property name="wrap">true</property>
                 <property name="wrap-mode">word-char</property>
                 <property name="max-width-chars">10</property>
-                <property name="selectable">true</property>
+                <property name="accessible-role">heading</property>
                 <style>
-                  <class name="detail-name"/>
+                  <class name="detail-section"/>
                 </style>
               </object>
             </child>
             <child>
-              <!-- "12 items" under the folder's name. -->
-              <object class="GtkLabel" id="summary">
-                <property name="xalign">0</property>
-                <property name="wrap">true</property>
-                <property name="wrap-mode">word-char</property>
-                <property name="max-width-chars">10</property>
-                <style>
-                  <class name="detail-summary"/>
-                </style>
-              </object>
-            </child>
-            <child>
-              <!-- The rows are 12 pixels apart, a name 8 pixels from its
-                   value. -->
+              <!-- The names in a column of their own, the values beside
+                   them, each row 10 pixels below the one before. -->
               <object class="GtkGrid" id="properties">
-                <property name="row-spacing">12</property>
-                <property name="column-spacing">8</property>
+                <property name="row-spacing">10</property>
+                <property name="column-spacing">12</property>
+              </object>
+            </child>
+            <child>
+              <!-- Opens Properties of the selection, or of the folder (win.properties). -->
+              <object class="GtkButton" id="properties_button">
+                <property name="halign">start</property>
+                <style>
+                  <class name="detail-button"/>
+                  <class name="bordered"/>
+                </style>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">8</property>
+                    <child>
+                      <object class="GtkImage" id="properties_glyph">
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="accessible-role">presentation</property>
+                        <style>
+                          <class name="glyph"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="i18n_3">
+                        <property name="label" translatable="yes">Properties</property>
+                      </object>
+                    </child>
+                  </object>
+                </property>
               </object>
             </child>
           </object>
