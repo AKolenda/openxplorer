@@ -31,7 +31,7 @@ use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
-use super::entries::{drive_menu, RowLevel, RowTarget, Section, SidebarEntry};
+use super::entries::{drive_menu, local_disk_menu, RowLevel, RowTarget, Section, SidebarEntry};
 use super::{HiddenRow, Sidebar};
 
 /// The menu of the pin that opens `uri`; `caching` says whether it is
@@ -373,11 +373,9 @@ impl Sidebar {
             return None;
         }
         let window = self.root().and_downcast::<BrowserWindow>()?;
-        window
-            .places()
-            .drives
-            .iter()
-            .map(drive_menu)
+        let drives = window.places().drives;
+        std::iter::once(local_disk_menu())
+            .chain(drives.iter().map(drive_menu))
             .find(|place| matches!(place, PlaceMenu::Drive { uri: drive, .. } if same_location(drive, uri)))
     }
 

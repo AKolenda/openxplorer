@@ -293,17 +293,6 @@ fn close_menu(menu: &MenuPopover) {
     wait_until("the menu to let go of the pane", || menu.parent().is_none());
 }
 
-/// Leaves This PC and opens it again, after a change that redrew it in
-/// place. GTK 4.18 keeps pointing at the page the still pointer was over,
-/// and the next menu's grab then fails a critical on it; opening the page
-/// anew does not.
-fn reopen_this_pc(test: &TestWindow, fixture: &Fixture) {
-    test.window.navigate(&fixture.uri()).expect("the fixture");
-    test.wait_for_listing("the fixture");
-    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
-    wait_for_frames(&test.window, 3);
-}
-
 /// A drive tile's menu is the file list's right-click menu, in its
 /// style, with Windows 11's drive items in Windows' order: Copy and Rename
 /// in the strip, greyed out, then Open, Open in new tab, Open in new
@@ -317,6 +306,12 @@ fn reopen_this_pc(test: &TestWindow, fixture: &Fixture) {
 fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     let fixture = Fixture::standard();
     let test = this_pc_with_drives(&fixture);
+    // Pinning and hiding redraw This PC in place. Kept clear of the still
+    // pointer in the screen's middle, where Xvfb starts it: GTK 4.18 keeps
+    // pointing at a redrawn page under it, and the next menu's grab fails
+    // a critical on that.
+    test.window.set_default_size(680, 480);
+    wait_until("the smaller window", || test.window.width() <= 700);
     let (_, backup) = drive_tile(&test, "Backup");
 
     let menu = open_tile_menu(&test, &backup);
@@ -369,7 +364,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
                 .any(|place| place.uri == fixture.uri())
     });
     // Pinning redraws This PC, and with it the tile.
-    reopen_this_pc(&test, &fixture);
+    wait_for_frames(&test.window, 3);
     let (_, backup) = drive_tile(&test, "Backup");
     let menu = open_tile_menu(&test, &backup);
     assert!(menu.row_labels().contains(&"Unpin from Quick access".to_owned()));
@@ -391,7 +386,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
         let labels = test.window.sidebar().labels();
         !labels.iter().any(|label| label == "This PC") && labels.contains(&pinned)
     });
-    reopen_this_pc(&test, &fixture);
+    wait_for_frames(&test.window, 3);
     let pin = test.window.sidebar().right_click_row(&pinned);
     pin.popup();
     wait_for_frames(&test.window, 2);
@@ -400,6 +395,30 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
         [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
     );
     assert!(pin.row_labels().contains(&"Unpin from Quick access".to_owned()));
+    pin.popdown();
+
+    // So does Local Disk's.
+    test.activate("pin-location", Some("file:///"));
+    let local_disk_pin = || {
+        test.window
+            .places()
+            .quick_access
+            .into_iter()
+            .find(|place| place.uri == "file:///")
+            .map(|place| place.label)
+    };
+    wait_until("Local Disk to be pinned", || {
+        local_disk_pin().is_some_and(|label| test.window.sidebar().labels().contains(&label))
+    });
+    let pinned = local_disk_pin().expect("Local Disk is pinned");
+    wait_for_frames(&test.window, 3);
+    let pin = test.window.sidebar().right_click_row(&pinned);
+    pin.popup();
+    wait_for_frames(&test.window, 2);
+    assert_eq!(
+        pin.strip_states(),
+        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+    );
     pin.popdown();
 }
 

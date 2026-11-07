@@ -293,12 +293,17 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
         target: RowTarget::Location(root.to_owned()),
         tooltip: locations.display_location(root),
         pinned: false,
-        menu: Some(PlaceMenu::Drive {
-            uri: root.to_owned(),
-            kind: VolumeKind::Drive,
-            controls: MountControls::FIXED,
-        }),
+        menu: Some(local_disk_menu()),
         eject: None,
+    }
+}
+
+/// Local Disk's menu: the root's, a drive that stays mounted.
+pub(super) fn local_disk_menu() -> PlaceMenu {
+    PlaceMenu::Drive {
+        uri: "file:///".to_owned(),
+        kind: VolumeKind::Drive,
+        controls: MountControls::FIXED,
     }
 }
 
