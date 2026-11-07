@@ -13,6 +13,8 @@ mod advanced;
 pub(super) mod choices;
 
 use std::cell::{Cell, RefCell};
+use std::future::Future;
+use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -297,6 +299,7 @@ fn apply_button(
         controls: controls.clone(),
         uris: RefCell::new(uris),
         applied: Cell::new(None),
+        rereads: RefCell::new(Vec::new()),
         versions,
         button: apply.downgrade(),
     });
@@ -315,6 +318,9 @@ fn apply_button(
     (apply, change)
 }
 
+/// Reads the items again after the editor changed them.
+type Reread = Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>>>;
+
 /// The editor's change, which Apply permissions and the window's OK and
 /// Apply make (PROP-002).
 pub(super) struct EditorChange {
@@ -324,6 +330,8 @@ pub(super) struct EditorChange {
     /// The request last made, which the window's next OK or Apply does not
     /// make again over a Read-only applied after it.
     applied: Cell<Option<PermissionRequest>>,
+    /// Run once each change is made, before the window's next one.
+    rereads: RefCell<Vec<Reread>>,
     versions: Arc<PreviousVersions>,
     /// Apply permissions, greyed while there is nothing to apply.
     button: glib::WeakRef<gtk::Button>,
@@ -352,6 +360,15 @@ impl EditorChange {
         for uri in self.uris.borrow_mut().iter_mut().filter(|uri| *uri == from) {
             to.clone_into(uri);
         }
+    }
+
+    /// Runs `reread` each time the editor changed the items, even when it
+    /// stopped at an error, and waits for it before Apply permissions
+    /// comes back or the window's next change is made.
+    pub(super) fn connect_applied<F: Future<Output = ()> + 'static>(&self, reread: impl Fn() -> F + 'static) {
+        self.rereads
+            .borrow_mut()
+            .push(Box::new(move || Box::pin(reread())));
     }
 
     /// Applies the controls' change to every item in the background.
@@ -393,6 +410,10 @@ impl EditorChange {
         }
         if result.is_ok() {
             self.applied.set(Some(request));
+        }
+        let rereads: Vec<_> = self.rereads.borrow().iter().map(|reread| reread()).collect();
+        for reread in rereads {
+            reread.await;
         }
         self.changed();
         result.map_err(|error| error.to_string())
