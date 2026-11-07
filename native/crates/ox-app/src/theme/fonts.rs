@@ -7,7 +7,9 @@
 //! from one table of base sizes (the values in `v2.0.0:desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
-use crate::folder_view::icon_size::{compact_row, content_row, tiles_cell, CONTENT_CHROME, TILES_CHROME};
+use crate::folder_view::icon_size::{
+    compact_row, content_row, group_heading_row, tiles_cell, CONTENT_CHROME, HEADING_CHROME, TILES_CHROME,
+};
 use crate::text_size::{self, TextSize};
 
 /// The stylesheet for `text_size`: every font size, the bars, rows, menus
@@ -358,12 +360,15 @@ fn compact_rule(text_size: TextSize) -> String {
 /// box ([`TILES_CHROME`], [`CONTENT_CHROME`]). Both views size and draw an
 /// item on its cell, not on the grid's slot, which a group's heading has
 /// too (VIEW-071).
-fn tiles_and_content_rules(text_size: TextSize) -> [String; 2] {
+fn tiles_and_content_rules(text_size: TextSize) -> [String; 3] {
     let tile = tiles_cell(text_size).height - TILES_CHROME;
     let row = content_row(text_size) - CONTENT_CHROME;
+    // A heading's row is as tall as Page Up and Page Down count it.
+    let heading = group_heading_row(text_size) - HEADING_CHROME;
     [
         format!("gridview.files.tiles > child > .item-cell:not(.group-slot) {{ min-height: {tile}px; }}"),
         format!("gridview.files.content > child > .item-cell:not(.group-slot) {{ min-height: {row}px; }}"),
+        format!("gridview.files > child > .item-cell.group-slot.heading-row {{ min-height: {heading}px; }}"),
     ]
 }
 
@@ -426,6 +431,7 @@ mod tests {
         );
         assert!(css
             .contains("gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }"));
+        assert!(css.contains("gridview.files > child > .item-cell.group-slot.heading-row { min-height: 17px; }"));
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 32px; }"));
         assert!(

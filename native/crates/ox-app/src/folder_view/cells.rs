@@ -271,7 +271,7 @@ mod imp {
         /// widgets while the cell shows a [`super::GroupSlot`].
         pub(super) slot_row: RefCell<Option<gtk::Box>>,
         /// The heading's text, bound to its slot's.
-        pub(super) slot_binding: RefCell<Option<glib::Binding>>,
+        pub(super) slot_binding: RefCell<Vec<glib::Binding>>,
         /// Follows whether the heading's group is collapsed.
         pub(super) slot_watch: RefCell<Option<glib::SignalHandlerId>>,
         /// The expanded state the cell last told assistive technology:
@@ -340,11 +340,11 @@ impl FileCell {
     }
 
     /// Shows `slot` of a grouped grid in place of an item: a group's
-    /// heading (its chevron, "Today (3)" and the start of its line), the
+    /// heading (its chevron, "Today" and the start of its line), the
     /// rest of its line, or nothing. `None` brings the item's widgets back.
     pub(crate) fn show_group_slot(&self, slot: Option<&GroupSlot>) {
         let imp = self.imp();
-        if let Some(binding) = imp.slot_binding.take() {
+        for binding in imp.slot_binding.take() {
             binding.unbind();
         }
         let watched = imp.slot.replace(slot.cloned());
@@ -407,7 +407,7 @@ impl FileCell {
         toggle_class(&row, HEADING_CLASS, is_heading);
         if is_heading {
             let text = slot.bind_property("text", &title, "label").sync_create().build();
-            imp.slot_binding.replace(Some(text));
+            imp.slot_binding.borrow_mut().push(text);
         }
         let show_state = glib::clone!(
             #[weak(rename_to = cell)]
@@ -915,6 +915,10 @@ pub(crate) fn connect_mapped_file_cells(
             cell.bind(&item);
             cell.show_name(&name);
             cell.show_item_check(bind_owners.shows_item_checks());
+            // A cell bound while it showed a group's heading, or while no
+            // item, missed the last change of whether check boxes take
+            // clicks (Ctrl held or not).
+            cell.item_check_takes_clicks(bind_owners.item_checks_take_clicks());
             cell.look_up_picture(&item, bind_owners.previews());
             bind_owners.style_cell(&cell, &item);
         }
@@ -950,8 +954,15 @@ fn show_slot_item(list_item: &gtk::ListItem, cell: &FileCell, slot: Option<&Grou
     list_item.set_selectable(is_item);
     list_item.set_activatable(is_item);
     list_item.set_focusable(is_item || is_heading);
-    if let Some(slot) = slot {
-        list_item.set_accessible_label(&slot.text());
-    }
     cell.show_group_slot(slot);
+    if let Some(slot) = slot {
+        // A screen reader hears the heading's text as the heading shows
+        // it, after a change too: the slot keeps its object while its
+        // group stays, so GTK does not bind it again.
+        let label = slot
+            .bind_property("text", list_item, "accessible-label")
+            .sync_create()
+            .build();
+        cell.imp().slot_binding.borrow_mut().push(label);
+    }
 }
