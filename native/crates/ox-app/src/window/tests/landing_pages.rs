@@ -324,6 +324,17 @@ fn select_all_none_and_invert_act_on_the_tiles_of_both_groups() {
     assert_eq!(selected_tiles(&test), [media], "a click selects in one group");
 }
 
+/// Shrinks the window clear of the pointer, which rests in the screen's
+/// middle where Xvfb starts it, for a test that opens one menu after
+/// another or redraws This PC in place. GTK 4.18 keeps pointing at a
+/// closed menu or a redrawn page under the still pointer, and the next
+/// menu's grab then fails a critical on that.
+fn clear_of_the_resting_pointer(test: &TestWindow) {
+    test.window.set_default_size(680, 480);
+    wait_until("the smaller window", || test.window.width() <= 700);
+    wait_for_frames(&test.window, 2);
+}
+
 /// Right-clicks `tile` and returns the menu it opens in the folder pane.
 fn open_tile_menu(test: &TestWindow, tile: &gtk::FlowBoxChild) -> MenuPopover {
     let right_click = tile
@@ -360,12 +371,7 @@ fn close_menu(menu: &MenuPopover) {
 fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     let fixture = Fixture::standard();
     let test = this_pc_with_drives(&fixture);
-    // Pinning and hiding redraw This PC in place. Kept clear of the still
-    // pointer in the screen's middle, where Xvfb starts it: GTK 4.18 keeps
-    // pointing at a redrawn page under it, and the next menu's grab fails
-    // a critical on that.
-    test.window.set_default_size(680, 480);
-    wait_until("the smaller window", || test.window.width() <= 700);
+    clear_of_the_resting_pointer(&test);
     let (_, backup) = drive_tile(&test, "Backup");
 
     let menu = open_tile_menu(&test, &backup);
@@ -526,6 +532,7 @@ fn the_drive_tile_menu_is_captured_light_and_dark() {
 fn a_drive_tile_has_the_drive_menu_and_its_properties() {
     let fixture = Fixture::standard();
     let test = this_pc_with_drives(&fixture);
+    clear_of_the_resting_pointer(&test);
     let (flow, backup) = drive_tile(&test, "Backup");
 
     let menu = open_tile_menu(&test, &backup);
@@ -612,6 +619,7 @@ fn a_server_row_shows_the_server_in_the_share_blue_on_the_network_bar() {
 #[gtk::test]
 fn a_this_pc_tile_menu_survives_the_page_being_drawn_again() {
     let test = laid_out(Page::ThisPc.uri());
+    clear_of_the_resting_pointer(&test);
     test.save_share("smb://nas/media", "Media (M:)");
     let share = Art::for_network_location(NetworkKind::Share, "Media (M:)", Connection::Disconnected);
     let landing = test.window.folder_pane().landing();
