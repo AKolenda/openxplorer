@@ -4034,6 +4034,11 @@ mod tests {
         type_keys(&mut pointer, "inv");
         assert_eq!(name.text(), "invoice.pdf", "typing selected a file in the list");
         assert_eq!(test.selected_names(), ["invoice.pdf"]);
+        // Back to the screen's middle, where the display starts it, so the
+        // next tests' windows and menus do not open under a pointer this
+        // test left there: GTK 4.14 crashes in gdk_surface_request_motion
+        // when address_bar's « menu closes over it.
+        pointer.move_to(720, 500);
     }
 
     /// The Save dialog as it opens, with the keyboard in the file list
