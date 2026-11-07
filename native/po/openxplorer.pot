@@ -7006,6 +7006,14 @@ msgstr ""
 msgid "Another file operation is still running."
 msgstr ""
 
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size all columns to fit"
+msgstr ""
+
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size column to fit"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/watch_state.rs
 msgid "{seconds} seconds"

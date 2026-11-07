@@ -5601,6 +5601,14 @@ msgstr "没有以“{prefix}”开头的名称"
 msgid "Another file operation is still running."
 msgstr "另一个文件操作仍在运行。"
 
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size all columns to fit"
+msgstr "将所有列调整为合适的大小"
+
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size column to fit"
+msgstr "将该列调整为合适的大小"
+
 #: crates/ox-app/src/window/watch_state.rs
 msgid "{seconds} seconds"
 msgstr "{seconds} 秒"

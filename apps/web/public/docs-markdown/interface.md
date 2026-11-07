@@ -4,7 +4,7 @@ Make the workspace fit the way you work.
 
 ## Your workspace, your widths
 
-Resize the sidebar and column edges. Double-click an edge to reset or fit it, depending on the control. Width preferences survive restarts. Local and SMB ancestors remain individual breadcrumb buttons. As in Windows 11, the arrow before the first one lists Home, This PC, Network and the Recycle Bin, the arrow after each one lists all of its subfolders, and on a long path the first ones fold into a « button that lists them.
+Resize the sidebar and column edges. Double-click an edge to reset or fit it, depending on the control. In Details, Ctrl + on the number pad, or Size all columns to fit in the menu of a right-clicked column title, fits every column to its contents, as in Windows File Explorer. Width preferences survive restarts. Local and SMB ancestors remain individual breadcrumb buttons. As in Windows 11, the arrow before the first one lists Home, This PC, Network and the Recycle Bin, the arrow after each one lists all of its subfolders, and on a long path the first ones fold into a « button that lists them.
 
 ![Historical directory in an amber-badged Previous version tab, with a read-only banner](../assets/screenshots/snapshot-tab.png)
 
@@ -134,7 +134,7 @@ Local and already connected SMB locations are supported by the implementation; l
 
 ## Make text easier to read
 
-Ctrl + (or Ctrl =) increases text, Ctrl − decreases it, and Ctrl 0 resets to 100%. Settings → Appearance → Text size offers 80% through 200%. The preference is saved across restarts and applied to open windows.
+Ctrl + (or Ctrl =) on the main keyboard increases text, Ctrl − decreases it, and Ctrl 0 resets to 100%. Settings → Appearance → Text size offers 80% through 200%. The preference is saved across restarts and applied to open windows.
 
 Only the application text and needed row spacing change; desktop scaling and file data remain unchanged. Sidebar and column widths remain resizable.
 
