@@ -5175,6 +5175,10 @@ msgid "This file selection is too large to drag."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
+msgid "A drive cannot be moved to the Recycle Bin."
+msgstr ""
+
+#: crates/ox-app/src/window/file_drop.rs
 msgid "A folder cannot be copied into itself."
 msgstr ""
 
@@ -6250,6 +6254,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/place_editor.rs
 msgid "The folder's name"
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
+msgid "A phone or camera cannot be copied. Open it and select what to copy."
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs

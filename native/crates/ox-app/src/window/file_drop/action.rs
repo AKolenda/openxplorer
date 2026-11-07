@@ -145,6 +145,10 @@ impl DropRun {
             shown
         } else if offered.contains(gdk::DragAction::COPY) {
             gdk::DragAction::COPY
+        } else if offered.contains(gdk::DragAction::LINK) {
+            // A drag of drives offers a link alone; the window runs what
+            // the drop asks for, such as the drop menu of a right-drag.
+            gdk::DragAction::LINK
         } else {
             gdk::DragAction::empty()
         }
@@ -665,6 +669,47 @@ mod tests {
     struct OfferCase {
         offered: gdk::DragAction,
         action: Option<DropAction>,
+    }
+
+    /// A drag of drives offers a link alone, so no other app can copy a
+    /// whole drive; the window answers it with the link, whatever the drop
+    /// runs, the drop menu of a right-drag included.
+    ///
+    /// parity: DND-019
+    #[test]
+    fn a_drag_that_offers_a_link_alone_is_answered_with_the_link() {
+        let link = crate::window::file_drag::DRIVE_DRAG_ACTIONS;
+
+        assert_eq!(link, gdk::DragAction::LINK);
+        for run in [
+            DropRun::Run(DropAction::Link),
+            DropRun::Run(DropAction::Ask(DragOrigin::ThisApp)),
+            DropRun::Run(DropAction::Copy),
+            DropRun::MoveWithinDrive,
+        ] {
+            assert_eq!(run.protocol_action(link), gdk::DragAction::LINK, "{run:?}");
+        }
+        assert_eq!(
+            DropAction::for_button_drop(
+                DragButton::Secondary,
+                DragOrigin::ThisApp,
+                link,
+                link,
+                gdk::ModifierType::empty()
+            ),
+            Some(DropRun::Run(DropAction::Ask(DragOrigin::ThisApp))),
+            "a right-drag of this app still asks"
+        );
+        assert_eq!(
+            DropAction::for_button_drop(
+                DragButton::Primary,
+                DragOrigin::ThisApp,
+                link,
+                link,
+                gdk::ModifierType::empty()
+            ),
+            Some(DropRun::Run(DropAction::Link))
+        );
     }
 
     /// parity: DND-017, DND-018

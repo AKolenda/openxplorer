@@ -686,6 +686,14 @@ fn a_copied_drive_tile_pastes_as_a_shortcut_named_after_the_drive() {
         gtk::gdk::Key::c,
         gtk::gdk::ModifierType::CONTROL_MASK
     ));
+    // Only this app's own format and the path as text: no other file
+    // manager may paste the drive as a folder and copy all of it.
+    let formats = test.window.clipboard().formats();
+    assert!(formats.contain_mime_type(ox_core::clipboard::CUSTOM));
+    assert!(formats.contain_mime_type(ox_core::clipboard::TEXT));
+    for generic in [ox_core::clipboard::GNOME, ox_core::clipboard::URI_LIST] {
+        assert!(!formats.contain_mime_type(generic), "{generic} is not offered");
+    }
     test.activate("go-to", Some(&fixture.uri_of("Projects")));
     test.wait_for_listing("the Projects folder");
     wait_until("Paste to be enabled", || is_enabled(&test, "paste"));

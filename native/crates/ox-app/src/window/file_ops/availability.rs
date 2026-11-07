@@ -371,7 +371,10 @@ impl BrowserWindow {
             clipboard: operations.clipboard,
             can_undo: context.journal_label(JournalDirection::Undo).is_some(),
             can_redo: context.journal_label(JournalDirection::Redo).is_some(),
-            drive_selected: !self.selected_drive_tiles().is_empty(),
+            drive_selected: self
+                .selected_drive_tiles()
+                .iter()
+                .any(|uri| !ox_core::location::is_device_location(uri)),
         }
     }
 

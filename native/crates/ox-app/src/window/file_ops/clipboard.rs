@@ -35,10 +35,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::clipboard::{
-    decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, IMAGE_MIME_TYPES, KDE_CUT, MAX_BYTES,
-    TEXTURE_EXTENSION,
+    decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, CUSTOM, IMAGE_MIME_TYPES, KDE_CUT,
+    MAX_BYTES, TEXT, TEXTURE_EXTENSION,
 };
-use ox_core::location::LocationContext;
+use ox_core::location::{is_device_location, LocationContext};
 
 use crate::window::BrowserWindow;
 
@@ -262,20 +262,35 @@ fn cut_uris(files: Option<&ClipboardFiles>) -> HashSet<String> {
 /// Makes `files` the clipboard's content, in every format at once.
 /// `locations` names the devices and the home folder of the paths the text
 /// format shows.
+///
+/// Safety rule "a drive is never copied whole" (CLIP-001): `with_drives`,
+/// a list that names a drive, is published in this app's own format and
+/// as text alone, never as GNOME's or the standard file list, which other
+/// file managers would paste as a folder, copying everything on the drive.
+/// This app pastes it as a shortcut to each drive, as Windows Explorer
+/// does ([`crate::window::drive_shortcuts`]).
 fn publish(
     clipboard: &gdk::Clipboard,
     files: &ClipboardFiles,
     locations: &LocationContext,
+    with_drives: bool,
 ) -> Result<(), glib::BoolError> {
     let providers: Vec<gdk::ContentProvider> = files
         .encode(locations)
         .into_iter()
+        .filter(|payload| !with_drives || is_for_this_app_or_text(payload.mime_type))
         .map(|payload| {
             gdk::ContentProvider::for_bytes(payload.mime_type, &glib::Bytes::from_owned(payload.bytes))
         })
         .collect();
     let content = gdk::ContentProvider::new_union(&providers);
     clipboard.set_content(Some(&content))
+}
+
+/// Whether `mime_type` is this app's own format or text, which no file
+/// manager pastes as files.
+fn is_for_this_app_or_text(mime_type: &str) -> bool {
+    mime_type == CUSTOM || mime_type == TEXT
 }
 
 impl BrowserWindow {
@@ -292,8 +307,14 @@ impl BrowserWindow {
             None => self.selected_drive_tiles(),
         };
         if !drives.is_empty() {
-            if mode == ClipboardMode::Copy {
-                self.copy_items(mode, &drives);
+            // A phone's or a camera's root has no path a shortcut could
+            // point to, so it is not copied, as its Copy is greyed out.
+            let copied: Vec<String> = drives
+                .into_iter()
+                .filter(|uri| !is_device_location(uri))
+                .collect();
+            if mode == ClipboardMode::Copy && !copied.is_empty() {
+                self.copy_items(mode, &copied);
             }
             return;
         }
@@ -354,7 +375,13 @@ impl BrowserWindow {
     /// Makes `files` the desktop's clipboard and shows `note`, such as
     /// what was left out, when there is one.
     pub(crate) fn put_files_on_clipboard_noting(&self, files: ClipboardFiles, note: Option<&str>) {
-        let published = publish(&self.clipboard(), &files, &self.imp().locations.borrow());
+        let with_drives = !self.split_drives(files.uris()).drives.is_empty();
+        let published = publish(
+            &self.clipboard(),
+            &files,
+            &self.imp().locations.borrow(),
+            with_drives,
+        );
         if published.is_err() {
             self.show_message(ox_core::i18n::gettext_static(
                 "The desktop clipboard could not be claimed.",
@@ -403,7 +430,14 @@ impl BrowserWindow {
             // meanwhile, and then there is nothing of this cut to clear.
             clipboard.set_content(None::<&gdk::ContentProvider>).ok();
             self.remember_clipboard(&ClipboardContent::Nothing);
-        } else if publish(&clipboard, &current, &self.imp().locations.borrow()).is_ok() {
+        } else if publish(
+            &clipboard,
+            &current,
+            &self.imp().locations.borrow(),
+            !self.split_drives(current.uris()).drives.is_empty(),
+        )
+        .is_ok()
+        {
             self.remember_clipboard(&ClipboardContent::Files(current));
         }
     }

@@ -153,14 +153,20 @@ fn cache_entries(uri: &str, caching: Option<Caching>) -> Vec<MenuEntry> {
         .collect()
 }
 
+/// Why a phone's or a camera's root cannot be copied: it has no path on
+/// this computer that a shortcut could point to.
+const DEVICE_NOT_COPIED: &str =
+    crate::i18n::message_id("A phone or camera cannot be copied. Open it and select what to copy.");
+
 /// Why a drive cannot be renamed from its menu.
 const DRIVE_NOT_RENAMED: &str = crate::i18n::message_id("Drive names cannot be changed here.");
 
 /// Copy and Rename, the icon strip Windows 11 shows on a drive. Copy
 /// copies the drive as Windows Explorer does: a paste of it into a folder
 /// makes a shortcut to the drive there, never a copy of what it holds
-/// ([`super::drive_shortcuts`]). Rename is greyed out: the app changes no
-/// drive's name.
+/// ([`super::drive_shortcuts`]). A phone's or a camera's Copy is greyed
+/// out, saying why: its root has no path a shortcut could point to.
+/// Rename is greyed out: the app changes no drive's name.
 fn drive_strip(uri: &str) -> Vec<MenuItem> {
     vec![
         MenuItem::with_text_target(
@@ -169,7 +175,11 @@ fn drive_strip(uri: &str) -> Vec<MenuItem> {
             WindowAction::CopyFolder,
             uri,
         )
-        .with_shortcut("Ctrl+C"),
+        .with_shortcut("Ctrl+C")
+        .disabled_because(
+            is_device_location(uri),
+            ox_core::i18n::gettext_static(DEVICE_NOT_COPIED),
+        ),
         MenuItem::with_text_target(
             &ox_core::i18n::gettext("Rename"),
             Icon::Rename,

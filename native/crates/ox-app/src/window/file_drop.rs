@@ -167,6 +167,10 @@ pub(crate) enum DropRefusal {
     /// The items could not be read in time, or at all.
     #[error("{}", ox_core::i18n::gettext("The file drop is empty or too large."))]
     Unreadable,
+    /// A drive dropped on the Recycle Bin: a drive is never deleted, as
+    /// Windows Explorer takes no drive into the Recycle Bin.
+    #[error("{}", ox_core::i18n::gettext("A drive cannot be moved to the Recycle Bin."))]
+    DriveToRecycleBin,
     /// Recycle Bin items dropped on the Recycle Bin.
     #[error("{}", ox_core::i18n::gettext("These items are in the Recycle Bin already."))]
     InRecycleBin,
@@ -512,6 +516,12 @@ impl BrowserWindow {
                     return Err(DropRefusal::InRecycleBin);
                 }
                 let items = dropped_uris(uris)?;
+                // Safety rule "a drive is never deleted": a drive, dragged
+                // from This PC or the sidebar or by another app, is refused
+                // before anything is moved to the Trash or deleted.
+                if !self.split_drives(&items).drives.is_empty() {
+                    return Err(DropRefusal::DriveToRecycleBin);
+                }
                 glib::spawn_future_local(glib::clone!(
                     #[weak(rename_to = window)]
                     self,
@@ -677,6 +687,29 @@ mod tests {
             items,
             Ok(uris(&["file:///tmp/a%20b.txt", "smb://nas/share/report.pdf"]))
         );
+    }
+
+    /// A drive dropped on the Recycle Bin is refused before anything is
+    /// moved to the Trash or deleted, alone or with other items; other
+    /// items still go there.
+    ///
+    /// parity: OPS-045
+    #[gtk::test]
+    fn a_drive_dropped_on_the_recycle_bin_is_refused() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let drop = |dropped: &[String]| {
+            test.window
+                .send_dropped_items(dropped, DropDestination::RecycleBin, DropAction::Move)
+        };
+
+        let alone = drop(&uris(&["file:///"]));
+        let with_a_file = drop(&[fixture.uri_of("Notes 2.txt"), "file:///".to_owned()]);
+
+        assert_eq!(alone, Err(DropRefusal::DriveToRecycleBin));
+        assert_eq!(with_a_file, Err(DropRefusal::DriveToRecycleBin));
+        assert!(fixture.path("Notes 2.txt").is_file(), "nothing went to the Trash");
+        assert_eq!(drop(&[fixture.uri_of("Notes 2.txt")]), Ok(()));
     }
 
     /// parity: DND-012

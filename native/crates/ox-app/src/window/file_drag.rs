@@ -242,6 +242,13 @@ fn file_drag_source() -> gtk::DragSource {
     source
 }
 
+/// What a drag of a drive offers, from This PC or the sidebar: a link
+/// alone, as a drive's drop effect in Windows Explorer is a link. Another
+/// app is never offered a copy or a move of a whole drive; this app's own
+/// right-button drag still asks with its drop menu, which offers drives
+/// "Create shortcuts here" alone.
+pub(super) const DRIVE_DRAG_ACTIONS: gdk::DragAction = gdk::DragAction::LINK;
+
 /// Lets the drive tiles of This PC, drawn in `page`, be dragged, as
 /// Windows Explorer lets a drive be dragged into a folder to make a
 /// shortcut to it there ("Create link in Documents"). `drive_at` names
@@ -265,9 +272,9 @@ pub(super) fn attach_drive_tile_drag(
     source.connect_prepare(move |source, x, y| {
         let page = source.widget().and_downcast::<gtk::Box>()?;
         let uri = drive_at(&page, x, y)?;
-        let button = pressed_button(source)?;
+        pressed_button(source)?;
         let content = window_of(source)?.drive_tile_drag_content(uri)?;
-        source.set_actions(offered_actions(button, source.current_event_state()));
+        source.set_actions(DRIVE_DRAG_ACTIONS);
         Some(content)
     });
     source.connect_drag_begin(move |source, drag| {
@@ -343,8 +350,15 @@ impl BrowserWindow {
             move |source, _, y| {
                 let button = pressed_button(source)?;
                 let uri = window.sidebar().location_at(y)?;
+                let is_drive = window.are_all_drives(std::slice::from_ref(&uri));
                 let content = window.sidebar_drag_content(uri)?;
-                source.set_actions(offered_actions(button, source.current_event_state()));
+                // A drive is only ever linked to, by this app or another.
+                let actions = if is_drive {
+                    DRIVE_DRAG_ACTIONS
+                } else {
+                    offered_actions(button, source.current_event_state())
+                };
+                source.set_actions(actions);
                 Some(content)
             }
         ));
