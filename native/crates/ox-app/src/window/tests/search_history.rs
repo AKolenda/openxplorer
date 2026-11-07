@@ -9,6 +9,8 @@ use std::fs;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use super::history::navigation_button;
+use super::support::middle_click_at;
 use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::session::Direction;
 
@@ -40,6 +42,19 @@ impl TestWindow {
         let active = active.expect("the window has a tab");
         let view = self.window.tab_strip().tab_view(active);
         view.expect("the active tab is shown").title
+    }
+
+    /// Every tab's title in the tab strip, in order.
+    fn tab_titles(&self) -> Vec<String> {
+        let ids: Vec<_> = {
+            let session = self.window.imp().session.borrow();
+            session.tabs().iter().map(|tab| tab.id).collect()
+        };
+        let strip = self.window.tab_strip();
+        let views = ids
+            .into_iter()
+            .map(|id| strip.tab_view(id).expect("the tab is shown"));
+        views.map(|view| view.title).collect()
     }
 
     /// The labels of the address bar's crumbs.
@@ -168,6 +183,81 @@ fn a_tab_on_results_shows_them_again_when_it_comes_back() {
 
     wait_until("the first tab's results", || test.names() == RESULTS);
     assert_eq!(test.search_text(), "notes");
+}
+
+/// A tab on results comes back with the results it had selected still
+/// selected and scrolled where they were, though they are searched again.
+///
+/// parity: SRCH-042
+#[gtk::test]
+fn a_tab_on_results_keeps_its_selection_and_scroll_position() {
+    let fixture = Fixture::standard();
+    for number in 1..=80 {
+        fs::write(fixture.path(&format!("notes {number:02}.txt")), b"x").expect("fixture file");
+    }
+    let test = window_with_notes(&fixture);
+    test.search_for("notes");
+    wait_until("every result", || test.names().len() == 83);
+    let pane = test.window.folder_pane();
+    let chosen = vec![fixture.uri_of("notes 70.txt")];
+    pane.model().select_uris(&chosen);
+    pane.restore_scroll_position(300.0);
+    wait_until("the results to scroll", || {
+        (pane.scroll_position() - 300.0).abs() < 1.0
+    });
+
+    test.window.add_tab(&fixture.uri()).expect("valid folder");
+    test.wait_for_listing("the second tab");
+    test.activate("previous-tab", None);
+
+    let pane = test.window.folder_pane();
+    wait_until("the results, selected and scrolled as they were", || {
+        test.names().len() == 83
+            && pane.model().selected_uris() == chosen
+            && (pane.scroll_position() - 300.0).abs() < 1.0
+    });
+    assert_eq!(test.search_text(), "notes");
+}
+
+/// A middle-click on Back to search results, or on them in Back's menu,
+/// opens them in a tab behind, "Search Results in <folder>" after the
+/// folder, not the folder alone; the tab searches again when it comes to
+/// the front, and its Back returns to the folder.
+///
+/// parity: NAV-007, SRCH-042
+#[gtk::test]
+fn a_middle_click_on_back_to_results_opens_the_results_in_a_tab() {
+    let fixture = Fixture::standard();
+    let test = window_with_notes(&fixture);
+    let root = root_title(&fixture);
+    let results = format!("Search Results in {root}");
+    test.search_for("notes");
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("valid folder");
+    test.wait_for_listing("the folder opened from the results");
+
+    let back = navigation_button(&test, "back");
+    middle_click_at(&back, (1.0, 1.0));
+    let menu = test
+        .window
+        .popup_history_menu(back.upcast_ref(), Direction::Backward)
+        .expect("Back has a menu");
+    wait_until("the menu to show", || {
+        menu.rows().iter().all(|row| row.height() > 0)
+    });
+    menu.middle_click_row(&results);
+    menu.popdown();
+
+    assert_eq!(test.tab_titles(), ["Documents", &results, &results]);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    test.activate("next-tab", None);
+    wait_until("the results in the new tab", || test.names() == RESULTS);
+    assert_eq!(test.search_text(), "notes");
+    test.activate("back", None);
+    test.wait_for_listing("the folder");
+    wait_until("the folder's items", || test.names() == STANDARD_NAMES);
+    assert_eq!(test.active_tab_title(), root);
 }
 
 /// Back and Forward show each step as it was, also while the strip's pin

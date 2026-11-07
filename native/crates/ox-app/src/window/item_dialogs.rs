@@ -428,12 +428,14 @@ impl BrowserWindow {
         }
     }
 
-    /// Shows the new icon of the item at `uri` in the folder view
-    /// (PROP-016).
+    /// Shows the new icon of the item at `uri` in the folder view and in
+    /// the details pane (PROP-016).
     pub(crate) fn refresh_item_icon(&self, uri: &str) {
         for pane in self.folder_panes() {
             pane.owners().refresh_custom_icon(uri);
         }
+        // The details pane shows the item's picture too, when it shows it.
+        self.details_pane().reread_picture_of(uri);
     }
 
     /// Lists again every tab and split pane showing `folder`, keeping their selection,

@@ -90,12 +90,19 @@ impl NetworkServices {
         self.visited.borrow_mut().remember(uri)
     }
 
+    /// Records the share `uri` mapped for this session only under `label`,
+    /// which its Network row shows.
+    pub(crate) fn remember_mapped(&self, uri: &str, label: &str) {
+        self.visited.borrow_mut().remember_mapped(uri, label);
+    }
+
     /// Forgets every browsed root on `host`, when signing out of it.
     pub(crate) fn forget_visited_host(&self, host: &str) {
         self.visited.borrow_mut().forget_host(host);
     }
 
-    /// The browsed roots, oldest first, as the Network list merges them.
+    /// The shares mapped this session, then the browsed roots, oldest
+    /// first, as the Network list merges them.
     pub(crate) fn visited_bookmarks(&self) -> Vec<Bookmark> {
         self.visited.borrow().to_bookmarks()
     }
