@@ -30,8 +30,9 @@
 //! with the search strip's "Names and contents".
 //!
 //! The options take effect with OK or Apply, and each tab's Restore
-//! Defaults sets its choices back. Built on the app's one [`Dialog`];
-//! [`super::explorer_options`] does what the options that only Folder
+//! Defaults sets its choices back. Built on the app's one [`Dialog`], as
+//! a window of its own with a title bar, modal to the window it was opened
+//! from ([`Dialog::with_title_bar`]). [`super::explorer_options`] does what the options that only Folder
 //! Options sets mean in a window.
 
 use std::cell::Cell;
@@ -676,7 +677,7 @@ impl BrowserWindow {
 
     /// Shows Folder Options until OK, Cancel or Escape.
     async fn run_folder_options(&self) {
-        let options = Dialog::new(self, &gettext("Folder Options"), "");
+        let options = Dialog::with_title_bar(self, &gettext("Folder Options"), "");
         let source = self
             .current_uri()
             .is_some_and(|uri| is_view_source(&uri, self.is_searching()));

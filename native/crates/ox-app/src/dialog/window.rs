@@ -46,6 +46,10 @@ use crate::window::{BrowserWindow, ButtonStyle};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DialogButton(usize);
 
+/// The size of the close glyph in a titled dialog's title bar, as in the
+/// Properties window's.
+const CLOSE_GLYPH: i32 = 12;
+
 /// The answer a button, Escape or closing the window gives.
 type Answer = Option<DialogButton>;
 
@@ -188,6 +192,54 @@ impl Dialog {
             .title_label()
             .upcast_ref()])]);
         dialog
+    }
+
+    /// A dialog over `parent` laid out as a Windows dialog window rather
+    /// than a `ContentDialog`: `title` is in a title bar of its own, with
+    /// a close button, and not over the body. Folder Options, Format and
+    /// Map network drive are such windows in Windows: the title bar shows
+    /// it is a window of its own, which can be moved anywhere, even off
+    /// its parent, while it stays modal to that window alone (the
+    /// parent's window group, [`BrowserWindow`]).
+    pub(crate) fn with_title_bar(parent: &impl IsA<gtk::Window>, title: &str, message: &str) -> Self {
+        let dialog = Self::new(parent, title, message);
+        dialog.add_css_class("titled");
+        dialog.imp().frame.title_label().set_visible(false);
+        dialog.set_titlebar(Some(&dialog.title_bar(title)));
+        dialog
+    }
+
+    /// The title and the close button, as a handle the window is dragged
+    /// by, as the Properties window's title bar is.
+    fn title_bar(&self, title: &str) -> gtk::WindowHandle {
+        let bar = gtk::Box::builder()
+            .css_classes(["ox-titlebar", "dialog-titlebar"])
+            .build();
+        let label = gtk::Label::builder()
+            .label(title)
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(1)
+            .css_classes(["dialog-window-title"])
+            .build();
+        bar.append(&label);
+        let close_text = ox_core::i18n::gettext("Close");
+        let close = gtk::Button::builder()
+            .child(&crate::icons::image(crate::icons::Icon::Dismiss, CLOSE_GLYPH))
+            .css_classes(["caption", "close"])
+            .focus_on_click(false)
+            .tooltip_text(close_text.as_str())
+            .build();
+        close.update_property(&[gtk::accessible::Property::Label(&close_text)]);
+        // Closing the window is a cancellation, as Escape is.
+        close.connect_clicked(glib::clone!(
+            #[weak(rename_to = dialog)]
+            self,
+            move |_| dialog.close()
+        ));
+        bar.append(&close);
+        gtk::WindowHandle::builder().child(&bar).build()
     }
 
     /// The box the fields, notes and check boxes go in, in the order added.

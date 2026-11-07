@@ -19,6 +19,24 @@ window.ox.ox-dialog.solid-csd {
   box-shadow: inset 0 0 0 3px @ox_border;
 }
 window.ox.ox-dialog .dialog-content { padding: 24px 24px 18px 24px; }
+/* A dialog window with a title bar of its own (Dialog::with_title_bar):
+   Folder Options, Format and Map network drive, as Windows draws them,
+   with the title and a full-height close button on the dialog's colour,
+   like the Properties window's. Its content starts under the bar. */
+window.ox.ox-dialog.titled .dialog-titlebar {
+  min-height: 32px;
+  padding-left: 12px;
+  background-color: @ox_bg;
+  border-radius: 8px 8px 0 0;
+}
+window.ox.ox-dialog.titled.solid-csd .dialog-titlebar { border-radius: 0; }
+window.ox.ox-dialog.titled:backdrop .dialog-titlebar { background-color: @ox_bg; color: @ox_text_tertiary; }
+window.ox.ox-dialog.titled .dialog-titlebar button.caption {
+  min-width: 46px;
+  min-height: 32px;
+  border-radius: 0 8px 0 0;
+}
+window.ox.ox-dialog.titled .dialog-content { padding-top: 12px; }
 window.ox.ox-dialog .dialog-title {
   font-size: 20px;
   font-weight: 600;

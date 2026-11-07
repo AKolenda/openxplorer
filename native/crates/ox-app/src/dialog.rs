@@ -9,6 +9,9 @@
 //! - [`Dialog`] puts the frame in a modal window of its own over the
 //!   browser window, for every question and form: the desktop dims and
 //!   attaches it, and nothing behind it takes input until it is answered.
+//!   [`Dialog::with_title_bar`] gives it a title bar with a close button,
+//!   as Windows draws Folder Options, Format and Map network drive: a
+//!   window that can be moved anywhere and is modal to its window alone.
 //! - [`DialogLayer`] shows the frame on a dimmed layer inside the browser
 //!   window, under its title bar, for a dialog that leaves the tab strip
 //!   usable and stays in front across tab switches: Restore a copy, the
