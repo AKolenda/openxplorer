@@ -245,9 +245,7 @@ fn folder_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 }
 
 /// The app's own commands beside Open, which Windows does not have:
-/// Compare files for two files, Show target for a link (CMD-030) and, for
-/// a search result or a Recent row, Open file location (SRCH-015), also
-/// in a new tab or window (SRCH-016).
+/// Compare files for two files and Show target for a link (CMD-030).
 fn other_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
     if facts.comparison == Comparison::TwoFiles {
@@ -268,6 +266,14 @@ fn other_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         entries.push(for_one_item(show_target, facts, false).into());
     }
+    entries
+}
+
+/// Open file location for a search result or a Recent row, which stand for
+/// a file elsewhere (SRCH-015), also in a new tab or window (SRCH-016):
+/// right after Open, where Windows lists it.
+fn file_location_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let mut entries = Vec::new();
     if facts.has_file_location {
         let locations = [
             ("Open file location", Icon::Folder, WindowAction::OpenFileLocation),
@@ -946,6 +952,7 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
 /// the classic menu behind "Show more options".
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     let mut entries = vec![open_item(facts)];
+    entries.extend(file_location_items(facts));
     entries.extend(extraction_items(facts));
     entries.extend(mount_item(facts));
     entries.extend(compact_open_with(facts));
@@ -1001,6 +1008,7 @@ fn rename_items_item(facts: &ItemFacts) -> Option<MenuEntry> {
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
     let mut entries = vec![open_item(facts)];
+    entries.extend(file_location_items(facts));
     entries.extend(extraction_items(facts));
     entries.extend(mount_item(facts));
     entries.extend(editor_items(facts));
@@ -1957,27 +1965,27 @@ mod tests {
         );
     }
 
+    /// A search result or a Recent row lists Open file location right
+    /// after Open, where Windows lists it, in both styles.
+    ///
     /// parity: SRCH-015
     #[test]
-    fn a_search_result_offers_open_file_location_after_the_open_group() {
+    fn a_search_result_offers_open_file_location_right_after_open() {
         let facts = ItemFacts {
             has_file_location: true,
             ..file()
         };
 
-        let entries = labels(&item_menu(&facts, MenuStyle::Classic).entries);
-
-        assert_eq!(
-            entries[..6],
-            [
-                "Open",
-                "Open containing folder in Terminal",
-                "Open with…",
-                "Open file location",
-                "Open file location in new tab",
-                "Open file location in new window"
-            ]
-        );
+        let locations = [
+            "Open file location",
+            "Open file location in new tab",
+            "Open file location in new window",
+        ];
+        for style in [MenuStyle::Classic, MenuStyle::Compact] {
+            let entries = labels(&item_menu(&facts, style).entries);
+            assert_eq!(entries[0], "Open", "{style:?}");
+            assert_eq!(entries[1..4], locations, "{style:?}");
+        }
         assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries)
             .contains(&"Open file location".to_owned()));
     }

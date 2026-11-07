@@ -10021,7 +10021,7 @@ python_tests = [
 bridge = ["list"]
 dolphin = "Open Path / Open Path in New Tab / Open Path in New Window"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/search.rs (a_results_folder_opens_in_a_new_tab_or_window_with_it_selected); native/crates/ox-app/src/window/context_menu/entries.rs (a_search_result_offers_open_file_location_after_the_open_group). A search result's menu lists \"Open file location\", \"Open file location in new tab\" and \"Open file location in new window\" (window/cache_folder.rs, window/folder_search.rs), enabled for one selected result. The tab opens behind, as Dolphin's Open Path in New Tab does, so the search stays in front; the window opens in front. Either lists the result's folder with the result selected and scrolled into view."
+native_note = "native/crates/ox-app/src/window/tests/search.rs (a_results_folder_opens_in_a_new_tab_or_window_with_it_selected); native/crates/ox-app/src/window/context_menu/entries.rs (a_search_result_offers_open_file_location_right_after_open). A search result's menu lists \"Open file location\", \"Open file location in new tab\" and \"Open file location in new window\" (window/cache_folder.rs, window/folder_search.rs), enabled for one selected result. The tab opens behind, as Dolphin's Open Path in New Tab does, so the search stays in front; the window opens in front. Either lists the result's folder with the result selected and scrolled into view."
 
 [[feature]]
 id = "SRCH-017"
