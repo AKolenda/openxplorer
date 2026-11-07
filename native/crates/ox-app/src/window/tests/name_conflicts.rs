@@ -481,3 +481,38 @@ fn undo_brings_back_the_file_a_paste_replaced() {
         "the source stays"
     );
 }
+
+/// With Settings > Files & folders > "When replacing a file, move the old
+/// one to the Recycle Bin" off, a paste's Replace overwrites the old file
+/// as Windows does: it is gone, not in the Recycle Bin, so there is no
+/// Undo that would bring it back.
+///
+/// parity: OPS-028
+#[gtk::test]
+fn a_pasted_replace_overwrites_the_old_file_when_the_switch_is_off() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+    super::restore_conflicts::overwrite_replaced_files(&test);
+    let trash_files = gtk::glib::user_data_dir().join("Trash/files");
+    let recycled = || fs::read_dir(&trash_files).map_or(0, Iterator::count);
+    let before = recycled();
+
+    test.activate("paste", None);
+    answer_conflicts(&test, ConflictAnswer::Replace);
+    wait_until("the file to be replaced", || {
+        fs::read(fixture.path("Notes 2.txt")).is_ok_and(|contents| contents == b"Another file\n")
+    });
+    wait_until("the copy to end", || !test.window.is_writing_files());
+
+    assert_eq!(recycled(), before, "nothing went to the Recycle Bin");
+    assert!(
+        !is_enabled(&test, "undo"),
+        "no Undo brings the overwritten file back"
+    );
+    assert_eq!(
+        fs::read(fixture.path("Documents/Notes 2.txt")).unwrap(),
+        b"Another file\n",
+        "the source stays"
+    );
+}

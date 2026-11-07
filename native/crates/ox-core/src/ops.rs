@@ -106,7 +106,9 @@ mod unfinished;
 pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
 pub use changed_copies::changed_copies;
 pub use conflicts::{scan_name_conflicts, ConflictScan, ItemFacts, NameConflict, PlannedItem, PlannedKind};
-pub use context::{FailureAsker, MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
+pub use context::{
+    FailureAsker, MoveByCopyingAsker, OperationContext, ReplacedFiles, UnstorableAsker, WriteProtection,
+};
 pub use create::{create_folder_path, create_item, create_numbered_folder, CreatedFolderPath, CreatedItem};
 pub use delete_plan::{
     permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, DeletePlan, DeleteSubject,
