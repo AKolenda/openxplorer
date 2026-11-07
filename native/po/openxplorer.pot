@@ -3388,6 +3388,10 @@ msgid "Copy and Cut also put the items' paths on the clipboard, so a terminal or
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Copying and moving"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Documents and other files"
 msgstr ""
 
@@ -3472,6 +3476,10 @@ msgid "Remember each folder's view"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can bring it back. Off: the new file overwrites it, as in Windows, and it is gone."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Right-click a folder → Calculate folder size. Results last for this session."
 msgstr ""
 
@@ -3501,6 +3509,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "The Size column says how many items a folder on this computer holds."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "When replacing a file, move the old one to the Recycle Bin"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3549,6 +3561,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "relative dates date modified time today yesterday absolute short format column"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "replace overwrite file conflict copy move paste drag restore recycle bin trash undo old replaced keep windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -8818,6 +8834,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/resolved_transfer.rs
 msgid "{name}: The file it was to replace is in the Recycle Bin. Restore it from there."
+msgstr ""
+
+#: crates/ox-core/src/ops/restore_conflicts.rs
+msgid "The Recycle Bin does not keep this item as a file on this computer, so it cannot replace another file. It was left in the Recycle Bin."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

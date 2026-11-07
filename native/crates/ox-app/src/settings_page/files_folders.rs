@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Files & folders: Dolphin's view options, item counts in a folder's Size
 //! (VIEW-037), as its "Number of items", folder sizes (the Python "Folder
-//! sizes" section, SET-008), and previews (VIEW-058), as Dolphin's Previews
-//! settings offer them, folded away, and two clipboard extras that Windows 11
-//! File Explorer lacks, both on by default and each one able to be turned
-//! off: a picture pasted as a new file (CLIP-015) and the paths copied as
-//! text beside the files (CLIP-004). Windows 11's Compact view (VIEW-067) is
-//! built here and shown on the Appearance page. Each switch saves its
-//! preference or the folder views' options at once, and every window follows.
+//! sizes" section, SET-008), what Replace does with the file it replaces
+//! (OPS-028), and previews (VIEW-058), as Dolphin's Previews settings offer
+//! them, folded away, and two clipboard extras that Windows 11 File Explorer
+//! lacks, both on by default and each one able to be turned off: a picture
+//! pasted as a new file (CLIP-015) and the paths copied as text beside the
+//! files (CLIP-004). Windows 11's Compact view (VIEW-067) is built here and
+//! shown on the Appearance page. Each switch saves its preference or the
+//! folder views' options at once, and every window follows.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -53,6 +54,14 @@ const EXPANDABLE_FOLDERS: RowText = RowText {
     title: "Expandable folders in Details",
     description: "In the details view, a folder's arrow lists its contents beneath it.",
     keywords: "expandable folders tree expand collapse arrow chevron details subfolders nested",
+};
+
+const RECYCLE_REPLACED: RowText = RowText {
+    title: "When replacing a file, move the old one to the Recycle Bin",
+    description: "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can \
+                  bring it back. Off: the new file overwrites it, as in Windows, and it is gone.",
+    keywords: "replace overwrite file conflict copy move paste drag restore recycle bin trash undo old \
+               replaced keep windows",
 };
 
 const SHOW_PREVIEWS: RowText = RowText {
@@ -159,6 +168,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let files = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     files.append_group(&folder_views_group(page));
     files.append_group(&details_group(page));
+    files.append_group(&replacing_group(page));
     files.append_group(&clipboard_group(page));
     files.append_group(&previews_group(page));
     files
@@ -252,6 +262,24 @@ fn details_group(page: &SettingsPage) -> SettingsGroup {
         group.add_row(&row);
     }
     add_folder_size_rows(page, &group);
+    group
+}
+
+/// What Replace does with the file it replaces in a copy, move, paste,
+/// drag or Recycle Bin restore. On by default, the owner's choice; off,
+/// the old file is overwritten, as in Windows 11.
+fn replacing_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Copying and moving"));
+    let row = SettingRow::new(RECYCLE_REPLACED);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.recycle_replaced_files,
+        write: |on| PreferencesUpdate {
+            recycle_replaced_files: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
     group
 }
 

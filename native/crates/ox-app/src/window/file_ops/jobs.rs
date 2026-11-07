@@ -64,6 +64,7 @@ impl BrowserWindow {
         context.unstorable = Some(self.unstorable_asker());
         context.move_by_copying = Some(self.move_by_copying_asker());
         context.item_failure = Some(self.failure_asker(&context.cancel));
+        context.replaced_files = self.replaced_files();
         let panel = if self.transfer_panel().is_busy() {
             TransferPanel::for_window(self)
         } else {

@@ -65,6 +65,10 @@ const MOVED_ROWS: [(&str, &str); 71] = [
         "Check network and unwatched folders every",
     ),
     ("Calculate folder sizes", "Calculate folder sizes"),
+    (
+        "When replacing a file, move the old one to the Recycle Bin",
+        "When replacing a file, move the old one to the Recycle Bin",
+    ),
     ("How sizes are counted", "How sizes are counted"),
     ("Include Show in folder", "Also handle “Show in folder”"),
     (
@@ -578,7 +582,11 @@ fn the_search_finds_settings_by_the_words_people_use() {
         ("magnify", &["Text size"]),
         (
             "wastebasket",
-            &["Moving items to the Recycle Bin", "Emptying the Recycle Bin"],
+            &[
+                "When replacing a file, move the old one to the Recycle Bin",
+                "Moving items to the Recycle Bin",
+                "Emptying the Recycle Bin",
+            ],
         ),
         ("monitor", &["Watch folders for changes"]),
         (
