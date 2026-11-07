@@ -307,3 +307,72 @@ fn folder_options_as_a_window_is_captured_light_and_dark() {
         close_folder_options(&test, &options, "Cancel");
     }
 }
+
+/// Counts the primary presses that reach `window`, before any of its
+/// widgets takes them.
+fn count_presses(window: &impl IsA<gtk::Widget>) -> std::rc::Rc<std::cell::Cell<u32>> {
+    let presses = std::rc::Rc::new(std::cell::Cell::new(0));
+    let click = gtk::GestureClick::new();
+    click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let counted = std::rc::Rc::clone(&presses);
+    click.connect_pressed(move |_, _, _, _| counted.set(counted.get() + 1));
+    window.add_controller(click);
+    presses
+}
+
+/// Clicks the primary button at (`x`, `y`) in `widget`, with the real
+/// pointer.
+fn click_in(
+    pointer: &mut crate::test_support::pointer::Pointer,
+    widget: &impl IsA<gtk::Widget>,
+    point: (f64, f64),
+) {
+    use crate::test_support::pointer::{screen_point, Button};
+    let (x, y) = screen_point(pointer, widget, point, (10, 10));
+    pointer.move_to(x, y);
+    pointer.press(Button::Primary);
+    pointer.release(Button::Primary);
+    crate::test_support::harness::settle();
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(200));
+}
+
+/// With real clicks, as in Windows: while Folder Options is open, the
+/// Explorer window it belongs to takes no click, another Explorer window
+/// still does, and Folder Options' own options take theirs.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn folder_options_holds_back_its_own_window_alone_under_real_clicks() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    // Without a window manager every window opens at the screen's corner:
+    // the other window lies wider underneath, this one over it, and
+    // Folder Options over that.
+    other.window.set_default_size(1100, 760);
+    test.window.set_default_size(640, 460);
+    test.window.present();
+    wait_until("the windows to have their sizes", || {
+        other.window.width() >= 1000 && test.window.width() <= 700
+    });
+    let options = open_folder_options(&test);
+    wait_until("Folder Options to show", || options.width() > 0);
+    let own = count_presses(&test.window);
+    let beside = count_presses(&other.window);
+    let mut pointer = crate::test_support::pointer::Pointer::connect();
+
+    click_in(&mut pointer, &test.window, (560.0, 380.0));
+    assert_eq!(own.get(), 0, "its own window takes no click");
+
+    click_in(&mut pointer, &other.window, (900.0, 600.0));
+    assert_eq!(beside.get(), 1, "another Explorer window takes its click");
+
+    let own_window = option_check(&options, "General", "Open each folder in its own window");
+    let middle = (8.0, f64::from(own_window.height()) / 2.0);
+    click_in(&mut pointer, &own_window, middle);
+    assert!(own_window.is_active(), "Folder Options takes its own clicks");
+
+    close_folder_options(&test, &options, "Cancel");
+    click_in(&mut pointer, &test.window, (560.0, 380.0));
+    assert_eq!(own.get(), 1, "its window takes clicks again once it closes");
+}
