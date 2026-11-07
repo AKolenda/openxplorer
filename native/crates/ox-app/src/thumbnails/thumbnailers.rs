@@ -20,7 +20,11 @@
 //! with a parser of its own, so it runs in a bubblewrap sandbox, as Files
 //! runs it ([`Sandbox`]): no network and no session bus, the system's
 //! programs and libraries read-only, the item alone of the user's files,
-//! and a private folder for its picture. A computer without bubblewrap,
+//! and a private folder for its picture, which is also its home: an
+//! empty one each run, so nothing it reads or keeps there outlives the
+//! item. A program installed outside the system's folders, in `/opt` or
+//! an unpacked app bundle, sees the folder it was installed in, and on
+//! NixOS the store every program lives in. A computer without bubblewrap,
 //! or where it cannot make its namespaces, starts none of these programs
 //! at all; the service and the app's own decoding still preview what
 //! they know.
@@ -109,13 +113,23 @@ const SYSTEM_FOLDERS: [&str; 5] = ["/bin", "/sbin", "/lib", "/lib32", "/lib64"];
 
 /// The system files and folders a program may need besides `/usr`, shown
 /// read-only when this computer has them: the linker's cache, Debian's
-/// alternatives and the fonts.
-const SYSTEM_EXTRAS: [&str; 4] = [
+/// alternatives, the fonts, and NixOS's store, system and graphics
+/// drivers, where every program and library lives instead of `/usr`
+/// (as nixpkgs's `bubblewrap-paths.patch` shows them to GNOME's
+/// thumbnailers).
+const SYSTEM_EXTRAS: [&str; 7] = [
     "/etc/ld.so.cache",
     "/etc/alternatives",
     "/etc/fonts",
     "/var/cache/fontconfig",
+    "/nix/store",
+    "/run/current-system",
+    "/run/opengl-driver",
 ];
+
+/// The folders of [`SYSTEM_EXTRAS`] a program may be installed in, which
+/// need no folder of its own in the sandbox.
+const SYSTEM_PROGRAM_FOLDERS: [&str; 3] = ["/nix/store", "/run/current-system", "/run/opengl-driver"];
 
 /// GNOME's settings for the desktop's thumbnailers, which Files honours:
 /// the MIME types no external thumbnailer is started for, and the switch
@@ -556,14 +570,12 @@ impl Sandbox {
                 if let (Some(first), Some(resolved)) = (program.first_mut(), &resolved) {
                     resolved.as_os_str().clone_into(first);
                 }
+                let folders = resolved
+                    .as_deref()
+                    .map(|program| program_folders(program, &UserFolders::of_session()))
+                    .unwrap_or_default();
                 let mut command = vec![bwrap.as_os_str().to_owned()];
-                command.extend(sandbox_arguments(
-                    workspace,
-                    item,
-                    &inside_item,
-                    resolved.as_deref(),
-                    *proc,
-                ));
+                command.extend(sandbox_arguments(workspace, item, &inside_item, &folders, *proc));
                 command.push("--".into());
                 command.extend(program);
                 command
@@ -593,15 +605,25 @@ fn extension_of(item: &Path) -> String {
 }
 
 /// bubblewrap's arguments for a thumbnailer: the system read-only, the
-/// program itself when it lives elsewhere, `workspace` as [`INSIDE`] and
-/// the item at `inside_item`, in fresh namespaces (no network, no other
-/// process, no session bus) that end with the app; `proc` gives it a
-/// `/proc` of its own.
+/// `program` folders of [`program_folders`] read-only, `workspace` as
+/// [`INSIDE`] and the item at `inside_item`, in fresh namespaces (no
+/// network, no other process, no session bus) that end with the app;
+/// `proc` gives it a `/proc` of its own.
+///
+/// They follow GNOME's own sandbox for thumbnailers, `add_bwrap` in
+/// gnome-desktop's `libgnome-desktop/gnome-desktop-thumbnail-script.c`:
+/// `/usr`, the linker's cache, `/bin`, `/sbin` and `/lib*` as folders or
+/// links into `/usr`, the font cache and `/etc/alternatives` read-only,
+/// `/proc`, `/dev`, `/` as the working folder, `GIO_USE_VFS=local`,
+/// every namespace unshared, and the output folder as `/tmp` with the
+/// item in it under its own extension. GNOME shows its own install
+/// prefix when it is not `/usr`; here the thumbnailer's is shown, since
+/// it is the program that needs its libraries.
 fn sandbox_arguments(
     workspace: &Path,
     item: &Path,
     inside_item: &Path,
-    program: Option<&Path>,
+    program: &[PathBuf],
     proc: bool,
 ) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = Vec::new();
@@ -618,15 +640,8 @@ fn sandbox_arguments(
             add(&[word("--ro-bind"), word(folder), word(folder)]);
         }
     }
-    // A program installed outside the system's folders, such as one in
-    // the user's own `bin` folder, is shown read-only where it is.
-    if let Some(program) = program {
-        let in_system = std::iter::once("/usr")
-            .chain(SYSTEM_FOLDERS)
-            .any(|folder| program.starts_with(folder));
-        if !in_system {
-            add(&[word("--ro-bind"), program.as_os_str(), program.as_os_str()]);
-        }
+    for folder in program {
+        add(&[word("--ro-bind"), folder.as_os_str(), folder.as_os_str()]);
     }
     if proc {
         add(&[word("--proc"), word("/proc")]);
@@ -656,6 +671,135 @@ fn sandbox_arguments(
         inside_item.as_os_str(),
     ]);
     arguments
+}
+
+/// The user's folders no thumbnailer's install folder may be or hold.
+struct UserFolders {
+    /// The home folder, as named and as it really is.
+    homes: Vec<PathBuf>,
+    /// The home folder and the user's data, settings, cache, state and
+    /// runtime folders, as named and as they really are.
+    own: Vec<PathBuf>,
+}
+
+impl UserFolders {
+    /// This session's.
+    fn of_session() -> Self {
+        Self::of(
+            &glib::home_dir(),
+            &[
+                glib::user_data_dir(),
+                glib::user_config_dir(),
+                glib::user_cache_dir(),
+                glib::user_state_dir(),
+                glib::user_runtime_dir(),
+            ],
+        )
+    }
+
+    /// Those of a user whose home is `home` and whose data and other
+    /// folders are `own`.
+    fn of(home: &Path, own: &[PathBuf]) -> Self {
+        let named_and_real = |path: &Path| {
+            let mut paths = vec![path.to_path_buf()];
+            paths.extend(fs::canonicalize(path).ok().filter(|real| real != path));
+            paths
+        };
+        let homes = named_and_real(home);
+        let own = homes
+            .iter()
+            .cloned()
+            .chain(own.iter().flat_map(|folder| named_and_real(folder)))
+            .collect();
+        Self { homes, own }
+    }
+
+    /// Whether `folder` may be shown to a thumbnailer as its install
+    /// folder: never `/` or a folder directly in it (`/opt`, `/tmp`,
+    /// `/home`), the home folder or a folder directly in it (Documents,
+    /// `~/.local`), or a folder that holds the user's data, settings or
+    /// cache. bubblewrap shows what a link leads to, so the folder must
+    /// pass both as named and as it really is.
+    fn may_show(&self, folder: &Path) -> bool {
+        self.may_name(folder) && fs::canonicalize(folder).is_ok_and(|real| self.may_name(&real))
+    }
+
+    /// Whether the path `folder` passes [`Self::may_show`]'s rules.
+    fn may_name(&self, folder: &Path) -> bool {
+        let mut components = folder.components();
+        let plain = components.next() == Some(std::path::Component::RootDir)
+            && components.all(|component| matches!(component, std::path::Component::Normal(_)));
+        plain
+            && folder.components().count() > 2
+            && !self
+                .homes
+                .iter()
+                .any(|home| folder.parent() == Some(home.as_path()))
+            && !self.own.iter().any(|own| own.starts_with(folder))
+    }
+}
+
+/// The folders a thumbnailer at `program` is shown read-only in the
+/// sandbox: none when it is a system program, else its install folder,
+/// which holds the libraries and data it needs. That is the folder it is
+/// in or, when that is a `bin` folder, the one above (`/opt/App` for
+/// `/opt/App/bin/x`). Where [`UserFolders::may_show`] refuses that, it
+/// is the `bin` folder with the `lib` folder and the program's own
+/// folder of `share` beside it (`~/.local/bin`, `~/.local/lib` and
+/// `~/.local/share/x`, since the rest of `~/.local/share` is the user's
+/// keyrings, Recycle Bin and recent files), else the program alone.
+///
+/// A program reached through a link, such as `/usr/local/bin/x` for
+/// `/opt/App/bin/x`, is shown both where it is named and where it is.
+fn program_folders(program: &Path, user: &UserFolders) -> Vec<PathBuf> {
+    let real = fs::canonicalize(program).ok().filter(|real| real != program);
+    let mut folders: Vec<PathBuf> = Vec::new();
+    for path in std::iter::once(program).chain(real.as_deref()) {
+        let in_system = std::iter::once("/usr")
+            .chain(SYSTEM_FOLDERS)
+            .chain(SYSTEM_PROGRAM_FOLDERS)
+            .any(|folder| path.starts_with(folder));
+        if in_system {
+            continue;
+        }
+        for folder in install_folders(path, user) {
+            if !folders.iter().any(|shown| folder.starts_with(shown)) {
+                folders.push(folder);
+            }
+        }
+    }
+    folders
+}
+
+/// The folders of [`program_folders`] for one path of the program.
+fn install_folders(program: &Path, user: &UserFolders) -> Vec<PathBuf> {
+    let Some(folder) = program.parent() else {
+        return vec![program.to_path_buf()];
+    };
+    if folder.file_name() != Some(OsStr::new("bin")) {
+        if user.may_show(folder) {
+            return vec![folder.to_path_buf()];
+        }
+        return vec![program.to_path_buf()];
+    }
+    let Some(prefix) = folder.parent() else {
+        return vec![program.to_path_buf()];
+    };
+    if user.may_show(prefix) {
+        return vec![prefix.to_path_buf()];
+    }
+    if !user.may_show(folder) {
+        return vec![program.to_path_buf()];
+    }
+    let mut folders = vec![folder.to_path_buf()];
+    let mut beside = vec![prefix.join("lib")];
+    beside.extend(program.file_name().map(|name| prefix.join("share").join(name)));
+    folders.extend(
+        beside
+            .into_iter()
+            .filter(|extra| extra.is_dir() && user.may_show(extra)),
+    );
+    folders
 }
 
 /// Where the program an `Exec` line starts with lives: a path as it is,
@@ -1382,8 +1526,9 @@ mod tests {
     }
 
     /// In bubblewrap a thumbnailer is given the item, read-only under a
-    /// name of the sandbox's own, and a private folder for its picture;
-    /// the user's other files are out of its sight. Runs where bubblewrap
+    /// name of the sandbox's own, a private folder for its picture, and
+    /// the folder it was installed in, read-only; the user's other files
+    /// are out of its sight. Runs where bubblewrap
     /// can make its sandbox.
     ///
     /// parity: VIEW-057
@@ -1403,7 +1548,14 @@ mod tests {
         let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 300, 200).expect("a picture");
         pixbuf.fill(0x3366_99ff);
         pixbuf.savev(&item, "png", &[]).expect("the item");
-        let script = folder.path().join("ox-sandboxed-thumbnailer");
+        // The program is installed in a folder of its own, which it sees
+        // with the data it was installed with.
+        let installed = folder.path().join("App");
+        let data = installed.join("share/data");
+        fs::create_dir_all(installed.join("bin")).expect("the install folder");
+        fs::create_dir_all(installed.join("share")).expect("the install folder");
+        fs::write(&data, b"installed with the program").expect("its data");
+        let script = installed.join("bin/ox-sandboxed-thumbnailer");
         fs::write(
             &script,
             format!(
@@ -1411,10 +1563,13 @@ mod tests {
                  test \"$1\" = /tmp/openxplorer-item.ab || exit 1\n\
                  test \"$2\" = file:///tmp/openxplorer-item.ab || exit 2\n\
                  test -e '{secret}' && exit 3\n\
+                 test -e '{data}' || exit 5\n\
+                 (: > '{data}') 2>/dev/null && exit 6\n\
                  touch '{escaped}' 2>/dev/null\n\
                  (: > \"$1\") 2>/dev/null && exit 4\n\
                  cp \"$1\" \"$3\"\n",
                 secret = secret.display(),
+                data = data.display(),
                 escaped = escaped.display(),
             ),
         )
@@ -1442,6 +1597,140 @@ mod tests {
         assert_eq!((thumbnail.width(), thumbnail.height()), (128, 85));
         assert!(!escaped.exists(), "the program wrote nothing outside its folder");
         assert!(secret.exists() && item.exists());
+    }
+
+    /// A thumbnailer installed outside the system's folders sees the
+    /// folder it was installed in, read-only, but never the user's home,
+    /// a folder directly in it or one holding the user's data; NixOS's
+    /// store is shown to every one, and the home it gets is its own
+    /// empty folder.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn a_thumbnailer_sees_the_folder_it_was_installed_in() {
+        let temporary = tempfile::tempdir().expect("a temporary folder");
+        let root = fs::canonicalize(temporary.path()).expect("the folder");
+        let home = root.join("home");
+        let local = home.join(".local");
+        let make = |path: &Path| {
+            fs::create_dir_all(path.parent().expect("a folder")).expect("the folders");
+            fs::write(path, b"#!/bin/sh\n").expect("the program");
+        };
+        for folder in [
+            local.join("lib"),
+            local.join("share/viewer"),
+            local.join("share/keyrings"),
+            home.join(".config"),
+            home.join(".cache"),
+        ] {
+            fs::create_dir_all(folder).expect("a folder");
+        }
+        let user = UserFolders::of(
+            &home,
+            &[
+                local.join("share"),
+                home.join(".config"),
+                home.join(".cache"),
+                local.join("state"),
+                root.join("run"),
+            ],
+        );
+        let installed = root.join("opt/App/bin/viewer");
+        let alone = root.join("opt/Tool/viewer");
+        let user_installed = local.join("bin/viewer");
+        let documents = home.join("Documents/viewer");
+        let own_bin = home.join("bin/viewer");
+        let in_home = home.join("viewer");
+        for program in [
+            &installed,
+            &alone,
+            &user_installed,
+            &documents,
+            &own_bin,
+            &in_home,
+        ] {
+            make(program);
+        }
+        let linked = local.join("bin/linked");
+        std::os::unix::fs::symlink(&installed, &linked).expect("the link");
+        // A folder that is a link into the home folder is not shown.
+        let into_home = root.join("opt/Linked");
+        std::os::unix::fs::symlink(&home, &into_home).expect("the link");
+        let through_link = into_home.join("bin/viewer");
+
+        let folders = |program: &Path| program_folders(program, &user);
+        assert_eq!(folders(&installed), [root.join("opt/App")]);
+        assert_eq!(folders(&alone), [root.join("opt/Tool")]);
+        // Of ~/.local, only its programs, libraries and the program's own
+        // data are shown; the rest of ~/.local/share is the user's.
+        assert_eq!(
+            folders(&user_installed),
+            [local.join("bin"), local.join("lib"), local.join("share/viewer")]
+        );
+        assert_eq!(
+            folders(&linked),
+            [local.join("bin"), local.join("lib"), root.join("opt/App")]
+        );
+        assert_eq!(folders(&through_link), [through_link.clone(), own_bin.clone()]);
+        // A program kept among the user's files is shown alone.
+        assert_eq!(folders(&documents), std::slice::from_ref(&documents));
+        assert_eq!(folders(&own_bin), std::slice::from_ref(&own_bin));
+        assert_eq!(folders(&in_home), std::slice::from_ref(&in_home));
+        assert!(folders(Path::new("/usr/bin/true")).is_empty());
+        assert!(folders(Path::new("/nix/store/0000-viewer/bin/viewer")).is_empty());
+        assert!(folders(Path::new("/run/current-system/sw/bin/viewer")).is_empty());
+        for refused in ["/", "/opt", "/tmp"] {
+            assert!(!user.may_show(Path::new(refused)), "{refused}");
+        }
+        for refused in [
+            &root,
+            &home,
+            &local,
+            &local.join("share"),
+            &home.join("Documents"),
+        ] {
+            assert!(!user.may_show(refused), "{}", refused.display());
+        }
+        assert!(!user.may_show(&root.join("opt/App/../../home/Documents/Taxes")));
+    }
+
+    /// bubblewrap's arguments show NixOS's store to every thumbnailer, its
+    /// install folder read-only, and its private folder as its home; the
+    /// user's home is not shown.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn the_sandbox_shows_the_store_and_the_install_folder() {
+        let home = Path::new("/home/someone");
+        let app = Path::new("/opt/App");
+        let workspace = Path::new("/tmp/openxplorer-thumbnailer-0000");
+        let item = home.join("Sprite.ab");
+        let arguments = sandbox_arguments(
+            workspace,
+            &item,
+            Path::new("/tmp/openxplorer-item.ab"),
+            &[app.to_path_buf()],
+            true,
+        );
+        let has = |words: &[&OsStr]| {
+            arguments
+                .windows(words.len())
+                .any(|window| window.iter().zip(words).all(|(argument, word)| argument == word))
+        };
+        let word = OsStr::new;
+        for nix in ["/nix/store", "/run/current-system", "/run/opengl-driver"] {
+            assert!(has(&[word("--ro-bind-try"), word(nix), word(nix)]), "{nix}");
+        }
+        assert!(has(&[word("--ro-bind"), app.as_os_str(), app.as_os_str()]));
+        assert!(has(&[word("--setenv"), word("HOME"), word(INSIDE)]));
+        assert!(has(&[word("--bind"), workspace.as_os_str(), word(INSIDE)]));
+        assert!(has(&[word("--unshare-all")]));
+        assert!(
+            !arguments
+                .iter()
+                .any(|argument| argument.as_os_str() == home.as_os_str()),
+            "the home folder is not shown"
+        );
     }
 
     /// What a thumbnailer leaves is read only when it is a picture file of
