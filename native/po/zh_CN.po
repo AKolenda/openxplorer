@@ -4050,8 +4050,8 @@ msgid "Only a folder on a drive or share can be cached for search."
 msgstr "只有驱动器或共享上的文件夹可以缓存以用于搜索。"
 
 #: crates/ox-app/src/window/disabled_reasons.rs
-msgid "Only a search result has a file location to open."
-msgstr "只有搜索结果才有可打开的文件位置。"
+msgid "Only a search result or a recent file has a file location to open."
+msgstr "只有搜索结果或最近使用的文件才有可打开的文件位置。"
 
 #: crates/ox-app/src/window/disabled_reasons.rs
 msgid "Pages such as This PC have no properties."
