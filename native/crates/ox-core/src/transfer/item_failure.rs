@@ -91,6 +91,10 @@ pub struct FailedItem {
     pub destination_folder: Option<String>,
     /// For a full drive, how many bytes the run needs there, when known.
     pub needed: Option<u64>,
+    /// Whether the run can do the item again as administrator, so the
+    /// question may offer Continue with the shield; only the transfer
+    /// engine can. Operations outside it offer Try Again instead.
+    pub administrator: bool,
 }
 
 impl FailedItem {
@@ -112,6 +116,7 @@ impl FailedItem {
             uri: uri.to_owned(),
             destination_folder: destination_folder.map(str::to_owned),
             needed: None,
+            administrator: true,
         }
     }
 }

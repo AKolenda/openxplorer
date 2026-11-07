@@ -109,6 +109,7 @@ impl ItemQuestions {
                 uri: String::new(),
                 destination_folder: None,
                 needed: None,
+                administrator: false,
             });
             result.presented.push(message);
         }
@@ -141,6 +142,7 @@ impl ItemQuestions {
             uri: item.uri.to_owned(),
             destination_folder: None,
             needed: None,
+            administrator: false,
         }
     }
 }
@@ -277,6 +279,10 @@ mod tests {
         assert_eq!(asked[0].cause, FailureCause::NotFound);
         assert_eq!(asked[0].mode, TransferMode::Delete);
         assert_eq!(asked[0].name, "a.txt");
+        assert!(
+            !asked[0].administrator,
+            "no Continue without an administrator path"
+        );
     }
 
     /// parity: OPS-047, OPS-023

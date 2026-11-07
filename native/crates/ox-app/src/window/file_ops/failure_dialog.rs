@@ -581,6 +581,9 @@ impl BrowserWindow {
     /// or the destination folder that may not be written to.
     async fn question_about(&self, item: &FailedItem) -> (Question, String) {
         match item.cause {
+            // Only the transfer engine can run an item again as
+            // administrator; elsewhere Continue would only fail again.
+            FailureCause::AccessDenied if !item.administrator => (Question::AccessDenied, item.uri.clone()),
             FailureCause::AccessDenied => {
                 if let Some(destination) = &item.destination_folder {
                     let writes = matches!(item.mode, TransferMode::Copy | TransferMode::Move);
@@ -645,6 +648,7 @@ mod tests {
             uri: "file:///home/sample/Reports/2026/plan.docx".into(),
             destination_folder: Some("file:///media/sample/USB".into()),
             needed: None,
+            administrator: true,
         }
     }
 
