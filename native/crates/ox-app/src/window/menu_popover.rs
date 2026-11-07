@@ -631,7 +631,7 @@ impl MenuPopover {
         }
     }
 
-    /// Where Settings puts the strip ("Cut, Copy and Delete buttons"): the
+    /// Where Settings puts the strip ("Buttons in the right-click menu"): the
     /// pointer's side unless the window's settings say otherwise.
     fn strip_position(&self) -> ox_core::settings::StripPosition {
         self.root()

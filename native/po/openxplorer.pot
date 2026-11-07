@@ -2850,11 +2850,11 @@ msgid "As in Windows, the navigation pane's arrows (This PC, Network and the fol
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is unchanged."
+msgid "Buttons in the right-click menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Cut, Copy and Delete buttons"
+msgid "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is unchanged."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/theme/appearance_button.rs
@@ -2918,7 +2918,7 @@ msgid "Use the desktop font"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Where the Windows 11 menu shows its row of buttons. Near the pointer puts them at the top of a menu that opens downward and at the bottom of one that opens upward, as Windows does."
+msgid "Where the Cut, Copy, Rename and Delete buttons appear in the right-click menu. Near the pointer puts them at the top of a menu that opens downward and at the bottom of one that opens upward, as Windows does."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs

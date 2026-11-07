@@ -55,10 +55,10 @@ const RIGHT_CLICK_MENU: RowText = RowText {
 };
 
 const MENU_BUTTONS: RowText = RowText {
-    title: "Cut, Copy and Delete buttons",
-    description: "Where the Windows 11 menu shows its row of buttons. Near the pointer puts them at \
-                  the top of a menu that opens downward and at the bottom of one that opens upward, \
-                  as Windows does.",
+    title: "Buttons in the right-click menu",
+    description: "Where the Cut, Copy, Rename and Delete buttons appear in the right-click menu. \
+                  Near the pointer puts them at the top of a menu that opens downward and at the \
+                  bottom of one that opens upward, as Windows does.",
     keywords: "context menu right-click strip buttons icons cut copy rename share delete paste top \
                bottom pointer position windows 11 compact",
 };
@@ -278,7 +278,7 @@ fn right_click_menu_row(page: &SettingsPage) -> SettingRow {
     menu
 }
 
-/// "Cut, Copy and Delete buttons": where the compact menu's strip sits.
+/// "Buttons in the right-click menu": where the compact menu's strip sits.
 /// Every compact menu reads it when it opens (`src/window/menu_popover`).
 fn menu_buttons_row(page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(MENU_BUTTONS);

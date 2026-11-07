@@ -44,7 +44,7 @@ pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     });
 }
 
-/// Saves `position` as the Settings choice "Cut, Copy and Delete buttons"
+/// Saves `position` as the Settings choice "Buttons in the right-click menu"
 /// and waits for the window to read it.
 pub(super) fn choose_strip_position(test: &TestWindow, position: StripPosition) {
     let update = PreferencesUpdate {

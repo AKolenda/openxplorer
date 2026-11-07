@@ -25,7 +25,10 @@ const MOVED_ROWS: [(&str, &str); 69] = [
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
     ("Right-click menu", "Right-click menu"),
-    ("Cut, Copy and Delete buttons", "Cut, Copy and Delete buttons"),
+    (
+        "Buttons in the right-click menu",
+        "Buttons in the right-click menu",
+    ),
     ("Show previews", "Show previews"),
     ("Show previews in network folders", "Also in network folders"),
     ("Skip previews of large files", "Skip very large files"),
