@@ -375,4 +375,9 @@ fn folder_options_holds_back_its_own_window_alone_under_real_clicks() {
     close_folder_options(&test, &options, "Cancel");
     click_in(&mut pointer, &test.window, (560.0, 380.0));
     assert_eq!(own.get(), 1, "its window takes clicks again once it closes");
+    // Back to the screen's middle, where the display starts it, as
+    // picker.rs's real-pointer test ends: GTK 4.14 crashes in
+    // gdk_surface_request_motion when a later test closes a menu under a
+    // pointer left over its windows.
+    pointer.move_to(720, 500);
 }
