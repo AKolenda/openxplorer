@@ -13,7 +13,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::{ContextMenu, PreferencesUpdate, Theme};
+use ox_core::settings::{ContextMenu, PreferencesUpdate, StripPosition, Theme};
 
 use super::bindings::{position_u32, Choice, PreferenceBinding};
 use super::choice_list::ChoiceButton;
@@ -54,6 +54,15 @@ const RIGHT_CLICK_MENU: RowText = RowText {
     keywords: "context menu style windows 10 11 classic compact",
 };
 
+const MENU_BUTTONS: RowText = RowText {
+    title: "Cut, Copy and Delete buttons",
+    description: "Where the Windows 11 menu shows its row of buttons. Near the pointer puts them at \
+                  the top of a menu that opens downward and at the bottom of one that opens upward, \
+                  as Windows does.",
+    keywords: "context menu right-click strip buttons icons cut copy rename share delete paste top \
+               bottom pointer position windows 11 compact",
+};
+
 const HIDE_EXPAND_ARROWS: RowText = RowText {
     title: "Hide expand arrows in the sidebar",
     description: "As in Windows, the navigation pane's arrows (This PC, Network and the folder tree) \
@@ -77,6 +86,23 @@ const MENU_STYLES: [Choice<ContextMenu>; 2] = [
     Choice {
         value: ContextMenu::Win11,
         label: crate::i18n::message_id("Windows 11 · Compact actions (default)"),
+    },
+];
+
+/// Where the compact menu's buttons go, the pointer's side first, as
+/// Windows 11 draws them.
+const STRIP_POSITIONS: [Choice<StripPosition>; 3] = [
+    Choice {
+        value: StripPosition::Pointer,
+        label: crate::i18n::message_id("Near the pointer (default)"),
+    },
+    Choice {
+        value: StripPosition::Top,
+        label: crate::i18n::message_id("Always at the top"),
+    },
+    Choice {
+        value: StripPosition::Bottom,
+        label: crate::i18n::message_id("Always at the bottom"),
     },
 ];
 
@@ -252,6 +278,24 @@ fn right_click_menu_row(page: &SettingsPage) -> SettingRow {
     menu
 }
 
+/// "Cut, Copy and Delete buttons": where the compact menu's strip sits.
+/// Every compact menu reads it when it opens (`src/window/menu_popover`).
+fn menu_buttons_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(MENU_BUTTONS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.strip_position,
+        write: |position| PreferencesUpdate {
+            strip_position: Some(position),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(
+        &page.preference_choice(&STRIP_POSITIONS, binding),
+        ControlName::RowTitle,
+    );
+    row
+}
+
 /// "Use the desktop font": the switch saves the choice and the skin draws
 /// it in every window at once.
 fn desktop_font_row(page: &SettingsPage) -> SettingRow {
@@ -340,6 +384,7 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     arrows.add_control(&page.preference_switch(binding), ControlName::RowTitle);
     group.add_row(&arrows);
     group.add_row(&right_click_menu_row(page));
+    group.add_row(&menu_buttons_row(page));
     let row = SettingRow::new(PANE_WIDTHS);
     let reset = parts::button_with_glyph(&ox_core::i18n::gettext("Reset"), Icon::ArrowClockwise);
     WindowAction::ResetLayout.assign_to(&reset);
@@ -375,5 +420,14 @@ mod tests {
         let values = MENU_STYLES.map(|choice| choice.value);
         assert_eq!(values, ContextMenu::ALL);
         assert_eq!(MENU_STYLES[0].label, "Windows 10 · Classic");
+    }
+
+    /// parity: CMD-008
+    #[test]
+    fn the_strip_positions_offer_the_pointers_side_first_as_the_default() {
+        let values = STRIP_POSITIONS.map(|choice| choice.value);
+        assert_eq!(values, StripPosition::ALL);
+        assert_eq!(StripPosition::default(), StripPosition::Pointer);
+        assert_eq!(STRIP_POSITIONS[0].label, "Near the pointer (default)");
     }
 }

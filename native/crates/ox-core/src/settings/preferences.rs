@@ -11,7 +11,7 @@ use std::ops::RangeInclusive;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::choices::{ContextMenu, Theme, View, ZipOpening};
+use super::choices::{ContextMenu, StripPosition, Theme, View, ZipOpening};
 use super::pane_options::DetailsPaneOptions;
 use super::tree_options::FolderTreeOptions;
 use super::view_options::ViewOptions;
@@ -254,6 +254,13 @@ pub struct Preferences {
     pub auto_index: bool,
     /// Classic (Windows 10) or compact (Windows 11) context menus.
     pub context_menu: ContextMenu,
+    /// Where the compact menu's strip sits; stored only when it is not
+    /// the pointer's side.
+    #[serde(
+        rename = "menuStripPosition",
+        skip_serializing_if = "StripPosition::is_pointer"
+    )]
+    pub strip_position: StripPosition,
     /// Folder item counts were turned on in this app. Files of older
     /// releases store `viewOptions.countFolderItems: true`, then the
     /// default, whenever any view option changed, so without this mark
@@ -538,6 +545,7 @@ impl Default for Preferences {
             show_hidden: false,
             auto_index: true,
             context_menu: ContextMenu::default(),
+            strip_position: StripPosition::Pointer,
             classic_menu_chosen: false,
             item_counts_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
@@ -735,6 +743,7 @@ impl Preferences {
         }
         replace_if_some(&mut self.browse_archives, update.browse_archives);
         replace_if_some(&mut self.zip_opening, update.zip_opening);
+        replace_if_some(&mut self.strip_position, update.strip_position);
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
@@ -865,6 +874,8 @@ pub struct PreferencesUpdate {
     pub column_widths: Option<Vec<ColumnWidth>>,
     /// New context menu style.
     pub context_menu: Option<ContextMenu>,
+    /// Where the compact menu's strip sits.
+    pub strip_position: Option<StripPosition>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
     /// The size new windows open at.
@@ -999,6 +1010,7 @@ impl PreferencesUpdate {
             sidebar_width: values.get("sidebarWidth").and_then(Value::as_f64),
             column_widths: values.get("columnWidths").and_then(read_column_widths),
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
+            strip_position: text("menuStripPosition").and_then(StripPosition::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
             show_full_path: flag("showFullPath"),

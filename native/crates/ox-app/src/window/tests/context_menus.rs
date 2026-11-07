@@ -9,7 +9,7 @@ use std::fs;
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
+use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings, StripPosition};
 
 use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
@@ -18,7 +18,7 @@ use super::file_ops_support::{
 use crate::test_support::harness::{
     capture_popover, settle, wait_for_frames, wait_until, Fixture, TestWindow,
 };
-use crate::window::menu_popover::{MenuEntry, MenuStyle};
+use crate::window::menu_popover::{MenuEntry, MenuStyle, Slide};
 
 /// The position of the item called `name` in `test`'s view.
 pub(super) fn position_of(test: &TestWindow, name: &str) -> u32 {
@@ -41,6 +41,22 @@ pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     test.context.reload_settings();
     wait_until("the window to read the choice", || {
         test.context.settings_data().preferences.context_menu == style
+    });
+}
+
+/// Saves `position` as the Settings choice "Cut, Copy and Delete buttons"
+/// and waits for the window to read it.
+pub(super) fn choose_strip_position(test: &TestWindow, position: StripPosition) {
+    let update = PreferencesUpdate {
+        strip_position: Some(position),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.strip_position == position
     });
 }
 
@@ -944,9 +960,11 @@ fn copy_as_path_in_the_menu_copies_the_items_path() {
 /// such as Downloads has only Copy in its strip, and the user's own pin
 /// has Cut, Copy, Rename and Delete. The strip is on the side nearest the
 /// pointer: at the top of a menu opening downward and at the bottom of
-/// one opening upward, as Windows 11 draws it. With
+/// one opening upward, as Windows 11 draws it, unless Settings puts it
+/// always at the top or always at the bottom. With
 /// `OX_NATIVE_CAPTURE_DIR` set, the menus are saved there as
-/// `context-menu-match-pinned-{down,up}-{light,dark}.png`.
+/// `context-menu-match-strip-{pointer,top,bottom}-{down,up}-{light,dark}.png`
+/// and `context-menu-match-pinned-{down,up}-{light,dark}.png`.
 ///
 /// parity: SIDE-014, CMD-010
 #[gtk::test]
@@ -1019,37 +1037,40 @@ fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() 
 
     for theme in ["light", "dark"] {
         test.activate("theme", Some(theme));
-        let menu = open_menu("Alpha");
-        wait_until("the menu placed below the pointer", || {
-            menu.slide() == Some(crate::window::menu_popover::Slide::Down)
-        });
-        assert!(
-            !menu.strip_at_bottom(),
-            "the strip on top of a menu opening downward"
-        );
-        crate::test_support::harness::capture_with_menus(
-            &test.window,
-            &format!("context-menu-match-pinned-down-{theme}.png"),
-        );
-        menu.popdown();
-        wait_until("the menu to close", || !menu.is_mapped());
-
-        let menu = open_menu("Downloads");
-        // Downloads, below the user's pins, is low in the window and opens
-        // its menu upward.
-        wait_until("the menu placed above the pointer", || {
-            menu.slide() == Some(crate::window::menu_popover::Slide::Up)
-        });
-        assert!(
-            menu.strip_at_bottom(),
-            "the strip at the bottom of a menu opening upward"
-        );
-        crate::test_support::harness::capture_with_menus(
-            &test.window,
-            &format!("context-menu-match-pinned-up-{theme}.png"),
-        );
-        menu.popdown();
-        wait_until("the menu to close", || !menu.is_mapped());
+        for position in StripPosition::ALL {
+            choose_strip_position(&test, position);
+            // Alpha, high in the pane, opens its menu downward; Downloads,
+            // below the user's pins, opens it upward.
+            for (label, slide, direction) in [("Alpha", Slide::Down, "down"), ("Downloads", Slide::Up, "up")]
+            {
+                let menu = open_menu(label);
+                wait_until("the menu placed", || menu.slide() == Some(slide));
+                let expected = position.at_bottom(slide == Slide::Up);
+                assert_eq!(
+                    menu.strip_at_bottom(),
+                    expected,
+                    "{position:?}, opening {direction}"
+                );
+                let name = position.as_str();
+                crate::test_support::harness::capture_with_menus(
+                    &test.window,
+                    &format!("context-menu-match-strip-{name}-{direction}-{theme}.png"),
+                );
+                if position == StripPosition::Pointer {
+                    let pinned = if direction == "down" {
+                        "pinned-down"
+                    } else {
+                        "pinned-up"
+                    };
+                    crate::test_support::harness::capture_with_menus(
+                        &test.window,
+                        &format!("context-menu-match-{pinned}-{theme}.png"),
+                    );
+                }
+                menu.popdown();
+                wait_until("the menu to close", || !menu.is_mapped());
+            }
+        }
     }
 }
 

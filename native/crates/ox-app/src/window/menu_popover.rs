@@ -221,6 +221,9 @@ mod imp {
             // Before GTK places the menu, so it is placed at its full size.
             self.obj().open_below_button_again();
             self.obj().fit_to_monitor();
+            // The strip where it goes for a menu opening downward; GTK's
+            // placement moves it if the menu opens upward (motion.rs).
+            self.obj().place_strip_for(false);
             // It fades and slides in, as Windows 11's menus open.
             self.obj().start_opening_motion();
             #[expect(
@@ -626,6 +629,21 @@ impl MenuPopover {
         for item in shown {
             strip.append(&self.strip_button(item));
         }
+    }
+
+    /// Where Settings puts the strip ("Cut, Copy and Delete buttons"): the
+    /// pointer's side unless the window's settings say otherwise.
+    fn strip_position(&self) -> ox_core::settings::StripPosition {
+        self.root()
+            .and_downcast::<crate::window::BrowserWindow>()
+            .map(|window| window.context().settings_data().preferences.strip_position)
+            .unwrap_or_default()
+    }
+
+    /// Puts the strip where Settings asks for a menu that opened upward
+    /// (`opened_upward`) or downward.
+    pub(super) fn place_strip_for(&self, opened_upward: bool) {
+        self.place_strip(self.strip_position().at_bottom(opened_upward));
     }
 
     /// Puts the strip at the bottom of the menu, `at_bottom` when it opened

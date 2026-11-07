@@ -2838,11 +2838,23 @@ msgid "update version release upgrade software updates install restart flatpak"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Always at the bottom"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Always at the top"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "As in Windows, the navigation pane's arrows (This PC, Network and the folder tree) show only while you point at the pane or move through it with the keyboard."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is unchanged."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Cut, Copy and Delete buttons"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/theme/appearance_button.rs
@@ -2859,6 +2871,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/theme/appearance_button.rs
 msgid "Light"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Near the pointer (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
@@ -2902,6 +2918,10 @@ msgid "Use the desktop font"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Where the Windows 11 menu shows its row of buttons. Near the pointer puts them at the top of a menu that opens downward and at the bottom of one that opens upward, as Windows does."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Windows 10 is compact and shows familiar text commands."
 msgstr ""
 
@@ -2915,6 +2935,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "appearance dark light system colour color mode"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "context menu right-click strip buttons icons cut copy rename share delete paste top bottom pointer position windows 11 compact"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
