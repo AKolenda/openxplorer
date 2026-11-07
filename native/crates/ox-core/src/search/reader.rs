@@ -86,7 +86,9 @@ fn read_batches(
         else {
             break;
         };
-        if hidden_items == HiddenItems::Skip && info.is_hidden() {
+        // Read as an attribute: GVfs's SMB backend sets it only on dot
+        // names, and GIO warns on every item that lacks it otherwise.
+        if hidden_items == HiddenItems::Skip && info.boolean("standard::is-hidden") {
             continue;
         }
         let item = ListedItem::from(entry_from_info(&enumerator.child(&info), &info));
