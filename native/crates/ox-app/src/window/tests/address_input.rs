@@ -337,6 +337,40 @@ fn typing_a_path_offers_the_matching_names() {
         address.suggestion_rows(),
         [format!("{base}/Notes 2.txt"), format!("{base}/Notes 10.txt")]
     );
+
+    // Typing on into a folder not listed yet leaves the old rows showing
+    // while it is listed; Escape then puts back what was typed last, not
+    // the text the rows were listed for.
+    // As typed: set_text would first empty the entry, which closes the list.
+    let entry = address.entry();
+    entry.delete_text(
+        i32::try_from(typed.chars().count()).expect("a short path") - 2,
+        -1,
+    );
+    let mut end = -1;
+    entry.insert_text("Documents/", &mut end);
+    let typed_on = format!("{base}/Documents/");
+    assert_eq!(entry.text(), typed_on);
+    assert!(
+        address.suggestions_shown(),
+        "the old rows show while Documents is listed"
+    );
+    let list_keys = controllers::<gtk::EventControllerKey>(&address.entry())
+        .into_iter()
+        .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+        .expect("the list's keys");
+    let no_keycode = 0_u32;
+    let escape = gdk::Key::Escape.into_glib();
+    list_keys.emit_by_name::<bool>(
+        "key-pressed",
+        &[&escape, &no_keycode, &gdk::ModifierType::empty()],
+    );
+    assert_eq!(
+        address.entry().text(),
+        typed_on,
+        "Escape keeps the text typed last"
+    );
+    assert!(!address.suggestions_shown(), "Escape closes the list");
     address.hide_suggestions();
 }
 

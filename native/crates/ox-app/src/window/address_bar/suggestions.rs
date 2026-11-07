@@ -99,10 +99,8 @@ impl AddressBar {
             move |_, key, _, modifiers| bar.suggestion_key(key, modifiers)
         ));
         imp.entry.add_controller(keys);
-        // A real edit is the new typed text, which Escape and moving off
-        // the list put back, and no row matches it any more. Without this
-        // the text saved with the last list would come back while the
-        // completions of the edit are still being listed.
+        // A real edit is the text typed last, which Escape and moving off
+        // the list put back, and no row matches it any more.
         imp.entry.connect_changed(glib::clone!(
             #[weak(rename_to = bar)]
             self,
@@ -111,7 +109,7 @@ impl AddressBar {
                 if imp.quiet_change.get() {
                     return;
                 }
-                imp.text_before_list.replace(entry.text().into());
+                imp.text_typed.replace(entry.text().into());
                 imp.list_dismissed.set(false);
                 if let Some(list) = imp.suggestion_list.get() {
                     list.unselect_all();
@@ -148,7 +146,7 @@ impl AddressBar {
             gdk::Key::Down | gdk::Key::KP_Down => self.move_suggestion(1),
             gdk::Key::Up | gdk::Key::KP_Up => self.move_suggestion(-1),
             gdk::Key::Escape => {
-                let typed = self.imp().text_before_list.borrow().clone();
+                let typed = self.imp().text_typed.borrow().clone();
                 self.set_text_quietly(&typed);
                 self.hide_suggestions();
                 self.imp().list_dismissed.set(true);
@@ -175,7 +173,7 @@ impl AddressBar {
             }
         } else {
             list.unselect_all();
-            let typed = self.imp().text_before_list.borrow().clone();
+            let typed = self.imp().text_typed.borrow().clone();
             self.set_text_quietly(&typed);
         }
     }
@@ -254,7 +252,6 @@ impl AddressBar {
             return;
         };
         list.remove_all();
-        imp.text_before_list.replace(imp.entry.text().into());
         for text in rows.iter().take(LIST_LENGTH) {
             list.append(&row_contents(text));
         }
