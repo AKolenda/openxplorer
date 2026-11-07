@@ -229,7 +229,7 @@ fn grid_headings(test: &TestWindow) -> Vec<String> {
         })
         .collect();
     headings.sort_by(|a, b| a.0.total_cmp(&b.0));
-    headings.into_iter().map(|(_, text)| text).collect()
+    super::support::with_group_counts(test, headings.into_iter().map(|(_, text)| text).collect())
 }
 
 /// The headings the details view draws, top to bottom.
@@ -245,12 +245,12 @@ fn details_headings(test: &TestWindow) -> Vec<String> {
         })
         .collect();
     labels.sort_by(|a, b| a.0.total_cmp(&b.0));
-    labels.into_iter().map(|(_, text)| text).collect()
+    super::support::with_group_counts(test, labels.into_iter().map(|(_, text)| text).collect())
 }
 
 /// A grouped folder keeps its groups in Tiles and Content, as in Windows
 /// 11: each group starts a row under a heading with the title and count
-/// Details shows, which is blank space for clicks and the rubber band; a
+/// Details shows, which takes clicks itself (VIEW-022); a
 /// file added to a group counts in its heading; Group by
 /// (None) takes the headings away, and the items stay selectable and
 /// open as before.
@@ -277,10 +277,14 @@ fn tiles_and_content_keep_the_folders_groups_under_headings() {
         );
         let pane = test.window.folder_pane();
         let on_heading = (f64::from(first_file.x()) + 20.0, f64::from(first_file.y()) - 12.0);
+        // A heading's row takes clicks itself, selecting its group or
+        // folding it with its chevron (VIEW-022), so it is no blank space;
+        // the blanks after a short group still are.
         assert!(
-            test.window
+            !test
+                .window
                 .is_blank_space(&pane.view_widget(), on_heading.0, on_heading.1),
-            "{view:?}: a click or a band starts from a heading as from blank space"
+            "{view:?}: a click on a heading is the heading's, not blank space"
         );
         assert_eq!(
             pane.owners().position_of(&cell_named(&test, "Notes 2").upcast()),
@@ -302,28 +306,33 @@ fn tiles_and_content_keep_the_folders_groups_under_headings() {
     );
 }
 
-/// A group heading's accessible name follows its count as files come
-/// and go, as the heading itself does, though GTK keeps the heading bound.
+/// A group heading's accessible name follows its title when the groups
+/// change, as the heading itself does, though GTK keeps the heading bound
+/// (a heading shows no count, as in Windows 11 since 22H2).
 ///
 /// parity: VIEW-071, VIEW-022
 #[gtk::test]
-fn a_group_headings_accessible_name_follows_its_count() {
+fn a_group_headings_accessible_name_follows_its_title() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.activate("group-by", Some("type"));
     show(&test, FolderView::Content);
     let owners = test.window.folder_pane().owners();
     let labels = || owners.bound_accessible_labels();
-    wait_until("the heading's name", || {
-        labels().contains(&"Text Document (3)".to_owned())
+    wait_until("the headings' names", || {
+        let names = labels();
+        names.contains(&"File folder".to_owned()) && names.contains(&"Text Document".to_owned())
     });
-    fixture.write("Notes 3.txt");
-    wait_until("the heading's new count", || {
-        grid_headings(&test).contains(&"Text Document (4)".to_owned())
+    test.activate("group-by", Some("name"));
+    wait_until("the new headings", || {
+        grid_headings(&test) == ["A – H (1)", "I – P (2)", "Q – Z (1)"]
     });
     let names = labels();
-    assert!(names.contains(&"Text Document (4)".to_owned()), "{names:?}");
-    assert!(!names.contains(&"Text Document (3)".to_owned()), "{names:?}");
+    for title in ["A – H", "I – P", "Q – Z"] {
+        assert!(names.contains(&title.to_owned()), "{names:?}");
+    }
+    assert!(!names.contains(&"File folder".to_owned()), "{names:?}");
+    assert!(!names.contains(&"Text Document".to_owned()), "{names:?}");
 }
 
 /// A heading row is as tall as Page Up and Page Down count it, and an
@@ -387,10 +396,14 @@ fn a_cell_that_showed_a_heading_follows_whether_check_boxes_take_clicks() {
         .into_iter()
         .filter(|cell| cell.group_heading().is_some())
         .collect();
-    // Ctrl changes while some cells show headings.
+    // The boxes stop waiting for Ctrl while some cells show headings. It
+    // goes through the window, which says again whether they take clicks
+    // as it gets focus, so a change made around it could be undone.
     let owners = pane.owners();
-    let take = !owners.item_checks_take_clicks();
-    owners.set_item_checks_take_clicks(take);
+    assert!(!owners.item_checks_take_clicks(), "the boxes wait for Ctrl");
+    test.window.wait_for_ctrl_with_item_checks(false);
+    let take = true;
+    assert!(owners.item_checks_take_clicks());
     let adjustment = pane.icon_view().scroll_adjustment();
     let mut reused = 0;
     for step in 1..=12 {

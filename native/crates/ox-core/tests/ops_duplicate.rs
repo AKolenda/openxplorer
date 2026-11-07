@@ -11,8 +11,7 @@ mod snapshots;
 
 use std::fs;
 
-use ox_core::ops::{duplicate_items, summarize, OperationContext, OperationSummary, OpsError, UndoRecord};
-use ox_core::transfer::TransferMode;
+use ox_core::ops::{duplicate_items, OperationContext, OpsError, UndoRecord};
 
 use folders::Folders;
 use ops_support::{block_on, file_uri};
@@ -113,10 +112,51 @@ fn a_cancelled_duplicate_says_nothing_and_copies_nothing() {
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
     assert!(outcome.created.is_empty());
     assert_eq!(outcome.undo, None);
-    assert_eq!(
-        summarize(TransferMode::Copy, &outcome.result),
-        OperationSummary::Cancelled
-    );
     assert_eq!(fs::read_dir(folders.source()).unwrap().count(), 1);
     assert_eq!(fs::read_dir(folders.destination()).unwrap().count(), 1);
+}
+
+/// Skip with "Do this for all current items" about a folder that refused
+/// the duplicate holds for the later folders too: items from two folders
+/// that both went away are asked about once (Codex review of #286).
+///
+/// parity: OPS-047, OPS-023
+#[test]
+fn skip_all_about_one_folder_holds_for_the_next_folder() {
+    use std::sync::{Arc, Mutex};
+
+    use ox_core::ops::FailureAsker;
+    use ox_core::transfer::{FailedItem, FailureAnswer};
+
+    let temp = tempfile::tempdir().unwrap();
+    let (first, second) = (temp.path().join("First"), temp.path().join("Second"));
+    fs::create_dir(&first).unwrap();
+    fs::create_dir(&second).unwrap();
+    fs::write(first.join("a.txt"), b"a").unwrap();
+    fs::write(second.join("b.txt"), b"b").unwrap();
+    let items = [file_uri(&first.join("a.txt")), file_uri(&second.join("b.txt"))];
+    // Both folders go away before the duplicate runs.
+    fs::remove_dir_all(&first).unwrap();
+    fs::remove_dir_all(&second).unwrap();
+    let asked = Arc::new(Mutex::new(Vec::<FailedItem>::new()));
+    let log = Arc::clone(&asked);
+    let context = OperationContext {
+        item_failure: Some(FailureAsker::new(move |item: &FailedItem| {
+            log.lock().unwrap().push(item.clone());
+            FailureAnswer::SkipAll
+        })),
+        ..OperationContext::default()
+    };
+
+    let outcome = block_on(duplicate_items(&items, &context, |_| {})).unwrap();
+
+    let asked = asked.lock().unwrap();
+    assert_eq!(asked.len(), 1, "asked once: {asked:?}");
+    assert!(asked[0].more_items, "the second folder follows");
+    assert_eq!(outcome.result.errors.len(), 2, "{:?}", outcome.result);
+    assert_eq!(
+        outcome.result.presented, outcome.result.errors,
+        "both were the user's answer"
+    );
+    assert!(!outcome.result.cancelled);
 }

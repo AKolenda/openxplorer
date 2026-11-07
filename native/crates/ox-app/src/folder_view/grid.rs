@@ -26,7 +26,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-pub(crate) use grouped::{GroupSlot, GroupedSelection, SlotKind};
+pub(crate) use grouped::{CollapsedGroups, GroupSlot, GroupedSelection, SlotKind};
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, PositionMap};
 use crate::folder_view::details::GroupTitle;
@@ -139,6 +139,9 @@ mod imp {
         pub(super) group_title: RefCell<Option<GroupTitle>>,
         /// The grid's model while it shows grouped Tiles or Content.
         pub(super) grouping: SharedGrouping,
+        /// The groups collapsed under their headings, which the folder
+        /// model shares.
+        pub(super) collapsed: RefCell<super::CollapsedGroups>,
     }
 
     impl std::fmt::Debug for IconView {
@@ -166,6 +169,7 @@ mod imp {
                 items: RefCell::default(),
                 group_title: RefCell::default(),
                 grouping: SharedGrouping::default(),
+                collapsed: RefCell::default(),
             }
         }
     }
@@ -230,6 +234,12 @@ impl IconView {
             .expect("a new IconView has no registries yet");
         view.apply_layout(GridLayout::Icons(IconSize::LARGE));
         view
+    }
+
+    /// Collapses the groups `collapsed` names, which the folder model
+    /// keeps for every view.
+    pub(crate) fn share_collapsed_groups(&self, collapsed: &CollapsedGroups) {
+        self.imp().collapsed.replace(Rc::clone(collapsed));
     }
 
     /// The grid of tiles, which holds the selection model and the keyboard
@@ -315,11 +325,22 @@ impl IconView {
         let title = imp.group_title.borrow().clone();
         let grouped = match (items.as_ref(), title) {
             (Some(items), Some(title)) if self.layout().shows_groups() => {
-                Some(GroupedSelection::new(items, title, imp.grid.max_columns()))
+                let collapsed = imp.collapsed.borrow().clone();
+                Some(GroupedSelection::new(
+                    items,
+                    title,
+                    &collapsed,
+                    imp.grid.max_columns(),
+                ))
             }
             _ => None,
         };
         imp.grouping.replace(grouped.clone());
+        crate::window::widget_tree::toggle_class(
+            &imp.grid,
+            crate::folder_view::details::GROUPED_CLASS,
+            grouped.is_some(),
+        );
         match (grouped, items) {
             (Some(grouped), _) => imp.grid.set_model(Some(&grouped)),
             (None, items) => imp.grid.set_model(items.as_ref()),
