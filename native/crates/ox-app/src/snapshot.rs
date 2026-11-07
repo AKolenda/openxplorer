@@ -61,7 +61,7 @@ use crate::window::BrowserWindow;
 
 use render::{open_menus, render_png_with_menus};
 #[cfg(test)]
-pub(crate) use render::{render_png, save_png};
+pub(crate) use render::{render_png, save_png, save_png_with_menus};
 pub(crate) use request::{SnapshotRequest, WindowSize};
 
 /// Frames drawn after the listing, so late layout changes (column widths,
