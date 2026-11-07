@@ -594,7 +594,7 @@ impl MenuPopover {
             let can_choose = self.can_choose(item);
             let row = item_row(item, self.check_mark(item), marks, glyphs);
             row.set_sensitive(can_choose);
-            explain_availability(self, row.upcast_ref(), item, can_choose);
+            describe_unavailable_row(self, &row, item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
@@ -628,16 +628,11 @@ impl MenuPopover {
         let can_choose = self.can_choose(item);
         let button = gtk::Button::builder()
             .child(&icons::image(item.glyph, ROW_GLYPH))
-            .tooltip_text(&item.label)
+            .tooltip_text(item_tooltip(item))
             .sensitive(can_choose)
             .build();
         button.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-        // The strip's buttons show only a glyph, so, as Windows 11's, they
-        // name their command in a tooltip, which also says why one is
-        // disabled.
-        if let Some(reason) = explain_availability(self, button.upcast_ref(), item, can_choose) {
-            button.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
-        }
+        explain_availability(self, button.upcast_ref(), item, can_choose);
         let item = item.clone();
         button.connect_clicked(glib::clone!(
             #[weak(rename_to = popover)]
@@ -1046,6 +1041,11 @@ fn items_of(entries: &[MenuEntry]) -> impl Iterator<Item = &MenuItem> {
     })
 }
 
+/// The tooltip of `item`: its label, which a narrow menu may cut short.
+fn item_tooltip(item: &MenuItem) -> String {
+    item.label.clone()
+}
+
 /// Why `item` cannot be chosen, when something says: the reason this
 /// menu gave, or its action's in the window of `menu`.
 fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
@@ -1054,20 +1054,31 @@ fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
             return Some(reason.to_owned());
         }
     }
+    let tooltip = item_tooltip(item);
+    if tooltip != item.label {
+        return None;
+    }
     item.action.disabled_reason(menu.upcast_ref()).map(str::to_owned)
 }
 
-/// Tells screen readers why `control`, which shows `item` in `menu`,
-/// cannot be chosen, and returns that reason.
-fn explain_availability(
-    menu: &MenuPopover,
-    control: &gtk::Widget,
-    item: &MenuItem,
-    can_choose: bool,
-) -> Option<String> {
-    let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten()?;
+/// Adds to the tooltip of the strip button `control`, which shows `item`
+/// in `menu`, why it cannot be chosen, and tells screen readers too.
+fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
+    let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten();
+    let Some(reason) = reason else {
+        return;
+    };
+    control.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
     control.update_property(&[gtk::accessible::Property::Description(&reason)]);
-    Some(reason)
+}
+
+/// Tells screen readers why `row`, which shows `item` in `menu`, cannot
+/// be chosen. The row shows no tooltip, as Windows 11's menu rows show
+/// none.
+fn describe_unavailable_row(menu: &MenuPopover, row: &gtk::ListBoxRow, item: &MenuItem, can_choose: bool) {
+    if let Some(reason) = (!can_choose).then(|| disabled_reason(menu, item)).flatten() {
+        row.update_property(&[gtk::accessible::Property::Description(&reason)]);
+    }
 }
 
 /// Whether a menu's rows keep a column for check marks and dots before
@@ -1193,7 +1204,7 @@ fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphC
     // No tooltip, as Windows 11's menus show none on their rows (not
     // `b.title=it.label` in app.js): not for a label the menu cuts short,
     // nor for a disabled row, which tells screen readers why in its
-    // accessible description ([`explain_availability`]).
+    // accessible description ([`describe_unavailable_row`]).
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }
