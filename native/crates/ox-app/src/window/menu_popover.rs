@@ -19,7 +19,9 @@
 //! once; resting on another row for as long closes it, so moving across
 //! the rows towards an open submenu does not. Its first item is level
 //! with the row, and GTK flips it to the left near the screen's edge.
-//! Left or Escape closes only the open submenu, the innermost one. Choosing an item
+//! The keyboard moving to another row takes over from the pointer: the
+//! submenu it was about to open does not, and one open beside the row it
+//! left closes. Left or Escape closes only the open submenu, the innermost one. Choosing an item
 //! in a submenu closes every menu, then runs it.
 //!
 //! A submenu is a popup of the menu it opens from, without a pointer grab
@@ -293,6 +295,7 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
         move |_, row| popover.choose_row(row.index())
     ));
     follow_hover(popover, &list);
+    follow_the_keyboard(popover, &list);
     open_submenus_by_keyboard(popover, &list);
     // Up on the first item and Down on the last wrap around, as `openMenu`
     // moves between enabled items.
@@ -347,6 +350,28 @@ fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
         move |_| popover.rest_on(None)
     ));
     list.add_controller(motion);
+}
+
+/// The keyboard moving between rows, with the arrow keys, Home, End or
+/// Page Up and Down, takes over from the pointer, as in Windows: a submenu
+/// waiting for the pointer to rest no longer opens or closes, and one open
+/// beside the row the keyboard left closes. Runs after the list has moved
+/// the focus, wrapping around included.
+fn follow_the_keyboard(popover: &MenuPopover, list: &gtk::ListBox) {
+    list.connect_local(
+        "move-cursor",
+        true,
+        glib::clone!(
+            #[weak]
+            popover,
+            #[upgrade_or]
+            None,
+            move |_| {
+                popover.keyboard_moved();
+                None
+            }
+        ),
+    );
 }
 
 /// Right, Enter and Space open the focused row's submenu with the keyboard
@@ -899,6 +924,10 @@ impl MenuPopover {
                 self,
                 move || {
                     popover.imp().hover.borrow_mut().1 = None;
+                    // Only for the row the pointer still rests on.
+                    if popover.imp().hover.borrow().0 != Some(index) {
+                        return;
+                    }
                     if opens {
                         popover.open_submenu(index, false);
                     } else {
@@ -915,6 +944,26 @@ impl MenuPopover {
     fn keep_submenu_open(&self) {
         self.cancel_hover();
         self.imp().hover.borrow_mut().0 = self.open_submenu_index();
+    }
+
+    /// The keyboard moved between rows: a submenu the pointer's timer was
+    /// to open or close stays as it is, unless it is open beside a row
+    /// other than the focused one, which closes it. The row the pointer rests on stays
+    /// known, so only the pointer coming onto another row starts a timer
+    /// again.
+    fn keyboard_moved(&self) {
+        self.cancel_hover();
+        let focused = self
+            .list()
+            .focus_child()
+            .and_downcast::<gtk::ListBoxRow>()
+            .and_then(|row| usize::try_from(row.index()).ok());
+        if self
+            .open_submenu_index()
+            .is_some_and(|open| Some(open) != focused)
+        {
+            self.close_submenu();
+        }
     }
 
     /// Stops a submenu from opening or closing on its timer. The row the
