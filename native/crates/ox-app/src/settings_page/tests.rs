@@ -509,6 +509,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Compact view",
             "Hide expand arrows in the sidebar",
             "Right-click menu",
+            "Buttons in the right-click menu",
             "Sidebar and column widths"
         ]
     );

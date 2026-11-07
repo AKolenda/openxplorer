@@ -250,6 +250,11 @@ impl Sidebar {
                     // PC's tiles and its Quick access pin too), in Windows
                     // 11's order.
                     Some(place @ PlaceMenu::Drive { .. }) => place.styled(facts_in(place, self), style),
+                    // A pinned folder's compact menu is Windows 11's own.
+                    _ if entry.pinned && style == MenuStyle::Compact => match &entry.target {
+                        RowTarget::Location(uri) => (self.compact_pin_menu(uri), self.edit_strip(entry)),
+                        _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+                    },
                     _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
                 }
             }
@@ -270,7 +275,10 @@ impl Sidebar {
             }
             menu.push(hide);
         }
-        if let Some((key, name)) = entry.section.hiding() {
+        // A pinned folder's compact menu is Windows 11's own; hiding the
+        // section stays behind "Show more options".
+        let pinned_compact = entry.pinned && style == MenuStyle::Compact && hidden == HiddenRow::Shown;
+        if let Some((key, name)) = entry.section.hiding().filter(|_| !pinned_compact) {
             if !menu.is_empty() {
                 menu.push(MenuEntry::Divider);
             }
@@ -292,7 +300,9 @@ impl Sidebar {
     /// greyed out as Windows greys This PC's, since none can be renamed
     /// or deleted; a folder or a network location has the file
     /// list's Cut, Copy, Paste, Rename and Delete, acting on the row's
-    /// location, each where it can run. Only a folder the user pinned
+    /// location, each only where it can run, as Windows 11 leaves out what
+    /// a folder does not allow (Paste only while there is something to
+    /// paste). Only a folder the user pinned
     /// can be cut, renamed or deleted: a drive, a share and the standard
     /// folders cannot.
     fn edit_strip(&self, entry: &SidebarEntry) -> Vec<MenuItem> {
@@ -317,17 +327,77 @@ impl Sidebar {
         let share_root = is_smb_share_root(uri);
         let changeable = own_pin && !share_root;
         let can_paste = window.as_ref().is_some_and(|window| window.can_paste_into(uri));
-        vec![
-            item("Cut", Icon::Cut, WindowAction::CutFolder, changeable),
-            item("Copy", Icon::Copy, WindowAction::CopyFolder, !share_root),
-            item(
+        // Windows 11 shows only what the folder allows: a standard folder
+        // such as Downloads has Copy alone, and Paste shows only while
+        // there is something to paste.
+        [
+            ("Cut", Icon::Cut, WindowAction::CutFolder, changeable),
+            ("Copy", Icon::Copy, WindowAction::CopyFolder, !share_root),
+            (
                 "Paste",
                 Icon::ClipboardPaste,
                 WindowAction::PasteIntoFolder,
                 can_paste,
             ),
-            item("Rename", Icon::Rename, WindowAction::RenameFolder, changeable),
-            item("Delete", Icon::Delete, WindowAction::TrashFolder, changeable),
+            ("Rename", Icon::Rename, WindowAction::RenameFolder, changeable),
+            ("Delete", Icon::Delete, WindowAction::TrashFolder, changeable),
+        ]
+        .into_iter()
+        .filter(|(_, _, _, allowed)| *allowed)
+        .map(|(label, glyph, action, allowed)| item(label, glyph, action, allowed))
+        .collect()
+    }
+
+    /// A pinned folder's compact menu, in Windows 11's order: Open in new
+    /// tab, Open in new window, Unpin from Quick access, Compress to (ZIP
+    /// File, Additional options), Copy as path, New (the command bar's New
+    /// menu, run in the folder), Properties, then Open in Terminal. Pin to
+    /// Start is Windows' own. "Show more options" follows
+    /// ([`finish_menu`]).
+    fn compact_pin_menu(&self, uri: &str) -> Vec<MenuEntry> {
+        let window = self.root().and_downcast::<BrowserWindow>();
+        let templates = window
+            .as_ref()
+            .map(|window| {
+                window.refresh_template_menu();
+                window.template_menu_entries()
+            })
+            .unwrap_or_default();
+        let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
+            MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+        };
+        let compress = MenuItem::submenu(
+            ox_core::i18n::gettext_static("Compress to"),
+            Icon::FolderZip,
+            WindowAction::CompressToOf,
+            vec![
+                target("ZIP File", Icon::FolderZip, WindowAction::CompressToZipOf).into(),
+                target("Additional options", Icon::FolderZip, WindowAction::CompressToOf).into(),
+            ],
+        );
+        let new = MenuItem::submenu(
+            ox_core::i18n::gettext_static("New"),
+            Icon::Add,
+            WindowAction::NewIn,
+            crate::window::place_commands::new_menu_in(uri, crate::window::command_bar::new_menu(templates)),
+        );
+        vec![
+            target("Open in new tab", Icon::Add, WindowAction::OpenTab).into(),
+            target("Open in new window", Icon::WindowNew, WindowAction::OpenWindow).into(),
+            target("Unpin from Quick access", Icon::Pin, WindowAction::Unpin).into(),
+            compress.into(),
+            target("Copy as path", Icon::Link, WindowAction::CopyPathOf).into(),
+            new.into(),
+            target("Properties", Icon::Info, WindowAction::PropertiesOf)
+                .with_shortcut("Alt+Enter")
+                .into(),
+            MenuEntry::Divider,
+            target(
+                "Open in Terminal",
+                Icon::WindowConsole,
+                WindowAction::OpenInTerminalOf,
+            )
+            .into(),
         ]
     }
 

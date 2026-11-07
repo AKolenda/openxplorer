@@ -42,7 +42,11 @@ pub(super) enum CopiedPath {
 /// What Copy path copies when `selected` are the URIs of the selected
 /// items in the folder `folder_uri`: the quoted address of every selected
 /// item, one per line, else the folder's. A landing page has none.
-fn copied_path(selected: &[String], folder_uri: Option<&str>, locations: &LocationContext) -> CopiedPath {
+pub(super) fn copied_path(
+    selected: &[String],
+    folder_uri: Option<&str>,
+    locations: &LocationContext,
+) -> CopiedPath {
     let uris: Vec<&str> = if selected.is_empty() {
         folder_uri.into_iter().collect()
     } else {
