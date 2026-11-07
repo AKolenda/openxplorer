@@ -298,6 +298,12 @@ impl RestoreSoFar {
         std::mem::take(&mut self.taken)
     }
 
+    /// True while an item waits because its name was taken
+    /// ([`Self::take_taken`]).
+    pub fn has_taken(&self) -> bool {
+        !self.taken.is_empty()
+    }
+
     /// The outcome of the restore stopped at the question: only these
     /// items count, and it reads as cancelled.
     pub fn into_outcome(mut self) -> TransferOutcome {
@@ -363,7 +369,7 @@ pub async fn restore_free_items(
             .filter(|item| item.kind == PlannedKind::Free)
             .collect();
         for (index, item) in free.iter().enumerate() {
-            let name = GioNode::new(&item.uri).display_name();
+            let name = original_name(&item.uri);
             let asked = AskedItem {
                 name: &name,
                 uri: &item.uri,
@@ -381,6 +387,42 @@ pub async fn restore_free_items(
             if so_far.cancelled() {
                 break;
             }
+        }
+        Ok(so_far)
+    })
+    .await
+}
+
+/// Asks, in the progress window, about each item of `so_far` still
+/// waiting because its name was taken after it was planned
+/// ([`RestoreSoFar::take_taken`]), when the restore stops planning them
+/// again: another program keeps taking the names. Each stays in the
+/// Recycle Bin, and "Interrupted Action" says so, as nothing is said once
+/// the restore ends.
+///
+/// # Errors
+///
+/// None for the whole request; each item is in the outcome.
+pub async fn tell_taken_items(
+    so_far: RestoreSoFar,
+    context: &OperationContext,
+) -> Result<RestoreSoFar, OpsError> {
+    let context = context.clone();
+    on_worker(move || {
+        let mut so_far = so_far;
+        let mut questions = ItemQuestions::new(&context, TransferMode::Move);
+        for uri in so_far.take_taken() {
+            let name = original_name(&uri);
+            let asked = AskedItem {
+                name: &name,
+                uri: &uri,
+                more_items: false,
+            };
+            let taken = OpsError::Exists(crate::i18n::format_message(
+                "An item named “{name}” already exists here. It was left in the Recycle Bin.",
+                &[("name", &name)],
+            ));
+            questions.tell(&mut so_far.outcome.result, asked, &taken);
         }
         Ok(so_far)
     })
@@ -466,6 +508,22 @@ fn replaced_later(scan: &ConflictScan, answers: &[Resolution], index: usize) -> 
         .enumerate()
         .skip(index + 1)
         .any(|(later, conflict)| answers[later] == Resolution::Replace && conflict.existing_uri == *existing)
+}
+
+/// The name the Recycle Bin item `uri` had where it was deleted from, as
+/// the user knows it, for its questions: the Recycle Bin may keep it as
+/// "Twin.2.txt" beside another "Twin.txt". Its own name when the Recycle
+/// Bin did not record where it came from.
+fn original_name(uri: &str) -> String {
+    let item = gio::File::for_uri(uri);
+    item.query_info(
+        ATTRIBUTES,
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        gio::Cancellable::NONE,
+    )
+    .ok()
+    .and_then(|info| entry_from_info(&item, &info).trash_orig_path)
+    .map_or_else(|| GioNode::new(uri).display_name(), |path| path_name(&path))
 }
 
 /// Moves the Recycle Bin item `uri` into `folder` under its original

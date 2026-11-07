@@ -21,8 +21,8 @@ use ox_core::location::TRASH_URI;
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, permanent_delete_confirmation,
     restore_answered_items, restore_free_items, restore_questions, restores_into_one_folder,
-    scan_drag_out_conflicts, scan_restore_conflicts, starting_label, ConflictScan, DeleteItem,
-    OperationContext, OpsError, Resolution, RestoreSoFar, TransferOutcome,
+    scan_drag_out_conflicts, scan_restore_conflicts, starting_label, tell_taken_items, ConflictScan,
+    DeleteItem, OperationContext, OpsError, Resolution, RestoreSoFar, TransferOutcome,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -114,20 +114,26 @@ impl BrowserWindow {
         };
         self.describe_operation(&context.cancel, Some(action.clone()));
         let mut so_far = restore_free_items(&scan, RestoreSoFar::new(), context).await?;
-        for _ in 0..TAKEN_ROUNDS {
+        for round in 1..=TAKEN_ROUNDS {
             if so_far.cancelled() {
                 return Ok(so_far.into_outcome());
             }
+            // Every plan's conflicts are asked about, the last one's too.
             let Some(answers) = self.ask_restore_conflicts(&scan, &action, context).await else {
                 return Ok(so_far.into_outcome());
             };
             so_far = restore_answered_items(&scan, &answers, so_far, context).await?;
-            let taken = so_far.take_taken();
-            if taken.is_empty() || so_far.cancelled() {
-                return Ok(so_far.finish());
+            if !so_far.has_taken() || so_far.cancelled() || round == TAKEN_ROUNDS {
+                break;
             }
+            let taken = so_far.take_taken();
             scan = Self::restore_scan(&taken, into, &context.cancel).await?;
             so_far = restore_free_items(&scan, so_far, context).await?;
+        }
+        // Another program keeps taking the names: each item still waiting
+        // is asked about now, never left in the Recycle Bin without a word.
+        if so_far.has_taken() && !so_far.cancelled() {
+            so_far = tell_taken_items(so_far, context).await?;
         }
         Ok(so_far.finish())
     }

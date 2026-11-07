@@ -610,3 +610,53 @@ fn a_name_taken_after_the_plan_is_asked_about_as_a_conflict() {
     assert_eq!(fs::read(&twin).unwrap(), b"newer");
     assert_eq!(recycled_from(&twin, 1).len(), 1, "the skipped item stays");
 }
+
+/// An item still waiting when the restore stops planning taken names
+/// again is asked about in the progress window, "Interrupted Action" with
+/// why it stayed in the Recycle Bin, never left there without a word
+/// (Codex review of #286).
+///
+/// parity: OPS-041, OPS-023
+#[test]
+fn an_item_still_taken_when_the_restore_stops_is_asked_about() {
+    use std::sync::{Arc, Mutex};
+
+    use ox_core::ops::{tell_taken_items, FailureAsker};
+    use ox_core::transfer::{FailedItem, FailureAnswer, FailureCause};
+
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let twin = temp.path().join("Twin.txt");
+    fs::write(&twin, b"trashed").unwrap();
+    trash(&[&twin]);
+    let uris: Vec<String> = recycled_from(&twin, 1).into_iter().map(|item| item.uri).collect();
+    let asked = Arc::new(Mutex::new(Vec::<FailedItem>::new()));
+    let log = Arc::clone(&asked);
+    let context = OperationContext {
+        item_failure: Some(FailureAsker::new(move |item: &FailedItem| {
+            log.lock().unwrap().push(item.clone());
+            FailureAnswer::Skip
+        })),
+        ..OperationContext::default()
+    };
+
+    let plan = scan(&uris);
+    // Another program takes the name before the item is restored.
+    fs::write(&twin, b"newer").unwrap();
+    let so_far = block_on(restore_free_items(&plan, RestoreSoFar::new(), &context)).unwrap();
+    assert!(so_far.has_taken(), "the item waits");
+    let outcome = block_on(tell_taken_items(so_far, &context)).unwrap().finish();
+
+    let asked = asked.lock().unwrap();
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_eq!(asked[0].cause, FailureCause::NeedsAttention);
+    assert_eq!(asked[0].name, "Twin.txt");
+    assert_eq!(outcome.result.errors.len(), 1);
+    assert_eq!(outcome.result.presented, outcome.result.errors, "the user saw it");
+    assert_eq!(fs::read(&twin).unwrap(), b"newer");
+    assert_eq!(
+        recycled_from(&twin, 1).len(),
+        1,
+        "the item stays in the Recycle Bin"
+    );
+}
