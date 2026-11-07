@@ -355,7 +355,10 @@ impl BrowserWindow {
         let Some(point) = context_menu_of(&view).and_then(|popover| popover.pointing_to().1.into()) else {
             return;
         };
-        self.open_context_menu(&view, &point, MenuStyle::Classic, None);
+        // Opened on a group heading, the classic menu keeps its commands.
+        let heading = self.imp().menu_heading.borrow().clone();
+        let heading = heading.filter(|heading| heading.model().is_some());
+        self.open_context_menu(&view, &point, MenuStyle::Classic, heading.as_ref());
     }
 
     /// The folder menu's "New…", "Sort by" and "View": `entries`, the
