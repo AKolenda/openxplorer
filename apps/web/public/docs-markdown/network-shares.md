@@ -27,7 +27,7 @@ Accounts are scoped by server and port. Different host aliases, rejected credent
 
 ## Keep a share in reach
 
-Map network drive, below the navigation pane or in the … menu of This PC and Network, asks for a drive letter and a folder such as \\studio-nas\Projects, as in Windows 11. Reconnect at sign-in saves the share beneath Network; on Linux the letter is only part of its name, such as Projects (Z:). Connect using different credentials asks for an account even when one is saved. Its link Connect to a Web site opens Add a network location, which also connects SFTP, FTP, WebDAV and NFS folders.
+Map network drive, below the navigation pane or in the … menu of This PC and Network, asks for a drive letter and a folder such as \\studio-nas\Projects, as in Windows 11. The Drive list offers only the letters no other share is mapped to, the highest one chosen. Save in the sidebar · reconnect when opened (Windows has Reconnect at sign-in) saves the share beneath Network, and OpenXplorer connects it again when you open it; unchecked, the share is listed until OpenXplorer quits. On Linux the letter is only part of its name, such as Projects (Z:). Connect using different credentials asks for an account even when one is saved. Its link Connect to a Web site opens Add a network location, which also connects SFTP, FTP, WebDAV and NFS folders.
 
 Successfully browsed locations appear beneath Network for the session. Right-click a share and choose Keep in Network to save it. Pin a share or a nested folder into the sidebar for a direct route back. Green marks indicate network-backed locations, not guaranteed online status.
 
