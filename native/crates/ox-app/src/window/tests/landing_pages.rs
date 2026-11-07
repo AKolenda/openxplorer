@@ -740,3 +740,36 @@ fn a_drive_is_copied_from_its_menu_and_never_cut() {
     assert_eq!(target, std::path::PathBuf::from("/"));
     assert_eq!(names_in(&fixture.path("Projects")), ["Local Disk - Shortcut"]);
 }
+
+/// Select all on This PC, then Copy, copies every drive, and a paste
+/// makes a shortcut to each, as Windows Explorer does with several drives
+/// selected; nothing on them is copied.
+///
+/// parity: HOME-003, CLIP-001, CMD-038
+#[gtk::test]
+fn every_selected_drive_pastes_as_its_own_shortcut() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+
+    test.activate("select-all", None);
+    wait_until("Copy to be enabled", || is_enabled(&test, "copy"));
+    assert!(!is_enabled(&test, "cut"), "drives are never cut");
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the three shortcuts", || {
+        names_in(&fixture.path("Projects")).len() == 3
+    });
+
+    assert_eq!(
+        names_in(&fixture.path("Projects")),
+        ["Backup - Shortcut", "Local Disk - Shortcut", "USB - Shortcut"]
+    );
+    let target = |name: &str| std::fs::read_link(fixture.path(&format!("Projects/{name}"))).expect("a link");
+    assert_eq!(target("Local Disk - Shortcut"), std::path::PathBuf::from("/"));
+    assert_eq!(target("Backup - Shortcut"), fixture.path(""));
+    assert_eq!(target("USB - Shortcut"), fixture.path("Documents"));
+}

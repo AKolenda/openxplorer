@@ -285,10 +285,9 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
             show_capacity(&lines, uri, true);
             gestures::open_folder_on_middle_click(&child, uri);
             // What Copy copies while the tile is selected, and what a drag
-            // of it carries: a shortcut to the drive, never its contents
-            // ([`super::drive_shortcuts`]).
+            // of it carries ([`drive_tile_at`]): a shortcut to the drive,
+            // never its contents ([`super::drive_shortcuts`]).
             child.add_css_class(DRIVE_TILE_CLASS);
-            super::file_drag::attach_drive_tile_drag(&child, uri);
             Tile {
                 child,
                 open: Opening {
@@ -762,6 +761,28 @@ fn tile_boxes(page: &gtk::Box) -> impl Iterator<Item = gtk::FlowBox> {
     super::widget_tree::children(page).filter_map(|child| child.downcast::<gtk::FlowBox>().ok())
 }
 
+/// The class This PC's page carries once its drive tiles can be dragged.
+const DRIVE_DRAG_CLASS: &str = "drive-tiles-drag";
+
+/// The drive whose tile is at `x`, `y` of `page`, for a drag of it.
+fn drive_tile_at(page: &gtk::Box, x: f64, y: f64) -> Option<String> {
+    let picked = page.pick(x, y, gtk::PickFlags::DEFAULT)?;
+    let tile = std::iter::successors(Some(picked), WidgetExt::parent)
+        .take_while(|widget| widget != page.upcast_ref::<gtk::Widget>())
+        .find(|widget| widget.has_css_class(DRIVE_TILE_CLASS))?;
+    Some(tile.widget_name().to_string())
+}
+
+/// Lets `page`'s drive tiles be dragged, once for the page, which is
+/// drawn again whenever a drive comes or goes.
+fn allow_drive_drags(page: &gtk::Box) {
+    if page.has_css_class(DRIVE_DRAG_CLASS) {
+        return;
+    }
+    page.add_css_class(DRIVE_DRAG_CLASS);
+    super::file_drag::attach_drive_tile_drag(page, drive_tile_at);
+}
+
 /// The drives whose tiles are selected on `page`, in order: what Copy
 /// copies on This PC, for a paste to make a shortcut to each.
 pub(super) fn selected_drives(page: &gtk::Box) -> Vec<String> {
@@ -947,6 +968,7 @@ pub(super) fn render(
     match page {
         Page::ThisPc => {
             body.add_css_class(THIS_PC_CLASS);
+            allow_drive_drags(body);
             this_pc(body, places, locations, text_size);
             select_one_group(body);
             kept.restore(body);

@@ -242,22 +242,31 @@ fn file_drag_source() -> gtk::DragSource {
     source
 }
 
-/// Lets This PC's `tile` of the drive at `uri` be dragged, as Windows
-/// Explorer lets a drive be dragged into a folder to make a shortcut to it
-/// there ("Create link in Documents"). The tile finds its window when the
-/// drag starts, as it is drawn before it is in one.
-pub(super) fn attach_drive_tile_drag(tile: &gtk::FlowBoxChild, uri: &str) {
+/// Lets the drive tiles of This PC, drawn in `page`, be dragged, as
+/// Windows Explorer lets a drive be dragged into a folder to make a
+/// shortcut to it there ("Create link in Documents"). `drive_at` names
+/// the drive whose tile is at a point of `page`; a press anywhere else
+/// drags nothing, so the tile box's rubber band starts there. The source
+/// is on the page, in the capture phase, so it sees a drag before the
+/// tile box, whose own rubber band would take a drag that starts on a
+/// tile. The page finds its window when the drag starts.
+pub(super) fn attach_drive_tile_drag(
+    page: &gtk::Box,
+    drive_at: impl Fn(&gtk::Box, f64, f64) -> Option<String> + 'static,
+) {
     let source = file_drag_source();
-    let uri = uri.to_owned();
+    source.set_propagation_phase(gtk::PropagationPhase::Capture);
     let window_of = |source: &gtk::DragSource| {
         source
             .widget()
             .and_then(|widget| widget.root())
             .and_downcast::<BrowserWindow>()
     };
-    source.connect_prepare(move |source, _, _| {
+    source.connect_prepare(move |source, x, y| {
+        let page = source.widget().and_downcast::<gtk::Box>()?;
+        let uri = drive_at(&page, x, y)?;
         let button = pressed_button(source)?;
-        let content = window_of(source)?.drive_tile_drag_content(uri.clone())?;
+        let content = window_of(source)?.drive_tile_drag_content(uri)?;
         source.set_actions(offered_actions(button, source.current_event_state()));
         Some(content)
     });
@@ -275,7 +284,7 @@ pub(super) fn attach_drive_tile_drag(tile: &gtk::FlowBoxChild, uri: &str) {
             window.end_file_drag();
         }
     });
-    tile.add_controller(source);
+    page.add_controller(source);
 }
 
 /// True when a menu or other popover inside `widget` is open.
