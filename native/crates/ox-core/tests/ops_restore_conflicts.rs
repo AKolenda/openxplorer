@@ -327,6 +327,8 @@ fn replace_restores_the_second_twin_over_the_first() {
         };
         assert_eq!(Some(fs::read(&twin).unwrap().len() as u64), expected, "{case}");
         assert_eq!(outcome.created, [file_uri(&twin)], "{case}");
+        // "1 item(s) restored.": an item sent back is not counted.
+        assert_eq!(outcome.result.done.len(), 1, "{case}: {:?}", outcome.result.done);
         assert_eq!(
             recycled_from(&twin, contents.len() - 1).len(),
             contents.len() - 1,

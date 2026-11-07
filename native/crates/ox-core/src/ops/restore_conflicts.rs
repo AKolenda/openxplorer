@@ -225,6 +225,8 @@ pub struct RestoreSoFar {
     outcome: TransferOutcome,
     /// The local paths of the replaced items, now in the Recycle Bin.
     replaced: Vec<PathBuf>,
+    /// Each Recycle Bin item restored so far, with the URI it went to.
+    placed: Vec<(String, String)>,
     /// When the restore started, in seconds since the Unix epoch.
     started: u64,
 }
@@ -247,6 +249,7 @@ impl RestoreSoFar {
         match restored {
             Ok(restored) => {
                 self.outcome.result.done.push(uri.to_owned());
+                self.placed.push((uri.to_owned(), restored.clone()));
                 self.outcome.created.push(restored);
             }
             Err(error) => record_failure(&mut self.outcome.result, name, &error),
@@ -426,7 +429,8 @@ fn keep_both(
 ///   and Replace sends it to the Recycle Bin, where it came from, and
 ///   restores this one in its place, as for any item in the way. It is
 ///   not a replaced item for Undo: Undo takes this one back, and the
-///   earlier item is already where it was before the restore.
+///   earlier item is already where it was before the restore. Nor is it
+///   restored any more, so "1 item(s) restored." counts this one alone.
 fn replace(
     item: &PlannedItem,
     conflict: &NameConflict,
@@ -441,12 +445,12 @@ fn replace(
         so_far.add(&item.uri, restored, &name);
         return;
     }
-    let restored_there = existing.path().is_some_and(|path| {
+    // The item this restore already put there, if any.
+    let restored_there = existing.path().and_then(|path| {
         so_far
-            .outcome
-            .created
+            .placed
             .iter()
-            .any(|created| gio::File::for_uri(created).path() == Some(path.clone()))
+            .position(|(_, created)| gio::File::for_uri(created).path().as_ref() == Some(&path))
     });
     let same_kind = facts(&existing, cancel).is_ok_and(|now| {
         now.is_folder == conflict.incoming.is_folder && now.is_folder == conflict.existing.is_folder
@@ -476,8 +480,20 @@ fn replace(
     let arrived = |part: &TransferOutcome| part.result.done.contains(&item.uri);
     match replace_through_recycle_bin(&existing, &path, context, place, arrived) {
         Ok((part, replaced)) => {
-            if replaced && !restored_there {
-                so_far.replaced.push(path);
+            if replaced {
+                match restored_there {
+                    // Back in the Recycle Bin, it is no longer restored.
+                    Some(at) => {
+                        let (earlier, _) = so_far.placed.remove(at);
+                        so_far.outcome.result.done.retain(|done| *done != earlier);
+                    }
+                    None => so_far.replaced.push(path),
+                }
+            }
+            if arrived(&part) {
+                if let Some(created) = part.created.first() {
+                    so_far.placed.push((item.uri.clone(), created.clone()));
+                }
             }
             for created in part.created {
                 if !so_far.outcome.created.contains(&created) {
