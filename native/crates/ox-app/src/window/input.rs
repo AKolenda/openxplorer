@@ -105,6 +105,7 @@ impl BrowserWindow {
             }
         ));
         self.install_focus_regions();
+        self.install_tab_order();
         super::menu_popover::close_menus_on_press(self);
     }
 

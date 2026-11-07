@@ -486,7 +486,7 @@ python_tests = [
 ]
 bridge = ["list"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/address_bar/crumb_input.rs keeps Left and Right among the crumbs and the chevron or « before them (address_bar/crumb_strip.rs, keyboard_stops), clamped at the ends; the shown one of the two takes Tab and opens its menu on Down. Tested in native/crates/ox-app/src/window/tests/address_input.rs (left_and_right_stop_at_the_first_chevron_and_the_last_crumb, activating_a_focused_crumb_opens_it_not_the_selected_file, a_middle_clicked_crumb_opens_in_a_background_tab) and native/crates/ox-app/src/window/tests/address_bar.rs (the_keyboard_reaches_the_collapsed_crumbs_through_the_overflow_button: Shift+Tab and Left reach the «, Down opens its menu). The per-crumb subfolder menu is NAV-020."
+native_note = "native/crates/ox-app/src/window/address_bar/crumb_input.rs keeps Left and Right among the crumbs and the chevron or « before them (address_bar/crumb_strip.rs, keyboard_stops), clamped at the ends; the shown one of the two takes Tab and opens its menu on Down. The window's Tab order (ACC-016) reaches the chevron or « after the navigation buttons and goes through each crumb shown. Tested in native/crates/ox-app/src/window/tests/address_input.rs (left_and_right_stop_at_the_first_chevron_and_the_last_crumb, activating_a_focused_crumb_opens_it_not_the_selected_file, a_middle_clicked_crumb_opens_in_a_background_tab) and native/crates/ox-app/src/window/tests/address_bar.rs (the_keyboard_reaches_the_collapsed_crumbs_through_the_overflow_button: Shift+Tab and Left reach the «, Down opens its menu). The per-crumb subfolder menu is NAV-020."
 
 [[feature]]
 id = "NAV-019"
@@ -16836,6 +16836,24 @@ bridge = []
 gnome = "GtkPaned cycle-child-focus key binding (F6 and Shift+F6), gtk_widget_child_focus"
 native = "done"
 native_note = "native/crates/ox-app/src/window/focus_regions.rs (f6_goes_round_the_shown_regions_and_shift_goes_back); native/crates/ox-app/src/window/tests/accessibility.rs (f6_moves_focus_round_the_regions_and_back_to_the_same_item). F6 and Shift+F6 are captured by the window, so they work from text fields too, and do nothing while a dialog is open. They visit the tab strip, the address bar, the search box, the command bar, the sidebar, the file list and the Details pane in that order, wrapping round and skipping regions that are hidden (unmapped) or disabled. Focus lands on the front tab, the highlighted sidebar row, the file list's current item or the region's first control; the selection is unchanged."
+
+[[feature]]
+id = "ACC-016"
+area = "ACC"
+title = "Tab moves keyboard focus in Windows Explorer's order, and every stop shows it"
+behaviour = "Tab and Shift+Tab move keyboard focus through the window in Windows File Explorer's order, wrapping around: the address bar (the chevron or « before the crumbs, each crumb shown, the history chevron; or the entry), the search box, the command bar, the navigation pane as one stop, the folder tree, Map network drive, the file list as one stop on its current item (each pane of a split tab), the Details pane, the status bar's buttons, the Open or Save bar, the tab in front and its Close button, New tab, then Back, Forward, Up and Refresh. The caption buttons are no stops; hidden or disabled stops are skipped. Every stop draws its focus for the keyboard, an empty file list included. Escape in the address entry returns to the crumbs with the keyboard in the file list."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "partial"
+sources = [
+  "https://learn.microsoft.com/en-us/previous-versions/technet-magazine/ee851673(v=msdn.10)",
+  "https://support.microsoft.com/en-us/windows/keyboard-shortcuts-in-windows-dcc61a57-8ff0-cffe-9796-cb9706c75eec",
+]
+python_tests = []
+bridge = []
+gnome = "GtkWidget move-focus, gtk_widget_child_focus"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_order.rs takes the window's move-focus for Tab and Shift+Tab, which GTK emits only once the focused widget let the key go (so Tab between split panes, VIEW-059, a rename in place and the unavailable page keep it), and walks its stops; dialogs, menus and the Settings page keep GTK's order. Microsoft's archived Windows 7 tip gives Tab's order as the address bar, search box, toolbar, navigation pane, file list and column headings, and Microsoft's Windows 11 shortcut list says F6 cycles through the window's elements; where Windows 11 puts its tabs and navigation buttons is not documented, so they come just before the address bar, where they sit. The column headings are not a Tab stop here. GTK's order had gone from the file list to the status bar, the title bar's caption buttons and every navigation pane row. An empty list that has the keyboard rings \"This folder is empty.\" with the item ring (window/folder_pane.rs, folder-views.css), and crumbs draw the buttons' 2 px ring (navigation.css). Tests: native/crates/ox-app/src/window/tab_order.rs (tab_tries_every_other_stop_once_and_wraps_round); native/crates/ox-app/src/window/tests/focus.rs (tab_after_escaping_the_address_goes_round_in_explorers_order_with_every_stop_shown: real Escape, Tab and Shift+Tab on the private display after a real click in the address bar, light and dark, each stop's pixels compared before and after it takes the keyboard, the « in a narrow window; the_keyboard_on_an_empty_list_rings_its_note)."
 
 [[feature]]
 id = "PERF-001"

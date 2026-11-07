@@ -21,7 +21,14 @@ use ox_core::places::FolderLocations;
 
 use crate::folder_view::grid::IconSize;
 
-use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    capture, descendants, settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
+use crate::test_support::pointer::{screen_point, Button, Pointer};
+use crate::window::address_bar::AddressMode;
+use crate::window::tab_order::Stop;
+
+use super::narrow_windows::resize;
 
 /// A home with the standard folders the sidebar lists, so a row of it opens a
 /// folder the test filled: the test home of the harness is the machine's
@@ -418,4 +425,346 @@ fn typing_while_a_location_opens_selects_nothing_hidden() {
         "the window leaves the letter alone"
     );
     assert!(test.selected_names().is_empty(), "no hidden row was selected");
+}
+
+/// What the window draws now, in device pixels, from its outer edge.
+struct Picture {
+    pixels: Vec<u8>,
+    stride: usize,
+    width: usize,
+    height: usize,
+    /// Device pixels per logical pixel.
+    scale: f32,
+    /// The window's outer edge in its own coordinates.
+    origin: (f32, f32),
+}
+
+impl Picture {
+    fn of(window: &gtk::Window) -> Self {
+        let native = window.upcast_ref::<gtk::Native>();
+        #[expect(clippy::cast_precision_loss, reason = "scale factors are small integers")]
+        let scale = native.scale_factor() as f32;
+        let paintable = gtk::WidgetPaintable::new(Some(native));
+        let snapshot = gtk::Snapshot::new();
+        snapshot.scale(scale, scale);
+        paintable.snapshot(
+            &snapshot,
+            f64::from(paintable.intrinsic_width()),
+            f64::from(paintable.intrinsic_height()),
+        );
+        let node = snapshot.to_node().expect("a shown window draws");
+        let renderer = native.renderer().expect("a shown window has a renderer");
+        let texture = renderer.render_texture(&node, None);
+        let mut downloader = gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gdk::MemoryFormat::R8g8b8a8);
+        let (bytes, stride) = downloader.download_bytes();
+        let outer = window.compute_bounds(window).expect("a shown window has bounds");
+        Self {
+            pixels: bytes.to_vec(),
+            stride,
+            width: usize::try_from(texture.width()).expect("a width"),
+            height: usize::try_from(texture.height()).expect("a height"),
+            scale,
+            origin: (outer.x(), outer.y()),
+        }
+    }
+
+    /// How many device pixels of `widget`'s box differ between the two
+    /// pictures.
+    fn changed_in(&self, other: &Self, widget: &gtk::Widget, window: &gtk::Window) -> usize {
+        let bounds = widget.compute_bounds(window).expect("a shown widget has bounds");
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "window measures are small and positive"
+        )]
+        let device = |logical: f32, origin: f32| ((logical - origin) * self.scale).max(0.0) as usize;
+        let left = device(bounds.x(), self.origin.0);
+        let top = device(bounds.y(), self.origin.1);
+        let right = device(bounds.x() + bounds.width(), self.origin.0).min(self.width);
+        let bottom = device(bounds.y() + bounds.height(), self.origin.1).min(self.height);
+        (top..bottom)
+            .flat_map(|y| (left..right).map(move |x| y * self.stride + x * 4))
+            .filter(|at| self.pixels[*at..*at + 4] != other.pixels[*at..*at + 4])
+            .count()
+    }
+}
+
+/// How long a control's focus ring may take to settle after a key.
+const RING_SETTLE: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Device pixels a focus ring changes at the least: a 2 px ring round
+/// the smallest stop, a 20 px chevron, changes far more.
+const RING_PIXELS: usize = 40;
+
+/// One press of Tab (Shift+Tab `backward`) on the private display's real
+/// keyboard: the widget it focused, which must draw its focus.
+fn tab_and_see_the_ring(test: &TestWindow, pointer: &mut Pointer, backward: bool) -> gtk::Widget {
+    let window = test.window.upcast_ref::<gtk::Window>();
+    let before = Picture::of(window);
+    if backward {
+        pointer.hold_key(gdk::Key::Shift_L);
+    }
+    pointer.tap_key(gdk::Key::Tab);
+    if backward {
+        pointer.let_go_key(gdk::Key::Shift_L);
+    }
+    wait_for(RING_SETTLE);
+    wait_for_frames(window, 2);
+    let focus = focused(test).expect("Tab leaves the keyboard on a control");
+    assert!(window.gets_focus_visible(), "Tab shows where the keyboard is");
+    let after = Picture::of(window);
+    let changed = after.changed_in(&before, &focus, window);
+    assert!(
+        changed >= RING_PIXELS,
+        "{} with {:?} draws its focus: {changed} pixels changed",
+        focus.type_().name(),
+        focus.css_classes()
+    );
+    focus
+}
+
+/// Where the stops are, by name, for a failure and the captures.
+fn stop_name(stop: Option<Stop>) -> String {
+    let name = stop.map_or_else(|| "none".to_owned(), |stop| format!("{stop:?}").to_lowercase());
+    name.replace('(', "-").replace(')', "")
+}
+
+/// The user's steps on Windows' order: open OX-Test > Template test >
+/// Inside A, click blank space in the address bar, press Esc, then press
+/// Tab. Esc leaves the keyboard in the file list, on its current item, and
+/// Tab goes on from there as in Windows File Explorer: the status bar's
+/// view buttons, the tab in front and its Close button, New tab, the navigation buttons, then
+/// the address bar (the chevron first, each crumb, the history chevron),
+/// the search box, the command bar, the navigation pane as one stop, Map
+/// network drive and back to the file list. Every stop draws its focus,
+/// light and dark: no press of Tab leaves the keyboard where nothing
+/// shows it. In a narrow window the « takes the chevron's place as the
+/// address bar's first stop. The keys are real ones on the private
+/// display, so GTK's own key handling decides what each one does.
+///
+/// parity: ACC-016, NAV-018, NAV-023
+#[gtk::test]
+fn tab_after_escaping_the_address_goes_round_in_explorers_order_with_every_stop_shown() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::empty();
+    let inside = fixture.path("OX-Test").join("Template test").join("Inside A");
+    std::fs::create_dir_all(&inside).expect("the test folders");
+    std::fs::write(inside.join("Plan.txt"), "x").expect("a file");
+    for theme in ["light", "dark"] {
+        let test = TestWindow::open(&file_uri(&inside));
+        test.activate("theme", Some(theme));
+        test.wait_for_listing("Inside A");
+        test.window.present();
+        wait_for_frames(&test.window, 3);
+        let mut pointer = Pointer::connect();
+        walk_the_tab_order(&test, &mut pointer, theme);
+    }
+}
+
+/// A point of `address` with no button under it, right of the crumbs: the
+/// empty spot the user clicked.
+fn blank_spot(address: &impl IsA<gtk::Widget>) -> (f64, f64) {
+    let address = address.upcast_ref::<gtk::Widget>();
+    let middle = f64::from(address.height()) / 2.0;
+    let on_a_button = |x: f64| {
+        let picked = address.pick(x, middle, gtk::PickFlags::DEFAULT);
+        std::iter::successors(picked, WidgetExt::parent)
+            .take_while(|widget| widget != address)
+            .any(|widget| widget.is::<gtk::Button>())
+    };
+    (1..address.width() / 2)
+        .map(|step| f64::from(address.width() - 4 * step))
+        .find(|x| !on_a_button(*x) && !on_a_button(*x - 8.0) && !on_a_button(*x + 8.0))
+        .map(|x| (x, middle))
+        .expect("the address bar has blank space")
+}
+
+fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
+    let address = test.window.address_bar();
+    let blank = blank_spot(address);
+    let (x, y) = screen_point(pointer, address, blank, (400, 70));
+    pointer.move_to(x, y);
+    // The window settles under the pointer before the click.
+    wait_for(RING_SETTLE);
+    pointer.press(Button::Primary);
+    pointer.release(Button::Primary);
+    wait_until("the address to be edited", || {
+        address.mode() == AddressMode::Entry
+    });
+    pointer.tap_key(gdk::Key::Escape);
+    wait_until("the crumbs back", || address.mode() == AddressMode::Crumbs);
+    // The pointer rests on the status bar's count, away from every stop.
+    let count = (12.0, f64::from(test.window.status_bar().height()) / 2.0);
+    let (x, y) = screen_point(pointer, test.window.status_bar(), count, (40, 780));
+    pointer.move_to(x, y);
+    wait_for(RING_SETTLE);
+    let start = Stop::Pane(test.window.active_side());
+    assert_eq!(
+        test.window.focused_stop(),
+        Some(start),
+        "Esc leaves the keyboard in the file list"
+    );
+    assert!(test.window.folder_pane().view_has_focus());
+    capture(&test.window, &format!("address-tab-fix-{theme}-00-escape.png"));
+
+    let mut visited: Vec<(Stop, gtk::Widget)> = Vec::new();
+    for press in 1..=60 {
+        let focus = tab_and_see_the_ring(test, pointer, false);
+        let stop = test.window.focused_stop();
+        capture(
+            &test.window,
+            &format!("address-tab-fix-{theme}-{press:02}-{}.png", stop_name(stop)),
+        );
+        if stop == Some(start) {
+            break;
+        }
+        visited.push((stop.unwrap_or_else(|| panic!("{focus:?} is in no stop")), focus));
+    }
+    let mut stops: Vec<Stop> = visited.iter().map(|(stop, _)| *stop).collect();
+    let presses: Vec<(Stop, usize)> = {
+        let mut counted = Vec::new();
+        for stop in &stops {
+            match counted.last_mut() {
+                Some((last, count)) if last == stop => *count += 1,
+                _ => counted.push((*stop, 1)),
+            }
+        }
+        counted
+    };
+    stops.dedup();
+    assert_eq!(
+        stops,
+        [
+            Stop::Status,
+            Stop::Tabs,
+            Stop::NewTab,
+            Stop::Navigation,
+            Stop::Address,
+            Stop::Search,
+            Stop::Commands,
+            Stop::Places,
+            Stop::MapNetworkDrive,
+        ],
+        "Windows' order from the file list round to it"
+    );
+    assert!(
+        presses.contains(&(Stop::Places, 1)),
+        "the navigation pane is one stop: {presses:?}"
+    );
+
+    let first_in_tabs = visited.iter().find(|(stop, _)| *stop == Stop::Tabs);
+    assert!(
+        first_in_tabs.is_some_and(|(_, widget)| widget.has_css_class("tab")),
+        "the tab in front is the strip's stop, before its Close button"
+    );
+
+    address_stops_follow_the_crumbs(test, &visited);
+    the_shift_tab_and_the_overflow_stops(test, pointer, theme);
+}
+
+/// The address bar's stops among `visited`: the chevron, each crumb, then
+/// the history chevron.
+fn address_stops_follow_the_crumbs(test: &TestWindow, visited: &[(Stop, gtk::Widget)]) {
+    let address = test.window.address_bar();
+    let in_address: Vec<gtk::Widget> = visited
+        .iter()
+        .filter(|(stop, _)| *stop == Stop::Address)
+        .map(|(_, widget)| widget.clone())
+        .collect();
+    let (chevron, _) = address.strip_buttons();
+    let crumbs: Vec<gtk::Widget> = address.crumb_buttons().into_iter().map(Cast::upcast).collect();
+    assert_eq!(
+        in_address.first(),
+        Some(chevron.upcast_ref()),
+        "the chevron is the first stop"
+    );
+    assert_eq!(
+        &in_address[1..=crumbs.len()],
+        crumbs.as_slice(),
+        "then every crumb"
+    );
+    assert!(
+        in_address
+            .last()
+            .is_some_and(|last| last.has_css_class("address-chevron")),
+        "then the history chevron"
+    );
+}
+
+/// Shift+Tab from the chevron goes back to the navigation buttons; in a
+/// narrow window the « is the address bar's first stop, and shows it.
+fn the_shift_tab_and_the_overflow_stops(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
+    let address = test.window.address_bar();
+    let (chevron, _) = address.strip_buttons();
+    // Shift+Tab goes back: from the chevron to the navigation buttons.
+    while test.window.focused_stop() != Some(Stop::Address) {
+        tab_and_see_the_ring(test, pointer, false);
+    }
+    assert_eq!(focused(test).as_ref(), Some(chevron.upcast_ref()));
+    tab_and_see_the_ring(test, pointer, true);
+    assert_eq!(test.window.focused_stop(), Some(Stop::Navigation));
+
+    // Narrow, the « is the first stop of the address bar, and shows it.
+    resize(test, 760);
+    let (_, overflow) = address.strip_buttons();
+    wait_until("the first crumbs to collapse", || {
+        overflow.is_mapped() && !address.hidden_crumbs().is_empty()
+    });
+    let focus = tab_and_see_the_ring(test, pointer, false);
+    assert_eq!(
+        focus,
+        overflow.clone().upcast::<gtk::Widget>(),
+        "the « is the first stop"
+    );
+    capture(
+        &test.window,
+        &format!("address-tab-fix-{theme}-narrow-overflow.png"),
+    );
+    let next = tab_and_see_the_ring(test, pointer, false);
+    let first_shown = address.crumb_buttons()[address.hidden_crumbs().len()].clone();
+    assert_eq!(
+        next,
+        first_shown.upcast::<gtk::Widget>(),
+        "then the first crumb shown"
+    );
+}
+
+/// After Esc in an empty folder the keyboard rests on the empty list,
+/// which has no item to ring: "This folder is empty." takes the items'
+/// ring instead, for the keyboard only.
+///
+/// parity: ACC-016, ACC-009
+#[gtk::test]
+fn the_keyboard_on_an_empty_list_rings_its_note() {
+    let fixture = Fixture::empty();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the empty folder");
+    let pane = test.window.folder_pane();
+    let ringed = || {
+        pane.parts_overlay()
+            .is_some_and(|overlay| overlay.has_css_class("keyboard-on-empty-list"))
+    };
+    assert!(pane.shows_empty_note());
+
+    test.window.set_focus_visible(false);
+    pane.focus_view();
+    settle();
+    assert!(pane.view_has_focus());
+    assert!(!ringed(), "a click shows no ring");
+
+    test.window.set_focus_visible(true);
+    settle();
+    assert!(ringed(), "the keyboard rings the note");
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        capture(&test.window, &format!("address-tab-fix-{theme}-empty-list.png"));
+    }
+
+    test.window
+        .address_bar()
+        .child_focus(gtk::DirectionType::TabForward);
+    settle();
+    assert!(!ringed(), "the ring goes with the keyboard");
 }

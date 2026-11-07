@@ -323,6 +323,16 @@ gridview.files > child .item-properties > box { border-spacing: 4px; }
 /* An empty folder keeps its list and says so near its top, under the
    column titles, in small grey text as Windows Explorer does. */
 .empty-folder-note { color: @ox_muted; }
+/* An empty list that has the keyboard has no item to ring, so the note
+   takes the items' ring (ACC-016): no Tab stop is invisible. */
+.folder-pane-overlay.keyboard-on-empty-list > label.empty-folder-note {
+  padding: 4px 10px;
+  margin: -4px -10px;
+  border-radius: 4px;
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 
 /* ---- Drag and drop (DND-007, DND-011, DND-026; style.css
    .file-dragging .drag-source, .file-drop-active, .tab-drag-hint) ---- */

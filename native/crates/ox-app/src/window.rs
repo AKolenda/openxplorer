@@ -162,6 +162,7 @@ mod tab_commands;
 mod tab_layout;
 mod tab_menu;
 mod tab_moves;
+mod tab_order;
 mod tab_strip;
 mod title_bar;
 mod toast;

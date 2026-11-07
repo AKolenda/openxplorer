@@ -145,6 +145,12 @@ impl Sidebar {
             .expect("constructed builds the folder tree")
     }
 
+    /// The footer holding Map network drive, at the foot of the pane.
+    pub(super) fn map_network_footer(&self) -> gtk::Widget {
+        self.last_child()
+            .expect("build_pane appends Map network drive last")
+    }
+
     /// Builds the list and, below it, the footer into the pane.
     fn build_pane(&self) {
         self.set_orientation(gtk::Orientation::Vertical);

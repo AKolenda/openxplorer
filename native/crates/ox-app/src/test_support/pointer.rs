@@ -305,9 +305,11 @@ pub(crate) fn screen_point(
         .compute_point(&native, &gtk::graphene::Point::new(x as f32, y as f32))
         .expect("a shown widget is laid out in its window");
     let (shadow_x, shadow_y) = native.surface_transform();
+    // GDK measures in logical pixels, the X server in device pixels.
+    let scale = f64::from(native.scale_factor());
     (
-        left + round(f64::from(in_native.x()) + shadow_x),
-        top + round(f64::from(in_native.y()) + shadow_y),
+        left + round((f64::from(in_native.x()) + shadow_x) * scale),
+        top + round((f64::from(in_native.y()) + shadow_y) * scale),
     )
 }
 
@@ -334,7 +336,8 @@ pub(crate) fn window_origin(
         .find_map(|(x, y)| {
             pointer.move_to(x, y);
             let (in_x, in_y, _) = surface.device_position(&device)?;
-            Some((x - round(in_x), y - round(in_y)))
+            let scale = f64::from(surface.scale_factor());
+            Some((x - round(in_x * scale), y - round(in_y * scale)))
         })
         .expect("the window is on the screen")
 }

@@ -117,6 +117,10 @@ glib::wrapper! {
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
+/// The CSS class of the pane's overlay while the keyboard is on its empty
+/// list (`folder-views.css`).
+const KEYBOARD_ON_EMPTY_LIST: &str = "keyboard-on-empty-list";
+
 impl FolderPane {
     /// Builds the pages, empty and in the details view.
     fn build_parts(&self) {
@@ -244,6 +248,7 @@ impl FolderPane {
             self.focus_empty_list();
         }
         note.set_visible(show);
+        self.show_keyboard_on_empty_list();
         let lists: [gtk::Widget; 2] = [
             self.details().column_view().clone().upcast(),
             self.icon_view().grid().clone().upcast(),
@@ -255,6 +260,34 @@ impl FolderPane {
                 list.reset_relation(gtk::AccessibleRelation::DescribedBy);
             }
         }
+    }
+
+    /// Rings "This folder is empty." while the keyboard is on the empty
+    /// list, for the keyboard only, as the item rings are: the list has no
+    /// item to ring and draws no ring around itself (ACC-009, ACC-016).
+    pub(super) fn show_keyboard_on_empty_list(&self) {
+        let window = self.root().and_then(|root| root.downcast::<gtk::Window>().ok());
+        let keyboard = window.as_ref().is_some_and(GtkWindowExt::gets_focus_visible);
+        let focus = window.as_ref().and_then(GtkWindowExt::focus);
+        let view = self.view_widget();
+        let on_list = focus.is_some_and(|focus| {
+            (focus == view || focus.is_ancestor(&view))
+                && (focus.is::<gtk::ListView>() || focus.is::<gtk::GridView>())
+        });
+        let on_empty_list = keyboard && on_list && self.shows_empty_note();
+        if let Some(overlay) = self.parts().stack.parent() {
+            if on_empty_list {
+                overlay.add_css_class(KEYBOARD_ON_EMPTY_LIST);
+            } else {
+                overlay.remove_css_class(KEYBOARD_ON_EMPTY_LIST);
+            }
+        }
+    }
+
+    /// The overlay over the pane's pages, for tests.
+    #[cfg(test)]
+    pub(super) fn parts_overlay(&self) -> Option<gtk::Widget> {
+        self.parts().stack.parent()
     }
 
     /// Whether "This folder is empty." shows.
@@ -518,6 +551,13 @@ impl FolderPane {
     /// The empty page's whole area.
     pub(super) fn empty_area(&self) -> gtk::Widget {
         self.parts().empty_area.clone().upcast()
+    }
+
+    /// Whether the pane shows a folder's list, empty or not, rather than
+    /// the empty page or a landing page: one stop for Tab, whose arrows
+    /// move among the items.
+    pub(super) fn lists_items(&self) -> bool {
+        self.page() == Some(PanePage::Listing)
     }
 
     /// True while keyboard focus is inside the visible view, or on the
