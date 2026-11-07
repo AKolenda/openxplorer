@@ -20,6 +20,10 @@
 //! - `row=<property>`: selects the Details row of that property (such
 //!   as `Camera model`) in the Properties window opened last, with the
 //!   keyboard on it, so the list scrolls to it;
+//! - `focus=<name>`: puts the keyboard on the shown button that runs
+//!   `win.<name>` (such as `share` or `properties`), with its focus ring,
+//!   as a Tab to it would; with several, the last in the window, which is
+//!   the details pane's;
 //! - `wait=<milliseconds>`: lets work the app does in the background, such
 //!   as building the search cache, finish first (at most ten seconds).
 //!
@@ -56,6 +60,8 @@ pub(crate) enum SceneStep {
     /// Select and focus this Details row of the Properties window opened
     /// last.
     Row(String),
+    /// Put the keyboard on the shown button that runs `win.<name>`.
+    Focus(String),
     /// Wait this long before the next step.
     Wait(Duration),
 }
@@ -84,6 +90,7 @@ impl SceneStep {
             "submenu" => Some(Self::Submenu(argument.to_owned())),
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
+            "focus" => Some(Self::Focus(argument.to_owned())),
             "action" => {
                 let (name, target) = match argument.split_once(':') {
                     Some((name, target)) => (name, Some(target.to_owned())),
@@ -140,6 +147,17 @@ impl SceneStep {
                     .then_some(Duration::ZERO)
                     .ok_or_else(|| format!("the Details tab has no row “{name}”"))
             }
+            Self::Focus(name) => {
+                let action = format!("win.{name}");
+                let button = crate::window::widget_tree::descendants::<gtk::Button>(window)
+                    .into_iter()
+                    .filter(|button| button.is_drawable() && button.action_name().as_deref() == Some(&action))
+                    .last()
+                    .ok_or_else(|| format!("no shown button runs “{name}”"))?;
+                button.grab_focus();
+                window.set_focus_visible(true);
+                Ok(Duration::ZERO)
+            }
             Self::Wait(pause) => Ok(*pause),
         }
     }
@@ -152,7 +170,7 @@ mod tests {
     #[test]
     fn a_scene_lists_selections_and_actions_in_order() {
         let scene = SceneStep::parse_scene(
-            "select=Notes.md; action=context-menu;submenu=Send to;action=open-tab:/home/demo;tab=details;row=Camera model;wait=250",
+            "select=Notes.md; action=context-menu;submenu=Send to;action=open-tab:/home/demo;tab=details;row=Camera model;focus=share;wait=250",
         )
         .expect("a valid scene");
         assert_eq!(
@@ -170,6 +188,7 @@ mod tests {
                 },
                 SceneStep::Tab("details".to_owned()),
                 SceneStep::Row("Camera model".to_owned()),
+                SceneStep::Focus("share".to_owned()),
                 SceneStep::Wait(Duration::from_millis(250)),
             ]
         );
@@ -181,6 +200,7 @@ mod tests {
         assert_eq!(SceneStep::parse_scene("select="), None);
         assert_eq!(SceneStep::parse_scene("tab="), None);
         assert_eq!(SceneStep::parse_scene("row="), None);
+        assert_eq!(SceneStep::parse_scene("focus="), None);
         assert_eq!(SceneStep::parse_scene("details-pane"), None);
         assert_eq!(SceneStep::parse_scene("wait=soon"), None);
         assert_eq!(
