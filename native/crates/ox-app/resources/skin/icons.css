@@ -35,3 +35,12 @@ columnview.files > listview > row:selected art .emblem,
 gridview.files > child:selected art .emblem { background-color: @ox_item_selected; }
 columnview.files > listview > row:selected:hover art .emblem,
 gridview.files > child:selected:hover art .emblem { background-color: @ox_item_selected_hover; }
+
+/* A folder's picture on its icon (PROP-037), in the larger icon views and
+   the Customize tab's preview: a photo card with a white edge and a soft
+   shadow, the same in both themes, tucked into the front of the folder. */
+folderpicture.folder-picture {
+  border: 1px solid @ox_folder_picture_edge;
+  border-radius: 1px;
+  box-shadow: 0 1px 2px @ox_menu_shadow;
+}
