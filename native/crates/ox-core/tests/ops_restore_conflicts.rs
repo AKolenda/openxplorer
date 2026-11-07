@@ -48,22 +48,27 @@ fn trash(items: &[&Path]) {
 }
 
 /// Every Recycle Bin item that came from `path`, waiting up to five
-/// seconds for `count` of them: the backend may list an item late.
+/// seconds for `count` of them: the backend may list an item late, and a
+/// Recycle Bin daemon that is still starting may refuse the first reads.
 fn recycled_from(path: &Path, count: usize) -> Vec<RecycledItem> {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let items: Vec<RecycledItem> = block_on(list_recycle_bin(&Cancellation::new()))
-            .expect("a readable Recycle Bin")
-            .into_iter()
-            .filter(|item| item.original_path.as_deref() == Some(path))
-            .collect();
-        if items.len() >= count {
-            return items;
+        let listed = block_on(list_recycle_bin(&Cancellation::new()));
+        if let Ok(listed) = &listed {
+            let items: Vec<RecycledItem> = listed
+                .iter()
+                .filter(|item| item.original_path.as_deref() == Some(path))
+                .cloned()
+                .collect();
+            if items.len() >= count {
+                return items;
+            }
         }
         assert!(
             Instant::now() < deadline,
-            "{} is not in the Recycle Bin",
-            path.display()
+            "{} is not in the Recycle Bin: {:?}",
+            path.display(),
+            listed.err()
         );
         thread::sleep(Duration::from_millis(50));
     }
