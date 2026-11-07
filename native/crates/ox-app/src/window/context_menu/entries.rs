@@ -591,10 +591,16 @@ fn properties_item() -> MenuEntry {
 /// "Show more options", the compact menu's last item, which opens the
 /// classic menu in its place (Shift+F10).
 fn show_more_options_item() -> MenuEntry {
+    more_options_item(WindowAction::ShowMoreOptions)
+}
+
+/// "Show more options" that runs `action`, which opens its menu's classic
+/// style in its place: the file list's, or the navigation pane's.
+pub(crate) fn more_options_item(action: WindowAction) -> MenuEntry {
     item(
         ox_core::i18n::gettext_static("Show more options"),
         Icon::MoreHorizontal,
-        WindowAction::ShowMoreOptions,
+        action,
     )
     .with_shortcut("Shift+F10")
     .into()
@@ -610,7 +616,7 @@ fn show_more_options_item() -> MenuEntry {
 /// their glyph: Open in Terminal, Open with and the applications' own
 /// icons, Send to, Properties and Open as administrator's shield; so do
 /// the app's own commands, which Windows does not have.
-const TEXT_ONLY_IN_CLASSIC: [WindowAction; 28] = [
+const TEXT_ONLY_IN_CLASSIC: [WindowAction; 33] = [
     WindowAction::Open,
     WindowAction::OpenTab,
     WindowAction::OpenSelectionInTabs,
@@ -638,6 +644,12 @@ const TEXT_ONLY_IN_CLASSIC: [WindowAction; 28] = [
     WindowAction::OpenFileLocationInTab,
     WindowAction::OpenFileLocationInWindow,
     WindowAction::Restore,
+    // The same commands on a navigation-pane row's location.
+    WindowAction::CutFolder,
+    WindowAction::CopyFolder,
+    WindowAction::PasteIntoFolder,
+    WindowAction::RenameFolder,
+    WindowAction::TrashFolder,
     WindowAction::EmptyRecycleBin,
 ];
 

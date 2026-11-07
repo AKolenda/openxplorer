@@ -518,6 +518,21 @@ pub(crate) fn capture(window: &BrowserWindow, filename: &str) {
     });
 }
 
+/// Saves a PNG of `window` with its open menus drawn over it into
+/// `$OX_NATIVE_CAPTURE_DIR`, when set, as the snapshot hook draws them.
+pub(crate) fn capture_with_menus(window: &BrowserWindow, filename: &str) {
+    let Some(directory) = capture_directory() else {
+        return;
+    };
+    // A menu fades and slides in as it opens.
+    wait_for(crate::window::MENU_OPENING_MOTION);
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
+    let path = directory.join(filename);
+    wait_until("the window to be saved", || {
+        crate::snapshot::save_png_with_menus(window.upcast_ref(), &path).is_ok()
+    });
+}
+
 /// Saves a PNG of the open `popover` into `$OX_NATIVE_CAPTURE_DIR`, when
 /// set. A popover is a surface of its own, which a window capture leaves
 /// out.
