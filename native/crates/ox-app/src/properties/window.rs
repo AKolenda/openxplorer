@@ -36,11 +36,12 @@ use crate::window::BrowserWindow;
 const WINDOW_WIDTH: i32 = 400;
 /// The height of every Properties window under its title bar, whatever
 /// it shows: Windows sizes a property sheet once, for its largest page,
-/// and never changes it. This holds the tallest page here, a drive's
-/// Customize under two rows of tabs, at the default text size; shorter
+/// and never changes it. This holds the tallest page here, a folder's
+/// Customize, under two rows of tabs (a standard folder's six tabs, or
+/// five in a wider font) at the default text size in Noto Sans; shorter
 /// pages leave room at the bottom, as in Windows, and taller ones (at a
 /// larger text size) scroll.
-const WINDOW_HEIGHT: i32 = 528;
+const WINDOW_HEIGHT: i32 = 556;
 /// The space around the tabs and their page (`.properties-notebook`).
 const PAGE_MARGIN: i32 = 11;
 /// The size of the item's picture in the title bar.

@@ -137,15 +137,16 @@ pub(crate) struct ItemLines {
 
 impl ItemLines {
     /// The lines for `item`, written as Windows 11's Tiles and Content
-    /// write them: the type's name, the size in the largest whole unit with
-    /// a decimal ("11.4 KB"), and the date and time.
+    /// write them: the type's name, the size with three significant digits
+    /// as the status bar writes it ("1.23 MB", "11.4 KB"), and the date and
+    /// time.
     pub(crate) fn of(item: &FileItem) -> Self {
         let entry = item.entry();
         let size = if entry.is_dir {
             String::new()
         } else {
             item.file_size()
-                .map(ox_core::format::pretty_bytes)
+                .map(ox_core::format::short_size)
                 .unwrap_or_default()
         };
         let modified = if entry.modified.is_some() {

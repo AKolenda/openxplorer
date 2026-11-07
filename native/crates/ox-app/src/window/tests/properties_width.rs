@@ -250,7 +250,30 @@ fn every_kind_of_properties_keeps_the_width() {
         ["General", "Hardware", "Sharing", "Security", "Previous Versions"],
         "a drive has no Customize tab"
     );
-    assert_eq!(tab_rows(&drive), [5], "a drive's five tabs fit one row");
+    // In Noto Sans its five tabs fit one row, as Windows' five do; a
+    // wider font, such as the DejaVu Sans of the distribution checks,
+    // wraps them onto a second.
+    let tabs = drive.tab_buttons();
+    let natural: i32 = tabs
+        .iter()
+        .map(|tab| tab.measure(gtk::Orientation::Horizontal, -1).1 - 1)
+        .sum::<i32>()
+        + 1;
+    let strip = tabs[0].parent().expect("the row of tabs").width();
+    let rows = tab_rows(&drive);
+    if natural <= strip {
+        assert_eq!(
+            rows,
+            [5],
+            "a drive's five tabs fit one row ({natural} of {strip})"
+        );
+    } else {
+        assert_eq!(
+            rows.len(),
+            2,
+            "a drive's five tabs take two rows ({natural} of {strip})"
+        );
+    }
     assert_every_tab_keeps(&drive, width, "a drive");
     drive.close();
 }
@@ -619,6 +642,27 @@ fn other_windows_on_the_properties_window_keep_their_own_size() {
     );
 }
 
+/// A lone tab shown, as Security's Edit... shows its Security tab, stays
+/// selected when it is clicked: it is in no group of tabs to keep it on.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn a_lone_tab_stays_selected_when_clicked() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let dialog = PropertiesWindow::new("Permissions for Short", None, Some(&test.window));
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    dialog.add_tab("security", "Security", &page);
+    dialog.show_single_tab();
+    dialog.present();
+    wait_for_frames(&dialog, 4);
+    let tab = dialog.tab_buttons().remove(0);
+    assert!(tab.is_active(), "the tab is selected");
+    tab.emit_clicked();
+    assert!(tab.is_active(), "a click leaves it selected");
+    dialog.close();
+}
+
 /// How many tabs each row of `window`'s tabs holds, top to bottom. The
 /// tab shown stands a little taller than its row, so tabs whose tops are
 /// within a few pixels share a row.
@@ -739,16 +783,18 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
 
     let strip = tabs[0].parent().expect("the row of tabs");
     assert_eq!(strip.accessible_role(), gtk::AccessibleRole::TabList);
-    let press = |key: gtk::gdk::Key| {
+    let press_with = |key: gtk::gdk::Key, modifiers: gtk::gdk::ModifierType| {
         let keys = strip
             .observe_controllers()
             .iter::<glib::Object>()
             .filter_map(Result::ok)
             .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
             .expect("the row's keys");
-        keys.emit_by_name::<bool>("key-pressed", &[&key, &0_u32, &gtk::gdk::ModifierType::empty()])
+        keys.emit_by_name::<bool>("key-pressed", &[&key, &0_u32, &modifiers])
     };
-    press(gtk::gdk::Key::Right);
+    let press = |key: gtk::gdk::Key| press_with(key, gtk::gdk::ModifierType::empty());
+    // Caps Lock on still moves between tabs.
+    press_with(gtk::gdk::Key::Right, gtk::gdk::ModifierType::LOCK_MASK);
     assert_eq!(window.selected_tab().as_deref(), Some("sharing"));
     assert!(tabs[1].has_focus() && tabs[1].is_active());
     press(gtk::gdk::Key::End);
@@ -801,6 +847,13 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
     );
     shortcut(gtk::gdk::Key::Tab);
     assert_eq!(window.selected_tab().as_deref(), Some("sharing"));
+
+    // A tab clicked is shown and takes the keyboard, the only stop.
+    let last = tabs.last().expect("a last tab");
+    last.emit_clicked();
+    assert_eq!(window.selected_tab().as_deref(), Some("customize"));
+    assert!(last.has_focus(), "the tab clicked has the keyboard");
+    assert!(!tabs[1].is_focusable(), "the tab left is no stop");
     window.close();
 }
 

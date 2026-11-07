@@ -91,7 +91,7 @@ mod unstorable;
 pub(crate) use cancellation::check_cancelled;
 pub use cancellation::Cancellation;
 pub(crate) use commit::verify_installation;
-pub use engine::TransferEngine;
+pub use engine::{ElevatedDestination, TransferEngine};
 pub use error::TransferError;
 pub use guard::MAX_DEPTH;
 pub(crate) use guard::{check_write_tree, nesting_error, SourceChange};
