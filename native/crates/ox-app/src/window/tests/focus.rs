@@ -573,7 +573,6 @@ fn tab_after_escaping_the_address_goes_round_in_explorers_order_with_every_stop_
     // scrolled window. Neither drew anything. Each theme, view and pane
     // state shows up with each value of the others once, which keeps the
     // walk short.
-    let mut pointer = Pointer::connect();
     for (theme, view, details_pane) in [
         ("light", "large", true),
         ("light", "details", false),
@@ -589,31 +588,34 @@ fn tab_after_escaping_the_address_goes_round_in_explorers_order_with_every_stop_
         }
         test.window.present();
         wait_for_frames(&test.window, 3);
+        let mut pointer = Pointer::connect();
         let pane = if details_pane { "pane" } else { "nopane" };
         walk_the_tab_order(&test, &mut pointer, &format!("{theme}-{view}-{pane}"));
+        // The pointer goes back to the screen's centre, where Xvfb starts
+        // it: GTK 4.14 crashes in a later test that closes a popover under
+        // a pointer left over the screen elsewhere.
+        pointer.move_to(720, 500);
     }
-    // The pointer goes back to the screen's centre, where Xvfb starts it:
-    // GTK 4.14 crashes in a later test that closes a popover under a
-    // pointer left over the screen elsewhere.
-    pointer.move_to(720, 500);
 }
 
-/// A point of `address` with no button under it, right of the crumbs: the
-/// empty spot the user clicked.
-fn blank_spot(address: &impl IsA<gtk::Widget>) -> (f64, f64) {
+/// A point of `address` with nothing of the crumbs under it, right of
+/// them: the empty spot the user clicked. A crumb's divider is no button,
+/// but a click on it does not edit the address. `None` while the crumbs
+/// fill the bar, as they can for the test's own temporary path.
+fn blank_spot(address: &impl IsA<gtk::Widget>) -> Option<(f64, f64)> {
     let address = address.upcast_ref::<gtk::Widget>();
     let middle = f64::from(address.height()) / 2.0;
     let on_a_button = |x: f64| {
-        let picked = address.pick(x, middle, gtk::PickFlags::DEFAULT);
-        std::iter::successors(picked, WidgetExt::parent)
-            .take_while(|widget| widget != address)
-            .any(|widget| widget.is::<gtk::Button>())
+        address
+            .pick(x, middle, gtk::PickFlags::DEFAULT)
+            .is_none_or(|picked| {
+                picked != *address && !picked.is::<gtk::Stack>() && !picked.has_css_class("breadcrumbs")
+            })
     };
     (1..address.width() / 2)
         .map(|step| f64::from(address.width() - 4 * step))
         .find(|x| !on_a_button(*x) && !on_a_button(*x - 8.0) && !on_a_button(*x + 8.0))
         .map(|x| (x, middle))
-        .expect("the address bar has blank space")
 }
 
 /// Clicks blank space in the address bar and presses Esc, as the user
@@ -621,10 +623,23 @@ fn blank_spot(address: &impl IsA<gtk::Widget>) -> (f64, f64) {
 fn escape_the_address(test: &TestWindow, pointer: &mut Pointer, name: &str) {
     let window = test.window.upcast_ref::<gtk::Window>();
     let address = test.window.address_bar();
-    let (x, y) = screen_point(pointer, address, blank_spot(address), (400, 70));
+    // Where the crumbs fill the bar, a narrower window collapses one more
+    // of them behind the «, which leaves room.
+    let mut width = test.window.width();
+    let spot = loop {
+        if let Some(spot) = blank_spot(address) {
+            break spot;
+        }
+        assert!(width > 1000, "the address bar has blank space");
+        width -= 24;
+        resize(test, width);
+    };
+    let (x, y) = screen_point(pointer, address, spot, (400, 70));
     pointer.move_to(x, y);
     // The window settles under the pointer before the click.
     wait_for(RING_SETTLE);
+    pointer.press(Button::Primary);
+    pointer.release(Button::Primary);
     pointer.press(Button::Primary);
     pointer.release(Button::Primary);
     wait_until("the address to be edited", || {
