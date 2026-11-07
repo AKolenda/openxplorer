@@ -395,6 +395,42 @@ fn undo_brings_back_a_replaced_file_and_redo_replaces_it_again() {
     assert_eq!(fs::read(src.join("report.png")).unwrap(), b"incoming");
 }
 
+/// Cancel while the incoming file is being copied keeps the replaced file:
+/// it comes back from the Recycle Bin at once, although the operation's
+/// own cancellation is spent, and nothing is left to restore by hand.
+///
+/// parity: OPS-028
+#[test]
+fn cancelling_a_replacing_copy_brings_the_replaced_file_back() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+    let context = OperationContext::default();
+    let cancel = context.cancel.clone();
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    // The press of Cancel as the copy of the incoming file starts, after
+    // the existing one went to the Recycle Bin.
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &context,
+        move |progress| {
+            if progress.name.as_deref() == Some("report.png") {
+                cancel.cancel();
+            }
+        },
+    ))
+    .expect("an accepted transfer");
+
+    assert!(outcome.result.cancelled, "{:?}", outcome.result);
+    assert!(outcome.result.recovery.is_empty(), "{:?}", outcome.result);
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"existing");
+}
+
 /// A move merges its folder: the answered files move or stay, the folder
 /// the move emptied goes, one holding a skipped file stays, and Undo
 /// moves everything back, the replaced file included.
