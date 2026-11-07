@@ -16711,7 +16711,7 @@ native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_arrow
 id = "ACC-009"
 area = "ACC"
 title = "Visible focus without a pane-wide outline"
-behaviour = "Focused buttons and focusable elements get a 2 px accent outline (inset). The file pane itself shows no outline when focused. Instead the focused row or tile, like a focused navigation pane entry, gets Windows 11 File Explorer's two-tone ring while the pane has keyboard focus: 2 px dark outside 1 px light in the light theme, white outside black in the dark theme."
+behaviour = "Focused buttons and focusable elements get a 2 px accent outline (inset). The file pane itself shows no outline when focused. Instead the focused row or tile, like a focused navigation pane entry, gets Windows 11 File Explorer's two-tone ring while the pane has keyboard focus: 2 px dark outside 1 px light in the light theme, white outside black in the dark theme. After a click or Ctrl+click, as in Windows 11 File Explorer's Details view, the focused row or tile draws a 1 px outline (dark in light, near-white in dark) while the list has the keyboard, over the selection's fill or alone; an item under the pointer alone draws a fainter fill with no outline."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -16729,7 +16729,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list); native/crates/ox-app/src/window/tests/look.rs (selected_rows_and_the_keyboard_ring_take_windows_11s_colours). Focused buttons and tabs draw a 2 px ring inside them; the file list draws none around itself; the focused row or tile, a focused navigation pane entry and a focused folder tree row draw Windows 11's two-tone ring inside them (ui-spec.md §4.13: alpha(black, .89) outside alpha(white, .7) in light, white outside alpha(black, .7) in dark), over the selection's fill, which has no edge (§3.1 C19 items)."
+native_note = "native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list); native/crates/ox-app/src/window/tests/look.rs (items_take_windows_11s_fill_outline_and_ring_in_each_state). Focused buttons and tabs draw a 2 px ring inside them; the file list draws none around itself; the focused row or tile, a focused navigation pane entry and a focused folder tree row draw Windows 11's two-tone ring inside them (ui-spec.md §4.13: alpha(black, .89) outside alpha(white, .7) in light, white outside alpha(black, .7) in dark), over the selection's fill (§3.1 C19 items). After a click or Ctrl+click the focused row or tile draws a 1 px outline in the ring's outer colour while the list has the keyboard, selected or not and hovered or not (folder-views.css row:focus, child:focus; 2 px in the text colour in high contrast); the selection has no edge while the list does not have the keyboard, and hover alone is a fill without an outline, as observed in Windows 11 File Explorer's Details view in light and dark."
 
 [[feature]]
 id = "ACC-010"
