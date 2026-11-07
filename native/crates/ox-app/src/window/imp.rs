@@ -191,6 +191,9 @@ pub(crate) struct BrowserWindow {
     /// The group heading the heading menu opened on, which its commands
     /// act on (VIEW-022).
     pub(super) menu_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The header class of This PC's group whose heading menu opened
+    /// last, which its Collapse group and Expand group act on.
+    pub(super) this_pc_menu_group: Cell<Option<&'static str>>,
     /// The group heading whose row shows the keyboard ring.
     pub(super) focused_row: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
     /// The group heading last clicked or moved to, which keeps the

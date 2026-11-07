@@ -125,8 +125,11 @@ fn a_long_path_collapses_its_first_crumbs_into_a_button_as_the_width_allows() {
     );
     let end = f64::from(bounds.x() + bounds.width());
     assert!(end <= f64::from(address.width()), "in full");
+    // The suggestion list's flyout scrolls; the crumbs never do.
     assert!(
-        descendants::<gtk::ScrolledWindow>(address).is_empty(),
+        descendants::<gtk::ScrolledWindow>(address)
+            .iter()
+            .all(|scroller| scroller.ancestor(gtk::Popover::static_type()).is_some()),
         "nothing scrolls"
     );
 

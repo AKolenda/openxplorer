@@ -98,13 +98,14 @@ pub(crate) enum WindowAction {
     Open,
     /// Selects every item (Ctrl+A).
     SelectAll,
-    /// Collapses the group whose heading the menu opened on (VIEW-022).
+    /// Collapses the group whose heading the menu opened on (VIEW-022):
+    /// a group of the folder's view, or of This PC on This PC.
     CollapseGroup,
     /// Expands the group whose heading the menu opened on.
     ExpandGroup,
-    /// Collapses every group of a grouped view.
+    /// Collapses every group of a grouped view, or of This PC on This PC.
     CollapseAllGroups,
-    /// Expands every group of a grouped view.
+    /// Expands every group of a grouped view, or of This PC on This PC.
     ExpandAllGroups,
     /// Clears the selection.
     SelectNone,
@@ -278,6 +279,17 @@ pub(crate) enum WindowAction {
     ClearRecentFiles,
     /// Forgets the recently visited folders (SIDE-026).
     ClearRecentLocations,
+    /// Copy as path for the folder at the location given (a pinned
+    /// folder's menu).
+    CopyPathOf,
+    /// Compresses the folder at the location given into a ZIP beside it.
+    CompressToZipOf,
+    /// Asks for the name and format of an archive of the folder at the
+    /// location given.
+    CompressToOf,
+    /// Opens a folder and runs a New menu item there; the target holds
+    /// the folder, the action and its target (`place_commands.rs`).
+    NewIn,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -592,6 +604,10 @@ impl WindowAction {
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ClearRecentFiles => "clear-recent-files",
             WindowAction::ClearRecentLocations => "clear-recent-locations",
+            WindowAction::CopyPathOf => "copy-path-of",
+            WindowAction::CompressToZipOf => "compress-to-zip-of",
+            WindowAction::CompressToOf => "compress-to-of",
+            WindowAction::NewIn => "new-in",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::SidebarMoreOptions => "sidebar-more-options",

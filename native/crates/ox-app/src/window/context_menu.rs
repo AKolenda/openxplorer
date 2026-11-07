@@ -316,6 +316,7 @@ impl BrowserWindow {
             delete_label: self.delete_label(),
             disk_tool: disk_tool_of(entry),
             send_to: self.send_to_targets(),
+            can_share: self.share_portal().is_some(),
         }
     }
 
@@ -374,9 +375,11 @@ impl BrowserWindow {
     }
 
     /// Adds the actions the context menus run themselves: "Show more
-    /// options", "New…", "Sort by", "View", "Unpin from Quick access" and "Open windows…".
+    /// options", "New…", "Sort by", "View", "Unpin from Quick access",
+    /// "Open windows…" and a group heading's collapse and expand commands.
     pub(super) fn install_context_menu_actions(&self) {
         self.install_sidebar_hiding();
+        self.install_place_commands();
         self.add_action_entries([
             plain_action(WindowAction::ShowMoreOptions, BrowserWindow::show_more_options),
             plain_action(WindowAction::ShowNewMenu, |window| {

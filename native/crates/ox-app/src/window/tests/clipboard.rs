@@ -91,7 +91,8 @@ fn paste_into_folder_pastes_into_the_selected_folder() {
         .right_click(Some(super::context_menus::position_of(&test, "Documents")));
     let menu = test.window.context_menu();
 
-    menu.row("Paste into folder").emit_activate();
+    // Windows names the folder's row Paste; it pastes into that folder.
+    menu.row("Paste").emit_activate();
 
     wait_until("the copy in Documents", || {
         fixture.path("Documents/Notes 2.txt").is_file()

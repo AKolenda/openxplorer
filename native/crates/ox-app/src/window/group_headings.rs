@@ -149,6 +149,18 @@ fn all_groups_entries() -> [MenuEntry; 2] {
     ]
 }
 
+/// A This PC group heading's whole menu, for a group that is `collapsed`:
+/// the same commands as a folder's heading menu, with nothing below them,
+/// as This PC selects one tile at a time and has no menu for several
+/// drives (`landing.rs`).
+pub(super) fn this_pc_heading_entries(collapsed: bool) -> Vec<MenuEntry> {
+    let mut entries = heading_entries(collapsed);
+    if matches!(entries.last(), Some(MenuEntry::Divider)) {
+        entries.pop();
+    }
+    entries
+}
+
 /// The entries a heading's menu starts with, for a group that is
 /// `collapsed`, as Windows 11 lists them above the menu of the group's
 /// items: Collapse group (Left) or Expand group (Right), Expand all groups
@@ -437,16 +449,43 @@ impl BrowserWindow {
             .or_else(|| self.focused_heading())
     }
 
-    /// Collapses the menu's group, or expands it with `collapsed` false.
+    /// Remembers This PC's group whose heading menu is opening, by its
+    /// header's class, for the menu's Collapse group or Expand group.
+    pub(super) fn set_this_pc_menu_group(&self, header_class: &'static str) {
+        self.imp().this_pc_menu_group.set(Some(header_class));
+    }
+
+    /// Whether the active pane shows This PC, whose group headings the
+    /// heading menu's commands then act on.
+    fn shows_this_pc(&self) -> bool {
+        self.current_uri()
+            .as_deref()
+            .and_then(crate::locations::Page::from_uri)
+            == Some(crate::locations::Page::ThisPc)
+    }
+
+    /// Collapses the menu's group, or expands it with `collapsed` false:
+    /// on This PC, the group whose heading menu opened last, in the active
+    /// pane only (a press in a pane makes it active before its menu opens).
     fn set_menu_group_collapsed(&self, collapsed: bool) {
+        if self.shows_this_pc() {
+            if let Some(header) = self.imp().this_pc_menu_group.get() {
+                super::landing::collapse_groups(self.folder_pane().landing(), Some(header), Some(collapsed));
+            }
+            return;
+        }
         if let Some(heading) = self.menu_heading() {
             heading.set_group_collapsed(collapsed);
         }
     }
 
-    /// Collapses every group of the active pane's grouped view, or
-    /// expands every one with `collapsed` false.
+    /// Collapses every group of the active pane's grouped view, or of
+    /// This PC there, or expands every one with `collapsed` false.
     fn set_all_groups_collapsed(&self, collapsed: bool) {
+        if self.shows_this_pc() {
+            super::landing::collapse_groups(self.folder_pane().landing(), None, Some(collapsed));
+            return;
+        }
         let grouped = self
             .menu_heading()
             .and_then(|heading| heading.model())
