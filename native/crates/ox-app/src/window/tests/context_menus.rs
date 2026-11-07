@@ -1139,3 +1139,35 @@ fn a_pinned_folder_menu_copies_compresses_and_creates_in_that_folder() {
         fixture.path("Pinned work/New folder").is_dir()
     });
 }
+
+/// New in a pinned folder's menu still makes the item while that folder
+/// shows search results: the search ends first, as New is off during a
+/// search.
+///
+/// parity: SIDE-014
+#[gtk::test]
+fn new_in_a_pinned_folder_ends_a_search_in_it_first() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Pinned work")).expect("fixture subfolder");
+    fs::write(fixture.path("Pinned work/plan.txt"), "plan").expect("fixture file");
+    let pinned = fixture.uri_of("Pinned work");
+    let test = TestWindow::open(&pinned);
+    test.search_for("plan");
+    assert!(test.window.is_searching());
+
+    let new_folder =
+        crate::window::place_commands::new_menu_in(&pinned, crate::window::command_bar::new_menu(Vec::new()));
+    let MenuEntry::Item(folder_item) = &new_folder[0] else {
+        panic!("New › Folder is an item");
+    };
+    let target = folder_item
+        .target
+        .as_ref()
+        .and_then(|target| target.str().map(str::to_owned))
+        .expect("a text target");
+    test.activate("new-in", Some(&target));
+    wait_until("the new folder inside it", || {
+        fixture.path("Pinned work/New folder").is_dir()
+    });
+    assert!(!test.window.is_searching());
+}

@@ -722,6 +722,37 @@ fn a_group_heading_menu_collapses_and_expands_the_groups() {
     close_menu(&menu);
 }
 
+/// With This PC in both panes of a split tab, a heading menu's Collapse
+/// group acts on its own pane: This PC beside it keeps its groups open.
+///
+/// parity: VIEW-059
+#[gtk::test]
+fn a_group_heading_menu_acts_on_its_own_pane_only() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    test.activate("split-view", None);
+    test.window.render_places();
+    let beside = test.window.pane_on(test.window.active_side().other()).clone();
+    let groups_shown = |landing: &gtk::Box| {
+        landing::tile_groups(landing)
+            .iter()
+            .map(|(flow, _)| flow.is_visible())
+            .collect::<Vec<bool>>()
+    };
+    wait_until("This PC beside it", || {
+        groups_shown(beside.landing()).first() == Some(&true)
+    });
+
+    let menu = open_heading_menu(&test, &first_header(&test));
+    menu.click_row("Collapse group");
+    wait_until("the group to collapse", || {
+        groups_shown(test.window.folder_pane().landing()).first() == Some(&false)
+    });
+    close_menu(&menu);
+
+    assert_eq!(groups_shown(beside.landing()).first(), Some(&true));
+}
+
 /// The right-click menus of a file, a folder, several items and a drive,
 /// compact and classic, light and dark: with `OX_NATIVE_CAPTURE_DIR` set,
 /// saved there as `context-menu-match-<item>-<style>-<theme>.png` for

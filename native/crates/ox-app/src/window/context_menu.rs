@@ -391,13 +391,13 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Collapses or expands This PC's groups in every pane: the one whose
-    /// header carries the class `header` (toggled, or as `collapse` says),
-    /// or all of them without one.
+    /// Collapses or expands the groups of This PC in the active pane, the
+    /// one whose heading menu ran the command (a press in a pane makes it
+    /// active before its menu opens): the group whose header carries the
+    /// class `header` (toggled, or as `collapse` says), or all of them
+    /// without one. This PC in the other pane keeps its groups as they are.
     fn collapse_groups(&self, header: Option<&str>, collapse: Option<bool>) {
-        for (side, _) in self.shown_panes() {
-            super::landing::collapse_groups(self.pane_on(side).landing(), header, collapse);
-        }
+        super::landing::collapse_groups(self.folder_pane().landing(), header, collapse);
     }
 
     /// "Clear recent locations": forgets the visited folders, and lists

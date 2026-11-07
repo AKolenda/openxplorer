@@ -88,7 +88,8 @@ impl BrowserWindow {
     }
 
     /// New in a folder: opens the folder, then once it is listed runs the
-    /// New menu's action there.
+    /// New menu's action there. A search in that folder ends first, as New
+    /// is off while search results are shown.
     fn new_in(&self, target: &str) {
         let mut parts = target.splitn(3, PART);
         let (Some(uri), Some(action), Some(inner)) = (parts.next(), parts.next(), parts.next()) else {
@@ -99,6 +100,8 @@ impl BrowserWindow {
                 self.show_message(&error.to_string());
                 return;
             }
+        } else if self.is_searching() {
+            self.end_search();
         }
         let (uri, action, inner) = (uri.to_owned(), action.to_owned(), inner.to_owned());
         let started = std::time::Instant::now();
