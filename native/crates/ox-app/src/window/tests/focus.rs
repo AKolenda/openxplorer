@@ -551,8 +551,8 @@ fn stop_name(stop: Option<Stop>) -> String {
 /// to take the keyboard), the status bar's view buttons, the tab in front
 /// and its Close button, New tab, the navigation buttons, then the address
 /// bar (the chevron first, each crumb, the history chevron), the search
-/// box, the command bar, the navigation pane as one stop, the pane's footer
-/// where it has one, the sidebar's resizer and back to the file list. Every stop draws its focus,
+/// box, the command bar, the navigation pane as one stop, the sidebar's
+/// resizer and back to the file list. Every stop draws its focus,
 /// light and dark: no key leaves the keyboard where nothing shows it. In a
 /// narrow window the « takes the chevron's place as the address bar's first
 /// stop. The keys are real ones on the private display, so GTK's own key
@@ -699,7 +699,6 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
                 Stop::Commands,
                 Stop::Places,
             ])
-            .chain(test.window.sidebar().footer().map(|_| Stop::SidebarFooter))
             .chain([Stop::SidebarResizer])
             .collect::<Vec<_>>(),
         "Windows' order from the file list round to it"
@@ -830,7 +829,7 @@ fn the_keyboard_on_an_empty_list_rings_its_note() {
 /// to the next stop rather than back to the address bar: the sidebar's
 /// resizer, Network's info bar, the search strip's controls and the update
 /// notice. The caption buttons alone are no stops. Real Tab keys go from
-/// Map network drive through them into the file list, each drawing its
+/// the navigation pane through them into the file list, each drawing its
 /// focus.
 ///
 /// parity: ACC-016
@@ -882,8 +881,9 @@ fn every_control_the_window_shows_is_a_tab_stop_that_draws_its_focus() {
     assert_eq!(outside, Vec::<String>::new(), "controls in no stop");
 
     let mut pointer = Pointer::connect();
-    let footer = test.window.sidebar().footer().expect("Map network drive");
-    footer.child_focus(gtk::DirectionType::TabForward);
+    let places = test.window.sidebar().list().clone();
+    places.child_focus(gtk::DirectionType::TabForward);
+    assert_eq!(test.window.focused_stop(), Some(Stop::Places));
     test.window.set_focus_visible(true);
     wait_for_frames(&test.window, 3);
     let mut stops = Vec::new();
