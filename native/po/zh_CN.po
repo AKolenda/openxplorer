@@ -7008,60 +7008,12 @@ msgid "Undo can only rename an item back within its own folder."
 msgstr "撤销只能把项目重命名回它所在的文件夹内。"
 
 #: crates/ox-core/src/ops/report.rs
-msgid "Operation result"
-msgstr "操作结果"
-
-#: crates/ox-core/src/ops/report.rs
 msgid "Operation stopped"
 msgstr "操作已停止"
 
 #: crates/ox-core/src/ops/report.rs
-msgid "{count} completed."
-msgstr "{count} 个已完成。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) copied."
-msgstr "已复制 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) duplicated."
-msgstr "已创建 {count} 个副本。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) linked."
-msgstr "已创建 {count} 个链接。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) moved."
-msgstr "已移动 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) permanently deleted."
-msgstr "已永久删除 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) renamed."
-msgstr "已重命名 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) restored."
-msgstr "已还原 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
 msgid "{count} item(s) sent to Trash."
 msgstr "已将 {count} 个项目移到回收站。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} skipped (name already exists)."
-msgstr "已跳过 {count} 个（名称已存在）。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} redone."
-msgstr "已重做 {title}。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} undone."
-msgstr "已撤销 {title}。"
 
 #: crates/ox-core/src/ops/run_transfer.rs crates/ox-core/src/transfer/request.rs
 msgid "Choose a destination folder."

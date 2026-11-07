@@ -543,7 +543,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -4721,7 +4721,7 @@ msgstr ""
 msgid "Tiles"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs crates/ox-core/src/ops/undo_apply.rs
 msgid "Undo"
 msgstr ""
 
@@ -8657,7 +8657,7 @@ msgid "The Recycle Bin does not record where “{name}” came from."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/recycle_bin_drag.rs
+#: crates/ox-core/src/ops/recycle_bin_drag.rs crates/ox-core/src/ops/restore_conflicts.rs
 msgid "An item named “{name}” already exists here. It was left in the Recycle Bin."
 msgstr ""
 
@@ -8670,71 +8670,7 @@ msgid "Undo can only rename an item back within its own folder."
 msgstr ""
 
 #: crates/ox-core/src/ops/report.rs
-msgid "Operation result"
-msgstr ""
-
-#: crates/ox-core/src/ops/report.rs
 msgid "Operation stopped"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} completed."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) copied."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) duplicated."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) linked."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) moved to the Recycle Bin."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) moved."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) permanently deleted."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) renamed."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) restored."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} skipped (name already exists)."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} redone."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} undone."
 msgstr ""
 
 #: crates/ox-core/src/ops/resolved_transfer.rs

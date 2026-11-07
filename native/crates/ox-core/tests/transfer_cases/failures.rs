@@ -306,15 +306,26 @@ fn backup_cleanup_failure_reports_the_original_and_keeps_the_new_file() {
     fixture.assert_no_staging();
 }
 
-/// A cancelled run still reports a backup the user must recover by hand.
+/// A cancelled run still tells about a backup the user must recover by
+/// hand: in the progress window, as the run stops, since nothing is said
+/// once it ends.
 ///
-/// parity: OPS-022, XFER-010
+/// parity: OPS-022, XFER-010, OPS-023
 #[test]
 fn cancellation_never_hides_a_backup_that_requires_manual_recovery() {
+    use ox_core::transfer::{FailedItem, FailureAnswer, FailureCause};
+
     for fault in [Fault::CancelAndCleanup, Fault::CancelAndRollback] {
         let fixture = Fixture::new();
         let source = fixture.replacement_source("document", "incoming", "original");
-        let mut engine = fixture.engine(Faults::new(fault, &fixture.cancel));
+        let told = Arc::new(Mutex::new(Vec::<FailedItem>::new()));
+        let log = Arc::clone(&told);
+        let mut engine = fixture
+            .engine(Faults::new(fault, &fixture.cancel))
+            .with_failure_question(move |item: &FailedItem| {
+                log.lock().expect("question log").push(item.clone());
+                FailureAnswer::Skip
+            });
 
         let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
@@ -324,12 +335,11 @@ fn cancellation_never_hides_a_backup_that_requires_manual_recovery() {
         assert_eq!(read(&backup), "original");
         assert!(result.errors[0].contains(&file_uri(&backup)), "{result:?}");
         assert_eq!(result.recovery, result.errors, "the backup needs the user");
-        let ox_core::ops::OperationSummary::Report(report) =
-            ox_core::ops::summarize(ox_core::transfer::TransferMode::Copy, &result)
-        else {
-            panic!("Cancel must not hide the backup: {result:?}");
-        };
-        assert_eq!(report, result.errors[0]);
+        let told = told.lock().expect("question log");
+        assert_eq!(told.len(), 1, "Cancel must not hide the backup: {told:?}");
+        assert_eq!(told[0].cause, FailureCause::NeedsAttention);
+        assert!(told[0].error.contains(&file_uri(&backup)), "{told:?}");
+        assert_eq!(result.presented, result.errors, "the user saw it");
         assert_eq!(read(&source), "incoming");
         fixture.assert_no_staging();
     }

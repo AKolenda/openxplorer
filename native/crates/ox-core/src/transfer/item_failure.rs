@@ -18,8 +18,13 @@
 //! Inside a folder, the question is about the one entry that failed, as
 //! in Windows Explorer: "Retry" copies that entry again, "Skip" leaves only
 //! it out, and the rest of the folder is still copied and published. The
-//! entries left out are reported at the end, and a move keeps them, with
+//! entries left out are recorded as answered, and a move keeps them, with
 //! their folders, where they were.
+//!
+//! Nothing is said once the run ends: as in Windows Explorer, which has no
+//! summary of an operation, every failure is asked about while it
+//! happens. A problem that needs recovery by hand, such as a kept backup,
+//! is told in the same place ([`FailureCause::NeedsAttention`]).
 
 use std::collections::HashSet;
 
@@ -42,6 +47,10 @@ pub enum FailureCause {
     NotFound,
     /// Anything else; the question shows the system's error.
     Other,
+    /// Something the user must sort out by hand, such as a backup kept
+    /// after a replacement or staging left behind: the question says what
+    /// and where, and only lets the run go on (OPS-023).
+    NeedsAttention,
 }
 
 impl FailureCause {
@@ -52,6 +61,7 @@ impl FailureCause {
             TransferError::NoSpace(_) => Self::NoSpace,
             TransferError::Busy(_) => Self::InUse,
             TransferError::NotFound(_) => Self::NotFound,
+            TransferError::RecoveryRequired(_) => Self::NeedsAttention,
             _ => Self::Other,
         }
     }
@@ -242,7 +252,8 @@ impl ItemFailures {
         } else {
             format!("{}/{entry}", running.name)
         };
-        let mut answered = false;
+        // After "Skip all", the entry is skipped as the user asked.
+        let mut answered = self.skip_all && self.question.is_some();
         if !self.skip_all {
             // Other entries, or other items, may follow.
             let failed = FailedItem::new(
@@ -287,15 +298,7 @@ impl ItemFailures {
     /// own, such as "Move by copying?") are not, nor anything after "Skip
     /// all".
     pub(crate) fn asks_about(&self, error: &TransferError) -> bool {
-        let askable = !matches!(
-            error,
-            TransferError::Cancelled
-                | TransferError::Exists(_)
-                | TransferError::RecoveryRequired(_)
-                | TransferError::NotSupported(_)
-                | TransferError::ReplaceUnsupported(_)
-        );
-        askable && !self.skip_all && self.question.is_some()
+        asks_about_kind(error) && !self.skip_all && self.question.is_some()
     }
 
     /// The user's answer about `item`, which [`Self::asks_about`] allowed;
@@ -305,4 +308,38 @@ impl ItemFailures {
         self.skip_all = answer == FailureAnswer::SkipAll;
         Some(answer)
     }
+
+    /// Whether an item that failed with `error` was left out without a
+    /// question because the user answered Skip with "Do this for all
+    /// current items": the user's own answer, as in Windows.
+    pub(crate) fn skipped_by_answer(&self, error: &TransferError) -> bool {
+        self.skip_all && self.question.is_some() && asks_about_kind(error)
+    }
+
+    /// Tells the user, in the question about failed items, about `item`,
+    /// whose cause is [`FailureCause::NeedsAttention`] or a failure the
+    /// run cannot ask about otherwise, and waits until they read it; also
+    /// after "Skip all" and a cancellation, because the user must act on
+    /// it. True when the question showed it.
+    pub(crate) fn tell(&mut self, item: &FailedItem) -> bool {
+        let Some(question) = self.question.as_mut() else {
+            return false;
+        };
+        question(item);
+        true
+    }
+}
+
+/// Whether a failure of this kind is asked about with Try Again, Skip and
+/// Cancel: not a name conflict, a cancellation, a problem that needs
+/// recovery by hand or something the location cannot do at all.
+fn asks_about_kind(error: &TransferError) -> bool {
+    !matches!(
+        error,
+        TransferError::Cancelled
+            | TransferError::Exists(_)
+            | TransferError::RecoveryRequired(_)
+            | TransferError::NotSupported(_)
+            | TransferError::ReplaceUnsupported(_)
+    )
 }

@@ -2,7 +2,8 @@
 //! Restore from the Recycle Bin onto a name taken again in the original
 //! folder, as Windows 11 asks it: the progress window's "Replace or Skip
 //! Files" question, under "Moving 1 item to <folder>", never the
-//! "Operation result" dialog (OPS-041, OPS-026, OPS-028). Every file is a
+//! 1.x app's "Operation result" dialog, which is gone (OPS-041, OPS-026,
+//! OPS-028, OPS-023). Every file is a
 //! fictional one of the fixture, in the test run's private Recycle Bin.
 
 use std::fs;
@@ -81,7 +82,10 @@ fn forget_trashed_items_of(fixture: &Fixture) {
         .map(|item| item.uri)
         .collect();
     context
-        .block_on(delete_from_recycle_bin(&uris, &Cancellation::new()))
+        .block_on(delete_from_recycle_bin(
+            &uris,
+            &ox_core::ops::OperationContext::default(),
+        ))
         .expect("the test's own items are deleted");
 }
 
@@ -90,7 +94,7 @@ fn forget_trashed_items_of(fixture: &Fixture) {
 fn ends_without_a_report(test: &TestWindow) {
     wait_until("the action to end", || test.context.progress_window().is_none());
     wait_for(Duration::from_millis(300));
-    assert!(dialog_over(test).is_none(), "no Operation result dialog");
+    assert!(dialog_over(test).is_none(), "nothing is said afterwards");
 }
 
 /// Restore onto a taken name asks in the progress window, as a move
@@ -155,6 +159,50 @@ fn restoring_onto_a_taken_name_asks_replace_or_skip_files() {
     button(&window, "Replace the file in the destination").emit_clicked();
     ends_without_a_report(&test);
     assert_eq!(fs::read(fixture.path(name)).unwrap(), TRASHED);
+}
+
+/// Two Recycle Bin items deleted from the same place, restored together:
+/// the second finds its name taken by the first and asks "Replace or Skip
+/// Files" in the progress window, as Windows does, never the 1.x app's
+/// "Operation result"; Skip leaves it in the Recycle Bin without a word.
+///
+/// parity: OPS-041, OPS-026, OPS-023
+#[gtk::test]
+fn restoring_two_items_from_the_same_place_asks_about_the_second() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let name = "Twin.txt";
+    fixture.write(name);
+    trash(&fixture.path(name));
+    fs::write(fixture.path(name), NEWER).expect("the newer file is written");
+    trash(&fixture.path(name));
+    let test = TestWindow::open(TRASH_URI);
+    wait_until("both trashed files to be listed", || {
+        test.names().iter().filter(|shown| *shown == name).count() == 2
+    });
+    // Both rows read "Twin.txt"; any other item stays unselected.
+    let model = test.window.folder_model();
+    model.select_none();
+    for position in 0..model.n_items() {
+        if model.name_at(position).as_deref() == Some(name) {
+            model.selection().select_item(position, false);
+        }
+    }
+    assert_eq!(test.selected_names(), [name, name]);
+
+    test.activate("restore", None);
+    let window = question_window(&test);
+    let shown = texts(&window);
+
+    assert!(
+        shown.contains(&format!("The destination already has a file named \"{name}\"")),
+        "{shown:?}"
+    );
+    assert!(dialog_over(&test).is_none(), "nothing over the browsing window");
+    button(&window, "Skip this file").emit_clicked();
+    ends_without_a_report(&test);
+    assert!(fixture.path(name).is_file(), "one of them is back");
+    forget_trashed_items_of(&fixture);
 }
 
 /// Restore all items with two taken names asks once, in the plural, and

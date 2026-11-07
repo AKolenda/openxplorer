@@ -17,12 +17,12 @@
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::folder_groups::{FolderGroup, FolderGroups};
-use super::results::{merge_results, record_failure};
+use super::results::{merge_results, AskedItem, ItemQuestions};
 use super::run_transfer::{gio_transfer_engine, TransferOutcome};
 use super::undo::UndoRecord;
 use crate::gio_node::GioNode;
 use crate::location::require_item_uri;
-use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine, MAX_ITEMS};
+use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine, TransferMode, MAX_ITEMS};
 
 /// Duplicates each of `uris` in its own folder, sending throttled progress
 /// to `progress` on the worker thread. The outcome lists the duplicates,
@@ -89,16 +89,24 @@ fn duplicate_in_folder(
         destination_folder: &group.folder_uri,
         policy: ConflictPolicy::KeepBoth,
     };
-    match engine.run(operation, &group.uris, &context.cancel) {
-        Ok(result) => {
-            let copies = result.landed.iter().map(|item| item.destination.clone());
-            outcome.created.extend(copies);
-            merge_results(&mut outcome.result, result);
-        }
-        Err(error) => {
-            let folder_name = GioNode::new(&group.folder_uri).display_name();
-            record_failure(&mut outcome.result, &folder_name, &error.into());
-        }
+    let folder_name = GioNode::new(&group.folder_uri).display_name();
+    let folder = AskedItem {
+        name: &folder_name,
+        uri: &group.folder_uri,
+        more_items: true,
+    };
+    // A folder that refuses the whole run is asked about in the progress
+    // window (OPS-047), as one item.
+    let mut questions = ItemQuestions::new(context, TransferMode::Copy);
+    let attempt = || {
+        engine
+            .run(operation, &group.uris, &context.cancel)
+            .map_err(OpsError::from)
+    };
+    if let Some(result) = questions.run(&mut outcome.result, folder, attempt) {
+        let copies = result.landed.iter().map(|item| item.destination.clone());
+        outcome.created.extend(copies);
+        merge_results(&mut outcome.result, result);
     }
 }
 

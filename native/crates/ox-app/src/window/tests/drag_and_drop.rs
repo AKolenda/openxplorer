@@ -172,7 +172,7 @@ fn a_drop_while_a_dialog_shows_is_refused() {
     let source = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
-    test.window.show_result_dialog("Operation result", "Done.");
+    test.window.show_result_dialog("Operation stopped", "Done.");
     wait_until("the dialog", || test.window.dialog_layer().shown().is_some());
 
     let taken = test.window.drop_files(

@@ -42,7 +42,7 @@ use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::folder_groups::FolderGroups;
 use super::recycle_bin::restore_trashed_since;
-use super::results::merge_results;
+use super::results::{merge_results, ItemQuestions};
 use super::run_transfer::{
     gio_transfer_engine, run_on_engine, run_renamed_on_engine, unix_seconds_now, TransferOutcome,
     TransferRequest,
@@ -250,6 +250,9 @@ struct Run<'a> {
     before: u64,
     /// The merged folders a move emptied and removed.
     removed_folders: Vec<String>,
+    /// Tells about each failure the engine did not ask about, such as a
+    /// replaced file left in the Recycle Bin, as it happens.
+    questions: ItemQuestions,
 }
 
 impl<'a> Run<'a> {
@@ -313,6 +316,7 @@ impl<'a> Run<'a> {
             place,
             before: earlier.before,
             removed_folders: earlier.removed_folders,
+            questions: ItemQuestions::new(context, scan.mode),
         }
     }
 
@@ -331,6 +335,7 @@ impl<'a> Run<'a> {
         } else {
             let folder = GioNode::new(&self.scan.destination_folder).display_name();
             super::results::record_failure(&mut self.total.result, &folder, &error);
+            self.questions.tell_unseen(&mut self.total.result);
         }
         Ok(())
     }
@@ -428,6 +433,7 @@ impl<'a> Run<'a> {
     fn add(&mut self, part: TransferOutcome) -> bool {
         self.landed.extend(part.result.landed.iter().cloned());
         merge_results(&mut self.total.result, part.result);
+        self.questions.tell_unseen(&mut self.total.result);
         self.total.result.cancelled
     }
 

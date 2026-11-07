@@ -18,7 +18,7 @@ use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
-use super::item_failure::{FailedItem, FailureAnswer, ItemFailures};
+use super::item_failure::{FailedItem, FailureAnswer, FailureCause, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
 use super::limits::{FreeSpace, Incoming, StorageRules, TreeTotals};
 use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
@@ -638,27 +638,48 @@ impl TransferEngine {
                 None => break,
             }
         }
-        // OPS-047: the entries inside it that were left out, even when the
-        // item failed or was cancelled after them.
+        self.record_item(batch, uri, outcome, answered, staging, &mut state.result);
+    }
+
+    /// Records how the item at `uri` ended in `result`: `outcome`, the
+    /// entries inside it that were left out (OPS-047), even when the item
+    /// failed or was cancelled after them, and any staging left behind.
+    /// `answered` when the user saw its error in the question.
+    fn record_item(
+        &mut self,
+        batch: &Batch,
+        uri: &str,
+        outcome: Result<ItemOutcome, TransferError>,
+        answered: bool,
+        mut staging: ItemStaging,
+        result: &mut TransferResult,
+    ) {
         for (message, seen) in self.failures.take_left_out() {
             if seen {
-                state.result.presented.push(message.clone());
+                result.presented.push(message.clone());
             }
-            state.result.errors.push(message);
+            result.errors.push(message);
         }
         match outcome {
-            Ok(ItemOutcome::Skipped) => state.result.skipped.push(uri.to_owned()),
+            Ok(ItemOutcome::Skipped) => result.skipped.push(uri.to_owned()),
             Ok(ItemOutcome::Done) => {
-                state.result.done.push(uri.to_owned());
+                result.done.push(uri.to_owned());
                 // A published copy leaves its private folder empty. Failing
-                // to remove it is reported, but the copy stays done.
+                // to remove it is told, but the copy stays done.
                 if let Err(error) = staging.remove_empty_folder() {
-                    self.record_failure(batch, uri, &error, false, &mut state.result);
+                    self.record_failure(batch, uri, &error, false, result);
                 }
             }
-            Err(error) => self.record_failure(batch, uri, &error, answered, &mut state.result),
+            Err(error) => {
+                // Skip with "Do this for all current items", or No to "Move
+                // by copying?", answered it already.
+                let answered = answered
+                    || self.failures.skipped_by_answer(&error)
+                    || (matches!(error, TransferError::NotSupported(_)) && self.move_by_copying.declined());
+                self.record_failure(batch, uri, &error, answered, result);
+            }
         }
-        self.discard_leftover_stage(staging, &mut state.result);
+        self.discard_leftover_stage(staging, result);
     }
 
     /// The first attempt at the item at `uri`, and whether it ended as
@@ -918,11 +939,12 @@ impl TransferEngine {
                 {
                     let kept =
                         self.move_by_copying(placement, selected, destination, batch.cancel, staging)?;
+                    // The entries the user skipped stay where they were:
+                    // the user's own answer, said nothing more about.
                     if let Some(notice) = kept {
-                        state
-                            .result
-                            .errors
-                            .push(format!("{}: {notice}", source.display_name()));
+                        let message = format!("{}: {notice}", source.display_name());
+                        state.result.presented.push(message.clone());
+                        state.result.errors.push(message);
                     }
                 }
                 moved => moved?,
@@ -1028,8 +1050,11 @@ impl TransferEngine {
 
     /// Adds a failed item to `result`, unless the user's cancellation
     /// explains it; `answered` when the user saw the error in the question.
+    /// A failure the user has not seen, such as a problem that needs
+    /// recovery by hand, is told in the progress window now, also after a
+    /// cancellation, as nothing is said once the run ends.
     fn record_failure(
-        &self,
+        &mut self,
         batch: &Batch,
         uri: &str,
         error: &TransferError,
@@ -1049,22 +1074,49 @@ impl TransferEngine {
             if needs_recovery {
                 result.recovery.push(message.clone());
             }
-            if answered {
+            let shown = answered || self.tell(batch.mode(), uri, error);
+            if shown {
                 result.presented.push(message.clone());
             }
             result.errors.push(message);
         }
     }
 
+    /// Tells the user about `error`, the failure of the item at `uri` that
+    /// no question asked about, in the question about failed items; true
+    /// when it showed.
+    fn tell(&mut self, mode: TransferMode, uri: &str, error: &TransferError) -> bool {
+        let item = FailedItem {
+            more_items: false,
+            cause: FailureCause::NeedsAttention,
+            ..FailedItem::new(mode, self.display_name(uri), uri, None, error)
+        };
+        self.failures.tell(&item)
+    }
+
     /// Removes the staging an item left behind. XFER-003: a leftover is
     /// reported with its exact location.
-    fn discard_leftover_stage(&self, staging: ItemStaging, result: &mut TransferResult) {
+    fn discard_leftover_stage(&mut self, staging: ItemStaging, result: &mut TransferResult) {
         let Some(stage) = staging.stage else {
             return;
         };
         let root = stage.root();
         if let Err(problem) = discard_stage(root, staging.created, staging.place, &*self.sleep) {
             let message = leftover_report(root, staging.place, &problem);
+            let item = FailedItem {
+                more_items: false,
+                cause: FailureCause::NeedsAttention,
+                ..FailedItem::new(
+                    TransferMode::Copy,
+                    root.display_name(),
+                    &root.uri(),
+                    None,
+                    &TransferError::RecoveryRequired(message.clone()),
+                )
+            };
+            if self.failures.tell(&item) {
+                result.presented.push(message.clone());
+            }
             result.recovery.push(message.clone());
             result.errors.push(message);
         }

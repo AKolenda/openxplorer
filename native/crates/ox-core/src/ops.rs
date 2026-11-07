@@ -56,7 +56,7 @@
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
-//! | `report` | The toast or result dialog at the end |
+//! | `report` | "Operation stopped" for a request refused before it ran |
 //! | `recycle_bin` | Listing, restoring, deleting and emptying `trash:///` |
 //! | `recycle_bin_drag` | Recycle Bin items dragged into a folder |
 //! | `undo` | What reverses each operation, and what reverses a reversal |
@@ -127,16 +127,13 @@ pub use recycle_bin::{
 };
 pub use recycle_bin_drag::{is_recycle_bin_item, move_out_of_recycle_bin};
 pub use rename::{rename_item, RenamedItem};
-pub use report::{
-    summarize, summarize_batch_rename, summarize_duplicate, summarize_journal_step, summarize_links,
-    summarize_restore, summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
-};
+pub use report::STOPPED_TITLE;
 pub use resolved_transfer::{
     run_answered_items, run_free_items, run_resolved_transfer, FreeItemsDone, Resolution,
 };
 pub use restore_conflicts::{
     restore_answered_items, restore_free_items, restore_questions, restores_into_one_folder,
-    scan_restore_conflicts, RestoreSoFar,
+    scan_drag_out_conflicts, scan_restore_conflicts, RestoreSoFar,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use shortcuts::{create_shortcut, create_shortcuts, shortcut_name, NO_LINKS_HERE};

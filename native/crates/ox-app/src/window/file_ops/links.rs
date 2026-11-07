@@ -12,9 +12,7 @@
 use glib::clone;
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::ops::{
-    create_link, create_links, create_shortcuts, starting_label, summarize_links, LinkRequest, NewLink,
-};
+use ox_core::ops::{create_link, create_links, create_shortcuts, starting_label, LinkRequest, NewLink};
 use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
@@ -53,7 +51,6 @@ impl BrowserWindow {
         let outcome = create_links(request, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });
@@ -72,7 +69,6 @@ impl BrowserWindow {
         let outcome = create_shortcuts(request, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: request.uris.clone(),
         });

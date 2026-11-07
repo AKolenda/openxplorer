@@ -9,17 +9,20 @@
 //! overwrites unless the user chose Replace. Each runs as the window's one operation,
 //! with the transfer panel and Cancel. Restore moves each item back into
 //! its folder as Windows does, asking "Replace or Skip Files" about a
-//! name taken there (`ox_core::ops::scan_restore_conflicts`), and deleting asks first unless the
-//! settings say not to (SET-010). Empty Recycle Bin asks Windows'
+//! name taken there (`ox_core::ops::scan_restore_conflicts`), also one
+//! taken while the restore runs, and deleting asks first unless the
+//! settings say not to (SET-010). Every other failure is asked about in
+//! the progress window, as Windows asks (OPS-047), and nothing is said
+//! once it ends. Empty Recycle Bin asks Windows'
 //! question: "Are you sure you want to permanently delete these N
 //! items?", with Yes and No.
 
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, move_out_of_recycle_bin,
-    permanent_delete_confirmation, restore_answered_items, restore_free_items, restore_questions,
-    restores_into_one_folder, scan_restore_conflicts, starting_label, summarize, summarize_restore,
-    DeleteItem, OperationContext, OpsError, Resolution, TransferOutcome,
+    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, permanent_delete_confirmation,
+    restore_answered_items, restore_free_items, restore_questions, restores_into_one_folder,
+    scan_drag_out_conflicts, scan_restore_conflicts, starting_label, ConflictScan, DeleteItem,
+    OperationContext, OpsError, Resolution, RestoreSoFar, TransferOutcome,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -30,6 +33,12 @@ use crate::window::BrowserWindow;
 
 /// The panel's label while items are restored.
 const RESTORING: &str = crate::i18n::message_id("Restoring items…");
+
+/// How many times a restore asks again about items whose names were
+/// taken while it ran, as by an item restored before them from the same
+/// place; beyond that, another program keeps taking the names, and such
+/// an item is asked about as a failure.
+const TAKEN_ROUNDS: usize = 4;
 
 impl BrowserWindow {
     /// Restore: puts the selected items back where they were deleted from,
@@ -43,7 +52,7 @@ impl BrowserWindow {
         let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RESTORING)) else {
             return;
         };
-        let outcome = self.restore_asking(&uris, &context).await;
+        let outcome = self.restore_asking(&uris, None, &context).await;
         self.end_restore(outcome).await;
     }
 
@@ -59,25 +68,43 @@ impl BrowserWindow {
         let outcome = match list_recycle_bin(&context.cancel).await {
             Ok(items) => {
                 let uris: Vec<String> = items.into_iter().map(|item| item.uri).collect();
-                self.restore_asking(&uris, &context).await
+                self.restore_asking(&uris, None, &context).await
             }
             Err(error) => Err(error),
         };
         self.end_restore(outcome).await;
     }
 
+    /// The plan of restoring `uris`, into their original folders, or into
+    /// `into` for items dragged out of the Recycle Bin.
+    async fn restore_scan(
+        uris: &[String],
+        into: Option<&str>,
+        cancel: &Cancellation,
+    ) -> Result<ConflictScan, OpsError> {
+        match into {
+            Some(folder) => scan_drag_out_conflicts(uris, folder, cancel).await,
+            None => scan_restore_conflicts(uris, cancel).await,
+        }
+    }
+
     /// Restores `uris` as the operation of `context`, as Windows moves
-    /// them back into their folders: the action reads "Moving 2 items to
-    /// Desktop", the items whose names are free go first, then a taken
-    /// name asks "Replace or Skip Files" in the progress window, whose
-    /// answers decide the rest. Cancel at the question keeps what was
-    /// restored, and says nothing.
+    /// them back into their folders, or into `into` for items dragged out
+    /// of the Recycle Bin: the action reads "Moving 2 items to Desktop",
+    /// the items whose names are free go first, then a taken name asks
+    /// "Replace or Skip Files" in the progress window, whose answers
+    /// decide the rest. A name taken while the restore runs, as by an
+    /// item restored before it from the same place, is asked about the
+    /// same way, as Windows asks as it meets it. Every other failure is
+    /// asked about in the progress window too (OPS-047). Cancel at a
+    /// question keeps what was restored, and says nothing.
     async fn restore_asking(
         &self,
         uris: &[String],
+        into: Option<&str>,
         context: &OperationContext,
     ) -> Result<TransferOutcome, OpsError> {
-        let scan = scan_restore_conflicts(uris, &context.cancel).await?;
+        let mut scan = Self::restore_scan(uris, into, &context.cancel).await?;
         let destination = restores_into_one_folder(&scan).then(|| scan.destination_folder.clone());
         let action = Action {
             verb: Verb::Restoring,
@@ -86,18 +113,41 @@ impl BrowserWindow {
             destination,
         };
         self.describe_operation(&context.cancel, Some(action.clone()));
-        let so_far = restore_free_items(&scan, context).await?;
-        if so_far.cancelled() {
-            return Ok(so_far.into_outcome());
+        let mut so_far = restore_free_items(&scan, RestoreSoFar::new(), context).await?;
+        for _ in 0..TAKEN_ROUNDS {
+            if so_far.cancelled() {
+                return Ok(so_far.into_outcome());
+            }
+            let Some(answers) = self.ask_restore_conflicts(&scan, &action, context).await else {
+                return Ok(so_far.into_outcome());
+            };
+            so_far = restore_answered_items(&scan, &answers, so_far, context).await?;
+            let taken = so_far.take_taken();
+            if taken.is_empty() || so_far.cancelled() {
+                return Ok(so_far.finish());
+            }
+            scan = Self::restore_scan(&taken, into, &context.cancel).await?;
+            so_far = restore_free_items(&scan, so_far, context).await?;
         }
+        Ok(so_far.finish())
+    }
+
+    /// Asks "Replace or Skip Files" about the conflicts of the restore
+    /// `scan`, one question per folder, each naming its folder: an answer
+    /// per conflict, or `None` when the user cancelled.
+    async fn ask_restore_conflicts(
+        &self,
+        scan: &ConflictScan,
+        action: &Action,
+        context: &OperationContext,
+    ) -> Option<Vec<Resolution>> {
+        let mut answers = vec![Resolution::Skip; scan.conflicts.len()];
         if !scan.has_conflicts() {
-            return restore_answered_items(&scan, &[], so_far, context).await;
+            return Some(answers);
         }
         let panel = self.panel_for_operation(&context.cancel);
-        // One question per original folder, each naming its folder.
-        let mut answers = vec![Resolution::Skip; scan.conflicts.len()];
         let several = action.destination.is_none();
-        for (question, indices) in restore_questions(&scan) {
+        for (question, indices) in restore_questions(scan) {
             if several {
                 let going = scan
                     .items
@@ -112,25 +162,22 @@ impl BrowserWindow {
                 };
                 self.describe_operation(&context.cancel, Some(asked));
             }
-            let Some(answered) = panel.ask_about_conflicts(&question).await else {
-                return Ok(so_far.into_outcome());
-            };
+            let answered = panel.ask_about_conflicts(&question).await?;
             for (index, answer) in indices.into_iter().zip(answered) {
                 answers[index] = answer;
             }
         }
         if several {
-            self.describe_operation(&context.cancel, Some(action));
+            self.describe_operation(&context.cancel, Some(action.clone()));
         }
-        restore_answered_items(&scan, &answers, so_far, context).await
+        Some(answers)
     }
 
-    /// Ends a restore: Undo remembers it, the restored items are selected
-    /// and a failure is reported.
+    /// Ends a restore: Undo remembers it and the restored items are
+    /// selected.
     async fn end_restore(&self, outcome: Result<TransferOutcome, OpsError>) {
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_restore(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });
@@ -138,19 +185,14 @@ impl BrowserWindow {
     }
 
     /// Recycle Bin items dropped into `folder`: moved there under their
-    /// original names, never overwriting (OPS-046).
+    /// original names, never overwriting, a taken name asking "Replace or
+    /// Skip Files" as a restore does (OPS-046).
     pub(crate) async fn move_out_of_recycle_bin(&self, uris: Vec<String>, folder: String) {
         let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RESTORING)) else {
             return;
         };
-        let outcome = move_out_of_recycle_bin(&uris, &folder, &context).await;
-        self.end_operation();
-        let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_restore(&outcome.result),
-            undo: outcome.undo,
-            select_after: outcome.created,
-        });
-        self.conclude_operation(finished).await;
+        let outcome = self.restore_asking(&uris, Some(&folder), &context).await;
+        self.end_restore(outcome).await;
     }
 
     /// Delete in the Recycle Bin: asks, then deletes the selected items for
@@ -164,10 +206,11 @@ impl BrowserWindow {
         let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
             return;
         };
-        let outcome = delete_from_recycle_bin(&uris, &context.cancel).await;
+        // "Deleting 2 items from Recycle Bin", as Windows reads it.
+        self.describe_operation(&context.cancel, Action::of(Verb::Deleting, &uris, None));
+        let outcome = delete_from_recycle_bin(&uris, &context).await;
         self.end_operation();
-        let finished = outcome.map(|result| FinishedOperation {
-            summary: summarize(TransferMode::Delete, &result),
+        let finished = outcome.map(|_| FinishedOperation {
             undo: None,
             select_after: Vec::new(),
         });
@@ -204,12 +247,14 @@ impl BrowserWindow {
             return;
         };
         let outcome = match confirmed {
-            Some(uris) => delete_from_recycle_bin(&uris, &context.cancel).await,
-            None => empty_recycle_bin(&context.cancel).await,
+            Some(uris) => {
+                self.describe_operation(&context.cancel, Action::of(Verb::Deleting, &uris, None));
+                delete_from_recycle_bin(&uris, &context).await
+            }
+            None => empty_recycle_bin(&context).await,
         };
         self.end_operation();
-        let finished = outcome.map(|result| FinishedOperation {
-            summary: summarize(TransferMode::Delete, &result),
+        let finished = outcome.map(|_| FinishedOperation {
             undo: None,
             select_after: Vec::new(),
         });

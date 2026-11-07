@@ -11,8 +11,7 @@ mod snapshots;
 
 use std::fs;
 
-use ox_core::ops::{duplicate_items, summarize, OperationContext, OperationSummary, OpsError, UndoRecord};
-use ox_core::transfer::TransferMode;
+use ox_core::ops::{duplicate_items, OperationContext, OpsError, UndoRecord};
 
 use folders::Folders;
 use ops_support::{block_on, file_uri};
@@ -113,10 +112,6 @@ fn a_cancelled_duplicate_says_nothing_and_copies_nothing() {
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
     assert!(outcome.created.is_empty());
     assert_eq!(outcome.undo, None);
-    assert_eq!(
-        summarize(TransferMode::Copy, &outcome.result),
-        OperationSummary::Cancelled
-    );
     assert_eq!(fs::read_dir(folders.source()).unwrap().count(), 1);
     assert_eq!(fs::read_dir(folders.destination()).unwrap().count(), 1);
 }

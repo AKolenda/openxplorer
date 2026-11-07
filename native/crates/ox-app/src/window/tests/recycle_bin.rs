@@ -15,8 +15,10 @@ use ox_core::transfer::Cancellation;
 
 use super::command_bar::command_bar_names;
 use super::file_ops_support::{
-    dialog_over, is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
+    dialog_over, failure_question, is_enabled, open_dialog, require_private_trash, select_names,
+    wait_for_no_dialog,
 };
+use super::name_conflicts::{button, question_window, texts};
 use crate::folder_view::details::shown_cell_text;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
@@ -278,6 +280,47 @@ fn delete_in_the_recycle_bin_deletes_only_the_chosen_items_for_good() {
     );
 }
 
+/// Deleting a Recycle Bin item that another program removed while the
+/// question showed asks "Item Not Found" in the progress window, as
+/// Windows does, and Skip ends the delete without a word.
+///
+/// parity: OPS-043, OPS-047, OPS-023
+#[gtk::test]
+fn deleting_an_item_gone_from_the_recycle_bin_asks_item_not_found() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Gone meanwhile.txt");
+    trash(&fixture.path("Gone meanwhile.txt"));
+    let test = TestWindow::open(TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        test.names().contains(&"Gone meanwhile.txt".to_owned())
+    });
+    select_names(&test, &["Gone meanwhile.txt"]);
+    let item = test.window.folder_model().selected_uris();
+
+    test.activate("trash", None);
+    let dialog = open_dialog(&test);
+    // Another program empties it out of the Recycle Bin meanwhile.
+    gio::File::for_uri(&item[0])
+        .delete(None::<&gio::Cancellable>)
+        .expect("the item leaves the Recycle Bin");
+    dialog.press("Yes");
+    let failed = failure_question(&test);
+
+    assert_eq!(failed.caption_shown(), "Item Not Found");
+    let texts = failed.failure_texts();
+    assert!(
+        texts[0].starts_with("Could not find this item\n\nThis is no longer located in Recycle Bin."),
+        "{texts:?}"
+    );
+    assert!(texts.contains(&"Gone meanwhile.txt".to_owned()), "{texts:?}");
+    assert_eq!(failed.failure_button_labels(), ["Try Again", "Skip", "Cancel"]);
+    failed.press_failure("Skip");
+    wait_until("the delete to end", || !test.window.is_writing_files());
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    assert!(dialog_over(&test).is_none(), "nothing is said afterwards");
+}
+
 /// Empty Recycle Bin asks Windows' question, "Delete Multiple Items",
 /// with Yes and No, and the empty Recycle Bin then says "This folder is
 /// empty." as any empty folder does.
@@ -478,6 +521,44 @@ fn items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder() {
     assert!(
         !fixture.path("Bring me back here.txt").exists(),
         "moved, not restored"
+    );
+}
+
+/// A Recycle Bin item dragged into a folder that has its name asks
+/// "Replace or Skip Files" in the progress window, as Windows does, and
+/// Skip leaves it in the Recycle Bin without a word.
+///
+/// parity: OPS-046, OPS-026, OPS-023
+#[gtk::test]
+fn an_item_dragged_out_onto_a_taken_name_asks_replace_or_skip_files() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Bring me back here.txt");
+    trash(&fixture.path("Bring me back here.txt"));
+    fixture.write("Documents/Bring me back here.txt");
+    let bin = TestWindow::open(TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        bin.names().contains(&"Bring me back here.txt".to_owned())
+    });
+    select_names(&bin, &["Bring me back here.txt"]);
+    let trashed = bin.window.folder_model().selected_uris();
+
+    let documents = TestWindow::open(&fixture.uri_of("Documents"));
+    assert!(documents.window.drop_files(&trashed, None, DropAction::Copy));
+    let window = question_window(&documents);
+    let shown = texts(&window);
+
+    assert!(
+        shown.contains(&"The destination already has a file named \"Bring me back here.txt\"".to_owned()),
+        "{shown:?}"
+    );
+    button(&window, "Skip this file").emit_clicked();
+    wait_until("the move to end", || !documents.window.is_writing_files());
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    assert!(dialog_over(&documents).is_none(), "nothing is said afterwards");
+    assert!(
+        gio::File::for_uri(&trashed[0]).query_exists(None::<&gio::Cancellable>),
+        "still in the Recycle Bin"
     );
 }
 

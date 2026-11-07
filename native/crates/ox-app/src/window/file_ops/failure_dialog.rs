@@ -12,6 +12,7 @@
 //! | Another program holds it | File In Use (Folder …) | The action can't be completed because the file is open in another program · Close the file and try again. | Try Again · Skip · Cancel |
 //! | It is gone | Item Not Found | Could not find this item · This is no longer located in <folder>. Verify the item's location and try again. | Try Again · Skip · Cancel |
 //! | Anything else | Interrupted Action | An unexpected error is keeping you from copying the file. … · the system's error | Try Again · Skip · Cancel |
+//! | Something to sort out by hand, such as a kept backup | Interrupted Action | An unexpected error is keeping you from copying the file. … · what happened and where | OK, shown after Cancel too |
 //!
 //! Each names the item as Windows does: its icon and name, then its Type,
 //! Size and Date modified (a folder's Date created; for the destination
@@ -391,8 +392,10 @@ impl BrowserWindow {
     /// Asks about `item` in its operation's action; Cancel and closing the
     /// progress window cancel the operation.
     async fn ask_about_failure(&self, item: &FailedItem, cancel: &Cancellation) -> FailureAnswer {
-        if item.cause == FailureCause::NoSpace {
-            return self.ask_about_space(item, cancel).await;
+        match item.cause {
+            FailureCause::NoSpace => return self.ask_about_space(item, cancel).await,
+            FailureCause::NeedsAttention => return self.tell_about_failure(item, cancel).await,
+            _ => {}
         }
         let (question, shown_uri) = self.question_about(item).await;
         let entry = read_entry(&shown_uri).await;
@@ -430,8 +433,9 @@ impl BrowserWindow {
                 details: self.failure_details(item),
                 for_all: item.more_items,
                 first,
-                second: gettext("Skip"),
+                second: Some(gettext("Skip")),
                 cancel: true,
+                after_cancel: false,
             };
             let (choice, for_all) = panel.ask_about_failure(view).await;
             return match choice {
@@ -466,6 +470,38 @@ impl BrowserWindow {
         }
     }
 
+    /// Tells, in the action of the operation `cancel` stops, about `item`,
+    /// a problem the user must sort out by hand or a failure that cannot
+    /// be tried again: "Interrupted Action" with what happened and where,
+    /// as Windows shows its error text there, and OK. It shows after a
+    /// cancellation too, since what it says still holds.
+    async fn tell_about_failure(&self, item: &FailedItem, cancel: &Cancellation) -> FailureAnswer {
+        let entry = read_entry(&item.uri).await;
+        let is_folder = entry.as_ref().is_some_and(|entry| entry.is_dir);
+        let wording = wording(Question::Unexpected, item, is_folder, "");
+        let name = last_name(&item.name).to_owned();
+        let text = [wording.heading.as_str(), wording.message.as_str()]
+            .into_iter()
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let lines = entry.as_ref().map(facts_lines).unwrap_or_default();
+        let card = item_card(&name, icon_of(entry.as_ref(), &name), &lines).upcast::<gtk::Widget>();
+        let view = FailureView {
+            caption: wording.caption,
+            text,
+            card,
+            details: self.failure_details(item),
+            for_all: false,
+            first: FirstButton::Plain(gettext("OK")),
+            second: None,
+            cancel: false,
+            after_cancel: true,
+        };
+        self.panel_for_operation(cancel).ask_about_failure(view).await;
+        FailureAnswer::Skip
+    }
+
     /// Asks in `panel` whether the item `card` shows, a folder when
     /// `is_folder`, which can't go to the Recycle Bin as administrator, may
     /// be deleted permanently, as Windows asks about an item too big to
@@ -486,8 +522,9 @@ impl BrowserWindow {
             details: Vec::new(),
             for_all: false,
             first: FirstButton::Plain(gettext("Yes")),
-            second: gettext("No"),
+            second: Some(gettext("No")),
             cancel: false,
+            after_cancel: false,
         };
         panel.ask_about_failure(view).await.0 == FailureChoice::First
     }
@@ -565,7 +602,9 @@ impl BrowserWindow {
             }
             FailureCause::InUse => (Question::InUse, item.uri.clone()),
             FailureCause::NotFound => (Question::NotFound, item.uri.clone()),
-            FailureCause::NoSpace | FailureCause::Other => (Question::Unexpected, item.uri.clone()),
+            FailureCause::NoSpace | FailureCause::Other | FailureCause::NeedsAttention => {
+                (Question::Unexpected, item.uri.clone())
+            }
         }
     }
 

@@ -17,9 +17,8 @@ use std::time::{Duration, Instant};
 
 use ox_core::ops::{
     list_recycle_bin, restore_answered_items, restore_free_items, restore_questions,
-    restores_into_one_folder, reverse, run_transfer, scan_restore_conflicts, summarize_restore, ConflictScan,
-    OperationContext, OperationSummary, PlannedKind, RecycledItem, Resolution, TransferOutcome,
-    TransferRequest, UndoRecord,
+    restores_into_one_folder, reverse, run_transfer, scan_restore_conflicts, ConflictScan, OperationContext,
+    PlannedKind, RecycledItem, Resolution, RestoreSoFar, TransferOutcome, TransferRequest, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -76,8 +75,10 @@ fn scan(uris: &[String]) -> ConflictScan {
 /// Restores `scan` with `answers`, as the window does: the free items
 /// first, then the answered ones.
 fn restore(scan: &ConflictScan, answers: &[Resolution], context: &OperationContext) -> TransferOutcome {
-    let so_far = block_on(restore_free_items(scan, context)).expect("the free items");
-    block_on(restore_answered_items(scan, answers, so_far, context)).expect("the answered items")
+    let so_far = block_on(restore_free_items(scan, RestoreSoFar::new(), context)).expect("the free items");
+    block_on(restore_answered_items(scan, answers, so_far, context))
+        .expect("the answered items")
+        .finish()
 }
 
 /// A taken name is a conflict of the plan, named as the original folder
@@ -113,10 +114,8 @@ fn skip_leaves_the_item_in_the_recycle_bin_without_a_report() {
     assert_eq!(fs::read(&plan).unwrap(), b"plan");
     assert_eq!(recycled_from(&notes, 1).len(), 1, "the skipped item stays");
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
-    assert_eq!(
-        summarize_restore(&outcome.result),
-        OperationSummary::Toast("1 item(s) restored.".into())
-    );
+    assert_eq!(outcome.result.done.len(), 1, "only the free item");
+    assert!(outcome.result.skipped.is_empty(), "nothing to say about Skip");
 }
 
 /// Replace moves the newer file to the Recycle Bin and restores the old
@@ -411,11 +410,61 @@ fn cancel_at_the_question_keeps_the_free_items_and_says_nothing() {
         recycled_from(&plan, 1)[0].uri.clone(),
     ];
 
-    let so_far = block_on(restore_free_items(&scan(&uris), &OperationContext::default())).unwrap();
+    let so_far = block_on(restore_free_items(
+        &scan(&uris),
+        RestoreSoFar::new(),
+        &OperationContext::default(),
+    ))
+    .unwrap();
     let outcome = so_far.into_outcome();
 
     assert!(plan.is_file());
     assert_eq!(fs::read(&notes).unwrap(), b"newer");
     assert_eq!(outcome.created, [file_uri(&plan)]);
-    assert_eq!(summarize_restore(&outcome.result), OperationSummary::Cancelled);
+    assert!(outcome.result.cancelled);
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+}
+
+/// Two Recycle Bin items deleted from the same place are planned as free,
+/// since nothing has their name yet; the second finds the name taken by
+/// the first and waits in the Recycle Bin, unreported, to be asked about:
+/// planned again, it is a conflict with the item just restored, as
+/// Windows asks "Replace or Skip Files" about it, and Skip leaves it in
+/// the Recycle Bin without a word.
+///
+/// parity: OPS-041, OPS-026, OPS-023
+#[test]
+fn a_name_the_restore_itself_takes_is_asked_about_as_a_conflict() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let twin = temp.path().join("Twin.txt");
+    fs::write(&twin, b"older").unwrap();
+    trash(&[&twin]);
+    fs::write(&twin, b"newer").unwrap();
+    trash(&[&twin]);
+    let uris: Vec<String> = recycled_from(&twin, 2).into_iter().map(|item| item.uri).collect();
+    let context = OperationContext::default();
+
+    let first = scan(&uris);
+    assert!(!first.has_conflicts(), "nothing has the name yet");
+    let mut so_far = block_on(restore_free_items(&first, RestoreSoFar::new(), &context)).unwrap();
+    let taken = so_far.take_taken();
+    let again = scan(&taken);
+    let so_far = block_on(restore_answered_items(
+        &again,
+        &[Resolution::Skip],
+        so_far,
+        &context,
+    ))
+    .unwrap();
+    let outcome = so_far.finish();
+
+    assert_eq!(taken.len(), 1, "the second item waits to be asked about");
+    assert_eq!(again.conflicts.len(), 1);
+    assert_eq!(again.conflicts[0].name(), "Twin.txt");
+    assert_eq!(again.conflicts[0].existing_uri, file_uri(&twin));
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+    assert_eq!(outcome.result.done.len(), 1);
+    assert!(twin.is_file());
+    assert_eq!(recycled_from(&twin, 1).len(), 1, "the skipped twin stays");
 }

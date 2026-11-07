@@ -219,7 +219,7 @@ impl BrowserWindow {
         let changed = changed_folders(written, incoming.uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
         let finished = outcome.clone().map(|outcome| {
-            let mut finished = FinishedOperation::of_transfer(mode, outcome);
+            let mut finished = FinishedOperation::of_transfer(outcome);
             if let Some(kept) = kept {
                 finished.select_after = kept;
             }
