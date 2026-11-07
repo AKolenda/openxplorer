@@ -379,9 +379,10 @@ fn a_picture_over_the_size_limit_is_no_data_and_says_why() {
 
     take_clipboard(&test, &owner);
     wait_until("the owner to answer", || progress.has_answered.get());
-    wait_for(Duration::from_millis(200));
+    // A busy runner can take longer than any fixed wait to turn the
+    // oversized answer into "no data", so wait for Paste to go off.
+    wait_until("nothing to be pasteable", || !is_enabled(&test, "paste"));
 
-    assert!(!is_enabled(&test, "paste"), "nothing is pasteable");
     test.window.paste_from_keyboard();
     wait_until("the refusal", || {
         test.window.shown_message() == ox_core::clipboard::TOO_LARGE_TO_PASTE
@@ -402,9 +403,8 @@ fn a_picture_conversion_the_owner_refuses_is_no_data() {
 
     take_clipboard(&test, &refusing_owner);
     wait_until("the owner to refuse", || progress.has_answered.get());
-    wait_for(Duration::from_millis(200));
+    wait_until("nothing to be pasteable", || !is_enabled(&test, "paste"));
 
-    assert!(!is_enabled(&test, "paste"));
     test.window.paste_from_keyboard();
     wait_for(Duration::from_millis(200));
     assert_eq!(test.window.shown_message(), "", "nothing is said");
