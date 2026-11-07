@@ -12,6 +12,15 @@
 //! `pub(crate)` or narrower on every item, so the declared visibility is
 //! the real one.
 #![warn(unreachable_pub)]
+// The test harness builds one array of every unit test; past 2048 tests
+// it is over Clippy's 16 KiB stack-array limit, which no source line holds.
+#![cfg_attr(
+    test,
+    allow(
+        clippy::large_stack_arrays,
+        reason = "libtest's generated array of this crate's unit tests"
+    )
+)]
 
 mod announcement;
 mod app_context;
