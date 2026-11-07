@@ -230,8 +230,9 @@ fn destination_folder_access_denied_offers_continue_with_the_shield() {
 /// Continue answers Continue, with "Do this for all current items" for
 /// all. The Recycle Bin has no administrator path, so in a Recycle Bin
 /// run Continue first asks in the same place whether to delete the file
-/// permanently: No asks the first question again, Yes answers Continue
-/// for this item alone. This test's folder fails the administrator check,
+/// permanently, also when the settings say not to confirm deletes: No
+/// asks the first question again, Yes answers Continue for this item
+/// alone. This test's folder fails the administrator check,
 /// so no password is asked for.
 ///
 /// parity: OPS-047, OPS-018
@@ -271,6 +272,14 @@ fn an_item_in_a_folder_only_an_administrator_may_change_offers_continue() {
         assert_eq!(answer_of(worker, &panel), expected);
     }
 
+    test.context
+        .remember_preferences(ox_core::settings::PreferencesUpdate {
+            confirm_delete: Some(false),
+            ..ox_core::settings::PreferencesUpdate::default()
+        });
+    wait_until("the setting to apply", || {
+        !test.context.settings_data().preferences.confirm_delete
+    });
     let (worker, panel) = ask_in_action(&test, &cancel, &item(TransferMode::Trash));
     assert!(panel.set_failure_for_all(true));
     panel.press_failure("Continue");
@@ -279,9 +288,8 @@ fn an_item_in_a_folder_only_an_administrator_may_change_offers_continue() {
     });
     let texts = panel.failure_texts();
     assert!(
-        texts
-            .iter()
-            .any(|text| text == "Are you sure you want to permanently delete this file?"),
+        texts.iter().any(|text| text
+            == "This file can't be moved to the Recycle Bin. Do you want to permanently delete it?"),
         "{texts:?}"
     );
     assert_eq!(panel.failure_button_labels(), ["Yes", "No"]);

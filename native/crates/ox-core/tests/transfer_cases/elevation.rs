@@ -161,7 +161,12 @@ impl Elevation {
                     elevations.lock().expect("elevation log").push(item.to_owned());
                     match &refusal {
                         Some(refusal) => Err(TransferError::failed(refusal.clone())),
-                        None => Ok(item.replacen(&destination, &elevated, 1)),
+                        // Only the protected folder's items have an
+                        // administrator path, as only they need one.
+                        None if item.starts_with(&destination) => {
+                            Ok(item.replacen(&destination, &elevated, 1))
+                        }
+                        None => Err(TransferError::failed("Not an administrator location.")),
                     }
                 }
             })
@@ -459,4 +464,35 @@ fn a_refused_delete_as_administrator_keeps_the_item() {
     assert_eq!(asked[0].cause, FailureCause::AccessDenied);
     assert_eq!(asked[1].error, refusal);
     assert_eq!(result.errors.len(), 1, "{result:?}");
+}
+
+/// Continue for all current items in a delete run answers only the later
+/// items the user may not delete: an item of the user's own between them
+/// is deleted as the user, never as administrator, and nothing is asked
+/// about it.
+///
+/// parity: OPS-047, XFER-015
+#[test]
+fn continue_for_all_leaves_the_users_own_items_to_an_ordinary_delete() {
+    let test = Elevation::new();
+    let fixture = &test.fixture;
+    let first = fixture.destination_folder.join("tool.cfg");
+    write(&first, "settings");
+    let own = fixture.source_folder.join("notes.txt");
+    write(&own, "mine");
+    let last = fixture.destination_folder.join("plugin.cfg");
+    write(&last, "plugin");
+    let mut engine = test.engine(&[FailureAnswer::ElevateAll], None);
+
+    let result = fixture.run(&mut engine, &[&first, &own, &last], Request::Delete);
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert!(!first.exists() && !own.exists() && !last.exists());
+    assert_eq!(test.asked().len(), 1, "asked once, about the first item");
+    let elevations = test.elevations.lock().expect("elevation log").clone();
+    assert_eq!(
+        elevations,
+        [file_uri(&first), file_uri(&last)],
+        "the own item was not elevated"
+    );
 }

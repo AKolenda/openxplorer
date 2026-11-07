@@ -5441,6 +5441,14 @@ msgstr ""
 msgid "There is not enough space on {drive}."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "This file can't be moved to the Recycle Bin. Do you want to permanently delete it?"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "This folder can't be moved to the Recycle Bin. Do you want to permanently delete it?"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "This is no longer located in {folder}. Verify the item's location and try again."
@@ -7045,7 +7053,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_copy.rs
-msgid "{uri} is not a folder on this computer, so items can't be copied there as administrator."
+msgid "{uri} is not on this computer, so it can't be changed as administrator."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

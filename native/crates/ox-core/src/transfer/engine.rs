@@ -559,13 +559,9 @@ impl TransferEngine {
         let mut item_folder: Option<Box<dyn Node>> = None;
         self.failures
             .start_item(batch.mode(), self.display_name(uri), destination.clone());
-        // This item is deleted as administrator, after Continue.
-        let mut removal_elevated = state.elevated_removal && batch.is_removal();
-        let mut outcome = if removal_elevated {
-            self.remove_elevated(batch, index, uri, state)
-        } else {
-            self.attempt(batch, elevated.as_deref(), index, uri, state, &mut staging)
-        };
+        // Whether this item is deleted as administrator, after Continue.
+        let (mut outcome, mut removal_elevated) =
+            self.first_attempt(batch, elevated.as_deref(), index, uri, state, &mut staging);
         // Whether the user saw the error of `outcome` in the question.
         let mut answered = false;
         while let Err(error) = &outcome {
@@ -663,6 +659,28 @@ impl TransferEngine {
             Err(error) => self.record_failure(batch, uri, &error, answered, &mut state.result),
         }
         self.discard_leftover_stage(staging, &mut state.result);
+    }
+
+    /// The first attempt at the item at `uri`, and whether it ended as
+    /// administrator. Every item is first copied, moved, trashed or deleted
+    /// as the user. Continue for all current items in a Recycle Bin or
+    /// delete run then answers only an item the user may not delete;
+    /// anything else stays the user's own delete, as asked (OPS-047).
+    fn first_attempt(
+        &mut self,
+        batch: &Batch,
+        elevated: Option<&dyn Node>,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+        staging: &mut ItemStaging,
+    ) -> (Result<ItemOutcome, TransferError>, bool) {
+        let outcome = self.attempt(batch, elevated, index, uri, state, staging);
+        let denied = matches!(outcome, Err(TransferError::PermissionDenied(_)));
+        if state.elevated_removal && batch.is_removal() && denied && !batch.cancel.is_cancelled() {
+            return (self.remove_elevated(batch, index, uri, state), true);
+        }
+        (outcome, false)
     }
 
     /// Runs one attempt at the top-level item at `uri`, writing into

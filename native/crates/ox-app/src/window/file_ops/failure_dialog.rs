@@ -33,10 +33,11 @@
 //! check refuses is answered with Continue all the same, without a prompt,
 //! so the engine's refusal is asked about in "Interrupted Action" with its
 //! reason. The Recycle Bin has no administrator path, so Continue in a
-//! Recycle Bin run first asks, in the same place, whether to delete the
-//! item permanently ("Are you sure you want to permanently delete this
-//! file?", unless the settings say not to ask), and answers for that item
-//! alone.
+//! Recycle Bin run first asks, in the same place and whatever the
+//! confirm-delete setting says, whether to delete the item permanently
+//! ("This file can't be moved to the Recycle Bin. Do you want to
+//! permanently delete it?"), and answers for that item alone. Windows'
+//! Continue still recycles the item; this one deletes it.
 //!
 //! A full drive asks in the progress window too, as Windows' "There is
 //! not enough space" does ([`TransferPanel::ask_about_space`]).
@@ -355,6 +356,16 @@ fn icon_of(entry: Option<&Entry>, name: &str) -> Icon {
     }
 }
 
+/// Windows' question about an item the Recycle Bin can't take, a folder
+/// when `is_folder`.
+fn unrecyclable_question(is_folder: bool) -> String {
+    if is_folder {
+        gettext("This folder can't be moved to the Recycle Bin. Do you want to permanently delete it?")
+    } else {
+        gettext("This file can't be moved to the Recycle Bin. Do you want to permanently delete it?")
+    }
+}
+
 /// The last part of `name`, an item's path below the item the run handles.
 fn last_name(name: &str) -> &str {
     name.rsplit('/').next().unwrap_or(name)
@@ -454,23 +465,22 @@ impl BrowserWindow {
         }
     }
 
-    /// Asks in `panel`, as Windows asks before a permanent delete, whether
-    /// the item `card` shows, a folder when `is_folder`, may be deleted
-    /// permanently; true at once when the settings say not to ask
-    /// (SET-010).
+    /// Asks in `panel` whether the item `card` shows, a folder when
+    /// `is_folder`, which can't go to the Recycle Bin as administrator, may
+    /// be deleted permanently, as Windows asks about an item too big to
+    /// recycle. It is always asked: the confirm-delete setting is about a
+    /// permanent delete the user chose, and this one replaces a Recycle
+    /// Bin the user chose (SET-010).
     async fn agrees_to_delete_permanently(
         &self,
         panel: &TransferPanel,
         is_folder: bool,
         card: gtk::Widget,
     ) -> bool {
-        if !self.context().settings_data().preferences.confirm_delete {
-            return true;
-        }
         let confirmation = permanent_delete_confirmation(DeleteSubject::of(1, is_folder));
         let view = FailureView {
             caption: gettext(confirmation.title),
-            text: confirmation.body,
+            text: unrecyclable_question(is_folder),
             card,
             details: Vec::new(),
             for_all: false,

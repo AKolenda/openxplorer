@@ -198,7 +198,7 @@ pub fn as_file_uri(uri: &str) -> String {
 fn local_folder(uri: &str) -> Result<PathBuf, TransferError> {
     let not_local = || {
         TransferError::NotSupported(format_message(
-            "{uri} is not a folder on this computer, so items can't be copied there as administrator.",
+            "{uri} is not on this computer, so it can't be changed as administrator.",
             &[("uri", uri)],
         ))
     };
