@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Cut, Copy and the desktop's file clipboard (CLIP-001 to CLIP-011,
+//! Cut, Copy and the desktop's clipboard (CLIP-001 to CLIP-011, CLIP-015,
 //! CLIP-016).
 //!
 //! Ports `copySelection`, `refreshClipboard` and `clipboardConsume` of
@@ -12,9 +12,13 @@
 //!   them.
 //! - Reading tries the app's own format, then GNOME's, then the URI
 //!   list with the KDE cut marker, each asynchronously, so a slow owner
-//!   never freezes the window. Plain text, an image, an empty or failed
-//!   conversion, an oversized payload or an owner change during the read
-//!   all mean "no files" (fail closed, CLIP-005, CLIP-016).
+//!   never freezes the window. When none of them holds a file list, the
+//!   clipboard's picture is read, which a paste writes as one new file
+//!   (CLIP-015). Plain text is neither a file list nor a file: as in
+//!   Windows Explorer, it leaves Paste disabled.
+//! - An empty or failed conversion, an oversized payload or an owner
+//!   change during the read all mean "no data" (fail closed, CLIP-005,
+//!   CLIP-016).
 //! - The window reads the clipboard again whenever it changes and when the
 //!   window becomes active (CLIP-009), which enables Paste and dims the
 //!   items a cut put on the clipboard (CLIP-002).
@@ -30,7 +34,10 @@ use std::collections::HashSet;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::clipboard::{decode, ClipboardFiles, ClipboardMode, FileListFormat, KDE_CUT, MAX_BYTES};
+use ox_core::clipboard::{
+    decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, IMAGE_MIME_TYPES, KDE_CUT, MAX_BYTES,
+    TEXTURE_EXTENSION,
+};
 use ox_core::location::LocationContext;
 
 use crate::window::BrowserWindow;
@@ -46,41 +53,123 @@ const FILE_LIST_FORMATS: [FileListFormat<'static>; 3] = [
     FileListFormat::UriList { kde_cut_marker: None },
 ];
 
-/// Reads the whole payload of `mime_type` from `clipboard`; `None` when
-/// the owner does not offer it, the conversion fails or the payload is
-/// larger than [`MAX_BYTES`].
-async fn read_payload(clipboard: &gdk::Clipboard, mime_type: &str) -> Option<Vec<u8>> {
-    if !clipboard.formats().contain_mime_type(mime_type) {
-        return None;
+/// What the desktop's clipboard offers Paste, as the window last read it:
+/// enough to enable the command without keeping the payload in memory.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ClipboardKind {
+    /// No files and no picture: Paste has nothing to write, as Windows
+    /// Explorer has nothing to paste from text (CLIP-016).
+    #[default]
+    Empty,
+    /// A file list, from this window, another window of this app, or
+    /// another file manager.
+    Files,
+    /// A picture copied in another application, pasted as one image file
+    /// (CLIP-015).
+    Image,
+    /// A picture larger than [`MAX_BYTES`], which is no data (CLIP-015);
+    /// Paste says so, instead of doing nothing.
+    TooLarge,
+}
+
+impl ClipboardKind {
+    /// Whether Paste has something to write.
+    pub(crate) fn is_pasteable(self) -> bool {
+        matches!(self, Self::Files | Self::Image)
     }
-    let (stream, _) = clipboard
-        .read_future(&[mime_type], glib::Priority::DEFAULT)
-        .await
-        .ok()?;
+}
+
+/// What the desktop's clipboard holds for a paste (CLIP-005, CLIP-015).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ClipboardContent {
+    /// Nothing a paste could write: no files and no picture.
+    Nothing,
+    /// A picture over [`MAX_BYTES`], refused as no data.
+    TooLarge,
+    /// A file list, which paste copies or moves item by item.
+    Files(ClipboardFiles),
+    /// A picture, which paste writes as one new file (CLIP-015).
+    Image(PastedImage),
+}
+
+impl ClipboardContent {
+    /// What Paste makes of it.
+    pub(crate) fn kind(&self) -> ClipboardKind {
+        match self {
+            Self::Nothing => ClipboardKind::Empty,
+            Self::TooLarge => ClipboardKind::TooLarge,
+            Self::Files(_) => ClipboardKind::Files,
+            Self::Image(_) => ClipboardKind::Image,
+        }
+    }
+
+    /// The file list, when the clipboard holds one.
+    fn files(&self) -> Option<&ClipboardFiles> {
+        match self {
+            Self::Files(files) => Some(files),
+            _ => None,
+        }
+    }
+}
+
+/// What one read of a clipboard format gave.
+#[derive(Debug)]
+enum Payload {
+    /// The owner's bytes, within [`MAX_BYTES`].
+    Bytes(Vec<u8>),
+    /// The owner offers the format, but its payload is over [`MAX_BYTES`].
+    TooLarge,
+    /// The owner does not offer it or the conversion failed: no data, and
+    /// never a crash (CLIP-016).
+    Unavailable,
+}
+
+impl Payload {
+    /// The bytes, when the read gave any within the limit.
+    fn bytes(self) -> Option<Vec<u8>> {
+        match self {
+            Self::Bytes(bytes) => Some(bytes),
+            Self::TooLarge | Self::Unavailable => None,
+        }
+    }
+}
+
+/// Reads the whole payload of `mime_type` from `clipboard`; `Unavailable`
+/// when the owner does not offer it or the conversion fails, and
+/// `TooLarge` when the payload is larger than [`MAX_BYTES`].
+async fn read_payload(clipboard: &gdk::Clipboard, mime_type: &str) -> Payload {
+    if !clipboard.formats().contain_mime_type(mime_type) {
+        return Payload::Unavailable;
+    }
+    let Ok((stream, _)) = clipboard.read_future(&[mime_type], glib::Priority::DEFAULT).await else {
+        return Payload::Unavailable;
+    };
     let mut payload = Vec::new();
     loop {
-        let chunk = stream
+        let Ok(chunk) = stream
             .read_bytes_future(READ_CHUNK_BYTES, glib::Priority::DEFAULT)
             .await
-            .ok()?;
+        else {
+            return Payload::Unavailable;
+        };
         if chunk.is_empty() {
-            return Some(payload);
+            return Payload::Bytes(payload);
         }
         payload.extend_from_slice(&chunk);
         if payload.len() > MAX_BYTES {
-            return None;
+            return Payload::TooLarge;
         }
     }
 }
 
 /// Reads `format` from `clipboard` and decodes it; a URI list is read
-/// with its KDE cut marker.
+/// with its KDE cut marker. A payload over the limit is no file list.
 async fn read_file_list(clipboard: &gdk::Clipboard, format: FileListFormat<'_>) -> Option<ClipboardFiles> {
-    let payload = read_payload(clipboard, format.mime_type()).await?;
+    let payload = read_payload(clipboard, format.mime_type()).await.bytes()?;
     if !matches!(format, FileListFormat::UriList { .. }) {
         return decode(format, &payload);
     }
-    let marker = read_payload(clipboard, KDE_CUT).await;
+    let marker = read_payload(clipboard, KDE_CUT).await.bytes();
     let with_marker = FileListFormat::UriList {
         kde_cut_marker: marker.as_deref(),
     };
@@ -97,8 +186,72 @@ async fn read_files(clipboard: &gdk::Clipboard) -> Option<ClipboardFiles> {
     None
 }
 
+/// The picture on `clipboard`, as the file a paste writes (CLIP-015).
+///
+/// The owner's own encoding is written as it is (PNG, JPEG, WebP, GIF or
+/// BMP), under the extension of that format, so a pasted screenshot is the
+/// screenshot and nothing re-encodes it. An owner that offers another
+/// `image/*` format is asked for a texture instead, which GTK encodes as
+/// PNG.
+async fn read_image(clipboard: &gdk::Clipboard) -> ClipboardContent {
+    let mut too_large = false;
+    for (mime_type, extension) in IMAGE_MIME_TYPES {
+        match read_payload(clipboard, mime_type).await {
+            Payload::Bytes(bytes) if bytes.is_empty() => {}
+            Payload::Bytes(bytes) => return ClipboardContent::Image(PastedImage { extension, bytes }),
+            Payload::TooLarge => too_large = true,
+            Payload::Unavailable => {}
+        }
+    }
+    if too_large {
+        return ClipboardContent::TooLarge;
+    }
+    if !offers_a_picture(clipboard) {
+        return ClipboardContent::Nothing;
+    }
+    let Ok(Some(texture)) = clipboard.read_texture_future().await else {
+        return ClipboardContent::Nothing;
+    };
+    let bytes = texture.save_to_png_bytes().to_vec();
+    if bytes.is_empty() {
+        return ClipboardContent::Nothing;
+    }
+    // GTK's decoding is not bounded by the size of what the owner holds, so
+    // the limit is enforced on what the paste would write: a picture of this
+    // branch is as much "too large" as one whose own bytes were over it.
+    if bytes.len() > MAX_BYTES {
+        return ClipboardContent::TooLarge;
+    }
+    ClipboardContent::Image(PastedImage {
+        extension: TEXTURE_EXTENSION,
+        bytes,
+    })
+}
+
+/// True when `clipboard` offers a picture at all, in any format: an owner
+/// that offers none is never asked for a texture, which would be a read it
+/// cannot answer.
+fn offers_a_picture(clipboard: &gdk::Clipboard) -> bool {
+    clipboard
+        .formats()
+        .mime_types()
+        .iter()
+        .any(|mime_type| mime_type.starts_with("image/"))
+}
+
+/// What `clipboard` holds that a paste could write, in the order a paste
+/// reads it: the file list first, then a picture (CLIP-005, CLIP-015).
+/// Text is neither: as in Windows Explorer, it leaves Paste disabled.
+async fn read_clipboard_content(clipboard: &gdk::Clipboard) -> ClipboardContent {
+    match read_files(clipboard).await {
+        Some(files) => ClipboardContent::Files(files),
+        None => read_image(clipboard).await,
+    }
+}
+
 /// The URIs of the items a cut put on the clipboard, which the views dim;
-/// none for a copy (`state.clipboard?.mode==='move'` in `renderRows`).
+/// none for a copy or a picture (`state.clipboard?.mode==='move'` in
+/// `renderRows`).
 fn cut_uris(files: Option<&ClipboardFiles>) -> HashSet<String> {
     match files {
         Some(files) if files.mode() == ClipboardMode::Cut => files.uris().iter().cloned().collect(),
@@ -195,35 +348,35 @@ impl BrowserWindow {
             ));
             return;
         }
-        self.remember_clipboard(Some(files));
+        self.remember_clipboard(&ClipboardContent::Files(files));
         if let Some(note) = note {
             self.show_message(note);
         }
     }
 
-    /// Reads the desktop's clipboard again and returns its file list
+    /// Reads the desktop's clipboard again and returns what it holds
     /// (`refreshClipboard`).
-    pub(crate) async fn refresh_file_clipboard(&self) -> Option<ClipboardFiles> {
+    pub(crate) async fn refresh_file_clipboard(&self) -> ClipboardContent {
         let clipboard = self.clipboard();
         let generation = self.clipboard_generation();
-        let files = read_files(&clipboard).await;
+        let content = read_clipboard_content(&clipboard).await;
         // Safety rule (one owner per read, CLIP-006, CLIP-016): formats
         // read before and after an owner change could mix two clipboards,
         // such as one owner's URI list with another's cut marker, so such a
-        // read holds no files. It is not remembered either: the change
+        // read holds no data. It is not remembered either: the change
         // started a read of its own, which a stale answer must not undo.
         if self.clipboard_generation() != generation {
-            return None;
+            return ClipboardContent::Nothing;
         }
-        self.remember_clipboard(files.clone());
-        files
+        self.remember_clipboard(&content);
+        content
     }
 
     /// Removes the items a move-paste of `pasted` moved from the clipboard,
     /// when it still holds that cut; clears it once nothing is left
     /// (`clipboardConsume`).
     pub(crate) async fn consume_cut(&self, pasted: &ClipboardFiles, moved: &[String]) {
-        let Some(mut current) = self.refresh_file_clipboard().await else {
+        let ClipboardContent::Files(mut current) = self.refresh_file_clipboard().await else {
             return;
         };
         // Safety rule (cut identity, CLIP-008): only the same cut, by its
@@ -236,20 +389,20 @@ impl BrowserWindow {
             // Clearing fails only when another owner took the clipboard
             // meanwhile, and then there is nothing of this cut to clear.
             clipboard.set_content(None::<&gdk::ContentProvider>).ok();
-            self.remember_clipboard(None);
+            self.remember_clipboard(&ClipboardContent::Nothing);
         } else if publish(&clipboard, &current, &self.imp().locations.borrow()).is_ok() {
-            self.remember_clipboard(Some(current));
+            self.remember_clipboard(&ClipboardContent::Files(current));
         }
     }
 
-    /// Keeps `files` as the clipboard's file list, dims the items it cut
+    /// Keeps `content` as what the clipboard holds, dims the items it cut
     /// and updates Paste.
-    fn remember_clipboard(&self, files: Option<ClipboardFiles>) {
-        let cut_uris = cut_uris(files.as_ref());
+    fn remember_clipboard(&self, content: &ClipboardContent) {
+        let cut_uris = cut_uris(content.files());
         for pane in self.folder_panes() {
             pane.owners().show_cut_items(cut_uris.clone());
         }
-        self.imp().file_operations.borrow_mut().clipboard = files;
+        self.imp().file_operations.borrow_mut().clipboard = content.kind();
         self.update_file_commands();
     }
 
@@ -278,7 +431,9 @@ impl BrowserWindow {
         ))
     }
 
-    /// Reads the clipboard in the background.
+    /// Reads the clipboard in the background, so opening, activating or
+    /// changing a clipboard with a large picture never holds up the
+    /// window.
     fn schedule_clipboard_read(&self) {
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

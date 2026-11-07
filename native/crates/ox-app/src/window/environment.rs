@@ -231,7 +231,7 @@ impl BrowserWindow {
         };
         let body = self.pane_on(side).landing();
         let locations = self.imp().locations.borrow();
-        landing::render(body, page, places, &locations);
+        landing::render(body, page, places, &locations, self.skin().drawn_text_size());
     }
 }
 

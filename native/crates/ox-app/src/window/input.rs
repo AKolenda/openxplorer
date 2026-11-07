@@ -546,11 +546,14 @@ impl BrowserWindow {
         }
     }
 
-    /// A primary press on blank space in `view`, below the rows, between
-    /// the tiles or on the empty part of an unselected details row, clears
-    /// the selection and keeps keyboard focus on the view, as in Windows
-    /// Explorer and Dolphin; with Ctrl or Shift held the selection stays.
-    /// A drag from there draws a rubber band ([`super::rubber_band`]).
+    /// A primary press on blank space in `view`, below the rows or between
+    /// the tiles, clears the selection and keeps keyboard focus on the
+    /// view, as in Windows Explorer and Dolphin; with Ctrl or Shift held
+    /// the selection stays. A drag from there draws a rubber band
+    /// ([`super::rubber_band`]). A press on the empty part of an unselected
+    /// details row keeps the selection: released there, the row's own click
+    /// selects the row (Ctrl toggles it, Shift extends to it), and dragged
+    /// from there, the band replaces the selection as it moves.
     fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
@@ -563,6 +566,9 @@ impl BrowserWindow {
             move |press, _, x, y| {
                 window.imp().view_modifiers.set(Some(press.current_event_state()));
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
+                    return;
+                }
+                if window.is_beside_item(&view, x, y) {
                     return;
                 }
                 if !press_keeps_selection(press.current_event_state()) {
@@ -590,12 +596,12 @@ impl BrowserWindow {
     /// Whether (`x`, `y`) in `view` is on the empty part of an unselected
     /// details row: past the end of its name, or in its other columns. As
     /// in Windows Explorer, only the icon and the name (with the check box
-    /// and the expand arrow before them) are the item there, so a press on
-    /// the rest of the row starts a rubber band, even in a folder whose
-    /// rows fill the view, and a click there clears the selection. A
-    /// selected row stays the item across its width, and so does every
-    /// tile of the icon views. A drop still goes into the folder of the
-    /// whole row.
+    /// and the expand arrow before them) are the item to drag there, so a
+    /// drag from the rest of the row draws a rubber band, even in a folder
+    /// whose rows fill the view. A click there still selects the row, as
+    /// Windows' full-row select does. A selected row stays the item across
+    /// its width, and so does every tile of the icon views. A drop still
+    /// goes into the folder of the whole row.
     pub(super) fn is_beside_item(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
         if !view.is::<gtk::ColumnView>() {
             return false;

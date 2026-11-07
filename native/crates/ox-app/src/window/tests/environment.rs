@@ -66,14 +66,13 @@ fn the_home_row_is_selected_in_the_home_folder() {
     assert_eq!(selected.map(|row| row.index()), Some(0), "Home is the first row");
 }
 
+/// Quick access stays in the navigation pane; This PC lists the drives,
+/// and network locations once one is saved (owner decision 2026-11-06).
 #[gtk::test]
-fn this_pc_lists_quick_access_devices_and_network_locations() {
+fn this_pc_lists_devices_and_drives_and_no_quick_access() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
-    assert_eq!(
-        landing::section_titles(landing),
-        ["Quick access", "Devices and drives", "Network locations"]
-    );
+    assert_eq!(landing::section_titles(landing), ["Devices and drives"]);
 }
 
 /// The status bar reads as Windows 11 Explorer's: "4 items", then, past

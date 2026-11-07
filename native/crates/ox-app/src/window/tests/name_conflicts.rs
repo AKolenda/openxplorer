@@ -42,7 +42,7 @@ fn assert_no_report_of_skipped_files(test: &TestWindow) {
 }
 
 /// The progress window, once it shows the question.
-fn question_window(test: &TestWindow) -> ProgressWindow {
+pub(super) fn question_window(test: &TestWindow) -> ProgressWindow {
     wait_until("the Replace or Skip Files question", || {
         test.context.progress_window().is_some_and(|window| {
             window.is_visible() && window.title().as_deref() == Some("Replace or Skip Files")
@@ -52,7 +52,7 @@ fn question_window(test: &TestWindow) -> ProgressWindow {
 }
 
 /// Whether `widget` and every widget it is in are visible.
-fn is_shown(widget: &impl IsA<gtk::Widget>) -> bool {
+pub(super) fn is_shown(widget: &impl IsA<gtk::Widget>) -> bool {
     let mut current = Some(widget.clone().upcast::<gtk::Widget>());
     while let Some(shown) = current {
         if !shown.is_visible() {
@@ -64,7 +64,7 @@ fn is_shown(widget: &impl IsA<gtk::Widget>) -> bool {
 }
 
 /// The texts of every shown label inside `widget`.
-fn texts(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
+pub(super) fn texts(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
     descendants::<gtk::Label>(widget)
         .into_iter()
         .filter(is_shown)
@@ -73,7 +73,7 @@ fn texts(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
 }
 
 /// The button inside `widget` that shows `text`.
-fn button(widget: &impl IsA<gtk::Widget>, text: &str) -> gtk::Button {
+pub(super) fn button(widget: &impl IsA<gtk::Widget>, text: &str) -> gtk::Button {
     descendants::<gtk::Button>(widget)
         .into_iter()
         .find(|button| is_shown(button) && texts(button).iter().any(|shown| shown == text))
@@ -81,7 +81,7 @@ fn button(widget: &impl IsA<gtk::Widget>, text: &str) -> gtk::Button {
 }
 
 /// The File Conflict window over `progress`, once it opens.
-fn conflict_window(progress: &ProgressWindow) -> FileConflictWindow {
+pub(super) fn conflict_window(progress: &ProgressWindow) -> FileConflictWindow {
     wait_until("the File Conflict window", || {
         progress
             .conflict_window()

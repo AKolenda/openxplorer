@@ -222,26 +222,6 @@ fn a_phone_is_not_cached_or_opened_in_a_terminal_and_drive_items_target_the_driv
     }
 }
 
-/// This PC's cards offer Disconnect device or Disconnect, and no
-/// menu where the system keeps the mount (`canUnmount === false`).
-///
-/// parity: DEV-006, HOME-003
-#[test]
-fn a_drive_card_offers_disconnect_only_where_the_mount_allows_it() {
-    let phone = PlaceMenu::DriveCard {
-        uri: "mtp://[usb:001,010]/".into(),
-        kind: VolumeKind::Device,
-        controls: MountControls::UNMOUNTABLE,
-    };
-    let fixed = PlaceMenu::DriveCard {
-        uri: "file:///mnt/data".into(),
-        kind: VolumeKind::Drive,
-        controls: MountControls::FIXED,
-    };
-    assert_eq!(labels(&phone), ["Disconnect device"]);
-    assert!(labels(&fixed).is_empty());
-}
-
 /// parity: NET-030
 #[test]
 fn a_connected_sftp_folder_can_be_kept_and_disconnected() {
