@@ -4,13 +4,13 @@
 //! 2026-11-06): 31-pixel rows 32 pixels apart, the pinned folders full
 //! width on the same pitch with their icons in Home's column, as in
 //! Windows 11's navigation pane, the accent bar's room on the selected
-//! row, the 6-pixel resizer and the "Map network drive"
-//! button below the list.
+//! row and the 6-pixel resizer. Nothing is pinned below the list, as in
+//! Windows 11 (`tests/sidebar.rs`, `nothing_is_pinned_below_the_navigation_pane`).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::geometry::{bounds, button_for, laid_out, Bounds};
+use super::geometry::{bounds, laid_out, Bounds};
 use super::icons::{assert_same_colour, painted_colour};
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 
@@ -145,22 +145,4 @@ fn the_sidebar_is_210_pixels_with_a_6_pixel_resizer() {
     assert_eq!(sidebar.width, 210);
     let list = bounds(&test, test.window.folder_pane());
     assert_eq!(list.x, 216, "the file list starts after the resizer");
-}
-
-/// parity: SIDE-001, NET-001
-#[gtk::test]
-fn map_network_location_sits_below_the_list() {
-    let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
-    let button = button_for(&test, "win.map-network-location");
-    assert!(button.is_sensitive(), "Map network drive opens its dialog");
-    assert_eq!(button.tooltip_text().as_deref(), Some("Map network drive"));
-    let place = bounds(&test, &button);
-    let window_height = test.window.height();
-    assert_eq!((place.x, place.width, place.height), (7, 196, 34));
-    assert_eq!(
-        place.y + place.height + 11 + 30,
-        window_height,
-        "above the status bar"
-    );
 }

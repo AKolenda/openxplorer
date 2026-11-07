@@ -30,8 +30,11 @@ pub(crate) use grouped::{CollapsedGroups, GroupSlot, GroupedSelection, SlotKind}
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, PositionMap};
 use crate::folder_view::details::GroupTitle;
+use crate::folder_view::group_slots::RowHeights;
 pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
-use crate::folder_view::icon_size::{compact_row, content_row, tiles_cell, CONTENT_ICON, TILES_ICON};
+use crate::folder_view::icon_size::{
+    compact_row, content_row, group_heading_row, tiles_cell, CONTENT_ICON, TILES_ICON,
+};
 use crate::text_size::TextSize;
 
 /// The icon edge of the compact layout (Explorer's List uses small icons).
@@ -299,22 +302,19 @@ impl IconView {
         }
     }
 
-    /// How many rows of items a page of the view holds, for Page Up and
-    /// Page Down in grouped Tiles and Content.
-    pub(crate) fn rows_per_page(&self) -> u32 {
+    /// How tall a page of the view and its rows are, for Page Up and Page
+    /// Down in grouped Tiles and Content.
+    pub(crate) fn row_heights(&self) -> RowHeights {
         let text_size = self.imp().text_size.get();
-        let row = match self.layout() {
+        let item = match self.layout() {
             GridLayout::Content => content_row(text_size),
             _ => tiles_cell(text_size).height,
         };
-        let page = self.scroll_adjustment().page_size();
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "a page holds few rows"
-        )]
-        let rows = (page / f64::from(row.max(1))).floor().max(1.0) as u32;
-        rows
+        RowHeights {
+            page: self.scroll_adjustment().page_size(),
+            item,
+            heading: group_heading_row(text_size),
+        }
     }
 
     /// Gives the grid the folder's items, grouped in Tiles and Content

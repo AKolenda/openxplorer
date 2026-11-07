@@ -29,7 +29,7 @@ use super::result_location::LocationTarget;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// The actions that open a search result's folder.
+/// The actions that open the folder of a search result or a Recent row.
 const LOCATION_ACTIONS: [WindowAction; 3] = [
     WindowAction::OpenFileLocation,
     WindowAction::OpenFileLocationInTab,
@@ -104,10 +104,16 @@ impl BrowserWindow {
     }
 
     /// Offers "Open file location" and its new tab and new window forms
-    /// for one selected search result; a file dialog offers only the
-    /// first, which opens the folder in its one tab (INT-032).
+    /// for one selected search result or Recent row; a file dialog offers
+    /// only the first, which opens the folder in its one tab (INT-032).
     pub(super) fn update_open_location_action(&self, selected: u32) {
-        let offers = self.is_searching() && selected == 1;
+        let offers = selected == 1
+            && self
+                .folder_pane()
+                .model()
+                .selected_items()
+                .first()
+                .is_some_and(|item| self.located_file(item.entry()).is_some());
         for action in LOCATION_ACTIONS {
             let elsewhere = action != WindowAction::OpenFileLocation;
             self.set_action_enabled(action, offers && !(elsewhere && self.is_picking()));
