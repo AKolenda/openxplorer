@@ -834,3 +834,46 @@ fn the_keyboard_on_an_empty_list_rings_its_note() {
     settle();
     assert!(!ringed(), "the ring goes with the keyboard");
 }
+
+/// With two tabs open, Tab goes from the tab in front to its Close button
+/// and on to New tab, and Shift+Tab comes back the same way, the tab
+/// included, before it leaves the strip: the tab behind and its Close
+/// button are no stops.
+///
+/// parity: ACC-016, ACC-008
+#[gtk::test]
+fn tab_visits_the_front_tab_then_its_close_button_both_ways() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("new-tab", None);
+    test.wait_for_listing("the new tab");
+    let window = &test.window;
+    let front = descendants::<gtk::Widget>(window.tab_strip())
+        .into_iter()
+        .find(|widget| widget.has_css_class("tab") && widget.has_css_class("active"))
+        .expect("a tab in front");
+    let close: gtk::Widget = descendants::<gtk::Button>(&front)
+        .into_iter()
+        .find(|button| button.has_css_class("tab-close"))
+        .expect("the tab in front has its Close button")
+        .upcast();
+    assert!(front.grab_focus());
+    settle();
+
+    let press = |backward: bool| {
+        assert!(window.tab_to_next_stop(backward), "Tab finds a control");
+        settle();
+        focused(&test)
+    };
+    assert_eq!(
+        press(false),
+        Some(close.clone()),
+        "the tab, then its Close button"
+    );
+    press(false);
+    assert_eq!(window.focused_stop(), Some(Stop::NewTab), "then New tab");
+    assert_eq!(press(true), Some(close), "Shift+Tab comes back to Close");
+    assert_eq!(press(true), Some(front), "then to the tab itself");
+    press(true);
+    assert_ne!(window.focused_stop(), Some(Stop::Tabs), "then leaves the strip");
+}

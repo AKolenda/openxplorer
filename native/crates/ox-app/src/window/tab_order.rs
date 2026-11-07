@@ -104,6 +104,22 @@ fn stops_after(current: Option<usize>, count: usize, backward: bool) -> Vec<usiz
 }
 
 impl BrowserWindow {
+    /// The tab in front and its Close button, the tab strip's controls in
+    /// Tab's order: the tabs behind it are no stops (ACC-008).
+    fn front_tab_controls(&self) -> Vec<gtk::Widget> {
+        let front = descendants::<gtk::Widget>(self.tab_strip())
+            .into_iter()
+            .find(|widget| widget.has_css_class("tab") && widget.is_focusable() && widget.is_mapped());
+        let Some(front) = front else {
+            return Vec::new();
+        };
+        let close = descendants::<gtk::Button>(&front)
+            .into_iter()
+            .find(|button| button.has_css_class("tab-close") && button.is_mapped())
+            .map(Cast::upcast);
+        std::iter::once(front).chain(close).collect()
+    }
+
     /// Makes Tab and Shift+Tab follow [`Stop::ALL`] once the focused
     /// widget let them go.
     pub(super) fn install_tab_order(&self) {
@@ -173,7 +189,24 @@ impl BrowserWindow {
             gtk::DirectionType::TabForward
         };
         let current = self.focused_stop();
-        if let Some(stop) = current {
+        if current == Some(Stop::Tabs) {
+            // The tab in front, then its Close button; GTK's own order
+            // would skip the tab going back and visit the Close buttons
+            // of the tabs behind it.
+            let controls = self.front_tab_controls();
+            let focus = gtk::prelude::GtkWindowExt::focus(self);
+            let at = controls
+                .iter()
+                .position(|control| Some(control) == focus.as_ref());
+            let next = match (at, backward) {
+                (Some(at), false) => controls.get(at + 1),
+                (Some(at), true) => at.checked_sub(1).and_then(|at| controls.get(at)),
+                (None, _) => None,
+            };
+            if next.is_some_and(WidgetExt::grab_focus) {
+                return true;
+            }
+        } else if let Some(stop) = current {
             // Within a stop of several controls, Tab goes to the next one.
             let within = || self.stop_widget(stop).child_focus(direction);
             if !self.stop_is_single(stop) && within() {
@@ -257,16 +290,14 @@ impl BrowserWindow {
                 .child_focus(gtk::DirectionType::TabForward),
             // The tab in front, the strip's one stop (ACC-008), before its
             // Close button; GTK would go to the button first.
-            Stop::Tabs if direction == gtk::DirectionType::TabForward => {
-                let front = descendants::<gtk::Widget>(self.tab_strip())
-                    .into_iter()
-                    .find(|widget| {
-                        widget.has_css_class("tab") && widget.is_focusable() && widget.is_mapped()
-                    });
-                match front {
-                    Some(tab) => tab.grab_focus(),
-                    None => self.focus_stop_widget(stop, direction),
-                }
+            Stop::Tabs => {
+                let controls = self.front_tab_controls();
+                let first = if direction == gtk::DirectionType::TabForward {
+                    controls.first()
+                } else {
+                    controls.last()
+                };
+                first.is_some_and(WidgetExt::grab_focus)
             }
             Stop::Pane(side) if self.stop_is_single(stop) => {
                 let pane = self.pane_on(side);
