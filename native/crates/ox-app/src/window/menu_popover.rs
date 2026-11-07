@@ -118,7 +118,7 @@ mod imp {
     /// Private state of [`super::MenuPopover`].
     #[derive(Debug, Default)]
     pub(crate) struct MenuPopover {
-        /// The compact style's icon buttons, above the list.
+        /// The compact style's labeled buttons, above or below the list.
         pub(super) strip: OnceCell<gtk::Box>,
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
@@ -263,7 +263,7 @@ glib::wrapper! {
             gtk::Native, gtk::ShortcutManager;
 }
 
-/// The row of icon buttons of the compact style (`.context-strip`).
+/// The row of labeled buttons of the compact style (`.context-strip`).
 fn strip_box() -> gtk::Box {
     let strip = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)

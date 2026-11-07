@@ -337,7 +337,8 @@ pub(in crate::window) enum MenuStyle {
     /// Windows 10 classic: a square text menu, the default.
     #[default]
     Classic,
-    /// Windows 11 compact: rounded, with a strip of icon buttons on top.
+    /// Windows 11 compact: rounded, with a strip of labeled buttons on the
+    /// side nearest the pointer.
     Compact,
 }
 
