@@ -1,53 +1,67 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The This PC landing page.
+//! The This PC page.
 //!
-//! Ports the `pc:` branch of `renderLanding` in `v2.0.0:desktop/ui/app.js`.
-//! Network is listed like a folder instead, as in Windows 11
-//! ([`super::loading`]). This PC lists Quick access (cards in a stretching grid,
-//! [`super::card_grid`]), then Devices and drives (Local Disk, drives and
-//! devices with a capacity bar, unmounted volumes that connect on click),
-//! then the saved network locations with their state. A saved location's
-//! card shows it on the network bar, as its sidebar row does (the owner's
-//! icon mapping, 2026-09-28), where app.js drew a blue server for every
-//! one.
+//! Draws This PC as Windows 11 File Explorer does: an item view of tiles
+//! under collapsible group headers, with no page heading. Devices and
+//! drives come first (Local Disk, then drives, devices and volumes to
+//! connect), then Network locations, the saved network locations; a group
+//! with nothing in it is left out. Quick access lives in the sidebar and on
+//! Home, as Windows 11 moved it there. Network is listed like a folder
+//! instead ([`super::loading`]).
 //!
-//! Cards run [`WindowAction::GoTo`] or [`WindowAction::MountVolume`]; a
-//! middle-click opens a folder in a background tab, and a right-click on
-//! a drive that can be removed or on a saved location opens its menu
-//! ([`super::place_menus`]).
+//! A tile looks like an item of the Tiles view (VIEW-071): a 48-pixel icon
+//! left of the name and, once GIO has measured the drive, a thin capacity
+//! bar, red when nearly full, and "N free of M". A saved location shows
+//! the art of its sidebar row, on the network bar and crossed out while it
+//! is not mounted (the owner's icon mapping, 2026-09-28), and is named as
+//! Windows names a mapped drive.
+//!
+//! Tiles are selected with a click and the arrow keys and opened with a
+//! double-click or Enter ([`WindowAction::GoTo`], or
+//! [`WindowAction::MountVolume`] for a volume); a middle-click opens a
+//! folder in a background tab. A right-click, the Menu key or Shift+F10
+//! opens the drive's menu ([`super::place_menus`]), and Alt+Enter its
+//! Properties.
+
+use std::rc::Rc;
 
 use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
-use ox_core::location::{is_server_location, is_smb_location, split_location, LocationContext};
-use ox_core::places::{NetworkKind, Place, SavedShare};
+use ox_core::location::{is_smb_location, split_location, LocationContext};
+use ox_core::places::{NetworkKind, SavedShare};
 
+use crate::folder_view::icon_size::{tiles_cell, CellSize, TILES_ICON};
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
 use crate::locations::Page;
 use crate::places::Places;
+use crate::text_size::TextSize;
 use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
-use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
+use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
-use super::place_menus::{attach_place_menu, PlaceMenu};
+use super::place_menus::{popup_place_menu, PlaceMenu};
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
 
-/// The glyph before a section title.
-const SECTION_GLYPH: i32 = 14;
-/// The folder art of a Quick access card (`folderIcon(43)`).
-const QUICK_CARD_ART: i32 = 43;
-/// The icon of a drive, device or saved network location's card.
-const DRIVE_CARD_ICON: i32 = 46;
-/// Pixels between a card's picture and its texts.
-const CARD_ICON_GAP: i32 = 15;
-
-/// The file system attributes a drive card reads.
+/// The file system attributes a drive tile reads.
 const CAPACITY_ATTRIBUTES: &str = "filesystem::size,filesystem::free";
+
+/// Pixels between a tile's icon and its lines, as in the Tiles view.
+const TILE_ICON_GAP: i32 = 10;
+/// A tile's padding and margin across (8 and 2 on each side) and down
+/// (8 and 1 on each side), as `gridview.files.tiles > child` has them.
+const TILE_CHROME: (i32, i32) = (20, 18);
+/// The chevron of a group header.
+const CHEVRON: i32 = 16;
+/// Most tiles a row of a group holds; the pane's width decides.
+const MOST_TILES_PER_ROW: u32 = 32;
+/// The class This PC's page carries, for its tighter padding.
+const THIS_PC_CLASS: &str = "this-pc";
 
 /// How full a file system is, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +85,7 @@ impl Capacity {
         self.used_share() >= NEARLY_FULL
     }
 
-    /// "N free of M", as the drive cards of app.js say it.
+    /// "N free of M", as Windows 11 says it under a drive.
     fn text(self) -> String {
         let free = format::pretty_bytes(self.free);
         let size = format::pretty_bytes(self.size);
@@ -84,92 +98,24 @@ fn label(text: &str, css_class: &str) -> gtk::Label {
         .label(text)
         .xalign(0.0)
         .ellipsize(gtk::pango::EllipsizeMode::End)
+        .single_line_mode(true)
         .css_classes([css_class])
         .build()
 }
 
-/// A section heading: a glyph and a bold title.
-fn section_title(text: &str, glyph: Icon) -> gtk::Box {
-    let title = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    title.add_css_class("section-title");
-    title.append(&icons::image(glyph, SECTION_GLYPH));
-    title.append(&gtk::Label::new(Some(text)));
-    title
-}
-
-/// A card button that opens `uri`.
-fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> gtk::Button {
-    let card = gtk::Button::builder()
-        .child(content)
-        .css_classes([css_class])
-        .action_name(WindowAction::GoTo.detailed_name())
-        .action_target(&uri.to_variant())
-        .build();
-    gestures::open_folder_on_middle_click(&card, uri);
-    card
-}
-
-/// A card's name above `subtitle`.
-fn card_texts_with(name: &str, subtitle: &gtk::Label) -> gtk::Box {
-    let texts = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    texts.set_hexpand(true);
-    texts.set_valign(gtk::Align::Center);
-    texts.add_css_class("drive-info");
-    texts.append(&label(name, "card-name"));
-    texts.append(subtitle);
-    texts
-}
-
-/// A card's name above a subtitle that ends in "…" when it is too long.
-fn card_texts(name: &str, subtitle: &str) -> gtk::Box {
-    card_texts_with(name, &label(subtitle, "card-sub"))
-}
-
-fn quick_card(place: &Place) -> gtk::Button {
-    let network = is_server_location(&place.uri);
-    let (art, subtitle) = if network {
-        (Art::SHARE, ox_core::i18n::gettext_static("Network folder"))
-    } else {
-        (Art::Folder, ox_core::i18n::gettext_static("Stored on this PC"))
-    };
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&ArtImage::new(art, QUICK_CARD_ART));
-    // "Stored on this PC" is never cut short: in a narrow card it runs
-    // into the padding, as `.quick-card .card-sub` lets it.
-    let whole_subtitle = gtk::Label::builder()
-        .label(subtitle)
-        .xalign(0.0)
-        .css_classes(["card-sub"])
-        .build();
-    content.append(&card_texts_with(&place.label, &whole_subtitle));
-    location_card("quick-card", &place.uri, &content)
-}
-
-fn quick_access(body: &gtk::Box, places: &Places) {
-    body.append(&section_title(
-        ox_core::i18n::gettext_static("Quick access"),
-        Icon::Pin,
-    ));
-    let cards = card_grid(QUICK_GRID);
-    for place in &places.quick_access {
-        cards.append(&quick_card(place));
-    }
-    body.append(&cards);
-}
-
 /// Adds a bar under `texts` once GIO has measured the file system at
 /// `uri`, and "N free of M" as a line under it `with_text`, else as the
-/// bar's tooltip. Never blocks: the card or row is drawn first.
+/// bar's tooltip. Never blocks: the tile or row is drawn first.
 pub(super) fn show_capacity(texts: &gtk::Box, uri: &str, with_text: bool) {
     let file = gio::File::for_uri(uri);
-    // Held weakly until GIO answers, so measuring never keeps a card that
+    // Held weakly until GIO answers, so measuring never keeps a tile that
     // was replaced meanwhile.
     let texts = texts.downgrade();
     glib::spawn_future_local(async move {
         let Some(capacity) = measure_capacity(&file).await else {
             return;
         };
-        // A card replaced while GIO measured shows nothing.
+        // A tile replaced while GIO measured shows nothing.
         let Some(texts) = texts.upgrade() else {
             return;
         };
@@ -207,44 +153,146 @@ fn capacity_bar(capacity: Capacity) -> gtk::ProgressBar {
     bar
 }
 
-/// A drive card: Local Disk, a drive, a device, or a volume to connect.
-fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
+/// The groups of This PC, in Windows 11's order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Group {
+    /// Local Disk, drives, devices and volumes.
+    DevicesAndDrives,
+    /// The saved network locations.
+    NetworkLocations,
+}
+
+impl Group {
+    fn title(self) -> &'static str {
+        match self {
+            Group::DevicesAndDrives => ox_core::i18n::gettext_static("Devices and drives"),
+            Group::NetworkLocations => ox_core::i18n::gettext_static("Network locations"),
+        }
+    }
+
+    /// The class the page carries while the group is collapsed, so a
+    /// collapsed group stays collapsed when This PC is drawn again.
+    fn collapsed_class(self) -> &'static str {
+        match self {
+            Group::DevicesAndDrives => "drives-collapsed",
+            Group::NetworkLocations => "network-collapsed",
+        }
+    }
+
+    /// The class of the group's header, which finds it again after a
+    /// redraw.
+    fn header_class(self) -> &'static str {
+        match self {
+            Group::DevicesAndDrives => "drives-header",
+            Group::NetworkLocations => "network-header",
+        }
+    }
+
+    const ALL: [Group; 2] = [Group::DevicesAndDrives, Group::NetworkLocations];
+}
+
+/// What opening a tile does: an action and its target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Opening {
+    action: WindowAction,
+    target: String,
+}
+
+/// One tile of This PC and what it does.
+struct Tile {
+    child: gtk::FlowBoxChild,
+    /// Double-click and Enter.
+    open: Opening,
+    /// The right-click menu.
+    menu: PlaceMenu,
+    /// The location Alt+Enter shows the Properties of, if it can.
+    properties: Option<String>,
+}
+
+impl Tile {
+    /// Runs `opening` from the tile.
+    fn open(&self) {
+        let target = self.open.target.to_variant();
+        self.open.action.activate_from(&self.child, Some(&target));
+    }
+
+    /// Opens the tile's menu at `x`, `y` in the tile.
+    fn popup_menu(&self, x: f64, y: f64) {
+        popup_place_menu(&self.menu, &self.child, x, y);
+    }
+}
+
+/// An empty tile showing `icon` left of `name`, at the Tiles view's size,
+/// and the box of lines beside the icon, for what the tile says under the
+/// name.
+///
+/// The tile is named `key`, the location or volume it opens, which finds
+/// it again after a redraw ([`Kept`]).
+fn tile_frame(
+    icon: &impl IsA<gtk::Widget>,
+    name: &str,
+    key: &str,
+    cell: CellSize,
+) -> (gtk::FlowBoxChild, gtk::Box) {
+    let lines = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    lines.set_valign(gtk::Align::Center);
+    lines.set_hexpand(true);
+    lines.add_css_class("tile-lines");
+    lines.append(&label(name, "tile-name"));
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, TILE_ICON_GAP);
+    icon.set_valign(gtk::Align::Center);
+    content.append(icon);
+    content.append(&lines);
+    content.set_size_request(cell.width - TILE_CHROME.0, cell.height - TILE_CHROME.1);
+    let child = gtk::FlowBoxChild::builder().child(&content).name(key).build();
+    child.update_property(&[gtk::accessible::Property::Label(name)]);
+    (child, lines)
+}
+
+/// A drive's tile: Local Disk, a drive, a device, or a volume to connect.
+fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
     let glyph = match row.kind {
         VolumeKind::Device => Icon::Phone,
         VolumeKind::Drive => Icon::HardDrive,
     };
-    let subtitle = match (&row.state, row.kind) {
-        (VolumeState::Mounted { .. }, VolumeKind::Device) => {
-            ox_core::i18n::gettext_static("Connected device").to_owned()
-        }
-        (VolumeState::Mounted { uri, .. }, VolumeKind::Drive) => locations.display_location(uri),
-        (VolumeState::Mountable { .. }, _) => ox_core::i18n::gettext_static("Click to connect").to_owned(),
+    let key = match &row.state {
+        VolumeState::Mounted { uri, .. } => uri,
+        VolumeState::Mountable { id } => id,
     };
-    let texts = card_texts(&row.label, &subtitle);
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::image(glyph, DRIVE_CARD_ICON));
-    content.append(&texts);
+    let (child, lines) = tile_frame(&icons::image(glyph, TILES_ICON), &row.label, key, cell);
     match &row.state {
         VolumeState::Mounted { uri, controls } => {
-            show_capacity(&texts, uri, true);
-            let card = location_card("drive-card", uri, &content);
-            let menu = PlaceMenu::DriveCard {
-                uri: uri.clone(),
-                kind: row.kind,
-                controls: *controls,
-            };
-            // Local Disk and mounts the system keeps have no menu.
-            if !menu.entries(None).is_empty() {
-                attach_place_menu(&card, menu);
+            show_capacity(&lines, uri, true);
+            gestures::open_folder_on_middle_click(&child, uri);
+            Tile {
+                child,
+                open: Opening {
+                    action: WindowAction::GoTo,
+                    target: uri.clone(),
+                },
+                menu: PlaceMenu::Drive {
+                    uri: uri.clone(),
+                    kind: row.kind,
+                    controls: *controls,
+                },
+                properties: Some(uri.clone()),
             }
-            card
         }
-        VolumeState::Mountable { id } => gtk::Button::builder()
-            .child(&content)
-            .css_classes(["drive-card"])
-            .action_name(WindowAction::MountVolume.detailed_name())
-            .action_target(&id.to_variant())
-            .build(),
+        VolumeState::Mountable { id } => {
+            lines.append(&label(
+                ox_core::i18n::gettext_static("Click to connect"),
+                "card-sub",
+            ));
+            Tile {
+                child,
+                open: Opening {
+                    action: WindowAction::MountVolume,
+                    target: id.clone(),
+                },
+                menu: PlaceMenu::Volume { id: id.clone() },
+                properties: None,
+            }
+        }
     }
 }
 
@@ -259,93 +307,47 @@ fn local_disk() -> VolumeRow {
     }
 }
 
-fn devices_and_drives(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title(
-        ox_core::i18n::gettext_static("Devices and drives"),
-        Icon::HardDrive,
-    ));
-    let cards = card_grid(DRIVE_GRID);
-    let drives = std::iter::once(local_disk()).chain(places.drives.iter().cloned());
-    for row in drives {
-        cards.append(&drive_card(&row, locations));
-    }
-    body.append(&cards);
-}
-
-/// A saved share's card, as Windows 11 draws a mapped drive in This PC:
+/// A saved share's tile, as Windows 11 draws a mapped drive in This PC:
 /// its name with its server and letter, and, while it is connected, how
-/// full it is; whether it is mounted or connects on open, as before. Its
-/// address is the card's tooltip.
-fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::Button {
-    let bookmark = &share.bookmark;
-    let address = locations.display_location(&bookmark.uri);
-    let texts = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    texts.set_hexpand(true);
-    texts.set_valign(gtk::Align::Center);
-    texts.add_css_class("drive-info");
-    texts.append(&label(
-        &share_card_name(&bookmark.label, &bookmark.uri),
-        "card-name",
-    ));
-    texts.append(&share_state(share));
+/// full it is, else that it connects on open. Its address is its tooltip.
+fn share_tile(share: &SavedShare, locations: &LocationContext, cell: CellSize) -> Tile {
+    let uri = &share.bookmark.uri;
+    let art = ArtImage::new(saved_share_art(share), TILES_ICON);
+    let name = share_card_name(&share.bookmark.label, uri);
+    let (child, lines) = tile_frame(&art, &name, uri, cell);
+    child.set_tooltip_text(Some(&locations.display_location(uri)));
     // Measuring never mounts: only a share that is mounted is asked.
     if share.is_connected {
-        show_capacity(&texts, &bookmark.uri, true);
+        show_capacity(&lines, uri, true);
+    } else {
+        lines.append(&label(
+            ox_core::i18n::gettext_static("Connect on open"),
+            "card-sub",
+        ));
     }
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&ArtImage::new(saved_share_art(share), DRIVE_CARD_ICON));
-    content.append(&texts);
-    let card = location_card("drive-card", &bookmark.uri, &content);
-    card.set_tooltip_text(Some(&address));
-    let menu = PlaceMenu::SavedShare {
-        uri: bookmark.uri.clone(),
-    };
-    attach_place_menu(&card, menu);
-    card
+    gestures::open_folder_on_middle_click(&child, uri);
+    Tile {
+        child,
+        open: Opening {
+            action: WindowAction::GoTo,
+            target: uri.clone(),
+        },
+        menu: PlaceMenu::SavedShare { uri: uri.clone() },
+        properties: share.is_connected.then(|| uri.clone()),
+    }
 }
 
 /// A saved share's art: the share, or the drive its label maps it to, on
 /// the network bar, crossed out while it is not mounted. The Network list
-/// counts every saved location as a share, so the card and the sidebar row
+/// counts every saved location as a share, so the tile and the sidebar row
 /// show the same.
 fn saved_share_art(share: &SavedShare) -> Art {
     let connection = Connection::from_mounted(share.is_connected);
     Art::for_network_location(NetworkKind::Share, &share.bookmark.label, connection)
 }
 
-/// A saved share's state line: a status dot, marked offline while the
-/// share is not mounted, and what opening it does.
-fn share_state(share: &SavedShare) -> gtk::Box {
-    let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    dot.add_css_class("status-dot");
-    dot.set_valign(gtk::Align::Center);
-    if !share.is_connected {
-        dot.add_css_class("offline");
-    }
-    let state_text = if share.is_connected {
-        ox_core::i18n::gettext_static("Mounted in this session")
-    } else {
-        ox_core::i18n::gettext_static("Connect on open")
-    };
-    let state = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-    state.add_css_class("connected");
-    state.append(&dot);
-    state.append(&gtk::Label::new(Some(state_text)));
-    state
-}
-
-/// "Map network drive" at the right of the Network locations heading.
-fn map_network_button() -> gtk::Button {
-    gtk::Button::builder()
-        .label(ox_core::i18n::gettext("Map network drive"))
-        .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .hexpand(true)
-        .halign(gtk::Align::End)
-        .build()
-}
-
-/// A saved share's card name, as Windows 11 names a mapped drive in This
-/// PC: its label, then its server, before the drive letter the label ends
+/// A saved share's name, as Windows 11 names a mapped drive in This PC:
+/// its label, then its server, before the drive letter the label ends
 /// with, if any, such as `Backup (\\fileserver) (S:)`. An SMB server is
 /// written `\\server`, any other by its host name; a label that already
 /// names the server is kept as it is.
@@ -380,81 +382,517 @@ fn is_drive_letter(text: &str) -> bool {
     )
 }
 
-/// The saved network locations with their state (`shares()` in app.js).
-fn saved_shares(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    let title = section_title(
-        ox_core::i18n::gettext_static("Network locations"),
-        Icon::Organization,
-    );
-    title.append(&map_network_button());
-    body.append(&title);
-    let cards = card_grid(DRIVE_GRID);
-    for share in &places.saved_shares {
-        cards.append(&saved_share_card(share, locations));
-    }
-    body.append(&cards);
-    if places.saved_shares.is_empty() {
-        let empty = gtk::Label::builder()
-            .label(ox_core::i18n::gettext(
-                "No network locations saved. Use “Map network drive” to connect to a share and add it to the \
-                 sidebar.",
-            ))
-            .xalign(0.0)
-            .wrap(true)
-            .css_classes(["notice"])
-            .build();
-        body.append(&empty);
+/// "Devices and drives (3)": a group's title and how many tiles it holds,
+/// as the details view heads its groups.
+fn header_text(title: &str, count: usize) -> String {
+    ox_core::i18n::format_message(
+        "{title} ({count})",
+        &[
+            ("title", title),
+            (
+                "count",
+                &format::group_digits(u64::try_from(count).unwrap_or(u64::MAX)),
+            ),
+        ],
+    )
+}
+
+/// A group's header: a chevron, the title and count, and a line to the
+/// right edge. Clicking it, Enter or Space collapses or expands `tiles`;
+/// with the keyboard on it, Left collapses them and Right expands them, as
+/// in Explorer ([`connect_header_keys`]).
+fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBox) -> gtk::Button {
+    let collapsed = page.has_css_class(group.collapsed_class());
+    let chevron_of = |collapsed: bool| {
+        if collapsed {
+            Icon::ChevronRight16
+        } else {
+            Icon::ChevronDown16
+        }
+    };
+    let chevron = icons::image(chevron_of(collapsed), CHEVRON);
+    let title = gtk::Label::builder()
+        .label(header_text(group.title(), count))
+        .xalign(0.0)
+        .css_classes(["group-title"])
+        .build();
+    let line = gtk::Separator::builder()
+        .hexpand(true)
+        .valign(gtk::Align::Center)
+        .build();
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    row.append(&chevron);
+    row.append(&title);
+    row.append(&line);
+    // Not a Tab stop while its group is expanded, as in Explorer: Tab goes
+    // to the tiles, and the arrows reach the header from its group's first
+    // row ([`focus_header`]). A collapsed group's header is one, so the
+    // keyboard can always come back to a page whose groups are collapsed.
+    let header = gtk::Button::builder()
+        .child(&row)
+        .focusable(collapsed)
+        .css_classes(["group-header", group.header_class()])
+        .build();
+    header.update_state(&[gtk::accessible::State::Expanded(Some(!collapsed))]);
+    tiles.set_visible(!collapsed);
+    header.connect_clicked(glib::clone!(
+        #[weak]
+        page,
+        #[weak]
+        tiles,
+        move |header| {
+            let collapse = tiles.is_visible();
+            tiles.set_visible(!collapse);
+            if collapse {
+                page.add_css_class(group.collapsed_class());
+            } else {
+                page.remove_css_class(group.collapsed_class());
+            }
+            icons::set_icon(&chevron, chevron_of(collapse), CHEVRON);
+            if collapse {
+                header.set_focusable(true);
+            } else if !header.has_focus() {
+                header.set_focusable(false);
+            }
+            header.update_state(&[gtk::accessible::State::Expanded(Some(!collapse))]);
+        }
+    ));
+    connect_header_keys(&header, tiles);
+    header
+}
+
+/// Gives `header` the keyboard. An expanded group's header is no Tab
+/// stop, so it takes focus only while it has it.
+fn focus_header(header: &gtk::Button) {
+    header.set_focusable(true);
+    header.grab_focus();
+}
+
+/// Selects `child` and gives it the keyboard, as the arrows do. The box
+/// moves its own cursor, which the arrows and Enter start from, only when
+/// the tile takes focus through its focus chain; a plain `grab_focus`
+/// would leave the cursor behind.
+fn focus_tile(child: &gtk::FlowBoxChild) {
+    child.child_focus(gtk::DirectionType::TabForward);
+}
+
+/// The first or last tile of `flow`.
+fn end_tile(flow: &gtk::FlowBox, last: bool) -> Option<gtk::FlowBoxChild> {
+    let count = super::widget_tree::children(flow).count();
+    let index = if last { count.checked_sub(1)? } else { 0 };
+    flow.child_at_index(i32::try_from(index).ok()?)
+}
+
+/// The header after `flow`, of the next group.
+fn next_header(flow: &gtk::FlowBox) -> Option<gtk::Button> {
+    flow.next_sibling().and_downcast::<gtk::Button>()
+}
+
+/// Left collapses the group and Right expands it; Down goes to its first
+/// tile, or past a collapsed group to the next header; Up goes to the
+/// previous group's last tile, or its header while it is collapsed.
+fn connect_header_keys(header: &gtk::Button, tiles: &gtk::FlowBox) {
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        header,
+        #[weak]
+        tiles,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, modifiers| {
+            if !modifiers.is_empty() {
+                return glib::Propagation::Proceed;
+            }
+            let expanded = tiles.is_visible();
+            match key {
+                gtk::gdk::Key::Left if expanded => header.emit_clicked(),
+                gtk::gdk::Key::Right if !expanded => header.emit_clicked(),
+                gtk::gdk::Key::Left | gtk::gdk::Key::Right => {}
+                gtk::gdk::Key::Down => {
+                    if let Some(first) = end_tile(&tiles, false).filter(|_| expanded) {
+                        focus_tile(&first);
+                    } else if let Some(next) = next_header(&tiles) {
+                        focus_header(&next);
+                    }
+                }
+                gtk::gdk::Key::Up => {
+                    let previous = header.prev_sibling().and_downcast::<gtk::FlowBox>();
+                    if let Some(previous) = previous {
+                        match end_tile(&previous, true).filter(|_| previous.is_visible()) {
+                            Some(last) => focus_tile(&last),
+                            None => {
+                                if let Some(above) = previous.prev_sibling().and_downcast::<gtk::Button>() {
+                                    focus_header(&above);
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => return glib::Propagation::Proceed,
+            }
+            glib::Propagation::Stop
+        }
+    ));
+    header.add_controller(keys);
+    // Out of the Tab order again once the keyboard leaves it, unless its
+    // group is collapsed.
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_leave(glib::clone!(
+        #[weak]
+        tiles,
+        move |focus| {
+            if let Some(header) = focus.widget() {
+                header.set_focusable(!tiles.is_visible());
+            }
+        }
+    ));
+    header.add_controller(focus);
+}
+
+/// Up from a group's first row goes to its header and Down from its last
+/// row to the next group's header, as in Explorer; the box moves the
+/// keyboard everywhere else.
+fn connect_edge_keys(flow: &gtk::FlowBox) {
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        flow,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, modifiers| {
+            let up = match key {
+                gtk::gdk::Key::Up => true,
+                gtk::gdk::Key::Down => false,
+                _ => return glib::Propagation::Proceed,
+            };
+            if !modifiers.is_empty() {
+                return glib::Propagation::Proceed;
+            }
+            let Some(focused) = flow.focus_child() else {
+                return glib::Propagation::Proceed;
+            };
+            let Some(end) = end_tile(&flow, !up) else {
+                return glib::Propagation::Proceed;
+            };
+            let row_of = |tile: &gtk::Widget| tile.compute_bounds(&flow).map(|bounds| bounds.y());
+            if row_of(&focused) != row_of(end.upcast_ref()) {
+                return glib::Propagation::Proceed;
+            }
+            let header = if up {
+                flow.prev_sibling().and_downcast::<gtk::Button>()
+            } else {
+                next_header(&flow)
+            };
+            match header {
+                Some(header) => {
+                    focus_header(&header);
+                    glib::Propagation::Stop
+                }
+                None => glib::Propagation::Proceed,
+            }
+        }
+    ));
+    flow.add_controller(keys);
+}
+
+/// The tile `child` is, among `tiles`.
+fn tile_of<'a>(tiles: &'a [Tile], child: &gtk::FlowBoxChild) -> Option<&'a Tile> {
+    tiles.iter().find(|tile| tile.child == *child)
+}
+
+/// The selected tile of `flow`, among `tiles`.
+fn selected_tile<'a>(flow: &gtk::FlowBox, tiles: &'a [Tile]) -> Option<&'a Tile> {
+    let child = flow.selected_children().into_iter().next()?;
+    tile_of(tiles, &child)
+}
+
+/// Gives every tile its right-click menu, which selects it first, as
+/// Explorer does.
+fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
+    for tile in tiles.iter() {
+        let right_click = gtk::GestureClick::new();
+        right_click.set_button(gtk::gdk::BUTTON_SECONDARY);
+        right_click.connect_pressed(glib::clone!(
+            #[weak]
+            flow,
+            #[weak]
+            tiles,
+            move |gesture, _, x, y| {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                let Some(child) = gesture.widget().and_downcast::<gtk::FlowBoxChild>() else {
+                    return;
+                };
+                flow.select_child(&child);
+                focus_tile(&child);
+                if let Some(tile) = tile_of(&tiles, &child) {
+                    tile.popup_menu(x, y);
+                }
+            }
+        ));
+        tile.child.add_controller(right_click);
     }
 }
 
-fn page_header(body: &gtk::Box, page: Page) {
-    let title = gtk::Label::builder()
-        .label(page.title())
-        .xalign(0.0)
-        .css_classes(["page-title"])
+/// The Menu key and Shift+F10 open the selected tile's menu under it;
+/// Alt+Enter opens its Properties.
+fn connect_keys(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
+    let shortcuts = gtk::ShortcutController::new();
+    let menu = gtk::CallbackAction::new(glib::clone!(
+        #[strong]
+        tiles,
+        move |flow, _| {
+            let Some(flow) = flow.downcast_ref::<gtk::FlowBox>() else {
+                return glib::Propagation::Proceed;
+            };
+            let Some(tile) = selected_tile(flow, &tiles) else {
+                return glib::Propagation::Proceed;
+            };
+            let width = f64::from(tile.child.width());
+            let height = f64::from(tile.child.height());
+            tile.popup_menu(width / 2.0, height / 2.0);
+            glib::Propagation::Stop
+        }
+    ));
+    for key in [MENU_KEY, CLASSIC_MENU_KEY] {
+        let trigger = gtk::ShortcutTrigger::parse_string(key);
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(menu.clone())));
+    }
+    let properties = gtk::CallbackAction::new(glib::clone!(
+        #[strong]
+        tiles,
+        move |flow, _| {
+            let Some(flow) = flow.downcast_ref::<gtk::FlowBox>() else {
+                return glib::Propagation::Proceed;
+            };
+            let Some((tile, uri)) =
+                selected_tile(flow, &tiles).and_then(|tile| Some((tile, tile.properties.as_ref()?)))
+            else {
+                return glib::Propagation::Proceed;
+            };
+            WindowAction::PropertiesOf.activate_from(&tile.child, Some(&uri.to_variant()));
+            glib::Propagation::Stop
+        }
+    ));
+    for key in ["<Alt>Return", "<Alt>KP_Enter"] {
+        let trigger = gtk::ShortcutTrigger::parse_string(key);
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(properties.clone())));
+    }
+    flow.add_controller(shortcuts);
+}
+
+/// Adds `group`'s header and its `tiles` to `page`; a group without tiles
+/// is left out, as Windows 11 leaves out an empty group.
+fn tile_group(page: &gtk::Box, group: Group, tiles: Vec<Tile>) {
+    if tiles.is_empty() {
+        return;
+    }
+    let flow = gtk::FlowBox::builder()
+        .selection_mode(gtk::SelectionMode::Single)
+        .activate_on_single_click(false)
+        .homogeneous(true)
+        .min_children_per_line(1)
+        .max_children_per_line(MOST_TILES_PER_ROW)
+        .column_spacing(0)
+        .row_spacing(0)
+        .valign(gtk::Align::Start)
+        .css_classes(["drive-tiles"])
         .build();
-    let subtitle = gtk::Label::builder()
-        .label(page.subtitle())
-        .xalign(0.0)
-        .wrap(true)
-        .css_classes(["page-subtitle"])
-        .build();
-    body.append(&title);
-    body.append(&subtitle);
+    flow.update_property(&[gtk::accessible::Property::Label(group.title())]);
+    page.append(&group_header(page, group, tiles.len(), &flow));
+    page.append(&flow);
+    for tile in &tiles {
+        flow.append(&tile.child);
+    }
+    let tiles = Rc::new(tiles);
+    // The tiles are held by the box's own handlers; their gestures hold
+    // them weakly, so no tile keeps itself alive.
+    flow.connect_child_activated(glib::clone!(
+        #[strong]
+        tiles,
+        move |_, child| {
+            if let Some(tile) = tile_of(&tiles, child) {
+                tile.open();
+            }
+        }
+    ));
+    connect_menus(&flow, &tiles);
+    connect_keys(&flow, &tiles);
+    connect_edge_keys(&flow);
+}
+
+/// The tile boxes `page` shows, one per group.
+fn tile_boxes(page: &gtk::Box) -> impl Iterator<Item = gtk::FlowBox> {
+    super::widget_tree::children(page).filter_map(|child| child.downcast::<gtk::FlowBox>().ok())
+}
+
+/// One tile is selected on the page, as in one item view: selecting a tile
+/// in one group clears the others.
+fn select_one_tile(page: &gtk::Box) {
+    for flow in tile_boxes(page) {
+        flow.connect_selected_children_changed(glib::clone!(
+            #[weak]
+            page,
+            move |flow| {
+                if flow.selected_children().is_empty() {
+                    return;
+                }
+                for other in tile_boxes(&page).filter(|other| other != flow) {
+                    other.unselect_all();
+                }
+            }
+        ));
+    }
+}
+
+/// Where the keyboard was on This PC.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum KeptFocus {
+    /// On the tile with this key.
+    Tile(String),
+    /// On a group's header.
+    Header(Group),
+}
+
+/// The selected tile and the keyboard's place on This PC, read before it
+/// is drawn again, as a drive coming or going does, and given back
+/// afterwards.
+#[derive(Debug, Default)]
+struct Kept {
+    selected: Option<String>,
+    focus: Option<KeptFocus>,
+}
+
+impl Kept {
+    fn read(page: &gtk::Box) -> Self {
+        let selected = tile_boxes(page)
+            .flat_map(|flow| flow.selected_children())
+            .map(|child| child.widget_name().to_string())
+            .next();
+        let focused = page
+            .root()
+            .and_then(|root| root.focus())
+            .filter(|focused| focused.is_ancestor(page));
+        let focus = focused.and_then(|focused| {
+            if let Some(tile) = focused.ancestor(gtk::FlowBoxChild::static_type()) {
+                return Some(KeptFocus::Tile(tile.widget_name().to_string()));
+            }
+            let header = std::iter::successors(Some(focused), WidgetExt::parent)
+                .find(|widget| widget.has_css_class("group-header"))?;
+            let group = Group::ALL
+                .into_iter()
+                .find(|group| header.has_css_class(group.header_class()))?;
+            Some(KeptFocus::Header(group))
+        });
+        Self { selected, focus }
+    }
+
+    /// The tile named `key` and its box, if the page still shows it.
+    fn tile(page: &gtk::Box, key: &str) -> Option<(gtk::FlowBox, gtk::FlowBoxChild)> {
+        tile_boxes(page).find_map(|flow| {
+            let child = super::widget_tree::children(&flow)
+                .filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
+                .find(|child| child.widget_name() == key)?;
+            Some((flow, child))
+        })
+    }
+
+    fn restore(&self, page: &gtk::Box) {
+        if let Some((flow, child)) = self.selected.as_deref().and_then(|key| Self::tile(page, key)) {
+            flow.select_child(&child);
+        }
+        match &self.focus {
+            Some(KeptFocus::Tile(key)) => {
+                if let Some((_, child)) = Self::tile(page, key) {
+                    focus_tile(&child);
+                }
+            }
+            Some(KeptFocus::Header(group)) => {
+                let header = super::widget_tree::children(page)
+                    .find(|child| child.has_css_class(group.header_class()))
+                    .and_downcast::<gtk::Button>();
+                if let Some(header) = header {
+                    focus_header(&header);
+                }
+            }
+            None => {}
+        }
+    }
+}
+
+fn this_pc(page: &gtk::Box, places: &Places, locations: &LocationContext, text_size: TextSize) {
+    let cell = tiles_cell(text_size);
+    let drives = std::iter::once(local_disk()).chain(places.drives.iter().cloned());
+    let drive_tiles = drives.map(|row| drive_tile(&row, cell)).collect();
+    tile_group(page, Group::DevicesAndDrives, drive_tiles);
+    let share_tiles = places.saved_shares.iter();
+    let share_tiles = share_tiles
+        .map(|share| share_tile(share, locations, cell))
+        .collect();
+    tile_group(page, Group::NetworkLocations, share_tiles);
 }
 
 /// Draws `page` into `body`, replacing what it showed.
-pub(super) fn render(body: &gtk::Box, page: Page, places: &Places, locations: &LocationContext) {
+pub(super) fn render(
+    body: &gtk::Box,
+    page: Page,
+    places: &Places,
+    locations: &LocationContext,
+    text_size: TextSize,
+) {
+    // A redraw keeps the selected tile and the keyboard's place.
+    let kept = Kept::read(body);
     remove_children(body);
     match page {
         Page::ThisPc => {
-            page_header(body, page);
-            quick_access(body, places);
-            devices_and_drives(body, places, locations);
-            saved_shares(body, places, locations);
+            body.add_css_class(THIS_PC_CLASS);
+            this_pc(body, places, locations, text_size);
+            select_one_tile(body);
+            kept.restore(body);
         }
         // Network is listed like a folder; the Settings page replaces the
         // whole browsing area, landing pages included
         // (`super::settings_tab`). Neither draws anything here.
-        Page::Network | Page::Settings => {}
+        Page::Network | Page::Settings => body.remove_css_class(THIS_PC_CLASS),
     }
 }
 
-/// The section titles `body` shows, for tests.
+/// The group titles `body` shows, without their counts, for tests.
 #[cfg(test)]
 pub(super) fn section_titles(body: &gtk::Box) -> Vec<String> {
-    super::widget_tree::children(body)
-        .filter(|child| child.has_css_class("section-title"))
-        .filter_map(|title| section_title_text(&title))
+    group_headers(body)
+        .iter()
+        .filter_map(|header| {
+            let row = header.child()?;
+            let title = row.first_child()?.next_sibling().and_downcast::<gtk::Label>()?;
+            let text = title.text();
+            let (title, _count) = text.rsplit_once(" (")?;
+            Some(title.to_owned())
+        })
         .collect()
 }
 
-/// The text of a [`section_title`]: its glyph, then its label.
+/// The group headers `body` shows, for tests.
 #[cfg(test)]
-fn section_title_text(title: &gtk::Widget) -> Option<String> {
-    let glyph = title.first_child()?;
-    let label = glyph.next_sibling().and_downcast::<gtk::Label>()?;
-    Some(label.text().to_string())
+pub(super) fn group_headers(body: &gtk::Box) -> Vec<gtk::Button> {
+    super::widget_tree::children(body)
+        .filter_map(|child| child.downcast::<gtk::Button>().ok())
+        .filter(|child| child.has_css_class("group-header"))
+        .collect()
+}
+
+/// The tiles of each group `body` shows, for tests.
+#[cfg(test)]
+pub(super) fn tile_groups(body: &gtk::Box) -> Vec<(gtk::FlowBox, Vec<gtk::FlowBoxChild>)> {
+    tile_boxes(body)
+        .map(|flow| {
+            let tiles = super::widget_tree::children(&flow)
+                .filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
+                .collect();
+            (flow, tiles)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -463,59 +901,51 @@ mod tests {
     use crate::test_support::harness::descendants;
     use crate::test_support::mounted_volume;
 
-    /// The texts of `card`, in order.
-    fn texts_of(card: &impl IsA<gtk::Widget>) -> Vec<String> {
-        let labels = descendants::<gtk::Label>(card);
+    /// The texts of `widget`, in order.
+    fn texts_of(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
+        let labels = descendants::<gtk::Label>(widget);
         labels.iter().map(|label| label.text().to_string()).collect()
     }
 
-    /// Local Disk comes first; a drive shows where it is mounted, a phone
-    /// "Connected device", and a volume "Click to connect", which mounts
-    /// it when clicked.
+    /// Local Disk comes first, then each drive and device by name; a
+    /// volume says "Click to connect" and mounts when opened.
     ///
     /// parity: HOME-003
     #[gtk::test]
-    fn drive_cards_say_where_each_drive_is_or_that_it_connects_on_click() {
-        let locations = LocationContext::default();
+    fn drive_tiles_name_each_drive_and_a_volume_connects_when_opened() {
         let volume = VolumeRow {
             label: "Backup".into(),
             kind: VolumeKind::Drive,
             state: VolumeState::Mountable { id: "uuid-1".into() },
         };
-        let places = Places {
-            quick_access: Vec::new(),
-            drives: vec![
-                mounted_volume("USB", "file:///media/u/USB", VolumeKind::Drive),
-                mounted_volume("Pixel 7", "mtp://[usb:001,010]/", VolumeKind::Device),
-                volume,
-            ],
-            saved_shares: Vec::new(),
-            network: Vec::new(),
-        };
-        let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let rows = [
+            local_disk(),
+            mounted_volume("USB", "file:///media/u/USB", VolumeKind::Drive),
+            mounted_volume("Pixel 7", "mtp://[usb:001,010]/", VolumeKind::Device),
+            volume,
+        ];
+        let cell = tiles_cell(TextSize::from_percent(100));
+        let tiles: Vec<Tile> = rows.iter().map(|row| drive_tile(row, cell)).collect();
 
-        devices_and_drives(&body, &places, &locations);
-
-        let cards = descendants::<gtk::Button>(&body);
-        let first_lines: Vec<Vec<String>> = cards.iter().map(|card| texts_of(card)[..2].to_vec()).collect();
+        let first_lines: Vec<Vec<String>> = tiles.iter().map(|tile| texts_of(&tile.child)).collect();
         assert_eq!(
             first_lines,
             [
-                ["Local Disk", "/"],
-                ["USB", "/media/u/USB"],
-                ["Pixel 7", "Connected device"],
-                ["Backup", "Click to connect"],
+                vec!["Local Disk"],
+                vec!["USB"],
+                vec!["Pixel 7"],
+                vec!["Backup", "Click to connect"],
             ]
         );
-        let mount = cards.last().expect("the volume's card");
+        let mount = tiles.last().expect("the volume's tile");
         assert_eq!(
-            mount.action_name().as_deref(),
-            Some(WindowAction::MountVolume.detailed_name().as_str())
+            mount.open,
+            Opening {
+                action: WindowAction::MountVolume,
+                target: "uuid-1".into()
+            }
         );
-        let target = mount
-            .action_target_value()
-            .and_then(|target| target.get::<String>());
-        assert_eq!(target.as_deref(), Some("uuid-1"));
+        assert_eq!(mount.properties, None);
     }
 
     #[test]

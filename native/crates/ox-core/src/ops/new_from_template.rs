@@ -150,7 +150,7 @@ pub async fn create_numbered_from_template(
 
 /// What `create` makes of the first of `base_name`'s numbered names
 /// ([`numbered_file_name`]) it does not find taken.
-fn first_free_name<Created>(
+pub(super) fn first_free_name<Created>(
     base_name: &str,
     mut create: impl FnMut(&str) -> Result<Created, OpsError>,
 ) -> Result<Created, OpsError> {
@@ -194,7 +194,7 @@ fn create_from_template_blocking(
 /// Creates the file `name` in the folder at `folder_uri` with what
 /// `contents` gives, which is asked for only once the name is checked and
 /// found free. Nothing is ever overwritten.
-fn create_file_blocking(
+pub(super) fn create_file_blocking(
     folder_uri: &str,
     name: &str,
     contents: impl FnOnce() -> Result<Vec<u8>, OpsError>,

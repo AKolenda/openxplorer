@@ -284,6 +284,24 @@ impl Shortfall {
     }
 }
 
+/// The same free-space rule for a payload the app already holds, rather
+/// than for items it was asked to copy: the refusal of writing `needed`
+/// bytes into `folder`, or `None` when they fit or its free space is
+/// unknown (XFER-028).
+///
+/// Pasting a picture from the clipboard writes bytes measured before the
+/// first one is written, so nothing has to be walked as a copy's tree is.
+/// `cancel` stops the query of a share that does not answer, so pressing
+/// Cancel ends the paste instead of waiting for the backend.
+pub(crate) fn payload_refusal(
+    folder: &dyn Node,
+    needed: u64,
+    cancel: Option<&Cancellation>,
+) -> Option<TransferError> {
+    let free = folder.filesystem(cancel)?.free?;
+    (needed > free).then(|| Shortfall { needed, free }.error(&folder.display_name()))
+}
+
 /// What the free-space check measured of the items a run writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct TreeTotals {

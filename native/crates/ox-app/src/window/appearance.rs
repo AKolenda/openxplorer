@@ -40,6 +40,8 @@ impl BrowserWindow {
         for pane in self.folder_panes() {
             pane.set_text_size(size);
         }
+        // This PC's tiles are as large as the Tiles view's.
+        self.render_landing();
     }
 
     /// Shows the chosen and drawn appearance on the Appearance button and
