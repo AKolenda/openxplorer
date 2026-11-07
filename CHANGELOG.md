@@ -1,3 +1,97 @@
+# 2.0.15 — 2026-11-07
+
+## Security
+* Previews made by the desktop's own thumbnailers, new in this release, run in bubblewrap, as GNOME's Files runs them: with no network, no session bus and no other processes, a private empty home and `/tmp`, and only the previewed item of your files, read-only. Where bubblewrap is missing or can't run, no outside thumbnailer is started.
+* **Continue**, offered when a copy, move or delete is denied, checks the location with the same refusals as the **Open as administrator** folder delete before it asks for a password: a folder other accounts can change, or one on a drive users can mount, is refused and the reason is shown. It uses the existing administrator paths and adds no new privilege mechanism. GVfs has no administrator Recycle Bin, so in a Recycle Bin delete Continue first asks whether to delete the item permanently.
+
+## What's Changed
+* fix(sidebar): Open Recent files from the navigation pane, with Open file location on its rows by @AKolenda in https://github.com/AKolenda/openxplorer/pull/273
+* feat(folder-options): Show Folder Options as its own compact modal window, as Windows 11 does by @addition-official in https://github.com/AKolenda/openxplorer/pull/269
+* feat(sidebar): Give This PC, Network and drives Windows 11's menus, and remove the Map network drive button by @addition-official in https://github.com/AKolenda/openxplorer/pull/268
+* fix(properties): Show a folder that is a mount point as a folder by @addition-official in https://github.com/AKolenda/openxplorer/pull/267
+* fix(views): Keep a folder's groups in Tiles and Content, with Windows 11's spacing by @addition-official in https://github.com/AKolenda/openxplorer/pull/266
+* fix(view): Draw the file list again after "Working on it..." hid it on a slow share by @AKolenda in https://github.com/AKolenda/openxplorer/pull/274
+* fix(recycle-bin): Replace the first of two items restored to one name with the second by @addition-official in https://github.com/AKolenda/openxplorer/pull/272
+* fix(properties): Give every Properties window one fixed size, with tabs in even rows by @addition-official in https://github.com/AKolenda/openxplorer/pull/271
+* feat(transfers): Continue as administrator when a copy, move or delete is denied, asked in the progress window by @addition-official in https://github.com/AKolenda/openxplorer/pull/263
+* fix(dialogs): Make windows opened inside a file dialog its children, as in Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/270
+* fix(look): Outline the file list's focused item only while the list has the keyboard, as Windows 11 does by @addition-official in https://github.com/AKolenda/openxplorer/pull/264
+* fix(menus): Stop a hovered submenu opening after the keyboard moves on, and keep Recent rows selected after Send to by @AKolenda in https://github.com/AKolenda/openxplorer/pull/261
+* fix(this-pc): Make Select all, Select none and Invert selection work on This PC's drives by @AKolenda in https://github.com/AKolenda/openxplorer/pull/259
+* fix(search): Keep search results in middle-clicked tabs, a tab's selection on results, and files whose text matches again by @AKolenda in https://github.com/AKolenda/openxplorer/pull/260
+* fix(address): Let the keyboard reach the « and the chevron before the crumbs by @AKolenda in https://github.com/AKolenda/openxplorer/pull/257
+* fix(network): Offer only free drive letters in Map network drive and keep a session mapping's letter by @AKolenda in https://github.com/AKolenda/openxplorer/pull/258
+* fix(transfers): Bring a replaced file back when its copy is cancelled, and say nothing about failures Skip all answered by @AKolenda in https://github.com/AKolenda/openxplorer/pull/252
+* fix(properties): Keep Read-only in step with a change made on the Security tab by @AKolenda in https://github.com/AKolenda/openxplorer/pull/256
+* fix(views): Show Tiles and Content sizes as the status bar does, and open folders in their own window from Open too by @AKolenda in https://github.com/AKolenda/openxplorer/pull/253
+* fix(recycle-bin): Ask about the second of two items restored to the same free name by @AKolenda in https://github.com/AKolenda/openxplorer/pull/254
+* fix(properties): Keep a template given to subfolders when only the folder changes later by @AKolenda in https://github.com/AKolenda/openxplorer/pull/255
+* feat(details-pane): Lay out the Details pane as Windows 11 does, with Share, Properties and photo details by @addition-official in https://github.com/AKolenda/openxplorer/pull/250
+* fix(thumbnails): Let thumbnailers outside /usr and on NixOS find their files in the sandbox by @AKolenda in https://github.com/AKolenda/openxplorer/pull/251
+* fix(dialogs): Draw the Save dialog's name selected only with the keyboard, and lay out Open and Save dialogs as Windows does by @addition-official in https://github.com/AKolenda/openxplorer/pull/247
+* fix(selection): Select a Details row clicked anywhere on it, as Windows 11's full-row select does by @addition-official in https://github.com/AKolenda/openxplorer/pull/249
+* feat(recycle-bin): Ask Replace or Skip Files when a restore meets a taken name by @addition-official in https://github.com/AKolenda/openxplorer/pull/248
+* feat(properties): Finish the Customize tab as Windows 11 lays it out by @addition-official in https://github.com/AKolenda/openxplorer/pull/246
+* feat(thumbnails): Make previews with the desktop's own thumbnailers by @clansty in https://github.com/AKolenda/openxplorer/pull/238
+* feat(this-pc): Show This PC as Windows 11 does (preview for the owner) by @AKolenda in https://github.com/AKolenda/openxplorer/pull/245
+* feat(clipboard): Paste a picture as a new file by @clansty in https://github.com/AKolenda/openxplorer/pull/240
+* fix(properties): Keep Windows' width and height for every item, however long its name by @addition-official in https://github.com/AKolenda/openxplorer/pull/243
+* feat(rename): Select the name Windows 11 selects when renaming, and treat shortcuts as Windows does by @addition-official in https://github.com/AKolenda/openxplorer/pull/242
+* feat(sidebar): Order and line up the navigation pane like Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/241
+* fix(thumbnails): Preview pictures whose MIME type no gdk-pixbuf loader declares by @clansty in https://github.com/AKolenda/openxplorer/pull/237
+* feat(clipboard): Copy the items' paths as text beside the file list by @clansty in https://github.com/AKolenda/openxplorer/pull/239
+* ci(workflows): Keep only the newest build's packages and run heavy checks only when started by hand by @AKolenda in https://github.com/AKolenda/openxplorer/pull/244
+* feat(terminal): Open in Terminal in kitty by @clansty in https://github.com/AKolenda/openxplorer/pull/236
+* fix(paste): Take pasted items into a folder opened through a symbolic link by @clansty in https://github.com/AKolenda/openxplorer/pull/235
+* feat(look): Name file types and lay out the Details pane as Windows 11 does by @AKolenda in https://github.com/AKolenda/openxplorer/pull/233
+* feat(look): Draw the title bar and tab strip like Windows 11's File Explorer by @AKolenda in https://github.com/AKolenda/openxplorer/pull/234
+* feat(menus): Round, space and fade in menus like Windows 11, with a bold Open and no shortcut text in the classic menu by @AKolenda in https://github.com/AKolenda/openxplorer/pull/232
+* feat(options): Lay out Folder Options like Windows 11, with Browse folders, Privacy, the View tree and a Search tab by @AKolenda in https://github.com/AKolenda/openxplorer/pull/231
+* feat(views): Add Windows 11's Tiles and Content views, with Ctrl+Shift+7 and 8 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/228
+* feat(network): Map network drive, Enter network credentials and Disconnect in Windows 11's words by @AKolenda in https://github.com/AKolenda/openxplorer/pull/230
+* feat(properties): Show several items' names, Read-only and Hidden, and Change Icon's icon grid, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/229
+* feat(look): Draw the file list's sort chevron, hover, selection and focus ring like Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/227
+* feat(dnd): Say "Move to Documents" while dragging, and start a rubber band beside a Details name, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/226
+* feat(address): Lay out the address bar like Windows 11: a chevron before the crumbs, « for long paths and every subfolder in the menus by @AKolenda in https://github.com/AKolenda/openxplorer/pull/225
+* feat(transfers): Ask about failed items in Windows 11's words, and say nothing afterwards about what was answered by @AKolenda in https://github.com/AKolenda/openxplorer/pull/224
+* fix(search): Keep a contents search's text matches when its folder changes, and fix the CI test flakes by @AKolenda in https://github.com/AKolenda/openxplorer/pull/222
+* feat(dnd): Copy, cut and drag up to 100,000 items, and never open a folder held under a drag, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/223
+* feat(search): Make search results a step in the tab's history, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/221
+* feat(rename): Refuse Windows' forbidden characters and offer "x (2)" for a taken name, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/212
+* feat(dnd): Show Windows' menu on a right-button drag and drop by @addition-official in https://github.com/AKolenda/openxplorer/pull/204
+* feat(look): Match Windows 11's density: 32 px rows, 48 px bars and 16 px icons, about 22 rows in a 900 px window by @AKolenda in https://github.com/AKolenda/openxplorer/pull/219
+* feat(network): List Network like Windows 11, its computers as items, with the info bar when discovery is off by @AKolenda in https://github.com/AKolenda/openxplorer/pull/220
+* feat(menus): Fly submenus out to the side on hover, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/217
+* feat(transfers): Ask Replace or Skip Files in the progress window, as in Windows by @addition-official in https://github.com/AKolenda/openxplorer/pull/205
+* feat(open-with): Choose apps like Windows 11: Current default, Suggested apps, More apps, Just once and Always by @AKolenda in https://github.com/AKolenda/openxplorer/pull/218
+* feat(properties): Show a drive's Properties as Windows 11 does, with used/free space and a ring, never counting its files by @AKolenda in https://github.com/AKolenda/openxplorer/pull/216
+* feat(recycle-bin): Empty and restore from the command bar, as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/213
+* feat(new-menu): List New as Windows 11 does and create every file in place by @AKolenda in https://github.com/AKolenda/openxplorer/pull/215
+* feat(keys): Make F3, Space, the address bar and the Back/Forward/Up buttons work as in Windows 11 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/210
+* feat(defaults): Start like Windows 11, with the Details pane closed and en-US dates as 9/13/2026 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/214
+* feat(menus): Add Send to to Show more options, as in Windows by @addition-official in https://github.com/AKolenda/openxplorer/pull/203
+* feat(status-bar): Read like Windows 11's status bar: item count, selection and the view toggles by @AKolenda in https://github.com/AKolenda/openxplorer/pull/211
+* feat(ops): Delete like Windows 11: no prompt for the Recycle Bin, Windows' Yes/No questions for permanent deletes by @AKolenda in https://github.com/AKolenda/openxplorer/pull/209
+* fix(transfers): Show compress and extract progress in the progress window by @addition-official in https://github.com/AKolenda/openxplorer/pull/202
+* feat(command-bar): Lay out "...", View and This PC as in Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/200
+* feat(properties): Add a Details tab to file Properties, as in Windows 11 by @addition-official in https://github.com/AKolenda/openxplorer/pull/206
+* chore(deps): bump rusqlite from 0.40.2 to 0.41.0 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/169
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.15_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.15-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.15-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.15-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.15-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.14...v2.0.15
+
 # 2.0.14 — 2026-11-05
 
 ## Security

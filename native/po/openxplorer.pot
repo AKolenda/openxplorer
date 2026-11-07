@@ -9752,6 +9752,10 @@ msgstr ""
 msgid "OpenXplorer contributors"
 msgstr ""
 
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "OpenXplorer now looks and works much more like Windows 11's File Explorer: its command bar, status bar, menus with side flyouts, title bar, address bar, navigation pane and row density follow Windows 11, with new Tiles and Content views and This PC shown as drive tiles. Show more options has Send to, a right-button drag asks whether to copy or move, and the progress window asks about replaced, failed and denied items, offering Continue as administrator when a copy, move or delete is denied. Properties, the Details pane, the Open and Save dialogs, Folder Options, Open with, Map network drive and the Recycle Bin are laid out as in Windows 11, previews come from the desktop's own thumbnailers, run in a sandbox, and Recent files opens from the navigation pane. The file list no longer stays blank after opening a folder on a slow share."
+msgstr ""
+
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "Preview build of OpenXplorer 2.0.0 under its own application ID."
 msgstr ""
