@@ -394,7 +394,8 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// appearances to Settings > Appearance; Show hidden files to View >
 /// Show > Hidden items; Keyboard shortcuts, Help, License & source and
 /// About this build to Settings > About, with F1 and Ctrl+? as before.
-/// Map network drive also stays at the foot of the navigation pane.
+/// Map network drive is also in the navigation pane's This PC and Network
+/// menus; the pane no longer has a button for it, as Windows' has none.
 pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = match state.place {
         MorePlace::Folder => folder_commands(state),
@@ -494,32 +495,9 @@ fn folder_commands(state: &MoreMenuState) -> Vec<MenuEntry> {
     entries
 }
 
-/// This PC's and Network's first commands: Map network drive, Add a
-/// network location and Disconnect network drive, which lists `drives`
-/// to disconnect, or says why it cannot run while none is connected.
+/// This PC's and Network's first commands: Add a network location, Map
+/// network drive and Disconnect network drive, in Windows 11's order.
 fn network_drive_commands(drives: &[NetworkDrive]) -> Vec<MenuEntry> {
-    let disconnect = if drives.is_empty() {
-        MenuItem::new(
-            &gettext("Disconnect network drive"),
-            Icon::DisconnectNetworkDrive24,
-            WindowAction::Disconnect,
-        )
-        .disabled_because(true, ox_core::i18n::gettext_static(NO_NETWORK_DRIVE))
-    } else {
-        let choices = drives
-            .iter()
-            .map(|drive| {
-                MenuItem::with_text_target(&drive.label, Icon::Server, WindowAction::Disconnect, &drive.uri)
-                    .into()
-            })
-            .collect();
-        MenuItem::submenu(
-            &gettext("Disconnect network drive"),
-            Icon::DisconnectNetworkDrive24,
-            WindowAction::Disconnect,
-            choices,
-        )
-    };
     // In Windows 11's order, with icons drawn to match its glyphs.
     vec![
         item(
@@ -532,8 +510,35 @@ fn network_drive_commands(drives: &[NetworkDrive]) -> Vec<MenuEntry> {
             Icon::MapNetworkDrive24,
             WindowAction::MapNetworkLocation,
         ),
-        disconnect.into(),
+        disconnect_network_drive(drives).into(),
     ]
+}
+
+/// "Disconnect network drive", which lists `drives` to disconnect, or
+/// says why it cannot run while none is connected; "…" and the
+/// navigation pane's This PC and Network menus share it.
+pub(in crate::window) fn disconnect_network_drive(drives: &[NetworkDrive]) -> MenuItem {
+    if drives.is_empty() {
+        return MenuItem::new(
+            &gettext("Disconnect network drive"),
+            Icon::DisconnectNetworkDrive24,
+            WindowAction::Disconnect,
+        )
+        .disabled_because(true, ox_core::i18n::gettext_static(NO_NETWORK_DRIVE));
+    }
+    let choices = drives
+        .iter()
+        .map(|drive| {
+            MenuItem::with_text_target(&drive.label, Icon::Server, WindowAction::Disconnect, &drive.uri)
+                .into()
+        })
+        .collect();
+    MenuItem::submenu(
+        &gettext("Disconnect network drive"),
+        Icon::DisconnectNetworkDrive24,
+        WindowAction::Disconnect,
+        choices,
+    )
 }
 
 #[cfg(test)]
