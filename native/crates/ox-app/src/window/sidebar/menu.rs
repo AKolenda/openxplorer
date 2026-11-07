@@ -31,7 +31,7 @@ use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
-use super::entries::{RowLevel, RowTarget, Section, SidebarEntry};
+use super::entries::{drive_menu, RowLevel, RowTarget, Section, SidebarEntry};
 use super::{HiddenRow, Sidebar};
 
 /// The menu of the pin that opens `uri`; `caching` says whether it is
@@ -243,13 +243,16 @@ impl Sidebar {
         let (mut menu, strip) = match hidden {
             HiddenRow::Place => return Some((show_place_menu(entry), Vec::new())),
             HiddenRow::Section => (Vec::new(), Vec::new()),
-            HiddenRow::Shown => match entry.menu.as_ref().or_else(|| pinned_drive(&entries, entry)) {
-                // A drive's menu is the same wherever it opens (This PC's
-                // tiles and its Quick access pin too), in Windows 11's
-                // order.
-                Some(place @ PlaceMenu::Drive { .. }) => place.styled(facts_in(place, self), style),
-                _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
-            },
+            HiddenRow::Shown => {
+                let pinned = self.pinned_drive(entry);
+                match entry.menu.as_ref().or(pinned.as_ref()) {
+                    // A drive's menu is the same wherever it opens (This
+                    // PC's tiles and its Quick access pin too), in Windows
+                    // 11's order.
+                    Some(place @ PlaceMenu::Drive { .. }) => place.styled(facts_in(place, self), style),
+                    _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+                }
+            }
         };
         let strip = match style {
             MenuStyle::Compact => strip,
@@ -358,6 +361,26 @@ impl Sidebar {
         (!place_menu.is_empty()).then_some(place_menu)
     }
 
+    /// The drive menu of the drive that the Quick access pin `entry`
+    /// opens, from the window's drives, shown in the pane or not: a pinned
+    /// drive keeps a drive's menu, not a folder's, whose Cut, Rename and
+    /// Delete would act on the whole drive.
+    fn pinned_drive(&self, entry: &SidebarEntry) -> Option<PlaceMenu> {
+        let RowTarget::Location(uri) = &entry.target else {
+            return None;
+        };
+        if !entry.pinned {
+            return None;
+        }
+        let window = self.root().and_downcast::<BrowserWindow>()?;
+        window
+            .places()
+            .drives
+            .iter()
+            .map(drive_menu)
+            .find(|place| matches!(place, PlaceMenu::Drive { uri: drive, .. } if same_location(drive, uri)))
+    }
+
     /// What This PC's or Network's menu shows for `section` now.
     fn head_menu_state(&self, section: Section) -> HeadMenuState {
         let window = self.root().and_downcast::<BrowserWindow>();
@@ -395,23 +418,6 @@ impl Sidebar {
         }
         menu
     }
-}
-
-/// The drive menu of the drive that the Quick access pin `entry` opens,
-/// from that drive's row in `entries`: a pinned drive keeps a drive's
-/// menu, not a folder's, whose Cut, Rename and Delete would act on the
-/// whole drive.
-fn pinned_drive<'a>(entries: &'a [SidebarEntry], entry: &SidebarEntry) -> Option<&'a PlaceMenu> {
-    let RowTarget::Location(uri) = &entry.target else {
-        return None;
-    };
-    if !entry.pinned {
-        return None;
-    }
-    entries.iter().find_map(|row| match &row.menu {
-        Some(place @ PlaceMenu::Drive { uri: drive, .. }) if same_location(drive, uri) => Some(place),
-        _ => None,
-    })
 }
 
 /// Whether `uri` is a Quick access pin of the user's own, not a standard

@@ -293,6 +293,17 @@ fn close_menu(menu: &MenuPopover) {
     wait_until("the menu to let go of the pane", || menu.parent().is_none());
 }
 
+/// Leaves This PC and opens it again, after a change that redrew it in
+/// place. GTK 4.18 keeps pointing at the page the still pointer was over,
+/// and the next menu's grab then fails a critical on it; opening the page
+/// anew does not.
+fn reopen_this_pc(test: &TestWindow, fixture: &Fixture) {
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+    wait_for_frames(&test.window, 3);
+}
+
 /// A drive tile's menu is the file list's right-click menu, in its
 /// style, with Windows 11's drive items in Windows' order: Copy and Rename
 /// in the strip, greyed out, then Open, Open in new tab, Open in new
@@ -358,15 +369,30 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
                 .any(|place| place.uri == fixture.uri())
     });
     // Pinning redraws This PC, and with it the tile.
-    wait_for_frames(&test.window, 3);
+    reopen_this_pc(&test, &fixture);
     let (_, backup) = drive_tile(&test, "Backup");
     let menu = open_tile_menu(&test, &backup);
     assert!(menu.row_labels().contains(&"Unpin from Quick access".to_owned()));
     close_menu(&menu);
 
     // The drive's Quick access pin keeps the drive's menu: nothing in it
-    // cuts, renames or deletes the whole drive.
-    let pin = test.window.sidebar().right_click_row("Backup");
+    // cuts, renames or deletes the whole drive, even with This PC's
+    // section, and so the drive's own row, hidden.
+    let pinned = test
+        .window
+        .places()
+        .quick_access
+        .into_iter()
+        .find(|place| place.uri == fixture.uri())
+        .expect("the drive is pinned")
+        .label;
+    test.activate("hide-section", Some("thisPc"));
+    wait_until("This PC to be hidden", || {
+        let labels = test.window.sidebar().labels();
+        !labels.iter().any(|label| label == "This PC") && labels.contains(&pinned)
+    });
+    reopen_this_pc(&test, &fixture);
+    let pin = test.window.sidebar().right_click_row(&pinned);
     pin.popup();
     wait_for_frames(&test.window, 2);
     assert_eq!(

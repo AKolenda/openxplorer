@@ -215,7 +215,7 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
 }
 
 /// A drive's menu (`driveMenu`): a mounted drive's, or Mount volume.
-fn drive_menu(row: &VolumeRow) -> PlaceMenu {
+pub(super) fn drive_menu(row: &VolumeRow) -> PlaceMenu {
     match &row.state {
         VolumeState::Mounted { uri, controls } => PlaceMenu::Drive {
             uri: uri.clone(),
