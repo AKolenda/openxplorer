@@ -1,19 +1,34 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* The details pane (ui-spec.md §4.8), as Windows 11 File Explorer's: the
-   picture without a frame, the name in large text, then rows of names and
-   values. */
+/* The details pane, as Windows 11 Explorer lays out its Details pane
+   (PROP-009; src/window/details_pane.rs, resources/ui/details-pane.ui). */
 
 .details { background-color: @ox_bg; border-left: 1px solid @ox_border; }
 .details-inner { padding: 22px 22px 16px 22px; }
-.details .detail-header { margin-bottom: 20px; }
-.details button.detail-close { min-width: 24px; min-height: 24px; }
-/* The picture's room: 148px tall, room for a thumbnail or a player, with
-   no background, border or corners. */
-.details .detail-preview { min-height: 148px; margin-bottom: 16px; }
+/* The picture's room: 148px tall, room for the large icon or a player,
+   with no background, border or corners (#233); a picture of the content
+   takes the height its shape needs. */
+.details .detail-preview { min-height: 148px; }
+.details .detail-preview.has-picture { min-height: 0; }
 /* The art's soft shadow (GTK's cairo renderer drops a shadow this faint,
    its GL renderers draw it). */
 .details .detail-preview image { -gtk-icon-shadow: 0 4px 4px @ox_preview_shadow; }
-.details .detail-name { font-weight: 600; margin-bottom: 4px; }
-.details .detail-summary { color: @ox_muted; }
-.details grid { margin-top: 16px; }
+/* The small icon and the name under the preview. */
+.details .detail-title { margin-top: 14px; margin-bottom: 14px; }
+.details .detail-title image { -gtk-icon-shadow: none; }
+.details .detail-name { font-weight: 600; font-size: 14px; }
+/* Share and Properties: bordered buttons 32px tall, as wide as their
+   text. */
+.details button.detail-button { min-height: 30px; padding: 0 12px; }
+.details .detail-title + button.detail-button { margin-bottom: 18px; }
+.details .detail-section { font-weight: 600; margin-bottom: 10px; }
+.details grid + button.detail-button { margin-top: 20px; }
 .details .detail-key { color: @ox_muted; }
+/* Windows' hint with nothing selected: an (i) and its text in a rounded
+   box on the chrome color. */
+.details .detail-hint {
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 7px;
+  padding: 10px 12px;
+}
+.details .detail-hint image { color: @ox_muted; margin-top: 1px; }

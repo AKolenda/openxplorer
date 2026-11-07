@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar's geometry, measured against the current app (see
 //! [`super::geometry`]), with Windows 11's denser rows (owner decision
-//! 2026-11-06): 31-pixel rows 32 pixels apart, the Quick access rows 4
-//! pixels further in and 31 pixels apart, the accent bar on the
-//! selected row, the 6-pixel resizer and the "Map network drive"
+//! 2026-11-06): 31-pixel rows 32 pixels apart, the pinned folders full
+//! width on the same pitch with their icons in Home's column, as in
+//! Windows 11's navigation pane, the accent bar's room on the selected
+//! row, the 6-pixel resizer and the "Map network drive"
 //! button below the list.
 
 use gtk::prelude::*;
@@ -52,9 +53,16 @@ fn with_two_pins(fixture: &Fixture) -> TestWindow {
     test
 }
 
-/// parity: LOOK-014
+/// The pinned folders are rows like Home and This PC, full width on the
+/// 32-pixel pitch, as in Windows 11's navigation pane; a divider 24
+/// pixels tall separates Home, the pins and This PC with Network, and
+/// none separates This PC from Network. Every top-level icon sits in one
+/// column, 28 pixels into the pane, a chevron's room after the edge, and
+/// the drives' icons a 16-pixel level further in.
+///
+/// parity: LOOK-014, SIDE-001
 #[gtk::test]
-fn quick_access_rows_sit_4_pixels_in_on_a_31_pixel_pitch() {
+fn pinned_rows_line_up_with_home_on_the_32_pixel_pitch() {
     let fixture = Fixture::standard();
     let test = with_two_pins(&fixture);
     let home = bounds(&test, &row_named(&test, "Home"));
@@ -63,31 +71,44 @@ fn quick_access_rows_sit_4_pixels_in_on_a_31_pixel_pitch() {
         Bounds::new(7, 152, 196, 31),
         "Home is 14 pixels below the command bar"
     );
-    let quick_access: Vec<Bounds> = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
+    let pinned: Vec<Bounds> = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
         .into_iter()
         .filter(|row| row.has_css_class("quick-access"))
         .map(|row| bounds(&test, &row))
         .collect();
-    assert!(quick_access.len() >= 2, "the known folders and two pins");
-    assert_eq!(quick_access[0], Bounds::new(11, 209, 188, 31));
-    for pair in quick_access.windows(2) {
-        assert_eq!(pair[1].y - pair[0].y, 31, "Quick access rows touch");
+    assert!(pinned.len() >= 2, "the known folders and two pins");
+    let divider = 12 + 1 + 11;
+    assert_eq!(pinned[0], Bounds::new(7, home.y + 31 + divider + 1, 196, 31));
+    for pair in pinned.windows(2) {
+        assert_eq!(pair[1].y - pair[0].y, 32, "pins are 32 apart, as every row");
     }
-    let last = quick_access[quick_access.len() - 1];
+    let last = pinned[pinned.len() - 1];
     let this_pc = bounds(&test, &row_named(&test, "This PC"));
     let local_disk = bounds(&test, &row_named(&test, "Local Disk"));
-    let separator_gap = 12 + 1 + 12;
+    let network = bounds(&test, &row_named(&test, "Network"));
+    assert_eq!(this_pc.y, last.y + 31 + divider + 1, "a divider after the pins");
+    assert_eq!(local_disk.y - this_pc.y, 32, "32 apart as in Windows 11");
     assert_eq!(
-        this_pc.y,
-        last.y + 31 + 4 + 1 + separator_gap,
-        "4px padding and a 1px border end Quick access, then a separator"
-    );
-    assert_eq!(
-        local_disk.y - this_pc.y,
+        network.y - local_disk.y,
         32,
-        "other rows are a pixel apart, 32 apart as in Windows 11"
+        "no divider between This PC and Network"
     );
     assert_eq!(this_pc.x, 7);
+
+    let icon_x = |label: &str| {
+        let row = row_named(&test, label);
+        let icon = descendants::<gtk::Widget>(&row)
+            .into_iter()
+            .find(|part| part.has_css_class("side-glyph") || part.has_css_class("side-art"))
+            .unwrap_or_else(|| panic!("{label} has an icon"));
+        bounds(&test, &icon).x
+    };
+    let column = icon_x("Home");
+    assert_eq!(column, 28, "a chevron's room before the icon");
+    assert_eq!(icon_x("Documents"), column, "pins line up with Home");
+    assert_eq!(icon_x("This PC"), column, "This PC's chevron sits in that room");
+    assert_eq!(icon_x("Network"), column);
+    assert_eq!(icon_x("Local Disk"), column + 16, "drives are a level in");
 }
 
 /// The open place is marked by its row's fill alone, as in Windows 11

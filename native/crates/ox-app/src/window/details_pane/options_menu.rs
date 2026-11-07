@@ -10,22 +10,24 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::settings::DetailsPaneOptions;
 
-use super::{DetailsPane, Field};
+use super::content::keys;
+use super::DetailsPane;
+use crate::i18n::message_id;
 use crate::icons::Icon;
 use crate::window::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;
 
-/// The glyph of `field` in the menu.
-fn field_glyph(field: Field) -> Icon {
-    match field {
-        Field::Type => Icon::Document,
-        Field::Size => Icon::HardDrive,
-        Field::Modified | Field::Created => Icon::Clock,
-        Field::Availability => Icon::Laptop,
-        Field::Dimensions => Icon::Image,
-        Field::Length => Icon::Video,
-    }
-}
+/// The fields the menu can turn off, in the order the pane shows them:
+/// each one's key (as the settings keep it), its name and its glyph.
+pub(super) const FIELDS: [(&str, &str, Icon); 7] = [
+    (keys::TYPE, message_id("Type"), Icon::Document),
+    (keys::SIZE, message_id("Size"), Icon::HardDrive),
+    (keys::LOCATION, message_id("File location"), Icon::Folder),
+    (keys::MODIFIED, message_id("Date modified"), Icon::Clock),
+    (keys::CREATED, message_id("Date created"), Icon::Clock),
+    (keys::DIMENSIONS, message_id("Dimensions"), Icon::Image),
+    (keys::LENGTH, message_id("Length"), Icon::Video),
+];
 
 /// The option names of the choices that are not fields.
 const FOLLOW_HOVER: &str = "follow-hover";
@@ -69,9 +71,13 @@ fn entries(options: &DetailsPaneOptions) -> Vec<MenuEntry> {
         ),
         MenuEntry::Divider,
     ];
-    for field in Field::ALL {
-        let key = field.key();
-        entries.push(choice(field.label(), field_glyph(field), key, options.shows(key)));
+    for (key, name, glyph) in FIELDS {
+        entries.push(choice(
+            ox_core::i18n::gettext_static(name),
+            glyph,
+            key,
+            options.shows(key),
+        ));
     }
     entries.push(MenuEntry::Divider);
     entries.push(choice(

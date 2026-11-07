@@ -30,6 +30,33 @@ pub(crate) fn has_control_character(text: &str) -> bool {
     text.chars().any(|c| c <= '\u{1f}' || c == '\u{7f}')
 }
 
+/// Whether `character` ends a line for whoever reads `text`: a terminal, an
+/// editor or a font.
+///
+/// C0 and C1 controls do, and so do U+2028 LINE SEPARATOR and U+2029
+/// PARAGRAPH SEPARATOR, which [`char::is_control`] leaves out because they are
+/// separators rather than controls. Python's `CONTROL` pattern ([`has_control_character`])
+/// covers neither the C1 range nor those two, so this rule is the app's own:
+/// it guards what the app shows and copies, and it never decides which address
+/// the app accepts.
+pub fn breaks_a_line(character: char) -> bool {
+    character.is_control() || matches!(character, '\u{2028}' | '\u{2029}')
+}
+
+/// `text` with every character that [`breaks_a_line`] replaced by U+FFFD,
+/// which is also what a name this font cannot draw shows as.
+pub fn without_line_breaks(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            if breaks_a_line(character) {
+                '\u{fffd}'
+            } else {
+                character
+            }
+        })
+        .collect()
+}
+
 /// Python's `str.isspace()`. It is Unicode `White_Space` plus the four
 /// information separators U+001C..U+001F, which Rust does not count.
 pub(crate) fn is_python_space(c: char) -> bool {
@@ -332,5 +359,20 @@ mod tests {
             let normal = normalise_posix_path(case.path);
             assert_eq!(normal, case.normal, "normpath({:?})", case.path);
         }
+    }
+
+    /// A displayed line ends at a C0 or C1 control, which Python's pattern
+    /// does not cover whole, and at the two Unicode separators.
+    #[test]
+    fn a_displayed_line_ends_at_controls_and_separators() {
+        for character in [
+            '\n', '\r', '\u{1b}', '\u{7f}', '\u{85}', '\u{9b}', '\u{2028}', '\u{2029}',
+        ] {
+            assert!(breaks_a_line(character), "{character:?} ends a line");
+        }
+        for character in ['a', '/', '文', '\u{a0}'] {
+            assert!(!breaks_a_line(character), "{character:?} does not");
+        }
+        assert_eq!(without_line_breaks("a\nb\u{2028}c"), "a\u{fffd}b\u{fffd}c");
     }
 }

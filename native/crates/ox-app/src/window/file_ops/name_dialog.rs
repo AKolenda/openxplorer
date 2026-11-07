@@ -31,7 +31,7 @@ const NAME_HINT: &str = crate::i18n::message_id("Names must not contain slashes.
 /// How much of the name the field selects when the dialog opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum NameSelection {
-    /// All of it: a folder being renamed.
+    /// All of it: a folder or a shortcut being renamed.
     Whole,
     /// The name without its extension: a file being renamed.
     Stem,
@@ -186,6 +186,14 @@ mod tests {
             StemCase {
                 name: "Makefile",
                 stem: 8,
+            },
+            StemCase {
+                name: "my.notes.txt",
+                stem: 8,
+            },
+            StemCase {
+                name: ".hidden",
+                stem: 7,
             },
         ];
         for case in cases {

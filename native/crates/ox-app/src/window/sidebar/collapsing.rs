@@ -137,7 +137,9 @@ impl Sidebar {
 
     /// Left collapses This PC or Network while its head row has keyboard
     /// focus, and Right expands it, as in Explorer's navigation pane and
-    /// the folder tree; the chevron itself takes no focus.
+    /// the folder tree; the chevron itself takes no focus. As in Windows
+    /// 11's tree, Right on an expanded head moves to its first row, and
+    /// Left on a row inside This PC or Network moves to the head.
     pub(super) fn collapse_sections_with_arrow_keys(&self, list: &gtk::ListBox) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -155,7 +157,7 @@ impl Sidebar {
                     gdk::Key::Left | gdk::Key::KP_Left => false,
                     _ => return glib::Propagation::Proceed,
                 };
-                if sidebar.expand_focused_section(expand) {
+                if sidebar.expand_focused_section(expand) || sidebar.step_through_tree(expand) {
                     glib::Propagation::Stop
                 } else {
                     glib::Propagation::Proceed
@@ -177,6 +179,39 @@ impl Sidebar {
         }
         self.collapse_section(section, !expand);
         true
+    }
+
+    /// Moves keyboard focus as Windows' tree does once a section is as
+    /// the key asks: `into` (Right) from an expanded head to its first
+    /// row, else (Left) from a row inside a section to its head; false
+    /// where there is nowhere to go.
+    fn step_through_tree(&self, into: bool) -> bool {
+        let Some(focused) = self.list().focus_child().and_downcast::<gtk::ListBoxRow>() else {
+            return false;
+        };
+        let Ok(index) = usize::try_from(focused.index()) else {
+            return false;
+        };
+        let target = {
+            let entries = self.imp().entries.borrow();
+            let Some(entry) = entries.get(index) else {
+                return false;
+            };
+            match (into, entry.level) {
+                (true, RowLevel::Group) if !self.is_collapsed(entry.section) => entries
+                    .get(index + 1)
+                    .filter(|next| next.section == entry.section && next.level == RowLevel::Child)
+                    .map(|_| index + 1),
+                (false, RowLevel::Child) => entries[..index]
+                    .iter()
+                    .rposition(|head| head.level == RowLevel::Group && head.section == entry.section),
+                _ => None,
+            }
+        };
+        let row = target
+            .and_then(|target| i32::try_from(target).ok())
+            .and_then(|target| self.list().row_at_index(target));
+        row.is_some_and(|row| row.grab_focus())
     }
 
     /// The section `row` is the head of, `None` for any other row.
