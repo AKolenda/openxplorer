@@ -1,6 +1,6 @@
 # OpenXplorer
 
-A Windows File Explorer-inspired file manager for Linux, written in Rust with GTK 4.
+A Windows File Explorer-inspired file manager for Linux, written in Rust with GTK 4. It follows Windows 11 File Explorer's layout and behavior: a command bar, a navigation pane with Quick access, This PC and Network, tabs, Details, Tiles and Content views, Windows 11-style Properties windows and the Recycle Bin. Other apps' Open and Save dialogs can use it too, once you turn that on in Settings.
 
 Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, split panes, a folder tree, Details, Compact, List and icon views with thumbnails, clickable paths, pinned folders, search, undoable file operations and light/dark themes.
 
