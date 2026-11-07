@@ -48,6 +48,20 @@ impl ItemQuestions {
         }
     }
 
+    /// The questions, carrying on after an earlier step of the same
+    /// operation whose user answered Skip with "Do this for all current
+    /// items" when `skip_all`.
+    pub(crate) fn skipping_all(mut self, skip_all: bool) -> Self {
+        self.skip_all = skip_all;
+        self
+    }
+
+    /// Whether the user answered Skip with "Do this for all current
+    /// items", for the next step of the same operation.
+    pub(crate) fn skips_all(&self) -> bool {
+        self.skip_all
+    }
+
     /// Runs `attempt` for `item` until it succeeds, asking after each
     /// failure: its value, or `None` once the item is left out or the
     /// user cancelled, which `result` then records.

@@ -265,6 +265,9 @@ pub struct RestoreSoFar {
     /// the same place: asked about as conflicts next
     /// ([`RestoreSoFar::take_taken`]).
     taken: Vec<String>,
+    /// Whether the user answered a failure Skip with "Do this for all
+    /// current items", which holds for the rest of the restore.
+    skip_all: bool,
 }
 
 impl Default for RestoreSoFar {
@@ -282,6 +285,7 @@ impl RestoreSoFar {
             placed: Vec::new(),
             started: unix_seconds_now(),
             taken: Vec::new(),
+            skip_all: false,
         }
     }
 
@@ -362,7 +366,7 @@ pub async fn restore_free_items(
     let context = context.clone();
     on_worker(move || {
         let mut so_far = so_far;
-        let mut questions = ItemQuestions::new(&context, TransferMode::Move);
+        let mut questions = ItemQuestions::new(&context, TransferMode::Move).skipping_all(so_far.skip_all);
         let free: Vec<&PlannedItem> = scan
             .items
             .iter()
@@ -388,6 +392,7 @@ pub async fn restore_free_items(
                 break;
             }
         }
+        so_far.skip_all = questions.skips_all();
         Ok(so_far)
     })
     .await
@@ -453,7 +458,7 @@ pub async fn restore_answered_items(
         if so_far.cancelled() {
             return Ok(so_far);
         }
-        let mut questions = ItemQuestions::new(&context, TransferMode::Move);
+        let mut questions = ItemQuestions::new(&context, TransferMode::Move).skipping_all(so_far.skip_all);
         'answers: for resolution in [Resolution::KeepBoth, Resolution::Replace] {
             for item in &scan.items {
                 let PlannedKind::Conflict(index) = item.kind else {
@@ -490,6 +495,7 @@ pub async fn restore_answered_items(
                 }
             }
         }
+        so_far.skip_all = questions.skips_all();
         Ok(so_far)
     })
     .await

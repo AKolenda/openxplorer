@@ -590,7 +590,11 @@ impl TransferEngine {
             };
             match answer {
                 Some(FailureAnswer::Retry) => {
-                    self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    self.discard_leftover_stage(
+                        batch.mode(),
+                        std::mem::take(&mut staging),
+                        &mut state.result,
+                    );
                     Accounting::roll_back(&self.byte_counts, checkpoint);
                     self.failures
                         .start_item(batch.mode(), self.display_name(uri), destination.clone());
@@ -607,7 +611,11 @@ impl TransferEngine {
                     outcome = self.remove_elevated(batch, index, uri, state);
                 }
                 Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) => {
-                    self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    self.discard_leftover_stage(
+                        batch.mode(),
+                        std::mem::take(&mut staging),
+                        &mut state.result,
+                    );
                     Accounting::roll_back(&self.byte_counts, checkpoint);
                     self.failures
                         .start_item(batch.mode(), self.display_name(uri), destination.clone());
@@ -679,7 +687,7 @@ impl TransferEngine {
                 self.record_failure(batch, uri, &error, answered, result);
             }
         }
-        self.discard_leftover_stage(staging, result);
+        self.discard_leftover_stage(batch.mode(), staging, result);
     }
 
     /// The first attempt at the item at `uri`, and whether it ended as
@@ -1094,9 +1102,14 @@ impl TransferEngine {
         self.failures.tell(&item)
     }
 
-    /// Removes the staging an item left behind. XFER-003: a leftover is
-    /// reported with its exact location.
-    fn discard_leftover_stage(&mut self, staging: ItemStaging, result: &mut TransferResult) {
+    /// Removes the staging an item of a `mode` run left behind. XFER-003: a
+    /// leftover is told with its exact location, worded for that run.
+    fn discard_leftover_stage(
+        &mut self,
+        mode: TransferMode,
+        staging: ItemStaging,
+        result: &mut TransferResult,
+    ) {
         let Some(stage) = staging.stage else {
             return;
         };
@@ -1107,7 +1120,7 @@ impl TransferEngine {
                 more_items: false,
                 cause: FailureCause::NeedsAttention,
                 ..FailedItem::new(
-                    TransferMode::Copy,
+                    mode,
                     root.display_name(),
                     &root.uri(),
                     None,
