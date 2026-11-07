@@ -134,12 +134,24 @@ fn is_remote_item(entry: &Entry) -> bool {
 
     std::iter::once(entry.uri.as_str())
         .chain(entry.target_uri.as_deref())
+        .chain(entry.meta.recent_target.as_deref())
         .any(|uri| {
             matches!(
                 location_kind(uri),
                 LocationKind::Smb | LocationKind::Remote | LocationKind::Device
             )
         })
+}
+
+/// The file `entry` stands for, when it is another: a Recently used
+/// files row's file (kept in its metadata, as `GVfs` names it only in the
+/// row's target), or a share's or shortcut's target.
+fn stands_for(entry: &Entry) -> Option<&str> {
+    entry
+        .meta
+        .recent_target
+        .as_deref()
+        .or(entry.target_uri.as_deref())
 }
 
 /// A decoded preview's item, version and size.
@@ -175,7 +187,7 @@ impl PreviewRequest {
             modified: entry.modified,
             pixels,
             local_only: false,
-            target_uri: entry.target_uri.clone(),
+            target_uri: stands_for(entry).map(str::to_owned),
         })
     }
 
@@ -530,10 +542,26 @@ mod tests {
         let mut shared = picture.clone();
         shared.uri = "smb://fileserver.example/team/photo.jpg".to_owned();
         assert!(!local.allows(&shared), "a share");
+        // A Recently used files row keeps its file in its metadata, not in
+        // its target, which stays empty for a file.
         let mut recent = picture.clone();
         recent.uri = "recent:///3a1b2c".to_owned();
-        recent.target_uri = Some("mtp://Example_Phone/DCIM/photo.jpg".to_owned());
+        recent.target_uri = None;
+        recent.meta.recent_target = Some("mtp://Example_Phone/DCIM/photo.jpg".to_owned());
         assert!(!local.allows(&recent), "a recent item on a phone");
+        let mut recent_share = recent.clone();
+        recent_share.meta.recent_target = Some("smb://fileserver.example/team/photo.jpg".to_owned());
+        assert!(!local.allows(&recent_share), "a recent item on a share");
+        // One on this computer is previewed, and its file is what the
+        // network file system check looks at.
+        let mut recent_local = recent.clone();
+        recent_local.meta.recent_target = Some("file:///home/demo/Pictures/photo.jpg".to_owned());
+        let request = local.request(&recent_local, 128).expect("a recent local picture");
+        assert!(request.local_only);
+        assert_eq!(
+            request.target_uri.as_deref(),
+            Some("file:///home/demo/Pictures/photo.jpg")
+        );
         let everywhere = ViewOptions {
             remote_previews: true,
             ..ViewOptions::default()

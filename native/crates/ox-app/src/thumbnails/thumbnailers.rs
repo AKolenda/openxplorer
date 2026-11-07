@@ -581,10 +581,10 @@ impl Sandbox {
             Some(Self::Bubblewrap {
                 limits: Limits::Unlimited,
                 ..
-            }) if strictest != Some(Limits::Unlimited) => glib::g_warning!(
+            }) => glib::g_warning!(
                 ox_core::LOG_DOMAIN,
-                "The thumbnailers' resource limits could not be applied: they run within their \
-                 timeout alone"
+                "The thumbnailers' resource limits could not be applied (systemd-run, prlimit and \
+                 nice are missing or refused): they run within their timeout alone"
             ),
             Some(Self::Bubblewrap {
                 limits: Limits::Process { .. },
@@ -689,28 +689,30 @@ pub(super) enum Limits {
     /// In a systemd user scope of its own, whose limits hold for all of
     /// its processes together: [`MEMORY_LIMIT`] of memory, [`TASKS`]
     /// processes and threads and [`CPU_QUOTA`] of a processor, besides the
-    /// per-process limits of [`Limits::Process`].
+    /// per-process limits of [`Limits::Process`] when this computer has
+    /// those programs: the scope's limits do not depend on them.
     Scope {
         /// systemd's `systemd-run`.
         systemd_run: PathBuf,
         /// coreutils' `env`, which takes the user manager's address away
         /// from the program again.
         env: PathBuf,
-        /// util-linux's `prlimit`.
-        prlimit: PathBuf,
-        /// coreutils' `nice`.
-        nice: PathBuf,
+        /// util-linux's `prlimit`, if this computer has it.
+        prlimit: Option<PathBuf>,
+        /// coreutils' `nice`, if this computer has it.
+        nice: Option<PathBuf>,
     },
     /// With per-process limits from `prlimit` (each process: [`MEMORY_LIMIT`]
     /// of data, which address space merely reserved does not count
     /// towards, [`FILE_SIZE_LIMIT`] for each file, [`CPU_SECONDS`] of
     /// processor time and no core dump; all of the user's processes:
-    /// [`TASKS`] more than run already) and `nice`'s lower priority.
+    /// [`TASKS`] more than run already) and `nice`'s lower priority, or
+    /// whichever of the two this computer has.
     Process {
-        /// util-linux's `prlimit`.
-        prlimit: PathBuf,
-        /// coreutils' `nice`.
-        nice: PathBuf,
+        /// util-linux's `prlimit`, if this computer has it.
+        prlimit: Option<PathBuf>,
+        /// coreutils' `nice`, if this computer has it.
+        nice: Option<PathBuf>,
     },
     /// Within the timeout alone: this computer lacks the programs above,
     /// or they cannot run here.
@@ -722,16 +724,31 @@ impl Limits {
     /// [`Limits::Unlimited`]; [`Sandbox::find`] keeps the first that works.
     fn candidates() -> Vec<Self> {
         let find = glib::find_program_in_path;
+        Self::candidates_of(
+            find("systemd-run").zip(find("env")),
+            find("prlimit"),
+            find("nice"),
+        )
+    }
+
+    /// [`Self::candidates`] for the programs found: `scope` is
+    /// `systemd-run` with `env`, and each way uses whichever of `prlimit`
+    /// and `nice` there is.
+    fn candidates_of(
+        scope: Option<(PathBuf, PathBuf)>,
+        prlimit: Option<PathBuf>,
+        nice: Option<PathBuf>,
+    ) -> Vec<Self> {
         let mut candidates = Vec::new();
-        if let (Some(prlimit), Some(nice)) = (find("prlimit"), find("nice")) {
-            if let (Some(systemd_run), Some(env)) = (find("systemd-run"), find("env")) {
-                candidates.push(Self::Scope {
-                    systemd_run,
-                    env,
-                    prlimit: prlimit.clone(),
-                    nice: nice.clone(),
-                });
-            }
+        if let Some((systemd_run, env)) = scope {
+            candidates.push(Self::Scope {
+                systemd_run,
+                env,
+                prlimit: prlimit.clone(),
+                nice: nice.clone(),
+            });
+        }
+        if prlimit.is_some() || nice.is_some() {
             candidates.push(Self::Process { prlimit, nice });
         }
         candidates.push(Self::Unlimited);
@@ -748,20 +765,28 @@ impl Limits {
     /// `prlimit --nproc` counts every process and thread of the user's, so
     /// its limit is what the user runs now plus [`TASKS`].
     fn words(&self) -> Vec<OsString> {
-        let process = |prlimit: &Path, nice: &Path| -> Vec<OsString> {
-            vec![
-                prlimit.as_os_str().to_owned(),
-                format!("--data={MEMORY_LIMIT}").into(),
-                format!("--fsize={FILE_SIZE_LIMIT}").into(),
-                format!("--cpu={CPU_SECONDS}").into(),
-                format!("--nproc={}", user_tasks().saturating_add(TASKS)).into(),
-                "--core=0".into(),
-                "--".into(),
-                nice.as_os_str().to_owned(),
-                "-n".into(),
-                NICENESS.to_string().into(),
-                "--".into(),
-            ]
+        let process = |prlimit: &Option<PathBuf>, nice: &Option<PathBuf>| -> Vec<OsString> {
+            let mut words: Vec<OsString> = Vec::new();
+            if let Some(prlimit) = prlimit {
+                words.extend([
+                    prlimit.as_os_str().to_owned(),
+                    format!("--data={MEMORY_LIMIT}").into(),
+                    format!("--fsize={FILE_SIZE_LIMIT}").into(),
+                    format!("--cpu={CPU_SECONDS}").into(),
+                    format!("--nproc={}", user_tasks().saturating_add(TASKS)).into(),
+                    "--core=0".into(),
+                    "--".into(),
+                ]);
+            }
+            if let Some(nice) = nice {
+                words.extend([
+                    nice.as_os_str().to_owned(),
+                    "-n".into(),
+                    NICENESS.to_string().into(),
+                    "--".into(),
+                ]);
+            }
+            words
         };
         match self {
             Self::Scope {
@@ -1084,6 +1109,18 @@ impl Drop for Workspace {
 /// its picture.
 const STALE_WORKSPACE: Duration = Duration::from_mins(2);
 
+/// Whether `name` is one [`Workspace::new`] gives: [`WORKSPACE`] and eight
+/// lowercase hexadecimal digits, and nothing else, so a folder of the
+/// user's that only starts the same way is never taken for one.
+fn is_workspace_name(name: &str) -> bool {
+    name.strip_prefix(WORKSPACE).is_some_and(|suffix| {
+        suffix.len() == 8
+            && suffix
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
 /// Removes the workspaces under `parent` that an earlier run of the app
 /// left: one that was closed, or ended, while a thumbnailer ran has no
 /// [`Workspace`] left to drop. Only this user's folders older than
@@ -1097,10 +1134,7 @@ fn sweep_stale_workspaces(parent: &Path) {
         return;
     };
     for entry in listing.filter_map(Result::ok) {
-        let is_workspace = entry
-            .file_name()
-            .to_str()
-            .is_some_and(|name| name.starts_with(WORKSPACE));
+        let is_workspace = entry.file_name().to_str().is_some_and(is_workspace_name);
         let Ok(metadata) = fs::symlink_metadata(entry.path()) else {
             continue;
         };
@@ -1877,8 +1911,8 @@ mod tests {
         let scope = Limits::Scope {
             systemd_run: path("systemd-run"),
             env: path("env"),
-            prlimit: path("prlimit"),
-            nice: path("nice"),
+            prlimit: Some(path("prlimit")),
+            nice: Some(path("nice")),
         };
         let words: Vec<String> = scope
             .words()
@@ -1900,8 +1934,8 @@ mod tests {
         assert!(scope.needs_runtime_dir());
 
         let process = Limits::Process {
-            prlimit: path("prlimit"),
-            nice: path("nice"),
+            prlimit: Some(path("prlimit")),
+            nice: Some(path("nice")),
         };
         let words: Vec<String> = process
             .words()
@@ -1920,6 +1954,45 @@ mod tests {
         assert!(!process.needs_runtime_dir());
         assert!(Limits::Unlimited.words().is_empty());
         assert_eq!(Limits::candidates().last(), Some(&Limits::Unlimited));
+
+        // The scope's own limits do not need prlimit or nice: without them
+        // it is still offered, first, and starts the program directly
+        // after env.
+        let systemd = Some((path("systemd-run"), path("env")));
+        let candidates = Limits::candidates_of(systemd.clone(), None, None);
+        assert_eq!(
+            candidates,
+            [
+                Limits::Scope {
+                    systemd_run: path("systemd-run"),
+                    env: path("env"),
+                    prlimit: None,
+                    nice: None,
+                },
+                Limits::Unlimited
+            ]
+        );
+        let words: Vec<String> = candidates[0]
+            .words()
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+        assert!(words.contains(&format!("--property=MemoryMax={MEMORY_LIMIT}")));
+        assert!(!words
+            .iter()
+            .any(|word| word.contains("prlimit") || word.contains("nice")));
+        assert_eq!(words.last().map(String::as_str), Some("--"));
+        // Either per-process program alone is used too.
+        let nice_only = Limits::candidates_of(None, None, Some(path("nice")));
+        assert_eq!(
+            nice_only[0],
+            Limits::Process {
+                prlimit: None,
+                nice: Some(path("nice"))
+            }
+        );
+        assert_eq!(nice_only[0].words()[0], path("nice").into_os_string());
+        assert_eq!(Limits::candidates_of(None, None, None), [Limits::Unlimited]);
     }
 
     /// A workspace an earlier run left, when the app was closed while its
@@ -1950,6 +2023,17 @@ mod tests {
         let other = parent.path().join("holiday-photos");
         fs::create_dir(&other).expect("another folder");
         aged(&other);
+        // A folder of the user's whose name only starts like a workspace's
+        // is never taken for one, however old.
+        let lookalikes: Vec<PathBuf> = ["backup", "0a1b2c3", "0a1b2c3d4", "0A1B2C3D", "0a1b2c3g"]
+            .iter()
+            .map(|suffix| parent.path().join(format!("{WORKSPACE}{suffix}")))
+            .collect();
+        for lookalike in &lookalikes {
+            fs::create_dir(lookalike).expect("a lookalike");
+            fs::write(lookalike.join("notes.txt"), b"kept").expect("its file");
+            aged(lookalike);
+        }
         let kept = parent.path().join("kept");
         fs::create_dir(&kept).expect("a folder a link names");
         let link = parent.path().join(format!("{WORKSPACE}deadbeef"));
@@ -1960,6 +2044,14 @@ mod tests {
         assert!(!stale.exists(), "the leftover is gone");
         assert!(fresh.exists(), "a workspace in use stays");
         assert!(other.exists() && kept.exists() && link.exists());
+        for lookalike in &lookalikes {
+            assert!(
+                lookalike.join("notes.txt").exists(),
+                "{} stays",
+                lookalike.display()
+            );
+        }
+        assert!(is_workspace_name(&format!("{WORKSPACE}{:08x}", 0x0a1b_2c3d_u32)));
     }
 
     /// A sandboxed thumbnailer runs with its resource limits and at a
