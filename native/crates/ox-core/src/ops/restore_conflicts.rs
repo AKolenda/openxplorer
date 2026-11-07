@@ -14,7 +14,10 @@
 //!   answers, as Windows queues the conflicts to the end of the job.
 //! - Two items deleted from the same place, restored together onto a free
 //!   name: the first goes back, and the second meets it, so it is asked
-//!   about as any taken name is, as Windows asks about it.
+//!   about as any taken name is, as Windows asks about it. Replace then
+//!   puts the second in the first one's place, and the first goes back to
+//!   the Recycle Bin; of several answered Replace for one name, the last
+//!   one is restored.
 //! - Skip leaves the item in the Recycle Bin and says nothing more, as
 //!   in Windows.
 //! - Replace moves the item in the original folder to the Recycle Bin
@@ -334,6 +337,9 @@ pub async fn restore_answered_items(
                 if answers[index] != resolution {
                     continue;
                 }
+                if resolution == Resolution::Replace && replaced_later(&scan, &answers, index) {
+                    continue;
+                }
                 let conflict = &scan.conflicts[index];
                 let name = conflict.name();
                 if context.cancel.is_cancelled() {
@@ -355,6 +361,21 @@ pub async fn restore_answered_items(
         Ok(so_far.finish())
     })
     .await
+}
+
+/// True when the conflict `index` of `scan`, answered Replace, meets the
+/// same item as a later conflict answered Replace: two or more items
+/// deleted from one place. Each Replace would send the item before it to
+/// the Recycle Bin, so only the last one's is carried out and the earlier
+/// ones stay in the Recycle Bin, where they would end up. The item first
+/// in the way is then the only replaced one, and Undo finds it.
+fn replaced_later(scan: &ConflictScan, answers: &[Resolution], index: usize) -> bool {
+    let existing = &scan.conflicts[index].existing_uri;
+    scan.conflicts
+        .iter()
+        .enumerate()
+        .skip(index + 1)
+        .any(|(later, conflict)| answers[later] == Resolution::Replace && conflict.existing_uri == *existing)
 }
 
 /// Restores the item of `conflict` under the first free "name (N)" name
@@ -401,10 +422,11 @@ fn keep_both(
 /// - A name freed meanwhile takes the item as any free name does.
 /// - An item there of the other kind now (a folder where a file was, or
 ///   the other way round) is not replaced.
-/// - A name this restore already replaced or restored an item into holds
-///   that item, so a second item from the same place stays in the Recycle
-///   Bin rather than sending the first one back there; Undo then has one
-///   item to take back, and any replaced item to bring back.
+/// - A name this restore already restored an item into holds that item,
+///   and Replace sends it to the Recycle Bin, where it came from, and
+///   restores this one in its place, as for any item in the way. It is
+///   not a replaced item for Undo: Undo takes this one back, and the
+///   earlier item is already where it was before the restore.
 fn replace(
     item: &PlannedItem,
     conflict: &NameConflict,
@@ -419,20 +441,13 @@ fn replace(
         so_far.add(&item.uri, restored, &name);
         return;
     }
-    let restored_there = |path: &PathBuf| {
+    let restored_there = existing.path().is_some_and(|path| {
         so_far
             .outcome
             .created
             .iter()
-            .any(|created| gio::File::for_uri(created).path().as_ref() == Some(path))
-    };
-    if existing
-        .path()
-        .is_some_and(|path| so_far.replaced.contains(&path) || restored_there(&path))
-    {
-        record_failure(&mut so_far.outcome.result, &name, &taken_meanwhile(&name));
-        return;
-    }
+            .any(|created| gio::File::for_uri(created).path() == Some(path.clone()))
+    });
     let same_kind = facts(&existing, cancel).is_ok_and(|now| {
         now.is_folder == conflict.incoming.is_folder && now.is_folder == conflict.existing.is_folder
     });
@@ -461,10 +476,14 @@ fn replace(
     let arrived = |part: &TransferOutcome| part.result.done.contains(&item.uri);
     match replace_through_recycle_bin(&existing, &path, context, place, arrived) {
         Ok((part, replaced)) => {
-            if replaced {
+            if replaced && !restored_there {
                 so_far.replaced.push(path);
             }
-            so_far.outcome.created.extend(part.created);
+            for created in part.created {
+                if !so_far.outcome.created.contains(&created) {
+                    so_far.outcome.created.push(created);
+                }
+            }
             merge_results(&mut so_far.outcome.result, part.result);
         }
         Err(error) => record_failure(&mut so_far.outcome.result, &name, &error),
