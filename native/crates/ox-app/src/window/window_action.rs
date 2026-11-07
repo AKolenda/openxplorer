@@ -98,6 +98,14 @@ pub(crate) enum WindowAction {
     Open,
     /// Selects every item (Ctrl+A).
     SelectAll,
+    /// Collapses the group whose heading the menu opened on (VIEW-022).
+    CollapseGroup,
+    /// Expands the group whose heading the menu opened on.
+    ExpandGroup,
+    /// Collapses every group of a grouped view.
+    CollapseAllGroups,
+    /// Expands every group of a grouped view.
+    ExpandAllGroups,
     /// Clears the selection.
     SelectNone,
     /// Selects exactly the items that were not selected.
@@ -500,6 +508,10 @@ impl WindowAction {
             WindowAction::MountVolume => "mount-volume",
             WindowAction::Open => "open",
             WindowAction::SelectAll => "select-all",
+            WindowAction::CollapseGroup => "collapse-group",
+            WindowAction::ExpandGroup => "expand-group",
+            WindowAction::CollapseAllGroups => "collapse-all-groups",
+            WindowAction::ExpandAllGroups => "expand-all-groups",
             WindowAction::SelectNone => "select-none",
             WindowAction::InvertSelection => "invert-selection",
             WindowAction::SelectMatching => "select-matching",
