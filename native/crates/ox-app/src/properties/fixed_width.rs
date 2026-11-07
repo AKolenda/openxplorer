@@ -93,4 +93,10 @@ impl FixedWidth {
         holder.imp().child.replace(Some(child.clone().upcast()));
         holder
     }
+
+    /// Asks for at most `width` pixels across from now on.
+    pub(crate) fn set_width(&self, width: i32) {
+        self.imp().width.set(width);
+        self.queue_resize();
+    }
 }

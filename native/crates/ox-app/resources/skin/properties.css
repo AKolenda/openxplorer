@@ -182,7 +182,8 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties dropdown.folder-template { margin: 2px 0 6px 0; }
 /* Windows' combo box: a push button's frame around the choice and its
    chevron. */
-.ox-properties dropdown.folder-template > button {
+.ox-properties dropdown.folder-template > button,
+.ox-properties dropdown.properties-combo > button {
   min-height: 21px;
   padding: 0 6px 0 8px;
   border-radius: 4px;
@@ -192,9 +193,11 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
   color: @ox_text;
   box-shadow: none;
 }
-.ox-properties dropdown.folder-template > button:hover { background-color: @ox_control_fill_hover; }
+.ox-properties dropdown.folder-template > button:hover,
+.ox-properties dropdown.properties-combo > button:hover { background-color: @ox_control_fill_hover; }
 .ox-properties dropdown.folder-template > button:checked,
 .ox-properties dropdown.folder-template > button:active { background-color: @ox_control_fill_pressed; }
+.ox-properties dropdown.properties-combo > button arrow,
 .ox-properties dropdown.folder-template > button arrow { -gtk-icon-size: 12px; color: @ox_muted; }
 .ox-properties .properties-button-column { border-spacing: 6px; margin: 8px 0 2px 0; }
 .ox-properties .folder-picture-preview { margin: 0 8px 0 0; }
@@ -258,3 +261,37 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
   margin-right: 2px;
 }
 .ox-properties .details-stars image { color: @ox_muted; }
+
+/* Folder Options (src/window/folder_options.rs), as Windows 11 draws it at
+   100 %: about 380 by 483 pixels, group boxes with a 32-pixel picture at
+   their left, option rows about 16 pixels apart, sub-choices indented 16,
+   and Restore Defaults at the bottom right of each tab. */
+.ox-folder-options notebook.properties-notebook { margin: 6px 8px 0 8px; }
+/* Windows' property sheet pages keep one height whatever they hold, which
+   makes Folder Options about 483 pixels tall with its title bar. */
+.ox-folder-options notebook.properties-notebook > stack { min-height: 360px; }
+.ox-folder-options .properties-page { padding: 6px 7px 7px 7px; }
+.ox-folder-options .properties-footer { margin: 8px 8px 8px 8px; }
+.ox-folder-options .options-open-to { margin: 1px 0 5px 2px; }
+.ox-folder-options frame.properties-group { margin: 8px 0 5px 0; }
+/* The title sits on the box's top line, as Windows draws a group box: it
+   is lifted by half its height onto the line, whose stroke its own
+   background hides behind the text. */
+.ox-folder-options frame.properties-group > label {
+  margin: -8px 4px 0 4px;
+  padding: 0 3px;
+  background-color: @ox_bg;
+}
+.ox-folder-options .options-group-content { padding: 2px 6px 5px 6px; border-spacing: 8px; }
+.ox-folder-options .options-group-art { margin-top: 2px; }
+.ox-folder-options .options-group-column { border-spacing: 0; }
+.ox-folder-options checkbutton.option-row { min-height: 16px; margin: 0; padding: 0; }
+.ox-folder-options checkbutton.option-row > check,
+.ox-folder-options checkbutton.option-row > radio { margin: 0 4px 0 0; -gtk-icon-size: 13px; min-width: 13px; min-height: 13px; }
+.ox-folder-options .option-heading { min-height: 16px; }
+.ox-folder-options .options-clear-row { margin-top: 5px; }
+.ox-folder-options .options-folder-views-buttons { margin-top: 5px; }
+.ox-folder-options .options-caption { margin: 2px 0 3px 0; }
+.ox-folder-options frame.advanced-settings { background-color: @ox_bg; }
+.ox-folder-options .advanced-tree { padding: 2px 4px; }
+.ox-folder-options .options-tab-footer { margin-top: 4px; }

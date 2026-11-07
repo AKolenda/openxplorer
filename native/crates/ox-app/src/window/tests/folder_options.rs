@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Folder Options' choices that only it sets (VIEW-021): Browse folders,
-//! Privacy and Clear File Explorer history on the General tab, the status
+//! Privacy and Clear `OpenXplorer` history on the General tab, the status
 //! bar, the infotips and typing into the search box on the View tab, and
 //! searching names and contents on the Search tab.
 
@@ -176,4 +176,134 @@ fn the_search_tab_searches_names_and_contents() {
     assert!(!option_check(&options, "Search", contents).is_active());
     close_folder_options(&test, &options, "OK");
     wait_until("searches to read names again", || search_in() == SearchIn::Names);
+}
+
+/// The close button in the title bar of the titled dialog `options`.
+fn title_bar_close(options: &crate::properties::PropertiesWindow) -> gtk::Button {
+    let bar = options.titlebar().expect("Folder Options has a title bar");
+    crate::test_support::harness::descendants::<gtk::Button>(&bar)
+        .into_iter()
+        .find(|button| button.has_css_class("close"))
+        .expect("the title bar has a close button")
+}
+
+/// Folder Options is a window of its own, as in Windows 11, not a layer
+/// inside the window it was opened from: it has a title bar with its name
+/// and a close button, by which it is moved, and it is a modal child of
+/// that window alone. It joins that window's window group, so another
+/// window stays usable while it is open. Its close button cancels, as
+/// Cancel and Escape do, and gives the window back.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn folder_options_is_a_modal_window_of_its_own() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    let options = open_folder_options(&test);
+    let window: &gtk::Window = test.window.upcast_ref();
+
+    assert_eq!(options.transient_for().as_ref(), Some(window));
+    assert!(options.is_modal(), "it holds back the window it belongs to");
+    assert!(options.parent().is_none(), "it is no widget inside the window");
+    // Windows 11 draws it about 380 by 483 pixels at 100 %.
+    wait_until("Folder Options to have its size", || options.width() > 0);
+    // Without a compositor, as on Xvfb, GTK draws a solid frame of 4
+    // pixels a side inside that width.
+    assert!(
+        (376..=380).contains(&options.width()),
+        "as wide as Windows' Folder Options, not {}",
+        options.width()
+    );
+    assert!(
+        options.height() < 540,
+        "about as tall as Windows' Folder Options, not {}",
+        options.height()
+    );
+    assert!(
+        test.window.dialog_layer().shown().is_none(),
+        "nothing is shown over the window's content"
+    );
+    let bar = options.titlebar().expect("Folder Options has a title bar");
+    assert!(bar.is::<gtk::WindowHandle>(), "the title bar moves the window");
+    let title = crate::test_support::harness::descendants::<gtk::Label>(&bar)
+        .into_iter()
+        .map(|label| label.text().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(title, ["Folder Options"]);
+
+    assert_eq!(
+        options.group(),
+        test.window.group(),
+        "it holds back its own window"
+    );
+    assert_ne!(other.window.group(), test.window.group(), "and no other window");
+
+    let browse = option_check(&options, "General", "Open each folder in its own window");
+    browse.set_active(true);
+    title_bar_close(&options).emit_clicked();
+    wait_until("Folder Options to close", || !options.is_visible());
+    assert!(
+        !test
+            .context
+            .settings_data()
+            .preferences
+            .open_folders_in_own_window,
+        "the close button cancels"
+    );
+    assert!(!test.window.has_open_dialog(), "the window is usable again");
+    assert!(other.window.is_visible());
+}
+
+/// Folder Options beside the window it was opened from, light and dark,
+/// for review with `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`): the
+/// window, each tab of Folder Options, and, under a window manager, the
+/// screen with Folder Options moved partly off its window.
+#[gtk::test]
+fn folder_options_as_a_window_is_captured_light_and_dark() {
+    use crate::test_support::harness::{capture, capture_dialog, wait_for_frames, ThemeGuard};
+
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.activate("theme", Some(theme));
+        test.window.set_default_size(760, 540);
+        let options = open_folder_options(&test);
+        capture(&test.window, &format!("folder-options-window-parent-{theme}.png"));
+        for tab in ["view", "search", "general"] {
+            options.select_tab(tab);
+            capture_dialog(&options, &format!("folder-options-window-{tab}-{theme}.png"));
+        }
+        if let Some(directory) = std::env::var_os("OX_NATIVE_CAPTURE_DIR") {
+            if std::env::var_os("OX_CAPTURE_SCREEN").is_some() {
+                // Moved by the window manager, as dragging its title bar does.
+                let moved = std::process::Command::new("xdotool")
+                    .args([
+                        "search",
+                        "--sync",
+                        "--name",
+                        "^Folder Options$",
+                        "windowmove",
+                        "%@",
+                        "1340",
+                        "200",
+                    ])
+                    .status()
+                    .is_ok_and(|status| status.success());
+                assert!(moved, "the window manager moves Folder Options");
+                crate::test_support::harness::wait_for(std::time::Duration::from_millis(500));
+                wait_for_frames(&options, 3);
+                let path = std::path::Path::new(&directory)
+                    .join(format!("folder-options-window-screen-{theme}.png"));
+                let saved = std::process::Command::new("import")
+                    .args(["-window", "root"])
+                    .arg(&path)
+                    .status()
+                    .is_ok_and(|status| status.success());
+                assert!(saved, "the screen is saved");
+            }
+        }
+        close_folder_options(&test, &options, "Cancel");
+    }
 }
