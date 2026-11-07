@@ -211,7 +211,7 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C44 | `shadow_ambient`, `shadow_key` (new) | `#0002`, `#0003`, `#0005`, `#20304e26` | Fluent neutral shadows `rgba(0,0,0,.12)` and `.14` in light, `.24` and `.28` in dark (FT `alias/lightColor.js` and `darkColor.js`, lines 179–180) | `alpha(black, .12)`, `alpha(black, .14)` / `alpha(black, .24)`, `alpha(black, .28)` | safe; used in §3.6 |
 | C45 | `rubberband` | none (web) | Explorer: translucent accent rectangle (observed, unverified) | border 1 px `@ox_accent`, fill `alpha(@ox_accent, .15)` | Keep (native). |
 | C46 | `doc_paper`, `doc_fold`, `doc_stroke`: file art | `#fafcfe`, `#e5ecf5`, `#c9d3df` / `#dbe3ec`, `#b7c8dc`, `#94a6bb` | none (Explorer artwork is proprietary) | current values | Keep (identity). |
-| C47 | `capacity`: drive bar | 4 px `@accent` on a `@hover` track | Explorer: accent bar that turns red when nearly full (observed, unverified) | 4 px `@ox_accent` on `@ox_hover`, radius 2; `@ox_critical_fill` at ≥ 90 % full | Keep; red is a gain. Native now uses 6 px `#26a0da` (D-N20). |
+| C47 | `capacity`: drive bar | 4 px `@accent` on a `@hover` track | Explorer: accent bar that turns red when nearly full (observed, unverified) | 4 px `@ox_accent` on `@ox_hover`, radius 2; `@ox_critical_fill` at ≥ 90 % full | Keep; red is a gain. This PC's tiles use 6 px with a 1 px `@ox_border` trough, radius 1, as Windows 11's thin drive bar (§4.16, 2026-11-06); the sidebar keeps 3 px. |
 
 ### 3.2 Typography
 
@@ -702,13 +702,13 @@ All transitions follow M01.
 
 ### 4.16 Landing pages (Home, This PC, Network, Settings)
 
-Keep the current metrics:
+Owner decision 2026-11-06: This PC follows Windows 11 (grouped drive tiles, no heading or Quick access cards). The app's own Home page is unchanged.
 
-- Page padding `25 28`; title T11; subtitle 12 px `@ox_muted`, 27 px below.
-- Section title 13 / 600, margins `24 0 15`.
-- Quick cards 78 high, padding 12, radius **4** (6), glyph 43, hover `@ox_hover` with a `@ox_border` edge.
-- Drive cards min height 103 (native: 67), padding 18, radius 7 (R09), 1 px `@ox_border`, background `@ox_card`, glyph 46; capacity bar per C47.
-- This PC groups Devices and drives and Network locations as Windows 11 does: each drive shows its glyph, name, a capacity bar and "N free of M"; a saved share is named as Windows names a mapped drive, label, server and letter (`Backup (\\fileserver) (S:)`), with its own capacity bar and "N free of M" while it is mounted (measuring never mounts), its state line, and its address as the tooltip (2026-11-03, the user's screenshot). Quick access stays above them, as before.
+- This PC is an item view, laid out as Windows 11 lays it out: no heading, no subtitle and no Quick access cards (Quick access is in the navigation pane). Page padding `4 12 8 8`, the icon view's.
+- Group headers, in Windows' order: "Devices and drives (N)", then "Network locations (N)". Each is a 16 px chevron (`chevron_down_16`, `chevron_right_16` while collapsed) in `@ox_muted`, the title and count 12 px / 600, and a 1 px `@ox_border` line to the right edge, as the details view heads its groups (VIEW-022); padding `10 8 4 8`, radius 4, hover `@ox_item_hover`. A click collapses or expands the group. With the keyboard, Up from a group's first row reaches its header, Left collapses it, Right expands it and Down returns to its tiles. An expanded group's header is no Tab stop, as in Explorer; a collapsed group's header is one, so the keyboard can always come back. A group with nothing in it is left out.
+- Tiles are the Tiles view's (VIEW-071): `tiles_cell` wide and high, padding 8, margin `1 2`, radius 4, a 48 px icon 10 px from its lines, the rows' hover, selection and focus ring. Lines: the name in `@ox_text`; for a drive, once GIO has measured it, a 6 px capacity bar with a 1 px `@ox_border` trough on `@ox_hover`, its fill `@ox_accent`, `@ox_critical_fill` from 90% used (C47), then "N free of M" 12 px `@ox_muted`; for a volume to mount, "Click to connect".
+- A saved share is named as Windows names a mapped drive, label, server and letter (`Backup (\\fileserver) (S:)`), with its sidebar row's art, its address as the tooltip, and its capacity while it is mounted (measuring never mounts), else "Connect on open" (2026-11-03, the user's screenshot).
+- One tile is selected on the page. Double-click or Enter opens a tile. A right-click (which selects it), the Menu key or Shift+F10 opens the drive's menu. Alt+Enter opens the drive's Properties. Drawing the page again, as a drive coming or going does, keeps the selected tile, the keyboard's place and collapsed groups.
 - Network is no landing page: it is listed like a folder, as in Windows 11 (2026-11-06), its discovered computers as items of the type "Computer" with the server on the network bar, in the folder's view. Where the network browser cannot be read, Windows' info bar shows above the items, across the folder panes: "Network discovery is turned off. Network computers and devices are not visible. Click to learn more..." (Windows says "Click to change...": OpenXplorer cannot turn discovery on, so the bar opens Help at Network locations), padding `7 14`, the caution tokens of C35 (`ox_caution_bg`, `ox_caution_text`, a 1 px `ox_caution_border` below), GIO's reason as its tooltip.
 - Recent table: 12 px rows with 10 px padding and 1 px `@ox_border` dividers.
 - Settings: left navigation 244 wide on `@ox_sidebar`; sections max 1000 wide, radius **7** (9) (R09), padding 24.
