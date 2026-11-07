@@ -18,6 +18,7 @@ use crate::text_size::Step;
 use super::details_pane::PaneMode;
 use super::folder_pane::FolderView;
 use super::preferences::Preference;
+use super::selection_keys::SelectionChange;
 use super::session::{Direction, TabId, TabPlacement};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -235,13 +236,13 @@ impl BrowserWindow {
         self.add_action_entries([
             plain_action(WindowAction::Open, BrowserWindow::open_selection),
             plain_action(WindowAction::SelectAll, |window| {
-                window.folder_pane().model().select_all();
+                window.change_selection(SelectionChange::All);
             }),
             plain_action(WindowAction::SelectNone, |window| {
-                window.folder_pane().model().select_none();
+                window.change_selection(SelectionChange::Clear);
             }),
             plain_action(WindowAction::InvertSelection, |window| {
-                window.folder_pane().model().invert_selection();
+                window.change_selection(SelectionChange::Invert);
             }),
             plain_action(
                 WindowAction::SelectMatching,

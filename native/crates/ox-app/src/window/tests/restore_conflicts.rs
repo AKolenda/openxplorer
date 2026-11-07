@@ -321,3 +321,98 @@ fn the_question_keeps_the_remembered_details_and_compares_both_files_in_them() {
         forget_trashed_items_of(&fixture);
     }
 }
+
+/// The user's steps: in a folder, Twin.txt is created and deleted, then
+/// created again and deleted; in the Recycle Bin both Twin.txt items are
+/// selected and restored. The second is asked about, and:
+///
+/// - Replace restores it over the first, which goes back to the Recycle
+///   Bin, with no Operation result report;
+/// - Skip leaves it in the Recycle Bin, with the first restored;
+/// - Compare info, both kept, restores it as "Twin (2).txt".
+///
+/// parity: OPS-041, OPS-026, OPS-028
+#[gtk::test]
+fn replace_restores_the_second_of_two_twins_over_the_first() {
+    require_private_trash();
+    let name = "Twin.txt";
+    let first: &[u8] = b"The first fictional twin\n";
+    let second: &[u8] = b"The second fictional twin, longer\n";
+    for answer in ["Replace", "Skip", "Keep both"] {
+        let fixture = Fixture::standard();
+        for contents in [first, second] {
+            fs::write(fixture.path(name), contents).expect("Twin.txt is written");
+            trash(&fixture.path(name));
+        }
+        let test = TestWindow::open(TRASH_URI);
+        wait_until("both twins to be listed", || {
+            test.names().iter().filter(|shown| *shown == name).count() == 2
+        });
+        let model = test.window.folder_model();
+        model.select_none();
+        for position in 0..model.n_items() {
+            if model.name_at(position).as_deref() == Some(name) {
+                model.selection().select_item(position, false);
+            }
+        }
+        assert_eq!(test.selected_names(), [name, name]);
+
+        test.activate("restore", None);
+        let window = question_window(&test);
+        let shown = texts(&window);
+        assert!(
+            shown.contains(&format!("The destination already has a file named \"{name}\"")),
+            "{shown:?}"
+        );
+        // The first twin went back before the question, as Windows
+        // restores the free names first; the second meets it.
+        let first_back = fs::read(fixture.path(name)).expect("the first twin is back");
+        assert!(first_back == first || first_back == second);
+        let other = if first_back == first { second } else { first };
+        let kept_both = fixture.path("Twin (2).txt");
+        match answer {
+            "Replace" => button(&window, "Replace the file in the destination").emit_clicked(),
+            "Skip" => button(&window, "Skip this file").emit_clicked(),
+            _ => {
+                button(&window, "Compare info for both files").emit_clicked();
+                let conflicts = super::name_conflicts::conflict_window(&window);
+                let (incoming, existing) = conflicts.row_checks(0);
+                incoming.set_active(true);
+                existing.set_active(true);
+                button(&conflicts, "Continue").emit_clicked();
+                wait_until("both versions", || kept_both.is_file());
+            }
+        }
+        ends_without_a_report(&test);
+
+        let restored = fs::read(fixture.path(name)).expect("Twin.txt is restored");
+        let in_bin = |count: usize| {
+            let context = gtk::glib::MainContext::default();
+            context
+                .block_on(list_recycle_bin(&Cancellation::new()))
+                .expect("a readable Recycle Bin")
+                .into_iter()
+                .filter(|item| item.original_path.as_deref() == Some(fixture.path(name).as_path()))
+                .count()
+                == count
+        };
+        match answer {
+            "Replace" => {
+                assert_eq!(restored, other, "the second replaced the first");
+                assert!(!kept_both.exists());
+                wait_until("the first twin to be in the Recycle Bin", || in_bin(1));
+            }
+            "Skip" => {
+                assert_eq!(restored, first_back, "the first stays restored");
+                wait_until("the second twin to stay in the Recycle Bin", || in_bin(1));
+            }
+            _ => {
+                assert_eq!(restored, first_back);
+                assert_eq!(fs::read(&kept_both).unwrap(), other, "the second is numbered");
+                wait_until("the Recycle Bin to hold neither twin", || in_bin(0));
+            }
+        }
+        drop(test);
+        forget_trashed_items_of(&fixture);
+    }
+}
