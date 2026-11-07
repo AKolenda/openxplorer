@@ -204,6 +204,76 @@ fn keeping_both_numbers_the_restored_items_by_their_original_name() {
     );
 }
 
+/// Two items deleted from one place, restored together while the name
+/// is free: the first goes back, and the second is asked about as it
+/// meets the first, never failing without a question, as in Windows.
+/// Keep both numbers it; Replace keeps the first, as for a name this
+/// restore already replaced, and Undo takes back what was restored.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn two_items_from_one_free_place_ask_about_the_second() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let context = OperationContext::default();
+    for answer in [Resolution::KeepBoth, Resolution::Replace] {
+        let folder = temp.path().join(format!("{answer:?}"));
+        fs::create_dir(&folder).unwrap();
+        let notes = folder.join("notes.txt");
+        for contents in [b"first".as_slice(), b"second!".as_slice()] {
+            fs::write(&notes, contents).unwrap();
+            trash(&[&notes]);
+        }
+        let uris: Vec<String> = recycled_from(&notes, 2)
+            .into_iter()
+            .map(|item| item.uri)
+            .collect();
+
+        let plan = scan(&uris);
+        let outcome = restore(&plan, &[answer], &context);
+
+        assert_eq!(plan.items[0].kind, PlannedKind::Free);
+        assert_eq!(plan.items[1].kind, PlannedKind::Conflict(0));
+        let conflict = &plan.conflicts[0];
+        assert_eq!(conflict.name(), "notes.txt");
+        assert_eq!(conflict.existing_uri, file_uri(&notes));
+        assert_ne!(
+            conflict.existing.size, conflict.incoming.size,
+            "the first item's facts"
+        );
+        if answer == Resolution::KeepBoth {
+            assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+            let mut both = [
+                fs::read(&notes).unwrap(),
+                fs::read(folder.join("notes (2).txt")).unwrap(),
+            ];
+            both.sort();
+            assert_eq!(both, [b"first".to_vec(), b"second!".to_vec()]);
+        } else {
+            assert!(notes.is_file());
+            assert_eq!(outcome.created, [file_uri(&notes)]);
+            assert_eq!(
+                outcome.result.errors,
+                [
+                    "notes.txt: An item named “notes.txt” already exists in its original folder. \
+                  It was left in the Recycle Bin."
+                ]
+            );
+            assert_eq!(recycled_from(&notes, 1).len(), 1, "the second item stays");
+        }
+        let Some(record) = outcome.undo else {
+            panic!("an Undo record");
+        };
+        let reversal = block_on(reverse(&record, &context, |_| {})).expect("Undo runs");
+        assert!(reversal.result.errors.is_empty(), "{:?}", reversal.result.errors);
+        assert_eq!(
+            fs::read_dir(&folder).unwrap().count(),
+            0,
+            "Undo empties {answer:?}"
+        );
+    }
+}
+
 /// Replace never puts a file in place of a folder: the item stays in the
 /// Recycle Bin and the report says why.
 ///
