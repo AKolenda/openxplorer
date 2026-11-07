@@ -48,6 +48,12 @@ impl FileCell {
         self.update_check_target();
     }
 
+    /// Whether the check box takes clicks now, for tests.
+    #[cfg(test)]
+    pub(crate) fn item_check_targets_clicks(&self) -> bool {
+        self.imp().check.can_target()
+    }
+
     /// Lets the check box take clicks when it may, or when it is checked.
     fn update_check_target(&self) {
         let imp = self.imp();

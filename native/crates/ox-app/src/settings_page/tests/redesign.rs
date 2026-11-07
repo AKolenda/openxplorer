@@ -20,7 +20,7 @@ use crate::test_support::harness::{descendants, wait_until};
 /// then, and the row that offers it now, then the rows added since and the
 /// rows of the commands that came from the command bar's "…" menu
 /// (CMD-007), by their menu labels.
-const MOVED_ROWS: [(&str, &str); 69] = [
+const MOVED_ROWS: [(&str, &str); 71] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -136,6 +136,8 @@ const MOVED_ROWS: [(&str, &str); 69] = [
         "Brave saves to my Linux Downloads folder",
     ),
     ("Check for updates", "Check for updates"),
+    ("Paste pictures as new files", "Paste pictures as new files"),
+    ("Also copy paths as text", "Also copy paths as text"),
     (
         "Check for updates automatically",
         "Check for updates automatically",

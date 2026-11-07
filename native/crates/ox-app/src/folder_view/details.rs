@@ -18,7 +18,7 @@ pub(crate) mod column_text;
 mod group_headers;
 mod select_all;
 
-pub(crate) use group_headers::GroupTitle;
+pub(crate) use group_headers::{header_text, GroupTitle};
 
 use std::cell::Cell;
 use std::rc::Rc;
