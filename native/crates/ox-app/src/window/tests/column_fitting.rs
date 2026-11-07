@@ -268,6 +268,10 @@ fn a_real_right_click_on_a_title_opens_the_menu_that_sizes_all_columns() {
 
     wait_until("the menu to close", || open_titles_menu(&header).is_none());
     assert_all_fitted(&details);
+    // Back to the screen's centre, where Xvfb starts the pointer: GTK 4.14
+    // crashes in a later test that closes a popover under a pointer left
+    // over the screen.
+    pointer.move_to(720, 500);
 }
 
 /// The real keys: Ctrl held with plus on the number pad fits the columns,
