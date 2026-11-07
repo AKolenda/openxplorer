@@ -261,9 +261,13 @@ impl BrowserWindow {
     /// with the volume's name `volume`, as a Mounted Volume's Properties
     /// button does.
     pub(crate) fn open_drive_properties(&self, uri: &str, volume: &str) {
+        // The volume's window, even where a standard folder is mounted.
         let target = PropertiesTarget {
+            uri: uri.to_owned(),
+            title: volume.to_owned(),
+            kind: ItemKind::Folder,
+            known_folder: None,
             as_drive: true,
-            ..self.named_target(uri.to_owned(), volume.to_owned(), ItemKind::Folder)
         };
         self.show_properties(target, PropertiesTab::General);
     }
