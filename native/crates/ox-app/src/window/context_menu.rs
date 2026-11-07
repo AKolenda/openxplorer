@@ -276,7 +276,7 @@ impl BrowserWindow {
             location: item_location(&entry.uri),
             is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
             is_single,
-            is_search_result: self.is_searching(),
+            has_file_location: self.located_file(entry).is_some(),
             is_symlink: entry.is_symlink,
             comparison: Comparison::Unavailable,
             editors: self.context().desktop_integration().known_editor_shortcuts(),

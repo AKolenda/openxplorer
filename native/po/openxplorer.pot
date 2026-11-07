@@ -5026,7 +5026,7 @@ msgid "Only a folder can be pinned to Quick access."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
-msgid "Only a search result has a file location to open."
+msgid "Only a search result or a recent file has a file location to open."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
