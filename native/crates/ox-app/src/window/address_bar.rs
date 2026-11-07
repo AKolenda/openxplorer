@@ -125,6 +125,9 @@ mod imp {
         /// entry shows again when the selection moves off the list or
         /// Escape closes it.
         pub(super) text_before_list: RefCell<String>,
+        /// Escape closed the list, and no edit has come since: completions
+        /// that arrive late, for the text as it was, stay closed.
+        pub(super) list_dismissed: Cell<bool>,
         /// The protocols offered under the empty entry (NET-029).
         pub(super) protocols: OnceCell<gtk::Popover>,
     }

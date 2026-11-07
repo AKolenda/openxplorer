@@ -380,7 +380,10 @@ fn the_wheel_on_a_crumb_never_switches_folders() {
     let crumbs = test.window.address_bar().crumb_buttons();
 
     assert!(!crumbs.is_empty());
-    assert!(descendants::<gtk::ScrolledWindow>(test.window.address_bar()).is_empty());
+    assert!(
+        crumbs[0].ancestor(gtk::ScrolledWindow::static_type()).is_none(),
+        "the crumbs never scroll"
+    );
     for crumb in &crumbs {
         assert!(
             controllers::<gtk::EventControllerScroll>(crumb).is_empty(),
@@ -568,4 +571,124 @@ fn a_typed_zip_opens_the_archive_browser() {
 
     archive_browser(&test);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+}
+
+/// The key controller of the address entry that moves through the list.
+fn list_keys(address: &crate::window::address_bar::AddressBar) -> gtk::EventControllerKey {
+    controllers::<gtk::EventControllerKey>(&address.entry())
+        .into_iter()
+        .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+        .expect("the list's keys")
+}
+
+/// Presses `key` on the list's keys.
+fn press_list_key(keys: &gtk::EventControllerKey, key: gdk::Key) {
+    let no_keycode = 0_u32;
+    keys.emit_by_name::<bool>(
+        "key-pressed",
+        &[&key.into_glib(), &no_keycode, &gdk::ModifierType::empty()],
+    );
+}
+
+/// Escape right after an edit keeps the edit while the edited folder's
+/// names are still being listed: only the stale list closes.
+///
+/// parity: NAV-030
+#[gtk::test]
+fn escape_keeps_an_edit_whose_folder_is_still_being_listed() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Report.txt");
+    let test = TestWindow::open(&fixture.uri());
+    let address = test.window.address_bar();
+    test.activate("location", None);
+    address
+        .entry()
+        .set_text(&format!("{}/No", fixture.root().display()));
+    wait_until("the completions", || address.suggestions_shown());
+
+    // Typed as keys change the text: "No" goes, then the rest comes,
+    // each a single change.
+    let entry = address.entry();
+    let root_end = i32::try_from(fixture.root().display().to_string().chars().count() + 1).expect("short");
+    entry.delete_text(root_end, -1);
+    let mut position = root_end;
+    entry.insert_text("Documents/R", &mut position);
+    let edited = format!("{}/Documents/R", fixture.root().display());
+    assert_eq!(entry.text(), edited);
+    assert!(
+        address.suggestions_shown(),
+        "the old list still shows while Documents is listed"
+    );
+    press_list_key(&list_keys(address), gdk::Key::Escape);
+
+    assert_eq!(address.entry().text(), edited, "the edit stays");
+    assert!(!address.suggestions_shown(), "the stale list closes");
+    // Documents' names arrive after Escape; "Report.txt" matches, but the
+    // list Escape closed stays closed until the next edit.
+    wait_for(std::time::Duration::from_millis(500));
+    assert!(!address.suggestions_shown(), "late completions stay closed");
+    assert_eq!(address.entry().text(), edited);
+    let mut position = -1;
+    entry.insert_text("e", &mut position);
+    wait_until("the completions of the next edit", || address.suggestions_shown());
+    assert_eq!(
+        address.suggestion_rows(),
+        [format!("{}/Documents/Report.txt", fixture.root().display())]
+    );
+    address.hide_suggestions();
+}
+
+/// A list taller than its room scrolls, and the arrow keys bring the
+/// selected row into view, as Windows' address bar drop-down does.
+///
+/// parity: NAV-030
+#[gtk::test]
+fn a_list_taller_than_its_room_scrolls_to_the_selected_row() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let address = test.window.address_bar();
+    test.activate("location", None);
+    let rows: Vec<String> = (0..12).map(|number| format!("/srv/folder {number:02}")).collect();
+    let typed = address.typed_text();
+    address.show_completions(&typed, &rows);
+    assert!(address.suggestions_shown());
+    let scroller = address.suggestion_scroller();
+    let limit = scroller.max_content_height();
+    let display = gdk::Display::default().expect("a display");
+    let monitor = display
+        .monitor_at_surface(
+            &address
+                .native()
+                .and_then(|native| native.surface())
+                .expect("a surface"),
+        )
+        .expect("a monitor");
+    assert!(
+        limit > 0 && limit <= monitor.geometry().height() / 2,
+        "the list is held to half the monitor"
+    );
+
+    scroller.set_max_content_height(100);
+    wait_until("the list cut to its room", || {
+        scroller.height() <= 100 && scroller.vadjustment().upper() > 200.0
+    });
+    let keys = list_keys(address);
+    for _ in 0..12 {
+        press_list_key(&keys, gdk::Key::Down);
+    }
+
+    let last = address.suggestion_row(11);
+    assert_eq!(address.entry().text(), rows[11]);
+    let parent = last.parent().expect("the list");
+    let bounds = last.compute_bounds(&parent).expect("the row is laid out");
+    let adjustment = scroller.vadjustment();
+    assert!(adjustment.value() > 0.0, "the list scrolled");
+    assert!(
+        f64::from(bounds.y() + bounds.height()) <= adjustment.value() + adjustment.page_size() + 0.5,
+        "the selected row shows whole"
+    );
+    press_list_key(&keys, gdk::Key::Down);
+    press_list_key(&keys, gdk::Key::Down);
+    assert!(adjustment.value().abs() < 0.5, "the first row again, at the top");
+    address.hide_suggestions();
 }
