@@ -17,14 +17,15 @@
 //! Here Tab visits, in order and wrapping round: the address bar (the
 //! chevron or «, each crumb shown, then the history chevron; or the
 //! entry), the search box, the command bar, the navigation pane (one stop,
-//! the arrows move inside it), the folder tree, Map network drive, the
-//! file list (one stop, on its current item; each pane of a split tab),
-//! the Details pane, the status bar's buttons, the Open or Save bar, the
-//! tab in front and its Close button, New tab, and the Back, Forward, Up
-//! and Refresh buttons, which lead back into the address bar as they sit
-//! before it.
-//! The caption buttons, which Windows draws outside the window's own
-//! controls, are no stops. A hidden or disabled stop is skipped.
+//! the arrows move inside it), the folder tree, the pane's footer (Map
+//! network drive, where it shows), the file list (one stop, on its current
+//! item, the first one when none had the keyboard; each pane of a split
+//! tab), the Details pane, the status bar's buttons, the Open or Save bar,
+//! the tab in front and its Close button, New tab, and the Back, Forward,
+//! Up and Refresh buttons, which lead back into the address bar as they
+//! sit before it. The caption buttons, which Windows draws outside the
+//! window's own controls, are no stops. A hidden or disabled stop is
+//! skipped.
 //!
 //! GTK emits `move-focus` for Tab only once the focused widget and its
 //! parents let the key go, so what takes Tab itself keeps it: Tab between
@@ -47,7 +48,7 @@ pub(super) enum Stop {
     Commands,
     Places,
     FolderTree,
-    MapNetworkDrive,
+    SidebarFooter,
     Pane(PaneSide),
     Details,
     Status,
@@ -65,7 +66,7 @@ impl Stop {
         Stop::Commands,
         Stop::Places,
         Stop::FolderTree,
-        Stop::MapNetworkDrive,
+        Stop::SidebarFooter,
         Stop::Pane(PaneSide::Start),
         Stop::Pane(PaneSide::End),
         Stop::Details,
@@ -150,7 +151,11 @@ impl BrowserWindow {
         let current = self.focused_stop();
         if let Some(stop) = current {
             // Within a stop of several controls, Tab goes to the next one.
-            if !self.stop_is_single(stop) && self.stop_widget(stop).child_focus(direction) {
+            let within = || {
+                self.stop_widget(stop)
+                    .is_some_and(|widget| widget.child_focus(direction))
+            };
+            if !self.stop_is_single(stop) && within() {
                 return true;
             }
         }
@@ -166,21 +171,22 @@ impl BrowserWindow {
     pub(super) fn focused_stop(&self) -> Option<Stop> {
         let focus = gtk::prelude::GtkWindowExt::focus(self)?;
         Stop::ALL.into_iter().find(|stop| {
-            let widget = self.stop_widget(*stop);
-            focus == widget || focus.is_ancestor(&widget)
+            self.stop_widget(*stop)
+                .is_some_and(|widget| focus == widget || focus.is_ancestor(&widget))
         })
     }
 
-    /// The widget that holds `stop`.
-    fn stop_widget(&self, stop: Stop) -> gtk::Widget {
+    /// The widget that holds `stop`; `None` for the navigation pane's
+    /// footer where the pane has none.
+    fn stop_widget(&self, stop: Stop) -> Option<gtk::Widget> {
         let imp = self.imp();
-        match stop {
+        let widget = match stop {
             Stop::Address => self.address_bar().clone().upcast(),
             Stop::Search => self.search_box().clone().upcast(),
             Stop::Commands => self.command_bar().clone().upcast(),
             Stop::Places => self.sidebar().list().clone().upcast(),
             Stop::FolderTree => self.sidebar().folder_tree().clone().upcast(),
-            Stop::MapNetworkDrive => self.sidebar().map_network_footer(),
+            Stop::SidebarFooter => return self.sidebar().footer(),
             Stop::Pane(side) => self.pane_on(side).clone().upcast(),
             Stop::Details => self.details_pane().clone().upcast(),
             Stop::Status => self.status_bar().clone().upcast(),
@@ -188,7 +194,8 @@ impl BrowserWindow {
             Stop::Tabs => self.tab_strip().clone().upcast(),
             Stop::NewTab => imp.new_tab_button.get().upcast(),
             Stop::Navigation => imp.navigation_buttons.get().upcast(),
-        }
+        };
+        Some(widget)
     }
 
     /// Whether `stop` is one stop however many items it holds, with the
@@ -205,8 +212,14 @@ impl BrowserWindow {
     /// Whether `stop` is shown and enabled. Each pane of a split tab is a
     /// stop; the start pane alone otherwise.
     fn stop_is_reachable(&self, stop: Stop) -> bool {
-        let widget = self.stop_widget(stop);
-        widget.is_mapped() && widget.is_sensitive()
+        self.stop_widget(stop)
+            .is_some_and(|widget| widget.is_mapped() && widget.is_sensitive())
+    }
+
+    /// Moves the keyboard into `stop`'s widget, `direction` first.
+    fn focus_stop_widget(&self, stop: Stop, direction: gtk::DirectionType) -> bool {
+        self.stop_widget(stop)
+            .is_some_and(|widget| widget.child_focus(direction))
     }
 
     /// Focuses `stop` from outside it, its first control (its last going
@@ -235,15 +248,16 @@ impl BrowserWindow {
                     });
                 match front {
                     Some(tab) => tab.grab_focus(),
-                    None => self.stop_widget(stop).child_focus(direction),
+                    None => self.focus_stop_widget(stop, direction),
                 }
             }
             Stop::Pane(side) if self.stop_is_single(stop) => {
                 let pane = self.pane_on(side);
                 pane.focus_view();
+                pane.focus_an_item();
                 pane.view_has_focus()
             }
-            _ => self.stop_widget(stop).child_focus(direction),
+            _ => self.focus_stop_widget(stop, direction),
         }
     }
 }

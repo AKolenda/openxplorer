@@ -531,17 +531,19 @@ fn stop_name(stop: Option<Stop>) -> String {
 }
 
 /// The user's steps on Windows' order: open OX-Test > Template test >
-/// Inside A, click blank space in the address bar, press Esc, then press
-/// Tab. Esc leaves the keyboard in the file list, on its current item, and
-/// Tab goes on from there as in Windows File Explorer: the status bar's
-/// view buttons, the tab in front and its Close button, New tab, the navigation buttons, then
-/// the address bar (the chevron first, each crumb, the history chevron),
-/// the search box, the command bar, the navigation pane as one stop, Map
-/// network drive and back to the file list. Every stop draws its focus,
-/// light and dark: no press of Tab leaves the keyboard where nothing
-/// shows it. In a narrow window the « takes the chevron's place as the
-/// address bar's first stop. The keys are real ones on the private
-/// display, so GTK's own key handling decides what each one does.
+/// Inside A in Large icons (and in Details), click blank space in the
+/// address bar, press Esc, then press Tab. Esc leaves the keyboard on an
+/// item of the file list, which draws its ring: Large icons had taken it
+/// on the list itself, which draws nothing. Tab goes on from there as in
+/// Windows File Explorer: the status bar's view buttons, the tab in front
+/// and its Close button, New tab, the navigation buttons, then the address
+/// bar (the chevron first, each crumb, the history chevron), the search
+/// box, the command bar, the navigation pane as one stop, the pane's
+/// footer where it has one and back to the file list. Every stop draws its
+/// focus, light and dark: no key leaves the keyboard where nothing shows
+/// it. In a narrow window the « takes the chevron's place as the address
+/// bar's first stop. The keys are real ones on the private display, so
+/// GTK's own key handling decides what each one does.
 ///
 /// parity: ACC-016, NAV-018, NAV-023
 #[gtk::test]
@@ -550,15 +552,24 @@ fn tab_after_escaping_the_address_goes_round_in_explorers_order_with_every_stop_
     let fixture = Fixture::empty();
     let inside = fixture.path("OX-Test").join("Template test").join("Inside A");
     std::fs::create_dir_all(&inside).expect("the test folders");
-    std::fs::write(inside.join("Plan.txt"), "x").expect("a file");
-    for theme in ["light", "dark"] {
+    for name in ["Plan.txt", "Notes.txt", "Budget.txt"] {
+        std::fs::write(inside.join(name), "x").expect("a file");
+    }
+    let cases = [
+        ("light", "large"),
+        ("dark", "large"),
+        ("light", "details"),
+        ("dark", "details"),
+    ];
+    for (theme, view) in cases {
         let test = TestWindow::open(&file_uri(&inside));
         test.activate("theme", Some(theme));
+        test.activate("view", Some(view));
         test.wait_for_listing("Inside A");
         test.window.present();
         wait_for_frames(&test.window, 3);
         let mut pointer = Pointer::connect();
-        walk_the_tab_order(&test, &mut pointer, theme);
+        walk_the_tab_order(&test, &mut pointer, &format!("{theme}-{view}"));
     }
 }
 
@@ -580,10 +591,12 @@ fn blank_spot(address: &impl IsA<gtk::Widget>) -> (f64, f64) {
         .expect("the address bar has blank space")
 }
 
-fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
+/// Clicks blank space in the address bar and presses Esc, as the user
+/// did: the keyboard is then on an item of the file list, which shows it.
+fn escape_the_address(test: &TestWindow, pointer: &mut Pointer, name: &str) {
+    let window = test.window.upcast_ref::<gtk::Window>();
     let address = test.window.address_bar();
-    let blank = blank_spot(address);
-    let (x, y) = screen_point(pointer, address, blank, (400, 70));
+    let (x, y) = screen_point(pointer, address, blank_spot(address), (400, 70));
     pointer.move_to(x, y);
     // The window settles under the pointer before the click.
     wait_for(RING_SETTLE);
@@ -592,21 +605,39 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
     wait_until("the address to be edited", || {
         address.mode() == AddressMode::Entry
     });
-    pointer.tap_key(gdk::Key::Escape);
-    wait_until("the crumbs back", || address.mode() == AddressMode::Crumbs);
     // The pointer rests on the status bar's count, away from every stop.
     let count = (12.0, f64::from(test.window.status_bar().height()) / 2.0);
     let (x, y) = screen_point(pointer, test.window.status_bar(), count, (40, 780));
     pointer.move_to(x, y);
     wait_for(RING_SETTLE);
-    let start = Stop::Pane(test.window.active_side());
+    let editing = Picture::of(window);
+    pointer.tap_key(gdk::Key::Escape);
+    wait_until("the crumbs back", || address.mode() == AddressMode::Crumbs);
+    wait_for(RING_SETTLE);
+    wait_for_frames(window, 2);
     assert_eq!(
         test.window.focused_stop(),
-        Some(start),
+        Some(Stop::Pane(test.window.active_side())),
         "Esc leaves the keyboard in the file list"
     );
-    assert!(test.window.folder_pane().view_has_focus());
-    capture(&test.window, &format!("address-tab-fix-{theme}-00-escape.png"));
+    let item = focused(test).expect("Esc leaves the keyboard on a control");
+    assert!(
+        test.window.folder_pane().focused_position().is_some(),
+        "the keyboard is on an item, not on the list itself: {}",
+        item.type_().name()
+    );
+    assert!(window.gets_focus_visible(), "Esc is a key: the ring shows");
+    let changed = Picture::of(window).changed_in(&editing, &item, window);
+    assert!(
+        changed >= RING_PIXELS,
+        "the item draws its ring after Esc: {changed} pixels changed"
+    );
+    capture(&test.window, &format!("address-tab-order-{name}-00-escape.png"));
+}
+
+fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
+    escape_the_address(test, pointer, theme);
+    let start = Stop::Pane(test.window.active_side());
 
     let mut visited: Vec<(Stop, gtk::Widget)> = Vec::new();
     for press in 1..=60 {
@@ -614,7 +645,7 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
         let stop = test.window.focused_stop();
         capture(
             &test.window,
-            &format!("address-tab-fix-{theme}-{press:02}-{}.png", stop_name(stop)),
+            &format!("address-tab-order-{theme}-{press:02}-{}.png", stop_name(stop)),
         );
         if stop == Some(start) {
             break;
@@ -644,8 +675,10 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
             Stop::Search,
             Stop::Commands,
             Stop::Places,
-            Stop::MapNetworkDrive,
-        ],
+        ]
+        .into_iter()
+        .chain(test.window.sidebar().footer().map(|_| Stop::SidebarFooter))
+        .collect::<Vec<_>>(),
         "Windows' order from the file list round to it"
     );
     assert!(
@@ -719,7 +752,7 @@ fn the_shift_tab_and_the_overflow_stops(test: &TestWindow, pointer: &mut Pointer
     );
     capture(
         &test.window,
-        &format!("address-tab-fix-{theme}-narrow-overflow.png"),
+        &format!("address-tab-order-{theme}-narrow-overflow.png"),
     );
     let next = tab_and_see_the_ring(test, pointer, false);
     let first_shown = address.crumb_buttons()[address.hidden_crumbs().len()].clone();
@@ -759,7 +792,7 @@ fn the_keyboard_on_an_empty_list_rings_its_note() {
     let _theme = ThemeGuard::keep();
     for theme in ["light", "dark"] {
         test.activate("theme", Some(theme));
-        capture(&test.window, &format!("address-tab-fix-{theme}-empty-list.png"));
+        capture(&test.window, &format!("address-tab-order-{theme}-empty-list.png"));
     }
 
     test.window

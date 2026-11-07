@@ -629,6 +629,20 @@ impl FolderPane {
         }
     }
 
+    /// Gives the list's keyboard focus to an item when it rests on the list
+    /// itself: its first selected item, else its first. GTK's icon view
+    /// takes the keyboard on itself until an item had it, and draws
+    /// nothing there; Windows draws the focus on the first item when the
+    /// keyboard enters a list where none had it (ACC-016).
+    pub(super) fn focus_an_item(&self) {
+        if !self.lists_items() || self.model().n_items() == 0 || !self.shows_rows() {
+            return;
+        }
+        if self.view_has_focus() && self.focused_position().is_none() {
+            self.focus_item(self.model().first_selected().unwrap_or(0));
+        }
+    }
+
     /// Lets the window hold no keyboard focus, for a page that has nothing
     /// to focus.
     fn release_keyboard(&self) {

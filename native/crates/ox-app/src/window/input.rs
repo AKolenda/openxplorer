@@ -102,6 +102,8 @@ impl BrowserWindow {
                 // The address being opened goes with the edit (VIEW-068).
                 window.cancel_typed_opening();
                 window.finish_address();
+                // Esc is a key, so the list shows where the keyboard is.
+                window.folder_pane().focus_an_item();
             }
         ));
         self.install_focus_regions();
