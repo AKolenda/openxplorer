@@ -70,8 +70,9 @@ pub(crate) struct ItemFacts {
     /// At most one item is selected (`state.selection.size<=1`).
     pub(crate) is_single: bool,
     /// It is a search result, listed away from its folder
-    /// (`state.query`).
-    pub(crate) is_search_result: bool,
+    /// (`state.query`), or a Recent row, which stands for a file
+    /// elsewhere.
+    pub(crate) has_file_location: bool,
     /// It is a symbolic link, whose target "Show target" opens (CMD-030).
     pub(crate) is_symlink: bool,
     /// Whether the selection can be compared (Dolphin's Compare Files).
@@ -244,9 +245,7 @@ fn folder_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 }
 
 /// The app's own commands beside Open, which Windows does not have:
-/// Compare files for two files, Show target for a link (CMD-030) and, for
-/// a search result, Open file location (SRCH-015), also in a new tab or
-/// window (SRCH-016).
+/// Compare files for two files and Show target for a link (CMD-030).
 fn other_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
     if facts.comparison == Comparison::TwoFiles {
@@ -267,7 +266,15 @@ fn other_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         entries.push(for_one_item(show_target, facts, false).into());
     }
-    if facts.is_search_result {
+    entries
+}
+
+/// Open file location for a search result or a Recent row, which stand for
+/// a file elsewhere (SRCH-015), also in a new tab or window (SRCH-016):
+/// right after Open, where Windows lists it.
+fn file_location_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let mut entries = Vec::new();
+    if facts.has_file_location {
         let locations = [
             ("Open file location", Icon::Folder, WindowAction::OpenFileLocation),
             (
@@ -947,6 +954,7 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
 /// the classic menu behind "Show more options".
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     let mut entries = vec![open_item(facts)];
+    entries.extend(file_location_items(facts));
     entries.extend(extraction_items(facts));
     entries.extend(mount_item(facts));
     entries.extend(compact_open_with(facts));
@@ -1002,6 +1010,7 @@ fn rename_items_item(facts: &ItemFacts) -> Option<MenuEntry> {
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
     let mut entries = vec![open_item(facts)];
+    entries.extend(file_location_items(facts));
     entries.extend(extraction_items(facts));
     entries.extend(mount_item(facts));
     entries.extend(editor_items(facts));
@@ -1260,7 +1269,7 @@ mod tests {
             location: ItemLocation::Local,
             is_read_only: false,
             is_single: true,
-            is_search_result: false,
+            has_file_location: false,
             is_symlink: false,
             comparison: Comparison::Unavailable,
             editors: Vec::new(),
@@ -1946,27 +1955,27 @@ mod tests {
         );
     }
 
+    /// A search result or a Recent row lists Open file location right
+    /// after Open, where Windows lists it, in both styles.
+    ///
     /// parity: SRCH-015
     #[test]
-    fn a_search_result_offers_open_file_location_after_the_open_group() {
+    fn a_search_result_offers_open_file_location_right_after_open() {
         let facts = ItemFacts {
-            is_search_result: true,
+            has_file_location: true,
             ..file()
         };
 
-        let entries = labels(&item_menu(&facts, MenuStyle::Classic).entries);
-
-        assert_eq!(
-            entries[..6],
-            [
-                "Open",
-                "Open containing folder in Terminal",
-                "Open with…",
-                "Open file location",
-                "Open file location in new tab",
-                "Open file location in new window"
-            ]
-        );
+        let locations = [
+            "Open file location",
+            "Open file location in new tab",
+            "Open file location in new window",
+        ];
+        for style in [MenuStyle::Classic, MenuStyle::Compact] {
+            let entries = labels(&item_menu(&facts, style).entries);
+            assert_eq!(entries[0], "Open", "{style:?}");
+            assert_eq!(entries[1..4], locations, "{style:?}");
+        }
         assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries)
             .contains(&"Open file location".to_owned()));
     }
