@@ -251,6 +251,7 @@ fn f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there() {
     }
 
     test.activate("address-history", None);
+    let typed = address.entry().text();
 
     assert_eq!(address.mode(), AddressMode::Entry);
     assert!(address.suggestions_shown());
@@ -271,6 +272,40 @@ fn f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there() {
         documents,
         "Down puts the row into the address"
     );
+    let press = |key: gdk::Key| {
+        let no_keycode = 0_u32;
+        list_keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[&key.into_glib(), &no_keycode, &gdk::ModifierType::empty()],
+        )
+    };
+    press(gdk::Key::Up);
+    assert_eq!(address.entry().text(), root, "Up goes back a row");
+    press(gdk::Key::Up);
+    assert_eq!(
+        address.entry().text(),
+        typed,
+        "Up past the first row puts back the typed text"
+    );
+    press(gdk::Key::Up);
+    assert_eq!(
+        address.entry().text(),
+        documents,
+        "Up from no row wraps to the last"
+    );
+    press(gdk::Key::Down);
+    assert_eq!(
+        address.entry().text(),
+        typed,
+        "Down past the last row puts back the typed text"
+    );
+    press(gdk::Key::Down);
+    press(gdk::Key::Escape);
+    assert_eq!(address.entry().text(), typed, "Escape puts back the typed text");
+    assert!(!address.suggestions_shown(), "Escape closes the list");
+    test.activate("address-history", None);
+    press(gdk::Key::Down);
+    press(gdk::Key::Down);
     address.entry().emit_by_name::<()>("activate", &[]);
     wait_until("the typed address", || {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))

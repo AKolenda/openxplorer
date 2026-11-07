@@ -11,7 +11,17 @@
 //! hears typed text through [`AddressBar::connect_typed`] and answers with
 //! [`AddressBar::show_completions`]. Up and Down move through the list and
 //! put the row into the entry, Enter goes there, a click on a row goes
-//! there at once, and Escape closes the list before it cancels editing.
+//! there at once, and Escape puts back the typed text and closes the list
+//! before it cancels editing.
+//!
+//! The keys follow Windows' autocomplete list (the shell's `IAutoComplete`
+//! drop-down, as `ReactOS`'s `CAutoComplete::OnListUpDown` reimplements it):
+//! Down with no row selected selects the first and Up the last; Down on
+//! the last row and Up on the first leave the list with no row selected
+//! and the typed text back in the entry, so the next key wraps round.
+//! The selected row has Windows 11's list selection look, a light fill
+//! and a short accent bar at its left edge; the pointer's hover draws the
+//! fill alone (`resources/skin/menus.css`).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -112,26 +122,34 @@ impl AddressBar {
         match key {
             gdk::Key::Down | gdk::Key::KP_Down => self.move_suggestion(1),
             gdk::Key::Up | gdk::Key::KP_Up => self.move_suggestion(-1),
-            gdk::Key::Escape => self.hide_suggestions(),
+            gdk::Key::Escape => {
+                let typed = self.imp().text_before_list.borrow().clone();
+                self.set_text_quietly(&typed);
+                self.hide_suggestions();
+            }
             _ => return glib::Propagation::Proceed,
         }
         glib::Propagation::Stop
     }
 
-    /// Selects the row `step` rows on and puts it into the entry.
+    /// Selects the row `step` rows on and puts it into the entry. Past
+    /// either end no row is selected and the typed text comes back, as
+    /// Windows' autocomplete list does.
     fn move_suggestion(&self, step: i32) {
         let Some(list) = self.imp().suggestion_list.get() else {
             return;
         };
         let count = i32::try_from(row_count(list)).unwrap_or(i32::MAX);
-        let current = list.selected_row().map_or(-1, |row| row.index());
-        let next = (current + step).clamp(0, count - 1);
-        let Some(row) = list.row_at_index(next) else {
-            return;
-        };
-        list.select_row(Some(&row));
-        if let Some(text) = row_text(&row) {
-            self.set_text_quietly(&text);
+        let current = list.selected_row().map(|row| row.index());
+        if let Some(row) = next_index(current, step, count).and_then(|next| list.row_at_index(next)) {
+            list.select_row(Some(&row));
+            if let Some(text) = row_text(&row) {
+                self.set_text_quietly(&text);
+            }
+        } else {
+            list.unselect_all();
+            let typed = self.imp().text_before_list.borrow().clone();
+            self.set_text_quietly(&typed);
         }
     }
 
@@ -208,13 +226,9 @@ impl AddressBar {
             return;
         };
         list.remove_all();
+        imp.text_before_list.replace(imp.entry.text().into());
         for text in rows.iter().take(LIST_LENGTH) {
-            let label = gtk::Label::builder()
-                .label(text)
-                .xalign(0.0)
-                .ellipsize(gtk::pango::EllipsizeMode::Middle)
-                .build();
-            list.append(&label);
+            list.append(&row_contents(text));
         }
         if rows.is_empty() || self.mode() != AddressMode::Entry {
             popover.popdown();
@@ -264,15 +278,62 @@ fn row_count(list: &gtk::ListBox) -> usize {
     (0..).map_while(|index| list.row_at_index(index)).count()
 }
 
+/// The row after `current` (none selected) `step` rows on in a list of
+/// `count`, or none past either end, as Windows' autocomplete list moves.
+fn next_index(current: Option<i32>, step: i32, count: i32) -> Option<i32> {
+    if count <= 0 {
+        return None;
+    }
+    let next = match current {
+        None if step > 0 => 0,
+        None => count - 1,
+        Some(index) => index + step,
+    };
+    (0..count).contains(&next).then_some(next)
+}
+
+/// A row's contents: the accent bar the selected row shows at its left
+/// edge, then the address.
+fn row_contents(text: &str) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    let pill = gtk::Box::builder()
+        .css_classes(["pill"])
+        .valign(gtk::Align::Center)
+        .build();
+    let label = gtk::Label::builder()
+        .label(text)
+        .xalign(0.0)
+        .hexpand(true)
+        .ellipsize(gtk::pango::EllipsizeMode::Middle)
+        .build();
+    row.append(&pill);
+    row.append(&label);
+    row
+}
+
 /// The address a row shows.
 fn row_text(row: &gtk::ListBoxRow) -> Option<String> {
-    let label = row.child().and_downcast::<gtk::Label>()?;
+    let contents = row.child()?;
+    let label = contents.last_child().and_downcast::<gtk::Label>()?;
     Some(label.text().to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Down from no row selects the first and Up the last; past either
+    /// end the selection leaves the list, so the next key wraps round.
+    #[test]
+    fn up_and_down_wrap_through_the_typed_text() {
+        assert_eq!(next_index(None, 1, 3), Some(0));
+        assert_eq!(next_index(Some(0), 1, 3), Some(1));
+        assert_eq!(next_index(Some(2), 1, 3), None);
+        assert_eq!(next_index(None, -1, 3), Some(2));
+        assert_eq!(next_index(Some(1), -1, 3), Some(0));
+        assert_eq!(next_index(Some(0), -1, 3), None);
+        assert_eq!(next_index(None, 1, 0), None);
+    }
 
     /// parity: NAV-043
     #[test]

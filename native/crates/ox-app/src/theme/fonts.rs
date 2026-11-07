@@ -304,9 +304,12 @@ fn selection_bar_rules(scale: f64) -> [String; 2] {
 /// rule sets the contents box, inside 3px of padding and a 1px border.
 /// The Windows 11 style (`.menu.win11{width:max(276px, calc(235px * s))}`)
 /// has no side padding, and its rows keep the web app's 33-pixel pitch
-/// with a 2px margin above and below.
+/// with a 2px margin above and below. The address bar's suggestion rows
+/// are Windows 11's 40-pixel list rows at 100% text, as its address bar
+/// drop-down spaces them.
 fn menu_rules(scale: f64) -> String {
     let row = 22.0 * scale + 10.0;
+    let suggestion_row = 22.0 * scale + 18.0;
     let width = (235.0 * scale).max(264.0) - 8.0;
     let compact_row = 22.0 * scale + 7.0;
     let compact_width = (235.0 * scale).max(276.0) - 2.0;
@@ -314,7 +317,8 @@ fn menu_rules(scale: f64) -> String {
         "popover.ox-menu list > row, popover.menu.ox-menu modelbutton {{ min-height: {row:.0}px; }}\n\
          popover.ox-menu > contents, popover.menu.ox-menu > contents {{ min-width: {width:.0}px; }}\n\
          popover.ox-menu.compact list > row {{ min-height: {compact_row:.0}px; }}\n\
-         popover.ox-menu.compact > contents {{ min-width: {compact_width:.0}px; }}"
+         popover.ox-menu.compact > contents {{ min-width: {compact_width:.0}px; }}\n\
+         popover.ox-menu list.address-suggestions > row {{ min-height: {suggestion_row:.0}px; }}"
     )
 }
 
@@ -419,6 +423,7 @@ mod tests {
         );
         assert!(css.contains("popover.ox-menu.compact list > row { min-height: 29px; }"));
         assert!(css.contains("popover.ox-menu.compact > contents { min-width: 274px; }"));
+        assert!(css.contains("popover.ox-menu list.address-suggestions > row { min-height: 40px; }"));
     }
 
     /// Every font size is a whole number of pixels at every text size: GTK

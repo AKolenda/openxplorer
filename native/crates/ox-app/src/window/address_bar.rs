@@ -121,6 +121,10 @@ mod imp {
         pub(super) typed_history: RefCell<Vec<String>>,
         /// The entry's text is being set from the list, not typed.
         pub(super) quiet_change: Cell<bool>,
+        /// The entry's text when the list was last filled, which the
+        /// entry shows again when the selection moves off the list or
+        /// Escape closes it.
+        pub(super) text_before_list: RefCell<String>,
         /// The protocols offered under the empty entry (NET-029).
         pub(super) protocols: OnceCell<gtk::Popover>,
     }

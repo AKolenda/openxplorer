@@ -87,6 +87,26 @@ popover.ox-menu list > row.submenu-open { background-color: @ox_hover; }
 popover.ox-menu list > row .submenu-arrow { color: @ox_muted; margin-left: 12px; }
 popover.ox-menu list > row:disabled .submenu-arrow { color: @ox_text_disabled; }
 
+/* ---- The address bar's suggestions (src/window/address_bar/suggestions.rs) ----
+   Windows 11's address bar drop-down lists its rows as its list views
+   do: 40px rows (src/theme/fonts.rs) with rounded 4px corners, 4px in
+   from the flyout's sides and 2px apart, the text 16px in. The row the
+   arrow keys select has the subtle fill and a 3 x 16 accent bar with 2px
+   corners at its left edge, the bar of the sidebar's selected row and of
+   Settings' chosen category (sidebar.css, settings.css). The pointer's
+   hover draws the fill alone. Without animations GTK runs no transition,
+   so the fill then comes at once. */
+popover.ox-menu list.address-suggestions > row {
+  margin: 1px;
+  padding: 0 12px 0 0;
+  border-radius: 4px;
+}
+popover.ox-menu list.address-suggestions > row:hover,
+popover.ox-menu list.address-suggestions > row:selected { background-color: @ox_hover; color: @ox_text; }
+popover.ox-menu list.address-suggestions > row:active { background-color: @ox_pressed; }
+.address-suggestions .pill { min-width: 3px; min-height: 16px; border-radius: 2px; margin-right: 13px; }
+.address-suggestions > row:selected .pill { background-color: @ox_accent; }
+
 /* ---- Toast (§4.15, E08) ---- */
 .toast {
   background-color: @ox_text;

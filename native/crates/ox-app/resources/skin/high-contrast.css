@@ -10,6 +10,7 @@
    background colours. */
 
 .sidebar list > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }
+popover.ox-menu list.address-suggestions > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }
 .sidebar list > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }
 .sidebar list > row.drop-before { box-shadow: inset 0 3px @ox_accent; }
 .sidebar list > row.drop-end { box-shadow: inset 0 -3px @ox_accent; }
