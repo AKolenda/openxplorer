@@ -59,6 +59,18 @@ pub(crate) fn save_png(window: &gtk::Window, path: &Path) -> Result<(), Snapshot
     render_png(window, Some(content), path)
 }
 
+/// [`save_png`], with the menus open in `window` drawn over it, as the
+/// snapshot hook draws a scene's.
+///
+/// # Errors
+///
+/// As [`save_png`].
+#[cfg(test)]
+pub(crate) fn save_png_with_menus(window: &gtk::Window, path: &Path) -> Result<(), SnapshotError> {
+    let content = content_bounds(window).ok_or(SnapshotError::NotDrawn)?;
+    render_png_with_menus(window, &open_menus(window), content, path)
+}
+
 /// Saves what the surface `native` (a window or a popover) draws now as a
 /// PNG at `path`, cropped to `crop` in logical pixels from the surface's
 /// outer edge, or whole.
