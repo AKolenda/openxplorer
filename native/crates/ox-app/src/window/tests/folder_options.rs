@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Folder Options' choices that only it sets (VIEW-021): Browse folders,
-//! Privacy and Clear File Explorer history on the General tab, the status
+//! Privacy and Clear `OpenXplorer` history on the General tab, the status
 //! bar, the infotips and typing into the search box on the View tab, and
 //! searching names and contents on the Search tab.
 

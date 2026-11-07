@@ -128,6 +128,12 @@ const FONT_SIZES: &[FontSize] = &[
     font(".ox-dialog", 12.0),
     // Properties windows (properties.css): Windows' 9-point dialog text.
     font(".ox-properties", 12.0),
+    // Folder Options (properties.css) at Windows' 380 pixels: a pixel
+    // under Windows' 9-point dialog text, as Noto Sans and the other
+    // fonts the app falls back to are wider than Segoe UI, so each option
+    // fits on one line as in Windows. The selector outranks `window.ox`,
+    // whose 13 pixels a bare class cannot override.
+    font("window.ox.ox-folder-options", 11.0),
     font(".snapshot-banner", 12.0),
     font(".snapshot-tab-badge", 12.0),
     font(".size-scan", 12.0),

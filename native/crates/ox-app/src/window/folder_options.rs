@@ -5,17 +5,17 @@
 //! it on, in Windows' words, and only the options the app can honour are
 //! there.
 //!
-//! General: "Open File Explorer to", the start places the app has (Home,
+//! General: "Open `OpenXplorer` to" (Windows' "Open File Explorer to",
+//! named for the app), the start places the app has (Home,
 //! This PC, or a folder chosen in Settings); Browse folders, the same
 //! window or a window of each folder's own; Click items as follows, where
 //! only Double-click can be chosen, as the app has no single-click mode
 //! (SEL-018); Privacy, whether the navigation pane shows Recent files
 //! ("Show recently used files") and Recent locations ("Show frequently
-//! used folders"), and Clear File Explorer history, which forgets them and
-//! the typed addresses at once; and "More settings…", which keeps the
-//! choices made, as OK does, and opens Settings: Settings left the "…"
-//! menu for it (CMD-007), as Windows 11 keeps File Explorer's options here
-//! and the rest in Settings.
+//! used folders"), and Clear `OpenXplorer` history (Windows' "Clear File
+//! Explorer history", named for the app), which forgets them and the
+//! typed addresses at once. The rest of the app's options are in Settings,
+//! which the command bar's gear and Ctrl+, open (CMD-007).
 //!
 //! View: Folder views gives every folder the view of the folder Folder
 //! Options was opened from (Apply to Folders: layout, icon size, columns,
@@ -405,7 +405,7 @@ fn is_view_source(uri: &str, searching: bool) -> bool {
     !searching && !uri.is_empty() && !is_virtual_location(uri)
 }
 
-/// The start places "Open File Explorer to" offers: Home (`None`), This
+/// The start places "Open `OpenXplorer` to" offers: Home (`None`), This
 /// PC, and the place chosen in Settings when it is another one.
 fn start_places(chosen: Option<&str>) -> Vec<Option<String>> {
     let mut places = vec![None, Some(Page::ThisPc.uri().to_owned())];
@@ -415,7 +415,7 @@ fn start_places(chosen: Option<&str>) -> Vec<Option<String>> {
     places
 }
 
-/// The name "Open File Explorer to" shows for `place`.
+/// The name "Open `OpenXplorer` to" shows for `place`.
 fn start_place_name(place: Option<&str>) -> String {
     match place {
         None => gettext("Home"),
@@ -432,8 +432,6 @@ struct OptionsForm {
     start: gtk::DropDown,
     places: Vec<Option<String>>,
     saved_start: Cell<u32>,
-    /// "More settings…" on the General tab, which opens Settings.
-    more_settings: gtk::Button,
     /// Privacy's Clear, which clears File Explorer's history at once.
     clear_history: gtk::Button,
 }
@@ -462,8 +460,7 @@ impl OptionsForm {
         column.append(&clear_row(&clear_history));
         general.append(&privacy);
         let restore_general = push_button(&gettext("Restore Defaults"));
-        let more_settings = push_button(&gettext("More settings…"));
-        general.append(&tab_footer(Some(&more_settings), &restore_general));
+        general.append(&tab_footer(&restore_general));
 
         let caption = gtk::Label::builder()
             .label(gettext("Advanced settings:"))
@@ -489,7 +486,7 @@ impl OptionsForm {
         view.append(&advanced_list(&tree));
         let restore_view = push_button(&gettext("Restore Defaults"));
         // The list takes the room the tab has, as in Windows.
-        let view_footer = tab_footer(None, &restore_view);
+        let view_footer = tab_footer(&restore_view);
         view_footer.set_vexpand(false);
         view.append(&view_footer);
 
@@ -499,14 +496,13 @@ impl OptionsForm {
         }
         search.append(&non_indexed);
         let restore_search = push_button(&gettext("Restore Defaults"));
-        search.append(&tab_footer(None, &restore_search));
+        search.append(&tab_footer(&restore_search));
 
         let form = Rc::new(Self {
             settings,
             saved_start: Cell::new(start.selected()),
             start,
             places,
-            more_settings,
             clear_history,
         });
         for (button, tab) in [
@@ -605,7 +601,7 @@ impl Pending for OptionsChange {
     }
 }
 
-/// "Open File Explorer to:" and its list of start places on `general`,
+/// "Open `OpenXplorer` to:" and its list of start places on `general`,
 /// showing the one `preferences` choose.
 fn open_file_explorer_to(
     general: &gtk::Box,
@@ -626,7 +622,7 @@ fn open_file_explorer_to(
         .unwrap_or(0);
     start.set_selected(u32::try_from(chosen).unwrap_or(0));
     let caption = gtk::Label::builder()
-        .label(gettext("Open File Explorer to:"))
+        .label(gettext("Open OpenXplorer to:"))
         .xalign(0.0)
         .mnemonic_widget(&start)
         .build();
@@ -666,12 +662,12 @@ fn click_items_group() -> gtk::Frame {
     group
 }
 
-/// "Clear File Explorer history" and its Clear button, on one line.
+/// "Clear `OpenXplorer` history" and its Clear button, on one line.
 fn clear_row(clear: &gtk::Button) -> gtk::Box {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     row.add_css_class("options-clear-row");
     let label = gtk::Label::builder()
-        .label(gettext("Clear File Explorer history"))
+        .label(gettext("Clear OpenXplorer history"))
         .xalign(0.0)
         .hexpand(true)
         .mnemonic_widget(clear)
@@ -708,17 +704,12 @@ fn push_button(label: &str) -> gtk::Button {
 }
 
 /// The foot of a tab: Restore Defaults at its bottom right, as in
-/// Windows, and on the General tab "More settings…" at the left, which
-/// opens the rest of the app's settings.
-fn tab_footer(more_settings: Option<&gtk::Button>, restore: &gtk::Button) -> gtk::Box {
+/// Windows.
+fn tab_footer(restore: &gtk::Button) -> gtk::Box {
     let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     footer.add_css_class("options-tab-footer");
     footer.set_valign(gtk::Align::End);
     footer.set_vexpand(true);
-    if let Some(more_settings) = more_settings {
-        more_settings.set_tooltip_text(Some(&gettext("Open OpenXplorer's Settings")));
-        footer.append(more_settings);
-    }
     restore.set_halign(gtk::Align::End);
     restore.set_hexpand(true);
     footer.append(restore);
@@ -752,7 +743,6 @@ impl BrowserWindow {
             form: Rc::clone(&form),
         }));
         form.follow_with(&options);
-        self.open_settings_from(&options, &form);
         form.clear_history.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -769,25 +759,6 @@ impl BrowserWindow {
             self.context()
                 .update_preferences(update, self.preference_failure_reply());
         }
-    }
-
-    /// Makes `form`'s "More settings…" keep the choices made, as OK does,
-    /// close Folder Options and open Settings. Settings left the "…" menu
-    /// for this button (CMD-007); Ctrl+, opens it too.
-    fn open_settings_from(&self, options: &PropertiesWindow, form: &Rc<OptionsForm>) {
-        form.more_settings.connect_clicked(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[weak]
-            options,
-            #[weak]
-            form,
-            move |_| {
-                window.save_options(&form);
-                options.close();
-                window.open_settings(None);
-            }
-        ));
     }
 
     /// Adds the Folder views group box to `view`, whose Apply to Folders
@@ -933,7 +904,7 @@ mod tests {
         assert!((files.read)(&preferences) && !(folders.read)(&preferences));
     }
 
-    /// "Open File Explorer to" offers Home and This PC, and a place chosen
+    /// "Open `OpenXplorer` to" offers Home and This PC, and a place chosen
     /// in Settings too.
     ///
     /// parity: TAB-055

@@ -267,6 +267,9 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
    their left, option rows about 16 pixels apart, sub-choices indented 16,
    and Restore Defaults at the bottom right of each tab. */
 .ox-folder-options notebook.properties-notebook { margin: 6px 8px 0 8px; }
+/* Windows' property sheet pages keep one height whatever they hold, which
+   makes Folder Options about 483 pixels tall with its title bar. */
+.ox-folder-options notebook.properties-notebook > stack { min-height: 360px; }
 .ox-folder-options .properties-page { padding: 6px 7px 7px 7px; }
 .ox-folder-options .properties-footer { margin: 8px 8px 8px 8px; }
 .ox-folder-options .options-open-to { margin: 1px 0 5px 2px; }
