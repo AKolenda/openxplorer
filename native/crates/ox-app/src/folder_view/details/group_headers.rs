@@ -35,7 +35,7 @@ impl std::fmt::Debug for HeaderTitle {
 }
 
 /// "Today (3)": a group's title and how many items it holds.
-fn header_text(title: &str, count: u32) -> String {
+pub(crate) fn header_text(title: &str, count: u32) -> String {
     ox_core::i18n::format_message(
         "{title} ({count})",
         &[

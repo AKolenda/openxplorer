@@ -21,6 +21,7 @@ pub(crate) mod column_widths;
 pub(crate) mod details;
 pub(crate) mod filter;
 pub(crate) mod grid;
+pub(crate) mod group_slots;
 pub(crate) mod groups;
 pub(crate) mod icon_size;
 pub(crate) mod item;
