@@ -157,6 +157,21 @@ impl MenuPopover {
             .collect()
     }
 
+    /// The strip's buttons while it shows, each with whether it can be
+    /// pressed, for tests.
+    pub(crate) fn strip_states(&self) -> Vec<(String, bool)> {
+        if !self.strip().is_visible() {
+            return Vec::new();
+        }
+        crate::window::widget_tree::children(self.strip())
+            .filter_map(|child| {
+                let tooltip = child.tooltip_text()?;
+                let label = tooltip.lines().next()?.to_owned();
+                Some((label, child.is_sensitive()))
+            })
+            .collect()
+    }
+
     /// The classic or compact look, for tests.
     pub(in crate::window) fn style(&self) -> MenuStyle {
         self.imp().style.get()

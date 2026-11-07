@@ -20,8 +20,40 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .properties-title { margin-right: 8px; }
 .properties-titlebar button.caption { min-width: 46px; min-height: 32px; }
 
-/* The tabs over the page (Windows' classic tab control). */
-.ox-properties notebook.properties-notebook { margin: 6px 11px 0 11px; background: none; }
+/* The tabs over the page (Windows' classic tab control): rows of tab
+   buttons (src/properties/window/tab_rows.rs), which wrap onto more rows
+   as Windows' property sheets do, over the notebook's bordered page.
+   Neighbouring tabs overlap by a pixel, so they share one border line. */
+.ox-properties .properties-tab-area { margin: 6px 11px 0 11px; }
+.ox-properties notebook.properties-notebook { margin: 0; background: none; }
+/* The tab area holds the margin around the tabs and their page; a rule
+   that gives the notebook its own margin, such as a dialog's narrower
+   one, must not add a second one and widen the window. */
+.ox-properties .properties-tab-area notebook.properties-notebook { margin: 0; }
+/* Folder Options (src/window/folder_options.rs), which Windows draws
+   narrower, has a narrower margin. */
+.ox-folder-options .properties-tab-area { margin: 6px 8px 0 8px; }
+.ox-properties tabrows.properties-tabs > button.properties-tab {
+  min-height: 20px;
+  min-width: 0;
+  padding: 1px 5px;
+  margin: 2px 0 0 0;
+  border: 1px solid @ox_border;
+  border-bottom-width: 0;
+  border-radius: 0;
+  background-color: @ox_chrome;
+  color: @ox_text;
+  box-shadow: none;
+  outline-offset: -3px;
+  font-weight: normal;
+}
+.ox-properties tabrows.properties-tabs > button.properties-tab:hover { background-color: @ox_hover; }
+.ox-properties tabrows.properties-tabs > button.properties-tab:checked {
+  background-color: @ox_bg;
+  margin-top: 0;
+  padding-top: 3px;
+  box-shadow: none;
+}
 .ox-properties notebook.properties-notebook > header {
   background: none;
   border: none;

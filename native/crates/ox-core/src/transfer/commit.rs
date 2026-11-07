@@ -28,7 +28,8 @@ use super::cancellation::Cancellation;
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::modes::{
-    open_directory_nofollow, restore_directory_modes, set_mode, DirectoryModes, PRIVATE_DIRECTORY_MODE,
+    open_directory_nofollow, restore_directory_modes, set_admin_mode, set_mode, DirectoryModes, ModeTarget,
+    PRIVATE_DIRECTORY_MODE,
 };
 use super::names::{backup_name, child_node};
 use super::node::{Node, NodeKind, WriteGuard};
@@ -72,8 +73,12 @@ pub(crate) fn publish_staged(
     let Some(root) = modes.take(&source.uri()) else {
         return source.publish(destination, Some(cancel));
     };
+    let path = match root.target {
+        ModeTarget::Local(path) => path,
+        ModeTarget::Admin(_) => return publish_admin_folder(source, destination, modes, root.mode, cancel),
+    };
     let staged = StagedFolder {
-        directory: open_directory_nofollow(&root.path)?,
+        directory: open_directory_nofollow(&path)?,
         mode: root.mode,
     };
     let moved = move_with_owner_access(source, destination, modes, cancel, &staged);
@@ -88,6 +93,30 @@ pub(crate) fn publish_staged(
         // failed rename is what gets reported.
         Err(error) => Err(error.into()),
     }
+}
+
+/// OPS-047: publishes a folder built under `admin://`. Its descendants get
+/// their final modes while it is still owner-only in its private staging
+/// folder; once renamed into place it gets its own through `gvfsd-admin`,
+/// by the path [`crate::admin_copy`] vouched for. Root needs no owner
+/// write to rename it.
+fn publish_admin_folder(
+    source: &dyn Node,
+    destination: &dyn Node,
+    modes: &mut DirectoryModes,
+    mode: u32,
+    cancel: &Cancellation,
+) -> Result<(), TransferError> {
+    if !modes.is_empty() {
+        restore_directory_modes(source, modes, cancel)?;
+    }
+    source.publish(destination, Some(cancel))?;
+    set_admin_mode(&destination.uri(), mode).map_err(|error| {
+        TransferError::RecoveryRequired(crate::i18n::format_message(
+            "The copied folder exists at {uri}, but its final permissions could not be restored. {error}",
+            &[("uri", &destination.uri()), ("error", &error.to_string())],
+        ))
+    })
 }
 
 /// Restores the descendants' final modes, gives the staged root owner write
@@ -112,7 +141,9 @@ fn move_with_owner_access(
 ///
 /// `modes` is `Some` for staged copies (their folders get final modes when
 /// published) and `None` for moves of the user's own items. `guard` is
-/// asked about every destination before it changes.
+/// asked about every destination before it changes. `merge_check`, given
+/// when the item is written as administrator (OPS-047), is asked about
+/// every existing folder before anything is written into it.
 ///
 /// # Errors
 ///
@@ -126,8 +157,14 @@ pub(crate) fn commit_replace(
     cancel: &Cancellation,
     guard: Option<&WriteGuard>,
     modes: Option<&mut DirectoryModes>,
+    merge_check: Option<&WriteGuard>,
 ) -> Result<(), TransferError> {
-    Replacement { cancel, guard }.replace(source, destination, modes, 0)
+    Replacement {
+        cancel,
+        guard,
+        merge_check,
+    }
+    .replace(source, destination, modes, 0)
 }
 
 /// One Replace commit of a top-level item.
@@ -135,6 +172,9 @@ struct Replacement<'a> {
     cancel: &'a Cancellation,
     /// Asked about every destination before it changes (XFER-020).
     guard: Option<&'a WriteGuard>,
+    /// Asked about every existing folder before a merge writes into it,
+    /// when the item is written as administrator (OPS-047).
+    merge_check: Option<&'a WriteGuard>,
 }
 
 impl Replacement<'_> {
@@ -189,6 +229,11 @@ impl Replacement<'_> {
         mut modes: Option<&mut DirectoryModes>,
         depth: usize,
     ) -> Result<(), TransferError> {
+        // Written as administrator, an existing folder is written into
+        // only when nobody but root can change it or its path.
+        if let Some(check) = self.merge_check {
+            check(&destination.uri())?;
+        }
         for child in source.children(Some(self.cancel))? {
             let target = child_node(destination, child.name())?;
             self.replace(child.as_ref(), target.as_ref(), modes.as_deref_mut(), depth + 1)?;

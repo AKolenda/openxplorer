@@ -488,8 +488,10 @@ fn tabs_taller_than_the_screen_scroll_inside_the_window() {
     test.activate("properties", None);
     let filled = test.wait_for_properties("Notes 2.txt Properties");
     general(&filled);
+    wait_for_frames(&filled, 4);
+    let fitting = filled.scroller().vadjustment();
     assert!(
-        filled.scroller().parent().is_none(),
+        fitting.upper() <= fitting.page_size() + 1.0,
         "tabs that fit do not scroll"
     );
     filled.close();
@@ -549,6 +551,47 @@ fn read_only_follows_a_change_made_in_edit() {
 
     wait_until("Read-only to follow", || read_only.is_active());
     assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    read_only.set_active(false);
+    assert!(window.apply_button().is_sensitive(), "clearing it is a change");
+    press(&window, "Apply");
+    wait_until("Write back", || mode_of(&path) & 0o200 != 0);
+}
+
+/// A Read-only choice on General not applied yet stays when Edit...
+/// makes the file read-only, and clearing it then is still a change
+/// against what the file has now, which gives Write back.
+///
+/// parity: PROP-003, PROP-007
+#[gtk::test]
+fn read_only_chosen_before_a_change_in_edit_compares_with_it() {
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let read_only = check(&general(&window), "Read-only");
+    read_only.set_active(true);
+    assert!(window.apply_button().is_sensitive(), "ticking it is a change");
+
+    window.select_tab("security");
+    let security = tab(&window, "security");
+    press(&security, "Edit...");
+    let edit = sub_dialog(&window, "Permissions for Notes 2.txt");
+    let names = descendants::<gtk::ListBox>(&edit).remove(0);
+    names.select_row(names.row_at_index(0).as_ref());
+    let write = descendants::<gtk::CheckButton>(&edit)
+        .into_iter()
+        .filter(WidgetExt::is_sensitive)
+        .nth(4)
+        .expect("Allow Write");
+    write.set_active(false);
+    edit.ok_button().emit_clicked();
+    wait_until("the change", || mode_of(&path) == 0o444);
+
+    wait_until("nothing left to apply", || !window.apply_button().is_sensitive());
+    assert!(read_only.is_active(), "the choice stays");
     read_only.set_active(false);
     assert!(window.apply_button().is_sensitive(), "clearing it is a change");
     press(&window, "Apply");
@@ -1347,6 +1390,208 @@ fn several_items_attributes_show_mixed_and_apply_to_every_item() {
     assert!(!fixture.path("Notes 2.txt").exists() && !fixture.path("Notes 10.txt").exists());
     assert!(hidden.is_active() && read_only.is_active());
     assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    window.close();
+}
+
+/// A folder that happens to be a mount point, such as a `tmpfs` at
+/// `/tmp`, is a Mounted Volume when it is reached in a folder's listing,
+/// and also from the navigation pane when This PC does not list it as a
+/// drive, as Windows shows a drive mounted in a folder: Type says so,
+/// Target names the volume in place of the sizes, and Properties beside
+/// it opens the drive's own window, with its Hardware tab, apart from the
+/// folder's. Only This PC's drives and the root open as a drive straight
+/// away. The harness cannot mount anything, so this uses a mount point the
+/// machine has, and says so when it has none.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_mount_point_reached_as_a_folder_is_a_mounted_volume() {
+    let Some(name) = ["dev", "proc", "sys", "run"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let uri = format!("file:///{name}");
+    let shows_mounted_volume = |window: &PropertiesWindow| {
+        let general = general(window);
+        assert_eq!(value_after(&general, "Type:").as_deref(), Some("Mounted Volume"));
+        assert!(value_after(&general, "Target:").is_some_and(|target| !target.is_empty()));
+        for row in ["Size:", "Size on disk:", "Contains:"] {
+            assert!(value_after(&general, row).is_none(), "no {row} row");
+        }
+        assert!(!window.shows_drive());
+        assert!(
+            window.tab_page("hardware").is_none(),
+            "no Hardware tab for a folder"
+        );
+        general
+    };
+    let test = TestWindow::open("file:///");
+    test.select_named(name);
+    test.activate("properties", None);
+    let window = test.wait_for_properties(&format!("{name} Properties"));
+    let general = shows_mounted_volume(&window);
+    let volume = value_after(&general, "Target:").expect("a target");
+    press(&general, "Properties");
+    let drive = test.wait_for_properties(&format!("{volume} Properties"));
+    assert!(drive.shows_drive());
+    assert!(drive.tab_page("hardware").is_some(), "the drive's Hardware tab");
+    assert_eq!(test.window.properties_windows().len(), 2, "a window of its own");
+    drive.close();
+    window.close();
+
+    test.activate("properties-of", Some(&uri));
+    let window = test.wait_for_properties(&format!("{name} Properties"));
+    shows_mounted_volume(&window);
+    window.close();
+}
+
+/// The same mounted volume opened from its folder's listing and from
+/// This PC has two Properties windows, one as the folder (Mounted
+/// Volume) and one as the drive, in either order; opening it again the
+/// same way brings that one back, as Windows brings back an item's open
+/// Properties rather than opening another.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_volume_has_one_properties_window_as_a_folder_and_one_as_a_drive() {
+    use glib::subclass::types::ObjectSubclassIsExt;
+
+    let Some(name) = ["dev", "proc", "sys", "run"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let uri = format!("file:///{name}");
+    let test = TestWindow::open("file:///");
+    // This PC lists the volume, as the volume monitor would.
+    test.window
+        .imp()
+        .volumes
+        .replace(vec![crate::test_support::mounted_volume(
+            name,
+            &uri,
+            crate::volumes::VolumeKind::Drive,
+        )]);
+    let windows = || test.window.properties_windows();
+    let open_as = |as_drive: bool| -> PropertiesWindow {
+        if as_drive {
+            test.activate("properties-of", Some(&uri));
+        } else {
+            test.select_named(name);
+            test.activate("properties", None);
+        }
+        wait_until("the Properties window", || {
+            windows().iter().any(|window| window.shows_drive() == as_drive)
+        });
+        let window = windows()
+            .into_iter()
+            .find(|window| window.shows_drive() == as_drive)
+            .expect("it is open");
+        wait_until("the item to be read", || {
+            value_after(&tab(&window, "general"), "Type:").is_some()
+        });
+        window
+    };
+    let is_drive_page = |window: &PropertiesWindow| window.tab_page("hardware").is_some();
+
+    for drive_first in [false, true] {
+        let first = open_as(drive_first);
+        let second = open_as(!drive_first);
+        assert_eq!(windows().len(), 2, "a window as the folder and one as the drive");
+        let (folder, drive) = if drive_first {
+            (second, first)
+        } else {
+            (first, second)
+        };
+        assert!(!is_drive_page(&folder), "the folder's window has no Hardware tab");
+        assert_eq!(
+            value_after(&tab(&folder, "general"), "Type:").as_deref(),
+            Some("Mounted Volume")
+        );
+        assert!(is_drive_page(&drive), "the drive's window has its Hardware tab");
+
+        // Opening each again brings its own window back.
+        assert_eq!(open_as(true), drive);
+        assert_eq!(open_as(false), folder);
+        assert_eq!(windows().len(), 2, "no third window");
+        folder.close();
+        drive.close();
+        wait_until("both to close", || windows().is_empty());
+    }
+}
+
+/// A mount point reached as a folder and the root reached as a drive,
+/// light and dark, for review with `OX_NATIVE_CAPTURE_DIR` (and
+/// `GDK_SCALE=2`): `mount-point-{folder,drive}-{light,dark}.png`.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_mount_point_and_a_drive_are_captured() {
+    let _theme = ThemeGuard::keep();
+    let Some(name) = ["dev", "proc"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let test = TestWindow::open("file:///");
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.select_named(name);
+        test.activate("properties", None);
+        let folder = test.wait_for_properties(&format!("{name} Properties"));
+        general(&folder);
+        capture_dialog(&folder, &format!("mount-point-folder-{theme}.png"));
+        folder.close();
+        test.activate("properties-of", Some("file:///"));
+        let drive = test.wait_for_properties("Local Disk Properties");
+        let page = tab(&drive, "general");
+        wait_until("the drive's details", || value_after(&page, "Type:").is_some());
+        capture_dialog(&drive, &format!("mount-point-drive-{theme}.png"));
+        drive.close();
+    }
+}
+
+/// Several files' Read-only follows a change made on the Security tab:
+/// taking the owner's write ticks it, and clearing it then gives every
+/// file write again.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn several_items_read_only_follows_a_change_made_on_security() {
+    let fixture = Fixture::standard();
+    for name in ["Notes 2.txt", "Notes 10.txt"] {
+        fs::set_permissions(fixture.path(name), fs::Permissions::from_mode(0o644)).expect("a writable file");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt, Notes 10.txt Properties");
+    let read_only = check(&tab(&window, "general"), "Read-only");
+    wait_until("the items read", || read_only.is_sensitive());
+    assert!(!read_only.is_active() && !read_only.is_inconsistent());
+
+    let security = tab(&window, "security");
+    wait_until("the editor", || {
+        !descendants::<gtk::DropDown>(&security).is_empty()
+    });
+    descendants::<gtk::DropDown>(&security)[0].set_selected(1);
+    press(&window, "Apply");
+    let modes = || ["Notes 2.txt", "Notes 10.txt"].map(|name| mode_of(&fixture.path(name)));
+    wait_until("the change", || modes() == [0o444, 0o444]);
+
+    wait_until("Read-only to follow", || read_only.is_active());
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    read_only.set_active(false);
+    assert!(window.apply_button().is_sensitive(), "clearing it is a change");
+    press(&window, "Apply");
+    wait_until("write back", || modes().iter().all(|mode| mode & 0o200 != 0));
     window.close();
 }
 
@@ -2303,7 +2548,11 @@ fn change_icon_lists_the_themes_folder_icons() {
         .iter()
         .find(|tile| tile.tooltip_text().as_deref() == Some("folder-oxtest"))
         .expect("the theme's folder icon");
-    descendants::<gtk::FlowBox>(&dialog)[0].select_child(tile);
+    descendants::<gtk::FlowBox>(&dialog)
+        .into_iter()
+        .find(|grid| grid.has_css_class("properties-icon-grid"))
+        .expect("the grid of icons")
+        .select_child(tile);
     dialog.ok_button().emit_clicked();
 
     wait_until("Change Icon to close", || dialog.is_closed());

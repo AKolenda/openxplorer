@@ -10,8 +10,9 @@
 use gio::prelude::*;
 use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry, EntryError, ATTRIBUTES};
+use ox_core::location::is_network_filesystem;
 use ox_core::location::{normalise, parent_location};
-use ox_core::network::read_mount_table;
+use ox_core::network::{read_mount_table, MountEntry};
 use ox_core::permissions::Account;
 
 use super::drive_facts::{drive_type, filesystem_name, read_block_facts, DriveType};
@@ -204,6 +205,61 @@ pub(crate) fn is_mount_point(uri: &str) -> bool {
         .is_some_and(|path| mounts.iter().any(|mount| mount.path == path))
 }
 
+/// Whether the drive mounted at `uri`, other than the system drive, can
+/// keep a Customize choice, which is stored as `GVfs` metadata: a local
+/// drive mounted read-write that takes metadata. Windows 11 has no
+/// Customize on the system drive, here the root. Only the mount table is
+/// read before GIO, so a network share that stopped answering is never
+/// touched.
+pub(crate) fn drive_keeps_customization(uri: &str) -> bool {
+    let file = gio::File::for_uri(uri);
+    let Some(path) = file.path() else {
+        return false;
+    };
+    let Some(path) = path.to_str() else {
+        return false;
+    };
+    let mounts = read_mount_table().unwrap_or_default();
+    let Some(mount) = mounts.iter().rev().find(|mount| mount.path == path) else {
+        return false;
+    };
+    is_customizable_mount(mount)
+        && file
+            .query_writable_namespaces(gio::Cancellable::NONE)
+            .is_ok_and(|namespaces| {
+                namespaces
+                    .attributes()
+                    .iter()
+                    .any(|namespace| namespace.name() == "metadata")
+            })
+}
+
+/// Whether the drive mounted as `mount` can keep a Customize choice, by
+/// the mount table alone: not the system drive, not a network or FUSE
+/// file system, and not mounted read-only.
+fn is_customizable_mount(mount: &MountEntry) -> bool {
+    let filesystem = mount.filesystem.as_str();
+    let is_network = is_network_filesystem(filesystem)
+        || matches!(
+            filesystem,
+            "smbfs"
+                | "nfs"
+                | "nfs4"
+                | "afs"
+                | "ceph"
+                | "9p"
+                | "glusterfs"
+                | "lustre"
+                | "davfs"
+                | "ncpfs"
+                | "coda"
+                | "fuse"
+        )
+        || filesystem.starts_with("fuse.");
+    let is_read_only = mount.options.split(',').any(|option| option == "ro");
+    mount.path != "/" && !is_network && !is_read_only
+}
+
 /// What is mounted at the folder `file`, if it is a mount point of the
 /// kernel's mount table. Reading the table never mounts anything.
 fn mount_at(file: &gio::File) -> Option<MountFacts> {
@@ -322,5 +378,38 @@ mod tests {
         };
 
         assert_eq!(properties.mode_text().as_deref(), Some("0o644"));
+    }
+
+    /// A drive at `path` of the file system `filesystem` mounted with
+    /// `options`.
+    fn mount(path: &str, filesystem: &str, options: &str) -> MountEntry {
+        MountEntry {
+            root: "/".to_owned(),
+            path: path.to_owned(),
+            filesystem: filesystem.to_owned(),
+            source: "/dev/sdb1".to_owned(),
+            options: options.to_owned(),
+        }
+    }
+
+    /// Customize is for a local drive mounted read-write, other than the
+    /// system drive: never the root, a network share or a read-only drive.
+    #[test]
+    fn only_a_local_writable_drive_other_than_the_root_is_customized() {
+        assert!(is_customizable_mount(&mount(
+            "/media/fictional/Data",
+            "ext4",
+            "rw"
+        )));
+        assert!(is_customizable_mount(&mount(
+            "/mnt/data",
+            "fuseblk",
+            "rw,user_id=0"
+        )));
+        assert!(!is_customizable_mount(&mount("/", "ext4", "rw")));
+        assert!(!is_customizable_mount(&mount("/mnt/disc", "iso9660", "ro")));
+        assert!(!is_customizable_mount(&mount("/mnt/nas", "cifs", "rw")));
+        assert!(!is_customizable_mount(&mount("/mnt/home", "nfs4", "rw")));
+        assert!(!is_customizable_mount(&mount("/mnt/remote", "fuse.sshfs", "rw")));
     }
 }

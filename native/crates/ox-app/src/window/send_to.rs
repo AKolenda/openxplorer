@@ -170,14 +170,21 @@ impl BrowserWindow {
     /// The addresses Send to sends for the selected items: a Recent row's
     /// file instead of the row ([`send_source`]).
     fn selected_uris(&self) -> Vec<String> {
+        self.selected_rows_and_sources().1
+    }
+
+    /// The selected rows' own addresses, to select them again, and the
+    /// addresses Send to sends for them ([`send_source`]).
+    fn selected_rows_and_sources(&self) -> (Vec<String>, Vec<String>) {
         let items = self.folder_pane().model().selected_items();
         items
             .iter()
             .map(|item| {
                 let entry = item.entry();
-                send_source(&entry.uri, entry.meta.recent_target.as_deref())
+                let source = send_source(&entry.uri, entry.meta.recent_target.as_deref());
+                (entry.uri.clone(), source)
             })
-            .collect()
+            .unzip()
     }
 
     /// Whether `folder` is a saved network location that is not connected
@@ -197,7 +204,7 @@ impl BrowserWindow {
     /// only once that succeeds, so no write is ever replayed after a mount
     /// (NET-004).
     async fn send_to_folder(&self, folder: String) {
-        let uris = self.selected_uris();
+        let (rows, uris) = self.selected_rows_and_sources();
         if uris.is_empty() {
             return;
         }
@@ -224,7 +231,8 @@ impl BrowserWindow {
             uris,
             destination_folder: folder,
         };
-        self.send_copies(incoming).await;
+        // A Recent row sends its file, but the row stays selected.
+        self.send_copies(incoming, rows).await;
     }
 
     /// Send to ▸ Desktop (create shortcut): a shortcut on the Desktop to
@@ -236,7 +244,7 @@ impl BrowserWindow {
             .known_folders()
             .into_iter()
             .find(|place| place.known_folder == Some(KnownFolder::Desktop));
-        let (Some(desktop), uris) = (desktop, self.selected_uris()) else {
+        let (Some(desktop), (rows, uris)) = (desktop, self.selected_rows_and_sources()) else {
             return;
         };
         if uris.is_empty() {
@@ -246,7 +254,8 @@ impl BrowserWindow {
             uris,
             destination_folder: desktop.uri,
         };
-        self.run_shortcuts(&request).await;
+        // A Recent row sends its file, but the row stays selected.
+        self.run_shortcuts(&request, rows).await;
     }
 
     /// Send to ▸ Bluetooth device: starts the desktop's Bluetooth sender

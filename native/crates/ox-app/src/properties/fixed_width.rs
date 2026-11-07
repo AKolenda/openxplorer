@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! [`FixedWidth`]: holds the Properties window's content at Windows 11's
-//! width, whatever an item's name, location or other values say.
+//! width, whatever an item's name, location or other values say, and at
+//! one height too when it is given one.
 //!
 //! A window that cannot be resized takes its content's natural width, and
 //! a label's natural width is its whole text, even when it wraps or ends
@@ -27,6 +28,9 @@ mod imp {
         pub(super) child: RefCell<Option<gtk::Widget>>,
         /// The widest the content asks to be.
         pub(super) width: Cell<i32>,
+        /// The height the content is held at, unless its minimum is
+        /// taller; 0 for its own height.
+        pub(super) height: Cell<i32>,
     }
 
     #[glib::object_subclass]
@@ -65,7 +69,14 @@ mod imp {
             } else {
                 for_size
             };
-            child.measure(orientation, width)
+            let (minimum, natural, _, _) = child.measure(orientation, width);
+            match self.height.get() {
+                0 => (minimum, natural, -1, -1),
+                height => {
+                    let height = height.max(minimum);
+                    (height, height, -1, -1)
+                }
+            }
         }
 
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
@@ -84,6 +95,19 @@ glib::wrapper! {
 }
 
 impl FixedWidth {
+    /// The height the child is held at; 0 when it takes its own.
+    pub(crate) fn height(&self) -> i32 {
+        self.imp().height.get()
+    }
+
+    /// Holds the child `height` pixels tall, or at its minimum when that
+    /// is taller; 0 lets it take its own height.
+    pub(crate) fn set_height(&self, height: i32) {
+        if self.imp().height.replace(height) != height {
+            self.queue_resize();
+        }
+    }
+
     /// Holds `child`, asking for at most `width` pixels across, or its
     /// minimum when that is wider.
     pub(crate) fn new(child: &impl IsA<gtk::Widget>, width: i32) -> Self {
