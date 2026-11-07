@@ -140,7 +140,12 @@ fn the_conflict_questions_are_captured_light_and_dark() {
             &conflicts,
             &format!("native-file-conflict-{theme}.png"),
         );
+        // Closing it goes back to the question, as in Windows 11.
         conflicts.close();
+        wait_until("the question again", || {
+            progress.conflict_window().is_none() && progress.actions()[0].waits_for_a_row()
+        });
+        super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
         wait_until("the action to end", || test.context.progress_window().is_none());
     }
 }
