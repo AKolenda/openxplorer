@@ -32,11 +32,9 @@ const NAVIGATION_GLYPH: i32 = 16;
 #[derive(Debug)]
 struct NavigationButton {
     glyph: Icon,
-    /// The accessible name (`aria-label`).
+    /// The accessible name (`aria-label`), and the tooltip when the
+    /// button leads nowhere, as Windows 11 Explorer words it.
     name: &'static str,
-    /// The tooltip with the keyboard shortcut, as Windows Explorer words
-    /// it when the button leads nowhere.
-    tooltip: &'static str,
     /// The tooltip naming the `{place}` the button leads to.
     tooltip_to: &'static str,
     action: WindowAction,
@@ -48,40 +46,36 @@ impl NavigationButton {
     fn tooltip(&self, place: Option<&str>) -> String {
         match place {
             Some(place) => ox_core::i18n::format_message(self.tooltip_to, &[("place", place)]),
-            None => ox_core::i18n::gettext(self.tooltip),
+            None => ox_core::i18n::gettext(self.name),
         }
     }
 }
 
 /// Back, Forward, Up and Refresh, in that order, with Windows 11
-/// Explorer's tooltips.
+/// Explorer's tooltips, which name no keyboard shortcut.
 const NAVIGATION_BUTTONS: [NavigationButton; 4] = [
     NavigationButton {
         glyph: Icon::ArrowLeft,
         name: crate::i18n::message_id("Back"),
-        tooltip: crate::i18n::message_id("Back (Alt + Left Arrow)"),
-        tooltip_to: crate::i18n::message_id("Back to {place} (Alt + Left Arrow)"),
+        tooltip_to: crate::i18n::message_id("Back to {place}"),
         action: WindowAction::Back,
     },
     NavigationButton {
         glyph: Icon::ArrowRight,
         name: crate::i18n::message_id("Forward"),
-        tooltip: crate::i18n::message_id("Forward (Alt + Right Arrow)"),
-        tooltip_to: crate::i18n::message_id("Forward to {place} (Alt + Right Arrow)"),
+        tooltip_to: crate::i18n::message_id("Forward to {place}"),
         action: WindowAction::Forward,
     },
     NavigationButton {
         glyph: Icon::ArrowUp,
         name: crate::i18n::message_id("Up"),
-        tooltip: crate::i18n::message_id("Up (Alt + Up Arrow)"),
-        tooltip_to: crate::i18n::message_id("Up to \"{place}\" (Alt + Up Arrow)"),
+        tooltip_to: crate::i18n::message_id("Up to \"{place}\""),
         action: WindowAction::Up,
     },
     NavigationButton {
         glyph: Icon::ArrowClockwise,
         name: crate::i18n::message_id("Refresh"),
-        tooltip: crate::i18n::message_id("Refresh (F5)"),
-        tooltip_to: crate::i18n::message_id("Refresh \"{place}\" (F5)"),
+        tooltip_to: crate::i18n::message_id("Refresh \"{place}\""),
         action: WindowAction::Refresh,
     },
 ];
@@ -153,9 +147,9 @@ impl BrowserWindow {
     }
 
     /// Names where Back, Forward, Up and Refresh lead from the active tab
-    /// in their tooltips, by the title its tab would have, as Windows
-    /// Explorer does: "Back to Downloads (Alt + Left Arrow)". A button
-    /// showing Stop keeps its own.
+    /// in their tooltips, by the title its tab would have, as Windows 11
+    /// Explorer does: "Back to Downloads", without the keyboard shortcut.
+    /// A button showing Stop keeps its own.
     pub(super) fn show_navigation_tooltips(&self) {
         let row = &*self.imp().navigation_buttons;
         for button in

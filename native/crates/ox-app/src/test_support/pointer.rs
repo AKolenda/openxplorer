@@ -26,6 +26,10 @@ const STEP_SETTLE: Duration = Duration::from_millis(30);
 /// The X11 opcodes and constants used here (X11 protocol and XTEST 2.2).
 const QUERY_EXTENSION: u8 = 98;
 const GET_INPUT_FOCUS: u8 = 43;
+const INTERN_ATOM: u8 = 16;
+const SEND_EVENT: u8 = 25;
+const QUERY_POINTER: u8 = 38;
+const CLIENT_MESSAGE: u8 = 33;
 const XTEST_FAKE_INPUT: u8 = 2;
 const KEY_PRESS: u8 = 2;
 const KEY_RELEASE: u8 = 3;
@@ -157,6 +161,48 @@ impl Pointer {
         self.send(&requests);
         self.sync();
         wait_for(STEP_SETTLE);
+    }
+
+    /// Asks the top-level window under the pointer to close, as a window
+    /// manager does when its title bar's close button (X) is clicked: the
+    /// `WM_DELETE_WINDOW` message of the ICCCM, which GTK takes as a close
+    /// request. The private display runs no window manager, so no title
+    /// bar of its own is drawn to click.
+    pub(crate) fn close_window_under_pointer(&mut self) {
+        let mut query = vec![QUERY_POINTER, 0];
+        query.extend_from_slice(&2_u16.to_le_bytes());
+        query.extend_from_slice(&self.root.to_le_bytes());
+        self.send(&query);
+        let reply = self.reply();
+        let window = u32::from_le_bytes([reply[12], reply[13], reply[14], reply[15]]);
+        assert_ne!(window, 0, "a window is under the pointer");
+        let protocols = self.atom(b"WM_PROTOCOLS");
+        let delete = self.atom(b"WM_DELETE_WINDOW");
+        let mut request = vec![SEND_EVENT, 0];
+        request.extend_from_slice(&11_u16.to_le_bytes());
+        request.extend_from_slice(&window.to_le_bytes());
+        request.extend_from_slice(&0_u32.to_le_bytes()); // no event mask
+        request.extend_from_slice(&[CLIENT_MESSAGE, 32, 0, 0]);
+        request.extend_from_slice(&window.to_le_bytes());
+        request.extend_from_slice(&protocols.to_le_bytes());
+        request.extend_from_slice(&delete.to_le_bytes());
+        request.extend_from_slice(&[0; 16]); // CurrentTime, then unused
+        self.send(&request);
+        self.sync();
+        wait_for(STEP_SETTLE);
+    }
+
+    /// The atom named `name`.
+    fn atom(&mut self, name: &[u8]) -> u32 {
+        let padded = padded(name);
+        let mut request = vec![INTERN_ATOM, 0];
+        request.extend_from_slice(&request_length(8 + padded.len()).to_le_bytes());
+        request.extend_from_slice(&length16(name.len()).to_le_bytes());
+        request.extend_from_slice(&[0, 0]);
+        request.extend_from_slice(&padded);
+        self.send(&request);
+        let reply = self.reply();
+        u32::from_le_bytes([reply[8], reply[9], reply[10], reply[11]])
     }
 
     /// One fake device event, then waits until the X server handled it and
