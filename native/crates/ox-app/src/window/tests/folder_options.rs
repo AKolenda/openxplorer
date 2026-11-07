@@ -170,7 +170,7 @@ fn the_search_tab_searches_names_and_contents() {
 }
 
 /// The close button in the title bar of the titled dialog `options`.
-fn title_bar_close(options: &crate::dialog::Dialog) -> gtk::Button {
+fn title_bar_close(options: &crate::properties::PropertiesWindow) -> gtk::Button {
     let bar = options.titlebar().expect("Folder Options has a title bar");
     crate::test_support::harness::descendants::<gtk::Button>(&bar)
         .into_iter()
@@ -197,6 +197,20 @@ fn folder_options_is_a_modal_window_of_its_own() {
     assert_eq!(options.transient_for().as_ref(), Some(window));
     assert!(options.is_modal(), "it holds back the window it belongs to");
     assert!(options.parent().is_none(), "it is no widget inside the window");
+    // Windows 11 draws it about 380 by 483 pixels at 100 %.
+    wait_until("Folder Options to have its size", || options.width() > 0);
+    // Without a compositor, as on Xvfb, GTK draws a solid frame of 4
+    // pixels a side inside that width.
+    assert!(
+        (376..=380).contains(&options.width()),
+        "as wide as Windows' Folder Options, not {}",
+        options.width()
+    );
+    assert!(
+        options.height() < 540,
+        "about as tall as Windows' Folder Options, not {}",
+        options.height()
+    );
     assert!(
         test.window.dialog_layer().shown().is_none(),
         "nothing is shown over the window's content"
@@ -234,8 +248,8 @@ fn folder_options_is_a_modal_window_of_its_own() {
 
 /// Folder Options beside the window it was opened from, light and dark,
 /// for review with `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`): the
-/// window, Folder Options, and, under a window manager, the screen with
-/// Folder Options moved partly off its window.
+/// window, each tab of Folder Options, and, under a window manager, the
+/// screen with Folder Options moved partly off its window.
 #[gtk::test]
 fn folder_options_as_a_window_is_captured_light_and_dark() {
     use crate::test_support::harness::{capture, capture_dialog, wait_for_frames, ThemeGuard};
@@ -248,7 +262,10 @@ fn folder_options_as_a_window_is_captured_light_and_dark() {
         test.window.set_default_size(760, 540);
         let options = open_folder_options(&test);
         capture(&test.window, &format!("folder-options-window-parent-{theme}.png"));
-        capture_dialog(&options, &format!("folder-options-window-dialog-{theme}.png"));
+        for tab in ["view", "search", "general"] {
+            options.select_tab(tab);
+            capture_dialog(&options, &format!("folder-options-window-{tab}-{theme}.png"));
+        }
         if let Some(directory) = std::env::var_os("OX_NATIVE_CAPTURE_DIR") {
             if std::env::var_os("OX_CAPTURE_SCREEN").is_some() {
                 // Moved by the window manager, as dragging its title bar does.
@@ -260,8 +277,8 @@ fn folder_options_as_a_window_is_captured_light_and_dark() {
                         "^Folder Options$",
                         "windowmove",
                         "%@",
-                        "560",
-                        "120",
+                        "1340",
+                        "200",
                     ])
                     .status()
                     .is_ok_and(|status| status.success());

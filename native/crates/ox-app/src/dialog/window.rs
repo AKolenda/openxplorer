@@ -196,8 +196,8 @@ impl Dialog {
 
     /// A dialog over `parent` laid out as a Windows dialog window rather
     /// than a `ContentDialog`: `title` is in a title bar of its own, with
-    /// a close button, and not over the body. Folder Options, Format and
-    /// Map network drive are such windows in Windows: the title bar shows
+    /// a close button, and not over the body. Format and Map network
+    /// drive are such windows in Windows: the title bar shows
     /// it is a window of its own, which can be moved anywhere, even off
     /// its parent, while it stays modal to that window alone (the
     /// parent's window group, [`BrowserWindow`]).
@@ -356,14 +356,6 @@ impl Dialog {
             self.set_default_widget(Some(&button));
         }
         answer
-    }
-
-    /// Lets `button` be pressed, or greys it out, such as Apply while
-    /// nothing has changed.
-    pub(crate) fn set_button_sensitive(&self, button: DialogButton, sensitive: bool) {
-        if let Some(button) = self.imp().buttons.borrow().get(button.0) {
-            button.set_sensitive(sensitive);
-        }
     }
 
     /// A button appended to the actions and remembered.

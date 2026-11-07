@@ -30,9 +30,11 @@
 //! with the search strip's "Names and contents".
 //!
 //! The options take effect with OK or Apply, and each tab's Restore
-//! Defaults sets its choices back. Built on the app's one [`Dialog`], as
-//! a window of its own with a title bar, modal to the window it was opened
-//! from ([`Dialog::with_title_bar`]). [`super::explorer_options`] does what the options that only Folder
+//! Defaults sets its choices back. It is a window of its own, modal to
+//! the window it was opened from alone, laid out as Windows 11's: about
+//! 380 by 483 pixels, the Properties window's classic tabs, group boxes
+//! with a picture at their left, and OK, Cancel and Apply
+//! ([`PropertiesWindow`]). [`super::explorer_options`] does what the options that only Folder
 //! Options sets mean in a window.
 
 use std::cell::Cell;
@@ -45,9 +47,11 @@ use ox_core::location::{is_virtual_location, same_location, RECENT_LOCATIONS_URI
 use ox_core::settings::{Preferences, PreferencesUpdate};
 
 use super::{BrowserWindow, ButtonStyle};
-use crate::dialog::{Dialog, DialogButton};
+use crate::dialog::Dialog;
 use crate::i18n::message_id;
+use crate::icons::Icon;
 use crate::locations::Page;
+use crate::properties::{ApplyFuture, Pending, PropertiesWindow};
 
 /// The question Apply to Folders asks, Windows' without "of this type".
 const APPLY_QUESTION: &str = message_id("Do you want all folders to match this folder's view settings?");
@@ -249,9 +253,10 @@ struct ShownSetting {
 }
 
 impl ShownSetting {
-    /// Adds `setting` of `tab` to `parent`, showing `preferences`; the
-    /// choices of a choice of two stand under its heading, indented, as
-    /// in Windows.
+    /// Adds `setting` of `tab` to `parent`, showing `preferences`. On the
+    /// View tab a choice of two stands under its heading, indented, as a
+    /// node of Windows' tree; on the General tab the group box it is in
+    /// is its heading, as in Windows.
     fn add(setting: Setting, tab: Tab, parent: &gtk::Box, preferences: &Preferences) -> Self {
         let value = (setting.read)(preferences);
         let (on, off) = match setting.choices {
@@ -261,18 +266,19 @@ impl ShownSetting {
                 (check, None)
             }
             Some(choices) => {
-                // Windows titles a group box on the General tab with the
-                // heading, and a node of the View tab's tree.
-                let heading = match tab {
-                    Tab::General => group_caption(gettext_static(setting.label)),
-                    Tab::View | Tab::Search => option_heading(gettext_static(setting.label)),
-                };
-                parent.append(&heading);
+                let heading = (tab != Tab::General).then(|| {
+                    let heading = option_heading(gettext_static(setting.label));
+                    parent.append(&heading);
+                    heading
+                });
                 let buttons = choices.map(|(label, _)| {
                     let button = option_check(gettext_static(label));
-                    button.set_margin_start(CHOICE_INDENT);
-                    button
-                        .update_relation(&[gtk::accessible::Relation::DescribedBy(&[heading.upcast_ref()])]);
+                    if let Some(heading) = &heading {
+                        button.set_margin_start(CHOICE_INDENT);
+                        button.update_relation(&[gtk::accessible::Relation::DescribedBy(&[
+                            heading.upcast_ref()
+                        ])]);
+                    }
                     parent.append(&button);
                     button
                 });
@@ -311,35 +317,84 @@ impl ShownSetting {
     }
 }
 
-/// How far a choice stands in from its heading, as in Windows' tree.
-const CHOICE_INDENT: i32 = 22;
+/// The width of Folder Options, as Windows 11 draws it at 100 %: about
+/// 380 by 483 pixels with its title bar, its pages the standard property
+/// sheet's 227 by 215 dialog units.
+const WINDOW_WIDTH: i32 = 380;
 
-/// A check box or a choice of Folder Options, closer together than a
-/// dialog's check boxes, as Windows lists them.
+/// How far a choice stands in from its heading, as in Windows.
+const CHOICE_INDENT: i32 = 16;
+
+/// The size of a group box's picture, as Windows draws it.
+const GROUP_ART: i32 = 32;
+
+/// A check box or a choice of Folder Options, close together, as Windows
+/// lists them.
 fn option_check(label: &str) -> gtk::CheckButton {
-    gtk::CheckButton::builder()
+    let check = gtk::CheckButton::builder()
         .label(label)
         .css_classes(["option-row"])
-        .build()
+        .build();
+    // A long option wraps, as in Windows, rather than widening the
+    // window past Windows' width.
+    if let Some(text) = check.last_child().and_downcast::<gtk::Label>() {
+        wrap(&text);
+    }
+    check
+}
+
+/// Lets `label` wrap at the width it is given, asking for no more.
+fn wrap(label: &gtk::Label) {
+    label.set_wrap(true);
+    label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+    label.set_max_width_chars(1);
+    label.set_hexpand(true);
+    label.set_xalign(0.0);
 }
 
 /// The heading over a choice of two.
 fn option_heading(label: &str) -> gtk::Label {
-    gtk::Label::builder()
+    let heading = gtk::Label::builder()
         .label(label)
-        .xalign(0.0)
         .css_classes(["option-heading"])
-        .build()
+        .build();
+    wrap(&heading);
+    heading
 }
 
-/// A group's caption on the General and Search tabs, as Windows' group
-/// boxes are titled.
-fn group_caption(label: &str) -> gtk::Label {
-    gtk::Label::builder()
-        .label(label)
-        .xalign(0.0)
-        .css_classes(["field-label"])
-        .build()
+/// A group box titled `title` with `icon` at its left, as Windows draws
+/// Folder Options' groups, and the column its controls go in.
+fn icon_group(title: &str, icon: Icon) -> (gtk::Frame, gtk::Box) {
+    let (frame, content) = options_group(title);
+    content.set_orientation(gtk::Orientation::Horizontal);
+    content.add_css_class("options-group-content");
+    let art = crate::icons::image(icon, GROUP_ART);
+    art.set_valign(gtk::Align::Start);
+    art.add_css_class("options-group-art");
+    content.append(&art);
+    let column = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .hexpand(true)
+        .css_classes(["options-group-column"])
+        .build();
+    content.append(&column);
+    (frame, column)
+}
+
+/// A group box titled `title` without a picture, as the Search tab's.
+fn plain_group(title: &str) -> (gtk::Frame, gtk::Box) {
+    let (frame, content) = options_group(title);
+    content.add_css_class("options-group-content");
+    (frame, content)
+}
+
+/// A Properties group box whose title is drawn on its top line, as
+/// Windows draws one: the title is lifted out of the box by the
+/// stylesheet, which the frame then must not clip.
+fn options_group(title: &str) -> (gtk::Frame, gtk::Box) {
+    let (frame, content) = crate::properties::group(title);
+    frame.set_overflow(gtk::Overflow::Visible);
+    (frame, content)
 }
 
 /// Whether Apply to Folders can take the view of `uri`: a folder, local,
@@ -385,41 +440,39 @@ struct OptionsForm {
 
 impl OptionsForm {
     /// The choices, showing `preferences`, on the tabs `general`, `view`
-    /// and `search`.
+    /// and `search`, laid out as Windows 11 lays out Folder Options.
     fn add_to(general: &gtk::Box, view: &gtk::Box, search: &gtk::Box, preferences: &Preferences) -> Rc<Self> {
         let mut settings = Vec::new();
         let (start, places) = open_file_explorer_to(general, preferences);
-        let browse = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        let (browse, column) = icon_group(&gettext("Browse folders"), Icon::WindowMultiple);
         settings.push(ShownSetting::add(
             browse_folders(),
             Tab::General,
-            &browse,
+            &column,
             preferences,
         ));
         general.append(&browse);
         general.append(&click_items_group());
-        let privacy = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        privacy.append(&group_caption(&gettext("Privacy")));
+        let (privacy, column) = icon_group(&gettext("Privacy"), Icon::ShieldLock);
         for setting in privacy_settings() {
-            settings.push(ShownSetting::add(setting, Tab::General, &privacy, preferences));
+            settings.push(ShownSetting::add(setting, Tab::General, &column, preferences));
         }
-        let clear_history = tab_button(&gettext("Clear"));
-        privacy.append(&clear_row(&clear_history));
+        let clear_history = push_button(&gettext("Clear"));
+        column.append(&clear_row(&clear_history));
         general.append(&privacy);
-        let restore_general = restore_defaults_button();
-        let more_settings = tab_button(&gettext("More settings…"));
-        general.append(&general_footer(&more_settings, &restore_general));
+        let restore_general = push_button(&gettext("Restore Defaults"));
+        let more_settings = push_button(&gettext("More settings…"));
+        general.append(&tab_footer(Some(&more_settings), &restore_general));
 
         let caption = gtk::Label::builder()
             .label(gettext("Advanced settings:"))
             .xalign(0.0)
+            .css_classes(["options-caption"])
             .build();
         view.append(&caption);
         let tree = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        tree.set_margin_top(6);
-        tree.set_margin_bottom(8);
-        tree.set_margin_start(8);
-        tree.set_margin_end(8);
+        tree.add_css_class("advanced-tree");
         tree.append(&option_heading(&gettext("Files and Folders")));
         let files_and_folders = gtk::Box::new(gtk::Orientation::Vertical, 0);
         files_and_folders.set_margin_start(CHOICE_INDENT);
@@ -434,15 +487,19 @@ impl OptionsForm {
         tree.append(&files_and_folders);
         tree.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
         view.append(&advanced_list(&tree));
-        let restore_view = restore_defaults_button();
-        view.append(&restore_view);
+        let restore_view = push_button(&gettext("Restore Defaults"));
+        // The list takes the room the tab has, as in Windows.
+        let view_footer = tab_footer(None, &restore_view);
+        view_footer.set_vexpand(false);
+        view.append(&view_footer);
 
-        search.append(&group_caption(&gettext("When searching non-indexed locations")));
+        let (non_indexed, column) = plain_group(&gettext("When searching non-indexed locations"));
         for setting in search_settings() {
-            settings.push(ShownSetting::add(setting, Tab::Search, search, preferences));
+            settings.push(ShownSetting::add(setting, Tab::Search, &column, preferences));
         }
-        let restore_search = restore_defaults_button();
-        search.append(&restore_search);
+        search.append(&non_indexed);
+        let restore_search = push_button(&gettext("Restore Defaults"));
+        search.append(&tab_footer(None, &restore_search));
 
         let form = Rc::new(Self {
             settings,
@@ -510,16 +567,13 @@ impl OptionsForm {
             || self.start.selected() != self.saved_start.get()
     }
 
-    /// Greys out `apply` of `options` while nothing is changed, as Windows
+    /// Lets `options` grey out Apply while nothing is changed, as Windows
     /// does.
-    fn follow_with(self: &Rc<Self>, options: &Dialog, apply: DialogButton) {
-        options.set_button_sensitive(apply, false);
+    fn follow_with(&self, options: &PropertiesWindow) {
         let update = glib::clone!(
             #[weak]
             options,
-            #[weak(rename_to = form)]
-            self,
-            move || options.set_button_sensitive(apply, form.is_changed())
+            move || options.changed()
         );
         let update = Rc::new(update);
         for shown in &self.settings {
@@ -527,6 +581,27 @@ impl OptionsForm {
             shown.on.connect_toggled(move |_| update());
         }
         self.start.connect_selected_notify(move |_| update());
+    }
+}
+
+/// What OK and Apply save: the choices changed in Folder Options.
+struct OptionsChange {
+    window: glib::WeakRef<BrowserWindow>,
+    form: Rc<OptionsForm>,
+}
+
+impl Pending for OptionsChange {
+    fn has_changes(&self) -> bool {
+        self.form.is_changed()
+    }
+
+    fn apply(self: Rc<Self>) -> ApplyFuture {
+        Box::pin(async move {
+            if let Some(window) = self.window.upgrade() {
+                window.save_options(&self.form);
+            }
+            Ok(())
+        })
     }
 }
 
@@ -544,6 +619,7 @@ fn open_file_explorer_to(
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
     let start = gtk::DropDown::from_strings(&names);
     start.set_halign(gtk::Align::Start);
+    start.add_css_class("properties-combo");
     let chosen = places
         .iter()
         .position(|place| *place == preferences.startup_folder)
@@ -556,6 +632,7 @@ fn open_file_explorer_to(
         .build();
     start.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
     let open_to = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    open_to.add_css_class("options-open-to");
     open_to.append(&caption);
     open_to.append(&start);
     general.append(&open_to);
@@ -565,9 +642,8 @@ fn open_file_explorer_to(
 /// Click items as follows, as Windows lists it, where only Double-click
 /// can be chosen: the file list has no single-click mode (SEL-018), so
 /// Single-click and its underline choices are greyed out and say why.
-fn click_items_group() -> gtk::Box {
-    let group = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    group.append(&group_caption(&gettext("Click items as follows")));
+fn click_items_group() -> gtk::Frame {
+    let (group, column) = icon_group(&gettext("Click items as follows"), Icon::Open);
     let single = option_check(&gettext("Single-click to open an item (point to select)"));
     let consistent = option_check(&gettext("Underline icon titles consistent with my browser"));
     let on_point = option_check(&gettext("Underline icon titles only when I point at them"));
@@ -585,7 +661,7 @@ fn click_items_group() -> gtk::Box {
         unavailable.set_tooltip_text(Some(reason));
     }
     for button in [&single, &consistent, &on_point, &double] {
-        group.append(button);
+        column.append(button);
     }
     group
 }
@@ -593,7 +669,7 @@ fn click_items_group() -> gtk::Box {
 /// "Clear File Explorer history" and its Clear button, on one line.
 fn clear_row(clear: &gtk::Button) -> gtk::Box {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    row.set_margin_top(8);
+    row.add_css_class("options-clear-row");
     let label = gtk::Label::builder()
         .label(gettext("Clear File Explorer history"))
         .xalign(0.0)
@@ -606,121 +682,99 @@ fn clear_row(clear: &gtk::Button) -> gtk::Box {
     row
 }
 
-/// The Advanced settings list, scrolled in a border as Windows draws its
-/// tree.
-fn advanced_list(tree: &gtk::Box) -> gtk::ScrolledWindow {
-    gtk::ScrolledWindow::builder()
+/// The Advanced settings list, scrolled in a sunken border as Windows
+/// draws its tree, taking the room the tab has.
+fn advanced_list(tree: &gtk::Box) -> gtk::Frame {
+    let scrolled = gtk::ScrolledWindow::builder()
         .child(tree)
         .hscrollbar_policy(gtk::PolicyType::Never)
         .min_content_height(ADVANCED_LIST_HEIGHT)
         .vexpand(true)
-        .css_classes(["advanced-settings"])
+        .build();
+    gtk::Frame::builder()
+        .child(&scrolled)
+        .vexpand(true)
+        .css_classes(["properties-list-frame", "advanced-settings"])
         .build()
 }
 
-/// The Advanced settings list's height, about ten lines, as in Windows.
-const ADVANCED_LIST_HEIGHT: i32 = 260;
+/// The Advanced settings list's least height; it takes the rest of the
+/// tab, as tall as the General tab makes it.
+const ADVANCED_LIST_HEIGHT: i32 = 120;
 
-/// A push button in a tab, drawn as the dialog's own bordered buttons
-/// (Cancel, Apply), as Windows draws Apply to Folders and Reset Folders.
-fn tab_button(label: &str) -> gtk::Button {
-    let button = gtk::Button::with_label(label);
-    button.add_css_class(ButtonStyle::Bordered.css_class());
-    button.add_css_class("dialog-button");
-    button
+/// A Windows push button in a tab, as Apply to Folders and Clear.
+fn push_button(label: &str) -> gtk::Button {
+    crate::properties::push_button(label)
 }
 
-/// A tab's Restore Defaults, at its bottom right as in Windows.
-fn restore_defaults_button() -> gtk::Button {
-    let button = tab_button(&gettext("Restore Defaults"));
-    button.set_halign(gtk::Align::End);
-    button.set_valign(gtk::Align::End);
-    button.set_vexpand(true);
-    button
-}
-
-/// The foot of the General tab: "More settings…" at the left, which
-/// opens the rest of the app's settings, and Restore Defaults at the
-/// right, at the bottom of the tab.
-fn general_footer(more_settings: &gtk::Button, restore: &gtk::Button) -> gtk::Box {
+/// The foot of a tab: Restore Defaults at its bottom right, as in
+/// Windows, and on the General tab "More settings…" at the left, which
+/// opens the rest of the app's settings.
+fn tab_footer(more_settings: Option<&gtk::Button>, restore: &gtk::Button) -> gtk::Box {
     let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    footer.add_css_class("options-tab-footer");
     footer.set_valign(gtk::Align::End);
     footer.set_vexpand(true);
-    more_settings.set_halign(gtk::Align::Start);
-    more_settings.set_hexpand(true);
-    more_settings.set_tooltip_text(Some(&gettext("Open OpenXplorer's Settings")));
-    restore.set_vexpand(false);
-    footer.append(more_settings);
+    if let Some(more_settings) = more_settings {
+        more_settings.set_tooltip_text(Some(&gettext("Open OpenXplorer's Settings")));
+        footer.append(more_settings);
+    }
+    restore.set_halign(gtk::Align::End);
+    restore.set_hexpand(true);
     footer.append(restore);
     footer
 }
 
-/// A tab's page.
-fn tab_page() -> gtk::Box {
-    let page = gtk::Box::new(gtk::Orientation::Vertical, 12);
-    page.set_margin_top(12);
-    page.set_margin_bottom(12);
-    page.set_margin_start(12);
-    page.set_margin_end(12);
-    page
-}
-
 impl BrowserWindow {
-    /// Opens Folder Options for the folder shown.
+    /// Opens Folder Options for the folder shown: a window of its own with
+    /// a title bar, modal to this window alone, as in Windows 11.
     pub(super) fn show_folder_options(&self) {
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move { window.run_folder_options().await }
-        ));
-    }
-
-    /// Shows Folder Options until OK, Cancel or Escape.
-    async fn run_folder_options(&self) {
-        let options = Dialog::with_title_bar(self, &gettext("Folder Options"), "");
+        let options = PropertiesWindow::new(&gettext("Folder Options"), None, Some(self));
+        options.add_css_class("ox-folder-options");
+        options.set_window_width(WINDOW_WIDTH);
+        options.set_transient_for(Some(self));
+        options.set_modal(true);
+        options.set_destroy_with_parent(true);
         let source = self
             .current_uri()
             .is_some_and(|uri| is_view_source(&uri, self.is_searching()));
-        let tabs = gtk::Notebook::new();
-        let general = tab_page();
-        let view = tab_page();
-        let search = tab_page();
+        let general = crate::properties::page();
+        let view = crate::properties::page();
+        let search = crate::properties::page();
         self.add_folder_views(&options, &view, source);
         let preferences = self.context().settings_data().preferences;
         let form = OptionsForm::add_to(&general, &view, &search, &preferences);
-        tabs.append_page(&general, Some(&gtk::Label::new(Some(&gettext("General")))));
-        tabs.append_page(&view, Some(&gtk::Label::new(Some(&gettext("View")))));
-        tabs.append_page(&search, Some(&gtk::Label::new(Some(&gettext("Search")))));
-        options.add_field(&tabs);
-        let ok = options.add_button(&gettext("OK"), ButtonStyle::Accent);
-        options.add_cancel_button();
-        let apply = options.add_button(&gettext("Apply"), ButtonStyle::Bordered);
-        form.follow_with(&options, apply);
+        options.add_tab("general", &gettext("General"), &general);
+        options.add_tab("view", &gettext("View"), &view);
+        options.add_tab("search", &gettext("Search"), &search);
+        options.add_pending(Rc::new(OptionsChange {
+            window: self.downgrade(),
+            form: Rc::clone(&form),
+        }));
+        form.follow_with(&options);
         self.open_settings_from(&options, &form);
         form.clear_history.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |_| window.clear_explorer_history()
         ));
-        options.open();
-        while let Some(answer) = options.next_response().await {
-            let preferences = self.context().settings_data().preferences;
-            if let Some(update) = form.take_change(&preferences) {
-                self.context()
-                    .update_preferences(update, self.preference_failure_reply());
-            }
-            if answer == ok {
-                options.finish();
-                return;
-            }
-            options.set_button_sensitive(apply, false);
+        self.quiet_for_dialog();
+        options.present();
+    }
+
+    /// Saves the choices changed in `form`, as OK and Apply do.
+    fn save_options(&self, form: &OptionsForm) {
+        let preferences = self.context().settings_data().preferences;
+        if let Some(update) = form.take_change(&preferences) {
+            self.context()
+                .update_preferences(update, self.preference_failure_reply());
         }
     }
 
     /// Makes `form`'s "More settings…" keep the choices made, as OK does,
     /// close Folder Options and open Settings. Settings left the "…" menu
     /// for this button (CMD-007); Ctrl+, opens it too.
-    fn open_settings_from(&self, options: &Dialog, form: &Rc<OptionsForm>) {
+    fn open_settings_from(&self, options: &PropertiesWindow, form: &Rc<OptionsForm>) {
         form.more_settings.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -729,46 +783,38 @@ impl BrowserWindow {
             #[weak]
             form,
             move |_| {
-                let preferences = window.context().settings_data().preferences;
-                if let Some(update) = form.take_change(&preferences) {
-                    window
-                        .context()
-                        .update_preferences(update, window.preference_failure_reply());
-                }
+                window.save_options(&form);
                 options.close();
                 window.open_settings(None);
             }
         ));
     }
 
-    /// Adds the Folder views box to `view`, whose Apply to Folders can be
-    /// pressed when Folder Options was opened from a folder (`source`).
-    fn add_folder_views(&self, options: &Dialog, view: &gtk::Box, source: bool) {
-        let folder_views = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        let caption = gtk::Label::builder()
-            .label(gettext("Folder views"))
-            .xalign(0.0)
-            .css_classes(["field-label"])
-            .build();
-        folder_views.append(&caption);
+    /// Adds the Folder views group box to `view`, whose Apply to Folders
+    /// can be pressed when Folder Options was opened from a folder
+    /// (`source`).
+    fn add_folder_views(&self, options: &PropertiesWindow, view: &gtk::Box, source: bool) {
+        let (group, column) = icon_group(&gettext("Folder views"), Icon::Grid);
         let text = gtk::Label::builder()
             .label(gettext(
                 "You can apply this view (such as Details or Icons) to all folders.",
             ))
             .xalign(0.0)
             .wrap(true)
-            .max_width_chars(48)
+            .wrap_mode(gtk::pango::WrapMode::WordChar)
+            .max_width_chars(1)
+            .hexpand(true)
             .build();
-        folder_views.append(&text);
+        column.append(&text);
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let apply = tab_button(&gettext("Apply to Folders"));
+        buttons.add_css_class("options-folder-views-buttons");
+        let apply = push_button(&gettext("Apply to Folders"));
         apply.set_sensitive(source);
-        let reset = tab_button(&gettext("Reset Folders"));
+        let reset = push_button(&gettext("Reset Folders"));
         buttons.append(&apply);
         buttons.append(&reset);
-        folder_views.append(&buttons);
-        folder_views.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
-        view.append(&folder_views);
+        column.append(&buttons);
+        view.append(&group);
         apply.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -791,7 +837,7 @@ impl BrowserWindow {
 
     /// Apply to Folders: after Yes, every folder shows the view of the
     /// folder shown and keeps none of its own.
-    async fn apply_to_folders(&self, options: &Dialog) {
+    async fn apply_to_folders(&self, options: &PropertiesWindow) {
         if ask_folder_views(options, APPLY_QUESTION).await {
             self.context()
                 .apply_view_to_all_folders(self.current_style(), self.preference_failure_reply());
@@ -800,7 +846,7 @@ impl BrowserWindow {
 
     /// Reset Folders: after Yes, every folder forgets its view and shows
     /// the default one.
-    async fn reset_folders(&self, options: &Dialog) {
+    async fn reset_folders(&self, options: &PropertiesWindow) {
         if ask_folder_views(options, RESET_QUESTION).await {
             self.context().reset_folder_views(self.preference_failure_reply());
         }
@@ -809,7 +855,7 @@ impl BrowserWindow {
 
 /// Asks `question` over `options` as Windows' Folder Views message box
 /// does; true for Yes.
-async fn ask_folder_views(options: &Dialog, question: &str) -> bool {
+async fn ask_folder_views(options: &PropertiesWindow, question: &str) -> bool {
     let ask = Dialog::new(options, &gettext("Folder Views"), &gettext(question));
     let yes = ask.add_button(&gettext("Yes"), ButtonStyle::Accent);
     ask.add_button(&gettext("No"), ButtonStyle::Bordered);

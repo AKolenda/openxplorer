@@ -111,6 +111,9 @@ mod imp {
         pub(super) is_closed: Cell<bool>,
         /// True once the window was first shown.
         pub(super) has_shown: Cell<bool>,
+        /// The window's width, when it is not Properties' own
+        /// ([`super::PropertiesWindow::set_window_width`]).
+        pub(super) width: Cell<Option<i32>>,
     }
 
     impl std::fmt::Debug for PropertiesWindow {
@@ -400,12 +403,27 @@ impl PropertiesWindow {
         page.add_css_class("properties-page");
         // Windows' Properties keep their width; a page's wrapped rows are
         // measured at it, never at the width of a short tab row.
-        page.set_size_request(WINDOW_WIDTH - 2 * PAGE_MARGIN - 2, -1);
+        page.set_size_request(self.window_width() - 2 * PAGE_MARGIN - 2, -1);
         page.set_widget_name(name);
         let tab = gtk::Label::new(Some(label));
         notebook.append_page(page, Some(&tab));
         notebook.set_show_tabs(notebook.n_pages() > 1);
         notebook.set_show_border(true);
+    }
+
+    /// Gives the window `width` instead of Properties' own, for a dialog
+    /// Windows draws narrower, as Folder Options. Call before adding tabs.
+    pub(crate) fn set_window_width(&self, width: i32) {
+        self.imp().width.set(Some(width));
+        self.set_default_width(width);
+        if let Some(holder) = self.child().and_downcast::<super::fixed_width::FixedWidth>() {
+            holder.set_width(width);
+        }
+    }
+
+    /// The window's width.
+    fn window_width(&self) -> i32 {
+        self.imp().width.get().unwrap_or(WINDOW_WIDTH)
     }
 
     /// Keeps the window on the screen beside its parent or opener: tabs
@@ -650,6 +668,30 @@ impl PropertiesWindow {
     #[cfg(test)]
     pub(crate) fn ok_button(&self) -> gtk::Button {
         self.imp().ok.clone()
+    }
+
+    /// Presses the footer button labelled `label`, for tests.
+    #[cfg(test)]
+    pub(crate) fn press(&self, label: &str) {
+        self.footer_button(label).emit_clicked();
+    }
+
+    /// Whether the footer button labelled `label` can be pressed, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn can_press(&self, label: &str) -> bool {
+        self.footer_button(label).is_sensitive()
+    }
+
+    /// The footer button labelled `label`, for tests.
+    #[cfg(test)]
+    fn footer_button(&self, label: &str) -> gtk::Button {
+        let imp = self.imp();
+        [&imp.ok, &imp.cancel, &imp.apply]
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some(label))
+            .cloned()
+            .unwrap_or_else(|| panic!("the window has a {label} button"))
     }
 
     /// The labels of the footer buttons shown, for tests.
