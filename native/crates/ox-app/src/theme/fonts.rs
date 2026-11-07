@@ -61,8 +61,7 @@ const FONT_SIZES: &[FontSize] = &[
     font(".address entry", 13.0),
     font(".search-wrap entry", 12.0),
     font(".commandbar .text-command", 12.0),
-    font(".sidebar list > row", 12.0),
-    font(".sidebar-bottom button", 12.0),
+    font(".sidebar list.places > row", 12.0),
     font("columnview.files", 12.0),
     font("columnview.files > header > button", 12.0),
     font("gridview.files", 12.0),
@@ -193,12 +192,13 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
 /// A sidebar row (`.side-entry`): 31 pixels at 100%, 32 apart with the
 /// 1-pixel gap, as Windows 11's navigation pane rows are (owner decision
 /// 2026-11-06; the web's were 35).
-const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list > row", 31, 20.0, 11.0);
+const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list.places > row", 31, 20.0, 11.0);
 
 /// A sidebar row in Compact view: 24 pixels at 100% instead of 31, as
 /// Windows 11's Compact view packs them, and no lower, as Compact view's
 /// details rows, growing with the text as the usual rows do.
-const COMPACT_SIDEBAR_ROW: ScaledHeight = grows("window.compact-density .sidebar list > row", 24, 20.0, 4.0);
+const COMPACT_SIDEBAR_ROW: ScaledHeight =
+    grows("window.compact-density .sidebar list.places > row", 24, 20.0, 4.0);
 
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
@@ -376,13 +376,13 @@ mod tests {
         assert!(
             css.contains("window.compact-density columnview.files > listview > row { min-height: 24px; }")
         );
-        assert!(css.contains("window.compact-density .sidebar list > row { min-height: 24px; }"));
+        assert!(css.contains("window.compact-density .sidebar list.places > row { min-height: 24px; }"));
         let larger = css_at(150);
         assert!(
             larger.contains("window.compact-density columnview.files > listview > row { min-height: 36px; }")
         );
-        assert!(larger.contains("window.compact-density .sidebar list > row { min-height: 34px; }"));
-        assert!(larger.contains(".sidebar list > row { min-height: 41px; }"));
+        assert!(larger.contains("window.compact-density .sidebar list.places > row { min-height: 34px; }"));
+        assert!(larger.contains(".sidebar list.places > row { min-height: 41px; }"));
         assert!(larger.contains("columnview.files > listview > row { min-height: 42px; }"));
     }
 
@@ -462,7 +462,7 @@ mod tests {
         let normal = css_at(100);
         let large = css_at(200);
         for (selector, at_100, at_200) in [
-            (".sidebar list > row", 31, 51),
+            (".sidebar list.places > row", 31, 51),
             (".commandbar", 47, 72),
             ("columnview.files > header > button", 31, 55),
             (".statusbar", 29, 39),
