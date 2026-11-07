@@ -637,16 +637,18 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
 
     let strip = tabs[0].parent().expect("the row of tabs");
     assert_eq!(strip.accessible_role(), gtk::AccessibleRole::TabList);
-    let press = |key: gtk::gdk::Key| {
+    let press_with = |key: gtk::gdk::Key, modifiers: gtk::gdk::ModifierType| {
         let keys = strip
             .observe_controllers()
             .iter::<glib::Object>()
             .filter_map(Result::ok)
             .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
             .expect("the row's keys");
-        keys.emit_by_name::<bool>("key-pressed", &[&key, &0_u32, &gtk::gdk::ModifierType::empty()])
+        keys.emit_by_name::<bool>("key-pressed", &[&key, &0_u32, &modifiers])
     };
-    press(gtk::gdk::Key::Right);
+    let press = |key: gtk::gdk::Key| press_with(key, gtk::gdk::ModifierType::empty());
+    // Caps Lock on still moves between tabs.
+    press_with(gtk::gdk::Key::Right, gtk::gdk::ModifierType::LOCK_MASK);
     assert_eq!(window.selected_tab().as_deref(), Some("sharing"));
     assert!(tabs[1].has_focus() && tabs[1].is_active());
     press(gtk::gdk::Key::End);
@@ -699,6 +701,13 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
     );
     shortcut(gtk::gdk::Key::Tab);
     assert_eq!(window.selected_tab().as_deref(), Some("sharing"));
+
+    // A tab clicked is shown and takes the keyboard, the only stop.
+    let last = tabs.last().expect("a last tab");
+    last.emit_clicked();
+    assert_eq!(window.selected_tab().as_deref(), Some("customize"));
+    assert!(last.has_focus(), "the tab clicked has the keyboard");
+    assert!(!tabs[1].is_focusable(), "the tab left is no stop");
     window.close();
 }
 

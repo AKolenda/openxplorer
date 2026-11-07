@@ -36,7 +36,12 @@ impl PropertiesWindow {
         self.imp().notebook.connect_switch_page(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, _, page| window.show_selected_tab(page)
+            move |_, _, page| {
+                // Every page scrolls in one scroller: a page shown opens
+                // at its top, not where the last one was scrolled to.
+                window.imp().scroller.vadjustment().set_value(0.0);
+                window.show_selected_tab(page);
+            }
         ));
     }
 
@@ -46,7 +51,9 @@ impl PropertiesWindow {
         let button = gtk::ToggleButton::builder()
             .label(label)
             .css_classes(["properties-tab"])
-            .focus_on_click(true)
+            // The tab clicked takes the keyboard once it is the one shown
+            // (below): only the tab shown can hold it.
+            .focus_on_click(false)
             .build();
         button.set_accessible_role(gtk::AccessibleRole::Tab);
         if let Some(first) = imp.tab_buttons.borrow().first() {
@@ -60,6 +67,15 @@ impl PropertiesWindow {
                 if button.is_active() {
                     window.imp().notebook.set_current_page(Some(index));
                 }
+            }
+        ));
+        // A click shows the tab first, which makes it the one the
+        // keyboard can reach, then puts the keyboard on it, as in Windows.
+        button.connect_clicked(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| {
+                window.focus_selected_tab();
             }
         ));
         page.update_relation(&[gtk::accessible::Relation::LabelledBy(&[button.upcast_ref()])]);
@@ -138,7 +154,14 @@ impl PropertiesWindow {
 
     /// Left, Right, Home and End on the row of tabs.
     fn tab_strip_key(&self, key: gdk::Key, modifiers: gdk::ModifierType) -> glib::Propagation {
-        if !modifiers.is_empty() {
+        // Caps Lock and Num Lock do not make it another key.
+        let held = gdk::ModifierType::CONTROL_MASK
+            | gdk::ModifierType::SHIFT_MASK
+            | gdk::ModifierType::ALT_MASK
+            | gdk::ModifierType::SUPER_MASK
+            | gdk::ModifierType::HYPER_MASK
+            | gdk::ModifierType::META_MASK;
+        if modifiers.intersects(held) {
             return glib::Propagation::Proceed;
         }
         let count = i32::try_from(self.imp().tab_buttons.borrow().len()).unwrap_or(0);
