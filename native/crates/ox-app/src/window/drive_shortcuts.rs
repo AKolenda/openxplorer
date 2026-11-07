@@ -79,14 +79,17 @@ impl BrowserWindow {
         !uris.is_empty() && self.split_drives(uris).others.is_empty()
     }
 
-    /// The drive selected on This PC, when the tab shows This PC and a
-    /// drive's tile is selected: what Copy copies there.
-    pub(super) fn selected_drive_tile(&self) -> Option<String> {
-        let uri = self.current_uri()?;
-        if Page::from_uri(&uri) != Some(Page::ThisPc) {
-            return None;
+    /// The drives selected on This PC, when the tab shows This PC: what
+    /// Copy copies there. Select all selects every tile, so there may be
+    /// several; empty elsewhere.
+    pub(super) fn selected_drive_tiles(&self) -> Vec<String> {
+        let shows_this_pc = self
+            .current_uri()
+            .is_some_and(|uri| Page::from_uri(&uri) == Some(Page::ThisPc));
+        if !shows_this_pc {
+            return Vec::new();
         }
-        super::landing::selected_drive(self.folder_pane().landing())
+        super::landing::selected_drives(self.folder_pane().landing())
     }
 
     /// Makes a shortcut in `folder` to each of `drives`, named as Windows

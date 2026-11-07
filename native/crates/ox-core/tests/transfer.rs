@@ -11,6 +11,7 @@
 //! | `replace` | Replace: overwriting files and merging folders |
 //! | `cross_moves` | Moves finished by a staged copy and removing what was copied |
 //! | `failures` | Failures injected at every step of a copy or replacement |
+//! | `elevation` | Continue writes into a denied destination as administrator |
 //! | `error_names` | Failed copies name the real item, not the staging |
 //! | `snapshots` | Previous-version (snapshot) protection |
 //! | `modes` | Unix modes on backends without `chmod` |
@@ -38,6 +39,8 @@ mod device_cleanup;
 mod device_replace;
 #[path = "transfer_cases/devices.rs"]
 mod devices;
+#[path = "transfer_cases/elevation.rs"]
+mod elevation;
 #[path = "transfer_cases/error_names.rs"]
 mod error_names;
 #[path = "transfer_cases/failures.rs"]

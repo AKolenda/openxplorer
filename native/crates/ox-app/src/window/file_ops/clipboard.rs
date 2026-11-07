@@ -284,16 +284,16 @@ impl BrowserWindow {
     /// commands are disabled, so a share root or a previous version says
     /// why it cannot be copied or cut.
     pub(crate) fn copy_selection(&self, mode: ClipboardMode) {
-        // A drive, focused in the sidebar or selected on This PC, is
-        // copied as Windows Explorer copies it, for a paste to make a
-        // shortcut to it; it is never cut.
-        if let Some(drive) = self
-            .sidebar()
-            .focused_drive()
-            .or_else(|| self.selected_drive_tile())
-        {
+        // A drive focused in the sidebar, or the drives selected on This
+        // PC, are copied as Windows Explorer copies them, for a paste to
+        // make a shortcut to each; a drive is never cut.
+        let drives = match self.sidebar().focused_drive() {
+            Some(drive) => vec![drive],
+            None => self.selected_drive_tiles(),
+        };
+        if !drives.is_empty() {
             if mode == ClipboardMode::Copy {
-                self.copy_folder_at(mode, &drive);
+                self.copy_items(mode, &drives);
             }
             return;
         }

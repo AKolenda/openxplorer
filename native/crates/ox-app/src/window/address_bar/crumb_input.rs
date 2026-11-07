@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The crumbs' keys and modified clicks: Left and Right move focus
-//! between the crumbs, and a Ctrl+click or a Shift+click opens a crumb in
+//! between the crumbs and the chevron or « before them, and a Ctrl+click or a Shift+click opens a crumb in
 //! a tab or a window (NAV-019), as in Dolphin.
 
 use gtk::prelude::*;
@@ -14,8 +14,9 @@ impl AddressBar {
     /// Left and Right move keyboard focus to the previous or next crumb
     /// and stop at the first and the last, as each crumb's `keydown` in
     /// `renderNavigation` does; GTK's own focus movement would leave the
-    /// crumbs at either end. With a modifier the key goes on, so Alt+Left
-    /// still goes back.
+    /// crumbs at either end. The chevron or « before the crumbs is the
+    /// first stop, so Left reaches the crumbs the « hides. With a
+    /// modifier the key goes on, so Alt+Left still goes back.
     pub(super) fn move_between_crumbs_with_arrows(&self) {
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(glib::clone!(
@@ -28,8 +29,9 @@ impl AddressBar {
         self.imp().crumbs.add_controller(keys);
     }
 
-    /// Moves focus one crumb in the direction of `key`, clamped at the
-    /// ends; any other key, or an arrow with a modifier, goes on.
+    /// Moves focus one crumb, or onto the chevron or « before them, in the
+    /// direction of `key`, clamped at the ends; any other key, or an
+    /// arrow with a modifier, goes on.
     fn move_crumb_focus(&self, key: gdk::Key, modifiers: gdk::ModifierType) -> glib::Propagation {
         let step: isize = match key {
             gdk::Key::Left | gdk::Key::KP_Left => -1,
@@ -43,9 +45,8 @@ impl AddressBar {
         if modifiers.intersects(shortcut) {
             return glib::Propagation::Proceed;
         }
-        let mut crumbs = self.crumb_buttons();
         // The crumbs the « hides take no focus.
-        crumbs.retain(WidgetExt::is_child_visible);
+        let crumbs = self.imp().crumbs.keyboard_stops();
         let Some(focused) = crumbs.iter().position(WidgetExt::has_focus) else {
             return glib::Propagation::Proceed;
         };

@@ -16,13 +16,16 @@
 //! is not mounted (the owner's icon mapping, 2026-09-28), and is named as
 //! Windows names a mapped drive.
 //!
-//! Tiles are selected with a click and the arrow keys and opened with a
-//! double-click or Enter ([`WindowAction::GoTo`], or
+//! Tiles are selected with a click and the arrow keys, one group at a time,
+//! and opened with a double-click or Enter ([`WindowAction::GoTo`], or
 //! [`WindowAction::MountVolume`] for a volume); a middle-click opens a
 //! folder in a background tab. A right-click, the Menu key or Shift+F10
 //! opens the drive's menu ([`super::place_menus`]), and Alt+Enter its
-//! Properties.
+//! Properties. Select all (Ctrl+A), Select none (Escape) and Invert
+//! selection act on the tiles of both groups, as in Windows 11's This PC
+//! ([`change_tile_selection`]).
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk::gio;
@@ -43,6 +46,7 @@ use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
 use super::menu_popover::MenuStyle;
 use super::place_menus::{popup_place_menu, PlaceMenu};
+use super::selection_keys::SelectionChange;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -645,7 +649,12 @@ fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
                 let Some(child) = gesture.widget().and_downcast::<gtk::FlowBoxChild>() else {
                     return;
                 };
-                flow.select_child(&child);
+                // A tile already selected keeps the selection it is part
+                // of, as in Explorer.
+                if !child.is_selected() {
+                    flow.unselect_all();
+                    flow.select_child(&child);
+                }
                 focus_tile(&child);
                 if let Some(tile) = tile_of(&tiles, &child) {
                     let shift = gesture
@@ -713,7 +722,9 @@ fn tile_group(page: &gtk::Box, group: Group, tiles: Vec<Tile>) {
         return;
     }
     let flow = gtk::FlowBox::builder()
-        .selection_mode(gtk::SelectionMode::Single)
+        // Several tiles, for Select all and Invert selection; a click or
+        // an arrow still selects one.
+        .selection_mode(gtk::SelectionMode::Multiple)
         .activate_on_single_click(false)
         .homogeneous(true)
         .min_children_per_line(1)
@@ -751,19 +762,66 @@ fn tile_boxes(page: &gtk::Box) -> impl Iterator<Item = gtk::FlowBox> {
     super::widget_tree::children(page).filter_map(|child| child.downcast::<gtk::FlowBox>().ok())
 }
 
-/// The drive whose tile is selected on `page`, if a mounted drive's is:
-/// what Copy copies on This PC.
-pub(super) fn selected_drive(page: &gtk::Box) -> Option<String> {
+/// The drives whose tiles are selected on `page`, in order: what Copy
+/// copies on This PC, for a paste to make a shortcut to each.
+pub(super) fn selected_drives(page: &gtk::Box) -> Vec<String> {
     tile_boxes(page)
         .flat_map(|flow| flow.selected_children())
-        .find(|child| child.has_css_class(DRIVE_TILE_CLASS))
+        .filter(|child| child.has_css_class(DRIVE_TILE_CLASS))
         .map(|child| child.widget_name().to_string())
+        .collect()
 }
 
-/// One tile is selected on the page, as in one item view: selecting a tile
-/// in one group clears the others. The window's commands follow the
-/// selection, as Copy copies a selected drive.
-fn select_one_tile(page: &gtk::Box) {
+/// The tiles of `flow`.
+fn tiles_in(flow: &gtk::FlowBox) -> impl Iterator<Item = gtk::FlowBoxChild> {
+    super::widget_tree::children(flow).filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
+}
+
+thread_local! {
+    /// Set while a command selects tiles in more than one group at once.
+    static ACROSS_GROUPS: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Runs `select`, which selects tiles in more than one group, without one
+/// group's selection clearing the others ([`select_one_group`]).
+fn across_groups(select: impl FnOnce()) {
+    ACROSS_GROUPS.set(true);
+    select();
+    ACROSS_GROUPS.set(false);
+}
+
+/// Selects every tile of This PC in `page`, none, or every tile that was
+/// not selected, in both groups, as Windows 11's This PC does with Select
+/// all, Select none and Invert selection. A collapsed group's tiles count
+/// too. Whether `page` shows This PC.
+pub(super) fn change_tile_selection(page: &gtk::Box, change: SelectionChange) -> bool {
+    if !page.has_css_class(THIS_PC_CLASS) {
+        return false;
+    }
+    across_groups(|| {
+        for flow in tile_boxes(page) {
+            match change {
+                SelectionChange::All => flow.select_all(),
+                SelectionChange::Clear => flow.unselect_all(),
+                SelectionChange::Invert => {
+                    for child in tiles_in(&flow) {
+                        if child.is_selected() {
+                            flow.unselect_child(&child);
+                        } else {
+                            flow.select_child(&child);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    true
+}
+
+/// A click or an arrow selects in one group at a time, as in one item
+/// view: selecting a tile in one group clears the others. The window's
+/// commands follow the selection, as Copy copies the selected drives.
+fn select_one_group(page: &gtk::Box) {
     for flow in tile_boxes(page) {
         flow.connect_selected_children_changed(glib::clone!(
             #[weak]
@@ -772,7 +830,7 @@ fn select_one_tile(page: &gtk::Box) {
                 if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
                     window.update_file_commands();
                 }
-                if flow.selected_children().is_empty() {
+                if ACROSS_GROUPS.get() || flow.selected_children().is_empty() {
                     return;
                 }
                 for other in tile_boxes(&page).filter(|other| other != flow) {
@@ -792,12 +850,12 @@ enum KeptFocus {
     Header(Group),
 }
 
-/// The selected tile and the keyboard's place on This PC, read before it
+/// The selected tiles and the keyboard's place on This PC, read before it
 /// is drawn again, as a drive coming or going does, and given back
 /// afterwards.
 #[derive(Debug, Default)]
 struct Kept {
-    selected: Option<String>,
+    selected: Vec<String>,
     focus: Option<KeptFocus>,
 }
 
@@ -806,7 +864,7 @@ impl Kept {
         let selected = tile_boxes(page)
             .flat_map(|flow| flow.selected_children())
             .map(|child| child.widget_name().to_string())
-            .next();
+            .collect();
         let focused = page
             .root()
             .and_then(|root| root.focus())
@@ -828,17 +886,12 @@ impl Kept {
     /// The tile named `key` and its box, if the page still shows it.
     fn tile(page: &gtk::Box, key: &str) -> Option<(gtk::FlowBox, gtk::FlowBoxChild)> {
         tile_boxes(page).find_map(|flow| {
-            let child = super::widget_tree::children(&flow)
-                .filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
-                .find(|child| child.widget_name() == key)?;
+            let child = tiles_in(&flow).find(|child| child.widget_name() == key)?;
             Some((flow, child))
         })
     }
 
     fn restore(&self, page: &gtk::Box) {
-        if let Some((flow, child)) = self.selected.as_deref().and_then(|key| Self::tile(page, key)) {
-            flow.select_child(&child);
-        }
         match &self.focus {
             Some(KeptFocus::Tile(key)) => {
                 if let Some((_, child)) = Self::tile(page, key) {
@@ -855,6 +908,16 @@ impl Kept {
             }
             None => {}
         }
+        // Focusing a tile selects it alone, so the selection comes back
+        // after the keyboard.
+        across_groups(|| {
+            for flow in tile_boxes(page) {
+                flow.unselect_all();
+            }
+            for (flow, child) in self.selected.iter().filter_map(|key| Self::tile(page, key)) {
+                flow.select_child(&child);
+            }
+        });
     }
 }
 
@@ -885,7 +948,7 @@ pub(super) fn render(
         Page::ThisPc => {
             body.add_css_class(THIS_PC_CLASS);
             this_pc(body, places, locations, text_size);
-            select_one_tile(body);
+            select_one_group(body);
             kept.restore(body);
         }
         // Network is listed like a folder; the Settings page replaces the
@@ -924,9 +987,7 @@ pub(super) fn group_headers(body: &gtk::Box) -> Vec<gtk::Button> {
 pub(super) fn tile_groups(body: &gtk::Box) -> Vec<(gtk::FlowBox, Vec<gtk::FlowBoxChild>)> {
     tile_boxes(body)
         .map(|flow| {
-            let tiles = super::widget_tree::children(&flow)
-                .filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
-                .collect();
+            let tiles = tiles_in(&flow).collect();
             (flow, tiles)
         })
         .collect()
