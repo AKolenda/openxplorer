@@ -10,6 +10,7 @@
 
 use super::server::host_name;
 use crate::location::{is_remote_location, is_smb_location, split_location};
+use crate::places::network_key;
 use crate::settings::Bookmark;
 
 /// The SMB roots and other servers browsed this session, in the order first browsed. One
@@ -44,7 +45,7 @@ impl VisitedNetwork {
             uri: uri.to_owned(),
             label: label.to_owned(),
         };
-        match self.mapped.iter_mut().find(|known| known.uri == uri) {
+        match self.mapped.iter_mut().find(|known| same_share(&known.uri, uri)) {
             Some(known) => *known = bookmark,
             None => self.mapped.push(bookmark),
         }
@@ -96,6 +97,16 @@ pub fn session_network_root(uri: &str) -> Option<String> {
 /// True when `known` already stands for `root`: the same SMB root, or any
 /// folder of the same remote server (scheme, user, host and port), so an
 /// SFTP server is listed once, at the first folder opened on it.
+/// Whether `known` and `uri` are one Network row, as [`network_key`]
+/// tells them apart: an SMB share spelled with other capitals, or with
+/// port 445 written out, is the same share.
+fn same_share(known: &str, uri: &str) -> bool {
+    match (network_key(known), network_key(uri)) {
+        (Ok(known), Ok(uri)) => known == uri,
+        _ => known == uri,
+    }
+}
+
 fn same_root(known: &str, root: &str) -> bool {
     if !is_remote_location(root) {
         return known == root;
@@ -137,8 +148,9 @@ mod tests {
     }
 
     /// A share mapped for this session only is listed under its label
-    /// before the browsed roots; mapping it again changes the label, and
-    /// signing out of its server forgets it.
+    /// before the browsed roots; mapping it again, however its name is
+    /// capitalised, changes the label, and signing out of its server
+    /// forgets it.
     ///
     /// parity: NET-001, NET-018
     #[test]
@@ -146,12 +158,12 @@ mod tests {
         let mut visited = VisitedNetwork::default();
         visited.remember("smb://other/share");
         visited.remember_mapped("smb://nas/projects", "projects (Y:)");
-        visited.remember_mapped("smb://nas/projects", "projects (X:)");
+        visited.remember_mapped("smb://nas/Projects", "Projects (X:)");
 
         let expected = [
             Bookmark {
-                uri: "smb://nas/projects".into(),
-                label: "projects (X:)".into(),
+                uri: "smb://nas/Projects".into(),
+                label: "Projects (X:)".into(),
             },
             Bookmark {
                 uri: "smb://other/share".into(),
