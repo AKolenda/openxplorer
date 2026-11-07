@@ -14,7 +14,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -22,6 +21,7 @@ use gtk::{gdk, gio, glib};
 use super::folder_picture::{FOLDER_PICTURE, SMALLEST_PICTURE_ICON};
 use super::FileCell;
 use crate::folder_view::item::FileItem;
+use crate::picture_guard::{self, Limits};
 use crate::thumbnails::{self, PreviewPolicy, PreviewRequest};
 
 /// The metadata key Files stores a custom icon under.
@@ -189,6 +189,8 @@ fn decode(uri: &str) -> Option<gdk::Texture> {
     if size > MAX_ICON_BYTES {
         return None;
     }
-    let pixbuf = Pixbuf::from_file_at_scale(&path, ICON_PIXELS, ICON_PIXELS, true).ok()?;
-    Some(gdk::Texture::for_pixbuf(&pixbuf))
+    let file = gio::File::for_path(&path);
+    let decoded =
+        picture_guard::decode_to_fit(&file, ICON_PIXELS, ICON_PIXELS, Limits::DISPLAY, None).ok()?;
+    Some(gdk::Texture::for_pixbuf(&decoded.pixbuf))
 }

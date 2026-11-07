@@ -67,6 +67,19 @@ const ENTRY_SIZE_LIMIT: u64 = 64 * 1024;
 /// while, an unresponsive program must not hold a slot for ever.
 const TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The most data memory a thumbnailer may use: a frame of an 8K video
+/// many times over, far more than a thumbnail needs, and still a fraction
+/// of a computer's memory.
+const MEMORY_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
+
+/// The largest file a thumbnailer may write: twice the largest picture
+/// read back from it ([`OUTPUT_SIZE_LIMIT`]).
+const FILE_SIZE_LIMIT: u64 = 2 * OUTPUT_SIZE_LIMIT;
+
+/// How much lower a thumbnailer's priority is than the app's, so making
+/// previews never slows the window down.
+const NICENESS: i32 = 10;
+
 /// How long a running thumbnailer is left alone before its request's
 /// cancellation and the timeout are looked at again.
 const POLL: Duration = Duration::from_millis(50);
@@ -503,6 +516,10 @@ pub(super) enum Sandbox {
         /// may refuse to mount; without one it is tighter still, and only
         /// a program that needs it fails.
         proc: bool,
+        /// The command that starts bubblewrap with the program's resource
+        /// limits and a lower priority ([`limits_prefix`]); empty when this
+        /// computer lacks `prlimit` or `nice`.
+        limits: Vec<OsString>,
     },
     /// Without a sandbox: only a test's own program, which must see the
     /// files of its test.
@@ -515,13 +532,21 @@ impl Sandbox {
     /// the sandbox here: it is tried with `true`, since a container or a
     /// strict kernel may refuse the namespaces it needs, first with a
     /// `/proc` of its own, as Files gives it, then without.
+    ///
+    /// The resource limits are tried first; a sandbox that works only
+    /// without them still runs the programs, within the timeout alone.
     fn find() -> Option<Self> {
         let program = glib::find_program_in_path("bwrap")?;
-        [true, false]
+        limits_prefix()
             .into_iter()
-            .map(|proc| Self::Bubblewrap {
-                program: program.clone(),
-                proc,
+            .chain([Vec::new()])
+            .flat_map(|limits| {
+                let program = program.clone();
+                [true, false].into_iter().map(move |proc| Self::Bubblewrap {
+                    program: program.clone(),
+                    proc,
+                    limits: limits.clone(),
+                })
             })
             .find(Self::works)
     }
@@ -558,7 +583,11 @@ impl Sandbox {
         pixels: i32,
     ) -> Vec<OsString> {
         match self {
-            Self::Bubblewrap { program: bwrap, proc } => {
+            Self::Bubblewrap {
+                program: bwrap,
+                proc,
+                limits,
+            } => {
                 let inside = Path::new(INSIDE);
                 let inside_item = inside.join(format!("{INPUT}{}", extension_of(item)));
                 let inside_uri = format!("file://{}", inside_item.display());
@@ -574,7 +603,8 @@ impl Sandbox {
                     .as_deref()
                     .map(|program| program_folders(program, &UserFolders::of_session()))
                     .unwrap_or_default();
-                let mut command = vec![bwrap.as_os_str().to_owned()];
+                let mut command = limits.clone();
+                command.push(bwrap.as_os_str().to_owned());
                 command.extend(sandbox_arguments(workspace, item, &inside_item, &folders, *proc));
                 command.push("--".into());
                 command.extend(program);
@@ -587,6 +617,35 @@ impl Sandbox {
             }
         }
     }
+}
+
+/// The command words that start a thumbnailer with its resource limits,
+/// before bubblewrap's own: util-linux's `prlimit` sets them, and
+/// coreutils' `nice` lowers its priority, so a program decoding a hostile
+/// file can neither take the computer's memory nor its processors from
+/// the app and the user. Both run the next program in their own process,
+/// so the limits pass to bubblewrap and everything it starts, and the
+/// group [`run`] stops is still the thumbnailer's. `None` when this
+/// computer lacks either program.
+///
+/// The limits are [`MEMORY_LIMIT`] of data (heap and private writable
+/// memory, which address space a program merely reserves does not count
+/// towards), [`FILE_SIZE_LIMIT`] for each file it writes, and no core
+/// dump of a program that crashed on the item.
+fn limits_prefix() -> Option<Vec<OsString>> {
+    let prlimit = glib::find_program_in_path("prlimit")?;
+    let nice = glib::find_program_in_path("nice")?;
+    Some(vec![
+        prlimit.into_os_string(),
+        format!("--data={MEMORY_LIMIT}").into(),
+        format!("--fsize={FILE_SIZE_LIMIT}").into(),
+        "--core=0".into(),
+        "--".into(),
+        nice.into_os_string(),
+        "-n".into(),
+        NICENESS.to_string().into(),
+        "--".into(),
+    ])
 }
 
 /// The extension the item keeps inside the sandbox, with its dot, which
@@ -1597,6 +1656,72 @@ mod tests {
         assert_eq!((thumbnail.width(), thumbnail.height()), (128, 85));
         assert!(!escaped.exists(), "the program wrote nothing outside its folder");
         assert!(secret.exists() && item.exists());
+    }
+
+    /// A sandboxed thumbnailer runs with its resource limits and at a
+    /// lower priority than the app: no more data memory than
+    /// [`MEMORY_LIMIT`], no file over [`FILE_SIZE_LIMIT`], no core dump.
+    /// Runs where bubblewrap can make its sandbox and the computer has
+    /// `prlimit` and `nice`.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn a_sandboxed_thumbnailer_runs_within_its_limits() {
+        let Some(sandbox) = Sandbox::find() else {
+            eprintln!("skipped: bubblewrap cannot make its sandbox here");
+            return;
+        };
+        let Sandbox::Bubblewrap { limits, .. } = &sandbox else {
+            unreachable!("found sandboxes are bubblewrap's");
+        };
+        if limits.is_empty() {
+            eprintln!("skipped: prlimit or nice is missing, or refused here");
+            return;
+        }
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let item = folder.path().join("Level.ab");
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 64, 64).expect("a picture");
+        pixbuf.fill(0x3366_99ff);
+        pixbuf.savev(&item, "png", &[]).expect("the item");
+        let installed = folder.path().join("App");
+        fs::create_dir_all(installed.join("bin")).expect("the install folder");
+        let script = installed.join("bin/ox-limited-thumbnailer");
+        let own_niceness = rustix::process::getpriority_process(None).expect("the app's niceness");
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 test \"$(ulimit -c)\" = 0 || exit 1\n\
+                 test \"$(ulimit -d)\" = {data_kib} || exit 2\n\
+                 test \"$(ulimit -f)\" = {file_blocks} || exit 3\n\
+                 test \"$(nice)\" = {niceness} || exit 4\n\
+                 cp \"$1\" \"$3\"\n",
+                data_kib = MEMORY_LIMIT / 1024,
+                // The shell counts files in blocks of 512 bytes.
+                file_blocks = FILE_SIZE_LIMIT / 512,
+                niceness = (own_niceness + NICENESS).min(19),
+            ),
+        )
+        .expect("the script");
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("the mode");
+        let mut catalogue = Catalogue::for_test(vec![Thumbnailer::for_test(
+            &[script.to_str().expect("a path"), "%i", "%u", "%o", "%s"],
+            &[BUNDLE],
+        )]);
+        catalogue.sandbox = Some(sandbox.clone());
+        let cache = folder.path().join("cache");
+        let job = Job {
+            cache_dir: cache.clone(),
+            uri: gio::File::for_path(&item).uri().to_string(),
+            content_type: BUNDLE.to_owned(),
+            modified: 1_700_000_000,
+            flavor: ThumbnailFlavor::Normal,
+        };
+
+        assert!(
+            write_thumbnail(&job, &catalogue, &gio::Cancellable::new()).is_some(),
+            "the program saw its limits and wrote its picture"
+        );
     }
 
     /// A thumbnailer installed outside the system's folders sees the

@@ -24,6 +24,8 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{thumbnail_file, ThumbnailFlavor};
 
+use crate::picture_guard::{self, Limits, Refusal};
+
 /// How much of a picture is read at a time.
 const READ_CHUNK: usize = 64 * 1024;
 
@@ -46,6 +48,11 @@ pub(super) enum Failure {
     /// The picture could not be read or decoded: the app has no loader
     /// for its type, or its bytes are no picture.
     Unreadable,
+    /// The picture was read and refused ([`picture_guard`]): its header
+    /// asks for more pixels than the limit, it is damaged or cut short, or
+    /// it took too long. Another thumbnailer would read the same picture,
+    /// so none is asked, and the item keeps its icon.
+    Refused,
     /// The picture was read, but the cache would not take its thumbnail:
     /// the item is a thumbnail of the cache itself, whose pictures of
     /// pictures would grow it from within, or the folder could not be
@@ -64,15 +71,19 @@ pub(super) fn write_thumbnail(
     flavor: ThumbnailFlavor,
     cancellation: &gio::Cancellable,
 ) -> Result<PathBuf, Failure> {
-    let Some(pixbuf) = scaled_picture(&source.uri, flavor.pixels(), cancellation) else {
+    let pixbuf = scaled_picture(&source.uri, flavor.pixels(), cancellation).map_err(|refusal| {
         // A read that stopped because it was cancelled is no reason to
-        // fall back to another thumbnailer.
-        return Err(if cancellation.is_cancelled() {
-            Failure::Cancelled
-        } else {
-            Failure::Unreadable
-        });
-    };
+        // fall back to another thumbnailer, nor is a picture the guard
+        // refused.
+        if cancellation.is_cancelled() {
+            return Failure::Cancelled;
+        }
+        match refusal {
+            Refusal::Unreadable => Failure::Unreadable,
+            Refusal::Cancelled => Failure::Cancelled,
+            Refusal::TooLarge { .. } | Refusal::Damaged | Refusal::TimedOut => Failure::Refused,
+        }
+    })?;
     if cancellation.is_cancelled() {
         return Err(Failure::Cancelled);
     }
@@ -130,7 +141,12 @@ pub(super) fn find_thumbnail(
     flavor: ThumbnailFlavor,
 ) -> Option<PathBuf> {
     let path = thumbnail_file(cache_dir, uri, flavor);
-    let thumbnail = Pixbuf::from_file(&path).ok()?;
+    // Read within a thumbnail's limits: another program may have left a
+    // huge or damaged file there.
+    let file = gio::File::for_path(&path);
+    let thumbnail = picture_guard::decode_to_fit(&file, i32::MAX, i32::MAX, Limits::THUMBNAIL_FILE, None)
+        .ok()?
+        .pixbuf;
     let is_current = thumbnail.option("tEXt::Thumb::URI").as_deref() == Some(uri)
         && thumbnail.option("tEXt::Thumb::MTime").as_deref() == Some(modified.to_string().as_str());
     is_current.then_some(path)
@@ -172,25 +188,13 @@ pub(super) fn scaled_png(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
 
 /// The picture at `uri`, turned upright and decoded to fit `edge` pixels
 /// square, or at its own size when smaller: a large photo is never held
-/// in memory at full size.
-fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Option<Pixbuf> {
-    let stream = gio::File::for_uri(uri).read(Some(cancellation)).ok()?;
-    let loader = scaling(PixbufLoader::new(), edge);
-    let mut buffer = vec![0; READ_CHUNK];
-    loop {
-        let Ok(read) = stream.read(&mut buffer, Some(cancellation)) else {
-            let _ = loader.close();
-            return None;
-        };
-        if read == 0 {
-            break;
-        }
-        if loader.write(&buffer[..read]).is_err() {
-            let _ = loader.close();
-            return None;
-        }
-    }
-    finish(&loader)
+/// in memory at full size, and a picture over the pixel limit, damaged,
+/// slow or animated is refused or cut to its first frame
+/// ([`picture_guard`]).
+fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Result<Pixbuf, Refusal> {
+    let file = gio::File::for_uri(uri);
+    picture_guard::decode_to_fit(&file, edge, edge, Limits::DISPLAY, Some(cancellation))
+        .map(|decoded| decoded.pixbuf)
 }
 
 /// `loader`, made to decode its picture to fit `edge` pixels square, or

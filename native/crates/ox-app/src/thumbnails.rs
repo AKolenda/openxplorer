@@ -16,8 +16,11 @@
 //! the cache refuses would be refused for the program too, and a dropped
 //! request needs no picture at all. Only a few are decoded or made at a
 //! time ([`slots`]); a type that cannot be previewed, or a failed attempt,
-//! keeps its icon. [`PreviewPolicy`] says which items of a folder get
-//! previews, from the Settings the user chose (VIEW-058).
+//! keeps its icon. Every picture the app decodes itself, and every file it
+//! reads back from the cache, goes through [`picture_guard`], so a huge,
+//! damaged or animated one keeps its icon instead of holding the app up.
+//! [`PreviewPolicy`] says which items of a folder get previews, from the
+//! Settings the user chose (VIEW-058).
 
 mod service;
 mod slots;
@@ -37,6 +40,8 @@ use ox_core::entry::{cached_thumbnail, CachedThumbnail, Entry, ThumbnailFlavor, 
 use ox_core::settings::{ViewOptions, PREVIEW_SIZE_LIMIT};
 
 pub(crate) use slots::Slots;
+
+use crate::picture_guard::{self, Limits};
 use thumbnailers::Catalogue;
 use writer::Source;
 
@@ -56,6 +61,10 @@ const MAX_KEPT: usize = 512;
 pub(crate) struct PreviewPolicy {
     /// Previews are shown at all; off, every item keeps its icon.
     pub shown: bool,
+    /// Items on a server or a device get previews too, wherever they are
+    /// listed; off, they keep their icons even in a folder on this
+    /// computer (search results, Recent, Quick access).
+    pub remote: bool,
     /// Files larger than this keep their icon.
     pub size_limit: Option<u64>,
     /// Pictures get previews.
@@ -72,6 +81,7 @@ impl PreviewPolicy {
     pub(crate) fn for_folder(options: &ViewOptions, is_remote: bool) -> Self {
         Self {
             shown: options.show_previews && (options.remote_previews || !is_remote),
+            remote: options.remote_previews,
             size_limit: options.skip_large_previews.then_some(PREVIEW_SIZE_LIMIT),
             pictures: options.preview_pictures,
             videos: options.preview_videos,
@@ -99,8 +109,25 @@ impl PreviewPolicy {
             .content_type
             .as_deref()
             .is_some_and(|content_type| self.allows_type(content_type));
-        self.shown && !entry.is_dir && !entry.is_virtual && type_allowed && within_limit
+        let reachable = self.remote || !is_remote_item(entry);
+        self.shown && !entry.is_dir && !entry.is_virtual && type_allowed && within_limit && reachable
     }
+}
+
+/// Whether `entry`, or the item it stands for, is on a server or a
+/// device rather than this computer, by its URI: a search result or a
+/// recent item may be listed in a folder that is not.
+fn is_remote_item(entry: &Entry) -> bool {
+    use ox_core::location::{location_kind, LocationKind};
+
+    std::iter::once(entry.uri.as_str())
+        .chain(entry.target_uri.as_deref())
+        .any(|uri| {
+            matches!(
+                location_kind(uri),
+                LocationKind::Smb | LocationKind::Remote | LocationKind::Device
+            )
+        })
 }
 
 /// A decoded preview's item, version and size.
@@ -295,11 +322,12 @@ async fn make_thumbnail_with(
             Ok(path) => return Ok(path),
             // Only a picture the app cannot read leaves room for another
             // thumbnailer. One it read and the cache refused is refused
-            // for every thumbnailer, and a dropped request has nobody left
-            // to show a picture to: forking a program for either would
-            // only cost one.
+            // for every thumbnailer, one too large, damaged or slow would
+            // be read the same way by the program, and a dropped request
+            // has nobody left to show a picture to: forking a program for
+            // any of them would only cost one.
             Err(writer::Failure::Unreadable) => {}
-            Err(writer::Failure::Unwritable | writer::Failure::Cancelled) => {
+            Err(writer::Failure::Unwritable | writer::Failure::Refused | writer::Failure::Cancelled) => {
                 return Err(Missing::Failed);
             }
         }
@@ -369,10 +397,14 @@ async fn by_thumbnailer(
         .unwrap_or(Err(Missing::Failed))
 }
 
-/// The thumbnail at `path`, scaled to fit `pixels` square.
+/// The thumbnail at `path`, scaled to fit `pixels` square; `None` for a
+/// file in the cache that is not a sensible thumbnail (more than the
+/// largest standard size, damaged, or slow to read), so the item keeps
+/// its icon.
 fn decode(path: &std::path::Path, pixels: i32) -> Option<gdk::Texture> {
-    let pixbuf = Pixbuf::from_file_at_scale(path, pixels, pixels, true).ok()?;
-    Some(gdk::Texture::for_pixbuf(&pixbuf))
+    let file = gio::File::for_path(path);
+    let decoded = picture_guard::decode_to_fit(&file, pixels, pixels, Limits::THUMBNAIL_FILE, None).ok()?;
+    Some(gdk::Texture::for_pixbuf(&decoded.pixbuf))
 }
 
 #[cfg(test)]
@@ -439,6 +471,24 @@ mod tests {
             ..ViewOptions::default()
         };
         assert!(!PreviewPolicy::for_folder(&no_pictures, false).allows(&picture));
+
+        // A file of a server or a phone listed in a folder of this
+        // computer, as a recent item or a search result is, keeps its icon
+        // unless network previews are on.
+        let local = PreviewPolicy::for_folder(&options, false);
+        let mut shared = picture.clone();
+        shared.uri = "smb://fileserver.example/team/photo.jpg".to_owned();
+        assert!(!local.allows(&shared), "a share");
+        let mut recent = picture.clone();
+        recent.uri = "recent:///3a1b2c".to_owned();
+        recent.target_uri = Some("mtp://Example_Phone/DCIM/photo.jpg".to_owned());
+        assert!(!local.allows(&recent), "a recent item on a phone");
+        let everywhere = ViewOptions {
+            remote_previews: true,
+            ..ViewOptions::default()
+        };
+        assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&shared));
+        assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&recent));
     }
 
     /// A thumbnailer of the test's own, and the file it leaves when it is

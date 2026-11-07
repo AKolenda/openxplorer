@@ -7,11 +7,14 @@
 //! (PROP-013).
 //!
 //! Everything is read off the main thread, and a preview that arrives
-//! after the selection changed is dropped.
+//! after the selection changed is dropped. Pictures are decoded through
+//! [`picture_guard`]: one over its pixel limit, damaged, slow or
+//! animated keeps the type icon (an animation shows its first frame), as
+//! Explorer's Preview pane does, and a picture too large to preview
+//! still lists its dimensions, read from its header.
 
 use std::path::PathBuf;
 
-use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -21,6 +24,7 @@ use super::content::MediaPreview;
 use super::DetailsPane;
 use crate::folder_view::cells::CUSTOM_ICON;
 use crate::icons::{Art, ArtImage};
+use crate::picture_guard::{self, Limits, Refusal};
 
 /// Images larger than this are not decoded for the pane.
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
@@ -129,10 +133,24 @@ impl DetailsPane {
             let decoded = gio::spawn_blocking(move || {
                 let path = path.or_else(|| cached_thumbnail(uri.as_deref()?))?;
                 let (width, height) = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
-                let pixbuf = Pixbuf::from_file_at_scale(&path, width, height, true).ok()?;
-                let pixbuf = pixbuf.apply_embedded_orientation().unwrap_or(pixbuf);
-                let size = Pixbuf::file_info(&path).map(|(_, width, height)| (width, height));
-                Some((gdk::Texture::for_pixbuf(&pixbuf), size))
+                let limits = if is_image {
+                    Limits::DISPLAY
+                } else {
+                    Limits::THUMBNAIL_FILE
+                };
+                let file = gio::File::for_path(&path);
+                match picture_guard::decode_to_fit(&file, width, height, limits, None) {
+                    Ok(picture) => Some((
+                        Some(gdk::Texture::for_pixbuf(&picture.pixbuf)),
+                        (picture.width, picture.height),
+                    )),
+                    // Too large to preview: the type icon stays, and the
+                    // header's size is still listed.
+                    Err(Refusal::TooLarge { width, height }) if width > 0 && height > 0 => {
+                        Some((None, (width, height)))
+                    }
+                    Err(_) => None,
+                }
             })
             .await;
             let (Some(pane), Ok(Some((texture, size)))) = (pane.upgrade(), decoded) else {
@@ -141,6 +159,18 @@ impl DetailsPane {
             if pane.imp().media_generation.get() != generation {
                 return;
             }
+            if is_image {
+                pane.add_media_property(
+                    "Dimensions",
+                    ox_core::i18n::format_message(
+                        "{width} × {height} pixels",
+                        &[("width", &size.0.to_string()), ("height", &size.1.to_string())],
+                    ),
+                );
+            }
+            let Some(texture) = texture else {
+                return;
+            };
             let picture = gtk::Picture::for_paintable(&texture);
             picture.set_content_fit(gtk::ContentFit::Contain);
             // As wide as the pane allows, which is narrower in a narrow
@@ -153,15 +183,6 @@ impl DetailsPane {
                 "Preview",
             ))]);
             pane.set_preview_widget(Some(picture.upcast_ref()));
-            if let Some((width, height)) = size.filter(|_| is_image) {
-                pane.add_media_property(
-                    "Dimensions",
-                    ox_core::i18n::format_message(
-                        "{width} × {height} pixels",
-                        &[("width", &width.to_string()), ("height", &height.to_string())],
-                    ),
-                );
-            }
         });
     }
 
