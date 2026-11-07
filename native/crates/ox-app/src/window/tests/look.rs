@@ -533,8 +533,9 @@ fn assert_row_paints(row: &gtk::Widget, expected: &[(i32, &str)], what: &str) {
 /// edge while the list does not have the keyboard; a 1 pixel outline,
 /// dark in light and white in dark, around the item that has it after a
 /// click, selected or not, and hovered too; a fainter fill without an
-/// outline under the pointer alone; and keyboard navigation's two-tone
-/// ring, 2 pixels dark outside 1 pixel light.
+/// outline under the pointer alone; the drop outline, not the focus
+/// outline, on a folder a drag would drop into; and keyboard navigation's
+/// two-tone ring, 2 pixels dark outside 1 pixel light.
 ///
 /// parity: ACC-009
 #[gtk::test]
@@ -545,11 +546,13 @@ fn items_take_windows_11s_fill_outline_and_ring_in_each_state() {
     // alpha(black, .89) over #cce8ff in light, white in dark; the ring's
     // inner alpha(white, .7) over #cce8ff in light, alpha(black, .7) over
     // #3d3d3d in dark.
-    for (theme, fill, hovered, outline, outline_alone, outline_alpha, inner) in [
+    for (theme, fill, hovered, outline, outline_alone, outline_alpha, inner, accent) in [
         (
-            "light", "#cce8ff", "#e5f3ff", "#1a1b1c", "#000000", 227, "#f0f8ff",
+            "light", "#cce8ff", "#e5f3ff", "#1a1b1c", "#000000", 227, "#f0f8ff", "#0067c0",
         ),
-        ("dark", "#3d3d3d", "#2d2d2d", "#ffffff", "#ffffff", 255, "#121212"),
+        (
+            "dark", "#3d3d3d", "#2d2d2d", "#ffffff", "#ffffff", 255, "#121212", "#74beff",
+        ),
     ] {
         show_theme(&test, theme);
         test.window.folder_model().select_only(1);
@@ -578,6 +581,17 @@ fn items_take_windows_11s_fill_outline_and_ring_in_each_state() {
             &format!("{theme} hovered selection with the keyboard: fill and outline"),
         );
         hover(&test, &selected, false);
+
+        // A drag over the item that has the keyboard: the drop outline wins.
+        selected.add_css_class("file-drop-active");
+        wait_for_frames(&test.window, 2);
+        assert_row_paints(
+            &selected,
+            &[(0, accent), (1, accent)],
+            &format!("{theme} focused drop target: the 2 pixel drop outline"),
+        );
+        selected.remove_css_class("file-drop-active");
+        wait_for_frames(&test.window, 2);
 
         // Ctrl+click on the selected item: it keeps the keyboard, unselected.
         test.window.folder_model().select_none();

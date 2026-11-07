@@ -245,7 +245,7 @@ mod tests {
             "gridview.files.keyboard-in > child",
         ]
         .map(|item| {
-            format!("{item}:focus:not(:focus-visible) {{ outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }}")
+            format!("{item}:focus:not(:focus-visible):not(.file-drop-active) {{ outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }}")
         });
         let control_rings = [
             "window.ox button:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
@@ -274,7 +274,7 @@ mod tests {
             ".tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }",
             "box-shadow: inset 0 0 0 2px @ox_focus_outer; }",
             "outline: 2px solid @ox_text;\n  outline-offset: -2px;\n  box-shadow: inset 0 0 0 3px @ox_bg;",
-            "gridview.files.keyboard-in > child:focus:not(:focus-visible) { outline: 2px solid @ox_text; outline-offset: -2px; }",
+            "gridview.files.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: 2px solid @ox_text; outline-offset: -2px; }",
         ] {
             assert!(code.contains(rule), "{rule}");
         }
