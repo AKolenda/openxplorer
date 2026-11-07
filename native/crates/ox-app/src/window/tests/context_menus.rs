@@ -268,14 +268,12 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         "a selected item keeps the selection"
     );
     assert!(!menu.row("Restore previous versions").is_sensitive());
-    // CMD-031: a disabled item says why.
-    let tooltip = menu
-        .row("Restore previous versions")
-        .tooltip_text()
-        .unwrap_or_default();
+    // CMD-031: a disabled item tells screen readers why, with no tooltip,
+    // as Windows 11's menu rows show none.
+    assert_eq!(menu.row("Restore previous versions").tooltip_text(), None);
     assert_eq!(
-        tooltip,
-        "Restore previous versions\nSelect only one item for this command."
+        menu.disabled_reason_of("Restore previous versions").as_deref(),
+        Some("Select only one item for this command.")
     );
     // Open opens each of them (OPEN-003); Rename gives them one numbered
     // name (OPS-050) and Rename items… opens the batch rename (OPS-014);

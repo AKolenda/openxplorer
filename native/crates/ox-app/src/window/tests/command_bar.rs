@@ -381,14 +381,13 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
         let disconnect = more.row("Disconnect network drive");
         assert!(!disconnect.is_sensitive(), "{page:?}");
         assert_eq!(
-            disconnect.tooltip_text().unwrap_or_default().lines().nth(1),
+            more.disabled_reason_of("Disconnect network drive").as_deref(),
             Some("No network drive is connected."),
             "{page:?}"
         );
         if page == Page::Network {
-            let properties = more.row("Properties");
             assert_eq!(
-                properties.tooltip_text().unwrap_or_default().lines().nth(1),
+                more.disabled_reason_of("Properties").as_deref(),
                 Some("Pages such as This PC have no properties."),
                 "{page:?}"
             );
@@ -1264,9 +1263,8 @@ fn more_options_needs_a_folder_for_pin() {
     wait_for_frames(&test.window, 2);
     let pin = more.row("Pin to Quick access");
     assert!(!pin.is_sensitive());
-    let tooltip = pin.tooltip_text().unwrap_or_default();
     assert_eq!(
-        tooltip.lines().nth(1),
+        more.disabled_reason_of("Pin to Quick access").as_deref(),
         Some("Only a folder can be pinned to Quick access.")
     );
     more.popdown();
@@ -1458,9 +1456,10 @@ fn nested_submenus_open_beside_each_other() {
     assert_eq!(work.checked_labels(), ["Name"]);
     let disabled = work.row("Not here");
     assert!(!disabled.is_sensitive());
+    assert_eq!(disabled.tooltip_text(), None);
     assert_eq!(
-        disabled.tooltip_text().as_deref(),
-        Some("Not here\nNot in this folder")
+        work.disabled_reason_of("Not here").as_deref(),
+        Some("Not in this folder")
     );
     assert_eq!(
         menu.items_labels(),

@@ -112,7 +112,8 @@ pub(in crate::window) struct MenuItem {
     /// Shown in bold, as a crumb's subfolder menu shows the folder the
     /// address goes on to (NAV-020).
     pub emphasised: bool,
-    /// Why it is disabled in this menu, which its tooltip says.
+    /// Why it is disabled in this menu, which its accessible description
+    /// tells screen readers (a strip button also shows it in its tooltip).
     pub disabled_reason: Option<&'static str>,
     /// The icon of the application it opens
     /// ([`ox_core::integration::ApplicationInfo::icon`]), which replaces
@@ -285,7 +286,7 @@ impl MenuItem {
     }
 
     /// The same item, disabled in this menu when `disabled` holds, with
-    /// `reason` in its tooltip.
+    /// `reason` in its accessible description.
     pub(in crate::window) fn disabled_because(self, disabled: bool, reason: &'static str) -> Self {
         if !disabled {
             return self;

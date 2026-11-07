@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the tests read of a [`MenuPopover`]: its rows, their labels and
-//! check marks, the compact style's strip and the style.
+//! check marks, why a row is disabled, the compact style's strip and the
+//! style.
 
 use gtk::glib;
 use gtk::glib::translate::IntoGlib;
@@ -97,6 +98,21 @@ impl MenuPopover {
             .unwrap_or_else(|| panic!("the menu has a {label} row"))
     }
 
+    /// Why the row labelled `label` is disabled, which its accessible
+    /// description tells screen readers, for tests. GTK cannot read an
+    /// accessible description back, so this asks the menu for the reason
+    /// it gave the row, after checking that the row has a description.
+    pub(crate) fn disabled_reason_of(&self, label: &str) -> Option<String> {
+        let row = self.row(label);
+        if row.is_sensitive()
+            || !gtk::test_accessible_has_property(&row, gtk::AccessibleProperty::Description)
+        {
+            return None;
+        }
+        let item = self.items().into_iter().find(|item| item.label == label)?;
+        super::disabled_reason(self, &item)
+    }
+
     /// Middle-clicks the row labelled `label`, for tests.
     pub(crate) fn middle_click_row(&self, label: &str) {
         let row = self.row(label);
@@ -186,15 +202,6 @@ impl MenuPopover {
     pub(in crate::window) fn style(&self) -> MenuStyle {
         self.imp().style.get()
     }
-}
-
-/// The tooltip `row` shows when the pointer rests on it, for tests.
-/// That is its own tooltip text (a disabled row's reason), else its whole
-/// label while the menu cuts it short.
-pub(crate) fn row_tooltip(row: &gtk::ListBoxRow) -> Option<String> {
-    row.tooltip_text()
-        .map(|text| text.to_string())
-        .or_else(|| super::cut_short_label(row))
 }
 
 /// The label of `row`, for tests: the first label after its mark and
