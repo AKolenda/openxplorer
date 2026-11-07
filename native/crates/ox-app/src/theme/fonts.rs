@@ -7,7 +7,9 @@
 //! from one table of base sizes (the values in `v2.0.0:desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
-use crate::folder_view::icon_size::{compact_row, content_row, tiles_cell};
+use crate::folder_view::icon_size::{
+    compact_row, content_row, group_heading_row, tiles_cell, CONTENT_CHROME, HEADING_CHROME, TILES_CHROME,
+};
 use crate::text_size::{self, TextSize};
 
 /// The stylesheet for `text_size`: every font size, the bars, rows, menus
@@ -127,6 +129,12 @@ const FONT_SIZES: &[FontSize] = &[
     font(".ox-dialog", 12.0),
     // Properties windows (properties.css): Windows' 9-point dialog text.
     font(".ox-properties", 12.0),
+    // Folder Options (properties.css) at Windows' 380 pixels: a pixel
+    // under Windows' 9-point dialog text, as Noto Sans and the other
+    // fonts the app falls back to are wider than Segoe UI, so each option
+    // fits on one line as in Windows. The selector outranks `window.ox`,
+    // whose 13 pixels a bare class cannot override.
+    font("window.ox.ox-folder-options", 11.0),
     font(".snapshot-banner", 12.0),
     font(".snapshot-tab-badge", 12.0),
     font(".size-scan", 12.0),
@@ -345,14 +353,18 @@ fn compact_rule(text_size: TextSize) -> String {
 
 /// The heights of Tiles' tiles and Content's rows at `text_size`
 /// ([`tiles_cell`], [`content_row`]), less what lies outside their content
-/// box: a tile's 8 pixels of padding above and below and the 2-pixel gap,
-/// a row's 1-pixel line under it.
-fn tiles_and_content_rules(text_size: TextSize) -> [String; 2] {
-    let tile = tiles_cell(text_size).height - 18;
-    let row = content_row(text_size) - 1;
+/// box ([`TILES_CHROME`], [`CONTENT_CHROME`]). Both views size and draw an
+/// item on its cell, not on the grid's slot, which a group's heading has
+/// too (VIEW-071).
+fn tiles_and_content_rules(text_size: TextSize) -> [String; 3] {
+    let tile = tiles_cell(text_size).height - TILES_CHROME;
+    let row = content_row(text_size) - CONTENT_CHROME;
+    // A heading's row is as tall as Page Up and Page Down count it.
+    let heading = group_heading_row(text_size) - HEADING_CHROME;
     [
-        format!("gridview.files.tiles > child {{ min-height: {tile}px; }}"),
-        format!("gridview.files.content > child {{ min-height: {row}px; }}"),
+        format!("gridview.files.tiles > child > .item-cell:not(.group-slot) {{ min-height: {tile}px; }}"),
+        format!("gridview.files.content > child > .item-cell:not(.group-slot) {{ min-height: {row}px; }}"),
+        format!("gridview.files > child > .item-cell.group-slot {{ min-height: {heading}px; }}"),
     ]
 }
 
@@ -410,8 +422,12 @@ mod tests {
         assert!(css.contains("columnview.files > listview > row { min-height: 30px; }"));
         assert!(css.contains("gridview.files.icons-large > child { min-width: 96px; min-height: 144px; }"));
         assert!(css.contains("gridview.files.icons-56 > child { min-width: 56px; min-height: 104px; }"));
-        assert!(css.contains("gridview.files.tiles > child { min-height: 51px; }"));
-        assert!(css.contains("gridview.files.content > child { min-height: 57px; }"));
+        assert!(
+            css.contains("gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 53px; }")
+        );
+        assert!(css
+            .contains("gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }"));
+        assert!(css.contains("gridview.files > child > .item-cell.group-slot { min-height: 17px; }"));
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 32px; }"));
         assert!(

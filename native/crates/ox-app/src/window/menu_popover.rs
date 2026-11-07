@@ -38,7 +38,7 @@ mod height;
 #[cfg(test)]
 mod inspection;
 #[cfg(test)]
-pub(crate) use inspection::{row_label, row_tooltip};
+pub(crate) use inspection::row_label;
 mod items;
 mod motion;
 
@@ -619,7 +619,7 @@ impl MenuPopover {
             let can_choose = self.can_choose(item);
             let row = item_row(item, self.check_mark(item), marks, glyphs);
             row.set_sensitive(can_choose);
-            explain_availability(self, row.upcast_ref(), item, can_choose);
+            describe_unavailable_row(self, &row, item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
@@ -1110,8 +1110,8 @@ fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
     item.action.disabled_reason(menu.upcast_ref()).map(str::to_owned)
 }
 
-/// Adds to the tooltip of `control`, which shows `item` in `menu`, why it
-/// cannot be chosen, and tells screen readers too.
+/// Adds to the tooltip of the strip button `control`, which shows `item`
+/// in `menu`, why it cannot be chosen, and tells screen readers too.
 fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
     let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten();
     let Some(reason) = reason else {
@@ -1119,6 +1119,15 @@ fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuIt
     };
     control.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
     control.update_property(&[gtk::accessible::Property::Description(&reason)]);
+}
+
+/// Tells screen readers why `row`, which shows `item` in `menu`, cannot
+/// be chosen. The row shows no tooltip, as Windows 11's menu rows show
+/// none.
+fn describe_unavailable_row(menu: &MenuPopover, row: &gtk::ListBoxRow, item: &MenuItem, can_choose: bool) {
+    if let Some(reason) = (!can_choose).then(|| disabled_reason(menu, item)).flatten() {
+        row.update_property(&[gtk::accessible::Property::Description(&reason)]);
+    }
 }
 
 /// Whether a menu's rows keep a column for check marks and dots before
@@ -1229,14 +1238,6 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: Gl
     content
 }
 
-/// The whole label of `row` while the menu cuts it short, else `None`.
-fn cut_short_label(row: &gtk::ListBoxRow) -> Option<String> {
-    let content = row.child()?;
-    let label = crate::window::widget_tree::children(&content)
-        .find_map(|child| child.downcast::<gtk::Label>().ok())?;
-    label.layout().is_ellipsized().then(|| label.text().to_string())
-}
-
 /// The row for `item`, showing `check` in the menu's `marks` column, and
 /// its glyph, or an empty slot, in the `glyphs` column.
 fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::ListBoxRow {
@@ -1249,22 +1250,10 @@ fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphC
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // No tooltip that would only repeat the label (`b.title=it.label` in
-    // app.js), as Windows 11's menus show none: only a label the menu cuts
-    // short shows whole, which adds what the row cannot show. A disabled
-    // row's own tooltip, saying why ([`explain_availability`]), comes
-    // first.
-    row.set_has_tooltip(true);
-    row.connect_query_tooltip(|row, _, _, _, tooltip| {
-        if row.tooltip_text().is_some() {
-            return false;
-        }
-        let Some(label) = cut_short_label(row) else {
-            return false;
-        };
-        tooltip.set_text(Some(&label));
-        true
-    });
+    // No tooltip, as Windows 11's menus show none on their rows (not
+    // `b.title=it.label` in app.js): not for a label the menu cuts short,
+    // nor for a disabled row, which tells screen readers why in its
+    // accessible description ([`describe_unavailable_row`]).
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

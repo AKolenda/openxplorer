@@ -246,6 +246,32 @@ fn the_details_pane_previews_an_image_and_names_its_dimensions() {
     });
 }
 
+/// A picture too large to decode (30,000 × 30,000 pixels, refused from
+/// its header) keeps its type icon in the details pane instead of
+/// holding the window up, and still lists its dimensions, as Windows'
+/// details pane does.
+///
+/// parity: PROP-011, PROP-013
+#[gtk::test]
+fn a_picture_too_large_to_preview_keeps_its_icon_and_lists_its_dimensions() {
+    let fixture = Fixture::standard();
+    crate::picture_guard::huge_png(&fixture.path("Huge poster.png"));
+    let test = TestWindow::open(&fixture.uri());
+    if !test.window.details_pane().is_visible() {
+        test.activate("details-pane", None);
+    }
+    let pane = test.window.details_pane();
+    test.select_named("Huge poster.png");
+
+    wait_until("the dimensions", || {
+        property(&pane.shown_properties(), "Dimensions").is_some_and(|size| size.contains("30000"))
+    });
+    assert!(
+        descendants::<gtk::Picture>(pane).is_empty(),
+        "no preview: the type icon stays"
+    );
+}
+
 /// The pane's menu makes it follow the pointer and drop a field, and
 /// the choice is saved.
 ///

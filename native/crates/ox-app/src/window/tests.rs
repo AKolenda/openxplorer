@@ -15,6 +15,7 @@ mod captures;
 mod chrome;
 mod clipboard;
 mod clipboard_interop;
+mod clipboard_switches;
 mod closing;
 mod column_fitting;
 mod command_bar;
