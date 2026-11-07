@@ -164,33 +164,71 @@ columnview.files .row-icon { margin-top: 1px; }
    (src/folder_view/details/group_headers.rs). The chevron changes at
    once, with no animation, so reduced motion has nothing to stop. */
 columnview.files .group-slot .group-header {
-  padding: 12px 0 4px 0;
-  margin-right: -16px;
+  padding: 0;
+  margin-right: 0;
   border-spacing: 8px;
 }
-columnview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
-/* A heading's row lights up under the pointer like an item's, all of
-   it, and takes Windows' 1px outline while it has the keyboard, after a
-   click too (src/folder_view/cells.rs marks the row as a heading's). */
+/* A heading's row: an 8px gap before every heading, the first one
+   included, then a box as tall as an item's row (src/theme/fonts.rs sets
+   its height). The gap is the top margin of the heading's cells, so the
+   row has its whole height when GTK binds it, and the hover, the
+   selection and the keyboard's outline are drawn on the box alone: the
+   Name cell's heading (reaching back over the cell's padding to the
+   row's edge) and each other column's line. The grouped list adds no
+   padding of its own above the first heading. */
+columnview.files.grouped > listview { padding-top: 1px; }
+columnview.files > listview > row > cell > .group-slot {
+  margin: 8px -16px 0 -14px;
+  padding-left: 14px;
+  border-radius: 4px 0 0 4px;
+}
+columnview.files > listview > row.heading-row,
+columnview.files > listview > row.heading-row:hover,
+columnview.files > listview > row.heading-row:selected,
 columnview.files > listview > row.heading-row:focus-visible,
 columnview.files > listview > row.heading-row:focus-within {
-  outline: 1px solid @ox_item_focus_outer;
-  outline-offset: -1px;
+  background: none;
+  outline: none;
   box-shadow: none;
 }
+columnview.files > listview > row.heading-row:hover > cell > .group-slot,
+columnview.files > listview > row.heading-row:hover > cell > .group-rule { background-color: @ox_item_hover; }
+columnview.files > listview > row.heading-row:selected > cell > .group-slot,
+columnview.files > listview > row.heading-row:selected > cell > .group-rule { background-color: @ox_item_selected; }
+columnview.files > listview > row.heading-row:selected:hover > cell > .group-slot,
+columnview.files > listview > row.heading-row:selected:hover > cell > .group-rule {
+  background-color: @ox_item_selected_hover;
+}
+columnview.files > listview > row.heading-row:focus-within > cell > .group-slot {
+  box-shadow: inset 1px 0 @ox_item_focus_outer, inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
+}
+columnview.files > listview > row.heading-row:focus-within > cell > .group-rule {
+  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
+}
+columnview.files > listview > row.heading-row:focus-within > cell:last-child > .group-rule {
+  box-shadow: inset -1px 0 @ox_item_focus_outer, inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
+}
+columnview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
 columnview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
 columnview.files .group-rule {
-  padding: 12px 0 4px 0;
-  /* Over the cells' padding on both sides; the minimum width keeps the
-     label's whole width from going below zero. */
-  margin: 0 -12px 0 -16px;
-  min-width: 28px;
+  padding: 0;
+  /* Over the cells' padding on both sides, after the gap above the
+     heading; the minimum width keeps the label's whole width from going
+     below zero. */
+  margin: 8px -17px 0 -17px;
+  min-width: 34px;
   background-image: linear-gradient(@ox_border, @ox_border);
   background-size: 100% 1px;
   background-position: center;
   background-repeat: no-repeat;
   background-origin: content-box;
   background-clip: content-box;
+}
+/* The last column's line reaches the row's right edge, rounded there. */
+columnview.files > listview > row > cell:last-child > .group-rule {
+  margin-right: -14px;
+  min-width: 31px;
+  border-radius: 0 4px 4px 0;
 }
 .files .group-chevron { color: @ox_muted; }
 
@@ -376,7 +414,13 @@ gridview.files > child .item-properties > box { border-spacing: 4px; }
 /* A group's heading, as the details view draws it (VIEW-022): the
    semibold title and count over the items' left edge, then a line across
    the row, which the heading row's other slots carry on. */
-gridview.files .group-slot { padding: 16px 0 6px 0; }
+gridview.files .group-slot { padding: 0; }
+/* A heading's row in Tiles and Content: one line of title tall, its
+   hover box that size, after an 8px gap before every heading, the first
+   one included, which is a margin outside the box. */
+gridview.files .group-slot.heading-row { padding: 5px 0; margin-top: 8px; }
+gridview.files.tiles.grouped { padding-top: 3px; }
+gridview.files.content.grouped { padding-top: 0; }
 gridview.files.tiles .group-slot .group-header.group-heading { margin-left: 12px; }
 gridview.files.content .group-slot .group-header.group-heading { margin-left: 16px; }
 gridview.files .group-slot .group-header { border-spacing: 8px; }
@@ -406,7 +450,8 @@ gridview.files .item-cell.heading-row.row-focus.row-end {
   box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer,
     inset -1px 0 @ox_item_focus_outer;
 }
-gridview.files .item-cell.heading-row.row-focus.row-start.row-end {
+gridview.files .item-cell.heading-row.row-focus.row-start.row-end,
+gridview.files.content > child:focus-within > .item-cell.heading-row {
   box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
 }
 gridview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }

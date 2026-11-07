@@ -169,7 +169,25 @@ impl BrowserWindow {
     pub(super) fn focused_heading(&self) -> Option<GroupSlot> {
         let focus = GtkWindowExt::focus(self)?;
         let view = self.folder_pane().input_widget();
-        focus.is_ancestor(&view).then(|| heading_near(&focus))?
+        let in_view = focus == view || focus.is_ancestor(&view);
+        if !in_view {
+            return None;
+        }
+        if let Some(heading) = heading_near(&focus) {
+            return Some(heading);
+        }
+        // The list has the keyboard but no row or tile does: GTK may leave
+        // it on the list itself after a click on a heading (seen in Tiles
+        // and Content on KDE Plasma's Wayland session). The heading last
+        // clicked or moved to keeps it then, unless an item has it.
+        if self.folder_pane().owners().position_of(&focus).is_some() {
+            return None;
+        }
+        self.imp().key_heading.borrow().clone().filter(|heading| {
+            heading
+                .model()
+                .is_some_and(|model| self.folder_pane().grouped() == Some(model))
+        })
     }
 
     /// Left, Right, Enter and Space on a group heading with the keyboard:
@@ -273,6 +291,12 @@ impl BrowserWindow {
         match spot {
             HeadingSpot::Chevron(heading) if presses == 1 => heading.toggle_group(),
             HeadingSpot::Title(heading) if presses == 1 => {
+                // Kept for a double-click, which leaves the selection as it
+                // was, as in Windows 11.
+                let before = self.folder_pane().model().selected_positions();
+                self.imp()
+                    .selection_before_click
+                    .replace(Some((heading.clone(), before)));
                 if let Some((model, index)) = heading.model().zip(heading.group_index()) {
                     let add = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
                     let extend = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
@@ -280,7 +304,14 @@ impl BrowserWindow {
                 }
                 self.keep_heading_focus(&heading);
             }
-            HeadingSpot::Title(heading) if presses == 2 => heading.toggle_group(),
+            HeadingSpot::Title(heading) if presses == 2 => {
+                let before = self.imp().selection_before_click.take();
+                if let Some((_, positions)) = before.filter(|(clicked, _)| *clicked == heading) {
+                    self.folder_pane().model().select_positions(&positions);
+                }
+                heading.toggle_group();
+                self.keep_heading_focus(&heading);
+            }
             _ => {}
         }
         true
@@ -289,6 +320,7 @@ impl BrowserWindow {
     /// Gives the keyboard back to `heading` after its group changed: the
     /// rows under it were added or removed, which may move the focus.
     pub(super) fn keep_heading_focus(&self, heading: &GroupSlot) {
+        self.imp().key_heading.replace(Some(heading.clone()));
         let (Some(model), Some(index)) = (heading.model(), heading.group_index()) else {
             return;
         };
@@ -302,6 +334,13 @@ impl BrowserWindow {
         } else if pane.icon_view().grouped().as_ref() == Some(&model) {
             pane.icon_view().grid().scroll_to(slot, flags, None);
         }
+        // The ring follows from here too, once GTK has moved the keyboard,
+        // not only from the window's focus changes.
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.mark_focused_heading(window.focused_heading())
+        ));
     }
 
     /// The folder menu's View: the command bar's, then Collapse all groups
@@ -364,20 +403,34 @@ impl BrowserWindow {
                 #[weak]
                 window,
                 move || {
-                    let now = window.focused_heading();
-                    let before = window.imp().focused_row.replace(now.clone());
-                    if before == now {
-                        return;
+                    let pane = window.folder_pane();
+                    let on_item = GtkWindowExt::focus(&window)
+                        .is_some_and(|focus| pane.owners().position_of(&focus).is_some());
+                    if on_item {
+                        window.imp().key_heading.replace(None);
                     }
-                    if let Some(before) = before {
-                        before.set_row_focused(false);
-                    }
-                    if let Some(now) = now {
-                        now.set_row_focused(true);
-                    }
+                    window.mark_focused_heading(window.focused_heading());
                 }
             ));
         });
+    }
+
+    /// Rings the row of `heading`, which has the keyboard, or none, and
+    /// takes the ring off the heading that had it.
+    fn mark_focused_heading(&self, heading: Option<GroupSlot>) {
+        let before = self.imp().focused_row.replace(heading.clone());
+        if before == heading {
+            if let Some(heading) = heading {
+                heading.set_row_focused(true);
+            }
+            return;
+        }
+        if let Some(before) = before {
+            before.set_row_focused(false);
+        }
+        if let Some(heading) = heading {
+            heading.set_row_focused(true);
+        }
     }
 
     /// Adds the heading menu's commands.

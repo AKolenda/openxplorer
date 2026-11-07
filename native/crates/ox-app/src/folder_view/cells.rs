@@ -445,6 +445,17 @@ impl FileCell {
                     .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()));
                 if let Some(item) = item.filter(|item| item.has_css_class(HEADING_ROW_CLASS) != heading) {
                     toggle_class(&item, HEADING_ROW_CLASS, heading);
+                    // A Details heading's box is drawn across the columns
+                    // by each column's cell, which GTK clips to the column:
+                    // its pieces overlap only while the cells let them.
+                    let overflow = if heading {
+                        gtk::Overflow::Visible
+                    } else {
+                        gtk::Overflow::Hidden
+                    };
+                    for cell in std::iter::successors(item.first_child(), WidgetExt::next_sibling) {
+                        cell.set_overflow(overflow);
+                    }
                 }
             }
         ));

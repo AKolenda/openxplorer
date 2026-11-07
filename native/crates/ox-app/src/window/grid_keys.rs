@@ -178,8 +178,8 @@ impl BrowserWindow {
                 if !modifiers.contains(gdk::ModifierType::CONTROL_MASK) {
                     grouped.select_group(index, false, extends);
                 }
-                if let Some(slot) = layout.heading_slot(index) {
-                    icons.grid().scroll_to(slot, gtk::ListScrollFlags::FOCUS, None);
+                if let Some(heading) = grouped.heading(index) {
+                    self.keep_heading_focus(&heading);
                 }
                 return Some(glib::Propagation::Stop);
             }

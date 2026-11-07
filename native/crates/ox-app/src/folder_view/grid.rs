@@ -336,6 +336,11 @@ impl IconView {
             _ => None,
         };
         imp.grouping.replace(grouped.clone());
+        crate::window::widget_tree::toggle_class(
+            &imp.grid,
+            crate::folder_view::details::GROUPED_CLASS,
+            grouped.is_some(),
+        );
         match (grouped, items) {
             (Some(grouped), _) => imp.grid.set_model(Some(&grouped)),
             (None, items) => imp.grid.set_model(items.as_ref()),

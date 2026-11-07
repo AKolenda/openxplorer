@@ -20,6 +20,9 @@ use super::DetailsView;
 use crate::folder_view::grid::GroupedSelection;
 use crate::folder_view::item::FileItem;
 
+/// The CSS class of a view that heads the folder's groups.
+pub(crate) const GROUPED_CLASS: &str = "grouped";
+
 /// Names the group an item is in, `None` while the items are not grouped.
 pub(crate) type GroupTitle = Rc<dyn Fn(&FileItem) -> Option<String>>;
 
@@ -98,6 +101,9 @@ impl DetailsView {
         };
         imp.grouping.replace(grouped.clone());
         let column_view = self.column_view();
+        // The stylesheet spaces a grouped list's headings evenly from the
+        // column titles down.
+        crate::window::widget_tree::toggle_class(column_view, GROUPED_CLASS, grouped.is_some());
         match (grouped, items) {
             (Some(grouped), _) => column_view.set_model(Some(&grouped)),
             (None, items) => column_view.set_model(items.as_ref()),

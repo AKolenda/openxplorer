@@ -735,9 +735,25 @@ fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
             Some(2),
             "{view}: and gives the heading the keyboard"
         );
+        // GTK may leave the keyboard on the list itself after the click
+        // (KDE Plasma's Wayland session): the heading still takes Left.
+        let list = test.window.folder_pane().view_widget();
+        gtk::prelude::GtkWindowExt::set_focus(&test.window, Some(&list));
+        press_key(&test, gdk::Key::Left, gdk::ModifierType::empty());
+        assert!(
+            heading.collapsed(),
+            "{view}: Left collapses the clicked heading's group"
+        );
+        press_key(&test, gdk::Key::Right, gdk::ModifierType::empty());
+        assert!(!heading.collapsed(), "{view}: Right expands it");
+        // A double-click folds the group and leaves the selection as it
+        // was before it, as in Windows 11.
+        test.window.folder_pane().model().select_only(0);
+        let (_, title, _) = heading_parts(&test, 2);
+        press_on(&test, &title, 1);
         press_on(&test, &title, 2);
         assert!(heading.collapsed(), "{view}: a double-click collapses the group");
-        assert_eq!(selected(&test), group, "{view}: its items stay selected");
+        assert_eq!(selected(&test), [0], "{view}: and leaves the selection as it was");
         test.window.folder_pane().model().select_only(0);
         let (chevron, _, _) = heading_parts(&test, 2);
         press_on(&test, &chevron, 1);

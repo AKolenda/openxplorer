@@ -190,6 +190,12 @@ pub(crate) struct BrowserWindow {
     pub(super) menu_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
     /// The group heading whose row shows the keyboard ring.
     pub(super) focused_row: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The group heading last clicked or moved to, which keeps the
+    /// keyboard while the list has it and no row or tile does.
+    pub(super) key_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The heading a first click selected the group of, and the selection
+    /// before it, which a double-click puts back.
+    pub(super) selection_before_click: RefCell<Option<(crate::folder_view::grid::GroupSlot, Vec<u32>)>>,
     pub(super) typeahead: RefCell<Typeahead>,
     /// The input method of the view that last had the keyboard, so a dead key
     /// or an IME commit typed on the window's chrome composes as it does in
