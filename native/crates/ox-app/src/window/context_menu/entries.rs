@@ -70,8 +70,9 @@ pub(crate) struct ItemFacts {
     /// At most one item is selected (`state.selection.size<=1`).
     pub(crate) is_single: bool,
     /// It is a search result, listed away from its folder
-    /// (`state.query`).
-    pub(crate) is_search_result: bool,
+    /// (`state.query`), or a Recent row, which stands for a file
+    /// elsewhere.
+    pub(crate) has_file_location: bool,
     /// It is a symbolic link, whose target "Show target" opens (CMD-030).
     pub(crate) is_symlink: bool,
     /// Whether the selection can be compared (Dolphin's Compare Files).
@@ -176,8 +177,8 @@ fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> Menu
 /// The Open group: Open, the extraction commands, the applications, for
 /// folders Open in new tab (Open in new tabs for several, TAB-027), Open
 /// in new window (TAB-028) and Pin to Quick access, and for a search
-/// result Open file location (SRCH-015), also in a new tab or window
-/// (SRCH-016).
+/// result or a Recent row Open file location (SRCH-015), also in a new
+/// tab or window (SRCH-016).
 fn open_group(facts: &ItemFacts, style: MenuStyle) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
     let open = item(
@@ -255,7 +256,7 @@ fn open_group(facts: &ItemFacts, style: MenuStyle) -> Vec<MenuEntry> {
         );
         entries.push(for_one_item(show_target, facts, false).into());
     }
-    if facts.is_search_result {
+    if facts.has_file_location {
         let locations = [
             ("Open file location", Icon::Folder, WindowAction::OpenFileLocation),
             (
@@ -1110,7 +1111,7 @@ mod tests {
             location: ItemLocation::Local,
             is_read_only: false,
             is_single: true,
-            is_search_result: false,
+            has_file_location: false,
             is_symlink: false,
             comparison: Comparison::Unavailable,
             editors: Vec::new(),
@@ -1773,7 +1774,7 @@ mod tests {
     #[test]
     fn a_search_result_offers_open_file_location_after_the_open_group() {
         let facts = ItemFacts {
-            is_search_result: true,
+            has_file_location: true,
             ..file()
         };
 

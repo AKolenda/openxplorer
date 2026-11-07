@@ -633,6 +633,47 @@ fn recent_files_follow_the_desktop_history_setting() {
     assert!(labels.contains(&"Clear recent files".to_owned()), "{labels:?}");
 }
 
+/// The Recent files row opens GIO's `recent:///`, which lists the files
+/// the desktop used lately; a row's menu has Windows' Open file location,
+/// which opens the file's folder with it selected.
+///
+/// parity: SIDE-026
+#[gtk::test]
+fn recent_files_opens_and_open_file_location_selects_the_file_in_its_folder() {
+    use super::context_menus::position_of;
+    use crate::app_context::add_to_desktop_history;
+    use ox_core::location::RECENT_URI;
+
+    super::file_ops_support::require_private_trash();
+    let schemes = gtk::gio::Vfs::default().supported_uri_schemes();
+    assert!(
+        schemes.iter().any(|scheme| scheme == "recent"),
+        "this test needs GVfs with its Recent backend; found {schemes:?}"
+    );
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Synthetic plan\n").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
+
+    assert!(row_named(&test, "Recent files").activate());
+    wait_until("Recent files", || {
+        test.window.current_uri().as_deref() == Some(RECENT_URI) && !test.window.is_loading()
+    });
+    wait_until("the recent file", || test.names() == ["plan.txt"]);
+    test.window.right_click(Some(position_of(&test, "plan.txt")));
+    let menu = test.window.context_menu();
+    let rows = menu.row_labels();
+    assert!(rows.contains(&"Open".to_owned()), "{rows:?}");
+    assert!(rows.contains(&"Open file location".to_owned()), "{rows:?}");
+    menu.popdown();
+
+    test.activate("open-file-location", None);
+
+    test.wait_for_listing("the file's folder");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    assert_eq!(test.selected_names(), ["plan.txt"]);
+}
+
 /// Recent locations lists the folders of the desktop's recently used list
 /// that still exist, honours the desktop's "remember recent files"
 /// setting, and its Clear forgets them.
