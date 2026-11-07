@@ -46,7 +46,7 @@ msgid "- Report an issue (in this Help window and in About this build) opens the
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it."
+msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it.\n- Copy a drive and paste it into a folder, or drag it there, to make a shortcut to it, such as Local Disk - Shortcut. The drive's files are not copied."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -1900,7 +1900,7 @@ msgstr ""
 msgid "CD Drive"
 msgstr ""
 
-#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/drive_shortcuts.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Local Disk"
 msgstr ""
 
@@ -5196,6 +5196,10 @@ msgid "This file selection is too large to drag."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
+msgid "A drive cannot be moved to the Recycle Bin."
+msgstr ""
+
+#: crates/ox-app/src/window/file_drop.rs
 msgid "A folder cannot be copied into itself."
 msgstr ""
 
@@ -5350,7 +5354,7 @@ msgstr ""
 msgid "This is not the Recycle Bin."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/send_to.rs
+#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/send_to.rs
 msgid "Wait for the running file operation to finish."
 msgstr ""
 
@@ -6250,7 +6254,7 @@ msgid "The folder's name"
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
-msgid "A whole drive cannot be copied. Open it and select what to copy."
+msgid "A phone or camera cannot be copied. Open it and select what to copy."
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
