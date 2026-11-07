@@ -215,7 +215,7 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
 }
 
 /// A drive's menu (`driveMenu`): a mounted drive's, or Mount volume.
-fn drive_menu(row: &VolumeRow) -> PlaceMenu {
+pub(super) fn drive_menu(row: &VolumeRow) -> PlaceMenu {
     match &row.state {
         VolumeState::Mounted { uri, controls } => PlaceMenu::Drive {
             uri: uri.clone(),
@@ -293,12 +293,17 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
         target: RowTarget::Location(root.to_owned()),
         tooltip: locations.display_location(root),
         pinned: false,
-        menu: Some(PlaceMenu::Drive {
-            uri: root.to_owned(),
-            kind: VolumeKind::Drive,
-            controls: MountControls::FIXED,
-        }),
+        menu: Some(local_disk_menu()),
         eject: None,
+    }
+}
+
+/// Local Disk's menu: the root's, a drive that stays mounted.
+pub(super) fn local_disk_menu() -> PlaceMenu {
+    PlaceMenu::Drive {
+        uri: "file:///".to_owned(),
+        kind: VolumeKind::Drive,
+        controls: MountControls::FIXED,
     }
 }
 
