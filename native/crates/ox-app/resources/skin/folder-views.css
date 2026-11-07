@@ -156,12 +156,34 @@ columnview.files .row-icon { margin-top: 1px; }
   border-radius: 0;
 }
 
-/* A group's header in the details view (VIEW-022): Explorer's semibold
-   title and count, then a line to the right edge. */
-columnview.files > listview > header { padding: 0; background: none; }
-columnview.files .group-header { padding: 12px 26px 4px 26px; }
-columnview.files .group-title { font-weight: 600; color: @ox_text; }
-columnview.files .group-header separator { background-color: @ox_border; min-height: 1px; }
+/* A group's heading in the details view (VIEW-022), a row of its own:
+   Windows 11's chevron (down while the group is expanded, right while it
+   is collapsed), the semibold title and count, then a line to the right
+   edge. The Name cell draws the chevron, the title and the start of the
+   line; each other column's cell carries the line on across its padding
+   (src/folder_view/details/group_headers.rs). The chevron changes at
+   once, with no animation, so reduced motion has nothing to stop. */
+columnview.files .group-slot .group-header {
+  padding: 12px 0 4px 0;
+  margin-right: -16px;
+  border-spacing: 8px;
+}
+columnview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
+columnview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
+columnview.files .group-rule {
+  padding: 12px 0 4px 0;
+  /* Over the cells' padding on both sides; the minimum width keeps the
+     label's whole width from going below zero. */
+  margin: 0 -12px 0 -16px;
+  min-width: 28px;
+  background-image: linear-gradient(@ox_border, @ox_border);
+  background-size: 100% 1px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-origin: content-box;
+  background-clip: content-box;
+}
+.files .group-chevron { color: @ox_muted; }
 
 /* The arrow before a folder that expands in place (VIEW-035). */
 columnview.files .folder-expander {
@@ -346,9 +368,18 @@ gridview.files > child .item-properties > box { border-spacing: 4px; }
    semibold title and count over the items' left edge, then a line across
    the row, which the heading row's other slots carry on. */
 gridview.files .group-slot { padding: 16px 0 6px 0; }
-gridview.files.tiles .group-slot .group-title { margin-left: 12px; }
-gridview.files.content .group-slot .group-title { margin-left: 16px; }
-gridview.files .group-slot .group-header { border-spacing: 10px; }
+gridview.files.tiles .group-slot .group-header.group-heading { margin-left: 12px; }
+gridview.files.content .group-slot .group-header.group-heading { margin-left: 16px; }
+gridview.files .group-slot .group-header { border-spacing: 8px; }
+/* A heading takes the keyboard (Left and Right collapse and expand its
+   group) and shows Windows' ring then. */
+gridview.files.tiles > child:focus-visible > .item-cell.group-slot,
+gridview.files.content > child:focus-visible > .item-cell.group-slot {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+  border-radius: 4px;
+}
 gridview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
 gridview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
 

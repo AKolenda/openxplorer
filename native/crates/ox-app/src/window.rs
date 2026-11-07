@@ -96,6 +96,7 @@ mod full_screen;
 mod gestures;
 mod grid_keys;
 mod group_day;
+mod group_headings;
 mod help;
 mod history_menu;
 mod imp;

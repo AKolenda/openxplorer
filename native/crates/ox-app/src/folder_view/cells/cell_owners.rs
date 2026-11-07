@@ -170,14 +170,9 @@ impl CellOwners {
         Rc::new(Self::default())
     }
 
-    /// Records that `cell` is the content widget of `list_item`, and
-    /// forgets cells that are gone.
-    pub(crate) fn register(&self, cell: &impl IsA<gtk::Widget>, list_item: &gtk::ListItem) {
-        self.register_mapped(cell, list_item, None);
-    }
-
-    /// [`Self::register`] for a view whose list item positions `positions`
-    /// maps to the listing's.
+    /// Records that `cell` is the content widget of `list_item`, whose
+    /// positions `positions` maps to the listing's when the view lists
+    /// more than the items, and forgets cells that are gone.
     pub(crate) fn register_mapped(
         &self,
         cell: &impl IsA<gtk::Widget>,

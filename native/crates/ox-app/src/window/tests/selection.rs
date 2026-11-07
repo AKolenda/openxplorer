@@ -487,10 +487,10 @@ fn arrows_move_through_tiles_and_content() {
 }
 
 /// In grouped Tiles and Content every key moves between items across
-/// the headings, as in Details: Down from a group's last row goes to the
-/// next group's first, Right from a group's last item to the next group's
-/// first, Up comes back to the column, and Shift and Ctrl work as
-/// elsewhere.
+/// the headings, as in Details: Down from a group's last row rests on the
+/// next group's heading, then goes to its first row, Right from a group's
+/// last item goes to the next group's first, Up comes back to the column,
+/// and Shift and Ctrl work as elsewhere.
 ///
 /// parity: VIEW-071, VIEW-022, SEL-007, SEL-009, SEL-010
 #[gtk::test]
@@ -506,7 +506,14 @@ fn arrows_cross_the_group_headings_in_tiles_and_content() {
         show_view(&test, view);
         start_at(&test, 0);
         press_key(&test, gdk::Key::Down, none);
-        assert_eq!(selected(&test), [1], "{view}: Down passes the heading");
+        assert!(
+            test.window.focused_heading().is_some(),
+            "{view}: Down rests on the heading"
+        );
+        assert_eq!(selected(&test), [0], "{view}: a heading selects nothing");
+        press_key(&test, gdk::Key::Down, none);
+        assert_eq!(selected(&test), [1], "{view}: Down goes on past the heading");
+        press_key(&test, gdk::Key::Up, none);
         press_key(&test, gdk::Key::Up, none);
         assert_eq!(selected(&test), [0], "{view}: Up passes it back");
         press_key(&test, gdk::Key::Right, none);
@@ -521,8 +528,12 @@ fn arrows_cross_the_group_headings_in_tiles_and_content() {
             (0..=last).collect::<Vec<u32>>(),
             "{view}: Shift+Home"
         );
+        // Down from the first item rests on the next heading first.
+        press_key(&test, gdk::Key::Down, none);
         press_key(&test, gdk::Key::Down, none);
         assert_eq!(selected(&test), [1], "{view}: a plain key selects one item");
+        // Past the next group's heading.
+        press_key(&test, gdk::Key::Down, gdk::ModifierType::CONTROL_MASK);
         press_key(&test, gdk::Key::Down, gdk::ModifierType::CONTROL_MASK);
         assert_eq!(selected(&test), [1], "{view}: Ctrl moves the focus alone");
         let focused = test.window.folder_pane().focused_position().expect("focus");
@@ -530,6 +541,82 @@ fn arrows_cross_the_group_headings_in_tiles_and_content() {
         press_key(&test, gdk::Key::Right, shift);
         let extended: Vec<u32> = (1..=focused + 1).collect();
         assert_eq!(selected(&test), extended, "{view}: Shift extends from the anchor");
+    }
+}
+
+/// A group collapses under its heading and expands again, in Details,
+/// Tiles and Content, as in Windows 11: with the keyboard on the heading,
+/// Left collapses it, Right expands it and Enter toggles it. Its items
+/// stay selected while hidden; the arrows, a Shift range and
+/// type-to-select pass them by, and Select all still selects them.
+///
+/// parity: VIEW-022, VIEW-071, SEL-007, SEL-009
+#[gtk::test]
+fn a_group_collapses_under_its_heading_and_its_items_are_passed_by() {
+    let fixture = Fixture::standard();
+    fixture.write("Plan.md");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let none = gdk::ModifierType::empty();
+    let shift = gdk::ModifierType::SHIFT_MASK;
+    let last = test.window.folder_pane().model().n_items() - 1;
+    let shows = |position| {
+        let grouped = test.window.folder_pane().grouped().expect("a grouped view");
+        grouped.layout().expect("laid out").shows(position)
+    };
+    for view in ["details", "tiles", "content"] {
+        show_view(&test, view);
+        start_at(&test, 0);
+        press_key(&test, gdk::Key::Up, none);
+        let heading = test.window.focused_heading().expect("Up rests on the heading");
+        assert_eq!(heading.group_index(), Some(0), "{view}");
+        press_key(&test, gdk::Key::Left, none);
+        assert!(
+            heading.collapsed() && !shows(0),
+            "{view}: Left collapses the group"
+        );
+        assert_eq!(selected(&test), [0], "{view}: a hidden item stays selected");
+        press_key(&test, gdk::Key::Right, none);
+        assert!(!heading.collapsed() && shows(0), "{view}: Right expands it");
+        press_key(&test, gdk::Key::Return, none);
+        assert!(heading.collapsed(), "{view}: Enter toggles it");
+        assert!(
+            test.window.focused_heading().is_some(),
+            "{view}: the heading keeps the keyboard"
+        );
+
+        press_key(&test, gdk::Key::Down, none);
+        press_key(&test, gdk::Key::Down, none);
+        assert_eq!(selected(&test), [1], "{view}: the first item shown");
+        press_key(&test, gdk::Key::End, shift);
+        assert_eq!(
+            selected(&test),
+            (1..=last).collect::<Vec<u32>>(),
+            "{view}: Shift+End"
+        );
+        start_at(&test, last);
+        test.window.reset_typeahead();
+        test.window.type_text("Documents");
+        assert_eq!(
+            selected(&test),
+            [last],
+            "{view}: type-to-select passes a hidden item by"
+        );
+        test.window.reset_typeahead();
+        test.activate("select-all", None);
+        assert_eq!(
+            selected(&test),
+            (0..=last).collect::<Vec<u32>>(),
+            "{view}: Select all selects the hidden items too"
+        );
+        test.activate("expand-all-groups", None);
+        assert!(shows(0), "{view}: Expand all groups");
+        test.activate("collapse-all-groups", None);
+        assert!(
+            (0..=last).all(|position| !shows(position)),
+            "{view}: Collapse all groups"
+        );
+        test.activate("expand-all-groups", None);
     }
 }
 

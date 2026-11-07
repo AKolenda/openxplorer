@@ -185,6 +185,9 @@ pub(crate) struct BrowserWindow {
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
+    /// The group heading the heading menu opened on, which its commands
+    /// act on (VIEW-022).
+    pub(super) menu_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
     pub(super) typeahead: RefCell<Typeahead>,
     /// The input method of the view that last had the keyboard, so a dead key
     /// or an IME commit typed on the window's chrome composes as it does in

@@ -321,33 +321,24 @@ fn pane_sort_state(pane: &FolderPane) -> SortState {
     }
 }
 
-/// Changes one pane's sorting without touching window action state.
 /// Groups `pane`'s items by `grouping`, or stops grouping them with
-/// `None`, with the details view's group headings to match, and the
-/// headings of Tiles and Content (VIEW-071).
-///
-/// The headings come off before the items change and go back on after.
-/// GTK's list keeps a heading for each group it has shown; when its model
-/// changes under the headings, between the grouped sort model and the
-/// ungrouped tree or from one set of groups to another, GTK 4.22 aborts
-/// in `gtk_list_item_manager_ensure_items` on a long list scrolled into
-/// its groups. Nothing changes when the grouping, its day and the
-/// headings already match.
+/// `None`, with group headings to match in Details, Tiles and Content
+/// (VIEW-022, VIEW-071). Nothing changes when the grouping, its day and
+/// the headings already match.
 pub(super) fn group_pane(pane: &FolderPane, grouping: Option<Grouping>) {
     let model = pane.model();
     let details = pane.details();
-    let has_headings = details.column_view().header_factory().is_some();
     let unchanged = model.grouping() == grouping && !model.day_changed();
-    if unchanged && has_headings == grouping.is_some() {
+    if unchanged && details.heads_groups() == grouping.is_some() {
         return;
     }
-    details.show_group_headers(None);
     model.set_grouping(grouping);
     if grouping.is_some() {
         let titles: GroupTitle = model.group_titles();
-        details.show_group_headers(Some(Rc::clone(&titles)));
+        details.set_group_titles(Some(Rc::clone(&titles)));
         pane.icon_view().set_group_titles(Some(titles));
     } else {
+        details.set_group_titles(None);
         pane.icon_view().set_group_titles(None);
     }
 }

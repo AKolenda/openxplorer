@@ -5897,6 +5897,22 @@ msgstr ""
 msgid "Show hidden folders"
 msgstr ""
 
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Collapse all groups"
+msgstr ""
+
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Collapse group"
+msgstr ""
+
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Expand all groups"
+msgstr ""
+
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Expand group"
+msgstr ""
+
 #: crates/ox-app/resources/manual.md crates/ox-app/src/window/help.rs
 msgid "Getting started"
 msgstr ""

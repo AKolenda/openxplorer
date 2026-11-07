@@ -8,15 +8,22 @@
 //! selects, so Details, the status bar and the window's commands see one
 //! selection. Headings, their lines and blanks are [`GroupSlot`]s, which
 //! cannot be selected.
+//!
+//! Details lists the same model in one column. A heading collapses and
+//! expands its group ([`GroupedSelection::set_collapsed`]); which groups
+//! are collapsed is kept in [`CollapsedGroups`], which the folder model
+//! shares between Details, Tiles and Content.
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::folder_view::details::{header_text, GroupTitle};
-use crate::folder_view::group_slots::{group_runs, ItemsChange, Slot, SlotLayout};
+use crate::folder_view::group_slots::{collapsed_runs, ItemsChange, Slot, SlotLayout};
 use crate::folder_view::item::FileItem;
 
 /// What a [`GroupSlot`] draws.
@@ -52,6 +59,13 @@ mod slot_imp {
         /// A heading's "Today (3)"; empty for the others.
         #[property(get, set)]
         pub(super) text: RefCell<String>,
+        /// Whether a heading's group is collapsed.
+        #[property(get, set)]
+        pub(super) collapsed: Cell<bool>,
+        /// The title of a heading's group.
+        pub(super) title: RefCell<String>,
+        /// The model listing the slot.
+        pub(super) model: glib::WeakRef<super::GroupedSelection>,
     }
 
     #[glib::object_subclass]
@@ -81,7 +95,39 @@ impl GroupSlot {
     pub(crate) fn kind(&self) -> SlotKind {
         self.imp().kind.get()
     }
+
+    /// Collapses a heading's group, or expands it with `collapsed` false.
+    pub(crate) fn set_group_collapsed(&self, collapsed: bool) {
+        let title = self.imp().title.borrow().clone();
+        if let Some(model) = self.imp().model.upgrade() {
+            model.set_collapsed(&title, collapsed);
+        }
+    }
+
+    /// Collapses a heading's group while it is expanded, else expands it.
+    pub(crate) fn toggle_group(&self) {
+        self.set_group_collapsed(!self.collapsed());
+    }
+
+    /// The index of a heading's group, in the model listing it.
+    pub(crate) fn group_index(&self) -> Option<usize> {
+        let model = self.imp().model.upgrade()?;
+        let title = self.imp().title.borrow();
+        let layout = model.layout()?;
+        layout.groups().iter().position(|group| group.title == *title)
+    }
+
+    /// The model listing the slot.
+    pub(crate) fn model(&self) -> Option<GroupedSelection> {
+        self.imp().model.upgrade()
+    }
 }
+
+/// The titles of the collapsed groups of a listing, shared by the views
+/// that head its groups. They last while the folder stays shown in its
+/// pane: another folder, another tab or another Group by expands them
+/// all again ([`crate::folder_view::model::FolderModel`]).
+pub(crate) type CollapsedGroups = Rc<RefCell<HashSet<String>>>;
 
 /// The slot objects of one group. GTK warns of an object listed twice,
 /// so every slot has its own; they are kept while the group's title is,
@@ -94,9 +140,12 @@ struct GroupObjects {
 }
 
 impl GroupObjects {
-    fn new() -> Self {
+    fn new(model: &GroupedSelection, title: &str) -> Self {
+        let heading = GroupSlot::new(SlotKind::Heading);
+        heading.imp().model.set(Some(model));
+        heading.imp().title.replace(title.to_owned());
         Self {
-            heading: GroupSlot::new(SlotKind::Heading),
+            heading,
             rules: Vec::new(),
             blanks: Vec::new(),
         }
@@ -129,6 +178,8 @@ mod imp {
         pub(super) items: OnceCell<gtk::MultiSelection>,
         /// Names each item's group.
         pub(super) title: OnceCell<GroupTitle>,
+        /// The titles of the collapsed groups.
+        pub(super) collapsed: OnceCell<super::CollapsedGroups>,
         pub(super) layout: RefCell<Option<SlotLayout>>,
         pub(super) objects: RefCell<Vec<GroupObjects>>,
         /// The item a plain or Ctrl click or move last selected, which
@@ -226,17 +277,21 @@ mod imp {
 
         fn select_range(&self, position: u32, n_items: u32, unselect_rest: bool) -> bool {
             let obj = self.obj();
-            match obj.items_in(position, n_items) {
-                Some((first, count)) => obj.items().select_range(first, count, unselect_rest),
-                None if unselect_rest => obj.items().unselect_all(),
-                None => false,
-            }
+            let items = obj.items_in(position, n_items);
+            obj.select_items(&items, unselect_rest)
         }
 
         fn unselect_range(&self, position: u32, n_items: u32) -> bool {
             let obj = self.obj();
-            obj.items_in(position, n_items)
-                .is_some_and(|(first, count)| obj.items().unselect_range(first, count))
+            let items = obj.items_in(position, n_items);
+            if items.is_empty() {
+                return false;
+            }
+            let mask = gtk::Bitset::new_empty();
+            for item in items {
+                mask.add(item);
+            }
+            obj.items().set_selection(&gtk::Bitset::new_empty(), &mask)
         }
 
         fn set_selection(&self, selected: &gtk::Bitset, mask: &gtk::Bitset) -> bool {
@@ -266,8 +321,14 @@ glib::wrapper! {
 }
 
 impl GroupedSelection {
-    /// `items` grouped by `title`, in `columns` columns.
-    pub(crate) fn new(items: &gtk::MultiSelection, title: GroupTitle, columns: u32) -> Self {
+    /// `items` grouped by `title`, in `columns` columns, with the groups
+    /// `collapsed` names collapsed.
+    pub(crate) fn new(
+        items: &gtk::MultiSelection,
+        title: GroupTitle,
+        collapsed: &CollapsedGroups,
+        columns: u32,
+    ) -> Self {
         let model: Self = glib::Object::new();
         let imp = model.imp();
         imp.items
@@ -275,6 +336,9 @@ impl GroupedSelection {
             .expect("a new model has no items yet");
         if imp.title.set(title).is_err() {
             unreachable!("a new model has no titles yet");
+        }
+        if imp.collapsed.set(Rc::clone(collapsed)).is_err() {
+            unreachable!("a new model has no collapsed groups yet");
         }
         model.relayout(columns, None, false);
         let on_items = items.connect_items_changed(glib::clone!(
@@ -347,15 +411,90 @@ impl GroupedSelection {
         self.imp().anchor.get()
     }
 
-    /// The first item at or after `slot` and how many items lie in the
-    /// `count` slots from it; `None` when they hold none.
-    fn items_in(&self, slot: u32, count: u32) -> Option<(u32, u32)> {
-        let layout = self.imp().layout.borrow();
-        let layout = layout.as_ref()?;
-        let end = slot.saturating_add(count).min(layout.len());
-        let first = (slot..end).find_map(|slot| layout.item_at(slot))?;
-        let last = (slot..end).rev().find_map(|slot| layout.item_at(slot))?;
-        Some((first, last - first + 1))
+    /// The listing positions of the items the `count` slots from `slot`
+    /// show: none of a collapsed group's.
+    fn items_in(&self, slot: u32, count: u32) -> Vec<u32> {
+        self.imp()
+            .layout
+            .borrow()
+            .as_ref()
+            .map(|layout| layout.items_in_slots(slot, count))
+            .unwrap_or_default()
+    }
+
+    /// Selects the items at the listing's `positions`, and no other with
+    /// `unselect_rest`.
+    pub(crate) fn select_items(&self, positions: &[u32], unselect_rest: bool) -> bool {
+        let selected = gtk::Bitset::new_empty();
+        for position in positions {
+            selected.add(*position);
+        }
+        let mask = if unselect_rest {
+            gtk::Bitset::new_range(0, self.items().n_items())
+        } else {
+            selected.copy()
+        };
+        if mask.is_empty() {
+            return false;
+        }
+        self.items().set_selection(&selected, &mask)
+    }
+
+    /// Selects the items the slots show from the item at `from` to the
+    /// item at `to`, passing over collapsed groups, and no other with
+    /// `unselect_rest`: a Shift range.
+    pub(crate) fn select_shown_between(&self, from: u32, to: u32, unselect_rest: bool) {
+        let shown = self
+            .imp()
+            .layout
+            .borrow()
+            .as_ref()
+            .map(|layout| layout.shown_between(from, to))
+            .unwrap_or_default();
+        self.select_items(&shown, unselect_rest);
+    }
+
+    /// The titles of the collapsed groups.
+    fn collapsed(&self) -> &CollapsedGroups {
+        self.imp()
+            .collapsed
+            .get()
+            .expect("GroupedSelection::new sets the collapsed groups")
+    }
+
+    /// Collapses the group titled `title`, or expands it with `collapsed`
+    /// false. Its items keep their selection.
+    pub(crate) fn set_collapsed(&self, title: &str, collapsed: bool) {
+        let changed = {
+            let mut titles = self.collapsed().borrow_mut();
+            if collapsed {
+                titles.insert(title.to_owned())
+            } else {
+                titles.remove(title)
+            }
+        };
+        if changed {
+            self.regroup();
+        }
+    }
+
+    /// Collapses every group, or expands every one with `collapsed` false.
+    pub(crate) fn set_all_collapsed(&self, collapsed: bool) {
+        let titles: Vec<String> = self
+            .imp()
+            .layout
+            .borrow()
+            .as_ref()
+            .map(|layout| layout.groups().iter().map(|group| group.title.clone()).collect())
+            .unwrap_or_default();
+        {
+            let mut set = self.collapsed().borrow_mut();
+            set.clear();
+            if collapsed {
+                set.extend(titles);
+            }
+        }
+        self.regroup();
     }
 
     /// The object the grid shows in `slot`.
@@ -371,7 +510,7 @@ impl GroupedSelection {
             Slot::Heading(_) => &group_objects.heading,
             Slot::Rule => group_objects.rules.get(usize::try_from(offset).ok()? - 1)?,
             Slot::Blank => {
-                let past = offset - layout.columns() - layout.groups()[group].len();
+                let past = offset - layout.columns() - layout.groups()[group].shown();
                 group_objects.blanks.get(usize::try_from(past).ok()?)?
             }
         };
@@ -393,7 +532,8 @@ impl GroupedSelection {
                     .unwrap_or_default()
             })
             .collect();
-        let layout = SlotLayout::new(group_runs(titles.iter().map(String::as_str)), columns);
+        let runs = collapsed_runs(titles.iter().map(String::as_str), &self.collapsed().borrow());
+        let layout = SlotLayout::new(runs, columns);
         self.keep_objects(&layout);
         let old = imp.layout.replace(Some(layout));
         if !notify {
@@ -432,14 +572,20 @@ impl GroupedSelection {
             .groups()
             .iter()
             .map(|group| {
-                let mut objects = kept.remove(&group.title).unwrap_or_else(GroupObjects::new);
+                let mut objects = kept
+                    .remove(&group.title)
+                    .unwrap_or_else(|| GroupObjects::new(self, &group.title));
                 let rules = usize::try_from(columns - 1).unwrap_or_default();
-                let blanks = usize::try_from((columns - group.len() % columns) % columns).unwrap_or_default();
+                let blanks =
+                    usize::try_from((columns - group.shown() % columns) % columns).unwrap_or_default();
                 GroupObjects::fit(&mut objects.rules, rules, SlotKind::Rule);
                 GroupObjects::fit(&mut objects.blanks, blanks, SlotKind::Blank);
                 let text = header_text(&group.title, group.len());
                 if objects.heading.text() != text {
                     objects.heading.set_text(text);
+                }
+                if objects.heading.collapsed() != group.collapsed {
+                    objects.heading.set_collapsed(group.collapsed);
                 }
                 objects
             })

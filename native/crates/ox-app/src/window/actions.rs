@@ -232,6 +232,7 @@ impl BrowserWindow {
     }
 
     fn install_selection_actions(&self) {
+        self.install_group_heading_actions();
         self.add_action_entries([
             plain_action(WindowAction::Open, BrowserWindow::open_selection),
             plain_action(WindowAction::SelectAll, |window| {

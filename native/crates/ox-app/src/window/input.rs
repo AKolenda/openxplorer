@@ -247,10 +247,18 @@ impl BrowserWindow {
     /// several is never opened.
     pub(super) fn connect_view_activation(&self) {
         for pane in self.folder_panes() {
-            pane.details().column_view().connect_activate(glib::clone!(
+            let details = pane.details();
+            details.column_view().connect_activate(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, position| window.activate_from_view(position)
+                #[weak]
+                details,
+                move |_, row| {
+                    // Grouped, the rows list headings among the items.
+                    if let Some(position) = details.item_at(row) {
+                        window.activate_from_view(position);
+                    }
+                }
             ));
             let icons = pane.icon_view();
             icons.grid().connect_activate(glib::clone!(
@@ -471,6 +479,9 @@ impl BrowserWindow {
         if is_plain_tab(key, modifiers) && self.tab_to_other_pane() {
             return glib::Propagation::Stop;
         }
+        if let Some(handled) = self.group_heading_key(key, modifiers) {
+            return handled;
+        }
         if let Some(handled) = self.grouped_grid_key(key, modifiers) {
             return handled;
         }
@@ -587,9 +598,13 @@ impl BrowserWindow {
     }
 
     /// Whether (`x`, `y`) in `view` is its blank space: inside the list,
-    /// not on an item, and not on the column titles. The empty part of an
+    /// not on an item or a group's heading, and not on the column titles. The empty part of an
     /// unselected details row is blank space too ([`Self::is_beside_item`]).
     pub(super) fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
+        // A group's heading collapses its group on a click (VIEW-022).
+        if super::group_headings::heading_at(view, x, y).is_some() {
+            return false;
+        }
         if self.folder_pane().owners().position_at(view, x, y).is_some() {
             return self.is_beside_item(view, x, y);
         }

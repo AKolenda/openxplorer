@@ -747,14 +747,18 @@ fn scroll_to_the_middle(test: &TestWindow) {
 /// the list's own groups, so it does not depend on the window's size, the
 /// row height or how many rows a group has.
 fn scroll_to_a_heading_in_the_middle(test: &TestWindow, by: &str) {
-    let column_view = test.window.folder_pane().details().column_view().clone();
-    let model = column_view.model().expect("the details view lists the folder");
-    let sections = model
-        .dynamic_cast_ref::<gtk::SectionModel>()
-        .expect("a grouped list has sections");
-    let middle = model.n_items() / 2;
-    let (start, end) = sections.section(middle);
-    let group_start = if end < model.n_items() { end } else { start };
+    let details = test.window.folder_pane().details();
+    let column_view = details.column_view().clone();
+    let layout = details
+        .grouped()
+        .and_then(|grouped| grouped.layout())
+        .expect("a grouped list has headings");
+    let middle = layout.len() / 2;
+    let group_start = (0..layout.groups().len())
+        .filter_map(|index| layout.heading_slot(index))
+        .find(|slot| *slot >= middle)
+        .or_else(|| layout.heading_slot(0))
+        .expect("a heading");
     column_view.scroll_to(group_start, None, gtk::ListScrollFlags::NONE, None);
     wait_for_frames(&test.window, 3);
     // Then up by half a view, so the heading sits in the middle of the
@@ -778,17 +782,14 @@ fn turn_groups_on_and_off(test: &TestWindow, choices: &[&str]) {
             // Headings on screen in the middle of the list: what GTK 4.22
             // needs to abort when the groups are turned off.
             scroll_to_a_heading_in_the_middle(test, by);
-            let details = test.window.folder_pane().details().column_view().clone();
-            assert!(
-                details.header_factory().is_some(),
-                "round {round}: grouped by {by}"
-            );
+            let details = test.window.folder_pane().details();
+            assert!(details.heads_groups(), "round {round}: grouped by {by}");
             assert_eq!(test.action_state("group-by").as_deref(), Some(*by));
 
             test.activate("group-by", Some("none"));
             wait_for_frames(&test.window, 3);
             assert!(headings(test).is_empty(), "round {round}: {by} turned off");
-            assert!(details.header_factory().is_none(), "round {round}: no headings");
+            assert!(!details.heads_groups(), "round {round}: no headings");
             let shown = test.names().len();
             assert!(
                 shown >= listed,

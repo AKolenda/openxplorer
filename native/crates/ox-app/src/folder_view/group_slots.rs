@@ -10,6 +10,11 @@
 //! and blanks that fill its last row, so the next group starts a row.
 //! [`SlotLayout`] maps the grid's slots to the items of the listing and
 //! back, and finds the item Up and Down go to across the groups.
+//!
+//! Details lists the same slots in one column. A collapsed group keeps its
+//! heading and lists none of its items, as Windows 11 collapses a group
+//! under its chevron: its items stay in the listing, and selected, but no
+//! slot shows them, so the keys and a Shift range pass them by.
 
 /// What one slot of the grid shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,12 +29,14 @@ pub(crate) enum Slot {
     Blank,
 }
 
-/// One group of the listing: its title and the positions of its items.
+/// One group of the listing: its title, the positions of its items and
+/// whether it is collapsed under its heading.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GroupRun {
     pub title: String,
     pub start: u32,
     pub end: u32,
+    pub collapsed: bool,
 }
 
 impl GroupRun {
@@ -37,6 +44,23 @@ impl GroupRun {
     pub(crate) fn len(&self) -> u32 {
         self.end - self.start
     }
+
+    /// How many of its items the group shows: none while collapsed.
+    pub(crate) fn shown(&self) -> u32 {
+        if self.collapsed {
+            0
+        } else {
+            self.len()
+        }
+    }
+}
+
+/// Where the keyboard is in a grouped listing: on an item, or on the
+/// heading of the group with this index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GroupTarget {
+    Item(u32),
+    Heading(usize),
 }
 
 /// Splits the titles of a listing's items, in order, into runs of equal
@@ -50,8 +74,22 @@ pub(crate) fn group_runs<'a>(titles: impl IntoIterator<Item = &'a str>) -> Vec<G
                 title: title.to_owned(),
                 start: position,
                 end: position + 1,
+                collapsed: false,
             }),
         }
+    }
+    runs
+}
+
+/// [`group_runs`] with the groups whose titles `collapsed` holds
+/// collapsed.
+pub(crate) fn collapsed_runs<'a>(
+    titles: impl IntoIterator<Item = &'a str>,
+    collapsed: &std::collections::HashSet<String>,
+) -> Vec<GroupRun> {
+    let mut runs = group_runs(titles);
+    for run in &mut runs {
+        run.collapsed = collapsed.contains(&run.title);
     }
     runs
 }
@@ -95,7 +133,7 @@ impl SlotLayout {
         let mut len = 0;
         for group in &groups {
             starts.push(len);
-            let rows = group.len().div_ceil(columns);
+            let rows = group.shown().div_ceil(columns);
             len += columns * (1 + rows);
         }
         Self {
@@ -144,7 +182,7 @@ impl SlotLayout {
             Slot::Heading(index)
         } else if offset < self.columns {
             Slot::Rule
-        } else if offset - self.columns < group.len() {
+        } else if offset - self.columns < group.shown() {
             Slot::Item(group.start + offset - self.columns)
         } else {
             Slot::Blank
@@ -159,11 +197,105 @@ impl SlotLayout {
         }
     }
 
-    /// The slot showing the item at `position` of the listing.
+    /// The slot showing the item at `position` of the listing; `None`
+    /// while its group is collapsed.
     pub(crate) fn slot_of(&self, position: u32) -> Option<u32> {
-        let index = self.groups.partition_point(|group| group.end <= position);
-        let group = self.groups.get(index).filter(|group| group.start <= position)?;
+        let index = self.group_of(position)?;
+        let group = &self.groups[index];
+        if group.collapsed {
+            return None;
+        }
         Some(self.starts[index] + self.columns + position - group.start)
+    }
+
+    /// The index of the group holding the item at `position`.
+    pub(crate) fn group_of(&self, position: u32) -> Option<usize> {
+        let index = self.groups.partition_point(|group| group.end <= position);
+        self.groups
+            .get(index)
+            .filter(|group| group.start <= position)
+            .map(|_| index)
+    }
+
+    /// The slot of the heading of the group at `index`.
+    pub(crate) fn heading_slot(&self, index: usize) -> Option<u32> {
+        self.starts.get(index).copied()
+    }
+
+    /// Whether a slot shows the item at `position`: its group is not
+    /// collapsed.
+    pub(crate) fn shows(&self, position: u32) -> bool {
+        self.slot_of(position).is_some()
+    }
+
+    /// The listing positions of the items the slots show, in order.
+    pub(crate) fn shown_items(&self) -> impl Iterator<Item = u32> + '_ {
+        self.groups
+            .iter()
+            .filter(|group| !group.collapsed)
+            .flat_map(|group| group.start..group.end)
+    }
+
+    /// The shown item before (`forward` false) or after `position`,
+    /// passing over collapsed groups.
+    pub(crate) fn item_step(&self, position: u32, forward: bool) -> Option<u32> {
+        if forward {
+            self.shown_items().find(|shown| *shown > position)
+        } else {
+            self.shown_items().filter(|shown| *shown < position).last()
+        }
+    }
+
+    /// The first (`last` false) or last item the slots show.
+    pub(crate) fn end_item(&self, last: bool) -> Option<u32> {
+        if last {
+            self.shown_items().last()
+        } else {
+            self.shown_items().next()
+        }
+    }
+
+    /// The listing positions the slots `slot..slot + count` show.
+    pub(crate) fn items_in_slots(&self, slot: u32, count: u32) -> Vec<u32> {
+        let end = slot.saturating_add(count).min(self.len);
+        (slot..end).filter_map(|slot| self.item_at(slot)).collect()
+    }
+
+    /// The listing positions the slots show from the item at `from` to
+    /// the item at `to`, whichever comes first.
+    pub(crate) fn shown_between(&self, from: u32, to: u32) -> Vec<u32> {
+        let (low, high) = (from.min(to), from.max(to));
+        self.shown_items()
+            .filter(|position| (low..=high).contains(position))
+            .collect()
+    }
+
+    /// Where Up (`down` false) or Down goes from `from`, a step of one
+    /// row: the item in `column` of the next row of items, as
+    /// [`Self::row_step`], but stopping at a heading between them, as
+    /// Windows 11 gives a group's heading the keyboard on the way. From a
+    /// heading, Down goes to its group's first row, or to the next heading
+    /// while the group is collapsed, and Up to the previous group's last
+    /// row, or its heading while that one is collapsed.
+    pub(crate) fn row_target(&self, from: GroupTarget, column: u32, down: bool) -> Option<GroupTarget> {
+        let mut row = match from {
+            GroupTarget::Item(position) => self.slot_of(position)? / self.columns,
+            GroupTarget::Heading(index) => self.heading_slot(index)? / self.columns,
+        };
+        let rows = self.len / self.columns;
+        loop {
+            row = if down {
+                Some(row + 1).filter(|row| *row < rows)?
+            } else {
+                row.checked_sub(1)?
+            };
+            if let Some(Slot::Heading(index)) = self.slot(row * self.columns) {
+                return Some(GroupTarget::Heading(index));
+            }
+            if let Some(to) = self.item_in_row(row, column) {
+                return Some(GroupTarget::Item(to));
+            }
+        }
     }
 
     /// The item at `column` of the slot row `row`, or its last item when
@@ -359,5 +491,77 @@ mod tests {
         assert_eq!(old.changes_to(&old, None), None);
         let wider = SlotLayout::new(listing(), 4);
         assert_eq!(old.changes_to(&wider, None), Some((3, 18, 21)));
+    }
+
+    /// A collapsed group keeps its heading row and shows none of its
+    /// items: no slot holds them, so the rows after it move up, and Down
+    /// rests on each heading on the way.
+    ///
+    /// parity: VIEW-022, VIEW-071
+    #[test]
+    fn a_collapsed_group_keeps_only_its_heading() {
+        use Slot::{Blank, Heading, Item, Rule};
+        let titles = [
+            "Today",
+            "Today",
+            "Today",
+            "Yesterday",
+            "Earlier this week",
+            "Earlier this week",
+        ];
+        let collapsed = std::collections::HashSet::from(["Today".to_owned()]);
+        let layout = SlotLayout::new(collapsed_runs(titles, &collapsed), 3);
+        let slots: Vec<Slot> = (0..layout.len()).filter_map(|slot| layout.slot(slot)).collect();
+        assert_eq!(
+            slots,
+            [
+                Heading(0),
+                Rule,
+                Rule,
+                Heading(1),
+                Rule,
+                Rule,
+                Item(3),
+                Blank,
+                Blank,
+                Heading(2),
+                Rule,
+                Rule,
+                Item(4),
+                Item(5),
+                Blank,
+            ]
+        );
+        assert_eq!(layout.slot_of(1), None, "Today's items are hidden");
+        assert!(!layout.shows(0) && layout.shows(3));
+        assert_eq!(layout.group_of(1), Some(0));
+        assert_eq!(layout.shown_items().collect::<Vec<_>>(), [3, 4, 5]);
+        assert_eq!(layout.item_step(3, false), None, "nothing shown before");
+        assert_eq!(layout.end_item(false), Some(3));
+        assert_eq!(layout.shown_between(5, 0), [3, 4, 5], "a Shift range skips Today");
+        assert_eq!(layout.items_in_slots(0, layout.len()), [3, 4, 5]);
+        let down = |from| layout.row_target(from, 0, true);
+        assert_eq!(down(GroupTarget::Heading(0)), Some(GroupTarget::Heading(1)));
+        assert_eq!(down(GroupTarget::Heading(1)), Some(GroupTarget::Item(3)));
+        assert_eq!(down(GroupTarget::Item(3)), Some(GroupTarget::Heading(2)));
+        assert_eq!(
+            layout.row_target(GroupTarget::Item(3), 0, false),
+            Some(GroupTarget::Heading(1))
+        );
+    }
+
+    /// Details lists the groups in one column: a collapsed group is its
+    /// heading row alone.
+    ///
+    /// parity: VIEW-022
+    #[test]
+    fn details_lists_a_collapsed_group_as_its_heading_alone() {
+        let collapsed = std::collections::HashSet::from(["Yesterday".to_owned()]);
+        let titles = ["Today", "Today", "Today", "Yesterday", "Earlier this week"];
+        let layout = SlotLayout::new(collapsed_runs(titles, &collapsed), 1);
+        assert_eq!(layout.len(), 3 + 3 + 1);
+        assert_eq!(layout.heading_slot(1), Some(4));
+        assert_eq!(layout.slot(5), Some(Slot::Heading(2)));
+        assert_eq!(layout.item_step(2, true), Some(4), "past Yesterday's item");
     }
 }

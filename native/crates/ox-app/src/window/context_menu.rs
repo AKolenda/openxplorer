@@ -132,6 +132,10 @@ impl BrowserWindow {
                 gesture.set_state(gtk::EventSequenceState::Claimed);
                 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
                 let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
+                if let Some(heading) = super::group_headings::heading_at(&view, x, y) {
+                    window.open_heading_menu(&view, &point, &heading);
+                    return;
+                }
                 let style = menu_style_for(window.preferred_menu_style(), gesture.current_event_state());
                 window.open_context_menu(&view, &point, style);
             }
@@ -150,6 +154,10 @@ impl BrowserWindow {
     /// A right-click on an unselected item selects only it; on blank space
     /// it clears the selection.
     fn select_for_context_menu(&self, view: &gtk::Widget, x: f64, y: f64) {
+        // A group heading's menu leaves the selection alone.
+        if super::group_headings::heading_at(view, x, y).is_some() {
+            return;
+        }
         let model = self.folder_pane().model();
         match self.folder_pane().owners().position_at(view, x, y) {
             Some(position) if !model.selection().is_selected(position) => model.select_only(position),
@@ -164,6 +172,7 @@ impl BrowserWindow {
         let Some(popover) = context_menu_of(view) else {
             return;
         };
+        self.imp().menu_heading.replace(None);
         let mut menu = self.menu_for_selection(style);
         let mut extras = Vec::new();
         // Service actions run programs on files: the Recycle Bin's items
@@ -188,6 +197,23 @@ impl BrowserWindow {
         }
         popover.set_entries(menu.entries);
         popover.set_style_and_strip(style, menu.strip);
+        popover.set_pointing_to(Some(point));
+        popover.popup();
+    }
+
+    /// Opens the menu of a group `heading` (VIEW-022), pointing at
+    /// `point` in `view`.
+    fn open_heading_menu(
+        &self,
+        view: &gtk::Widget,
+        point: &gdk::Rectangle,
+        heading: &crate::folder_view::grid::GroupSlot,
+    ) {
+        let Some(popover) = context_menu_of(view) else {
+            return;
+        };
+        popover.set_entries(self.heading_menu_for(heading));
+        popover.set_style_and_strip(MenuStyle::Classic, Vec::new());
         popover.set_pointing_to(Some(point));
         popover.popup();
     }
@@ -309,6 +335,11 @@ impl BrowserWindow {
     /// selected item, or near the top of the view without one.
     fn open_keyboard_menu(&self, style: MenuStyle) {
         let view = self.folder_pane().input_widget();
+        if let Some(heading) = self.focused_heading() {
+            let row = GtkWindowExt::focus(self).and_then(|focus| focus.compute_bounds(&view));
+            self.open_heading_menu(&view, &keyboard_menu_anchor(row), &heading);
+            return;
+        }
         let selected = self.folder_pane().model().first_selected();
         if let Some(position) = selected {
             self.folder_pane().reveal(position);

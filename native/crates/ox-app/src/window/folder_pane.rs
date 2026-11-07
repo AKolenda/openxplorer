@@ -23,7 +23,7 @@ use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
-use crate::folder_view::grid::IconView;
+use crate::folder_view::grid::{GroupedSelection, IconView};
 use crate::folder_view::model::FolderModel;
 use crate::text_size::TextSize;
 
@@ -407,15 +407,14 @@ impl FolderPane {
         let switching_the_listing = self.page() == Some(PanePage::Listing) && self.view_has_focus();
         let parts = self.parts();
         let selection = parts.model.selection();
-        let column_view = parts.details.column_view();
         match view.grid_layout() {
             None => {
                 parts.icon_view.set_model(None);
-                column_view.set_model(Some(selection));
+                parts.details.set_model(Some(selection));
             }
             Some(layout) => {
                 parts.icon_view.set_layout(layout);
-                column_view.set_model(None::<&gtk::MultiSelection>);
+                parts.details.set_model(None);
                 parts.icon_view.set_model(Some(selection));
                 parts.icon_view.fit_lines();
             }
@@ -595,6 +594,15 @@ impl FolderPane {
         rows.grab_focus();
     }
 
+    /// The grouped model the visible view lists, while it heads the
+    /// folder's groups: Details, Tiles or Content of a grouped folder.
+    pub(super) fn grouped(&self) -> Option<GroupedSelection> {
+        match self.view() {
+            FolderView::Details => self.details().grouped(),
+            _ => self.icon_view().grouped(),
+        }
+    }
+
     /// Scrolls to `position` and gives it keyboard focus.
     pub(super) fn reveal(&self, position: u32) {
         self.scroll_to(position, gtk::ListScrollFlags::FOCUS, None);
@@ -626,10 +634,7 @@ impl FolderPane {
             self.parts().top_keeper.let_go();
         }
         match self.view() {
-            FolderView::Details => self
-                .details()
-                .column_view()
-                .scroll_to(position, None, flags, scroll),
+            FolderView::Details => self.details().scroll_to(position, flags, scroll),
             _ => {
                 self.icon_view().scroll_to(position, flags, scroll);
             }

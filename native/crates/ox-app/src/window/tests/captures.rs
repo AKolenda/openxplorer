@@ -6,7 +6,8 @@
 //! `native-browsing-narrow.png`, `native-browsing-dark.png`,
 //! `native-tabs-3-light.png`, `native-tabs-3-dark.png`,
 //! `native-this-pc.png`, `native-network.png`, `native-menu-new-*.png`,
-//! `native-menu-context-*.png` and `native-states-*.png` there. Without
+//! `native-menu-context-*.png`, `native-states-*.png` and
+//! `group-collapse-{details,tiles,content}-{light,dark}.png` there. Without
 //! it, they only prove the window lays out in both themes and on both
 //! pages.
 
@@ -62,6 +63,54 @@ fn three_tabs_are_captured_light_and_dark() {
     capture(&test.window, "native-tabs-3-light.png");
     test.activate("theme", Some("dark"));
     capture(&test.window, "native-tabs-3-dark.png");
+}
+
+/// Details, Tiles and Content of a folder grouped by type, with its
+/// Markdown files' group collapsed under its heading, in both themes.
+///
+/// parity: VIEW-022, VIEW-071
+#[gtk::test]
+fn grouped_views_with_a_collapsed_group_are_captured() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::empty();
+    std::fs::create_dir(fixture.path("Photos")).expect("a fixture folder");
+    for name in [
+        "Budget 2026.ods",
+        "Launch plan.md",
+        "Meeting notes.txt",
+        "Packing list.txt",
+        "Roadmap.txt",
+        "Brochure draft.pdf",
+        "Release notes.md",
+    ] {
+        fixture.write(name);
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(1200, 760);
+    test.activate("group-by", Some("type"));
+    for view in ["details", "tiles", "content"] {
+        test.activate("view", Some(view));
+        let grouped = test.window.folder_pane().grouped().expect("a grouped view");
+        let model = test.window.folder_pane().model();
+        let launch = model
+            .position_of_uri(&fixture.uri_of("Launch plan.md"))
+            .expect("Launch plan is listed");
+        let layout = grouped.layout().expect("laid out");
+        let notes = layout.groups()[layout.group_of(launch).expect("in a group")]
+            .title
+            .clone();
+        grouped.set_collapsed(&notes, true);
+        assert!(!grouped.layout().expect("laid out again").shows(launch), "{view}");
+        if let Some(budget) = model.position_of_uri(&fixture.uri_of("Budget 2026.ods")) {
+            model.select_only(budget);
+        }
+        for theme in THEMES {
+            test.activate("theme", Some(theme));
+            wait_for(TRANSITION_TIME);
+            capture(&test.window, &format!("group-collapse-{view}-{theme}.png"));
+        }
+        grouped.set_collapsed(&notes, false);
+    }
 }
 
 #[gtk::test]
