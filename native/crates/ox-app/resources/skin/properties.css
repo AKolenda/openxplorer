@@ -160,9 +160,13 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties .properties-group-content { padding: 6px 10px 10px 10px; border-spacing: 6px; }
 /* The title sits on the box's top line, as Windows draws a group box: it
    is lifted by half its height onto the line, whose stroke its own
-   background hides behind the text. Folder Options keeps its own rules. */
+   background hides behind the text. The lift (half the title's line, past
+   the box's 1-pixel line) and the room above the box are in em, so they
+   follow the text size: 9 and 4 pixels at 100 %, 18 and 8 at 200 %.
+   Folder Options keeps its own rules. */
+window.ox-properties:not(.ox-folder-options) frame.properties-group { margin-top: 0.34em; }
 window.ox-properties:not(.ox-folder-options) frame.properties-group > label {
-  margin: -8px 4px 0 4px;
+  margin: -0.75em 4px 0 4px;
   padding: 0 3px;
   background-color: @ox_bg;
 }

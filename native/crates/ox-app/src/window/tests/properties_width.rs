@@ -509,11 +509,12 @@ fn every_kind_of_properties_draws_windows_dialog_text() {
                 let text = label.text();
                 let (size, _) = text_size_and_line(label);
                 assert!((size - 12.0).abs() < 0.01, "{what}: {text:?} is {size} pixels");
-                // Only a one-line field of a value as long as a path
-                // (Location, Object name) may end in "…", with the whole
+                // Only a value as long as a path may end in "…": a
+                // one-line field (Location, Object name) with the whole
                 // value as its tooltip, as Windows clips its read-only
-                // fields.
-                let field = label.tooltip_text().as_deref() == Some(text.as_str());
+                // fields, or a path in Details, whose length here
+                // follows the fixture's temporary folder.
+                let field = label.tooltip_text().as_deref() == Some(text.as_str()) || text.starts_with('/');
                 assert!(
                     field || !label.layout().is_ellipsized(),
                     "{what}: {text:?} ends in \"…\""
@@ -572,6 +573,49 @@ fn every_kind_of_properties_draws_windows_dialog_text() {
     let own = (size - browser).abs() < 0.01 || (size - 11.0).abs() < 0.01;
     assert!(own, "Folder Options keeps its own size: {size} pixels");
     options.close();
+}
+
+/// A group box's title sits centred on the box's top line, as Windows
+/// draws it, at every text size: the lift follows the title's height, so
+/// the title neither hangs below the line at 200 % nor floats above it at
+/// 80 %.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn group_titles_sit_on_the_box_line_at_every_text_size() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Holiday 2025")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    let skin = crate::test_support::harness::skin();
+    let before = skin.text_size();
+    test.select_named("Holiday 2025");
+    let window = properties_of_selection(&test, "Holiday 2025 Properties");
+    window.select_tab("customize");
+    let mut misplaced = Vec::new();
+    for percent in ox_core::settings::TEXT_SIZES {
+        skin.set_text_size(crate::text_size::TextSize::from_percent(percent));
+        wait_for_frames(&window, 4);
+        let groups: Vec<gtk::Frame> = descendants::<gtk::Frame>(&window)
+            .into_iter()
+            .filter(|frame| frame.is_mapped() && frame.has_css_class("properties-group"))
+            .collect();
+        assert_eq!(groups.len(), 3, "{percent}%: Customize's three group boxes");
+        for frame in groups {
+            let title = frame.label_widget().expect("a title");
+            let line = frame.compute_bounds(&window).expect("the box").y();
+            let bounds = title.compute_bounds(&window).expect("the title");
+            let centre = bounds.y() + bounds.height() / 2.0;
+            if (centre - line).abs() > 1.0 {
+                misplaced.push(format!(
+                    "{percent}%: {:?} centred at {centre}, line at {line}",
+                    frame.label()
+                ));
+            }
+        }
+    }
+    skin.set_text_size(before);
+    window.close();
+    assert!(misplaced.is_empty(), "titles off the line: {misplaced:?}");
 }
 
 /// Every kind of Properties, light and dark, for review side by side with
