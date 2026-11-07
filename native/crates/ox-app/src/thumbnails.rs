@@ -37,6 +37,7 @@ use ox_core::entry::{cached_thumbnail, CachedThumbnail, Entry, ThumbnailFlavor, 
 use ox_core::settings::{ViewOptions, PREVIEW_SIZE_LIMIT};
 
 pub(crate) use slots::Slots;
+pub(crate) use thumbnailers::pdf_pages;
 use thumbnailers::Catalogue;
 use writer::Source;
 

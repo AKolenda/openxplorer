@@ -32,3 +32,13 @@
   padding: 10px 12px;
 }
 .details .detail-hint image { color: @ox_muted; margin-top: 1px; }
+/* The Preview pane's file contents (VIEW-070; details_pane/contents.rs):
+   "No preview available." in the middle of the pane, a text file's
+   beginning in a fixed-width font on the pane's own background, and a
+   PDF's pages on white with a thin edge, as Windows 11's Preview pane
+   draws them. The text keeps the window's text size. */
+.details .preview-message { color: @ox_text; }
+.details textview.preview-text,
+.details textview.preview-text text { background-color: @ox_bg; color: @ox_text; font-family: monospace; }
+.details textview.preview-text text selection { background-color: @ox_text_selection_bg; color: @ox_text_selection_fg; }
+.details .preview-page { background-color: #ffffff; border: 1px solid @ox_border; }

@@ -26,6 +26,8 @@ use crate::i18n::message_id;
 use crate::icons::Art;
 use crate::media_details::MediaKind;
 
+use super::preview_page::{preview_page, PreviewPage, PreviewRules, NO_PREVIEW};
+
 /// The keys of the rows the pane's menu can turn off (PROP-010), which
 /// are also the names the settings keep them under.
 pub(in crate::window) mod keys {
@@ -208,6 +210,8 @@ pub(in crate::window) struct PaneContent {
     pub media: Option<MediaPreview>,
     /// The file whose own details are read and added to the rows.
     pub metadata: Option<MetadataRequest>,
+    /// What the Preview pane shows (VIEW-070).
+    pub page: PreviewPage,
 }
 
 /// What [`pane_content`] reads.
@@ -226,15 +230,19 @@ pub(in crate::window) struct PaneFacts<'a> {
     pub network: &'a [NetworkLocation],
     /// Dates show the day only; else the time too (PROP-010).
     pub condensed_dates: bool,
+    /// Whether the Preview pane may read the folder's files.
+    pub preview_rules: PreviewRules,
 }
 
 /// What the pane shows for the selection in a folder.
 pub(in crate::window) fn pane_content(facts: &PaneFacts<'_>) -> PaneContent {
-    match facts.selection {
+    let mut content = match facts.selection {
         [] => folder_content(facts),
         [item] => item_content(item, facts),
         several => several_content(several, facts),
-    }
+    };
+    content.page = preview_page(facts.selection, facts.preview_rules);
+    content
 }
 
 fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
@@ -276,6 +284,7 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
         properties,
         media: MediaPreview::of(item),
         metadata: MetadataRequest::of(item),
+        page: PreviewPage::Message(NO_PREVIEW),
     }
 }
 
@@ -298,6 +307,7 @@ fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
         properties,
         media: None,
         metadata: None,
+        page: PreviewPage::Message(NO_PREVIEW),
     }
 }
 
@@ -323,6 +333,7 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
         properties: Vec::new(),
         media: None,
         metadata: None,
+        page: PreviewPage::Message(NO_PREVIEW),
     }
 }
 
@@ -398,6 +409,10 @@ mod tests {
             locations: &locations,
             network: &network,
             condensed_dates: false,
+            preview_rules: PreviewRules {
+                remote: false,
+                remote_previews: false,
+            },
         })
     }
 

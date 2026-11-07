@@ -492,6 +492,95 @@ pub(super) fn write_thumbnail(
     writer::save_thumbnail(&job.cache_dir, &source, job.flavor, &picture).ok()
 }
 
+/// The poppler program that draws a PDF's pages for the Preview pane.
+const PDF_PROGRAM: &str = "pdftoppm";
+
+/// The name of the pages [`PDF_PROGRAM`] writes in its folder, before
+/// each page's number.
+const PDF_PAGE: &str = "page";
+
+/// The sandbox the Preview pane draws PDF pages in, looked for once per
+/// run: `None` when bubblewrap or poppler's `pdftoppm` is missing, or
+/// cannot run here, so no page is drawn outside a sandbox.
+static PDF_SANDBOX: OnceLock<Option<Sandbox>> = OnceLock::new();
+
+/// The pages `first` to `last` of the local PDF at `path`, drawn
+/// `width` pixels wide by poppler's `pdftoppm` in the thumbnailers'
+/// sandbox ([`Sandbox`]: no network, no session bus, the PDF alone of the
+/// user's files) and read back with the care a thumbnailer's picture is
+/// ([`read_picture`]). Fewer pages than asked for means the document
+/// ended; `None` when none could be drawn, nothing draws PDFs here, or
+/// `cancellation` was cancelled. Blocks: run it off the main thread.
+pub(crate) fn pdf_pages(
+    path: &Path,
+    first: u32,
+    last: u32,
+    width: i32,
+    cancellation: &gio::Cancellable,
+) -> Option<Vec<Pixbuf>> {
+    let sandbox = PDF_SANDBOX.get_or_init(pdf_sandbox).as_ref()?;
+    let workspace = Workspace::new()?;
+    let output = format!("{INSIDE}/{PDF_PAGE}");
+    let (first, last, width) = (first.to_string(), last.to_string(), width.to_string());
+    let words = [
+        PDF_PROGRAM,
+        "-png",
+        "-f",
+        &first,
+        "-l",
+        &last,
+        "-scale-to-x",
+        &width,
+        "-scale-to-y",
+        "-1",
+        "%i",
+        &output,
+    ];
+    let program = Thumbnailer {
+        command: words.iter().map(|word| (*word).to_owned()).collect(),
+        types: Vec::new(),
+    };
+    let command = sandbox.command(&program, path, workspace.path(), 0);
+    run(&command, cancellation)?;
+    // pdftoppm names each page `page-7.png`, its number padded with zeros
+    // to the width of the last page's.
+    let mut pages: Vec<(u32, PathBuf)> = fs::read_dir(workspace.path())
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let number = name
+                .strip_prefix(PDF_PAGE)?
+                .strip_prefix('-')?
+                .strip_suffix(".png")?
+                .parse()
+                .ok()?;
+            Some((number, entry.path()))
+        })
+        .collect();
+    pages.sort_unstable();
+    let edge = i32::try_from(OUTPUT_SIDE_LIMIT).unwrap_or(i32::MAX);
+    let pictures: Vec<Pixbuf> = pages
+        .iter()
+        .map_while(|(_, page)| read_picture(page, edge))
+        .collect();
+    drop(workspace);
+    (!pictures.is_empty() && !cancellation.is_cancelled()).then_some(pictures)
+}
+
+/// The sandbox PDF pages are drawn in, when this computer has `pdftoppm`.
+#[cfg(not(test))]
+fn pdf_sandbox() -> Option<Sandbox> {
+    installed_program(PDF_PROGRAM).then(Sandbox::find).flatten()
+}
+
+/// None in a test, which never starts the programs of the computer it
+/// runs on.
+#[cfg(test)]
+fn pdf_sandbox() -> Option<Sandbox> {
+    None
+}
+
 /// How a desktop thumbnailer is run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Sandbox {

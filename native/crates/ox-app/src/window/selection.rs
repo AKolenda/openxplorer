@@ -16,7 +16,7 @@ use ox_core::location::is_smb_location;
 use crate::folder_view::shown_name::{shown_name, shows_whole};
 use crate::locations::Page;
 
-use super::details_pane::{self, PaneFacts};
+use super::details_pane::{self, PaneFacts, PreviewRules};
 use super::status_bar::StatusSubject;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -212,6 +212,15 @@ impl BrowserWindow {
             locations: &locations,
             network: &network,
             condensed_dates: pane.options().condensed_dates,
+            preview_rules: PreviewRules {
+                remote: self.is_remote_folder(&folder_uri),
+                remote_previews: self
+                    .context()
+                    .settings_data()
+                    .preferences
+                    .view_options
+                    .remote_previews,
+            },
         });
         // One item is named as the file list names it (VIEW-069).
         if let [item] = selection.as_slice() {
