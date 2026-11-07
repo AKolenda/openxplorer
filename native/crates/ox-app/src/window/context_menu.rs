@@ -28,12 +28,14 @@ use crate::integration::{self, ApplicationChoice, Tool};
 use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
-use super::command_bar::{group_by_menu, new_menu, sort_menu, view_menu};
+use super::command_bar::{group_by_menu, new_menu, sort_menu};
 use super::disk_tools::is_installed;
+use super::group_headings::{heading_spot, HeadingSpot};
 use super::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::folder_view::grid::GroupSlot;
 
 use entries::{
     background_menu, classic_look, compact_background_menu, item_menu, recycle_bin_background_menu,
@@ -132,12 +134,16 @@ impl BrowserWindow {
                 gesture.set_state(gtk::EventSequenceState::Claimed);
                 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
                 let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-                if let Some(heading) = super::group_headings::heading_at(&view, x, y) {
-                    window.open_heading_menu(&view, &point, &heading);
-                    return;
-                }
                 let style = menu_style_for(window.preferred_menu_style(), gesture.current_event_state());
-                window.open_context_menu(&view, &point, style);
+                // On a group heading's chevron or title, the menu of the
+                // group's items, headed by the group's commands; the rest
+                // of a heading's row has none, as in Windows 11.
+                let heading = match heading_spot(&view, x, y) {
+                    Some(HeadingSpot::Rest) => return,
+                    Some(spot) => spot.heading().cloned(),
+                    None => None,
+                };
+                window.open_context_menu(&view, &point, style, heading.as_ref());
             }
         ));
         view.add_controller(right_click);
@@ -154,9 +160,19 @@ impl BrowserWindow {
     /// A right-click on an unselected item selects only it; on blank space
     /// it clears the selection.
     fn select_for_context_menu(&self, view: &gtk::Widget, x: f64, y: f64) {
-        // A group heading's menu leaves the selection alone.
-        if super::group_headings::heading_at(view, x, y).is_some() {
-            return;
+        // A right-click on a group heading's chevron or title selects the
+        // group's items, as in Windows 11; the rest of its row nothing.
+        match heading_spot(view, x, y) {
+            Some(HeadingSpot::Rest) => return,
+            Some(spot) => {
+                if let Some(heading) = spot.heading() {
+                    if let Some((model, index)) = heading.model().zip(heading.group_index()) {
+                        model.select_group(index, false, false);
+                    }
+                }
+                return;
+            }
+            None => {}
         }
         let model = self.folder_pane().model();
         match self.folder_pane().owners().position_at(view, x, y) {
@@ -167,13 +183,25 @@ impl BrowserWindow {
     }
 
     /// Opens the menu of the selection, or of the folder without one, in
-    /// `style`, pointing at `point` in `view`.
-    fn open_context_menu(&self, view: &gtk::Widget, point: &gdk::Rectangle, style: MenuStyle) {
+    /// `style`, pointing at `point` in `view`; opened on a group
+    /// `heading`, the group's commands head it (VIEW-022).
+    fn open_context_menu(
+        &self,
+        view: &gtk::Widget,
+        point: &gdk::Rectangle,
+        style: MenuStyle,
+        heading: Option<&GroupSlot>,
+    ) {
         let Some(popover) = context_menu_of(view) else {
             return;
         };
         self.imp().menu_heading.replace(None);
         let mut menu = self.menu_for_selection(style);
+        if let Some(heading) = heading {
+            let mut entries = self.heading_menu_for(heading);
+            entries.append(&mut menu.entries);
+            menu.entries = entries;
+        }
         let mut extras = Vec::new();
         // Service actions run programs on files: the Recycle Bin's items
         // and those inside a ZIP (ARC-026) are not files they can open.
@@ -201,23 +229,6 @@ impl BrowserWindow {
         popover.popup();
     }
 
-    /// Opens the menu of a group `heading` (VIEW-022), pointing at
-    /// `point` in `view`.
-    fn open_heading_menu(
-        &self,
-        view: &gtk::Widget,
-        point: &gdk::Rectangle,
-        heading: &crate::folder_view::grid::GroupSlot,
-    ) {
-        let Some(popover) = context_menu_of(view) else {
-            return;
-        };
-        popover.set_entries(self.heading_menu_for(heading));
-        popover.set_style_and_strip(MenuStyle::Classic, Vec::new());
-        popover.set_pointing_to(Some(point));
-        popover.popup();
-    }
-
     /// What the menu lists for the selection now.
     fn menu_for_selection(&self, style: MenuStyle) -> ContextMenu {
         let items = self.folder_pane().model().selected_items();
@@ -241,7 +252,7 @@ impl BrowserWindow {
                 compact_background_menu(
                     &self.journal_label(JournalDirection::Undo),
                     BackgroundSubmenus {
-                        view: view_menu(),
+                        view: self.background_view_menu(),
                         sort: sort_menu(),
                         group: group_by_menu(),
                         new: new_menu(self.template_menu_entries()),
@@ -255,7 +266,7 @@ impl BrowserWindow {
                     &self.journal_label(JournalDirection::Redo),
                     &self.folder_applications(),
                     BackgroundSubmenus {
-                        view: view_menu(),
+                        view: self.background_view_menu(),
                         sort: sort_menu(),
                         group: group_by_menu(),
                         new: new_menu(self.template_menu_entries()),
@@ -337,7 +348,7 @@ impl BrowserWindow {
         let view = self.folder_pane().input_widget();
         if let Some(heading) = self.focused_heading() {
             let row = GtkWindowExt::focus(self).and_then(|focus| focus.compute_bounds(&view));
-            self.open_heading_menu(&view, &keyboard_menu_anchor(row), &heading);
+            self.open_context_menu(&view, &keyboard_menu_anchor(row), style, Some(&heading));
             return;
         }
         let selected = self.folder_pane().model().first_selected();
@@ -346,7 +357,7 @@ impl BrowserWindow {
         }
         let row = selected.and_then(|position| self.folder_pane().owners().widget_at(position));
         let bounds = row.and_then(|row| row.compute_bounds(&view));
-        self.open_context_menu(&view, &keyboard_menu_anchor(bounds), style);
+        self.open_context_menu(&view, &keyboard_menu_anchor(bounds), style, None);
     }
 
     /// "Show more options": the classic menu where the compact one was.
@@ -355,7 +366,7 @@ impl BrowserWindow {
         let Some(point) = context_menu_of(&view).and_then(|popover| popover.pointing_to().1.into()) else {
             return;
         };
-        self.open_context_menu(&view, &point, MenuStyle::Classic);
+        self.open_context_menu(&view, &point, MenuStyle::Classic, None);
     }
 
     /// The folder menu's "New…", "Sort by" and "View": `entries`, the
@@ -384,7 +395,7 @@ impl BrowserWindow {
                 window.show_menu_in_place(sort_menu());
             }),
             plain_action(WindowAction::ShowViewMenu, |window| {
-                window.show_menu_in_place(view_menu());
+                window.show_menu_in_place(window.background_view_menu());
             }),
             text_action(WindowAction::Unpin, BrowserWindow::unpin),
             plain_action(WindowAction::AddPlace, |window| {
@@ -451,7 +462,7 @@ impl BrowserWindow {
         };
         self.select_for_context_menu(&view, x, y);
         let point = gdk::Rectangle::new(KEYBOARD_MENU_INSET, KEYBOARD_MENU_INSET, 1, 1);
-        self.open_context_menu(&view, &point, self.preferred_menu_style());
+        self.open_context_menu(&view, &point, self.preferred_menu_style(), None);
     }
 
     /// The view's right-button gesture and a point on the item at

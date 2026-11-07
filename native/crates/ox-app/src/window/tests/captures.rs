@@ -7,12 +7,14 @@
 //! `native-tabs-3-light.png`, `native-tabs-3-dark.png`,
 //! `native-this-pc.png`, `native-network.png`, `native-menu-new-*.png`,
 //! `native-menu-context-*.png`, `native-states-*.png` and
-//! `group-collapse-{details,tiles,content}-{light,dark}.png` there. Without
+//! `group-collapse-{details,tiles,content}-{hover,selected,collapsed,menu}-{light,dark}.png`
+//! there. Without
 //! it, they only prove the window lays out in both themes and on both
 //! pages.
 
 use std::time::Duration;
 
+use gtk::glib;
 use gtk::prelude::*;
 
 use super::support::{app_menu, menu_button_with_class};
@@ -65,8 +67,47 @@ fn three_tabs_are_captured_light_and_dark() {
     capture(&test.window, "native-tabs-3-dark.png");
 }
 
-/// Details, Tiles and Content of a folder grouped by type, with its
-/// Markdown files' group collapsed under its heading, in both themes.
+/// Presses `button` once at the middle of `widget` and lets it go, as far
+/// as the visible view's own gestures for that button go.
+fn click_on(test: &TestWindow, widget: &gtk::Widget, button: u32) {
+    let view = test.window.folder_pane().view_widget();
+    #[expect(clippy::cast_precision_loss, reason = "widget sizes are small")]
+    let middle = gtk::graphene::Point::new(widget.width() as f32 / 2.0, widget.height() as f32 / 2.0);
+    let point = widget
+        .compute_point(&view, &middle)
+        .expect("the widget is in the view");
+    let (x, y) = (f64::from(point.x()), f64::from(point.y()));
+    let controllers = view.observe_controllers();
+    let gestures: Vec<gtk::GestureClick> = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+        .filter(|gesture| gesture.button() == button)
+        .collect();
+    for gesture in &gestures {
+        gesture.emit_by_name::<()>("pressed", &[&1_i32, &x, &y]);
+    }
+    for gesture in &gestures {
+        gesture.emit_by_name::<()>("released", &[&1_i32, &x, &y]);
+    }
+}
+
+/// The title of the shown heading whose group is titled `title`.
+fn heading_title(test: &TestWindow, title: &str) -> gtk::Widget {
+    let view = test.window.folder_pane().view_widget();
+    descendants::<gtk::Label>(&view)
+        .into_iter()
+        .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+        .find(|label| label.text() == title)
+        .expect("the heading is on screen")
+        .upcast()
+}
+
+/// Details, Tiles and Content of a folder grouped by type, in both
+/// themes: the pointer over a heading (its whole row lit), a heading
+/// clicked (its group's items selected, the heading outlined), that group
+/// collapsed with its items still selected (the heading filled), and the
+/// heading's right-click menu.
 ///
 /// parity: VIEW-022, VIEW-071
 #[gtk::test]
@@ -90,26 +131,66 @@ fn grouped_views_with_a_collapsed_group_are_captured() {
     test.activate("group-by", Some("type"));
     for view in ["details", "tiles", "content"] {
         test.activate("view", Some(view));
+        wait_for(TRANSITION_TIME);
         let grouped = test.window.folder_pane().grouped().expect("a grouped view");
         let model = test.window.folder_pane().model();
         let launch = model
             .position_of_uri(&fixture.uri_of("Launch plan.md"))
             .expect("Launch plan is listed");
         let layout = grouped.layout().expect("laid out");
-        let notes = layout.groups()[layout.group_of(launch).expect("in a group")]
-            .title
-            .clone();
-        grouped.set_collapsed(&notes, true);
-        assert!(!grouped.layout().expect("laid out again").shows(launch), "{view}");
-        if let Some(budget) = model.position_of_uri(&fixture.uri_of("Budget 2026.ods")) {
-            model.select_only(budget);
-        }
+        let index = layout.group_of(launch).expect("in a group");
+        let markdown = layout.groups()[index].title.clone();
+        let heading = grouped.heading(index).expect("a heading");
+        let notes: Vec<u32> = (layout.groups()[index].start..layout.groups()[index].end).collect();
         for theme in THEMES {
             test.activate("theme", Some(theme));
+            model.select_none();
+            heading.set_row_hovered(true);
             wait_for(TRANSITION_TIME);
-            capture(&test.window, &format!("group-collapse-{view}-{theme}.png"));
+            capture(&test.window, &format!("group-collapse-{view}-hover-{theme}.png"));
+            heading.set_row_hovered(false);
+
+            click_on(&test, &heading_title(&test, &markdown), gtk::gdk::BUTTON_PRIMARY);
+            assert_eq!(
+                model.selected_positions(),
+                notes,
+                "{view}: the title selects the group"
+            );
+            wait_for(TRANSITION_TIME);
+            capture(
+                &test.window,
+                &format!("group-collapse-{view}-selected-{theme}.png"),
+            );
+
+            grouped.set_collapsed(&markdown, true);
+            test.window.keep_heading_focus(&heading);
+            assert!(!grouped.layout().expect("laid out").shows(launch), "{view}");
+            assert_eq!(
+                model.selected_positions(),
+                notes,
+                "{view}: hidden items stay selected"
+            );
+            wait_for(TRANSITION_TIME);
+            capture(
+                &test.window,
+                &format!("group-collapse-{view}-collapsed-{theme}.png"),
+            );
+            grouped.set_collapsed(&markdown, false);
+
+            click_on(
+                &test,
+                &heading_title(&test, &markdown),
+                gtk::gdk::BUTTON_SECONDARY,
+            );
+            let menu = test.window.context_menu();
+            wait_until("the heading menu to open", || menu.is_visible());
+            capture_popover(
+                &test.window,
+                menu.upcast_ref(),
+                &format!("group-collapse-{view}-menu-{theme}.png"),
+            );
+            menu.popdown();
         }
-        grouped.set_collapsed(&notes, false);
     }
 }
 

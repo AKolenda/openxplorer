@@ -221,7 +221,7 @@ fn grid_headings(test: &TestWindow) -> Vec<String> {
         })
         .collect();
     headings.sort_by(|a, b| a.0.total_cmp(&b.0));
-    headings.into_iter().map(|(_, text)| text).collect()
+    super::support::with_group_counts(test, headings.into_iter().map(|(_, text)| text).collect())
 }
 
 /// The headings the details view draws, top to bottom.
@@ -237,7 +237,7 @@ fn details_headings(test: &TestWindow) -> Vec<String> {
         })
         .collect();
     labels.sort_by(|a, b| a.0.total_cmp(&b.0));
-    labels.into_iter().map(|(_, text)| text).collect()
+    super::support::with_group_counts(test, labels.into_iter().map(|(_, text)| text).collect())
 }
 
 /// A grouped folder keeps its groups in Tiles and Content, as in Windows

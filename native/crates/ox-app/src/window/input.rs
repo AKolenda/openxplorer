@@ -583,8 +583,13 @@ impl BrowserWindow {
             self,
             #[weak]
             view,
-            move |press, _, x, y| {
+            move |press, presses, x, y| {
                 window.imp().view_modifiers.set(Some(press.current_event_state()));
+                if !window.are_item_clicks_paused()
+                    && window.press_heading(&view, x, y, presses, press.current_event_state())
+                {
+                    return;
+                }
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
                     return;
                 }

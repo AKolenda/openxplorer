@@ -3,9 +3,14 @@
 //! (VIEW-022), in Details, Tiles and Content.
 //!
 //! Windows 11 heads each group with a chevron that collapses the group
-//! under its heading and expands it again. With the keyboard on a heading,
-//! Left collapses its group and Right expands it; Enter and Space toggle
-//! it. The heading's right-click menu (or Shift+F10 and the Menu key on
+//! under its heading and expands it again. A click on the chevron does
+//! that at once; a click anywhere else on the heading's row selects every
+//! item of the group (Ctrl adds the group or takes it out, Shift extends
+//! the selection to it), and a double-click collapses or expands it, as
+//! Windows' list view does (`LVGS_SELECTED`; `LVHT_EX_GROUP_COLLAPSE` apart
+//! from `LVHT_EX_GROUP_HEADER`). With the keyboard on a heading, Left
+//! collapses its group and Right expands it; Space and Enter select its
+//! items. The heading's right-click menu (or Shift+F10 and the Menu key on
 //! it) collapses or expands that group, or every group. A collapsed
 //! group's items keep their selection, and Select all still selects them;
 //! the arrows, Shift ranges and type-to-select pass them by.
@@ -32,18 +37,61 @@ pub(super) fn heading_near(widget: &gtk::Widget) -> Option<GroupSlot> {
         std::iter::successors(Some(widget.clone()), WidgetExt::parent)
             .take_while(|widget| !widget.is::<gtk::ListBase>())
     };
+    let row_heading = |cell: FileCell| cell.slot().and_then(|slot| slot.row_heading());
     if let Some(cell) = ancestors().find_map(|widget| widget.downcast::<FileCell>().ok()) {
-        return cell.heading();
+        return row_heading(cell);
     }
     let item = ancestors()
         .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()))
         .unwrap_or_else(|| widget.clone());
     super::widget_tree::descendants::<FileCell>(&item)
         .into_iter()
-        .find_map(|cell| cell.heading())
+        .find_map(row_heading)
 }
 
-/// The heading a click landed on at (`x`, `y`) in `view`.
+/// Whether `widget`, picked under the pointer, is inside a widget with
+/// the CSS class `class`, within its row.
+fn is_inside(widget: &gtk::Widget, class: &str) -> bool {
+    std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+        .take_while(|widget| !widget.is::<gtk::ListBase>())
+        .any(|widget| widget.has_css_class(class))
+}
+
+/// Where a pointer at (`x`, `y`) in `view` is on a group heading's row.
+#[derive(Debug, Clone)]
+pub(super) enum HeadingSpot {
+    /// The chevron, which collapses or expands the group at once.
+    Chevron(GroupSlot),
+    /// The title, which selects the group's items.
+    Title(GroupSlot),
+    /// The rest of the row, which Windows 11 leaves alone.
+    Rest,
+}
+
+impl HeadingSpot {
+    /// The heading the pointer acts on, when it acts on one.
+    pub(super) fn heading(&self) -> Option<&GroupSlot> {
+        match self {
+            HeadingSpot::Chevron(heading) | HeadingSpot::Title(heading) => Some(heading),
+            HeadingSpot::Rest => None,
+        }
+    }
+}
+
+/// Where (`x`, `y`) in `view` is on a heading's row, `None` off one.
+pub(super) fn heading_spot(view: &gtk::Widget, x: f64, y: f64) -> Option<HeadingSpot> {
+    let picked = view.pick(x, y, gtk::PickFlags::DEFAULT)?;
+    let heading = heading_near(&picked)?;
+    Some(if is_inside(&picked, "group-chevron") {
+        HeadingSpot::Chevron(heading)
+    } else if is_inside(&picked, "group-heading-hit") {
+        HeadingSpot::Title(heading)
+    } else {
+        HeadingSpot::Rest
+    })
+}
+
+/// The heading whose row (`x`, `y`) in `view` is on, whatever part.
 pub(super) fn heading_at(view: &gtk::Widget, x: f64, y: f64) -> Option<GroupSlot> {
     let picked = view.pick(x, y, gtk::PickFlags::DEFAULT)?;
     heading_near(&picked)
@@ -54,7 +102,7 @@ pub(super) fn heading_at(view: &gtk::Widget, x: f64, y: f64) -> Option<GroupSlot
 enum HeadingKey {
     Collapse,
     Expand,
-    Toggle,
+    Select,
 }
 
 impl HeadingKey {
@@ -67,53 +115,65 @@ impl HeadingKey {
             | gdk::Key::KP_Enter
             | gdk::Key::ISO_Enter
             | gdk::Key::space
-            | gdk::Key::KP_Space => HeadingKey::Toggle,
+            | gdk::Key::KP_Space => HeadingKey::Select,
             _ => return None,
         })
     }
 
-    /// Whether the group is collapsed after the key, from `collapsed`.
-    fn collapses(self, collapsed: bool) -> bool {
+    /// Whether the group is collapsed after the key, or `None` for a key
+    /// that selects the group's items.
+    fn collapses(self) -> Option<bool> {
         match self {
-            HeadingKey::Collapse => true,
-            HeadingKey::Expand => false,
-            HeadingKey::Toggle => !collapsed,
+            HeadingKey::Collapse => Some(true),
+            HeadingKey::Expand => Some(false),
+            HeadingKey::Select => None,
         }
     }
 }
 
-/// The heading menu's entries for a group that is `collapsed`: that
-/// group's command, then both commands for every group.
-fn heading_menu(collapsed: bool) -> Vec<MenuEntry> {
-    let own = if collapsed {
-        MenuItem::new(
-            gettext_static("Expand group"),
-            Icon::ChevronDown16,
-            WindowAction::ExpandGroup,
-        )
-    } else {
-        MenuItem::new(
-            gettext_static("Collapse group"),
-            Icon::ChevronRight16,
-            WindowAction::CollapseGroup,
-        )
-    };
-    vec![
-        own.into(),
-        MenuEntry::Divider,
-        MenuItem::new(
-            gettext_static("Collapse all groups"),
-            Icon::ChevronRight16,
-            WindowAction::CollapseAllGroups,
-        )
-        .into(),
+/// Collapse all groups and Expand all groups, as the heading menu and the
+/// folder menu's View list them.
+fn all_groups_entries() -> [MenuEntry; 2] {
+    [
         MenuItem::new(
             gettext_static("Expand all groups"),
             Icon::ChevronDown16,
             WindowAction::ExpandAllGroups,
         )
         .into(),
+        MenuItem::new(
+            gettext_static("Collapse all groups"),
+            Icon::ChevronRight16,
+            WindowAction::CollapseAllGroups,
+        )
+        .into(),
     ]
+}
+
+/// The entries a heading's menu starts with, for a group that is
+/// `collapsed`, as Windows 11 lists them above the menu of the group's
+/// items: Collapse group (Left) or Expand group (Right), Expand all groups
+/// and Collapse all groups.
+fn heading_entries(collapsed: bool) -> Vec<MenuEntry> {
+    let own = if collapsed {
+        MenuItem::new(
+            gettext_static("Expand group"),
+            Icon::ChevronDown16,
+            WindowAction::ExpandGroup,
+        )
+        .with_shortcut("Right")
+    } else {
+        MenuItem::new(
+            gettext_static("Collapse group"),
+            Icon::ChevronRight16,
+            WindowAction::CollapseGroup,
+        )
+        .with_shortcut("Left")
+    };
+    let mut entries = vec![own.into()];
+    entries.extend(all_groups_entries());
+    entries.push(MenuEntry::Divider);
+    entries
 }
 
 impl BrowserWindow {
@@ -126,8 +186,8 @@ impl BrowserWindow {
     }
 
     /// Left, Right, Enter and Space on a group heading with the keyboard:
-    /// collapse, expand or toggle its group. `None` for every other key,
-    /// or with no heading focused.
+    /// collapse or expand its group, or select its items. `None` for
+    /// every other key, or with no heading focused.
     pub(super) fn group_heading_key(
         &self,
         key: gdk::Key,
@@ -143,9 +203,52 @@ impl BrowserWindow {
         }
         let heading = self.focused_heading()?;
         self.reset_typeahead();
-        heading.set_group_collapsed(effect.collapses(heading.collapsed()));
+        match effect.collapses() {
+            Some(collapsed) => heading.set_group_collapsed(collapsed),
+            None => {
+                if let Some((model, index)) = heading.model().zip(heading.group_index()) {
+                    model.select_group(index, false, false);
+                }
+            }
+        }
         self.keep_heading_focus(&heading);
         Some(glib::Propagation::Stop)
+    }
+
+    /// A press on a group heading's row at (`x`, `y`) in `view`, the
+    /// `presses`th of a click, as Windows 11 takes it: on the chevron it
+    /// collapses or expands the group at once, without selecting; on the
+    /// title the first press selects the group's items (Ctrl adds them or
+    /// takes them out, Shift extends the selection to them) and gives the
+    /// heading the keyboard, and a double-click collapses or expands the
+    /// group. The rest of the row takes no click. Returns false when the
+    /// press is not on a heading's row.
+    pub(super) fn press_heading(
+        &self,
+        view: &gtk::Widget,
+        x: f64,
+        y: f64,
+        presses: i32,
+        modifiers: gdk::ModifierType,
+    ) -> bool {
+        let Some(spot) = heading_spot(view, x, y) else {
+            return false;
+        };
+        self.reset_typeahead();
+        match spot {
+            HeadingSpot::Chevron(heading) if presses == 1 => heading.toggle_group(),
+            HeadingSpot::Title(heading) if presses == 1 => {
+                if let Some((model, index)) = heading.model().zip(heading.group_index()) {
+                    let add = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
+                    let extend = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+                    model.select_group(index, add, extend);
+                }
+                self.keep_heading_focus(&heading);
+            }
+            HeadingSpot::Title(heading) if presses == 2 => heading.toggle_group(),
+            _ => {}
+        }
+        true
     }
 
     /// Gives the keyboard back to `heading` after its group changed: the
@@ -166,11 +269,23 @@ impl BrowserWindow {
         }
     }
 
-    /// The heading menu's entries for `heading`, which its commands then
-    /// act on.
+    /// The folder menu's View: the command bar's, then Collapse all groups
+    /// and Expand all groups while the view heads the folder's groups, as
+    /// Windows 11's folder menu has them.
+    pub(super) fn background_view_menu(&self) -> Vec<MenuEntry> {
+        let mut entries = super::command_bar::view_menu();
+        if self.folder_pane().grouped().is_some() {
+            entries.push(MenuEntry::Divider);
+            entries.extend(all_groups_entries());
+        }
+        entries
+    }
+
+    /// The entries a menu opened on `heading` starts with, which its
+    /// commands then act on.
     pub(super) fn heading_menu_for(&self, heading: &GroupSlot) -> Vec<MenuEntry> {
         self.imp().menu_heading.replace(Some(heading.clone()));
-        heading_menu(heading.collapsed())
+        heading_entries(heading.collapsed())
     }
 
     /// The heading the menu's commands act on: the one it opened on, else
@@ -203,8 +318,36 @@ impl BrowserWindow {
         }
     }
 
+    /// Rings the whole row of the heading that has the keyboard, in Tiles
+    /// and Content, whose rows are several slots (Details rings its row by
+    /// itself), and takes the ring off the heading that had it. Followed
+    /// from the window's focus, later than GTK moves it: restyling the
+    /// slots while GTK binds or moves them upsets its lists.
+    fn follow_heading_focus(&self) {
+        self.connect_focus_widget_notify(|window| {
+            glib::idle_add_local_once(glib::clone!(
+                #[weak]
+                window,
+                move || {
+                    let now = window.focused_heading();
+                    let before = window.imp().focused_row.replace(now.clone());
+                    if before == now {
+                        return;
+                    }
+                    if let Some(before) = before {
+                        before.set_row_focused(false);
+                    }
+                    if let Some(now) = now {
+                        now.set_row_focused(true);
+                    }
+                }
+            ));
+        });
+    }
+
     /// Adds the heading menu's commands.
     pub(super) fn install_group_heading_actions(&self) {
+        self.follow_heading_focus();
         self.add_action_entries([
             plain_action(WindowAction::CollapseGroup, |window| {
                 window.set_menu_group_collapsed(true);
@@ -226,20 +369,52 @@ impl BrowserWindow {
 mod tests {
     use super::*;
 
-    /// Left collapses, Right expands, Enter and Space toggle, as Windows
-    /// 11's group headings do.
+    /// Left collapses, Right expands, Enter and Space select the group's
+    /// items, as on Windows 11's group headings.
     ///
     /// parity: VIEW-022
     #[test]
-    fn heading_keys_collapse_expand_and_toggle() {
+    fn heading_keys_collapse_expand_and_select() {
         assert_eq!(HeadingKey::of(gdk::Key::Left), Some(HeadingKey::Collapse));
         assert_eq!(HeadingKey::of(gdk::Key::Right), Some(HeadingKey::Expand));
-        assert_eq!(HeadingKey::of(gdk::Key::Return), Some(HeadingKey::Toggle));
-        assert_eq!(HeadingKey::of(gdk::Key::space), Some(HeadingKey::Toggle));
+        assert_eq!(HeadingKey::of(gdk::Key::Return), Some(HeadingKey::Select));
+        assert_eq!(HeadingKey::of(gdk::Key::space), Some(HeadingKey::Select));
         assert_eq!(HeadingKey::of(gdk::Key::Down), None);
-        assert!(HeadingKey::Collapse.collapses(true), "Left keeps it collapsed");
-        assert!(!HeadingKey::Expand.collapses(false));
-        assert!(HeadingKey::Toggle.collapses(false));
-        assert!(!HeadingKey::Toggle.collapses(true));
+        assert_eq!(HeadingKey::Collapse.collapses(), Some(true));
+        assert_eq!(HeadingKey::Expand.collapses(), Some(false));
+        assert_eq!(HeadingKey::Select.collapses(), None);
+    }
+
+    /// A heading's menu starts with its group's command, its shortcut
+    /// shown, then Expand all groups and Collapse all groups, above the
+    /// menu of the group's items, as Windows 11's.
+    ///
+    /// parity: VIEW-022
+    #[test]
+    fn a_heading_menu_starts_with_the_group_commands() {
+        use crate::window::menu_popover::MenuAction;
+        let actions = |collapsed| {
+            heading_entries(collapsed)
+                .into_iter()
+                .map(|entry| match entry {
+                    MenuEntry::Item(item) => Some((item.action, item.shortcut)),
+                    MenuEntry::Divider => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let window = |action| MenuAction::Window(action);
+        assert_eq!(
+            actions(false),
+            [
+                Some((window(WindowAction::CollapseGroup), Some("Left"))),
+                Some((window(WindowAction::ExpandAllGroups), None)),
+                Some((window(WindowAction::CollapseAllGroups), None)),
+                None,
+            ]
+        );
+        assert_eq!(
+            actions(true).first().copied().flatten(),
+            Some((window(WindowAction::ExpandGroup), Some("Right")))
+        );
     }
 }

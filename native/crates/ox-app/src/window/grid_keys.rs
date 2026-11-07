@@ -3,8 +3,8 @@
 //! rows of different lengths (SEL-010). In grouped Tiles and Content the
 //! window moves between the items for every arrow, Home, End, Page Up and
 //! Page Down, across the groups' headings (VIEW-071). Up and Down rest on
-//! a heading on the way, as Windows 11 does, where Left and Right collapse
-//! and expand its group ([`super::group_headings`]); the items of a
+//! a heading on the way, selecting its group's items, as Windows 11 does,
+//! where Left and Right collapse and expand its group ([`super::group_headings`]); the items of a
 //! collapsed group are passed by.
 //!
 //! GTK's grid moves Down into a shorter last row by clamping to its last
@@ -170,8 +170,14 @@ impl BrowserWindow {
         let to = match to {
             GroupTarget::Item(to) => to,
             GroupTarget::Heading(index) => {
-                // The heading takes the keyboard; the selection stays.
+                // The heading takes the keyboard and, as in Windows 11, its
+                // group's items the selection: Shift extends it to them,
+                // Ctrl moves the keyboard alone.
                 self.imp().grid_column.set(None);
+                let extends = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+                if !modifiers.contains(gdk::ModifierType::CONTROL_MASK) {
+                    grouped.select_group(index, false, extends);
+                }
                 if let Some(slot) = layout.heading_slot(index) {
                     icons.grid().scroll_to(slot, gtk::ListScrollFlags::FOCUS, None);
                 }

@@ -18,7 +18,7 @@ pub(crate) mod column_text;
 mod group_headers;
 mod select_all;
 
-pub(crate) use group_headers::{header_text, GroupTitle};
+pub(crate) use group_headers::GroupTitle;
 
 /// The rows' grouped model, if any, shared with the cells' position map.
 type SharedGrouping = Rc<std::cell::RefCell<Option<GroupedSelection>>>;

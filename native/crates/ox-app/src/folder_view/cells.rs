@@ -134,6 +134,24 @@ const GROUP_SLOT_CLASS: &str = "group-slot";
 /// can rest on.
 const HEADING_CLASS: &str = "group-heading";
 
+/// The CSS class of a cell in a heading's row: the heading or a slot
+/// carrying its line.
+const HEADING_ROW_CLASS: &str = "heading-row";
+
+/// The CSS class of a heading row's cells while the pointer is over the
+/// row.
+const ROW_HOVER_CLASS: &str = "row-hover";
+
+/// The CSS class of a heading row's cells while its heading has the
+/// keyboard.
+const ROW_FOCUS_CLASS: &str = "row-focus";
+
+/// The CSS class of the cell starting a heading's row: the heading.
+const ROW_START_CLASS: &str = "row-start";
+
+/// The CSS class of the cell ending a heading's row at the right.
+const ROW_END_CLASS: &str = "row-end";
+
 /// The edge of a heading's chevron, as Windows 11 draws it.
 const HEADING_CHEVRON: i32 = 16;
 
@@ -314,8 +332,17 @@ impl FileCell {
         let watched = imp.slot.replace(slot.cloned());
         if let (Some(watched), Some(handler)) = (watched, imp.slot_watch.take()) {
             watched.disconnect(handler);
+            // The cell goes on to show something else: the row it showed
+            // loses the pointer it had through it.
+            if slot != Some(&watched) && watched.hovered() {
+                // Later: the row's other cells restyle, which GTK must not
+                // see while it binds this one. The window follows the
+                // keyboard itself (`window/group_headings.rs`).
+                glib::idle_add_local_once(move || watched.set_row_hovered(false));
+            }
         }
         let Some(slot) = slot else {
+            self.clear_row_classes();
             if !self.has_css_class(GROUP_SLOT_CLASS) {
                 return;
             }
@@ -344,54 +371,94 @@ impl FileCell {
             self.add_css_class(GROUP_SLOT_CLASS);
         }
         let row = self.slot_row();
-        let chevron = row
+        let hit = row.first_child().expect("a slot row starts with its heading");
+        let chevron = hit
             .first_child()
             .and_downcast::<gtk::Image>()
-            .expect("a slot row starts with its chevron");
+            .expect("a heading starts with its chevron");
         let title = chevron
             .next_sibling()
             .and_downcast::<gtk::Label>()
             .expect("the title follows the chevron");
-        let line = title.next_sibling().expect("a slot row ends with its line");
+        let line = hit.next_sibling().expect("a slot row ends with its line");
         let kind = slot.kind();
         let is_heading = kind == SlotKind::Heading;
-        chevron.set_visible(is_heading);
-        title.set_visible(is_heading);
+        hit.set_visible(is_heading);
         line.set_visible(kind != SlotKind::Blank);
         row.set_visible(true);
         toggle_class(&row, HEADING_CLASS, is_heading);
         if is_heading {
             let text = slot.bind_property("text", &title, "label").sync_create().build();
             imp.slot_binding.replace(Some(text));
-            let show_state = glib::clone!(
-                #[weak(rename_to = cell)]
-                self,
-                #[weak]
-                chevron,
-                move |slot: &GroupSlot| {
+        }
+        let show_state = glib::clone!(
+            #[weak(rename_to = cell)]
+            self,
+            #[weak]
+            chevron,
+            move |slot: &GroupSlot| {
+                let in_row = slot.kind() != SlotKind::Blank;
+                if slot.kind() == SlotKind::Heading {
                     let collapsed = slot.collapsed();
                     icons::set_icon(&chevron, chevron_icon(collapsed), HEADING_CHEVRON);
                     cell.update_state(&[gtk::accessible::State::Expanded(Some(!collapsed))]);
                 }
-            );
-            show_state(slot);
-            let handler = slot.connect_collapsed_notify(move |slot| show_state(slot));
-            imp.slot_watch.replace(Some(handler));
-        }
+                toggle_class(&cell, HEADING_ROW_CLASS, in_row);
+                toggle_class(&cell, ROW_HOVER_CLASS, in_row && slot.hovered());
+                toggle_class(&cell, ROW_FOCUS_CLASS, in_row && slot.focused());
+                toggle_class(&cell, ROW_START_CLASS, slot.kind() == SlotKind::Heading);
+                toggle_class(&cell, ROW_END_CLASS, in_row && slot.ends_row());
+                cell.style_item_widget(in_row, in_row && slot.hovered(), in_row && slot.focused());
+            }
+        );
+        show_state(slot);
+        let handler = slot.connect_notify_local(None, move |slot, _| show_state(slot));
+        imp.slot_watch.replace(Some(handler));
     }
 
-    /// The group heading the cell shows, while it shows one.
-    pub(crate) fn heading(&self) -> Option<GroupSlot> {
-        self.imp()
-            .slot
-            .borrow()
-            .clone()
-            .filter(|slot| slot.kind() == SlotKind::Heading)
+    /// Takes the heading row's looks off the cell, which shows an item.
+    fn clear_row_classes(&self) {
+        for class in [
+            HEADING_ROW_CLASS,
+            ROW_HOVER_CLASS,
+            ROW_FOCUS_CLASS,
+            ROW_START_CLASS,
+            ROW_END_CLASS,
+        ] {
+            toggle_class(self, class, false);
+        }
+        self.style_item_widget(false, false, false);
+    }
+
+    /// Gives the row or tile GTK wraps the cell in the heading row's looks:
+    /// Details draws a heading's hover on its whole row, which follows the
+    /// pointer over the chevron and title alone. Done once GTK has bound
+    /// the cell, as changing a row's classes while GTK binds its cells
+    /// upsets the list (see `cells/cell_owners.rs`).
+    fn style_item_widget(&self, heading: bool, hovered: bool, focused: bool) {
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = cell)]
+            self,
+            move || {
+                let item = std::iter::successors(cell.parent(), WidgetExt::parent)
+                    .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()));
+                if let Some(item) = item {
+                    toggle_class(&item, HEADING_ROW_CLASS, heading);
+                    toggle_class(&item, ROW_HOVER_CLASS, hovered);
+                    toggle_class(&item, ROW_FOCUS_CLASS, focused);
+                }
+            }
+        ));
+    }
+
+    /// The group slot the cell shows, while it shows one.
+    pub(crate) fn slot(&self) -> Option<GroupSlot> {
+        self.imp().slot.borrow().clone()
     }
 
     /// The heading row of a slot, made the first time a slot shows: the
-    /// chevron, the title and the line. A click on a heading, the chevron
-    /// or its title, collapses or expands its group, as in Windows 11.
+    /// chevron, the title and the line. The window handles clicks on it
+    /// (`window/group_headings.rs`).
     fn slot_row(&self) -> gtk::Box {
         let imp = self.imp();
         if let Some(row) = imp.slot_row.borrow().as_ref() {
@@ -414,28 +481,40 @@ impl FileCell {
             .hexpand(true)
             .css_classes(["group-header"])
             .build();
-        row.append(&chevron);
-        row.append(&title);
+        // The chevron and the title are what the pointer acts on, as in
+        // Windows 11; the line beside them is not.
+        let hit = gtk::Box::builder()
+            .spacing(8)
+            .css_classes(["group-heading-hit"])
+            .build();
+        hit.append(&chevron);
+        hit.append(&title);
+        row.append(&hit);
         row.append(&line);
-        let click = gtk::GestureClick::new();
-        click.set_button(gtk::gdk::BUTTON_PRIMARY);
-        click.connect_pressed(glib::clone!(
+        // The pointer over any slot of a heading's row lights the whole
+        // row, as Windows 11 lights a heading across the view.
+        let motion = gtk::EventControllerMotion::new();
+        motion.connect_enter(glib::clone!(
             #[weak(rename_to = cell)]
             self,
-            move |gesture, presses, _, _| {
-                let Some(heading) = cell.heading() else {
-                    return;
-                };
-                // The click is the heading's: the list neither selects
-                // nor clears anything for it.
-                gesture.set_state(gtk::EventSequenceState::Claimed);
-                // A double-click toggles once, on its first press.
-                if presses == 1 {
-                    heading.toggle_group();
+            move |_, _, _| {
+                if let Some(slot) = cell.slot() {
+                    slot.set_row_hovered(true);
                 }
             }
         ));
-        row.add_controller(click);
+        motion.connect_leave(glib::clone!(
+            #[weak(rename_to = cell)]
+            self,
+            move |_| {
+                if let Some(slot) = cell.slot() {
+                    slot.set_row_hovered(false);
+                }
+            }
+        ));
+        hit.add_controller(motion);
+        // The keyboard on a heading rings its whole row; the grid gives it
+        // to the item widget around the cell.
         self.append(&row);
         imp.slot_row.replace(Some(row.clone()));
         row
@@ -445,7 +524,11 @@ impl FileCell {
     #[cfg(test)]
     pub(crate) fn group_heading(&self) -> Option<String> {
         let row = self.imp().slot_row.borrow().clone()?;
-        let title = row.first_child()?.next_sibling().and_downcast::<gtk::Label>()?;
+        let title = row
+            .first_child()?
+            .first_child()?
+            .next_sibling()
+            .and_downcast::<gtk::Label>()?;
         (row.is_visible() && title.is_visible()).then(|| title.text().to_string())
     }
 

@@ -806,11 +806,6 @@ msgstr ""
 msgid "{count} items"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/details/group_headers.rs crates/ox-app/src/window/landing.rs
-msgid "{title} ({count})"
-msgstr ""
-
 #: crates/ox-app/src/folder_view/details/select_all.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Select all"
 msgstr ""
@@ -5970,6 +5965,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/landing.rs
 msgid "{free} free of {size}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/landing.rs
+msgid "{title} ({count})"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

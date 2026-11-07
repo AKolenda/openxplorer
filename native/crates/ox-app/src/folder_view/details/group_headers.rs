@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The heading above each group of a grouped listing (VIEW-022).
 //!
-//! Windows 11 heads each group with a chevron, its name, its item count
-//! and a line to the right edge ("Today (3) ———"); the chevron collapses
-//! the group under its heading and expands it again. The details view
+//! Windows 11 heads each group with a chevron, its name and a line to the
+//! right edge ("Today ———"; since 22H2 without the item count); the
+//! chevron collapses the group under its heading and expands it again. The details view
 //! lists the folder through a [`GroupedSelection`] in one column while it
 //! is grouped, as Content does: each heading is a row of its own, which
 //! the keyboard can rest on, and a collapsed group lists no rows. The
@@ -22,17 +22,6 @@ use crate::folder_view::item::FileItem;
 
 /// Names the group an item is in, `None` while the items are not grouped.
 pub(crate) type GroupTitle = Rc<dyn Fn(&FileItem) -> Option<String>>;
-
-/// "Today (3)": a group's title and how many items it holds.
-pub(crate) fn header_text(title: &str, count: u32) -> String {
-    ox_core::i18n::format_message(
-        "{title} ({count})",
-        &[
-            ("title", title),
-            ("count", &ox_core::format::group_digits(u64::from(count))),
-        ],
-    )
-}
 
 impl DetailsView {
     /// Shows the folder's `items`, or nothing.
@@ -113,15 +102,5 @@ impl DetailsView {
             (Some(grouped), _) => column_view.set_model(Some(&grouped)),
             (None, items) => column_view.set_model(items.as_ref()),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_header_counts_its_items() {
-        assert_eq!(header_text("Today", 3), "Today (3)");
     }
 }

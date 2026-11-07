@@ -188,6 +188,8 @@ pub(crate) struct BrowserWindow {
     /// The group heading the heading menu opened on, which its commands
     /// act on (VIEW-022).
     pub(super) menu_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The group heading whose row shows the keyboard ring.
+    pub(super) focused_row: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
     pub(super) typeahead: RefCell<Typeahead>,
     /// The input method of the view that last had the keyboard, so a dead key
     /// or an IME commit typed on the window's chrome composes as it does in

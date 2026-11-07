@@ -27,7 +27,8 @@ use crate::window::menu_popover::MenuEntry;
 
 use super::view_styles::{ask_from_folder_options, close_folder_options, open_folder_options};
 
-/// The headings the details view draws, top to bottom.
+/// The headings the details view draws, top to bottom, each with its
+/// group's count.
 fn headings(test: &TestWindow) -> Vec<String> {
     wait_for_frames(&test.window, 3);
     let column_view = test.window.folder_pane().details().column_view().clone();
@@ -40,7 +41,7 @@ fn headings(test: &TestWindow) -> Vec<String> {
         })
         .collect();
     labels.sort_by(|a, b| a.0.total_cmp(&b.0));
-    labels.into_iter().map(|(_, text)| text).collect()
+    super::support::with_group_counts(test, labels.into_iter().map(|(_, text)| text).collect())
 }
 
 /// Sets the modification time of `path` to `age` ago.
