@@ -50,7 +50,7 @@ use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::ThumbnailFlavor;
-use rustix::process::{kill_process_group, Pid, Signal};
+use rustix::process::{kill_process_group, Pid, Resource, Signal};
 
 use super::writer::{self, Source};
 
@@ -67,12 +67,40 @@ const ENTRY_SIZE_LIMIT: u64 = 64 * 1024;
 /// while, an unresponsive program must not hold a slot for ever.
 const TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The most data memory a thumbnailer may use: a frame of an 8K video
+/// many times over, far more than a thumbnail needs, and still a fraction
+/// of a computer's memory.
+const MEMORY_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
+
+/// The largest file a thumbnailer may write: twice the largest picture
+/// read back from it ([`OUTPUT_SIZE_LIMIT`]).
+const FILE_SIZE_LIMIT: u64 = 2 * OUTPUT_SIZE_LIMIT;
+
+/// How much lower a thumbnailer's priority is than the app's, so making
+/// previews never slows the window down.
+const NICENESS: i32 = 10;
+
+/// The most processor time, in seconds, any one of a thumbnailer's
+/// processes may use: twice its [`TIMEOUT`], so a program working on a
+/// few processors at once still finishes a long video.
+const CPU_SECONDS: u64 = 60;
+
+/// How many processes and threads a thumbnailer may start, besides those
+/// its user already runs (`prlimit --nproc` counts every one of the
+/// user's), and the most its scope may hold ([`Limits::Scope`]): a video
+/// decoder's threads, not a program forking without end.
+const TASKS: u64 = 64;
+
+/// The share of one processor the processes of a thumbnailer's scope may
+/// use together.
+const CPU_QUOTA: &str = "100%";
+
 /// How long a running thumbnailer is left alone before its request's
 /// cancellation and the timeout are looked at again.
 const POLL: Duration = Duration::from_millis(50);
 
-/// The name of the private folder a thumbnailer writes its picture in,
-/// with `XXXXXX` for the random part.
+/// The start of the name of the private folder a thumbnailer writes its
+/// picture in; eight hexadecimal digits follow.
 const WORKSPACE: &str = "openxplorer-thumbnailer-";
 
 /// Where the sandbox shows the private folder to the program.
@@ -100,7 +128,7 @@ const OUTPUT_PIXEL_LIMIT: u64 = 7680 * 4320;
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
 /// The chunks of a thumbnailer's PNG the app keeps: those that draw the
-/// picture. The others, text and colour profiles among them, may hold
+/// picture. The others, text and color profiles among them, may hold
 /// compressed data that libpng would expand without the pixel limit.
 const DRAWN_CHUNKS: [&[u8; 4]; 5] = [b"IHDR", b"PLTE", b"tRNS", b"IDAT", b"IEND"];
 
@@ -212,6 +240,19 @@ pub(super) struct Catalogue {
 }
 
 impl Catalogue {
+    /// Whether its programs run with their memory limited, by a systemd
+    /// scope or `prlimit`, so a picture too large for the app to decode
+    /// may be handed to one ([`Limits::limit_memory`]). A test's own
+    /// programs count as limited.
+    pub(super) fn limits_memory(&self) -> bool {
+        match &self.sandbox {
+            Some(Sandbox::Bubblewrap { limits, .. }) => limits.limit_memory(),
+            #[cfg(test)]
+            Some(Sandbox::Off) => true,
+            None => false,
+        }
+    }
+
     /// The thumbnailers the data folders `folders` hold, run in the
     /// sandbox `sandbox` finds: one without a working sandbox keeps none,
     /// and the sandbox is looked for only when there is a program to run
@@ -477,7 +518,7 @@ pub(super) fn write_thumbnail(
     let command = sandbox.command(thumbnailer, &path, workspace.path(), pixels);
     // One that failed on its own may still have written a good picture, so
     // the picture alone decides; a stopped one left none worth reading.
-    run(&command, cancellation)?;
+    run_with(&command, sandbox.needs_runtime_dir(), cancellation)?;
     let picture = read_picture(&workspace.path().join(OUTPUT), pixels)?;
     drop(workspace);
     if cancellation.is_cancelled() {
@@ -503,6 +544,8 @@ pub(super) enum Sandbox {
         /// may refuse to mount; without one it is tighter still, and only
         /// a program that needs it fails.
         proc: bool,
+        /// How the program's resources are limited.
+        limits: Limits,
     },
     /// Without a sandbox: only a test's own program, which must see the
     /// files of its test.
@@ -515,15 +558,57 @@ impl Sandbox {
     /// the sandbox here: it is tried with `true`, since a container or a
     /// strict kernel may refuse the namespaces it needs, first with a
     /// `/proc` of its own, as Files gives it, then without.
+    ///
+    /// The strictest limits this computer offers are tried first
+    /// ([`Limits::candidates`]); a sandbox that works only without them
+    /// still runs the programs, within the timeout alone, and says so in
+    /// the log, as it does when no sandbox works at all.
     fn find() -> Option<Self> {
-        let program = glib::find_program_in_path("bwrap")?;
-        [true, false]
+        sweep_stale_workspaces(&glib::tmp_dir());
+        let Some(program) = glib::find_program_in_path("bwrap") else {
+            glib::g_message!(
+                ox_core::LOG_DOMAIN,
+                "bubblewrap is not installed: the desktop's thumbnailers are not started"
+            );
+            return None;
+        };
+        let candidates = Limits::candidates();
+        let strictest = candidates.first().cloned();
+        let found = candidates
             .into_iter()
-            .map(|proc| Self::Bubblewrap {
-                program: program.clone(),
-                proc,
+            .flat_map(|limits| {
+                let program = program.clone();
+                [true, false].into_iter().map(move |proc| Self::Bubblewrap {
+                    program: program.clone(),
+                    proc,
+                    limits: limits.clone(),
+                })
             })
-            .find(Self::works)
+            .find(Self::works);
+        match &found {
+            None => glib::g_warning!(
+                ox_core::LOG_DOMAIN,
+                "bubblewrap cannot make its sandbox here (a kernel or AppArmor setting may forbid \
+                 user namespaces): the desktop's thumbnailers are not started"
+            ),
+            Some(Self::Bubblewrap {
+                limits: Limits::Unlimited,
+                ..
+            }) => glib::g_warning!(
+                ox_core::LOG_DOMAIN,
+                "The thumbnailers' resource limits could not be applied (systemd-run, prlimit and \
+                 nice are missing or refused): they run within their timeout alone"
+            ),
+            Some(Self::Bubblewrap {
+                limits: Limits::Process { .. },
+                ..
+            }) if matches!(strictest, Some(Limits::Scope { .. })) => glib::g_debug!(
+                ox_core::LOG_DOMAIN,
+                "No systemd user scope for the thumbnailers: their limits apply to each process"
+            ),
+            _ => {}
+        }
+        found
     }
 
     /// Whether this sandbox runs `true` here.
@@ -540,7 +625,18 @@ impl Sandbox {
             types: Vec::new(),
         };
         let command = self.command(&probe, &item, workspace.path(), 0);
-        run(&command, &gio::Cancellable::new()).is_some_and(|status| status.success())
+        run_with(&command, self.needs_runtime_dir(), &gio::Cancellable::new())
+            .is_some_and(|status| status.success())
+    }
+
+    /// Whether its command needs the user's runtime folder
+    /// ([`Limits::needs_runtime_dir`]).
+    fn needs_runtime_dir(&self) -> bool {
+        match self {
+            Self::Bubblewrap { limits, .. } => limits.needs_runtime_dir(),
+            #[cfg(test)]
+            Self::Off => false,
+        }
     }
 
     /// The command that runs `thumbnailer` for the file at `item`, writing
@@ -558,7 +654,11 @@ impl Sandbox {
         pixels: i32,
     ) -> Vec<OsString> {
         match self {
-            Self::Bubblewrap { program: bwrap, proc } => {
+            Self::Bubblewrap {
+                program: bwrap,
+                proc,
+                limits,
+            } => {
                 let inside = Path::new(INSIDE);
                 let inside_item = inside.join(format!("{INPUT}{}", extension_of(item)));
                 let inside_uri = format!("file://{}", inside_item.display());
@@ -574,7 +674,8 @@ impl Sandbox {
                     .as_deref()
                     .map(|program| program_folders(program, &UserFolders::of_session()))
                     .unwrap_or_default();
-                let mut command = vec![bwrap.as_os_str().to_owned()];
+                let mut command = limits.words();
+                command.push(bwrap.as_os_str().to_owned());
                 command.extend(sandbox_arguments(workspace, item, &inside_item, &folders, *proc));
                 command.push("--".into());
                 command.extend(program);
@@ -587,6 +688,191 @@ impl Sandbox {
             }
         }
     }
+}
+
+/// How a thumbnailer's resources are limited, so that a program decoding
+/// a hostile file can neither take the computer's memory, processes nor
+/// processors from the app and the user. Each way runs the next program
+/// in its own process (`systemd-run --scope`, `env`, `prlimit` and `nice`
+/// all end by executing it), so the limits pass to bubblewrap and
+/// everything it starts, and the process group [`run_with`] stops is still the
+/// thumbnailer's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Limits {
+    /// In a systemd user scope of its own, whose limits hold for all of
+    /// its processes together: [`MEMORY_LIMIT`] of memory, [`TASKS`]
+    /// processes and threads and [`CPU_QUOTA`] of a processor, besides the
+    /// per-process limits of [`Limits::Process`] when this computer has
+    /// those programs: the scope's limits do not depend on them.
+    Scope {
+        /// systemd's `systemd-run`.
+        systemd_run: PathBuf,
+        /// coreutils' `env`, which takes the user manager's address away
+        /// from the program again.
+        env: PathBuf,
+        /// util-linux's `prlimit`, if this computer has it.
+        prlimit: Option<PathBuf>,
+        /// coreutils' `nice`, if this computer has it.
+        nice: Option<PathBuf>,
+    },
+    /// With per-process limits from `prlimit` (each process: [`MEMORY_LIMIT`]
+    /// of data, which address space merely reserved does not count
+    /// towards, [`FILE_SIZE_LIMIT`] for each file, [`CPU_SECONDS`] of
+    /// processor time and no core dump; all of the user's processes:
+    /// [`TASKS`] more than run already) and `nice`'s lower priority, or
+    /// whichever of the two this computer has.
+    Process {
+        /// util-linux's `prlimit`, if this computer has it.
+        prlimit: Option<PathBuf>,
+        /// coreutils' `nice`, if this computer has it.
+        nice: Option<PathBuf>,
+    },
+    /// Within the timeout alone: this computer lacks the programs above,
+    /// or they cannot run here.
+    Unlimited,
+}
+
+impl Limits {
+    /// The ways this computer has, strictest first, ending with
+    /// [`Limits::Unlimited`]; [`Sandbox::find`] keeps the first that works.
+    fn candidates() -> Vec<Self> {
+        let find = glib::find_program_in_path;
+        Self::candidates_of(
+            find("systemd-run").zip(find("env")),
+            find("prlimit"),
+            find("nice"),
+        )
+    }
+
+    /// [`Self::candidates`] for the programs found: `scope` is
+    /// `systemd-run` with `env`, and each way uses whichever of `prlimit`
+    /// and `nice` there is.
+    fn candidates_of(
+        scope: Option<(PathBuf, PathBuf)>,
+        prlimit: Option<PathBuf>,
+        nice: Option<PathBuf>,
+    ) -> Vec<Self> {
+        let mut candidates = Vec::new();
+        if let Some((systemd_run, env)) = scope {
+            candidates.push(Self::Scope {
+                systemd_run,
+                env,
+                prlimit: prlimit.clone(),
+                nice: nice.clone(),
+            });
+        }
+        if prlimit.is_some() || nice.is_some() {
+            candidates.push(Self::Process { prlimit, nice });
+        }
+        candidates.push(Self::Unlimited);
+        candidates
+    }
+
+    /// Whether the programs' memory is limited: by the scope, or by
+    /// `prlimit` (`nice` alone limits nothing).
+    fn limit_memory(&self) -> bool {
+        match self {
+            Self::Scope { .. } => true,
+            Self::Process { prlimit, .. } => prlimit.is_some(),
+            Self::Unlimited => false,
+        }
+    }
+
+    /// Whether the command needs the user's runtime folder, where
+    /// `systemd-run --user` finds the user's service manager.
+    fn needs_runtime_dir(&self) -> bool {
+        matches!(self, Self::Scope { .. })
+    }
+
+    /// The words that start the next program within these limits.
+    /// `prlimit --nproc` counts every process and thread of the user's, so
+    /// its limit is what the user runs now plus [`TASKS`].
+    fn words(&self) -> Vec<OsString> {
+        let process = |prlimit: &Option<PathBuf>, nice: &Option<PathBuf>| -> Vec<OsString> {
+            let mut words: Vec<OsString> = Vec::new();
+            if let Some(prlimit) = prlimit {
+                words.extend([
+                    prlimit.as_os_str().to_owned(),
+                    format!("--data={}", within_inherited(Resource::Data, MEMORY_LIMIT)).into(),
+                    format!("--fsize={}", within_inherited(Resource::Fsize, FILE_SIZE_LIMIT)).into(),
+                    format!("--cpu={}", within_inherited(Resource::Cpu, CPU_SECONDS)).into(),
+                    format!(
+                        "--nproc={}",
+                        within_inherited(Resource::Nproc, user_tasks().saturating_add(TASKS))
+                    )
+                    .into(),
+                    "--core=0".into(),
+                    "--".into(),
+                ]);
+            }
+            if let Some(nice) = nice {
+                words.extend([
+                    nice.as_os_str().to_owned(),
+                    "-n".into(),
+                    NICENESS.to_string().into(),
+                    "--".into(),
+                ]);
+            }
+            words
+        };
+        match self {
+            Self::Scope {
+                systemd_run,
+                env,
+                prlimit,
+                nice,
+            } => {
+                let mut words: Vec<OsString> = vec![
+                    systemd_run.as_os_str().to_owned(),
+                    "--user".into(),
+                    "--scope".into(),
+                    "--quiet".into(),
+                    "--collect".into(),
+                    format!("--property=MemoryMax={MEMORY_LIMIT}").into(),
+                    "--property=MemorySwapMax=0".into(),
+                    format!("--property=TasksMax={TASKS}").into(),
+                    format!("--property=CPUQuota={CPU_QUOTA}").into(),
+                    "--".into(),
+                    env.as_os_str().to_owned(),
+                    "-u".into(),
+                    "XDG_RUNTIME_DIR".into(),
+                    "--".into(),
+                ];
+                words.extend(process(prlimit, nice));
+                words
+            }
+            Self::Process { prlimit, nice } => process(prlimit, nice),
+            Self::Unlimited => Vec::new(),
+        }
+    }
+}
+
+/// `wanted`, or the app's own hard limit of `resource` when that is lower:
+/// `prlimit` given one value sets both limits, and raising a hard limit
+/// the app inherited is refused, which would cost the thumbnailers every
+/// limit, the scope's included ([`Sandbox::find`] would pass over it).
+fn within_inherited(resource: Resource, wanted: u64) -> u64 {
+    rustix::process::getrlimit(resource)
+        .maximum
+        .map_or(wanted, |hard| hard.min(wanted))
+}
+
+/// How many processes and threads the user runs now, as `prlimit
+/// --nproc` counts them: every task of every process the user owns.
+fn user_tasks() -> u64 {
+    use std::os::unix::fs::MetadataExt;
+
+    let user = rustix::process::getuid().as_raw();
+    let Ok(listing) = fs::read_dir("/proc") else {
+        return 0;
+    };
+    listing
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().as_bytes().iter().all(u8::is_ascii_digit))
+        .filter(|entry| entry.metadata().is_ok_and(|metadata| metadata.uid() == user))
+        .map(|entry| fs::read_dir(entry.path().join("task")).map_or(1, Iterator::count))
+        .map(|count| u64::try_from(count).unwrap_or(u64::MAX))
+        .fold(0, u64::saturating_add)
 }
 
 /// The extension the item keeps inside the sandbox, with its dot, which
@@ -855,6 +1141,51 @@ impl Drop for Workspace {
     }
 }
 
+/// How old a workspace must be to be another run's leftover: a run's own
+/// lasts no longer than its thumbnailer's [`TIMEOUT`] and the reading of
+/// its picture.
+const STALE_WORKSPACE: Duration = Duration::from_mins(2);
+
+/// Whether `name` is one [`Workspace::new`] gives: [`WORKSPACE`] and eight
+/// lowercase hexadecimal digits, and nothing else, so a folder of the
+/// user's that only starts the same way is never taken for one.
+fn is_workspace_name(name: &str) -> bool {
+    name.strip_prefix(WORKSPACE).is_some_and(|suffix| {
+        suffix.len() == 8
+            && suffix
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
+/// Removes the workspaces under `parent` that an earlier run of the app
+/// left: one that was closed, or ended, while a thumbnailer ran has no
+/// [`Workspace`] left to drop. Only this user's folders older than
+/// [`STALE_WORKSPACE`] go, so a workspace another window's thumbnailer
+/// still writes in stays; a link is never followed.
+fn sweep_stale_workspaces(parent: &Path) {
+    use std::os::unix::fs::MetadataExt;
+
+    let user = rustix::process::getuid().as_raw();
+    let Ok(listing) = fs::read_dir(parent) else {
+        return;
+    };
+    for entry in listing.filter_map(Result::ok) {
+        let is_workspace = entry.file_name().to_str().is_some_and(is_workspace_name);
+        let Ok(metadata) = fs::symlink_metadata(entry.path()) else {
+            continue;
+        };
+        let is_stale = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age >= STALE_WORKSPACE);
+        if is_workspace && metadata.is_dir() && metadata.uid() == user && is_stale {
+            remove_tree(&entry.path());
+        }
+    }
+}
+
 /// How deep a workspace's folders are emptied; a thumbnailer has no need
 /// of more, and a deeper one is left, as a deeper walk could exhaust the
 /// stack or the descriptors.
@@ -985,7 +1316,11 @@ fn drawn_png(bytes: &[u8]) -> Option<Vec<u8>> {
 /// The wait polls instead of blocking on the child so that a cancelled
 /// request stops the program within [`POLL`]: a request scrolled away must
 /// not keep a slot for the whole timeout.
-fn run(command: &[OsString], cancellation: &gio::Cancellable) -> Option<ExitStatus> {
+///
+/// With `runtime_dir` the command is handed the user's runtime folder,
+/// where `systemd-run --user` finds the user's service manager; the
+/// command takes it away from the program again ([`Limits::Scope`]).
+fn run_with(command: &[OsString], runtime_dir: bool, cancellation: &gio::Cancellable) -> Option<ExitStatus> {
     let (program, arguments) = command.split_first()?;
     let mut child = std::process::Command::new(program)
         .args(arguments)
@@ -1002,6 +1337,7 @@ fn run(command: &[OsString], cancellation: &gio::Cancellable) -> Option<ExitStat
             name.to_str()
                 .is_some_and(|name| name == "LANG" || name == "LANGUAGE" || name.starts_with("LC_"))
         }))
+        .envs(runtime_dir.then(|| ("XDG_RUNTIME_DIR", glib::user_runtime_dir())))
         // The thumbnailer gets a process group of its own, so stopping it
         // stops the programs it started too: a wrapper script's `cp`, or
         // ffmpeg, would otherwise keep writing the picture the app deletes.
@@ -1023,7 +1359,7 @@ fn run(command: &[OsString], cancellation: &gio::Cancellable) -> Option<ExitStat
 
 /// Kills the process group `child` leads, and reaps the child.
 ///
-/// The group is the child's own, [`run`] having put it in one: its number
+/// The group is the child's own, [`run_with`] having put it in one: its number
 /// is the child's. A group that is gone already is no failure — the
 /// program may have exited between the last look and this kill — so the
 /// outcome is not reported. In the sandbox, killing bubblewrap ends every
@@ -1597,6 +1933,239 @@ mod tests {
         assert_eq!((thumbnail.width(), thumbnail.height()), (128, 85));
         assert!(!escaped.exists(), "the program wrote nothing outside its folder");
         assert!(secret.exists() && item.exists());
+    }
+
+    /// A thumbnailer's limits: in a systemd user scope its processes
+    /// share one memory, task and processor budget, the user manager's
+    /// address is taken away before bubblewrap starts, and every process
+    /// keeps the per-process limits; without systemd those alone apply,
+    /// with room for the processes the user already runs.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn a_thumbnailer_is_limited_in_a_scope_or_per_process() {
+        let path = |name: &str| PathBuf::from(format!("/usr/bin/{name}"));
+        let scope = Limits::Scope {
+            systemd_run: path("systemd-run"),
+            env: path("env"),
+            prlimit: Some(path("prlimit")),
+            nice: Some(path("nice")),
+        };
+        let words: Vec<String> = scope
+            .words()
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+        let at = |word: &str| words.iter().position(|each| each == word).expect(word);
+        assert_eq!(words[..3], ["/usr/bin/systemd-run", "--user", "--scope"]);
+        for property in [
+            format!("--property=MemoryMax={MEMORY_LIMIT}"),
+            format!("--property=TasksMax={TASKS}"),
+            format!("--property=CPUQuota={CPU_QUOTA}"),
+        ] {
+            assert!(at(&property) < at("/usr/bin/env"), "{property} is the scope's");
+        }
+        assert!(at("XDG_RUNTIME_DIR") < at("/usr/bin/prlimit"));
+        assert!(at("/usr/bin/prlimit") < at("/usr/bin/nice"));
+        assert_eq!(words.last().map(String::as_str), Some("--"));
+        assert!(scope.needs_runtime_dir());
+
+        let process = Limits::Process {
+            prlimit: Some(path("prlimit")),
+            nice: Some(path("nice")),
+        };
+        let words: Vec<String> = process
+            .words()
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(words[0], "/usr/bin/prlimit");
+        assert!(words.contains(&format!("--cpu={CPU_SECONDS}")));
+        assert!(words.contains(&"--core=0".to_owned()));
+        let nproc: u64 = words
+            .iter()
+            .find_map(|word| word.strip_prefix("--nproc="))
+            .and_then(|limit| limit.parse().ok())
+            .expect("a process limit");
+        assert!(nproc > TASKS, "room for the user's own processes");
+        assert!(!process.needs_runtime_dir());
+        // Only a scope or prlimit limits memory, which a picture too large
+        // for the app to decode needs.
+        assert!(scope.limit_memory() && process.limit_memory());
+        assert!(!Limits::Process {
+            prlimit: None,
+            nice: Some(path("nice"))
+        }
+        .limit_memory());
+        assert!(!Limits::Unlimited.limit_memory());
+        assert!(Limits::Unlimited.words().is_empty());
+        assert_eq!(Limits::candidates().last(), Some(&Limits::Unlimited));
+
+        // The scope's own limits do not need prlimit or nice: without them
+        // it is still offered, first, and starts the program directly
+        // after env.
+        let systemd = Some((path("systemd-run"), path("env")));
+        let candidates = Limits::candidates_of(systemd.clone(), None, None);
+        assert_eq!(
+            candidates,
+            [
+                Limits::Scope {
+                    systemd_run: path("systemd-run"),
+                    env: path("env"),
+                    prlimit: None,
+                    nice: None,
+                },
+                Limits::Unlimited
+            ]
+        );
+        let words: Vec<String> = candidates[0]
+            .words()
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+        assert!(words.contains(&format!("--property=MemoryMax={MEMORY_LIMIT}")));
+        assert!(!words
+            .iter()
+            .any(|word| word.contains("prlimit") || word.contains("nice")));
+        assert_eq!(words.last().map(String::as_str), Some("--"));
+        // Either per-process program alone is used too.
+        let nice_only = Limits::candidates_of(None, None, Some(path("nice")));
+        assert_eq!(
+            nice_only[0],
+            Limits::Process {
+                prlimit: None,
+                nice: Some(path("nice"))
+            }
+        );
+        assert_eq!(nice_only[0].words()[0], path("nice").into_os_string());
+        assert_eq!(Limits::candidates_of(None, None, None), [Limits::Unlimited]);
+    }
+
+    /// A workspace an earlier run left, when the app was closed while its
+    /// thumbnailer ran, is removed with what it holds; a recent one,
+    /// another of the user's folders and a link are left alone.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn workspaces_an_earlier_run_left_are_removed() {
+        let parent = tempfile::tempdir().expect("a temporary folder");
+        let aged = |path: &Path| {
+            let old = std::time::SystemTime::now() - STALE_WORKSPACE - Duration::from_mins(1);
+            fs::File::open(path)
+                .and_then(|folder| folder.set_modified(old))
+                .expect("an old time");
+        };
+        let stale = parent.path().join(format!("{WORKSPACE}0a1b2c3d"));
+        fs::create_dir(&stale).expect("a workspace");
+        fs::write(stale.join("openxplorer-item.pdf"), b"").expect("its item");
+        fs::set_permissions(
+            stale.join("openxplorer-item.pdf"),
+            fs::Permissions::from_mode(0o444),
+        )
+        .expect("read-only");
+        aged(&stale);
+        let fresh = parent.path().join(format!("{WORKSPACE}4e5f6a7b"));
+        fs::create_dir(&fresh).expect("a workspace in use");
+        let other = parent.path().join("holiday-photos");
+        fs::create_dir(&other).expect("another folder");
+        aged(&other);
+        // A folder of the user's whose name only starts like a workspace's
+        // is never taken for one, however old.
+        let lookalikes: Vec<PathBuf> = ["backup", "0a1b2c3", "0a1b2c3d4", "0A1B2C3D", "0a1b2c3g"]
+            .iter()
+            .map(|suffix| parent.path().join(format!("{WORKSPACE}{suffix}")))
+            .collect();
+        for lookalike in &lookalikes {
+            fs::create_dir(lookalike).expect("a lookalike");
+            fs::write(lookalike.join("notes.txt"), b"kept").expect("its file");
+            aged(lookalike);
+        }
+        let kept = parent.path().join("kept");
+        fs::create_dir(&kept).expect("a folder a link names");
+        let link = parent.path().join(format!("{WORKSPACE}deadbeef"));
+        std::os::unix::fs::symlink(&kept, &link).expect("a link");
+
+        sweep_stale_workspaces(parent.path());
+
+        assert!(!stale.exists(), "the leftover is gone");
+        assert!(fresh.exists(), "a workspace in use stays");
+        assert!(other.exists() && kept.exists() && link.exists());
+        for lookalike in &lookalikes {
+            assert!(
+                lookalike.join("notes.txt").exists(),
+                "{} stays",
+                lookalike.display()
+            );
+        }
+        assert!(is_workspace_name(&format!("{WORKSPACE}{:08x}", 0x0a1b_2c3d_u32)));
+    }
+
+    /// A sandboxed thumbnailer runs with its resource limits and at a
+    /// lower priority than the app: no more data memory than
+    /// [`MEMORY_LIMIT`], no file over [`FILE_SIZE_LIMIT`], no core dump.
+    /// Runs where bubblewrap can make its sandbox and the computer has
+    /// `prlimit` and `nice`.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn a_sandboxed_thumbnailer_runs_within_its_limits() {
+        let Some(sandbox) = Sandbox::find() else {
+            eprintln!("skipped: bubblewrap cannot make its sandbox here");
+            return;
+        };
+        let Sandbox::Bubblewrap { limits, .. } = &sandbox else {
+            unreachable!("found sandboxes are bubblewrap's");
+        };
+        if *limits == Limits::Unlimited {
+            eprintln!("skipped: prlimit or nice is missing, or refused here");
+            return;
+        }
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let item = folder.path().join("Level.ab");
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 64, 64).expect("a picture");
+        pixbuf.fill(0x3366_99ff);
+        pixbuf.savev(&item, "png", &[]).expect("the item");
+        let installed = folder.path().join("App");
+        fs::create_dir_all(installed.join("bin")).expect("the install folder");
+        let script = installed.join("bin/ox-limited-thumbnailer");
+        let own_niceness = rustix::process::getpriority_process(None).expect("the app's niceness");
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 test \"$(ulimit -c)\" = 0 || exit 1\n\
+                 test \"$(ulimit -d)\" = {data_kib} || exit 2\n\
+                 test \"$(ulimit -f)\" = {file_blocks} || exit 3\n\
+                 test \"$(ulimit -t)\" = {cpu} || exit 5\n\
+                 test \"$(nice)\" = {niceness} || exit 4\n\
+                 cp \"$1\" \"$3\"\n",
+                data_kib = MEMORY_LIMIT / 1024,
+                // The shell counts files in blocks of 512 bytes.
+                file_blocks = FILE_SIZE_LIMIT / 512,
+                niceness = (own_niceness + NICENESS).min(19),
+                cpu = CPU_SECONDS,
+            ),
+        )
+        .expect("the script");
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("the mode");
+        let mut catalogue = Catalogue::for_test(vec![Thumbnailer::for_test(
+            &[script.to_str().expect("a path"), "%i", "%u", "%o", "%s"],
+            &[BUNDLE],
+        )]);
+        catalogue.sandbox = Some(sandbox.clone());
+        let cache = folder.path().join("cache");
+        let job = Job {
+            cache_dir: cache.clone(),
+            uri: gio::File::for_path(&item).uri().to_string(),
+            content_type: BUNDLE.to_owned(),
+            modified: 1_700_000_000,
+            flavor: ThumbnailFlavor::Normal,
+        };
+
+        assert!(
+            write_thumbnail(&job, &catalogue, &gio::Cancellable::new()).is_some(),
+            "the program saw its limits and wrote its picture"
+        );
     }
 
     /// A thumbnailer installed outside the system's folders sees the
