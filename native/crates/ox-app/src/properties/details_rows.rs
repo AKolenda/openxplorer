@@ -111,7 +111,7 @@ pub(super) fn detail_sections(
     let media = media.unwrap_or(&empty);
     let mut sections = Vec::new();
     match kind {
-        Some(MediaKind::Picture) => picture_sections(properties, media, &mut sections),
+        Some(MediaKind::Picture) => picture_sections(properties.dimensions, media, &mut sections),
         Some(MediaKind::Video) => video_sections(media, &mut sections),
         Some(MediaKind::Audio) => audio_sections(media, &mut sections),
         None => {}
@@ -120,11 +120,84 @@ pub(super) fn detail_sections(
     sections
 }
 
+/// The rows of a picture's, video's or audio file's own details that
+/// the Details pane lists under its file rows, as Windows 11's pane does
+/// (PROP-009): the most telling ones of [`detail_sections`], in the pane's
+/// order, with the tab's wording and values. Each row is its untranslated
+/// name (the pane's key), its shown name and its value; an unrated file
+/// has no Rating row, and a row the file does not have is left out.
+pub(crate) fn pane_media_rows(kind: MediaKind, media: &MediaDetails) -> Vec<(&'static str, String, String)> {
+    let mut sections = Vec::new();
+    let wanted: &[&'static str] = match kind {
+        MediaKind::Picture => {
+            picture_sections(None, media, &mut sections);
+            &[
+                "Date taken",
+                "Dimensions",
+                "Rating",
+                "Title",
+                "Tags",
+                "Authors",
+                "Camera maker",
+                "Camera model",
+                "F-stop",
+                "Exposure time",
+                "ISO speed",
+                "Exposure bias",
+                "Focal length",
+                "Flash mode",
+            ]
+        }
+        MediaKind::Video => {
+            video_sections(media, &mut sections);
+            &[
+                "Length",
+                "Frame width",
+                "Frame height",
+                "Frame rate",
+                "Data rate",
+                "Total bitrate",
+                "Bit rate",
+                "Title",
+                "Contributing artists",
+                "Year",
+                "Genre",
+            ]
+        }
+        MediaKind::Audio => {
+            audio_sections(media, &mut sections);
+            &[
+                "Length",
+                "Contributing artists",
+                "Album artist",
+                "Album",
+                "Year",
+                "#",
+                "Genre",
+                "Bit rate",
+                "Title",
+            ]
+        }
+    };
+    let rows: Vec<&DetailRow> = sections.iter().flat_map(|section| &section.rows).collect();
+    wanted
+        .iter()
+        .filter_map(|key| {
+            let name = ox_core::i18n::gettext(key);
+            let row = rows.iter().find(|row| row.name == name)?;
+            if row.value == DetailValue::Stars(0) {
+                return None;
+            }
+            Some((*key, name, row.value.text()))
+        })
+        .collect()
+}
+
 fn rating(media: &MediaDetails) -> Option<u8> {
     media.rating.or(media.rating_readable.then_some(0))
 }
 
-fn picture_sections(properties: &ItemProperties, media: &MediaDetails, sections: &mut Vec<DetailSection>) {
+fn picture_sections(dimensions: Option<(i32, i32)>, media: &MediaDetails, sections: &mut Vec<DetailSection>) {
     let mut description = Section::new(message_id("Description"));
     description
         .text(message_id("Title"), media.title.clone())
@@ -149,9 +222,7 @@ fn picture_sections(properties: &ItemProperties, media: &MediaDetails, sections:
     origin.finish(sections);
 
     let size = media.width.zip(media.height).or_else(|| {
-        properties
-            .dimensions
-            .and_then(|(width, height)| Some((u32::try_from(width).ok()?, u32::try_from(height).ok()?)))
+        dimensions.and_then(|(width, height)| Some((u32::try_from(width).ok()?, u32::try_from(height).ok()?)))
     });
     let mut image = Section::new(message_id("Image"));
     image
@@ -825,5 +896,57 @@ mod tests {
         assert_eq!(f_stop_text(4.0), "f/4");
         assert_eq!(length_text(59_600_000_000), "00:01:00");
         assert_eq!(kbps_text(320_000), "320kbps");
+    }
+
+    /// The Details pane takes a photo's telling rows from the tab, in its
+    /// own order and with the tab's values; an unrated file has no Rating.
+    ///
+    /// parity: PROP-009, PROP-034
+    #[test]
+    fn the_pane_lists_a_photos_telling_rows_in_its_order() {
+        let media = MediaDetails {
+            rating_readable: true,
+            date_taken: NaiveDateTime::parse_exif("2026:05:01 18:42:07"),
+            width: Some(4000),
+            height: Some(3000),
+            resolution: Some((72.0, 72.0)),
+            camera_maker: Some("Fictional Optics".to_owned()),
+            camera_model: Some("FO-100".to_owned()),
+            f_number: Some(2.8),
+            exposure_time: Some((1, 125)),
+            iso: Some(200),
+            ..MediaDetails::default()
+        };
+        let rows = pane_media_rows(MediaKind::Picture, &media);
+        let keys: Vec<&str> = rows.iter().map(|(key, _, _)| *key).collect();
+        assert_eq!(
+            keys,
+            [
+                "Date taken",
+                "Dimensions",
+                "Camera maker",
+                "Camera model",
+                "F-stop",
+                "Exposure time",
+                "ISO speed"
+            ]
+        );
+        let value = |key: &str| rows.iter().find(|row| row.0 == key).map(|row| row.2.clone());
+        assert_eq!(value("Dimensions").as_deref(), Some("4000 x 3000"));
+        assert_eq!(value("F-stop").as_deref(), Some("f/2.8"));
+        assert_eq!(value("Exposure time").as_deref(), Some("1/125 sec."));
+        assert_eq!(value("ISO speed").as_deref(), Some("ISO-200"));
+
+        let song = MediaDetails {
+            length: Some(205_000_000_000),
+            artists: Some("The Example Band".to_owned()),
+            audio_bitrate: Some(320_000),
+            ..MediaDetails::default()
+        };
+        let keys: Vec<&str> = pane_media_rows(MediaKind::Audio, &song)
+            .iter()
+            .map(|(key, _, _)| *key)
+            .collect();
+        assert_eq!(keys, ["Length", "Contributing artists", "Bit rate"]);
     }
 }
