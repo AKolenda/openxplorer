@@ -48,7 +48,7 @@ impl From<AppAction> for MenuAction {
 
 impl MenuAction {
     /// The name a row runs the action by, such as `win.sort`.
-    pub(super) fn detailed_name(self) -> String {
+    pub(in crate::window) fn detailed_name(self) -> String {
         match self {
             MenuAction::Window(action) => action.detailed_name(),
             MenuAction::Application(action) => action.detailed_name(),

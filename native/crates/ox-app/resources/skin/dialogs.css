@@ -197,3 +197,11 @@ popover.ox-menu .context-strip button:not(:first-child) {
   border-left: 1px solid alpha(@ox_border, 0.7);
 }
 popover.ox-menu .context-strip .strip-label { font-size: 0.85em; }
+/* Below the rows when the menu opened above the pointer, as Windows 11
+   keeps the strip on the side nearest the pointer. */
+popover.ox-menu .context-strip.at-bottom {
+  border-bottom: none;
+  margin-bottom: 0;
+  border-top: 1px solid @ox_border;
+  margin-top: 2px;
+}

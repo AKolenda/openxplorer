@@ -270,6 +270,17 @@ pub(crate) enum WindowAction {
     CollapseAllGroups,
     /// Expands every group of This PC.
     ExpandAllGroups,
+    /// Copy as path for the folder at the location given (a pinned
+    /// folder's menu).
+    CopyPathOf,
+    /// Compresses the folder at the location given into a ZIP beside it.
+    CompressToZipOf,
+    /// Asks for the name and format of an archive of the folder at the
+    /// location given.
+    CompressToOf,
+    /// Opens a folder and runs a New menu item there; the target holds
+    /// the folder, the action and its target (`place_commands.rs`).
+    NewIn,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -581,6 +592,10 @@ impl WindowAction {
             WindowAction::ToggleGroup => "toggle-group",
             WindowAction::CollapseAllGroups => "collapse-all-groups",
             WindowAction::ExpandAllGroups => "expand-all-groups",
+            WindowAction::CopyPathOf => "copy-path-of",
+            WindowAction::CompressToZipOf => "compress-to-zip-of",
+            WindowAction::CompressToOf => "compress-to-of",
+            WindowAction::NewIn => "new-in",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::SidebarMoreOptions => "sidebar-more-options",

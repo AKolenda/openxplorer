@@ -628,6 +628,33 @@ impl MenuPopover {
         }
     }
 
+    /// Puts the strip at the bottom of the menu, `at_bottom` when it opened
+    /// above the pointer, or at its top, as Windows 11 keeps it on the side
+    /// nearest the pointer.
+    pub(super) fn place_strip(&self, at_bottom: bool) {
+        let strip = self.strip();
+        let Some(content) = strip.parent().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        if at_bottom {
+            if content.last_child().as_ref() != Some(strip.upcast_ref()) {
+                content.reorder_child_after(strip, content.last_child().as_ref());
+            }
+            strip.add_css_class("at-bottom");
+        } else {
+            if content.first_child().as_ref() != Some(strip.upcast_ref()) {
+                content.reorder_child_after(strip, None::<&gtk::Widget>);
+            }
+            strip.remove_css_class("at-bottom");
+        }
+    }
+
+    /// Whether the strip sits at the bottom of the menu, for tests.
+    #[cfg(test)]
+    pub(crate) fn strip_at_bottom(&self) -> bool {
+        self.strip().has_css_class("at-bottom")
+    }
+
     /// A button of the strip: its icon with its label under it, as
     /// Windows 11 draws Cut, Copy, Rename, Share and Delete.
     fn strip_button(&self, item: &MenuItem) -> gtk::Button {

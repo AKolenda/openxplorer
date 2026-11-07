@@ -18,7 +18,7 @@ use super::file_ops_support::{
 use crate::test_support::harness::{
     capture_popover, settle, wait_for_frames, wait_until, Fixture, TestWindow,
 };
-use crate::window::menu_popover::MenuStyle;
+use crate::window::menu_popover::{MenuEntry, MenuStyle};
 
 /// The position of the item called `name` in `test`'s view.
 pub(super) fn position_of(test: &TestWindow, name: &str) -> u32 {
@@ -719,11 +719,17 @@ fn right_clicking_a_pin_opens_its_menu() {
     // Until then the click lands on empty space, whose menu differs.
     wait_until("the pin's menu", || {
         let menu = test.window.sidebar().right_click_row("Pinned menu");
-        menu.is_visible() && menu.row_labels().first().is_some_and(|label| label == "Open")
+        menu.is_visible()
+            && menu
+                .row_labels()
+                .first()
+                .is_some_and(|label| label == "Open in new tab")
     });
     let menu = test.window.sidebar().right_click_row("Pinned menu");
 
-    assert_eq!(menu.row_labels()[0], "Open");
+    // Windows 11's compact menu of a pinned folder starts with Open in new
+    // tab; a click opens the folder.
+    assert_eq!(menu.row_labels()[0], "Open in new tab");
     assert!(menu.row("Unpin from Quick access").is_sensitive());
     assert!(
         menu.row("Properties").is_sensitive(),
@@ -930,4 +936,168 @@ fn copy_as_path_in_the_menu_copies_the_items_path() {
     let copied = copied.ok().flatten().map(|text| text.to_string());
     let expected = format!("\"{}\"", fixture.path("Notes 2.txt").display());
     assert_eq!(copied, Some(expected));
+}
+
+/// A pinned folder's compact menu, as Windows 11's: Open in new tab, Open
+/// in new window, Unpin from Quick access, Compress to, Copy as path, New,
+/// Properties, Open in Terminal and Show more options; a standard folder
+/// such as Downloads has only Copy in its strip, and the user's own pin
+/// has Cut, Copy, Rename and Delete. The strip is on the side nearest the
+/// pointer: at the top of a menu opening downward and at the bottom of
+/// one opening upward, as Windows 11 draws it. With
+/// `OX_NATIVE_CAPTURE_DIR` set, the menus are saved there as
+/// `context-menu-match-pinned-{down,up}-{light,dark}.png`.
+///
+/// parity: SIDE-014, CMD-010
+#[gtk::test]
+fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() {
+    let _theme = crate::test_support::harness::ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let names = [
+        "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliett", "Kilo",
+        "Lima", "Mike", "November",
+    ];
+    for name in names {
+        fs::create_dir(fixture.path(name)).expect("fixture subfolder");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(960, 980);
+    wait_until("the taller window", || test.window.height() >= 940);
+    for name in names {
+        test.window.navigate(&fixture.uri_of(name)).expect("a folder");
+        test.wait_for_listing(name);
+        test.activate("pin-folder", None);
+        wait_until("the pin", || {
+            test.window.sidebar().labels().contains(&name.to_owned())
+        });
+    }
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    let open_menu = |label: &str| {
+        wait_until("the pin's menu", || {
+            let menu = test.window.sidebar().right_click_row(label);
+            let shown = menu.is_visible()
+                && menu
+                    .row_labels()
+                    .first()
+                    .is_some_and(|first| first == "Open in new tab");
+            if !shown {
+                menu.popdown();
+            }
+            shown
+        });
+        let menu = test.window.sidebar().right_click_row(label);
+        crate::test_support::harness::wait_for_frames(&test.window, 3);
+        menu
+    };
+
+    let menu = open_menu("Downloads");
+    assert_eq!(
+        menu.row_labels(),
+        [
+            "Open in new tab",
+            "Open in new window",
+            "Unpin from Quick access",
+            "Compress to",
+            "Copy as path",
+            "New",
+            "Properties",
+            "-",
+            "Open in Terminal",
+            "-",
+            "Show more options",
+        ]
+    );
+    assert_eq!(menu.strip_labels(), ["Copy"]);
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+
+    let menu = open_menu("Alpha");
+    assert_eq!(menu.strip_labels(), ["Cut", "Copy", "Rename", "Delete"]);
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        let menu = open_menu("Alpha");
+        wait_until("the menu placed below the pointer", || {
+            menu.slide() == Some(crate::window::menu_popover::Slide::Down)
+        });
+        assert!(
+            !menu.strip_at_bottom(),
+            "the strip on top of a menu opening downward"
+        );
+        crate::test_support::harness::capture_with_menus(
+            &test.window,
+            &format!("context-menu-match-pinned-down-{theme}.png"),
+        );
+        menu.popdown();
+        wait_until("the menu to close", || !menu.is_mapped());
+
+        let menu = open_menu("Downloads");
+        // Downloads, below the user's pins, is low in the window and opens
+        // its menu upward.
+        wait_until("the menu placed above the pointer", || {
+            menu.slide() == Some(crate::window::menu_popover::Slide::Up)
+        });
+        assert!(
+            menu.strip_at_bottom(),
+            "the strip at the bottom of a menu opening upward"
+        );
+        crate::test_support::harness::capture_with_menus(
+            &test.window,
+            &format!("context-menu-match-pinned-up-{theme}.png"),
+        );
+        menu.popdown();
+        wait_until("the menu to close", || !menu.is_mapped());
+    }
+}
+
+/// A pinned folder's Copy as path, Compress to › ZIP File and New ›
+/// Folder act on that folder, not on the file list's selection: the path
+/// is copied in quotes, the ZIP is made beside the folder, and New opens
+/// the folder and makes the new folder there.
+///
+/// parity: SIDE-014, CLIP-013, ARC-023
+#[gtk::test]
+fn a_pinned_folder_menu_copies_compresses_and_creates_in_that_folder() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Pinned work")).expect("fixture subfolder");
+    let pinned = fixture.uri_of("Pinned work");
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_model().select_only(0);
+
+    test.activate("copy-path-of", Some(&pinned));
+    let clipboard = test.window.clipboard();
+    let copied = gtk::glib::MainContext::default().block_on(clipboard.read_text_future());
+    let copied = copied.ok().flatten().map(|text| text.to_string());
+    assert_eq!(
+        copied,
+        Some(format!("\"{}\"", fixture.path("Pinned work").display()))
+    );
+
+    test.activate("compress-to-zip-of", Some(&pinned));
+    wait_until("the ZIP beside the folder", || {
+        fixture.path("Pinned work.zip").exists()
+    });
+    test.wait_for_listing("the folder listed again");
+
+    let new_folder =
+        crate::window::place_commands::new_menu_in(&pinned, crate::window::command_bar::new_menu(Vec::new()));
+    let MenuEntry::Item(folder_item) = &new_folder[0] else {
+        panic!("New › Folder is an item");
+    };
+    assert_eq!(folder_item.label, "Folder");
+    let target = folder_item
+        .target
+        .as_ref()
+        .and_then(|target| target.str().map(str::to_owned))
+        .expect("a text target");
+    test.activate("new-in", Some(&target));
+    wait_until("the pinned folder to open", || {
+        test.window.current_uri().as_deref() == Some(pinned.as_str())
+    });
+    wait_until("the new folder inside it", || {
+        fixture.path("Pinned work/New folder").is_dir()
+    });
 }

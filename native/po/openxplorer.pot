@@ -4532,7 +4532,7 @@ msgstr ""
 msgid "More options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
 
@@ -4838,7 +4838,7 @@ msgstr ""
 msgid "Compare files"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Compress to"
 msgstr ""
 

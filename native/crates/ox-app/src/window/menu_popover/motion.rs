@@ -218,6 +218,9 @@ impl MenuPopover {
 
     /// Slides the menu `slide`'s way.
     fn set_slide(&self, slide: Slide) {
+        // Windows 11 keeps the strip on the side nearest the pointer: at
+        // the bottom of a menu that opened above it.
+        self.place_strip(slide == Slide::Up);
         if self.imp().slide.replace(Some(slide)) == Some(slide) && self.has_css_class(slide.css_class()) {
             return;
         }
