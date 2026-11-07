@@ -13,6 +13,14 @@
 //! which Folder Options replaced, still applies below it, as Dolphin's
 //! `ApplyViewPropsJob` does; none is saved any more. The Python app reads
 //! neither key.
+//!
+//! A folder's own entry can also hold the template the Properties
+//! window's Customize tab optimized it for (Windows' "What kind of folder
+//! do you want?", PROP-036), as `folderType`, with `subfolders` set when
+//! "Also apply this template to all subfolders" was ticked. Customizing
+//! saves the template's view into the entry, so the folder and, with
+//! that box, its sub-folders show it as any saved style; nothing is
+//! written into the folder itself.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -153,6 +161,73 @@ fn is_short_key(key: &str) -> bool {
     !key.is_empty() && key.len() <= MAX_SORT_KEY && key.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
+/// What a folder is optimized for: the templates of Windows' Customize
+/// tab, in the order its list gives them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FolderTemplate {
+    /// "General items", the template of a folder never customized.
+    GeneralItems,
+    /// "Documents".
+    Documents,
+    /// "Pictures".
+    Pictures,
+    /// "Music".
+    Music,
+    /// "Videos".
+    Videos,
+}
+
+impl FolderTemplate {
+    /// Every template, in the order Windows lists them.
+    pub const ALL: [FolderTemplate; 5] = [
+        FolderTemplate::GeneralItems,
+        FolderTemplate::Documents,
+        FolderTemplate::Pictures,
+        FolderTemplate::Music,
+        FolderTemplate::Videos,
+    ];
+
+    /// The key the settings keep it under.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            FolderTemplate::GeneralItems => "generalItems",
+            FolderTemplate::Documents => "documents",
+            FolderTemplate::Pictures => "pictures",
+            FolderTemplate::Music => "music",
+            FolderTemplate::Videos => "videos",
+        }
+    }
+
+    /// The template kept under `key`, if it is one.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|template| template.as_str() == key)
+    }
+
+    /// `style` as this template shows a folder, as Windows' templates
+    /// pick their view: Pictures and Videos in Large icons, the others in
+    /// Details. The sort, groups and columns stay as they are: the
+    /// columns Windows adds (Tags and Rating for pictures, Contributing
+    /// artists and Album for music, Length for videos) are not ones the
+    /// Details view has.
+    pub fn style(self, style: &ViewProperties) -> ViewProperties {
+        let (mode, icon_size) = match self {
+            FolderTemplate::Pictures | FolderTemplate::Videos => ("icons", LARGE_ICONS),
+            FolderTemplate::GeneralItems | FolderTemplate::Documents | FolderTemplate::Music => {
+                ("details", style.icon_size)
+            }
+        };
+        ViewProperties {
+            mode: mode.to_owned(),
+            icon_size,
+            ..style.clone()
+        }
+    }
+}
+
+/// The icon edge of Explorer's Large icons, in pixels.
+const LARGE_ICONS: u32 = 96;
+
 /// One folder's own style.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -163,10 +238,14 @@ pub struct FolderView {
     #[serde(flatten)]
     pub properties: ViewProperties,
     /// The style applies to the folder's sub-folders too, unless they have
-    /// their own: saved by the display style dialog before Folder Options
-    /// replaced it, and still read.
+    /// their own: set by the Customize tab's "Also apply this template to
+    /// all subfolders", and by the display style dialog before Folder
+    /// Options replaced it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub subfolders: bool,
+    /// The template the Customize tab optimized the folder for.
+    #[serde(rename = "folderType", skip_serializing_if = "Option::is_none")]
+    pub template: Option<FolderTemplate>,
 }
 
 impl FolderView {
@@ -181,6 +260,10 @@ impl FolderView {
             uri: uri.to_owned(),
             properties: ViewProperties::from_json(value)?,
             subfolders: value.get("subfolders").and_then(Value::as_bool).unwrap_or(false),
+            template: value
+                .get("folderType")
+                .and_then(Value::as_str)
+                .and_then(FolderTemplate::from_key),
         })
     }
 }
@@ -245,9 +328,65 @@ pub fn saved_style_for<'a>(folder_views: &'a [FolderView], uri: &str) -> Option<
     None
 }
 
+/// The template `uri` is optimized for: its own, else that of the nearest
+/// folder above it customized with its sub-folders; `None` when it was
+/// never customized.
+pub fn template_for(folder_views: &[FolderView], uri: &str) -> Option<FolderTemplate> {
+    saved_style_for(folder_views, uri).and_then(|view| view.template)
+}
+
+/// Optimizes the folder at `uri` for `template` (the Customize tab's OK or
+/// Apply): its entry keeps the template and `properties`, the template's
+/// view of the style the folder had, and reaches its sub-folders when
+/// `subfolders` is set, whose own styles are then dropped, as Windows
+/// gives every sub-folder the template. A template once applied to the
+/// sub-folders keeps reaching them: they have no entries of their own to
+/// keep the earlier one. Returns whether `uri` may be kept.
+pub(super) fn customize(
+    folder_views: &mut Vec<FolderView>,
+    uri: &str,
+    template: FolderTemplate,
+    properties: ViewProperties,
+    subfolders: bool,
+) -> bool {
+    if !may_remember(uri) {
+        return false;
+    }
+    let reached_below = folder_views
+        .iter()
+        .any(|view| same_location(&view.uri, uri) && view.subfolders && view.template.is_some());
+    // The folder's own entry goes, and with the box every sub-folder's.
+    let replaced =
+        |view: &FolderView| same_location(&view.uri, uri) || (subfolders && is_inside(&view.uri, uri));
+    folder_views.retain(|view| !replaced(view));
+    folder_views.push(FolderView {
+        uri: uri.to_owned(),
+        properties,
+        subfolders: subfolders || reached_below,
+        template: Some(template),
+    });
+    let excess = folder_views.len().saturating_sub(MAX_FOLDER_VIEWS);
+    folder_views.drain(..excess);
+    true
+}
+
+/// Whether `uri` is below the folder `folder`.
+fn is_inside(uri: &str, folder: &str) -> bool {
+    let mut above = parent_location(uri);
+    while let Some(parent) = above {
+        if same_location(&parent, folder) {
+            return true;
+        }
+        above = parent_location(&parent);
+    }
+    false
+}
+
 /// Saves `properties` for `uri` with `scope` into `folder_views` and
 /// `defaults`. A location that may not be kept changes nothing but the
-/// default of [`ViewScope::AllFolders`].
+/// default of [`ViewScope::AllFolders`]. A folder customized on the
+/// Customize tab keeps its template, and its sub-folders, through a
+/// change of view; a sub-folder restyled keeps the template it inherits.
 pub(super) fn remember(
     folder_views: &mut Vec<FolderView>,
     defaults: &mut Option<ViewProperties>,
@@ -263,11 +402,16 @@ pub(super) fn remember(
     if !may_remember(uri) {
         return;
     }
-    folder_views.retain(|view| !same_location(&view.uri, uri));
+    let template = template_for(folder_views, uri);
+    let own = folder_views
+        .iter()
+        .position(|view| same_location(&view.uri, uri))
+        .map(|own| folder_views.remove(own));
     folder_views.push(FolderView {
         uri: uri.to_owned(),
         properties,
-        subfolders: false,
+        subfolders: own.is_some_and(|own| own.subfolders && own.template.is_some()),
+        template,
     });
     let excess = folder_views.len().saturating_sub(MAX_FOLDER_VIEWS);
     folder_views.drain(..excess);
@@ -414,5 +558,114 @@ mod tests {
             style_for(&views, &ViewProperties::default(), "file:///b/c").sort,
             "name"
         );
+    }
+
+    /// A template gives the folder its view, Large icons for Pictures and
+    /// Videos and Details for the others, keeping its sort; with "Also
+    /// apply this template to all subfolders" it reaches below, dropping
+    /// the sub-folders' own styles. A later change of view keeps the
+    /// template, and a sub-folder restyled keeps the one it inherits.
+    ///
+    /// parity: PROP-036
+    #[test]
+    fn a_template_picks_the_view_and_reaches_subfolders_when_asked() {
+        let mut views = Vec::new();
+        let mut defaults = None;
+        remember(
+            &mut views,
+            &mut defaults,
+            "file:///p/inner",
+            sorted_by("size"),
+            ViewScope::Folder,
+        );
+        let pictures = FolderTemplate::Pictures.style(&sorted_by("type"));
+        assert_eq!(
+            (pictures.mode.as_str(), pictures.icon_size, pictures.sort.as_str()),
+            ("icons", 96, "type")
+        );
+        assert_eq!(FolderTemplate::Music.style(&pictures).mode, "details");
+
+        assert!(customize(
+            &mut views,
+            "file:///p",
+            FolderTemplate::Pictures,
+            pictures.clone(),
+            false
+        ));
+        assert_eq!(template_for(&views, "file:///p/"), Some(FolderTemplate::Pictures));
+        assert_eq!(
+            template_for(&views, "file:///p/other"),
+            None,
+            "not without the box"
+        );
+        assert_eq!(
+            style_for(&views, &ViewProperties::default(), "file:///p/inner").sort,
+            "size"
+        );
+
+        assert!(customize(
+            &mut views,
+            "file:///p",
+            FolderTemplate::Videos,
+            pictures.clone(),
+            true
+        ));
+        assert_eq!(views.len(), 1, "the sub-folder's own style is dropped");
+        assert_eq!(
+            template_for(&views, "file:///p/inner/deep"),
+            Some(FolderTemplate::Videos)
+        );
+        assert_eq!(
+            style_for(&views, &ViewProperties::default(), "file:///p/inner").mode,
+            "icons"
+        );
+
+        remember(
+            &mut views,
+            &mut defaults,
+            "file:///p",
+            sorted_by("name"),
+            ViewScope::Folder,
+        );
+        remember(
+            &mut views,
+            &mut defaults,
+            "file:///p/inner",
+            sorted_by("size"),
+            ViewScope::Folder,
+        );
+        assert_eq!(
+            template_for(&views, "file:///p/elsewhere"),
+            Some(FolderTemplate::Videos)
+        );
+        assert_eq!(
+            template_for(&views, "file:///p/inner"),
+            Some(FolderTemplate::Videos)
+        );
+
+        let stored = serde_json::to_value(&views).expect("serializes");
+        assert_eq!(stored[0]["folderType"], json!("videos"));
+        assert_eq!(stored[0]["subfolders"], json!(true));
+        assert_eq!(read_folder_views(&stored), Some(views.clone()));
+        let odd = json!([{"uri": "file:///q", "folderType": "contacts"}]);
+        assert_eq!(read_folder_views(&odd).expect("a list")[0].template, None);
+        assert!(customize(
+            &mut views,
+            "file:///p",
+            FolderTemplate::Music,
+            pictures.clone(),
+            false
+        ));
+        assert_eq!(
+            template_for(&views, "file:///p/elsewhere"),
+            Some(FolderTemplate::Music)
+        );
+        assert!(!customize(
+            &mut views,
+            "sftp://me@host/x",
+            FolderTemplate::Music,
+            pictures,
+            false
+        ));
     }
 }

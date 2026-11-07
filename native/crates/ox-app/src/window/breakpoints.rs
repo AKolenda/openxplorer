@@ -212,7 +212,7 @@ impl BrowserWindow {
         };
         let room = self.window_width().has_room_for_details();
         let shown = switched_on && room;
-        // A button of the pane may hold the keyboard (its close button, say):
+        // A button of the pane may hold the keyboard (Properties, say):
         // the folder takes it before the pane hides, rather than leaving GTK
         // to hand it to an unrelated control.
         let on_details =
