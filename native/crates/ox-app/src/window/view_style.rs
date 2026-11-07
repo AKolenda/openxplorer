@@ -294,6 +294,7 @@ impl BrowserWindow {
         self.follow_hidden_files(preferences.show_hidden);
         self.follow_file_name_extensions_preference();
         self.follow_folder_options(&preferences);
+        self.follow_picture_paste_preference();
         for (side, uri) in self.shown_panes() {
             let pane = self.pane_on(side);
             let style = preferences.view_for(&uri);
