@@ -253,22 +253,15 @@ fn restore_conflicts_are_captured_light_and_dark() {
     }
 }
 
-/// Whether every one of `wanted` is a shown text of `window`.
-fn shows_all(window: &impl IsA<gtk::Widget>, wanted: &[&str]) -> bool {
-    let shown = texts(window);
-    wanted.iter().all(|text| shown.iter().any(|shown| shown == text))
-}
-
-/// "More details" stays as it was left, as in Windows: a question opened
-/// with the details remembered open reads "Fewer details" and compares
-/// both files (name, folders, dates and sizes) under it, never an empty
-/// body; folded, it reads "More details" and shows none. Saves
-/// `native-restore-question-expanded-*.png` and
-/// `native-restore-question-collapsed-*.png`.
+/// While Replace or Skip Files shows, "More details" is greyed, as in
+/// Windows 11, even with the details remembered open: it reads "More
+/// details", Tab passes it, and nothing compares the files under the
+/// question; "Compare info for both files" still opens the File Conflict
+/// window. Saves `replace-skip-details-*.png`.
 ///
 /// parity: OPS-021, OPS-026
 #[gtk::test]
-fn the_question_keeps_the_remembered_details_and_compares_both_files_in_them() {
+fn the_question_greys_more_details_and_compares_the_files_only_in_the_file_conflict_window() {
     require_private_trash();
     let _theme = ThemeGuard::keep();
     for theme in ["light", "dark"] {
@@ -291,31 +284,29 @@ fn the_question_keeps_the_remembered_details_and_compares_both_files_in_them() {
             "20 bytes".to_owned(),
             "23 bytes".to_owned(),
         ];
-        let compared: Vec<&str> = compared.iter().map(String::as_str).collect();
 
         test.activate("restore", None);
         let window = question_window(&test);
 
         assert!(window.shows_details(), "the remembered choice is kept");
-        assert_eq!(window.details_text(), "Fewer details");
-        assert!(shows_all(&window, &compared), "{:?}", texts(&window));
-        button(&window, "Skip this file");
-        capture_dialog(&window, &format!("native-restore-question-expanded-{theme}.png"));
-
-        window.press_details();
-
+        assert!(!window.offers_details(), "the toggle is greyed");
         assert_eq!(window.details_text(), "More details");
-        let folded = texts(&window);
+        let shown = texts(&window);
+        assert!(!shown.iter().any(|text| compared.contains(text)), "{shown:?}");
+        let tabbed = focus_after_tabs(&window, 8);
         assert!(
-            !folded.iter().any(|text| compared.contains(&text.as_str())),
-            "{folded:?}"
+            !tabbed
+                .iter()
+                .any(|widget| widget.has_css_class("progress-details-toggle")),
+            "Tab passes the greyed toggle"
         );
-        capture_dialog(&window, &format!("native-restore-question-collapsed-{theme}.png"));
+        GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
+        window.set_focus_visible(false);
+        capture_dialog(&window, &format!("replace-skip-details-{theme}.png"));
 
-        window.press_details();
-        assert_eq!(window.details_text(), "Fewer details");
-        assert!(shows_all(&window, &compared), "{:?}", texts(&window));
-        button(&window, "Skip this file").emit_clicked();
+        button(&window, "Compare info for both files").emit_clicked();
+        let conflicts = super::name_conflicts::conflict_window(&window);
+        conflicts.cancel();
         ends_without_a_report(&test);
         drop(test);
         forget_trashed_items_of(&fixture);

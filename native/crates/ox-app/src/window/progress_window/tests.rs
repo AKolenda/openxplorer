@@ -330,3 +330,115 @@ fn toggling_the_details_leaves_the_browsing_windows_alone() {
     test.context.disconnect(handler);
     action.finish();
 }
+
+/// A question about the taken name "Report.txt" in Documents.
+fn taken_name(fixture: &Fixture) -> ox_core::ops::ConflictScan {
+    use ox_core::ops::{ConflictScan, ItemFacts, NameConflict};
+    ConflictScan {
+        mode: ox_core::transfer::TransferMode::Copy,
+        destination_folder: format!("{}/Documents", fixture.uri()),
+        selection: Vec::new(),
+        items: Vec::new(),
+        conflicts: vec![NameConflict {
+            incoming_uri: format!("{}/Report.txt", fixture.uri()),
+            existing_uri: format!("{}/Documents/Report.txt", fixture.uri()),
+            incoming: ItemFacts::default(),
+            existing: ItemFacts::default(),
+        }],
+        merged_folders: Vec::new(),
+    }
+}
+
+/// The shown button of `window` labelled `text`.
+fn row(window: &ProgressWindow, text: &str) -> gtk::Button {
+    crate::window::widget_tree::descendants::<gtk::Button>(window)
+        .into_iter()
+        .find(|button| {
+            button.is_visible()
+                && crate::window::widget_tree::descendants::<gtk::Label>(button)
+                    .iter()
+                    .any(|label| label.text() == text)
+        })
+        .unwrap_or_else(|| panic!("a button {text:?}"))
+}
+
+/// While the one action asks Replace or Skip Files, "More details" shows
+/// greyed, as in Windows 11: worded "More details" even when remembered
+/// open, out of Tab's reach, and the details stay hidden. Answered, the
+/// toggle and the remembered choice come back with the progress.
+///
+/// parity: OPS-021, OPS-026
+#[gtk::test]
+fn replace_or_skip_greys_more_details_until_it_is_answered() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (action, _) = start_copy(&test, &fixture, 1);
+    window.press_details();
+    let scan = taken_name(&fixture);
+    let asking = action.clone();
+    let answered = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&answered);
+    gtk::glib::MainContext::default().spawn_local(async move {
+        asking.ask_about_conflicts(&scan).await;
+        done.set(true);
+    });
+    wait_until("the question", || {
+        window.title().as_deref() == Some("Replace or Skip Files")
+    });
+
+    let asked = (window.offers_details(), window.details_text());
+    let details_hidden = !action.shows_details_now();
+    let mut reached = Vec::new();
+    GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
+    for _ in 0..12 {
+        window.child_focus(gtk::DirectionType::TabForward);
+        if let Some(focused) = GtkWindowExt::focus(&window) {
+            reached.push(focused);
+        }
+    }
+    let toggle_reached = reached.iter().any(|widget| {
+        widget
+            .ancestor(gtk::Button::static_type())
+            .unwrap_or_else(|| widget.clone())
+            .has_css_class("progress-details-toggle")
+    });
+    row(&window, "Skip this file").emit_clicked();
+    wait_until("the answer", || answered.get());
+
+    assert_eq!(asked, (false, "More details".to_owned()), "greyed while asking");
+    assert!(details_hidden, "no comparison under the question");
+    assert!(!toggle_reached, "Tab passes the greyed toggle");
+    assert!(window.offers_details(), "offered again with the progress");
+    assert_eq!(window.details_text(), "Fewer details", "the remembered choice");
+    assert!(action.shows_details_now(), "the details show again");
+    action.finish();
+}
+
+/// Only Replace or Skip Files greys the toggle: the question about a full
+/// drive leaves it as it was.
+///
+/// parity: OPS-021
+#[gtk::test]
+fn a_full_drive_leaves_more_details_offered() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let window = window_of(&test);
+    let (action, _) = start_copy(&test, &fixture, 1);
+    let texts = crate::window::transfer_panel::SpaceTexts {
+        summary: "There is not enough space on USB Drive.".to_owned(),
+        needed: "4.4 GB is needed to copy this item.".to_owned(),
+        drive: Vec::new(),
+    };
+    let asking = action.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        asking.ask_about_space(&texts).await;
+    });
+    wait_until("the question", || action.asks_about_space());
+
+    let offered = window.offers_details();
+    action.press_space_answer(false);
+
+    assert!(offered);
+    action.finish();
+}

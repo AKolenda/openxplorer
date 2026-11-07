@@ -21,6 +21,10 @@
 //! question, and stops it too; nothing has changed then. Each row is a
 //! button named by its text, reachable with Tab, with the glyph Windows
 //! shows: a check mark, a turning arrow and two documents.
+//!
+//! While it asks, the window's "More details" shows greyed and the
+//! details stay hidden, whatever was remembered, as in Windows 11: the
+//! files are compared only in the File Conflict window.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -29,7 +33,7 @@ use ox_core::ops::{ConflictScan, Resolution};
 
 use super::TransferPanel;
 use crate::icons::{self, Icon};
-use crate::window::conflict_window::{compared_files, FileConflictWindow};
+use crate::window::conflict_window::FileConflictWindow;
 
 /// The edge of the rows' glyphs.
 const ROW_GLYPH_SIZE: i32 = 20;
@@ -221,6 +225,11 @@ impl TransferPanel {
         button.emit_clicked();
     }
 
+    /// True while the action asks Replace or Skip Files.
+    pub(crate) fn asks_about_names(&self) -> bool {
+        self.imp().question.get_visible()
+    }
+
     /// True while the action asks about a full drive.
     pub(crate) fn asks_about_space(&self) -> bool {
         self.imp().space_question.get_visible()
@@ -247,10 +256,7 @@ impl TransferPanel {
         imp.replace_label.set_text(&replace);
         imp.skip_label.set_text(&skip);
         imp.decide_label.set_text(&decide);
-        // "More details" stays as it was left, and compares the files.
-        self.compare_in_details(scan);
-        let details = imp.window.upgrade().is_some_and(|window| window.shows_details());
-        imp.details.set_visible(details);
+        // The details stay hidden, and the window greys its toggle.
         imp.question.set_visible(true);
         let (sender, receiver) = async_channel::bounded(1);
         imp.question_answer.replace(Some(sender));
@@ -266,43 +272,6 @@ impl TransferPanel {
             window.show_question();
         }
         receiver.recv().await.ok().flatten()
-    }
-
-    /// What "More details" shows while the action asks, whichever way
-    /// it was left: the files in question, compared side by side, in
-    /// place of the speed graph, and with several conflicts how many
-    /// remain. Never an empty body.
-    fn compare_in_details(&self, scan: &ConflictScan) {
-        let imp = self.imp();
-        self.forget_comparison();
-        for widget in [
-            imp.graph.upcast_ref::<gtk::Widget>(),
-            imp.name_label.upcast_ref(),
-            imp.time_label.upcast_ref(),
-        ] {
-            widget.set_visible(false);
-        }
-        let several = scan.conflicts.len() > 1;
-        imp.items_label.set_visible(several);
-        if several {
-            let count = u64::try_from(scan.conflicts.len()).unwrap_or(u64::MAX);
-            imp.items_label.set_text(&super::rate::items_text(count, None));
-        }
-        let compared = compared_files(scan, &self.source_folder(), &scan.destination_folder);
-        if let Some(compared) = &compared {
-            imp.details.prepend(compared);
-        }
-        imp.compared.replace(compared);
-    }
-
-    /// Takes the comparison out of the details, which show the graph again.
-    fn forget_comparison(&self) {
-        let imp = self.imp();
-        if let Some(compared) = imp.compared.take() {
-            imp.details.remove(&compared);
-        }
-        imp.graph.set_visible(true);
-        imp.name_label.set_visible(true);
     }
 
     /// Answers the question waiting, if any, with `row`; `None` cancels.
@@ -332,7 +301,6 @@ impl TransferPanel {
         imp.percent_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
         imp.pause_button
             .set_visible(imp.kind.get() == Some(super::TransferKind::Files));
-        self.forget_comparison();
         let details = imp.window.upgrade().is_some_and(|window| window.shows_details());
         self.show_details(details);
         self.show_details_text();

@@ -4741,11 +4741,6 @@ msgstr ""
 msgid "Compress"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/conflict_window.rs
-msgid "Already in {folder}"
-msgstr ""
-
 #: crates/ox-app/src/window/conflict_window.rs
 msgid "Continue"
 msgstr ""
@@ -4764,18 +4759,8 @@ msgstr ""
 msgid "Files with the same names"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/conflict_window.rs
-msgid "From {folder}"
-msgstr ""
-
 #: crates/ox-app/src/window/conflict_window.rs
 msgid "If you select both versions, the copied file will have a number added to its name."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/transfer_panel.rs
-msgid "Name: {name}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6736,6 +6721,11 @@ msgstr ""
 
 #: crates/ox-app/src/window/transfer_panel.rs
 msgid "Cancelling…"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel.rs
+msgid "Name: {name}"
 msgstr ""
 
 #: crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/window/transfer_panel.rs

@@ -213,8 +213,6 @@ mod imp {
         pub(super) window: glib::WeakRef<ProgressWindow>,
         /// Receives the row chosen while the action asks.
         pub(super) question_answer: RefCell<Option<async_channel::Sender<Option<Row>>>>,
-        /// What "More details" compares while the action asks.
-        pub(super) compared: RefCell<Option<gtk::Box>>,
         /// Receives Try Again (true) or Cancel while the action asks
         /// about a full drive.
         pub(super) space_answer: RefCell<Option<async_channel::Sender<bool>>>,
@@ -475,11 +473,18 @@ impl TransferPanel {
 
     /// Shows or hides "More details": the graph in the bar's place, the
     /// name, and the time and items remaining.
-    /// While the action asks, its bar stays hidden either way.
+    /// While the action asks, its bar stays hidden either way, and while
+    /// it asks Replace or Skip Files, so do the details.
     pub(crate) fn show_details(&self, shown: bool) {
         let imp = self.imp();
-        imp.details.set_visible(shown);
+        imp.details.set_visible(shown && !self.asks_about_names());
         imp.progress_bar.set_visible(!shown && !self.is_asking());
+    }
+
+    /// Whether the details show now, for tests.
+    #[cfg(test)]
+    pub(crate) fn shows_details_now(&self) -> bool {
+        self.imp().details.is_visible()
     }
 
     /// "44% complete", or "Cancelling…" once cancelled, as the progress
