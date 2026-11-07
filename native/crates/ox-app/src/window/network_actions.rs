@@ -16,7 +16,7 @@ use ox_core::network::{connect_share, ConnectedShare};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
-use crate::dialogs::{map_network_dialog, network_location_dialog, MapRequest, ShareKeeping};
+use crate::dialogs::{drive_letter, map_network_dialog, network_location_dialog, MapRequest, ShareKeeping};
 use crate::network::user_recent_servers;
 use crate::places::network_row;
 use crate::settings_store::Change;
@@ -115,7 +115,14 @@ impl BrowserWindow {
             move |dialog: &Dialog, request: MapRequest| window.connect_mapped_share(dialog, request)
         );
         let dialog = match kind {
-            ConnectDialog::MapNetworkDrive => map_network_dialog(self, on_connect),
+            ConnectDialog::MapNetworkDrive => {
+                let network = self.network_locations();
+                let taken: Vec<&str> = network
+                    .iter()
+                    .filter_map(|row| drive_letter(&row.label))
+                    .collect();
+                map_network_dialog(self, &taken, on_connect)
+            }
             ConnectDialog::AddNetworkLocation => network_location_dialog(self, on_connect),
         };
         dialog.open();
@@ -157,12 +164,15 @@ impl BrowserWindow {
     /// (`after_connect`). A save that fails keeps the dialog open with the
     /// reason.
     pub(super) fn keep_mapped_share(&self, dialog: &Dialog, share: ConnectedShare, keeping: ShareKeeping) {
-        self.context().remember_network(&share.uri);
         if keeping == ShareKeeping::ThisSessionOnly {
+            // The row keeps the drive letter for the session, as the
+            // mapping lasts until sign-out in Windows.
+            self.context().remember_mapped_share(&share.uri, &share.label);
             dialog.finish();
             self.navigate_or_report(&share.uri);
             return;
         }
+        self.context().remember_network(&share.uri);
         // A share kept in the sidebar is offered to Files and the GTK file
         // chooser too; one for this session only leaves no record.
         add_recent_server(&share);

@@ -305,6 +305,8 @@ impl GeneralEdits {
         read_only.set_inconsistent(entry.is_dir);
         read_only.set_sensitive(rights.can_change_permissions);
         let hidden = gtk::CheckButton::with_mnemonic(&ox_core::i18n::gettext("Hidden"));
+        super::window::wrap_check_label(&read_only);
+        super::window::wrap_check_label(&hidden);
         hidden.set_active(entry.name.starts_with('.'));
         hidden.set_sensitive(rights.can_rename);
         let edits = Rc::new(Self {
@@ -373,16 +375,21 @@ impl GeneralEdits {
     }
 
     /// After Security changed the item's permissions, a file's Read-only
-    /// shows its mode `mode` again, unless it holds a change not applied.
+    /// compares with its mode `mode`, and shows it unless the box holds a
+    /// change not applied, which stays.
     pub(super) fn follow_mode(&self, mode: Option<u32>) {
-        if self.is_folder || self.read_only_change().is_some() {
+        if self.is_folder {
             return;
         }
+        let has_choice = self.read_only_change().is_some();
         let read_only = mode.is_some_and(|mode| mode & 0o200 == 0);
         self.read_only_now.set(Some(read_only));
-        self.is_updating.set(true);
-        self.read_only.set_active(read_only);
-        self.is_updating.set(false);
+        if !has_choice {
+            self.is_updating.set(true);
+            self.read_only.set_active(read_only);
+            self.is_updating.set(false);
+        }
+        self.notify_changed();
     }
 
     fn notify_changed(&self) {
