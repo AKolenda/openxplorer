@@ -90,7 +90,7 @@ bridge = ["list"]
 dolphin = "Go > Back/Forward; Dolphin Back/Forward toolbar buttons with history dropdown on long-press/right-click.; Back/Forward, Alt+Left/Alt+Right; go_back: Alt+Left, Back key, Backspace; go_forward: Alt+Right, Forward key"
 gnome = "GtkButton in header; per-tab history model"
 native = "done"
-native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_name_where_they_lead_and_follow_each_tabs_own_history): the buttons' tooltips naming where they lead or only their key (native/crates/ox-app/src/window/navigation_buttons.rs, show_navigation_tooltips, run whenever the location is rendered), their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
+native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_name_where_they_lead_and_follow_each_tabs_own_history): the buttons' tooltips naming where they lead or only the button's name (native/crates/ox-app/src/window/navigation_buttons.rs, show_navigation_tooltips, run whenever the location is rendered), their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
 
 [[feature]]
 id = "NAV-002"
