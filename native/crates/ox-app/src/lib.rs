@@ -33,6 +33,7 @@ mod media_details;
 mod modal;
 mod network;
 mod operation_session;
+mod picture_guard;
 mod places;
 mod properties;
 mod resizer_control;

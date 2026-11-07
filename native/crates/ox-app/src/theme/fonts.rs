@@ -124,11 +124,23 @@ const FONT_SIZES: &[FontSize] = &[
     font(".settings .settings-paragraph", 13.0),
     font(".settings .settings-no-matches", 13.0),
     font("popover.choice-list list > row", 13.0),
+    // Properties windows (properties.css) and their dialogs: Windows 11's
+    // 9-point dialog text, 12 pixels at 100 %. This selector outranks
+    // `window.ox`, whose 13 pixels the bare `.ox-properties` below cannot
+    // override. Folder Options, built on the same window, keeps its own
+    // size.
+    font("window.ox.ox-properties:not(.ox-folder-options)", 12.0),
     // Dialogs, the snapshot banner and the size-scan bar
     // (in-window-dialogs.css), at ui-spec.md's 12 px minimum (T04, T10).
     font(".ox-dialog", 12.0),
     // Properties windows (properties.css): Windows' 9-point dialog text.
     font(".ox-properties", 12.0),
+    // Folder Options (properties.css) at Windows' 380 pixels: a pixel
+    // under Windows' 9-point dialog text, as Noto Sans and the other
+    // fonts the app falls back to are wider than Segoe UI, so each option
+    // fits on one line as in Windows. The selector outranks `window.ox`,
+    // whose 13 pixels a bare class cannot override.
+    font("window.ox.ox-folder-options", 11.0),
     font(".snapshot-banner", 12.0),
     font(".snapshot-tab-badge", 12.0),
     font(".size-scan", 12.0),
@@ -434,6 +446,19 @@ mod tests {
         assert!(css.contains("popover.ox-menu.compact list > row { min-height: 29px; }"));
         assert!(css.contains("popover.ox-menu.compact > contents { min-width: 274px; }"));
         assert!(css.contains("popover.ox-menu list.address-suggestions > row { min-height: 40px; }"));
+    }
+
+    /// Properties windows draw Windows 11's 9-point dialog text, 12 pixels
+    /// at 100 % and growing with the text, under a selector that outranks
+    /// the browser window's 13 pixels (`window.ox`); Folder Options keeps
+    /// its own size.
+    ///
+    /// parity: PROP-001
+    #[test]
+    fn properties_windows_draw_windows_dialog_text() {
+        let rule = "window.ox.ox-properties:not(.ox-folder-options)";
+        assert!(css_at(100).contains(&format!("{rule} {{ font-size: 12px; }}")));
+        assert!(css_at(200).contains(&format!("{rule} {{ font-size: 24px; }}")));
     }
 
     /// Every font size is a whole number of pixels at every text size: GTK
