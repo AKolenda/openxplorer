@@ -92,8 +92,9 @@ pub(super) enum KeyboardSpot {
 }
 
 /// The heading a first click selected the group of, the selection before
-/// it and where the keyboard was, which a double-click puts back.
-pub(super) type BeforeClick = (GroupSlot, Vec<u32>, Option<KeyboardSpot>);
+/// it, where the keyboard was and the item Shift extended from, which a
+/// double-click puts back.
+pub(super) type BeforeClick = (GroupSlot, Vec<u32>, Option<KeyboardSpot>, Option<u32>);
 
 /// What a heading key does to its group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -316,9 +317,10 @@ impl BrowserWindow {
                 // was, as in Windows 11.
                 let before = self.folder_pane().model().selected_positions();
                 let focus = self.keyboard_spot();
+                let anchor = heading.model().and_then(|model| model.anchor());
                 self.imp()
                     .selection_before_click
-                    .replace(Some((heading.clone(), before, focus)));
+                    .replace(Some((heading.clone(), before, focus, anchor)));
                 if let Some((model, index)) = heading.model().zip(heading.group_index()) {
                     let add = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
                     let extend = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
@@ -328,13 +330,16 @@ impl BrowserWindow {
             }
             HeadingSpot::Title(heading) if presses == 2 => {
                 let before = self.imp().selection_before_click.take();
-                let before = before.filter(|(clicked, _, _)| *clicked == heading);
+                let before = before.filter(|(clicked, _, _, _)| *clicked == heading);
                 heading.toggle_group();
-                // A double-click leaves the selection and the keyboard where
-                // they were before it, as on Windows 11.
+                // A double-click leaves the selection, the keyboard and the
+                // Shift anchor where they were before it, as on Windows 11.
                 match before {
-                    Some((_, positions, focus)) => {
+                    Some((_, positions, focus, anchor)) => {
                         self.folder_pane().model().select_positions(&positions);
+                        if let Some(model) = heading.model() {
+                            model.set_anchor(anchor);
+                        }
                         match focus {
                             Some(KeyboardSpot::Item(position)) => {
                                 self.imp().key_heading.replace(None);

@@ -100,17 +100,21 @@ fn grouped_step(
     page: u32,
 ) -> Option<GroupTarget> {
     let item = |position: Option<u32>| position.map(GroupTarget::Item).filter(|to| *to != from);
+    // A page counts the heading rows it passes too, so it moves about as far
+    // as the view shows; it always moves at least one row.
     let rows = |down: bool, count: u32| {
+        let start = layout.row_of(from)?;
         let mut at = from;
-        for _ in 0..count.max(1) {
+        loop {
             let next = match at {
                 GroupTarget::Item(position) => layout.row_step(position, column, down).map(GroupTarget::Item),
                 GroupTarget::Heading(_) => layout.row_target(at, column, down),
             };
-            match next {
-                Some(next) => at = next,
-                None => break,
+            let Some(next) = next else { break };
+            if at != from && layout.row_of(next)?.abs_diff(start) > count.max(1) {
+                break;
             }
+            at = next;
         }
         (at != from).then_some(at)
     };
@@ -285,20 +289,55 @@ mod tests {
         assert_eq!(step(GroupedMove::Up, Heading(1), 0), Some(Item(3)));
         assert_eq!(
             step(GroupedMove::PageDown, Item(0), 0),
-            Some(Item(4)),
-            "two rows down"
+            Some(Item(3)),
+            "two rows down: the next row of items, then a heading row"
         );
         assert_eq!(
             step(GroupedMove::PageDown, Item(4), 1),
             Some(Item(6)),
             "to the last row"
         );
-        assert_eq!(step(GroupedMove::PageUp, Item(6), 1), Some(Item(3)));
+        assert_eq!(
+            step(GroupedMove::PageUp, Item(6), 1),
+            Some(Item(4)),
+            "two rows up, the heading between counted"
+        );
         assert_eq!(step(GroupedMove::First, Item(5), 0), Some(Item(0)));
         assert_eq!(step(GroupedMove::Last, Item(5), 0), Some(Item(6)));
         assert_eq!(step(GroupedMove::Last, Item(6), 0), None);
         assert_eq!(GroupedMove::of(gdk::Key::Left, true), Some(GroupedMove::Forward));
         assert_eq!(GroupedMove::of(gdk::Key::a, false), None);
+    }
+
+    /// Page Down counts the heading rows it passes, so a page of many
+    /// small groups moves about as far as the view shows, not that many
+    /// rows of items plus every heading between (Codex review of #289).
+    ///
+    /// parity: VIEW-071, VIEW-022
+    #[test]
+    fn a_page_counts_the_heading_rows_it_passes() {
+        use GroupTarget::Item;
+        let titles = ["A", "B", "C", "D", "E", "F"];
+        let layout = SlotLayout::new(group_runs(titles), 3);
+        // Rows: heading A, A's item, heading B, B's item, heading C, ...
+        let step = |movement, from| grouped_step(&layout, movement, from, 0, 2);
+        assert_eq!(
+            step(GroupedMove::PageDown, Item(0)),
+            Some(Item(1)),
+            "two rows: a heading and an item"
+        );
+        assert_eq!(step(GroupedMove::PageUp, Item(3)), Some(Item(2)));
+        assert_eq!(
+            step(GroupedMove::PageDown, Item(5)),
+            None,
+            "nothing below the last row"
+        );
+        let one_group = SlotLayout::new(group_runs(["A"; 9]), 3);
+        assert_eq!(
+            grouped_step(&one_group, GroupedMove::PageDown, Item(0), 0, 2),
+            Some(Item(6)),
+            "without headings a page is that many rows of items"
+        );
     }
 
     /// A collapsed group's items are passed by: Right, Down and End skip

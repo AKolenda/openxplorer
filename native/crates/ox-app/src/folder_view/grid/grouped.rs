@@ -481,6 +481,12 @@ impl GroupedSelection {
         self.imp().anchor.get()
     }
 
+    /// Makes `anchor` the item Shift extends a selection from, as it was
+    /// before a double-click on a heading.
+    pub(crate) fn set_anchor(&self, anchor: Option<u32>) {
+        self.imp().anchor.set(anchor);
+    }
+
     /// Whether `slot` shows as selected: a selected item, or a slot of the
     /// heading row of a collapsed group whose items are all selected, which
     /// Windows 11 fills; an expanded group's heading shows no fill.
@@ -573,16 +579,11 @@ impl GroupedSelection {
         } else {
             self.imp().anchor.set(Some(group.start));
         }
-        if add
-            && !extend
-            && self
-                .imp()
-                .groups_selected
-                .borrow()
-                .get(index)
-                .copied()
-                .unwrap_or(false)
-        {
+        // Whether every item of the group is selected now, folded or not:
+        // the fill's record covers collapsed groups only.
+        let selection = self.items().selection();
+        let all_selected = group.len() > 0 && (group.start..group.end).all(|item| selection.contains(item));
+        if add && !extend && all_selected {
             // Ctrl on a selected group takes it out, as Ctrl on an item.
             let mask = gtk::Bitset::new_empty();
             for item in items {
@@ -840,5 +841,88 @@ impl GroupedSelection {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::folder_view::item::store_of_files;
+
+    /// Items grouped by their first letter, in one column.
+    fn grouped(names: &[&str]) -> (GroupedSelection, gtk::MultiSelection) {
+        let items = gtk::MultiSelection::new(Some(store_of_files(names)));
+        let title: GroupTitle = Rc::new(|item: &FileItem| item.entry().name.chars().next().map(String::from));
+        let model = GroupedSelection::new(&items, title, &CollapsedGroups::default(), 1);
+        (model, items)
+    }
+
+    fn selected(items: &gtk::MultiSelection) -> Vec<u32> {
+        (0..items.n_items())
+            .filter(|item| items.is_selected(*item))
+            .collect()
+    }
+
+    /// Ctrl on an expanded group whose items are all selected takes the
+    /// group out, as Ctrl on a selected item does; the collapsed-heading
+    /// fill does not decide it (Codex review of #289).
+    ///
+    /// parity: VIEW-022
+    #[gtk::test]
+    fn ctrl_takes_out_an_expanded_group_that_is_all_selected() {
+        let (model, items) = grouped(&["a1.txt", "a2.txt", "b1.txt"]);
+        model.select_group(0, false, false);
+        assert_eq!(selected(&items), [0, 1]);
+        model.select_group(0, true, false);
+        assert_eq!(selected(&items), Vec::<u32>::new(), "Ctrl took the group out");
+        model.select_group(1, false, false);
+        model.select_group(0, true, false);
+        assert_eq!(
+            selected(&items),
+            [0, 1, 2],
+            "Ctrl adds a group that is not all selected"
+        );
+    }
+
+    /// The Shift anchor can be put back, as a double-click on a heading
+    /// does after its first click moved it.
+    #[gtk::test]
+    fn the_shift_anchor_can_be_put_back() {
+        let (model, _items) = grouped(&["a1.txt", "a2.txt", "b1.txt"]);
+        model.set_anchor(Some(2));
+        model.select_group(0, false, false);
+        assert_eq!(model.anchor(), Some(0), "a click on a heading anchors its group");
+        model.set_anchor(Some(2));
+        assert_eq!(model.anchor(), Some(2));
+    }
+
+    /// A cell that showed a heading stops telling assistive technology it
+    /// is expanded or collapsed once GTK reuses it for a heading's line or
+    /// a file (Codex review of #289).
+    ///
+    /// parity: VIEW-022
+    #[gtk::test]
+    fn a_reused_heading_cell_stops_announcing_its_state() {
+        use crate::folder_view::cells::{CellLayout, FileCell};
+        let items = gtk::MultiSelection::new(Some(store_of_files(&["a1.txt", "b1.txt"])));
+        let title: GroupTitle = Rc::new(|item: &FileItem| item.entry().name.chars().next().map(String::from));
+        let model = GroupedSelection::new(&items, title, &CollapsedGroups::default(), 3);
+        let heading = model.heading(0).expect("a heading");
+        let rule = model.rules(0).into_iter().next().expect("a line slot");
+        let cell = FileCell::new(CellLayout::Tile, 48);
+        cell.show_group_slot(Some(&heading));
+        assert_eq!(cell.announced_expanded(), Some(true));
+        model.set_collapsed(&heading_title(&heading), true);
+        assert_eq!(cell.announced_expanded(), Some(false));
+        cell.show_group_slot(Some(&rule));
+        assert_eq!(cell.announced_expanded(), None, "a heading's line is no heading");
+        cell.show_group_slot(Some(&heading));
+        cell.show_group_slot(None);
+        assert_eq!(cell.announced_expanded(), None, "a file is no heading");
+    }
+
+    /// The title of the group `heading` heads.
+    fn heading_title(heading: &GroupSlot) -> String {
+        heading.imp().title.borrow().clone()
     }
 }

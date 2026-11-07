@@ -274,6 +274,9 @@ mod imp {
         pub(super) slot_binding: RefCell<Option<glib::Binding>>,
         /// Follows whether the heading's group is collapsed.
         pub(super) slot_watch: RefCell<Option<glib::SignalHandlerId>>,
+        /// The expanded state the cell last told assistive technology:
+        /// `None` while it shows no heading.
+        pub(super) announced_expanded: Cell<Option<bool>>,
         /// The slot the cell shows, while it shows one.
         pub(super) slot: RefCell<Option<super::GroupSlot>>,
         /// Which of the item's widgets were shown when a slot took the
@@ -416,7 +419,9 @@ impl FileCell {
                 if slot.kind() == SlotKind::Heading {
                     let collapsed = slot.collapsed();
                     icons::set_icon(&chevron, chevron_icon(collapsed), HEADING_CHEVRON);
-                    cell.update_state(&[gtk::accessible::State::Expanded(Some(!collapsed))]);
+                    cell.announce_expanded(Some(!collapsed));
+                } else {
+                    cell.announce_expanded(None);
                 }
                 toggle_class(&cell, HEADING_ROW_CLASS, in_row);
                 toggle_class(&cell, ROW_HOVER_CLASS, in_row && slot.hovered());
@@ -432,8 +437,29 @@ impl FileCell {
         imp.slot_watch.replace(Some(handler));
     }
 
+    /// Tells assistive technology whether the heading the cell shows is
+    /// expanded, or, with `None`, that the cell shows no heading: GTK
+    /// reuses a heading's cell for files, lines and blanks.
+    fn announce_expanded(&self, expanded: Option<bool>) {
+        if self.imp().announced_expanded.replace(expanded) == expanded {
+            return;
+        }
+        match expanded {
+            Some(expanded) => self.update_state(&[gtk::accessible::State::Expanded(Some(expanded))]),
+            None => self.reset_state(gtk::AccessibleState::Expanded),
+        }
+    }
+
+    /// Whether the cell tells assistive technology it is expanded, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn announced_expanded(&self) -> Option<bool> {
+        self.imp().announced_expanded.get()
+    }
+
     /// Takes the heading row's looks off the cell, which shows an item.
     fn clear_row_classes(&self) {
+        self.announce_expanded(None);
         for class in [
             HEADING_ROW_CLASS,
             ROW_HOVER_CLASS,

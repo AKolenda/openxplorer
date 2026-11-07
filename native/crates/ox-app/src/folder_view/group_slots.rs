@@ -217,6 +217,15 @@ impl SlotLayout {
             .map(|_| index)
     }
 
+    /// The slot row `target` is in, heading rows counted.
+    pub(crate) fn row_of(&self, target: GroupTarget) -> Option<u32> {
+        let slot = match target {
+            GroupTarget::Item(position) => self.slot_of(position)?,
+            GroupTarget::Heading(index) => self.heading_slot(index)?,
+        };
+        Some(slot / self.columns)
+    }
+
     /// The slot of the heading of the group at `index`.
     pub(crate) fn heading_slot(&self, index: usize) -> Option<u32> {
         self.starts.get(index).copied()

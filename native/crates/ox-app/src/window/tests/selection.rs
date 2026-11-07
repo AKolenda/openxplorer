@@ -755,9 +755,16 @@ fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
         // A double-click folds the group and leaves the selection as it
         // was before it, as in Windows 11.
         test.window.folder_pane().model().select_only(0);
+        let grouped = test.window.folder_pane().grouped().expect("grouped");
+        grouped.set_anchor(Some(0));
         let (_, title, _) = heading_parts(&test, 2);
         press_on(&test, &title, 1);
         press_on(&test, &title, 2);
+        assert_eq!(
+            grouped.anchor(),
+            Some(0),
+            "{view}: and the Shift anchor where it was (Codex review of #289)"
+        );
         assert!(heading.collapsed(), "{view}: a double-click collapses the group");
         assert_eq!(selected(&test), [0], "{view}: and leaves the selection as it was");
         test.window.folder_pane().model().select_only(0);
