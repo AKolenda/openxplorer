@@ -388,7 +388,7 @@ const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is conn
 /// The rest of what "…" used to list moved where Windows has it (the
 /// user's request of 2026-11-03, CMD-007): New window to the title bar's
 /// window menu, Ctrl+N and a folder's "Open in new window"; Settings to
-/// the bar's gear, Folder Options' "More settings…" and Ctrl+,; Default
+/// the bar's gear and Ctrl+,; Default
 /// file explorer to Settings > Default apps; Cache this folder for search
 /// to Settings > Search, the search strip and the folder's menu; the
 /// appearances to Settings > Appearance; Show hidden files to View >
