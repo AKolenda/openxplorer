@@ -838,7 +838,8 @@ impl Rows {
 }
 
 /// A group box with a title, as Windows' Sharing and Customize tabs draw
-/// them (`.properties-group`).
+/// them (`.properties-group`). The stylesheet lifts the title onto the
+/// box's top line, as Windows draws it, so the frame must not clip it.
 pub(crate) fn group(title: &str) -> (gtk::Frame, gtk::Box) {
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -848,6 +849,7 @@ pub(crate) fn group(title: &str) -> (gtk::Frame, gtk::Box) {
         .label(title)
         .child(&content)
         .css_classes(["properties-group"])
+        .overflow(gtk::Overflow::Visible)
         .build();
     (frame, content)
 }

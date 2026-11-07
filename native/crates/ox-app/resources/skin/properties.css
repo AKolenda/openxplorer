@@ -5,7 +5,7 @@
    Cancel and Apply at the bottom right. The measures are Windows' at 100 %
    (11-pixel page margins, 23-pixel buttons at least 75 wide); the colours
    are the @ox_* tokens of light.css and dark.css, and the text the app's
-   own font at the size theme/fonts.rs gives .ox-properties. */
+   own font at the size theme/fonts.rs gives window.ox.ox-properties. */
 
 window.ox.ox-properties { background-color: @ox_chrome; color: @ox_text; }
 window.ox.ox-properties.csd {
@@ -158,6 +158,14 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 }
 .ox-properties frame.properties-group > label { margin: 0 6px; padding: 0 2px; }
 .ox-properties .properties-group-content { padding: 6px 10px 10px 10px; border-spacing: 6px; }
+/* The title sits on the box's top line, as Windows draws a group box: it
+   is lifted by half its height onto the line, whose stroke its own
+   background hides behind the text. Folder Options keeps its own rules. */
+window.ox-properties:not(.ox-folder-options) frame.properties-group > label {
+  margin: -8px 4px 0 4px;
+  padding: 0 3px;
+  background-color: @ox_bg;
+}
 .ox-properties .properties-text { margin: 2px 0; }
 
 /* Lists in a sunken frame: names, permissions, versions. */

@@ -449,6 +449,108 @@ fn every_kind_of_properties_has_one_size() {
     assert!(others.is_empty(), "every window is {expected:?}: {others:?}");
 }
 
+/// The size of `label`'s font and the height of one line of its text,
+/// in pixels.
+fn text_size_and_line(label: &gtk::Label) -> (f64, i32) {
+    let font = label.pango_context().font_description().expect("a font");
+    let size = f64::from(font.size()) / f64::from(gtk::pango::SCALE);
+    let layout = label.layout();
+    let lines = layout.line_count().max(1);
+    (size, layout.pixel_size().1 / lines)
+}
+
+/// The shown labels of `window` with text.
+fn shown_labels(window: &PropertiesWindow) -> Vec<gtk::Label> {
+    descendants::<gtk::Label>(window)
+        .into_iter()
+        .filter(|label| label.is_mapped() && !label.text().is_empty())
+        .collect()
+}
+
+/// Every Properties window, of every kind and on every tab, draws its
+/// text at Windows 11's 9-point dialog size, 12 pixels at 100 %, not the
+/// browser window's 13; no text but a long value's field ends in "…" and
+/// none is cut by its box, and
+/// one line of text stands as high on every window. Folder Options is
+/// not an item's Properties and keeps its own size.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn every_kind_of_properties_draws_windows_dialog_text() {
+    let mut lines: Vec<(String, i32)> = Vec::new();
+    every_kind(None, &mut |kind, window| {
+        let mut look = |what: String| {
+            let labels = shown_labels(window);
+            assert!(!labels.is_empty(), "{what}: text");
+            for label in &labels {
+                let text = label.text();
+                let (size, _) = text_size_and_line(label);
+                assert!((size - 12.0).abs() < 0.01, "{what}: {text:?} is {size} pixels");
+                // Only a one-line field of a value as long as a path
+                // (Location, Object name) may end in "…", with the whole
+                // value as its tooltip, as Windows clips its read-only
+                // fields.
+                let field = label.tooltip_text().as_deref() == Some(text.as_str());
+                assert!(
+                    field || !label.layout().is_ellipsized(),
+                    "{what}: {text:?} ends in \"…\""
+                );
+                let (_, height) = label.layout().pixel_size();
+                assert!(
+                    label.height() >= height,
+                    "{what}: {text:?} is cut ({} of {height})",
+                    label.height()
+                );
+                if label.layout().line_count() > 1 {
+                    eprintln!(
+                        "{what}: wraps onto {} lines: {text:?}",
+                        label.layout().line_count()
+                    );
+                }
+            }
+            let line = labels
+                .iter()
+                .find(|label| label.has_css_class("property-name"))
+                .unwrap_or(&labels[0]);
+            lines.push((what, text_size_and_line(line).1));
+        };
+        look(format!("{kind} general"));
+        for name in TABS.into_iter().skip(1) {
+            if window.tab_page(name).is_none() {
+                continue;
+            }
+            window.select_tab(name);
+            wait_for_frames(window, 4);
+            look(format!("{kind} {name}"));
+        }
+    });
+    eprintln!("one line of text: {lines:?}");
+    let first = lines[0].1;
+    let others: Vec<_> = lines.iter().filter(|(_, line)| *line != first).collect();
+    assert!(
+        others.is_empty(),
+        "a line is {first} pixels high on every window: {others:?}"
+    );
+
+    // Folder Options keeps its own size: the browser window's text here,
+    // or its own where the skin gives it one.
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = PropertiesWindow::new("Folder Options", None, Some(&test.window));
+    options.add_css_class("ox-folder-options");
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    page.append(&gtk::Label::new(Some("Open File Explorer to:")));
+    options.add_tab("general", "General", &page);
+    options.present();
+    wait_for_frames(&options, 6);
+    let (size, _) = text_size_and_line(&shown_labels(&options)[0]);
+    let browser = test.window.pango_context().font_description().expect("a font");
+    let browser = f64::from(browser.size()) / f64::from(gtk::pango::SCALE);
+    let own = (size - browser).abs() < 0.01 || (size - 11.0).abs() < 0.01;
+    assert!(own, "Folder Options keeps its own size: {size} pixels");
+    options.close();
+}
+
 /// Every kind of Properties, light and dark, for review side by side with
 /// `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):
 /// `properties-size-{kind}-{light,dark}.png`.
