@@ -5,10 +5,10 @@
 use std::fs;
 use std::path::PathBuf;
 
-use gtk::glib;
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, glib};
 
 use ox_core::settings::{PreferencesUpdate, Settings};
 
@@ -18,6 +18,7 @@ use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 use crate::window::address_bar::AddressMode;
 use crate::window::menu_popover::MenuPopover;
 
+use super::address_input::press_key;
 use super::narrow_windows::resize;
 
 /// The window's minimum width.
@@ -153,6 +154,47 @@ fn a_long_path_collapses_its_first_crumbs_into_a_button_as_the_width_allows() {
     wait_until("the nearest hidden folder", || {
         test.window.current_uri() == nearest_uri
     });
+}
+
+/// The « takes the keyboard as a crumb does: Shift+Tab and Left reach
+/// it from the first crumb shown, and Down opens its menu, so the
+/// collapsed crumbs stay a few keys away. Hidden, the chevron is no stop.
+///
+/// parity: NAV-018, NAV-023
+#[gtk::test]
+fn the_keyboard_reaches_the_collapsed_crumbs_through_the_overflow_button() {
+    let fixture = Fixture::standard();
+    let deep = deep_folder(&fixture);
+    let test = TestWindow::open(&ox_core::location::file_uri(&deep));
+    let address = test.window.address_bar();
+    let (chevron, overflow) = address.strip_buttons();
+    resize(&test, 1320);
+    wait_until("the first crumbs to collapse", || {
+        overflow.is_child_visible() && overflow.is_mapped() && !address.hidden_crumbs().is_empty()
+    });
+    assert!(!chevron.can_focus(), "the hidden chevron is no stop");
+    let hidden = address.hidden_crumbs();
+    let first_shown = address.crumb_buttons()[hidden.len()].clone();
+    let strip = first_shown.parent().expect("crumbs sit in their strip");
+
+    first_shown.grab_focus();
+    test.window.emit_move_focus(gtk::DirectionType::TabBackward);
+    assert!(overflow.has_focus(), "Shift+Tab reaches the «");
+
+    first_shown.grab_focus();
+    assert!(press_key(&strip, gdk::Key::Left));
+    assert!(overflow.has_focus(), "Left reaches the «");
+    assert!(press_key(&strip, gdk::Key::Left));
+    assert!(overflow.has_focus(), "and stops there");
+    press_key(&strip, gdk::Key::Right);
+    assert!(first_shown.has_focus());
+
+    overflow.grab_focus();
+    assert!(press_key(&overflow, gdk::Key::Down), "Down opens the « menu");
+    let menu = open_menu(&test);
+    let first_hidden = hidden[0].label().expect("a named crumb").to_string();
+    assert_eq!(menu.row_labels().first(), Some(&first_hidden));
+    menu.popdown();
 }
 
 /// As in Windows 11 File Explorer, a chevron follows the location icon,

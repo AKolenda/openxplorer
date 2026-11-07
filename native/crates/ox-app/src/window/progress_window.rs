@@ -28,7 +28,11 @@
 //! each action's Cancel does: finished work stays (OPS-022). It belongs
 //! to no browsing window and sets no position: the desktop places it, as
 //! Wayland requires, and closing a browsing window still asks first
-//! while that window's operations run (TAB-049).
+//! while that window's operations run (TAB-049). While an action started
+//! in a file dialog runs, the window is that dialog's modeless child, as
+//! Windows' common dialog owns the progress of what it started, so the
+//! desktop keeps it above the dialog and lets it be used while the
+//! dialog is modal for its caller.
 
 use std::time::Duration;
 
@@ -180,8 +184,24 @@ impl ProgressWindow {
         }
         action.show_in(Some(self));
         action.show_details(imp.details.get());
+        self.follow_dialog();
         self.refresh();
         self.show_soon();
+    }
+
+    /// Makes the window the child of the file dialog the earliest running
+    /// action was started in, or of no window when none was: a browsing
+    /// window's progress stands alone (OPS-019). GTK moves a child into
+    /// its parent's window group and, once it has no parent, into the
+    /// default one, so the window goes back to its own group each time,
+    /// where its File Conflict window blocks it alone.
+    fn follow_dialog(&self) {
+        let dialog = self.actions().iter().find_map(TransferPanel::dialog);
+        let parent = dialog.as_ref().map(Cast::upcast_ref::<gtk::Window>);
+        if self.transient_for().as_ref() != parent {
+            self.set_transient_for(parent);
+            self.imp().group.add_window(self);
+        }
     }
 
     /// Takes `action`, which has ended, out; the window closes with its
@@ -193,6 +213,7 @@ impl ProgressWindow {
             imp.actions.remove(action);
         }
         if !self.actions().is_empty() {
+            self.follow_dialog();
             self.refresh();
             return;
         }
@@ -222,7 +243,8 @@ impl ProgressWindow {
 
     /// Titles the window for its actions: "44% complete" for one, or
     /// "Replace or Skip Files" while it asks about taken names and "1
-    /// Interrupted Action" while it asks about a full drive, as Windows
+    /// Interrupted Action" while it asks about a full drive or a failed
+    /// item, as Windows
     /// titles it, and "2 Running Actions" for several; its icon is the
     /// first action's.
     pub(crate) fn refresh(&self) {
@@ -232,7 +254,7 @@ impl ProgressWindow {
         }
         let title = match actions.as_slice() {
             [] => return,
-            [action] if action.asks_about_space() => {
+            [action] if action.asks_about_space() || action.asks_about_failure() => {
                 ox_core::i18n::ngettext("{count} Interrupted Action", "{count} Interrupted Actions", 1)
                     .replace("{count}", "1")
             }

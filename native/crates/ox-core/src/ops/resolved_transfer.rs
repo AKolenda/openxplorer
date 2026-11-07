@@ -684,10 +684,13 @@ pub(super) fn replace_through_recycle_bin(
         return placed.map(|part| (part, true));
     }
     // The incoming item did not take the name: the replaced item comes
-    // back from the Recycle Bin.
+    // back from the Recycle Bin, also when the user cancelled the copy,
+    // so it runs with a cancellation of its own and the same write
+    // protection.
     let mut part = placed.unwrap_or_else(|error| failed(&existing.display_name(), &error));
     let path = path.to_path_buf();
-    let restored = restore_trashed_since(std::slice::from_ref(&path), since, context);
+    let rollback = OperationContext::new(context.protection.clone());
+    let restored = restore_trashed_since(std::slice::from_ref(&path), since, &rollback);
     if !restored.is_ok_and(|result| result.errors.is_empty()) {
         let message = crate::i18n::format_message(
             "{name}: The file it was to replace is in the Recycle Bin. Restore it from there.",

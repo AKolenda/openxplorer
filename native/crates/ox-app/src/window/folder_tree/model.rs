@@ -57,7 +57,11 @@ pub(super) fn tree_model(root: &gio::File, title: &str, show_hidden: bool) -> gt
 fn subfolders(show_hidden: bool) -> gtk::SortListModel {
     let filter = gtk::CustomFilter::new(move |item| {
         item.downcast_ref::<gio::FileInfo>().is_some_and(|info| {
-            info.file_type() == gio::FileType::Directory && (show_hidden || !info.is_hidden())
+            // GVfs's SMB backend sets is-hidden only on dot names: read as
+            // an attribute, a missing one means shown, without GIO's
+            // critical warning.
+            info.file_type() == gio::FileType::Directory
+                && (show_hidden || !info.boolean("standard::is-hidden"))
         })
     });
     let folders = gtk::FilterListModel::new(None::<gio::ListModel>, Some(filter));

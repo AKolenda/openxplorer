@@ -63,6 +63,7 @@ pub(crate) fn open_selection_properties(
     let art = entries.first().map(Art::for_entry);
     let names: Vec<String> = entries.iter().map(|entry| entry.name.clone()).collect();
     let window = PropertiesWindow::new(&selection_title(&names), art, Some(opener));
+    window.hold_sheet_size();
     let general = page();
     let security = page();
     window.add_tab(
@@ -312,6 +313,16 @@ fn read_permissions(panel: &gtk::Box, read: ReadItems) {
         };
         let (editor, change) = permissions_editor(edited, Arc::clone(&context.versions));
         panel.append(&editor);
+        // Read-only on General shows what the editor's change made.
+        let follows = Rc::downgrade(&attributes);
+        change.connect_applied(move || {
+            let attributes = follows.upgrade();
+            async move {
+                if let Some(attributes) = attributes {
+                    attributes.follow_permissions().await;
+                }
+            }
+        });
         // Hidden renames the items after the editor's change is made; a
         // later change follows them.
         let follows = Rc::downgrade(&change);

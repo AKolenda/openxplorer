@@ -14,10 +14,7 @@ use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, TEXT, URI_LIST};
 use ox_core::settings::ContextMenu;
 
 use super::context_menus::choose_menu_style;
-use super::file_ops_support::{
-    answer_conflicts, is_enabled, open_dialog, press_shortcut, select_names, wait_for_no_dialog,
-    ConflictAnswer,
-};
+use super::file_ops_support::{answer_conflicts, is_enabled, press_shortcut, select_names, ConflictAnswer};
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 
 /// The modifier of Ctrl+C, Ctrl+X and Ctrl+V.
@@ -514,10 +511,13 @@ fn every_published_format_is_offered_for_a_clipboard_manager_to_keep() {
 
 /// Copies `Alpha.txt` and `Beta.txt` of the fixture's folder, the file
 /// called `unreadable` without read permission, and starts pasting them
-/// into Documents: the copy stops at that file with the failed-item
-/// dialog, which this returns. Tests run as a normal user: root reads the
-/// file anyway.
-fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWindow, crate::dialog::Dialog) {
+/// into Documents: the copy stops at that file and asks about it in the
+/// progress window, in place of the action's progress; this returns that
+/// action. Tests run as a normal user: root reads the file anyway.
+fn paste_with_an_unreadable_file(
+    fixture: &Fixture,
+    unreadable: &str,
+) -> (TestWindow, crate::window::transfer_panel::TransferPanel) {
     use std::os::unix::fs::PermissionsExt;
 
     fixture.write("Alpha.txt");
@@ -526,10 +526,18 @@ fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWi
         .expect("take read permission away");
     let test = clipboard_then_documents(fixture, "copy", &["Alpha.txt", "Beta.txt"]);
     test.activate("paste", None);
-    let failed = open_dialog(&test);
+    let window = crate::window::progress_window::ProgressWindow::of(&test.context);
+    let asking = || {
+        window
+            .actions()
+            .into_iter()
+            .find(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+    };
+    wait_until("the action to ask", || asking().is_some());
+    let failed = asking().expect("the asking action");
     assert!(
-        failed.button_labels().contains(&"Try Again".to_owned()),
-        "the failed-item dialog"
+        failed.failure_button_labels().contains(&"Try Again".to_owned()),
+        "the failed-item question"
     );
     (test, failed)
 }
@@ -545,7 +553,7 @@ fn cancel_in_the_failed_item_dialog_just_stops_and_undo_takes_back_what_was_copi
     let fixture = Fixture::standard();
     let (test, failed) = paste_with_an_unreadable_file(&fixture, "Beta.txt");
 
-    failed.press("Cancel");
+    failed.press_failure("Cancel");
     wait_until("the finished copy to be selected", || {
         test.selected_names() == ["Alpha.txt"]
     });
@@ -562,8 +570,8 @@ fn cancel_in_the_failed_item_dialog_just_stops_and_undo_takes_back_what_was_copi
     assert!(fixture.path("Alpha.txt").is_file(), "the original stays");
 }
 
-/// The progress panel's Cancel stops a copy without a report, also after
-/// an item was skipped.
+/// Cancelling the operation while its action asks about a failed item
+/// answers the question and stops the copy without a report.
 ///
 /// parity: OPS-019, OPS-023
 #[gtk::test]
@@ -572,8 +580,7 @@ fn the_panels_cancel_stops_a_copy_without_a_report() {
     let (test, failed) = paste_with_an_unreadable_file(&fixture, "Alpha.txt");
 
     test.activate("cancel-operation", None);
-    failed.press("Skip");
-    wait_for_no_dialog(&test);
+    wait_until("the question to close", || !failed.asks_about_failure());
     wait_until("the copy to end", || !test.window.is_writing_files());
     crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
 

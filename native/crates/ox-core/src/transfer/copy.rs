@@ -32,7 +32,10 @@ use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::item_failure::{EntryDecision, ItemFailures};
 use super::labels::copy_label;
-use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
+use super::modes::{
+    is_admin, path_for_unix_modes, secure_local_staging, DirectoryModes, ModeTarget, ADMIN_MODE_MASK,
+    PRIVATE_DIRECTORY_MODE,
+};
 use super::names::child_node;
 use super::node::{Node, NodeInfo, NodeKind};
 use super::source_removal::CopiedItem;
@@ -189,7 +192,15 @@ impl<'a> Copier<'a> {
         target.create_directory(Some(self.cancel))?;
         if let Some(path) = path_for_unix_modes(target) {
             let final_mode = self.published_mode(info, target)?;
-            self.modes.record(target.uri(), path, final_mode);
+            self.modes
+                .record(target.uri(), ModeTarget::Local(path), final_mode);
+            secure_local_staging(target)?;
+        } else if is_admin(target) {
+            // OPS-047: owner-only while it is built, like a local folder,
+            // so a folder the source kept private is never published open.
+            let final_mode = self.published_mode(info, target)? & ADMIN_MODE_MASK;
+            self.modes
+                .record(target.uri(), ModeTarget::Admin(target.uri()), final_mode);
             secure_local_staging(target)?;
         }
         self.copy_children(source, target, depth + 1)

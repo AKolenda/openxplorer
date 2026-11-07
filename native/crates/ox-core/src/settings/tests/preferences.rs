@@ -419,7 +419,7 @@ fn views_saved_by_the_old_display_style_dialog_still_load() {
     save_preferences(&mut store, &json!({"theme": "dark"}));
     let reread = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(reread.folder_views, preferences.folder_views);
-    assert!(reread.folder_views[0].subfolders);
+    assert!(reread.folder_views[0].subfolders.is_some());
     assert_eq!(reread.view_for("file:///home/someone/Projects/site").sort, "size");
 }
 
