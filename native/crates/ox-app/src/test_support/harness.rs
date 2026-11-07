@@ -385,6 +385,38 @@ impl TestWindow {
             !self.context.settings_data().preferences.per_folder_views
         });
     }
+
+    /// Turns Settings' "Paste pictures as new files" on or off, as another
+    /// process would, and waits until the window reads it, for tests of that
+    /// switch (CLIP-015).
+    pub(crate) fn set_paste_pictures_as_files(&self, on: bool) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                paste_pictures_as_files: Some(on),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("picture paste to follow the setting", || {
+            self.context.settings_data().preferences.paste_pictures_as_files == on
+        });
+    }
+
+    /// Turns Settings' "Also copy paths as text" on or off, as another process
+    /// would, and waits until the window reads it, for tests of that switch
+    /// (CLIP-004).
+    pub(crate) fn set_copy_paths_as_text(&self, on: bool) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                copy_paths_as_text: Some(on),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("paths as text to follow the setting", || {
+            self.context.settings_data().preferences.copy_paths_as_text == on
+        });
+    }
 }
 
 impl Drop for TestWindow {
@@ -515,6 +547,21 @@ pub(crate) fn capture(window: &BrowserWindow, filename: &str) {
     // A window that was just resized may not be drawable for a frame or two.
     wait_until("the window to be saved", || {
         crate::snapshot::save_png(window.upcast_ref(), &path).is_ok()
+    });
+}
+
+/// Saves a PNG of `window` with its open menus drawn over it into
+/// `$OX_NATIVE_CAPTURE_DIR`, when set, as the snapshot hook draws them.
+pub(crate) fn capture_with_menus(window: &BrowserWindow, filename: &str) {
+    let Some(directory) = capture_directory() else {
+        return;
+    };
+    // A menu fades and slides in as it opens.
+    wait_for(crate::window::MENU_OPENING_MOTION);
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
+    let path = directory.join(filename);
+    wait_until("the window to be saved", || {
+        crate::snapshot::save_png_with_menus(window.upcast_ref(), &path).is_ok()
     });
 }
 

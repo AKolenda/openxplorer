@@ -128,14 +128,16 @@ impl Step {
     }
 
     /// The GDK key names that perform the step with Ctrl held, from
-    /// `action()` in text-size.js: `+`, `=` and keypad Add; `-`, `_` and
-    /// keypad Subtract; `0` and keypad 0. `KP_Insert` is keypad 0 with
-    /// `NumLock` off, which the web app matched by its physical code.
+    /// `action()` in text-size.js: `+` and `=`; `-`, `_` and keypad
+    /// Subtract; `0` and keypad 0. `KP_Insert` is keypad 0 with `NumLock`
+    /// off, which the web app matched by its physical code. Keypad Add is
+    /// not one: as in Windows File Explorer, Ctrl with it fits the details
+    /// columns (VIEW-072).
     ///
     /// The first key is the one menus show.
     pub(crate) const fn keys(self) -> &'static [&'static str] {
         match self {
-            Step::Increase => &["plus", "equal", "KP_Add"],
+            Step::Increase => &["plus", "equal"],
             Step::Decrease => &["minus", "underscore", "KP_Subtract"],
             Step::Reset => &["0", "KP_0", "KP_Insert"],
         }
@@ -251,13 +253,14 @@ mod tests {
         assert_eq!(step_for("0"), Some(Step::Reset));
     }
 
-    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs` (keypad add, keypad
-    /// subtract and keypad zero)
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs` (keypad subtract
+    /// and keypad zero). Its keypad add case no longer holds: Ctrl+keypad
+    /// Add fits the details columns, as in Windows File Explorer (VIEW-072).
     ///
     /// parity: VIEW-043
     #[test]
     fn keypad_keys_are_recognised() {
-        assert_eq!(step_for("KP_Add"), Some(Step::Increase));
+        assert_eq!(step_for("KP_Add"), None, "Ctrl+keypad Add fits the columns");
         assert_eq!(step_for("KP_Subtract"), Some(Step::Decrease));
         assert_eq!(step_for("KP_0"), Some(Step::Reset));
         assert_eq!(step_for("KP_Insert"), Some(Step::Reset));

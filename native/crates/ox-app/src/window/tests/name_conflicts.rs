@@ -12,6 +12,7 @@ use gtk::prelude::*;
 
 use super::file_ops_support::{answer_conflicts, dialog_over, is_enabled, select_names, ConflictAnswer};
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::pointer::{screen_point, Button as PointerButton, Pointer};
 use crate::window::conflict_window::FileConflictWindow;
 use crate::window::progress_window::ProgressWindow;
 
@@ -264,8 +265,7 @@ fn the_file_conflict_window_keeps_both_with_a_number() {
 }
 
 /// "Let me decide for each file" lists every file; a header check box
-/// takes one side for all of them. Cancel in the window stops the whole
-/// action, as in Windows.
+/// takes one side for all of them.
 ///
 /// parity: OPS-028
 #[gtk::test]
@@ -302,6 +302,111 @@ fn a_header_check_box_chooses_one_side_for_every_file() {
             .iter()
             .all(|name| fs::read(fixture.path(name)).is_ok_and(|contents| contents == b"Another file\n"))
     });
+}
+
+/// Clicks the middle of `widget` with the private display's real pointer.
+fn click(pointer: &mut Pointer, widget: &impl IsA<gtk::Widget>) {
+    let middle = (f64::from(widget.width()) / 2.0, f64::from(widget.height()) / 2.0);
+    let point = screen_point(pointer, widget, middle, (720, 500));
+    pointer.move_to(point.0, point.1);
+    pointer.press(PointerButton::Primary);
+    pointer.release(PointerButton::Primary);
+}
+
+/// Puts the real pointer inside `window`, where its keyboard input and a
+/// window manager's close request go.
+fn point_into(pointer: &mut Pointer, window: &impl IsA<gtk::Widget>) {
+    let inside = screen_point(pointer, window, (40.0, 40.0), (720, 500));
+    pointer.move_to(inside.0, inside.1);
+}
+
+/// Waits until the File Conflict window over `progress` has closed, then
+/// checks that the same question still asks, unanswered, and that the
+/// existing file is as it was.
+fn back_at_the_question(test: &TestWindow, fixture: &Fixture, progress: &ProgressWindow, how: &str) {
+    wait_until(&format!("the File Conflict window to close with {how}"), || {
+        progress.conflict_window().is_none()
+            && !gtk::Window::list_toplevels()
+                .iter()
+                .any(|window| window.is::<FileConflictWindow>() && window.is_visible())
+    });
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    assert!(test.window.is_writing_files(), "{how}: the copy still waits");
+    assert_eq!(
+        test.context.progress_window().as_ref(),
+        Some(progress),
+        "{how}: the same progress window"
+    );
+    assert_eq!(
+        progress.title().as_deref(),
+        Some("Replace or Skip Files"),
+        "{how}"
+    );
+    wait_until(&format!("the question to wait again after {how}"), || {
+        progress.actions()[0].waits_for_a_row()
+    });
+    let shown = texts(progress);
+    assert!(
+        shown.contains(&"The destination already has a file named \"Notes 2.txt\"".to_owned()),
+        "{how}: {shown:?}"
+    );
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Synthetic test data\n",
+        "{how}: nothing was written"
+    );
+}
+
+/// With the real pointer and keyboard, as Windows 11 does: closing the
+/// File Conflict window with its close button (X), its Cancel or Escape
+/// closes only that window. The copy keeps waiting at the same "Replace
+/// or Skip Files" question, unanswered, and Skip still answers it.
+///
+/// parity: OPS-026, OPS-028
+#[gtk::test]
+fn closing_the_file_conflict_window_returns_to_the_question() {
+    let mut pointer = Pointer::connect();
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+
+    test.activate("paste", None);
+    let progress = question_window(&test);
+    crate::test_support::harness::wait_for_frames(&progress, 4);
+
+    click(&mut pointer, &button(&progress, "Compare info for both files"));
+    let conflicts = conflict_window(&progress);
+    crate::test_support::harness::wait_for_frames(&conflicts, 4);
+    // The close button (X): the desktop's close request, as a window
+    // manager sends it when its title bar's X is clicked.
+    point_into(&mut pointer, &conflicts);
+    pointer.close_window_under_pointer();
+    back_at_the_question(&test, &fixture, &progress, "the close button");
+
+    click(&mut pointer, &button(&progress, "Compare info for both files"));
+    let conflicts = conflict_window(&progress);
+    crate::test_support::harness::wait_for_frames(&conflicts, 4);
+    click(&mut pointer, &button(&conflicts, "Cancel"));
+    back_at_the_question(&test, &fixture, &progress, "Cancel");
+
+    click(&mut pointer, &button(&progress, "Compare info for both files"));
+    let conflicts = conflict_window(&progress);
+    crate::test_support::harness::wait_for_frames(&conflicts, 4);
+    // The keyboard goes to the window under the pointer.
+    point_into(&mut pointer, &conflicts);
+    pointer.tap_key(gtk::gdk::Key::Escape);
+    back_at_the_question(&test, &fixture, &progress, "Escape");
+
+    crate::test_support::harness::wait_for_frames(&progress, 4);
+    click(&mut pointer, &button(&progress, "Skip this file"));
+    // Back to the screen's centre, where Xvfb starts it: a pointer left
+    // over a closing window crashes GTK 4.14 in a later test.
+    pointer.move_to(720, 500);
+    assert_no_report_of_skipped_files(&test);
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Synthetic test data\n",
+        "Skip left the file as it was"
+    );
 }
 
 /// "Skip 1 file with the same date and size" shows when two files match,
@@ -370,6 +475,41 @@ fn undo_brings_back_the_file_a_paste_replaced() {
     wait_until("the file to be replaced again", || {
         fs::read(fixture.path("Notes 2.txt")).is_ok_and(|contents| contents == b"Another file\n")
     });
+    assert_eq!(
+        fs::read(fixture.path("Documents/Notes 2.txt")).unwrap(),
+        b"Another file\n",
+        "the source stays"
+    );
+}
+
+/// With Settings > Files & folders > "When replacing a file, move the old
+/// one to the Recycle Bin" off, a paste's Replace overwrites the old file
+/// as Windows does: it is gone, not in the Recycle Bin, so there is no
+/// Undo that would bring it back.
+///
+/// parity: OPS-028
+#[gtk::test]
+fn a_pasted_replace_overwrites_the_old_file_when_the_switch_is_off() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+    super::restore_conflicts::overwrite_replaced_files(&test);
+    let trash_files = gtk::glib::user_data_dir().join("Trash/files");
+    let recycled = || fs::read_dir(&trash_files).map_or(0, Iterator::count);
+    let before = recycled();
+
+    test.activate("paste", None);
+    answer_conflicts(&test, ConflictAnswer::Replace);
+    wait_until("the file to be replaced", || {
+        fs::read(fixture.path("Notes 2.txt")).is_ok_and(|contents| contents == b"Another file\n")
+    });
+    wait_until("the copy to end", || !test.window.is_writing_files());
+
+    assert_eq!(recycled(), before, "nothing went to the Recycle Bin");
+    assert!(
+        !is_enabled(&test, "undo"),
+        "no Undo brings the overwritten file back"
+    );
     assert_eq!(
         fs::read(fixture.path("Documents/Notes 2.txt")).unwrap(),
         b"Another file\n",

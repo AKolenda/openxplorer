@@ -763,6 +763,74 @@ fn the_compact_view_switch_saves_the_choice() {
     });
 }
 
+/// "When replacing a file, move the old one to the Recycle Bin" is in
+/// Files & folders, on by default (the owner's choice), and saves only
+/// its turning off, which the window's next Replace follows.
+///
+/// parity: OPS-028
+#[gtk::test]
+fn the_replaced_files_switch_is_on_by_default_and_saves_only_its_turning_off() {
+    let settings = SettingsTest::open();
+    let title = "When replacing a file, move the old one to the Recycle Bin";
+    let switch = switch_of(&settings.row(title));
+    assert!(switch.is_active(), "on by default");
+    assert_eq!(
+        settings.test.window.replaced_files(),
+        ox_core::ops::ReplacedFiles::RecycleBin
+    );
+
+    switch.set_active(false);
+    wait_until("the choice to be saved", || {
+        !settings.saved_preferences().recycle_replaced_files
+    });
+    let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
+    assert!(
+        stored.contains("recycleReplacedFiles"),
+        "stored when off: {stored}"
+    );
+    wait_until("the window to follow", || {
+        settings.test.window.replaced_files() == ox_core::ops::ReplacedFiles::Overwrite
+    });
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().recycle_replaced_files
+    });
+    let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
+    assert!(
+        !stored.contains("recycleReplacedFiles"),
+        "stored only when off: {stored}"
+    );
+}
+
+/// The clipboard's extras beyond Windows are on by default, as they were
+/// before they could be turned off; each switch saves the choice to turn
+/// it off, as Windows 11 File Explorer behaves, which the open window then
+/// follows.
+///
+/// parity: CLIP-004, CLIP-015
+#[gtk::test]
+fn the_clipboard_switches_are_on_by_default_and_save_the_choice() {
+    let settings = SettingsTest::open();
+    let pictures = switch_of(&settings.row("Paste pictures as new files"));
+    let paths = switch_of(&settings.row("Also copy paths as text"));
+    assert!(pictures.is_active(), "pictures paste as files by default");
+    assert!(paths.is_active(), "paths are copied as text by default");
+
+    pictures.set_active(false);
+    wait_until("picture paste off to be saved", || {
+        !settings.saved_preferences().paste_pictures_as_files
+    });
+    paths.set_active(false);
+    wait_until("paths as text off to be saved", || {
+        !settings.saved_preferences().copy_paths_as_text
+    });
+    wait_until("the window to follow", || {
+        let preferences = settings.test.context.settings_data().preferences;
+        !preferences.paste_pictures_as_files && !preferences.copy_paths_as_text
+    });
+}
+
 /// The rows of preferences the Python app follows save its keys and
 /// values, so a change made here reaches it.
 ///

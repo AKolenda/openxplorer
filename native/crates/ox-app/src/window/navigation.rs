@@ -67,8 +67,9 @@ struct SavedTabView {
 impl BrowserWindow {
     /// The canonical location for an address: the home folder for its
     /// legacy page names, a landing page by URI, the home folder or a
-    /// landing page by title, the Recycle Bin or a folder in it, else a
-    /// folder relative to the current one (see [`Self::resolve_relative`]).
+    /// landing page by title, the Recycle Bin or Recent or a location in
+    /// them, else a folder relative to the current one (see
+    /// [`Self::resolve_relative`]).
     ///
     /// # Errors
     ///
@@ -90,8 +91,8 @@ impl BrowserWindow {
         if let Some(place) = self.place_titled(typed) {
             return Ok(place);
         }
-        if let Some(recycle_bin) = recycle_bin_location(typed)? {
-            return Ok(recycle_bin);
+        if let Some(listed) = gio_folder_location(typed)? {
+            return Ok(listed);
         }
         if let Some(inside) = ArchiveLocation::parse(typed)? {
             return Ok(inside.uri());
@@ -678,22 +679,21 @@ fn path_through_zip(uri: &str) -> Option<String> {
     ox_core::archive::is_safe_member_name(&member).then(|| root.member(&member).uri())
 }
 
-/// The Recycle Bin by its title or URI, or a folder in it, for `typed`;
-/// `None` for any other address. The Python app could not show the Trash;
-/// the native app lists it like a folder (OPS-040).
+/// The Recycle Bin or Recent by its title or URI, or a location in it,
+/// for `typed`; `None` for any other address. The Python app could show
+/// neither; the native app lists both like folders, as GIO's `trash:` and
+/// `recent:` (OPS-040, SIDE-026).
 ///
 /// # Errors
 ///
-/// A `trash:` address that is not a canonical location.
-fn recycle_bin_location(typed: &str) -> Result<Option<String>, LocationError> {
-    let is_titled = VirtualPlace::from_title(typed) == Some(VirtualPlace::RecycleBin);
-    if !is_titled && !typed.starts_with("trash:") {
-        return Ok(None);
-    }
-    let address = if is_titled {
-        VirtualPlace::RecycleBin.uri()
-    } else {
-        typed
+/// A `trash:` or `recent:` address that is not a canonical location.
+fn gio_folder_location(typed: &str) -> Result<Option<String>, LocationError> {
+    let titled = VirtualPlace::from_title(typed)
+        .filter(|place| matches!(place, VirtualPlace::RecycleBin | VirtualPlace::Recent));
+    let address = match titled {
+        Some(place) => place.uri(),
+        None if typed.starts_with("trash:") || typed.starts_with("recent:") => typed,
+        None => return Ok(None),
     };
     normalise_navigation(address, None, &glib::home_dir()).map(Some)
 }

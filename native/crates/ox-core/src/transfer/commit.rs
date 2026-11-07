@@ -249,11 +249,36 @@ impl Replacement<'_> {
     /// move, or reversibly (XFER-010) where the backend cannot do it in one
     /// step.
     fn overwrite(&self, source: &dyn Node, destination: &dyn Node) -> Result<(), TransferError> {
+        // Two names of one file (hard links): a rename between them changes
+        // nothing and still reports success, which would leave the source
+        // in place. The destination already holds the file, so only the
+        // source name goes, as the move asked.
+        if is_same_file(source, destination, self.cancel)? {
+            return source.delete();
+        }
         match source.replace_native(destination, Some(self.cancel)) {
             Err(TransferError::ReplaceUnsupported(_)) => replace_via_backup(source, destination, self.cancel),
             other => other,
         }
     }
+}
+
+/// True when `source` and `destination` are two names of one file: both
+/// report the same device and inode. A backend that reports no identity
+/// never counts as the same file.
+///
+/// # Errors
+///
+/// A failure to query either item.
+pub(crate) fn is_same_file(
+    source: &dyn Node,
+    destination: &dyn Node,
+    cancel: &Cancellation,
+) -> Result<bool, TransferError> {
+    let Some(source_identity) = source.info(Some(cancel))?.identity else {
+        return Ok(false);
+    };
+    Ok(destination.info(Some(cancel))?.identity == Some(source_identity))
 }
 
 /// XFER-010: replaces a file on backends such as MTP using reversible

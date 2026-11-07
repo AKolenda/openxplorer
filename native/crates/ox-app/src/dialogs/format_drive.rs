@@ -34,7 +34,7 @@ pub(crate) fn format_drive_dialog(
     on_start: impl Fn(&Dialog, FormatRequest) + 'static,
 ) -> Dialog {
     let title = ox_core::i18n::format_message("Format {drive}", &[("drive", drive_name)]);
-    let dialog = Dialog::new(parent, &title, "");
+    let dialog = Dialog::with_title_bar(parent, &title, "");
     let capacity = gtk::Label::builder()
         .label(ox_core::format::pretty_bytes(facts.size))
         .xalign(0.0)

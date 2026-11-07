@@ -98,6 +98,14 @@ pub(crate) enum WindowAction {
     Open,
     /// Selects every item (Ctrl+A).
     SelectAll,
+    /// Collapses the group whose heading the menu opened on (VIEW-022).
+    CollapseGroup,
+    /// Expands the group whose heading the menu opened on.
+    ExpandGroup,
+    /// Collapses every group of a grouped view.
+    CollapseAllGroups,
+    /// Expands every group of a grouped view.
+    ExpandAllGroups,
     /// Clears the selection.
     SelectNone,
     /// Selects exactly the items that were not selected.
@@ -108,6 +116,9 @@ pub(crate) enum WindowAction {
     PinSelected,
     /// Pins the current folder to Quick access.
     PinFolder,
+    /// Pins the location in the string target to Quick access: a drive's
+    /// Pin to Quick access.
+    PinLocation,
     /// Copies the path of the selection, or of the folder.
     CopyPath,
     /// Emails the selected files through the desktop's Email portal.
@@ -139,6 +150,13 @@ pub(crate) enum WindowAction {
     /// Shows or hides the details column whose key is the string target
     /// (the column titles' menu, VIEW-033).
     DetailsColumn,
+    /// Fits the details column whose key is the string target to its
+    /// widest content and title ("Size column to fit" in the column
+    /// titles' menu, VIEW-072).
+    FitColumn,
+    /// Fits every shown details column to its widest content and title
+    /// ("Size all columns to fit", Ctrl+keypad plus, VIEW-072).
+    FitAllColumns,
     /// Stops the listing of the folder shown (VIEW-049).
     Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
@@ -266,6 +284,12 @@ pub(crate) enum WindowAction {
     /// Opens the classic context menu where the compact one was ("Show
     /// more options").
     ShowMoreOptions,
+    /// Opens the navigation pane's classic menu where its compact one
+    /// was ("Show more options" in a sidebar menu).
+    SidebarMoreOptions,
+    /// Opens the classic menu of the place (a This PC tile) whose compact
+    /// menu was open, where it was.
+    PlaceMoreOptions,
     /// Opens the Sort menu where the folder's context menu was (its
     /// "Sort by", CMD-012).
     ShowSortMenu,
@@ -491,11 +515,16 @@ impl WindowAction {
             WindowAction::MountVolume => "mount-volume",
             WindowAction::Open => "open",
             WindowAction::SelectAll => "select-all",
+            WindowAction::CollapseGroup => "collapse-group",
+            WindowAction::ExpandGroup => "expand-group",
+            WindowAction::CollapseAllGroups => "collapse-all-groups",
+            WindowAction::ExpandAllGroups => "expand-all-groups",
             WindowAction::SelectNone => "select-none",
             WindowAction::InvertSelection => "invert-selection",
             WindowAction::SelectMatching => "select-matching",
             WindowAction::PinSelected => "pin-selected",
             WindowAction::PinFolder => "pin-folder",
+            WindowAction::PinLocation => "pin-location",
             WindowAction::CopyPath => "copy-path",
             WindowAction::Share => "share",
             WindowAction::About => "about",
@@ -509,6 +538,8 @@ impl WindowAction {
             WindowAction::FileNameExtensions => "file-name-extensions",
             WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::DetailsColumn => "details-column",
+            WindowAction::FitColumn => "fit-column",
+            WindowAction::FitAllColumns => "fit-all-columns",
             WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SplitView => "split-view",
@@ -563,6 +594,8 @@ impl WindowAction {
             WindowAction::ClearRecentLocations => "clear-recent-locations",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
+            WindowAction::SidebarMoreOptions => "sidebar-more-options",
+            WindowAction::PlaceMoreOptions => "place-more-options",
             WindowAction::ShowSortMenu => "show-sort-menu",
             WindowAction::ShowViewMenu => "show-view-menu",
             WindowAction::Unpin => "unpin",

@@ -102,9 +102,12 @@ impl BrowserWindow {
                 // The address being opened goes with the edit (VIEW-068).
                 window.cancel_typed_opening();
                 window.finish_address();
+                // Esc is a key, so the list shows where the keyboard is.
+                window.folder_pane().focus_an_item();
             }
         ));
         self.install_focus_regions();
+        self.install_tab_order();
         super::menu_popover::close_menus_on_press(self);
     }
 
@@ -247,15 +250,32 @@ impl BrowserWindow {
     /// several is never opened.
     pub(super) fn connect_view_activation(&self) {
         for pane in self.folder_panes() {
-            pane.details().column_view().connect_activate(glib::clone!(
+            let details = pane.details();
+            details.column_view().connect_activate(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, position| window.activate_from_view(position)
+                #[weak]
+                details,
+                move |_, row| {
+                    // Grouped, the rows list headings among the items.
+                    if let Some(position) = details.item_at(row) {
+                        window.activate_from_view(position);
+                    }
+                }
             ));
-            pane.icon_view().grid().connect_activate(glib::clone!(
+            let icons = pane.icon_view();
+            icons.grid().connect_activate(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, position| window.activate_from_view(position)
+                #[weak]
+                icons,
+                move |_, slot| {
+                    // Grouped Tiles and Content list headings among the
+                    // items (VIEW-071).
+                    if let Some(position) = icons.item_at(slot) {
+                        window.activate_from_view(position);
+                    }
+                }
             ));
         }
     }
@@ -461,6 +481,13 @@ impl BrowserWindow {
         if is_plain_tab(key, modifiers) && self.tab_to_other_pane() {
             return glib::Propagation::Stop;
         }
+        if let Some(handled) = self.group_heading_key(key, modifiers) {
+            return handled;
+        }
+        self.select_heading_after_key(key, modifiers);
+        if let Some(handled) = self.grouped_grid_key(key, modifiers) {
+            return handled;
+        }
         let shortcut =
             gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK;
         if modifiers.intersects(shortcut) {
@@ -562,8 +589,13 @@ impl BrowserWindow {
             self,
             #[weak]
             view,
-            move |press, _, x, y| {
+            move |press, presses, x, y| {
                 window.imp().view_modifiers.set(Some(press.current_event_state()));
+                if !window.are_item_clicks_paused()
+                    && window.press_heading(&view, x, y, presses, press.current_event_state())
+                {
+                    return;
+                }
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
                     return;
                 }
@@ -580,16 +612,24 @@ impl BrowserWindow {
     }
 
     /// Whether (`x`, `y`) in `view` is its blank space: inside the list,
-    /// not on an item, and not on the column titles. The empty part of an
+    /// not on an item or a group's heading, and not on the column titles. The empty part of an
     /// unselected details row is blank space too ([`Self::is_beside_item`]).
     pub(super) fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
+        // A group's heading collapses its group on a click (VIEW-022).
+        if super::group_headings::heading_at(view, x, y).is_some() {
+            return false;
+        }
         if self.folder_pane().owners().position_at(view, x, y).is_some() {
             return self.is_beside_item(view, x, y);
         }
         // The details view's rows are an inner list view; its titles are
-        // not inside it. The icon grid is the list itself.
-        view.pick(x, y, gtk::PickFlags::DEFAULT)
-            .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
+        // not inside it. The icon grid is the list itself, and a group's
+        // heading row in grouped Tiles and Content is blank space too.
+        view.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
+            &picked == view
+                || picked.ancestor(gtk::ListView::static_type()).is_some()
+                || crate::folder_view::cells::is_in_group_slot(&picked)
+        })
     }
 
     /// Whether (`x`, `y`) in `view` is on the empty part of an unselected

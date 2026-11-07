@@ -83,6 +83,10 @@ window.ox button:disabled, window.ox button:disabled image { color: @ox_text_dis
 /* The focus ring of the current app, a 2px ring inside the control
    (§4.13; the Windows two-ring focus visual awaits sign-off, C29). */
 window.ox button:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
+/* A scrolled window that holds the keyboard itself, so that the keys
+   scroll it, as the Details pane does with no file selected (ACC-016,
+   window/tab_order.rs): no Tab stop is invisible. */
+window.ox scrolledwindow.keyboard-on-itself { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
 
 /* Bordered buttons: the details pane's action, the empty state's action,
    secondary buttons on landing pages (E06, §4.14 "Bordered button"). The

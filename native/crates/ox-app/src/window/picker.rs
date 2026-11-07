@@ -5195,7 +5195,26 @@ mod tests {
                 })
                 .collect();
         headings.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let first = headings.into_iter().next().map(|(_, text)| text);
+        // A heading shows its title alone, as Windows 11's Open and Save
+        // dialogs do since 22H2 (VIEW-022); its group's count, read from
+        // the grouped layout, tells which files the type lists.
+        let layout = window
+            .folder_pane()
+            .grouped()
+            .and_then(|grouped| grouped.layout());
+        let first = headings.into_iter().next().map(|(_, title)| {
+            let count = layout.as_ref().and_then(|layout| {
+                layout
+                    .groups()
+                    .iter()
+                    .find(|group| group.title == title)
+                    .map(crate::folder_view::group_slots::GroupRun::len)
+            });
+            match count {
+                Some(count) => format!("{title} ({count})"),
+                None => title,
+            }
+        });
         (first, window.folder_pane().details().vadjustment().value())
     }
 

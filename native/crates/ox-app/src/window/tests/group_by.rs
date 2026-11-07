@@ -27,7 +27,8 @@ use crate::window::menu_popover::MenuEntry;
 
 use super::view_styles::{ask_from_folder_options, close_folder_options, open_folder_options};
 
-/// The headings the details view draws, top to bottom.
+/// The headings the details view draws, top to bottom, each with its
+/// group's count.
 fn headings(test: &TestWindow) -> Vec<String> {
     wait_for_frames(&test.window, 3);
     let column_view = test.window.folder_pane().details().column_view().clone();
@@ -40,7 +41,7 @@ fn headings(test: &TestWindow) -> Vec<String> {
         })
         .collect();
     labels.sort_by(|a, b| a.0.total_cmp(&b.0));
-    labels.into_iter().map(|(_, text)| text).collect()
+    super::support::with_group_counts(test, labels.into_iter().map(|(_, text)| text).collect())
 }
 
 /// Sets the modification time of `path` to `age` ago.
@@ -793,14 +794,18 @@ fn scroll_to_the_middle(test: &TestWindow) {
 /// the list's own groups, so it does not depend on the window's size, the
 /// row height or how many rows a group has.
 fn scroll_to_a_heading_in_the_middle(test: &TestWindow, by: &str) {
-    let column_view = test.window.folder_pane().details().column_view().clone();
-    let model = column_view.model().expect("the details view lists the folder");
-    let sections = model
-        .dynamic_cast_ref::<gtk::SectionModel>()
-        .expect("a grouped list has sections");
-    let middle = model.n_items() / 2;
-    let (start, end) = sections.section(middle);
-    let group_start = if end < model.n_items() { end } else { start };
+    let details = test.window.folder_pane().details();
+    let column_view = details.column_view().clone();
+    let layout = details
+        .grouped()
+        .and_then(|grouped| grouped.layout())
+        .expect("a grouped list has headings");
+    let middle = layout.len() / 2;
+    let group_start = (0..layout.groups().len())
+        .filter_map(|index| layout.heading_slot(index))
+        .find(|slot| *slot >= middle)
+        .or_else(|| layout.heading_slot(0))
+        .expect("a heading");
     column_view.scroll_to(group_start, None, gtk::ListScrollFlags::NONE, None);
     wait_for_frames(&test.window, 3);
     // Then up by half a view, so the heading sits in the middle of the
@@ -824,17 +829,14 @@ fn turn_groups_on_and_off(test: &TestWindow, choices: &[&str]) {
             // Headings on screen in the middle of the list: what GTK 4.22
             // needs to abort when the groups are turned off.
             scroll_to_a_heading_in_the_middle(test, by);
-            let details = test.window.folder_pane().details().column_view().clone();
-            assert!(
-                details.header_factory().is_some(),
-                "round {round}: grouped by {by}"
-            );
+            let details = test.window.folder_pane().details();
+            assert!(details.heads_groups(), "round {round}: grouped by {by}");
             assert_eq!(test.action_state("group-by").as_deref(), Some(*by));
 
             test.activate("group-by", Some("none"));
             wait_for_frames(&test.window, 3);
             assert!(headings(test).is_empty(), "round {round}: {by} turned off");
-            assert!(details.header_factory().is_none(), "round {round}: no headings");
+            assert!(!details.heads_groups(), "round {round}: no headings");
             let shown = test.names().len();
             assert!(
                 shown >= listed,
@@ -1055,5 +1057,68 @@ fn a_column_shown_in_a_grouped_list_keeps_its_first_heading() {
         wait_for_frames(&test.window, 4);
         assert!(adjustment.value() < 0.5, "at its top, not {}", adjustment.value());
         assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
+    }
+}
+
+/// A Details heading's chevron, title and line span the whole row, over
+/// the other columns, as Windows 11 draws them whatever Name's width: the
+/// title is never cut to the Name column, and it never widens Name.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_details_heading_spans_its_row_over_the_columns() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    wait_until("the headings", || !headings(&test).is_empty());
+    let details = test.window.folder_pane().details().clone();
+    let column_view = details.column_view().clone();
+    let name = details.column(SortColumn::Name).expect("a Name column");
+    let boxes: Vec<gtk::Widget> = descendants::<gtk::Box>(&column_view)
+        .into_iter()
+        .filter(|heading| heading.has_css_class("group-header") && heading.is_mapped())
+        .map(Cast::upcast)
+        .collect();
+    assert!(!boxes.is_empty(), "headings on screen");
+    for heading in &boxes {
+        let row = std::iter::successors(heading.parent(), WidgetExt::parent)
+            .find(|widget| widget.css_name() == "row")
+            .expect("the heading's row");
+        let bounds = heading.compute_bounds(&row).expect("the heading is laid out");
+        assert!(bounds.x().abs() < 0.5, "the heading starts at the row's edge");
+        #[expect(clippy::cast_precision_loss, reason = "row widths are small")]
+        let row_width = row.width() as f32;
+        assert!(
+            (bounds.width() - row_width).abs() < 0.5,
+            "the heading spans the row: {} of {row_width}",
+            bounds.width()
+        );
+    }
+    // Name at its least width: each title still shows whole, laid out
+    // across the row rather than in Name's cell.
+    let titles: Vec<gtk::Label> = descendants::<gtk::Label>(&column_view)
+        .into_iter()
+        .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+        .collect();
+    let widest = titles
+        .iter()
+        .map(|title| title.measure(gtk::Orientation::Horizontal, -1).1)
+        .max()
+        .expect("titles");
+    name.set_fixed_width(1);
+    wait_for_frames(&test.window, 4);
+    let name_width = details
+        .column_view()
+        .first_child()
+        .and_then(|header| header.first_child())
+        .map_or(0, |title| title.width());
+    for title in &titles {
+        let (_, natural, _, _) = title.measure(gtk::Orientation::Horizontal, -1);
+        assert!(
+            title.width() >= natural,
+            "{:?} shows whole ({} of {natural}) with Name {name_width} wide, widest title {widest}",
+            title.text(),
+            title.width()
+        );
     }
 }

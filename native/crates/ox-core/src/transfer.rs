@@ -90,6 +90,7 @@ mod unstorable;
 
 pub(crate) use cancellation::check_cancelled;
 pub use cancellation::Cancellation;
+pub(crate) use commit::is_same_file;
 pub(crate) use commit::verify_installation;
 pub use engine::{ElevatedDestination, TransferEngine};
 pub use error::TransferError;

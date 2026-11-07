@@ -134,6 +134,11 @@ impl BrowserWindow {
 
     /// Copies or moves the clipboard's `files` into `destination_folder`
     /// where it is writable.
+    ///
+    /// Safety rule "a drive is never copied whole": a drive on the
+    /// clipboard becomes a shortcut in the folder, "Local Disk -
+    /// Shortcut", as Windows Explorer pastes a copied drive; only the
+    /// other items are copied or moved ([`crate::window::drive_shortcuts`]).
     async fn paste_files(&self, files: ClipboardFiles, destination_folder: String) {
         if !self.takes_pasted_items(&destination_folder) {
             return;
@@ -142,9 +147,16 @@ impl BrowserWindow {
             ClipboardMode::Copy => TransferMode::Copy,
             ClipboardMode::Cut => TransferMode::Move,
         };
+        let split = self.split_drives(files.uris());
+        let made = self
+            .make_drive_shortcuts(split.drives, destination_folder.clone())
+            .await;
+        if !made || split.others.is_empty() {
+            return;
+        }
         let incoming = IncomingItems {
             mode,
-            uris: files.uris().to_vec(),
+            uris: split.others,
             destination_folder,
         };
         let Some(outcome) = self.transfer_with_conflicts(incoming).await else {
@@ -222,7 +234,7 @@ impl BrowserWindow {
         let changed = changed_folders(written, incoming.uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
         let finished = outcome.clone().map(|outcome| {
-            let mut finished = FinishedOperation::of_transfer(mode, outcome);
+            let mut finished = FinishedOperation::of_transfer(outcome);
             if let Some(kept) = kept {
                 finished.select_after = kept;
             }

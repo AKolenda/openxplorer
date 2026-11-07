@@ -27,7 +27,7 @@ use scripted_owner::{Script, ScriptedOwner};
 
 /// A clipboard owner in another application, played by a content
 /// provider whose answers the test scripts.
-mod scripted_owner {
+pub(super) mod scripted_owner {
     use std::cell::{Cell, OnceCell};
     use std::future::Future;
     use std::pin::Pin;
@@ -40,7 +40,7 @@ mod scripted_owner {
 
     /// How a [`ScriptedOwner`] answers a read.
     #[derive(Debug, Clone)]
-    pub(super) enum Script {
+    pub(in crate::window::tests) enum Script {
         /// The conversion fails, as when an X11 owner refuses a target
         /// (the length -1 selection data of GitHub issue #20).
         Fail,
@@ -55,11 +55,11 @@ mod scripted_owner {
 
     /// What a [`ScriptedOwner`] has done, for the test to wait on.
     #[derive(Debug, Default)]
-    pub(super) struct OwnerProgress {
+    pub(in crate::window::tests) struct OwnerProgress {
         /// A reader asked for the payload.
-        pub(super) was_asked: Cell<bool>,
+        pub(in crate::window::tests) was_asked: Cell<bool>,
         /// The owner has answered, or failed as scripted.
-        pub(super) has_answered: Cell<bool>,
+        pub(in crate::window::tests) has_answered: Cell<bool>,
     }
 
     mod imp {
@@ -145,7 +145,7 @@ mod scripted_owner {
 
     impl ScriptedOwner {
         /// An owner offering `mime_type` and answering as `script` says.
-        pub(super) fn new(mime_type: &'static str, script: Script) -> Self {
+        pub(in crate::window::tests) fn new(mime_type: &'static str, script: Script) -> Self {
             let owner: Self = glib::Object::new();
             let imp = owner.imp();
             imp.mime_type
@@ -156,7 +156,7 @@ mod scripted_owner {
         }
 
         /// What the owner has done so far.
-        pub(super) fn progress(&self) -> Rc<OwnerProgress> {
+        pub(in crate::window::tests) fn progress(&self) -> Rc<OwnerProgress> {
             Rc::clone(&self.imp().progress)
         }
     }
@@ -379,9 +379,10 @@ fn a_picture_over_the_size_limit_is_no_data_and_says_why() {
 
     take_clipboard(&test, &owner);
     wait_until("the owner to answer", || progress.has_answered.get());
-    wait_for(Duration::from_millis(200));
+    // A busy runner can take longer than any fixed wait to turn the
+    // oversized answer into "no data", so wait for Paste to go off.
+    wait_until("nothing to be pasteable", || !is_enabled(&test, "paste"));
 
-    assert!(!is_enabled(&test, "paste"), "nothing is pasteable");
     test.window.paste_from_keyboard();
     wait_until("the refusal", || {
         test.window.shown_message() == ox_core::clipboard::TOO_LARGE_TO_PASTE
@@ -402,9 +403,8 @@ fn a_picture_conversion_the_owner_refuses_is_no_data() {
 
     take_clipboard(&test, &refusing_owner);
     wait_until("the owner to refuse", || progress.has_answered.get());
-    wait_for(Duration::from_millis(200));
+    wait_until("nothing to be pasteable", || !is_enabled(&test, "paste"));
 
-    assert!(!is_enabled(&test, "paste"));
     test.window.paste_from_keyboard();
     wait_for(Duration::from_millis(200));
     assert_eq!(test.window.shown_message(), "", "nothing is said");

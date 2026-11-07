@@ -12,9 +12,11 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
+use ox_core::i18n::gettext;
 use ox_core::location::{location_kind, LocationKind};
 
-use super::actions::text_action;
+use super::actions::{plain_action, text_action};
+use super::folder_pane::{FolderView, PanePage};
 use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -33,9 +35,37 @@ fn column_glyph(column: SortColumn) -> Icon {
     }
 }
 
-/// The titles' menu: every column that can be shown or hidden, checked
-/// while it shows. Name cannot be hidden, so it is not offered.
-fn column_menu_entries(chosen: &[SortColumn]) -> Vec<MenuEntry> {
+/// The titles' menu, as Windows 11 File Explorer's: "Size column to fit"
+/// for the column it was opened on (`under`, unavailable outside the
+/// titles), "Size all columns to fit", then every column that can be
+/// shown or hidden, checked while it shows. Name cannot be hidden, so it
+/// is not offered.
+fn column_menu_entries(chosen: &[SortColumn], under: Option<SortColumn>) -> Vec<MenuEntry> {
+    let fit_one = MenuItem::with_text_target(
+        &gettext("Size column to fit"),
+        Icon::Document,
+        WindowAction::FitColumn,
+        under.map_or("", SortColumn::as_str),
+    )
+    .without_glyph()
+    .disabled_when(under.is_none());
+    let fit_all = MenuItem::new(
+        &gettext("Size all columns to fit"),
+        Icon::Document,
+        WindowAction::FitAllColumns,
+    )
+    .without_glyph();
+    let mut entries = vec![
+        MenuEntry::Item(fit_one),
+        MenuEntry::Item(fit_all),
+        MenuEntry::Divider,
+    ];
+    entries.extend(column_toggle_entries(chosen));
+    entries
+}
+
+/// The titles' menu items that show and hide columns.
+fn column_toggle_entries(chosen: &[SortColumn]) -> Vec<MenuEntry> {
     let item = |column: SortColumn| {
         let item = MenuItem::with_text_target(
             column.label(),
@@ -70,7 +100,15 @@ impl BrowserWindow {
                 window.toggle_details_column(column);
             }
         });
-        self.add_action_entries([toggle]);
+        let fit_one = text_action(WindowAction::FitColumn, |window, key| {
+            if let Some(column) = SortColumn::from_key(key) {
+                window.fit_details_columns(Some(column));
+            }
+        });
+        let fit_all = plain_action(WindowAction::FitAllColumns, |window| {
+            window.fit_details_columns(None);
+        });
+        self.add_action_entries([toggle, fit_one, fit_all]);
         for pane in self.folder_panes() {
             let details = pane.details();
             details.connect_columns_chosen(glib::clone!(
@@ -83,6 +121,10 @@ impl BrowserWindow {
             let Some(header) = details.header() else { continue };
             let click = gtk::GestureClick::new();
             click.set_button(gdk::BUTTON_SECONDARY);
+            // A real right-click on a title never reached this gesture in
+            // the bubble phase, so the menu did not open: it takes the
+            // press before the titles do.
+            click.set_propagation_phase(gtk::PropagationPhase::Capture);
             click.connect_pressed(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
@@ -102,8 +144,9 @@ impl BrowserWindow {
 
     /// The titles' menu at (`x`, `y`) in `header`.
     pub(super) fn show_column_menu(&self, header: &gtk::Widget, x: f64, y: f64) -> MenuPopover {
-        let chosen = self.folder_pane().details().chosen_columns();
-        let popover = MenuPopover::new(column_menu_entries(&chosen));
+        let details = self.folder_pane().details();
+        let chosen = details.chosen_columns();
+        let popover = MenuPopover::new(column_menu_entries(&chosen, details.column_at(x)));
         popover.set_parent(header);
         #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in i32")]
         popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
@@ -121,6 +164,23 @@ impl BrowserWindow {
         let chosen = toggled(details.chosen_columns(), column);
         details.show_chosen_columns(chosen.clone());
         self.remember_style();
+    }
+
+    /// Fits `column` of the active pane's details view, or every shown
+    /// column for `None`, which saves the widths as a drag does. Only
+    /// the details view has columns: in the other views, and on a page
+    /// without a listing, Ctrl+plus on the number pad does nothing, as in
+    /// Windows File Explorer (VIEW-072).
+    fn fit_details_columns(&self, column: Option<SortColumn>) {
+        let pane = self.folder_pane();
+        if pane.view() != FolderView::Details || pane.page() != Some(PanePage::Listing) {
+            return;
+        }
+        let details = pane.details();
+        match column {
+            Some(column) => details.fit_column(column),
+            None => details.fit_all_columns(),
+        }
     }
 
     /// Applies the shared view options to the folder shown: which items
@@ -163,7 +223,7 @@ mod tests {
     #[test]
     fn the_titles_menu_shows_and_hides_columns() {
         let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
-        let entries = column_menu_entries(&chosen);
+        let entries = column_toggle_entries(&chosen);
         let checked: Vec<(String, bool)> = entries
             .iter()
             .filter_map(|entry| match entry {

@@ -236,7 +236,7 @@ mod tests {
         let item_rings = [
             "columnview.files > listview > row",
             "gridview.files > child",
-            ".sidebar list > row",
+            ".sidebar list.places > row",
             ".folder-tree listview > row",
         ]
         .map(|item| format!("{item}:focus-visible {item_ring}"));
@@ -268,9 +268,9 @@ mod tests {
     fn higher_contrast_thickens_drop_outlines_and_outlines_the_open_place() {
         let code = without_comments(HIGH_CONTRAST_RULES);
         for rule in [
-            ".sidebar list > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }",
-            ".sidebar list > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
-            ".sidebar list > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
+            ".sidebar list.places > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }",
+            ".sidebar list.places > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
+            ".sidebar list.places > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
             ".tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }",
             "box-shadow: inset 0 0 0 2px @ox_focus_outer; }",
             "outline: 2px solid @ox_text;\n  outline-offset: -2px;\n  box-shadow: inset 0 0 0 3px @ox_bg;",
@@ -278,6 +278,25 @@ mod tests {
         ] {
             assert!(code.contains(rule), "{rule}");
         }
+    }
+
+    /// High contrast rings a focused tile or Content row once, on its
+    /// cell: the high-contrast provider outranks the base rule that clears
+    /// the ring of the grid's slot around the cell, so it clears it too,
+    /// after the ring it gives every slot.
+    ///
+    /// parity: ACC-011, VIEW-071
+    #[test]
+    fn high_contrast_rings_a_tile_or_content_row_once() {
+        let code = without_comments(HIGH_CONTRAST_RULES);
+        let generic = code
+            .find("gridview.files > child:focus-visible,")
+            .expect("every slot gets the high-contrast ring");
+        let cleared = code
+            .find("gridview.files.tiles > child:focus-visible,\ngridview.files.content > child:focus-visible { outline: none; box-shadow: none; }")
+            .expect("Tiles and Content clear the slot's ring");
+        assert!(cleared > generic, "the clearing rule comes after the ring");
+        assert!(code.contains("gridview.files.tiles > child:focus-visible > .item-cell:not(.group-slot)"));
     }
 
     #[gtk::test]

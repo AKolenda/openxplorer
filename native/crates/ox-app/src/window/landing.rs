@@ -44,10 +44,12 @@ use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
+use super::menu_popover::MenuStyle;
 use super::place_menus::{popup_place_menu, PlaceMenu};
 use super::selection_keys::SelectionChange;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
+use super::BrowserWindow;
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
@@ -66,6 +68,8 @@ const CHEVRON: i32 = 16;
 const MOST_TILES_PER_ROW: u32 = 32;
 /// The class This PC's page carries, for its tighter padding.
 const THIS_PC_CLASS: &str = "this-pc";
+/// The class of a mounted drive's tile, which Copy copies when selected.
+const DRIVE_TILE_CLASS: &str = "drive-tile";
 
 /// How full a file system is, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,9 +224,21 @@ impl Tile {
         self.open.action.activate_from(&self.child, Some(&target));
     }
 
-    /// Opens the tile's menu at `x`, `y` in the tile.
-    fn popup_menu(&self, x: f64, y: f64) {
-        popup_place_menu(&self.menu, &self.child, x, y);
+    /// Opens the tile's menu at `x`, `y` in the tile, in `style`.
+    fn popup_menu(&self, x: f64, y: f64, style: MenuStyle) {
+        popup_place_menu(&self.menu, &self.child, x, y, style);
+    }
+
+    /// The style the window's file list opens its right-click menu in,
+    /// the classic one when `classic` asks for it (Shift held, Shift+F10).
+    fn menu_style(&self, classic: bool) -> MenuStyle {
+        if classic {
+            return MenuStyle::Classic;
+        }
+        self.child
+            .root()
+            .and_downcast::<BrowserWindow>()
+            .map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
     }
 }
 
@@ -268,6 +284,10 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
         VolumeState::Mounted { uri, controls } => {
             show_capacity(&lines, uri, true);
             gestures::open_folder_on_middle_click(&child, uri);
+            // What Copy copies while the tile is selected, and what a drag
+            // of it carries ([`drive_tile_at`]): a shortcut to the drive,
+            // never its contents ([`super::drive_shortcuts`]).
+            child.add_css_class(DRIVE_TILE_CLASS);
             Tile {
                 child,
                 open: Opening {
@@ -636,7 +656,10 @@ fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
                 }
                 focus_tile(&child);
                 if let Some(tile) = tile_of(&tiles, &child) {
-                    tile.popup_menu(x, y);
+                    let shift = gesture
+                        .current_event_state()
+                        .contains(gtk::gdk::ModifierType::SHIFT_MASK);
+                    tile.popup_menu(x, y, tile.menu_style(shift));
                 }
             }
         ));
@@ -648,25 +671,25 @@ fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
 /// Alt+Enter opens its Properties.
 fn connect_keys(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
     let shortcuts = gtk::ShortcutController::new();
-    let menu = gtk::CallbackAction::new(glib::clone!(
-        #[strong]
-        tiles,
-        move |flow, _| {
-            let Some(flow) = flow.downcast_ref::<gtk::FlowBox>() else {
-                return glib::Propagation::Proceed;
-            };
-            let Some(tile) = selected_tile(flow, &tiles) else {
-                return glib::Propagation::Proceed;
-            };
-            let width = f64::from(tile.child.width());
-            let height = f64::from(tile.child.height());
-            tile.popup_menu(width / 2.0, height / 2.0);
-            glib::Propagation::Stop
-        }
-    ));
-    for key in [MENU_KEY, CLASSIC_MENU_KEY] {
+    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+        let menu = gtk::CallbackAction::new(glib::clone!(
+            #[strong]
+            tiles,
+            move |flow, _| {
+                let Some(flow) = flow.downcast_ref::<gtk::FlowBox>() else {
+                    return glib::Propagation::Proceed;
+                };
+                let Some(tile) = selected_tile(flow, &tiles) else {
+                    return glib::Propagation::Proceed;
+                };
+                let width = f64::from(tile.child.width());
+                let height = f64::from(tile.child.height());
+                tile.popup_menu(width / 2.0, height / 2.0, tile.menu_style(classic));
+                glib::Propagation::Stop
+            }
+        ));
         let trigger = gtk::ShortcutTrigger::parse_string(key);
-        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(menu.clone())));
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(menu)));
     }
     let properties = gtk::CallbackAction::new(glib::clone!(
         #[strong]
@@ -738,6 +761,38 @@ fn tile_boxes(page: &gtk::Box) -> impl Iterator<Item = gtk::FlowBox> {
     super::widget_tree::children(page).filter_map(|child| child.downcast::<gtk::FlowBox>().ok())
 }
 
+/// The class This PC's page carries once its drive tiles can be dragged.
+const DRIVE_DRAG_CLASS: &str = "drive-tiles-drag";
+
+/// The drive whose tile is at `x`, `y` of `page`, for a drag of it.
+fn drive_tile_at(page: &gtk::Box, x: f64, y: f64) -> Option<String> {
+    let picked = page.pick(x, y, gtk::PickFlags::DEFAULT)?;
+    let tile = std::iter::successors(Some(picked), WidgetExt::parent)
+        .take_while(|widget| widget != page.upcast_ref::<gtk::Widget>())
+        .find(|widget| widget.has_css_class(DRIVE_TILE_CLASS))?;
+    Some(tile.widget_name().to_string())
+}
+
+/// Lets `page`'s drive tiles be dragged, once for the page, which is
+/// drawn again whenever a drive comes or goes.
+fn allow_drive_drags(page: &gtk::Box) {
+    if page.has_css_class(DRIVE_DRAG_CLASS) {
+        return;
+    }
+    page.add_css_class(DRIVE_DRAG_CLASS);
+    super::file_drag::attach_drive_tile_drag(page, drive_tile_at);
+}
+
+/// The drives whose tiles are selected on `page`, in order: what Copy
+/// copies on This PC, for a paste to make a shortcut to each.
+pub(super) fn selected_drives(page: &gtk::Box) -> Vec<String> {
+    tile_boxes(page)
+        .flat_map(|flow| flow.selected_children())
+        .filter(|child| child.has_css_class(DRIVE_TILE_CLASS))
+        .map(|child| child.widget_name().to_string())
+        .collect()
+}
+
 /// The tiles of `flow`.
 fn tiles_in(flow: &gtk::FlowBox) -> impl Iterator<Item = gtk::FlowBoxChild> {
     super::widget_tree::children(flow).filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
@@ -785,13 +840,17 @@ pub(super) fn change_tile_selection(page: &gtk::Box, change: SelectionChange) ->
 }
 
 /// A click or an arrow selects in one group at a time, as in one item
-/// view: selecting a tile in one group clears the others.
+/// view: selecting a tile in one group clears the others. The window's
+/// commands follow the selection, as Copy copies the selected drives.
 fn select_one_group(page: &gtk::Box) {
     for flow in tile_boxes(page) {
         flow.connect_selected_children_changed(glib::clone!(
             #[weak]
             page,
             move |flow| {
+                if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
+                    window.update_file_commands();
+                }
                 if ACROSS_GROUPS.get() || flow.selected_children().is_empty() {
                     return;
                 }
@@ -909,6 +968,7 @@ pub(super) fn render(
     match page {
         Page::ThisPc => {
             body.add_css_class(THIS_PC_CLASS);
+            allow_drive_drags(body);
             this_pc(body, places, locations, text_size);
             select_one_group(body);
             kept.restore(body);
