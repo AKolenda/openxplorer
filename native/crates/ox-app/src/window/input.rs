@@ -265,7 +265,8 @@ impl BrowserWindow {
     /// behind, with Ctrl+Shift to a new tab in front and with Shift to a
     /// new window, whatever is selected, as in Dolphin (TAB-026). With
     /// Folder Options' "Open each folder in its own window", a folder
-    /// opened alone goes to a new window too, as in Windows.
+    /// opened alone goes to a new window too, as in Windows
+    /// ([`BrowserWindow::activate_item`]).
     pub(super) fn activate_from_view(&self, position: u32) {
         // DND-007: the press or release of a drag never opens an item.
         if self.are_item_clicks_paused() {
@@ -283,10 +284,7 @@ impl BrowserWindow {
         }
         let selected = self.folder_pane().model().selected_positions();
         let alone = selected.is_empty() || selected == [position];
-        let own_window = alone && self.opens_folders_in_own_window();
-        if let Some(uri) = self.folder_in_view(position).filter(|_| own_window) {
-            WindowAction::OpenWindow.activate_from(self, Some(&uri.to_variant()));
-        } else if alone {
+        if alone {
             self.activate_item(position);
         } else if selected.contains(&position) {
             self.open_selection();
@@ -322,6 +320,7 @@ impl BrowserWindow {
         self.attach_file_drag(view);
         self.attach_details_hover(view);
         self.attach_file_drop_zone(view, DropZone::FolderView);
+        view.add_controller(keyboard_marker(view));
     }
 
     /// Gives the empty page's whole area in `pane` what an empty folder takes in
@@ -654,13 +653,38 @@ impl BrowserWindow {
 
     /// The location of the folder at `position` of the active pane, if a
     /// folder is there.
-    fn folder_in_view(&self, position: u32) -> Option<String> {
+    pub(super) fn folder_in_view(&self, position: u32) -> Option<String> {
         let item = self.folder_pane().model().item(position)?;
         match activation_for(item.entry()) {
             Activation::Folder(uri) => Some(uri),
             Activation::File | Activation::Archive | Activation::Refused(_) => None,
         }
     }
+}
+
+/// The class a folder view has while the keyboard is in it, which its
+/// focused row or tile outlines (folder-views.css).
+pub(super) const KEYBOARD_IN_CLASS: &str = "keyboard-in";
+
+/// Marks `view` with [`KEYBOARD_IN_CLASS`] while the window's keyboard
+/// focus is inside it, and only then: as in Windows 11 File Explorer, the
+/// focused item draws its outline only while the list has the keyboard,
+/// whatever state GTK leaves on the row it last focused once the
+/// keyboard moves to the navigation pane or the address bar.
+fn keyboard_marker(view: &gtk::Widget) -> gtk::EventControllerFocus {
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_contains_focus_notify(glib::clone!(
+        #[weak]
+        view,
+        move |focus| {
+            if focus.contains_focus() {
+                view.add_css_class(KEYBOARD_IN_CLASS);
+            } else {
+                view.remove_css_class(KEYBOARD_IN_CLASS);
+            }
+        }
+    ));
+    focus
 }
 
 #[cfg(test)]

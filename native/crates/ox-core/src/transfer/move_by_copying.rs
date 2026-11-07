@@ -27,6 +27,9 @@ pub type MoveByCopyingQuestion = dyn FnMut(&MoveByCopyingItem) -> bool + Send;
 pub(crate) struct MoveByCopying {
     question: Option<Box<MoveByCopyingQuestion>>,
     answer: Option<bool>,
+    /// The item is written as administrator: the user's Continue already
+    /// agreed to finish its move by copying (OPS-047).
+    elevated: bool,
 }
 
 impl MoveByCopying {
@@ -35,12 +38,23 @@ impl MoveByCopying {
         Self {
             question: Some(question),
             answer: None,
+            elevated: false,
         }
+    }
+
+    /// Whether the item running now is written as administrator. A file
+    /// can only reach `admin://` from `file:` by copying, and Continue is
+    /// the user's agreement to that, so it is not asked about again.
+    pub(crate) fn set_elevated(&mut self, elevated: bool) {
+        self.elevated = elevated;
     }
 
     /// True when the user agreed that `item`, and every later such move of
     /// the operation, is finished by copying. The user is asked once.
     pub(crate) fn allowed(&mut self, item: impl FnOnce() -> MoveByCopyingItem) -> bool {
+        if self.elevated {
+            return true;
+        }
         if let Some(answer) = self.answer {
             return answer;
         }

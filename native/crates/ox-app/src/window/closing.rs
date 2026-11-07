@@ -321,13 +321,18 @@ impl BrowserWindow {
         self.cancel_operation();
     }
 
-    /// Whether a dialog shows over this window.
+    /// Whether a dialog shows over this window. The Properties and progress
+    /// windows a file dialog owns are no dialogs over it: they are
+    /// modeless, as everywhere ([`Self::own_in_dialog`]).
     pub(super) fn has_open_dialog(&self) -> bool {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<gtk::Window>().ok())
             .any(|window| {
+                let modeless = window.is::<crate::properties::PropertiesWindow>()
+                    || window.is::<super::progress_window::ProgressWindow>();
                 window.is_visible()
+                    && !modeless
                     && window.transient_for().as_ref() == Some(self.upcast_ref::<gtk::Window>())
             })
     }
