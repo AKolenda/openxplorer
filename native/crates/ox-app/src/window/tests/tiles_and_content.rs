@@ -396,10 +396,14 @@ fn a_cell_that_showed_a_heading_follows_whether_check_boxes_take_clicks() {
         .into_iter()
         .filter(|cell| cell.group_heading().is_some())
         .collect();
-    // Ctrl changes while some cells show headings.
+    // The boxes stop waiting for Ctrl while some cells show headings. It
+    // goes through the window, which says again whether they take clicks
+    // as it gets focus, so a change made around it could be undone.
     let owners = pane.owners();
-    let take = !owners.item_checks_take_clicks();
-    owners.set_item_checks_take_clicks(take);
+    assert!(!owners.item_checks_take_clicks(), "the boxes wait for Ctrl");
+    test.window.wait_for_ctrl_with_item_checks(false);
+    let take = true;
+    assert!(owners.item_checks_take_clicks());
     let adjustment = pane.icon_view().scroll_adjustment();
     let mut reused = 0;
     for step in 1..=12 {
