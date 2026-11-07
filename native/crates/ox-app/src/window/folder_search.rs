@@ -124,7 +124,9 @@ impl BrowserWindow {
     /// filters the listing by the text, clears the selection and scrolls
     /// to the top (`queueSearch`).
     /// Emptying the box on search results goes back to the folder
-    /// ([`Self::leave_search_step`]).
+    /// ([`Self::leave_search_step`]). A tab's search put back when the
+    /// tab comes back to the front keeps what the tab had selected
+    /// ([`Self::restore_results_view`]).
     fn search_edited(&self, text: &str) {
         let was_searching = self.is_searching();
         if !was_searching && !text.trim().is_empty() {
@@ -134,9 +136,12 @@ impl BrowserWindow {
         let roots = self.context().search_cache().roots();
         self.imp().search.borrow_mut().edit(text, &folder, &roots);
         self.show_searched_items();
-        self.folder_pane().model().select_none();
-        if self.is_searching() {
-            self.folder_pane().scroll_to_start();
+        if !self.is_restoring_results() {
+            self.forget_results_view();
+            self.folder_pane().model().select_none();
+            if self.is_searching() {
+                self.folder_pane().scroll_to_start();
+            }
         }
         self.show_search_state();
         if was_searching && !self.is_searching() && !self.is_clearing_search_box() {
@@ -332,6 +337,7 @@ impl BrowserWindow {
             self.show_searched_items();
         }
         self.show_search_state();
+        self.restore_results_view();
     }
 
     /// Merges the listing's matches with `found` and keeps them as the

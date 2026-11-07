@@ -9,7 +9,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::places::NetworkKind;
 
-use super::file_ops_support::{is_enabled, is_triggered_by, shortcuts_of};
+use super::file_ops_support::{is_enabled, is_triggered_by, press_shortcut_where_focused, shortcuts_of};
 use super::geometry::{bounds, laid_out, Bounds};
 use super::support::{art_image_showing, arts_in, menu_button_with_class};
 use crate::icons::{Art, Connection, Icon};
@@ -266,6 +266,60 @@ fn a_drive_tile_opens_the_drive_and_one_tile_is_selected() {
 
     test.wait_for_listing("Backup");
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+}
+
+/// The names of the selected tiles of This PC, in both groups.
+fn selected_tiles(test: &TestWindow) -> Vec<String> {
+    landing::tile_groups(test.window.folder_pane().landing())
+        .into_iter()
+        .flat_map(|(_, tiles)| tiles)
+        .filter(gtk::prelude::FlowBoxChildExt::is_selected)
+        .filter_map(|tile| texts_in(&tile).into_iter().next())
+        .collect()
+}
+
+/// Select all, Invert selection and Select none act on the tiles of both
+/// groups, from "…" and from Ctrl+A and Escape, as in Windows 11's This
+/// PC, and a redraw keeps them; a click selects in one group again.
+///
+/// parity: HOME-003
+#[gtk::test]
+fn select_all_none_and_invert_act_on_the_tiles_of_both_groups() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    test.save_share("smb://nas/media", "Media (M:)");
+    wait_until("the Network locations group", || {
+        landing::tile_groups(test.window.folder_pane().landing()).len() == 2
+    });
+    let media = "Media (\\\\nas) (M:)";
+    let every = ["Local Disk", "Backup", "USB", media];
+    let (drives, backup) = drive_tile(&test, "Backup");
+    drives.select_child(&backup);
+
+    test.activate("invert-selection", None);
+    assert_eq!(selected_tiles(&test), ["Local Disk", "USB", media]);
+    test.activate("select-none", None);
+    assert!(selected_tiles(&test).is_empty(), "Select none");
+    test.activate("select-all", None);
+    assert_eq!(selected_tiles(&test), every, "Select all");
+
+    backup.child_focus(gtk::DirectionType::TabForward);
+    press_shortcut_where_focused(&test, gtk::gdk::Key::Escape, gtk::gdk::ModifierType::empty());
+    assert!(selected_tiles(&test).is_empty(), "Escape");
+    assert!(press_shortcut_where_focused(
+        &test,
+        gtk::gdk::Key::a,
+        gtk::gdk::ModifierType::CONTROL_MASK
+    ));
+    assert_eq!(selected_tiles(&test), every, "Ctrl+A");
+    test.window.render_places();
+    assert_eq!(selected_tiles(&test), every, "a redraw keeps them all");
+    assert!(drive_tile(&test, "Backup").1.has_focus(), "and the keyboard");
+
+    let (shares, media_tile) = drive_tile(&test, media);
+    shares.unselect_all();
+    shares.select_child(&media_tile);
+    assert_eq!(selected_tiles(&test), [media], "a click selects in one group");
 }
 
 /// Right-clicks `tile` and returns the menu it opens in the folder pane.

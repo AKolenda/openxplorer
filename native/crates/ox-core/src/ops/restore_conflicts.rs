@@ -12,6 +12,12 @@
 //! - Each item goes back into the folder it was deleted from, under its
 //!   original name; one whose name is free goes first, before the user
 //!   answers, as Windows queues the conflicts to the end of the job.
+//! - Two items deleted from the same place, restored together onto a free
+//!   name: the first goes back, and the second meets it, so it is asked
+//!   about as any taken name is, as Windows asks about it. Replace then
+//!   puts the second in the first one's place, and the first goes back to
+//!   the Recycle Bin; of several answered Replace for one name, the last
+//!   one is restored.
 //! - Skip leaves the item in the Recycle Bin and says nothing more, as
 //!   in Windows.
 //! - Replace moves the item in the original folder to the Recycle Bin
@@ -53,8 +59,9 @@ use crate::transfer::{Cancellation, Node, TransferMode};
 
 /// The plan of restoring the Recycle Bin items `uris`: each item goes
 /// into the folder it was deleted from, and each one whose original name
-/// is taken there is a conflict to ask about. An item the Recycle Bin
-/// cannot place is planned as free, and its restore says why it failed.
+/// is taken there, or goes to an earlier item of `uris` first, is a
+/// conflict to ask about. An item the Recycle Bin cannot place is planned
+/// as free, and its restore says why it failed.
 ///
 /// The plan's `destination_folder` is the folder of its first conflict,
 /// or of its first item; [`restores_into_one_folder`] tells whether every
@@ -129,10 +136,14 @@ fn scan_blocking(uris: &[String], cancel: &Cancellation) -> Result<ConflictScan,
         conflicts: Vec::new(),
         merged_folders: Vec::new(),
     };
+    let mut earlier: Vec<(PathBuf, String)> = Vec::new();
     for uri in uris {
         cancel.check()?;
-        let (destination_folder, conflict) = match plan_item(uri, cancel) {
-            Ok(planned) => planned,
+        let (destination_folder, conflict) = match plan_item(uri, &earlier, cancel) {
+            Ok((original_path, folder, conflict)) => {
+                earlier.push((original_path, uri.clone()));
+                (folder, conflict)
+            }
             Err(error) if error.is_cancelled() => return Err(error),
             // The restore itself reports it.
             Err(_) => (String::new(), None),
@@ -155,14 +166,20 @@ fn scan_blocking(uris: &[String], cancel: &Cancellation) -> Result<ConflictScan,
         .iter()
         .find(|item| matches!(item.kind, PlannedKind::Conflict(_)));
     if let Some(item) = first_conflict.or_else(|| scan.items.first()) {
-        scan.destination_folder = item.destination_folder.clone();
+        scan.destination_folder.clone_from(&item.destination_folder);
     }
     Ok(scan)
 }
 
 /// The folder the Recycle Bin item `uri` goes back into, and its
-/// conflict when its original name is taken there.
-fn plan_item(uri: &str, cancel: &Cancellation) -> Result<(String, Option<NameConflict>), OpsError> {
+/// conflict when its original name is taken there, or will be: an item
+/// of `earlier`, the items planned before it with their original paths,
+/// goes back to that name first and is the item it meets.
+fn plan_item(
+    uri: &str,
+    earlier: &[(PathBuf, String)],
+    cancel: &Cancellation,
+) -> Result<(PathBuf, String, Option<NameConflict>), OpsError> {
     let item = top_level_item(uri)?;
     let original_path = original_path(&item, cancel)?;
     let target = gio::File::for_path(&original_path);
@@ -171,17 +188,21 @@ fn plan_item(uri: &str, cancel: &Cancellation) -> Result<(String, Option<NameCon
         .map(|parent| parent.uri().to_string())
         .unwrap_or_default();
     let existing = GioNode::from_file(target);
-    if !existing.exists(Some(cancel)) {
+    let existing_facts = if existing.exists(Some(cancel)) {
+        facts(&existing, cancel)?
+    } else if let Some((_, first)) = earlier.iter().find(|(path, _)| *path == original_path) {
+        facts(&GioNode::new(first), cancel)?
+    } else {
         cancel.check()?;
-        return Ok((folder, None));
-    }
+        return Ok((original_path, folder, None));
+    };
     let conflict = NameConflict {
         incoming_uri: uri.to_owned(),
         existing_uri: existing.uri(),
         incoming: facts(&GioNode::new(uri), cancel)?,
-        existing: facts(&existing, cancel)?,
+        existing: existing_facts,
     };
-    Ok((folder, Some(conflict)))
+    Ok((original_path, folder, Some(conflict)))
 }
 
 /// Where the Recycle Bin item `item` was deleted from.
@@ -204,6 +225,8 @@ pub struct RestoreSoFar {
     outcome: TransferOutcome,
     /// The local paths of the replaced items, now in the Recycle Bin.
     replaced: Vec<PathBuf>,
+    /// Each Recycle Bin item restored so far, with the URI it went to.
+    placed: Vec<(String, String)>,
     /// When the restore started, in seconds since the Unix epoch.
     started: u64,
 }
@@ -226,6 +249,7 @@ impl RestoreSoFar {
         match restored {
             Ok(restored) => {
                 self.outcome.result.done.push(uri.to_owned());
+                self.placed.push((uri.to_owned(), restored.clone()));
                 self.outcome.created.push(restored);
             }
             Err(error) => record_failure(&mut self.outcome.result, name, &error),
@@ -316,6 +340,9 @@ pub async fn restore_answered_items(
                 if answers[index] != resolution {
                     continue;
                 }
+                if resolution == Resolution::Replace && replaced_later(&scan, &answers, index) {
+                    continue;
+                }
                 let conflict = &scan.conflicts[index];
                 let name = conflict.name();
                 if context.cancel.is_cancelled() {
@@ -337,6 +364,21 @@ pub async fn restore_answered_items(
         Ok(so_far.finish())
     })
     .await
+}
+
+/// True when the conflict `index` of `scan`, answered Replace, meets the
+/// same item as a later conflict answered Replace: two or more items
+/// deleted from one place. Each Replace would send the item before it to
+/// the Recycle Bin, so only the last one's is carried out and the earlier
+/// ones stay in the Recycle Bin, where they would end up. The item first
+/// in the way is then the only replaced one, and Undo finds it.
+fn replaced_later(scan: &ConflictScan, answers: &[Resolution], index: usize) -> bool {
+    let existing = &scan.conflicts[index].existing_uri;
+    scan.conflicts
+        .iter()
+        .enumerate()
+        .skip(index + 1)
+        .any(|(later, conflict)| answers[later] == Resolution::Replace && conflict.existing_uri == *existing)
 }
 
 /// Restores the item of `conflict` under the first free "name (N)" name
@@ -383,10 +425,12 @@ fn keep_both(
 /// - A name freed meanwhile takes the item as any free name does.
 /// - An item there of the other kind now (a folder where a file was, or
 ///   the other way round) is not replaced.
-/// - A name this restore already replaced holds an item it restored, so
-///   a second item from the same place stays in the Recycle Bin rather
-///   than sending the first one back there; Undo then has one item to
-///   take back and one replaced item to bring back.
+/// - A name this restore already restored an item into holds that item,
+///   and Replace sends it to the Recycle Bin, where it came from, and
+///   restores this one in its place, as for any item in the way. It is
+///   not a replaced item for Undo: Undo takes this one back, and the
+///   earlier item is already where it was before the restore. Nor is it
+///   restored any more, so "1 item(s) restored." counts this one alone.
 fn replace(
     item: &PlannedItem,
     conflict: &NameConflict,
@@ -401,13 +445,13 @@ fn replace(
         so_far.add(&item.uri, restored, &name);
         return;
     }
-    if existing
-        .path()
-        .is_some_and(|path| so_far.replaced.contains(&path))
-    {
-        record_failure(&mut so_far.outcome.result, &name, &taken_meanwhile(&name));
-        return;
-    }
+    // The item this restore already put there, if any.
+    let restored_there = existing.path().and_then(|path| {
+        so_far
+            .placed
+            .iter()
+            .position(|(_, created)| gio::File::for_uri(created).path().as_ref() == Some(&path))
+    });
     let same_kind = facts(&existing, cancel).is_ok_and(|now| {
         now.is_folder == conflict.incoming.is_folder && now.is_folder == conflict.existing.is_folder
     });
@@ -437,9 +481,25 @@ fn replace(
     match replace_through_recycle_bin(&existing, &path, context, place, arrived) {
         Ok((part, replaced)) => {
             if replaced {
-                so_far.replaced.push(path);
+                match restored_there {
+                    // Back in the Recycle Bin, it is no longer restored.
+                    Some(at) => {
+                        let (earlier, _) = so_far.placed.remove(at);
+                        so_far.outcome.result.done.retain(|done| *done != earlier);
+                    }
+                    None => so_far.replaced.push(path),
+                }
             }
-            so_far.outcome.created.extend(part.created);
+            if arrived(&part) {
+                if let Some(created) = part.created.first() {
+                    so_far.placed.push((item.uri.clone(), created.clone()));
+                }
+            }
+            for created in part.created {
+                if !so_far.outcome.created.contains(&created) {
+                    so_far.outcome.created.push(created);
+                }
+            }
             merge_results(&mut so_far.outcome.result, part.result);
         }
         Err(error) => record_failure(&mut so_far.outcome.result, &name, &error),

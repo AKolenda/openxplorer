@@ -1192,7 +1192,7 @@ mod tests {
         per_folder.folder_views.push(FolderView {
             uri: DOWNLOADS.to_owned(),
             properties: own,
-            subfolders: false,
+            subfolders: None,
             template: None,
         });
         assert_eq!(per_folder.view_in(DOWNLOADS, downloads).grouping(), GroupBy::Type);
