@@ -111,6 +111,9 @@ mod imp {
         pub(super) is_closed: Cell<bool>,
         /// True once the window was first shown.
         pub(super) has_shown: Cell<bool>,
+        /// True when it shows a mount point as a drive, which has its own
+        /// window beside the folder's (PROP-004).
+        pub(super) shows_drive: Cell<bool>,
     }
 
     impl std::fmt::Debug for PropertiesWindow {
@@ -387,6 +390,17 @@ impl PropertiesWindow {
     /// The browser window that opened this one, while it is open.
     pub(crate) fn opener(&self) -> Option<BrowserWindow> {
         self.imp().opener.upgrade()
+    }
+
+    /// Marks the window as showing a mount point as a drive, not as the
+    /// folder it is: each has its own window, as in Windows.
+    pub(crate) fn set_shows_drive(&self, shows_drive: bool) {
+        self.imp().shows_drive.set(shows_drive);
+    }
+
+    /// Whether the window shows a mount point as a drive.
+    pub(crate) fn shows_drive(&self) -> bool {
+        self.imp().shows_drive.get()
     }
 
     /// The Properties window `widget` is in.

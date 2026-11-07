@@ -1351,15 +1351,18 @@ fn several_items_attributes_show_mixed_and_apply_to_every_item() {
 }
 
 /// A folder that happens to be a mount point, such as a `tmpfs` at
-/// `/tmp`, shows as a folder when it is reached in a folder's listing,
+/// `/tmp`, is a Mounted Volume when it is reached in a folder's listing,
 /// and also from the navigation pane when This PC does not list it as a
-/// drive, as Windows shows a folder: only This PC's drives and the root
-/// get the drive page. The harness cannot mount anything, so this uses a
-/// mount point the machine has, and says so when it has none.
+/// drive, as Windows shows a drive mounted in a folder: Type says so,
+/// Target names the volume in place of the sizes, and Properties beside
+/// it opens the drive's own window, with its Hardware tab, apart from the
+/// folder's. Only This PC's drives and the root open as a drive straight
+/// away. The harness cannot mount anything, so this uses a mount point the
+/// machine has, and says so when it has none.
 ///
 /// parity: PROP-004
 #[gtk::test]
-fn a_mount_point_reached_as_a_folder_shows_as_a_folder() {
+fn a_mount_point_reached_as_a_folder_is_a_mounted_volume() {
     let Some(name) = ["dev", "proc", "sys", "run"]
         .into_iter()
         .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
@@ -1368,27 +1371,37 @@ fn a_mount_point_reached_as_a_folder_shows_as_a_folder() {
         return;
     };
     let uri = format!("file:///{name}");
-    let shows_as_folder = |window: &PropertiesWindow| {
-        let general = tab(window, "general");
-        wait_until("the folder's details", || {
-            value_after(&general, "Type:").is_some()
-        });
-        assert_eq!(value_after(&general, "Type:").as_deref(), Some("File folder"));
+    let shows_mounted_volume = |window: &PropertiesWindow| {
+        let general = general(window);
+        assert_eq!(value_after(&general, "Type:").as_deref(), Some("Mounted Volume"));
+        assert!(value_after(&general, "Target:").is_some_and(|target| !target.is_empty()));
+        for row in ["Size:", "Size on disk:", "Contains:"] {
+            assert!(value_after(&general, row).is_none(), "no {row} row");
+        }
+        assert!(!window.shows_drive());
         assert!(
             window.tab_page("hardware").is_none(),
             "no Hardware tab for a folder"
         );
+        general
     };
     let test = TestWindow::open("file:///");
     test.select_named(name);
     test.activate("properties", None);
     let window = test.wait_for_properties(&format!("{name} Properties"));
-    shows_as_folder(&window);
+    let general = shows_mounted_volume(&window);
+    let volume = value_after(&general, "Target:").expect("a target");
+    press(&general, "Properties");
+    let drive = test.wait_for_properties(&format!("{volume} Properties"));
+    assert!(drive.shows_drive());
+    assert!(drive.tab_page("hardware").is_some(), "the drive's Hardware tab");
+    assert_eq!(test.window.properties_windows().len(), 2, "a window of its own");
+    drive.close();
     window.close();
 
     test.activate("properties-of", Some(&uri));
     let window = test.wait_for_properties(&format!("{name} Properties"));
-    shows_as_folder(&window);
+    shows_mounted_volume(&window);
     window.close();
 }
 

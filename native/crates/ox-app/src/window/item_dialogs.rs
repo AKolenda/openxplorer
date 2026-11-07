@@ -257,6 +257,17 @@ impl BrowserWindow {
         ));
     }
 
+    /// Opens Properties of the drive mounted at the folder `uri`, titled
+    /// with the volume's name `volume`, as a Mounted Volume's Properties
+    /// button does.
+    pub(crate) fn open_drive_properties(&self, uri: &str, volume: &str) {
+        let target = PropertiesTarget {
+            as_drive: true,
+            ..self.named_target(uri.to_owned(), volume.to_owned(), ItemKind::Folder)
+        };
+        self.show_properties(target, PropertiesTab::General);
+    }
+
     /// What a Properties window needs from this window.
     fn properties_context(&self) -> PropertiesContext {
         PropertiesContext {
@@ -276,12 +287,12 @@ impl BrowserWindow {
     }
 
     /// Opens the Properties window of `target` on `tab`, or brings the
-    /// one open for it to the front on that tab, as Windows does.
+    /// one open for it to the front on that tab, as Windows does; a
+    /// Mounted Volume and its drive each have their own.
     fn show_mounted_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
-        let open = self
-            .properties_windows()
-            .into_iter()
-            .find(|window| window.widget_name() == target.uri.as_str());
+        let open = self.properties_windows().into_iter().find(|window| {
+            window.widget_name() == target.uri.as_str() && window.shows_drive() == target.as_drive
+        });
         if let Some(window) = open {
             window.select_tab(tab.page_name());
             self.hand_over_startup_id(&window);
