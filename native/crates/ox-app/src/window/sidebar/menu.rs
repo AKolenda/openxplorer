@@ -286,8 +286,9 @@ impl Sidebar {
     /// files, Recent locations and the Recycle Bin have Rename and Delete,
     /// greyed out as Windows greys This PC's, since none can be renamed
     /// or deleted; a folder or a network location has the file
-    /// list's Cut, Copy, Paste, Rename and Delete, acting on the row's
-    /// location, each where it can run. Only a folder the user pinned
+    /// list's Cut, Copy, Paste (only while there is something to paste),
+    /// Rename and Delete, acting on the row's location, each where it can
+    /// run. Only a folder the user pinned
     /// can be cut, renamed or deleted: a drive, a share and the standard
     /// folders cannot.
     fn edit_strip(&self, entry: &SidebarEntry) -> Vec<MenuItem> {
@@ -312,18 +313,19 @@ impl Sidebar {
         let share_root = is_smb_share_root(uri);
         let changeable = own_pin && !share_root;
         let can_paste = window.as_ref().is_some_and(|window| window.can_paste_into(uri));
-        vec![
+        // Windows 11 shows Paste only while there is something to paste.
+        let paste =
+            can_paste.then(|| item("Paste", Icon::ClipboardPaste, WindowAction::PasteIntoFolder, true));
+        let mut strip = vec![
             item("Cut", Icon::Cut, WindowAction::CutFolder, changeable),
             item("Copy", Icon::Copy, WindowAction::CopyFolder, !share_root),
-            item(
-                "Paste",
-                Icon::ClipboardPaste,
-                WindowAction::PasteIntoFolder,
-                can_paste,
-            ),
+        ];
+        strip.extend(paste);
+        strip.extend([
             item("Rename", Icon::Rename, WindowAction::RenameFolder, changeable),
             item("Delete", Icon::Delete, WindowAction::TrashFolder, changeable),
-        ]
+        ]);
+        strip
     }
 
     /// The menu of `entry` itself: a saved search's, a pin's, or a drive's

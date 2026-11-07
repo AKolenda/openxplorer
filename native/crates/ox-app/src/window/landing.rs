@@ -21,7 +21,9 @@
 //! [`WindowAction::MountVolume`] for a volume); a middle-click opens a
 //! folder in a background tab. A right-click, the Menu key or Shift+F10
 //! opens the drive's menu ([`super::place_menus`]), and Alt+Enter its
-//! Properties.
+//! Properties. A group heading's right-click, Menu key or Shift+F10
+//! opens its menu, as Explorer's: Collapse group (or Expand group),
+//! Collapse all groups and Expand all groups ([`heading_menu`]).
 
 use std::rc::Rc;
 
@@ -41,8 +43,8 @@ use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
-use super::menu_popover::MenuStyle;
-use super::place_menus::{popup_place_menu, PlaceMenu};
+use super::menu_popover::{MenuEntry, MenuItem, MenuPopover, MenuStyle};
+use super::place_menus::{classic_or_compact, popup_place_menu, PlaceMenu};
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -472,7 +474,145 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
         }
     ));
     connect_header_keys(&header, tiles);
+    connect_header_menu(&header, group, tiles);
     header
+}
+
+/// A group heading's menu, as Explorer's: Collapse group (Expand group
+/// while it is collapsed), then Collapse all groups and Expand all groups.
+/// It has nothing more, so the compact style has no "Show more options".
+fn heading_menu(group: Group, collapsed: bool) -> Vec<MenuEntry> {
+    let toggle = if collapsed {
+        ox_core::i18n::gettext("Expand group")
+    } else {
+        ox_core::i18n::gettext("Collapse group")
+    };
+    vec![
+        MenuItem::with_text_target(
+            &toggle,
+            Icon::ChevronDown16,
+            WindowAction::ToggleGroup,
+            group.header_class(),
+        )
+        .into(),
+        MenuEntry::Divider,
+        MenuItem::new(
+            ox_core::i18n::gettext_static("Collapse all groups"),
+            Icon::ChevronRight16,
+            WindowAction::CollapseAllGroups,
+        )
+        .into(),
+        MenuItem::new(
+            ox_core::i18n::gettext_static("Expand all groups"),
+            Icon::ChevronDown16,
+            WindowAction::ExpandAllGroups,
+        )
+        .into(),
+    ]
+}
+
+/// Opens `header`'s menu at `x`, `y` in it, in the right-click menu's
+/// style, or the classic one when `classic` asks for it. The menu hangs
+/// from the folder pane, which outlives a redraw of This PC.
+fn popup_heading_menu(
+    header: &gtk::Button,
+    group: Group,
+    tiles: &gtk::FlowBox,
+    x: f64,
+    y: f64,
+    classic: bool,
+) {
+    let style = if classic {
+        MenuStyle::Classic
+    } else {
+        header
+            .root()
+            .and_downcast::<BrowserWindow>()
+            .map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
+    };
+    let owner = header
+        .ancestor(super::folder_pane::FolderPane::static_type())
+        .unwrap_or_else(|| header.clone().upcast());
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let point = header
+        .compute_point(&owner, &gtk::graphene::Point::new(x as f32, y as f32))
+        .unwrap_or_else(|| gtk::graphene::Point::new(x as f32, y as f32));
+    let popover = MenuPopover::new(classic_or_compact(
+        heading_menu(group, !tiles.is_visible()),
+        style,
+    ));
+    popover.set_style_and_strip(style, Vec::new());
+    popover.set_offset(0, 0);
+    popover.set_position(gtk::PositionType::Bottom);
+    popover.set_parent(&owner);
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let pointing_to = gtk::gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
+    popover.set_pointing_to(Some(&pointing_to));
+    popover.connect_closed(|popover| {
+        let closed = popover.clone();
+        glib::idle_add_local_once(move || closed.unparent());
+    });
+    popover.popup();
+}
+
+/// Gives `header` its menu: a right-click (Shift for the classic style),
+/// the Menu key and Shift+F10.
+fn connect_header_menu(header: &gtk::Button, group: Group, tiles: &gtk::FlowBox) {
+    let right_click = gtk::GestureClick::new();
+    right_click.set_button(gtk::gdk::BUTTON_SECONDARY);
+    right_click.connect_released(glib::clone!(
+        #[weak]
+        header,
+        #[weak]
+        tiles,
+        move |gesture, _, x, y| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            let shift = gesture
+                .current_event_state()
+                .contains(gtk::gdk::ModifierType::SHIFT_MASK);
+            popup_heading_menu(&header, group, &tiles, x, y, shift);
+        }
+    ));
+    header.add_controller(right_click);
+    let shortcuts = gtk::ShortcutController::new();
+    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+        let action = gtk::CallbackAction::new(glib::clone!(
+            #[weak]
+            tiles,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |widget, _| {
+                let Some(header) = widget.downcast_ref::<gtk::Button>() else {
+                    return glib::Propagation::Proceed;
+                };
+                let height = f64::from(header.height());
+                popup_heading_menu(header, group, &tiles, 24.0, height, classic);
+                glib::Propagation::Stop
+            }
+        ));
+        shortcuts.add_shortcut(gtk::Shortcut::new(
+            gtk::ShortcutTrigger::parse_string(key),
+            Some(action),
+        ));
+    }
+    header.add_controller(shortcuts);
+}
+
+/// Collapses or expands the groups of This PC drawn in `body`: the one
+/// whose header carries the class `header`, or every one without it;
+/// toggled, or as `collapse` says.
+pub(super) fn collapse_groups(body: &gtk::Box, header: Option<&str>, collapse: Option<bool>) {
+    let headers = super::widget_tree::children(body)
+        .filter_map(|child| child.downcast::<gtk::Button>().ok())
+        .filter(|child| child.has_css_class("group-header"))
+        .filter(|child| header.is_none_or(|class| child.has_css_class(class)));
+    for button in headers {
+        let tiles = button.next_sibling().and_downcast::<gtk::FlowBox>();
+        let expanded = tiles.is_some_and(|tiles| tiles.is_visible());
+        if collapse.is_none_or(|collapse| collapse == expanded) {
+            button.emit_clicked();
+        }
+    }
 }
 
 /// Gives `header` the keyboard. An expanded group's header is no Tab

@@ -4564,7 +4564,7 @@ msgstr ""
 msgid "Settings (Ctrl+,)"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Share"
 msgstr ""
 
@@ -4814,6 +4814,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Additional options"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/disk_tools.rs
 msgid "Analyse disk usage"
 msgstr ""
@@ -4835,7 +4839,7 @@ msgid "Compare files"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
-msgid "Compress to ZIP file"
+msgid "Compress to"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -4925,10 +4929,6 @@ msgid "Open with…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
-msgid "Paste into folder"
-msgstr ""
-
-#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Pin this folder"
 msgstr ""
 
@@ -4941,11 +4941,19 @@ msgid "Rename items…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Restore previous versions"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Select only one item for this command."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Send to"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Share with"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4962,6 +4970,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Sort by"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "ZIP File"
 msgstr ""
 
 #: crates/ox-app/src/window/copy_path.rs
@@ -5983,11 +5995,27 @@ msgid "Click to connect"
 msgstr ""
 
 #: crates/ox-app/src/window/landing.rs
+msgid "Collapse all groups"
+msgstr ""
+
+#: crates/ox-app/src/window/landing.rs
+msgid "Collapse group"
+msgstr ""
+
+#: crates/ox-app/src/window/landing.rs
 msgid "Connect on open"
 msgstr ""
 
 #: crates/ox-app/src/window/landing.rs
 msgid "Devices and drives"
+msgstr ""
+
+#: crates/ox-app/src/window/landing.rs
+msgid "Expand all groups"
+msgstr ""
+
+#: crates/ox-app/src/window/landing.rs
+msgid "Expand group"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md crates/ox-app/src/window/landing.rs

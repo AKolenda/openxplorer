@@ -9,9 +9,10 @@
 //! window or application action: a disabled action, or an item disabled
 //! in this menu, greys its row out, and a checked item shows the check
 //! check mark in a column at its left, before its own glyph, as Windows
-//! 11 draws it. The compact style (CMD-008) puts a strip of icon buttons
-//! above the list: Cut, Copy, Paste, Rename and Delete in the context
-//! menus.
+//! 11 draws it. The compact style (CMD-008) puts a strip of buttons, each
+//! an icon with its label under it, above the list: Cut, Copy, Rename,
+//! Share and Delete in the context menus, and Paste on a folder while
+//! there is something to paste.
 //!
 //! An item with a submenu (a chevron at the far right of its row) opens it
 //! beside the menu, as Windows 11's menus do: resting the pointer on the
@@ -618,16 +619,35 @@ impl MenuPopover {
         if !shows_strip {
             return;
         }
-        for item in items.iter() {
+        let shown = items.iter().filter(|item| {
+            item.availability != ItemAvailability::ShownWhileEnabled
+                || item.action.is_enabled(self.upcast_ref())
+        });
+        for item in shown {
             strip.append(&self.strip_button(item));
         }
     }
 
-    /// An icon button of the strip.
+    /// A button of the strip: its icon with its label under it, as
+    /// Windows 11 draws Cut, Copy, Rename, Share and Delete.
     fn strip_button(&self, item: &MenuItem) -> gtk::Button {
         let can_choose = self.can_choose(item);
+        let face = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(2)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .build();
+        face.append(&icons::image(item.glyph, ROW_GLYPH));
+        let label = gtk::Label::builder()
+            .label(&item.label)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(9)
+            .css_classes(["strip-label"])
+            .build();
+        face.append(&label);
         let button = gtk::Button::builder()
-            .child(&icons::image(item.glyph, ROW_GLYPH))
+            .child(&face)
             .tooltip_text(item_tooltip(item))
             .sensitive(can_choose)
             .build();

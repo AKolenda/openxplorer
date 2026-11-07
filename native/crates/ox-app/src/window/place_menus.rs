@@ -618,6 +618,16 @@ pub(super) fn finish_menu(
     }
 }
 
+/// `entries` in `style`, for a menu that has nothing behind "Show more
+/// options": as they are in the compact style, drawn as the classic file
+/// menu in the classic one.
+pub(super) fn classic_or_compact(entries: Vec<MenuEntry>, style: MenuStyle) -> Vec<MenuEntry> {
+    match style {
+        MenuStyle::Compact => entries,
+        MenuStyle::Classic => classic_look(entries),
+    }
+}
+
 /// A place menu as it was opened, for "Show more options".
 #[derive(Debug)]
 pub(super) struct OpenPlaceMenu {

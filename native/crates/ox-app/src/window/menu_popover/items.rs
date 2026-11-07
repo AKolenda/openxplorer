@@ -86,6 +86,10 @@ pub(in crate::window) enum ItemAvailability {
     /// Disabled in this menu, such as Open with several items selected
     /// (`disabled: true` in app.js).
     Disabled,
+    /// It follows its action, and the compact menu's strip leaves it out
+    /// while the action is off, as Windows 11 shows Paste there only
+    /// while there is something to paste.
+    ShownWhileEnabled,
 }
 
 /// One menu item.
@@ -257,6 +261,15 @@ impl MenuItem {
     pub(in crate::window) fn with_shortcut(self, shortcut: &'static str) -> Self {
         Self {
             shortcut: Some(shortcut),
+            ..self
+        }
+    }
+
+    /// The same item, left out of the compact menu's strip while its
+    /// action is off ([`ItemAvailability::ShownWhileEnabled`]).
+    pub(in crate::window) fn shown_while_enabled(self) -> Self {
+        Self {
+            availability: ItemAvailability::ShownWhileEnabled,
             ..self
         }
     }

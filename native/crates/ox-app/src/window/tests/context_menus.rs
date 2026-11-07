@@ -99,20 +99,20 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Open containing folder in Terminal",
             "Open with…",
             "-",
+            "Copy as path",
+            "Restore previous versions",
+            "-",
             "Send to",
             "-",
             "Cut",
             "Copy",
-            "Paste",
             "-",
-            "Rename",
-            "Delete",
             "Duplicate",
-            "Copy as path",
-            "Compress to ZIP file",
+            "Delete",
+            "Rename",
+            "-",
             "Compress to…",
             "-",
-            "Previous versions",
             "Properties",
             "Configure service actions…",
         ]
@@ -251,12 +251,15 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    assert!(!menu.row("Previous versions").is_sensitive());
+    assert!(!menu.row("Restore previous versions").is_sensitive());
     // CMD-031: a disabled item says why.
-    let tooltip = menu.row("Previous versions").tooltip_text().unwrap_or_default();
+    let tooltip = menu
+        .row("Restore previous versions")
+        .tooltip_text()
+        .unwrap_or_default();
     assert_eq!(
         tooltip,
-        "Previous versions\nSelect only one item for this command."
+        "Restore previous versions\nSelect only one item for this command."
     );
     // Open opens each of them (OPEN-003); Rename gives them one numbered
     // name (OPS-050) and Rename items… opens the batch rename (OPS-014);
@@ -346,10 +349,16 @@ fn the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one() 
     let menu = test.window.context_menu();
 
     assert_eq!(menu.style(), MenuStyle::Compact);
-    assert_eq!(
-        menu.strip_labels(),
-        ["Cut", "Copy", "Paste into folder", "Rename", "Delete"]
-    );
+    // Windows 11 shows Paste on a folder only while there is something to
+    // paste, and Share only for files.
+    assert_eq!(menu.strip_labels(), ["Cut", "Copy", "Rename", "Delete"]);
+    menu.popdown();
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    test.window.right_click(Some(position_of(&test, "Documents")));
+    assert_eq!(menu.strip_labels(), ["Cut", "Copy", "Paste", "Rename", "Delete"]);
+    // Each button shows its label under its icon, as in Windows 11.
+    assert_eq!(menu.strip_texts(), ["Cut", "Copy", "Paste", "Rename", "Delete"]);
     assert!(!menu.row_labels().contains(&"Cut".to_owned()));
     menu.row("Show more options").emit_activate();
     wait_until("the classic menu", || {

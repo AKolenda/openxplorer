@@ -290,6 +290,7 @@ impl BrowserWindow {
             delete_label: self.delete_label(),
             disk_tool: disk_tool_of(entry),
             send_to: self.send_to_targets(),
+            can_share: self.share_portal().is_some(),
         }
     }
 
@@ -340,7 +341,8 @@ impl BrowserWindow {
     }
 
     /// Adds the actions the context menus run themselves: "Show more
-    /// options", "New…", "Sort by", "View", "Unpin from Quick access" and "Open windows…".
+    /// options", "New…", "Sort by", "View", "Unpin from Quick access",
+    /// "Open windows…" and a group heading's collapse and expand commands.
     pub(super) fn install_context_menu_actions(&self) {
         self.install_sidebar_hiding();
         self.add_action_entries([
@@ -376,7 +378,25 @@ impl BrowserWindow {
                 WindowAction::ClearRecentLocations,
                 BrowserWindow::clear_recent_locations,
             ),
+            text_action(WindowAction::ToggleGroup, |window, header| {
+                window.collapse_groups(Some(header), None);
+            }),
+            plain_action(WindowAction::CollapseAllGroups, |window| {
+                window.collapse_groups(None, Some(true));
+            }),
+            plain_action(WindowAction::ExpandAllGroups, |window| {
+                window.collapse_groups(None, Some(false));
+            }),
         ]);
+    }
+
+    /// Collapses or expands This PC's groups in every pane: the one whose
+    /// header carries the class `header` (toggled, or as `collapse` says),
+    /// or all of them without one.
+    fn collapse_groups(&self, header: Option<&str>, collapse: Option<bool>) {
+        for (side, _) in self.shown_panes() {
+            super::landing::collapse_groups(self.pane_on(side).landing(), header, collapse);
+        }
     }
 
     /// "Clear recent locations": forgets the visited folders, and lists

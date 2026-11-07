@@ -157,6 +157,16 @@ impl MenuPopover {
             .collect()
     }
 
+    /// The text drawn under each strip button's icon, for tests.
+    pub(crate) fn strip_texts(&self) -> Vec<String> {
+        crate::window::widget_tree::children(self.strip())
+            .filter_map(|button| button.downcast::<gtk::Button>().ok())
+            .filter_map(|button| button.child())
+            .filter_map(|face| face.last_child().and_downcast::<gtk::Label>())
+            .map(|label| label.text().to_string())
+            .collect()
+    }
+
     /// The strip's buttons while it shows, each with whether it can be
     /// pressed, for tests.
     pub(crate) fn strip_states(&self) -> Vec<(String, bool)> {

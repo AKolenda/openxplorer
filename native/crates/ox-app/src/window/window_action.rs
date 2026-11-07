@@ -263,6 +263,13 @@ pub(crate) enum WindowAction {
     ClearRecentFiles,
     /// Forgets the recently visited folders (SIDE-026).
     ClearRecentLocations,
+    /// Collapses This PC's group whose header carries the class given, or
+    /// expands it while it is collapsed (a group heading's menu).
+    ToggleGroup,
+    /// Collapses every group of This PC.
+    CollapseAllGroups,
+    /// Expands every group of This PC.
+    ExpandAllGroups,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -571,6 +578,9 @@ impl WindowAction {
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ClearRecentFiles => "clear-recent-files",
             WindowAction::ClearRecentLocations => "clear-recent-locations",
+            WindowAction::ToggleGroup => "toggle-group",
+            WindowAction::CollapseAllGroups => "collapse-all-groups",
+            WindowAction::ExpandAllGroups => "expand-all-groups",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::SidebarMoreOptions => "sidebar-more-options",
