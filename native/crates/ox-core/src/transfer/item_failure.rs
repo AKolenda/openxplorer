@@ -222,7 +222,8 @@ impl ItemFailures {
         } else {
             format!("{}/{entry}", running.name)
         };
-        let mut answered = false;
+        // "Skip all" answered this entry too.
+        let mut answered = self.skip_all;
         if !self.skip_all {
             // Other entries, or other items, may follow.
             let failed = FailedItem::new(
@@ -261,15 +262,13 @@ impl ItemFailures {
     /// own, such as "Move by copying?") are not, nor anything after "Skip
     /// all".
     pub(crate) fn asks_about(&self, error: &TransferError) -> bool {
-        let askable = !matches!(
-            error,
-            TransferError::Cancelled
-                | TransferError::Exists(_)
-                | TransferError::RecoveryRequired(_)
-                | TransferError::NotSupported(_)
-                | TransferError::ReplaceUnsupported(_)
-        );
-        askable && !self.skip_all && self.question.is_some()
+        askable(error) && !self.skip_all && self.question.is_some()
+    }
+
+    /// Whether an item that failed with `error` is left out by an earlier
+    /// "Skip all", which answered it: it is not reported afterwards.
+    pub(crate) fn skips_for_all(&self, error: &TransferError) -> bool {
+        askable(error) && self.skip_all
     }
 
     /// The user's answer about `item`, which [`Self::asks_about`] allowed;
@@ -279,4 +278,18 @@ impl ItemFailures {
         self.skip_all = answer == FailureAnswer::SkipAll;
         Some(answer)
     }
+}
+
+/// Whether an item that failed with `error` may be asked about: not a name
+/// conflict, a cancellation, a problem that needs recovery by hand or
+/// something the location cannot do at all.
+fn askable(error: &TransferError) -> bool {
+    !matches!(
+        error,
+        TransferError::Cancelled
+            | TransferError::Exists(_)
+            | TransferError::RecoveryRequired(_)
+            | TransferError::NotSupported(_)
+            | TransferError::ReplaceUnsupported(_)
+    )
 }

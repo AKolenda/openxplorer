@@ -88,6 +88,8 @@ impl BrowserWindow {
         if self.imp().changing_model.get() {
             return;
         }
+        // The user chose: a tab's results found again keep that choice.
+        self.forget_results_view();
         self.save_selection();
         self.update_selection_state();
     }

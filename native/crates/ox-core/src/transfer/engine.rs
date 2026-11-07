@@ -530,7 +530,11 @@ impl TransferEngine {
                     self.record_failure(batch, uri, &error, false, &mut state.result);
                 }
             }
-            Err(error) => self.record_failure(batch, uri, &error, answered, &mut state.result),
+            Err(error) => {
+                // An earlier "Skip all" answered it too.
+                let answered = answered || self.failures.skips_for_all(&error);
+                self.record_failure(batch, uri, &error, answered, &mut state.result);
+            }
         }
         self.discard_leftover_stage(staging, &mut state.result);
     }
