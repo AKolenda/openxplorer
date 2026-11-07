@@ -591,21 +591,32 @@ fn group_titles_sit_on_the_box_line_at_every_text_size() {
     test.select_named("Holiday 2025");
     let window = properties_of_selection(&test, "Holiday 2025 Properties");
     window.select_tab("customize");
+    // The Customize page fills its groups after it is shown.
+    let groups = || -> Vec<gtk::Frame> {
+        descendants::<gtk::Frame>(&window)
+            .into_iter()
+            .filter(|frame| frame.is_mapped() && frame.has_css_class("properties-group"))
+            .collect()
+    };
+    crate::test_support::harness::wait_until("Customize's three group boxes", || groups().len() == 3);
     let mut misplaced = Vec::new();
     for percent in ox_core::settings::TEXT_SIZES {
         skin.set_text_size(crate::text_size::TextSize::from_percent(percent));
         wait_for_frames(&window, 4);
-        let groups: Vec<gtk::Frame> = descendants::<gtk::Frame>(&window)
-            .into_iter()
-            .filter(|frame| frame.is_mapped() && frame.has_css_class("properties-group"))
-            .collect();
+        let groups = groups();
         assert_eq!(groups.len(), 3, "{percent}%: Customize's three group boxes");
         for frame in groups {
             let title = frame.label_widget().expect("a title");
             let line = frame.compute_bounds(&window).expect("the box").y();
             let bounds = title.compute_bounds(&window).expect("the title");
             let centre = bounds.y() + bounds.height() / 2.0;
-            if (centre - line).abs() > 1.0 {
+            // The lift is in em, and a font's line is a different share
+            // of its em: centred to a pixel in Noto Sans, it sits up to
+            // 3 pixels high at 200 % in DejaVu Sans (the distribution
+            // CI's font). A sixth of the title's height still lets the
+            // line through its middle, and still catches a fixed lift,
+            // which is 8 pixels off at 200 %.
+            if (centre - line).abs() > bounds.height() / 6.0 {
                 misplaced.push(format!(
                     "{percent}%: {:?} centred at {centre}, line at {line}",
                     frame.label()
