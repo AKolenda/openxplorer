@@ -685,14 +685,18 @@ outline whenever the list has the keyboard, after a click too (below).
 Tab and Shift+Tab follow Windows Explorer's order, not GTK's widget tree
 (ACC-016, `window/tab_order.rs`): the address bar (chevron or «, each
 crumb, history chevron), the search box, the command bar, the navigation
-pane as one stop, the folder tree, the file list as one stop on its
-current item, the first one when no item had the keyboard (each pane of a split tab), the Details
-pane (its scrolled window, ringed, when it has no control to focus), the
-status bar's buttons, the Open or Save bar, the tab in front and its Close
-button, New tab, then Back, Forward, Up and Refresh, wrapping round. The
-caption buttons are no stops. Every stop draws its focus. Esc in the
-address entry returns to the crumbs with the keyboard on an item of the
-file list, ringed, in every view.
+pane as one stop, the folder tree, the sidebar's resizer (it lights the
+pane handle), Network's info bar and the search strip where they show,
+the file list as one stop on its current item, scrolled into view, else
+the selected or the first item shown (each pane of a split tab), the
+Details pane (its scrolled window, ringed, when it has no control to
+focus), the toast and the update notice where they show, the status bar's
+buttons, the Open or Save bar, the tab in front and its Close button, New
+tab, then Back, Forward, Up and Refresh, wrapping round. The caption
+buttons are no stops; a control in no stop keeps GTK's order. Every stop
+draws its focus. Esc in the address entry returns to the crumbs with the
+keyboard on an item of the file list, ringed, in every view; while
+"Working on it..." hides the rows, the note takes the ring.
 
 ### 4.14 States summary
 

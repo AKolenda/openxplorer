@@ -514,7 +514,18 @@ fn tab_and_see_the_ring(test: &TestWindow, pointer: &mut Pointer, backward: bool
     let focus = focused(test).expect("Tab leaves the keyboard on a control");
     assert!(window.gets_focus_visible(), "Tab shows where the keyboard is");
     let after = Picture::of(window);
-    let changed = after.changed_in(&before, &focus, window);
+    // The sidebar's resizer lights the pane handle beside it.
+    let handle = focus
+        .is::<crate::resizer_control::ResizerControl>()
+        .then(|| test.window.workspace().clone().upcast::<gtk::Widget>())
+        .and_then(|workspace| {
+            std::iter::successors(workspace.first_child(), WidgetExt::next_sibling)
+                .find(|child| child.css_name() == "separator")
+        });
+    let changed: usize = std::iter::once(&focus)
+        .chain(handle.as_ref())
+        .map(|shown| after.changed_in(&before, shown, window))
+        .sum();
     assert!(
         changed >= RING_PIXELS,
         "{} with {:?} draws its focus: {changed} pixels changed",
@@ -540,8 +551,8 @@ fn stop_name(stop: Option<Stop>) -> String {
 /// to take the keyboard), the status bar's view buttons, the tab in front
 /// and its Close button, New tab, the navigation buttons, then the address
 /// bar (the chevron first, each crumb, the history chevron), the search
-/// box, the command bar, the navigation pane as one stop and back to the
-/// file list. Every stop draws its focus,
+/// box, the command bar, the navigation pane as one stop, the sidebar's
+/// resizer and back to the file list. Every stop draws its focus,
 /// light and dark: no key leaves the keyboard where nothing shows it. In a
 /// narrow window the « takes the chevron's place as the address bar's first
 /// stop. The keys are real ones on the private display, so GTK's own key
@@ -695,6 +706,7 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
                 Stop::Commands,
                 Stop::Places,
             ])
+            .chain([Stop::SidebarResizer])
             .collect::<Vec<_>>(),
         "Windows' order from the file list round to it"
     );
@@ -876,4 +888,191 @@ fn tab_visits_the_front_tab_then_its_close_button_both_ways() {
     assert_eq!(press(true), Some(front), "then to the tab itself");
     press(true);
     assert_ne!(window.focused_stop(), Some(Stop::Tabs), "then leaves the strip");
+}
+
+/// Every control the window shows while it searches Network's folders is
+/// in a stop of the Tab order, so Tab reaches it, and Tab goes on from it
+/// to the next stop rather than back to the address bar: the sidebar's
+/// resizer, Network's info bar, the search strip's controls and the update
+/// notice. The caption buttons alone are no stops. Real Tab keys go from
+/// the navigation pane through them into the file list, each drawing its
+/// focus.
+///
+/// parity: ACC-016
+#[gtk::test]
+fn every_control_the_window_shows_is_a_tab_stop_that_draws_its_focus() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.search_for("notes");
+    wait_until("the search strip", || test.window.search_strip().is_mapped());
+    // Network's info bar shows while Network found no computers.
+    test.window.network_info_bar().set_visible(true);
+    test.window.present();
+    wait_for_frames(&test.window, 3);
+
+    let window = test.window.upcast_ref::<gtk::Window>();
+    let outside: Vec<String> = descendants::<gtk::Widget>(window)
+        .into_iter()
+        .filter(|widget| widget.is_focusable() && widget.can_focus() && widget.is_mapped())
+        .filter(WidgetExt::is_sensitive)
+        .filter(|widget| widget.ancestor(gtk::Popover::static_type()).is_none())
+        // GTK's paned turns its own focus off while Tab moves through it,
+        // so Tab never stops on it (its handle takes F8), and a scrolled
+        // window takes the keyboard itself only while it holds nothing
+        // that can.
+        .filter(|widget| !widget.is::<gtk::Paned>())
+        .filter(|widget| {
+            !widget.is::<gtk::ScrolledWindow>()
+                || !descendants::<gtk::Widget>(widget)
+                    .iter()
+                    .any(|inside| inside.is_focusable() && inside.is_mapped())
+        })
+        .filter(|widget| {
+            !std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+                .any(|widget| widget.has_css_class("caption-buttons"))
+        })
+        .filter(|widget| {
+            widget.grab_focus();
+            test.window.focused_stop().is_none()
+        })
+        .map(|widget| {
+            let path: Vec<String> = std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+                .take(6)
+                .map(|widget| format!("{}{:?}", widget.type_().name(), widget.css_classes()))
+                .collect();
+            path.join(" < ")
+        })
+        .collect();
+    assert_eq!(outside, Vec::<String>::new(), "controls in no stop");
+
+    let mut pointer = Pointer::connect();
+    let places = test.window.sidebar().list().clone();
+    places.child_focus(gtk::DirectionType::TabForward);
+    assert_eq!(test.window.focused_stop(), Some(Stop::Places));
+    test.window.set_focus_visible(true);
+    wait_for_frames(&test.window, 3);
+    let mut stops = Vec::new();
+    while test.window.focused_stop() != Some(Stop::Pane(test.window.active_side())) {
+        assert!(stops.len() < 30, "Tab reaches the file list: {stops:?}");
+        tab_and_see_the_ring(&test, &mut pointer, false);
+        stops.push(test.window.focused_stop().expect("every control is in a stop"));
+    }
+    stops.dedup();
+    assert_eq!(
+        stops,
+        [
+            Stop::SidebarResizer,
+            Stop::NetworkInfoBar,
+            Stop::SearchStrip,
+            Stop::Pane(test.window.active_side()),
+        ]
+    );
+
+    // A control of the strip the keyboard was put on (as a click does)
+    // goes on to the next stop, not back to the address bar.
+    let clear = descendants::<gtk::Button>(test.window.search_strip())
+        .into_iter()
+        .find(|button| button.has_css_class("search-clear") && !button.is::<gtk::ToggleButton>())
+        .expect("the strip's Clear button");
+    test.window
+        .address_bar()
+        .child_focus(gtk::DirectionType::TabForward);
+    assert!(clear.grab_focus(), "the Clear button takes the keyboard");
+    assert_eq!(test.window.focused_stop(), Some(Stop::SearchStrip));
+    wait_for_frames(&test.window, 2);
+    tab_and_see_the_ring(&test, &mut pointer, false);
+    assert_eq!(
+        test.window.focused_stop(),
+        Some(Stop::Pane(test.window.active_side())),
+        "Tab from the strip's last control goes into the file list, not to the address bar"
+    );
+}
+
+/// While "Working on it..." hides the rows of a slow location, the list
+/// keeps the keyboard with no item to ring, so the note shows where the
+/// keyboard is, as "This folder is empty." does.
+///
+/// parity: ACC-016, VIEW-068
+#[gtk::test]
+fn the_keyboard_on_a_list_that_is_opening_rings_its_note() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the folder");
+    let pane = test.window.folder_pane();
+    let ringed = || {
+        pane.parts_overlay()
+            .is_some_and(|overlay| overlay.has_css_class("keyboard-on-empty-list"))
+    };
+    test.window.set_focus_visible(true);
+    pane.focus_view();
+    settle();
+    assert!(!ringed(), "the item draws the ring while the rows show");
+
+    pane.show_working_note(true);
+    settle();
+    assert!(pane.view_has_focus(), "the list keeps the keyboard");
+    assert!(ringed(), "the note shows where the keyboard is");
+
+    pane.show_empty_note(false);
+    pane.hide_rows(false);
+    settle();
+    assert!(!ringed(), "the ring goes with the note");
+}
+
+/// In a folder scrolled down with nothing selected, the keyboard entering
+/// the icon view lands on a tile in view, which draws its ring, not on
+/// the first tile out of view; a selected tile out of view is scrolled
+/// into view.
+///
+/// parity: ACC-016
+#[gtk::test]
+fn the_keyboard_entering_a_scrolled_list_lands_on_an_item_in_view() {
+    let fixture = Fixture::with_files(300);
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("large"));
+    test.wait_for_listing("the folder");
+    test.window.present();
+    wait_for_frames(&test.window, 3);
+    let pane = test.window.folder_pane();
+    let grid = pane.icon_view().grid().clone();
+    let scroller = grid
+        .ancestor(gtk::ScrolledWindow::static_type())
+        .and_downcast::<gtk::ScrolledWindow>()
+        .expect("the tiles scroll");
+    let adjustment = scroller.vadjustment();
+    adjustment.set_value(adjustment.upper() / 2.0);
+    wait_for_frames(&test.window, 3);
+    let shown = pane.positions_shown();
+    assert!(!shown.contains(&0), "the first tile is out of view: {shown:?}");
+
+    test.window.set_focus_visible(true);
+    grid.grab_focus();
+    pane.focus_an_item();
+    settle();
+    let focused_at = pane.focused_position().expect("a tile has the keyboard");
+    assert!(
+        pane.positions_shown().contains(&focused_at),
+        "tile {focused_at} is in view"
+    );
+
+    test.window
+        .address_bar()
+        .child_focus(gtk::DirectionType::TabForward);
+    test.window.folder_model().select_only(0);
+    // No tile had the keyboard in a new view of the same items.
+    test.activate("view", Some("details"));
+    test.activate("view", Some("large"));
+    wait_for_frames(&test.window, 3);
+    adjustment.set_value(adjustment.upper() / 2.0);
+    wait_for_frames(&test.window, 3);
+    pane.icon_view().grid().grab_focus();
+    pane.focus_an_item();
+    wait_for_frames(&test.window, 3);
+    assert_eq!(
+        pane.focused_position(),
+        Some(0),
+        "the selected tile has the keyboard"
+    );
+    assert!(pane.positions_shown().contains(&0), "and is scrolled into view");
 }
