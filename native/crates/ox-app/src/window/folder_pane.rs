@@ -270,11 +270,17 @@ impl FolderPane {
         let keyboard = window.as_ref().is_some_and(GtkWindowExt::gets_focus_visible);
         let focus = window.as_ref().and_then(GtkWindowExt::focus);
         let view = self.view_widget();
+        // On the list itself, or anywhere in it while its rows are hidden:
+        // GTK keeps the keyboard on a hidden row then.
+        let rows_hidden = !self.shows_rows();
         let on_list = focus.is_some_and(|focus| {
             (focus == view || focus.is_ancestor(&view))
-                && (focus.is::<gtk::ListView>() || focus.is::<gtk::GridView>())
+                && (rows_hidden || focus.is::<gtk::ListView>() || focus.is::<gtk::GridView>())
         });
-        let on_empty_list = keyboard && on_list && self.shows_empty_note();
+        // The note says "This folder is empty." or, while the rows are
+        // hidden, "Working on it..."; either way the list has no item to
+        // ring, so the note shows where the keyboard is.
+        let on_empty_list = keyboard && on_list && self.parts().empty_note.is_visible();
         if let Some(overlay) = self.parts().stack.parent() {
             if on_empty_list {
                 overlay.add_css_class(KEYBOARD_ON_EMPTY_LIST);
@@ -629,18 +635,60 @@ impl FolderPane {
         }
     }
 
-    /// Gives the list's keyboard focus to an item when it rests on the list
-    /// itself: its first selected item, else its first. GTK's icon view
-    /// takes the keyboard on itself until an item had it, and draws
-    /// nothing there; Windows draws the focus on the first item when the
-    /// keyboard enters a list where none had it (ACC-016).
+    /// Makes sure the item with the list's keyboard focus shows, for the
+    /// keyboard entering the list (Esc in the address bar, Tab): when the
+    /// keyboard rests on the list itself, it goes to the first selected
+    /// item, scrolled into view, else the first item shown; when it is on
+    /// an item scrolled out of view, that item is scrolled into view. GTK's
+    /// icon view takes the keyboard on itself until an item had it, and
+    /// draws nothing there, and a ring out of view shows nothing either;
+    /// Windows draws the focus on an item when the keyboard enters a list
+    /// (ACC-016).
     pub(super) fn focus_an_item(&self) {
         if !self.lists_items() || self.model().n_items() == 0 || !self.shows_rows() {
             return;
         }
-        if self.view_has_focus() && self.focused_position().is_none() {
-            self.focus_item(self.model().first_selected().unwrap_or(0));
+        if !self.view_has_focus() {
+            return;
         }
+        let shown = self.positions_shown();
+        match (self.focused_position(), self.model().first_selected()) {
+            (Some(focused), _) if shown.contains(&focused) => {}
+            (Some(focused), _) => self.reveal(focused),
+            (None, Some(selected)) if shown.contains(&selected) => self.focus_item(selected),
+            (None, Some(selected)) => self.reveal(selected),
+            (None, None) => match shown.iter().min() {
+                Some(first_shown) => self.focus_item(*first_shown),
+                None => self.reveal(0),
+            },
+        }
+    }
+
+    /// The positions of the items whose rows or tiles show in the list's
+    /// visible part, at least half of each.
+    pub(super) fn positions_shown(&self) -> Vec<u32> {
+        let view = self.view_widget();
+        let Some(scroller) = view.ancestor(gtk::ScrolledWindow::static_type()) else {
+            return Vec::new();
+        };
+        #[expect(clippy::cast_precision_loss, reason = "pane heights are small")]
+        let height = scroller.height() as f32;
+        // The details view lays its rows out in a list inside it; the icon
+        // views lay their tiles out themselves.
+        let lists = std::iter::once(view.clone())
+            .chain(std::iter::successors(view.first_child(), WidgetExt::next_sibling))
+            .filter(|list| list.is::<gtk::ListBase>() || list.is::<gtk::ListView>());
+        lists
+            .flat_map(|list| std::iter::successors(list.first_child(), WidgetExt::next_sibling))
+            .filter(|item| item.is_mapped() && item.is_child_visible())
+            .filter(|item| {
+                item.compute_bounds(&scroller).is_some_and(|bounds| {
+                    let middle = bounds.y() + bounds.height() / 2.0;
+                    (0.0..height).contains(&middle)
+                })
+            })
+            .filter_map(|item| self.owners().position_holding(&view, item))
+            .collect()
     }
 
     /// Lets the window hold no keyboard focus, for a page that has nothing

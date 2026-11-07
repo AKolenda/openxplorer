@@ -18,14 +18,17 @@
 //! chevron or «, each crumb shown, then the history chevron; or the
 //! entry), the search box, the command bar, the navigation pane (one stop,
 //! the arrows move inside it), the folder tree, the pane's footer (Map
-//! network drive, where it shows), the file list (one stop, on its current
-//! item, the first one when none had the keyboard; each pane of a split
-//! tab), the Details pane, the status bar's buttons, the Open or Save bar,
-//! the tab in front and its Close button, New tab, and the Back, Forward,
-//! Up and Refresh buttons, which lead back into the address bar as they
-//! sit before it. The caption buttons, which Windows draws outside the
+//! network drive, where it shows), the sidebar's resizer, Network's info
+//! bar and the search strip where they show, the file list (one stop, on
+//! its current item, the first one shown when none had the keyboard; each
+//! pane of a split tab), the Details pane, the toast and the update notice
+//! where they show, the status bar's buttons, the Open or Save bar, the
+//! tab in front and its Close button, New tab, and the Back, Forward, Up
+//! and Refresh buttons, which lead back into the address bar as they sit
+//! before it. The caption buttons, which Windows draws outside the
 //! window's own controls, are no stops. A hidden or disabled stop is
-//! skipped.
+//! skipped. Every control the window shows is in a stop; one that is not
+//! keeps GTK's order, so Tab still goes on from it.
 //!
 //! GTK emits `move-focus` for Tab only once the focused widget and its
 //! parents let the key go, so what takes Tab itself keeps it: Tab between
@@ -56,8 +59,13 @@ pub(super) enum Stop {
     Places,
     FolderTree,
     SidebarFooter,
+    SidebarResizer,
+    NetworkInfoBar,
+    SearchStrip,
     Pane(PaneSide),
     Details,
+    Toast,
+    UpdateNotice,
     Status,
     Picker,
     Tabs,
@@ -67,16 +75,21 @@ pub(super) enum Stop {
 
 impl Stop {
     /// Every stop, in Tab's order.
-    pub(super) const ALL: [Stop; 14] = [
+    pub(super) const ALL: [Stop; 19] = [
         Stop::Address,
         Stop::Search,
         Stop::Commands,
         Stop::Places,
         Stop::FolderTree,
         Stop::SidebarFooter,
+        Stop::SidebarResizer,
+        Stop::NetworkInfoBar,
+        Stop::SearchStrip,
         Stop::Pane(PaneSide::Start),
         Stop::Pane(PaneSide::End),
         Stop::Details,
+        Stop::Toast,
+        Stop::UpdateNotice,
         Stop::Status,
         Stop::Picker,
         Stop::Tabs,
@@ -117,6 +130,12 @@ impl BrowserWindow {
                 _ => return,
             };
             if window.keeps_gtk_tab_order() {
+                return;
+            }
+            // A control in no stop keeps GTK's order, so the keyboard goes
+            // on from it rather than back to the address bar.
+            let on_a_control = gtk::prelude::GtkWindowExt::focus(window).is_some();
+            if on_a_control && window.focused_stop().is_none() {
                 return;
             }
             if window.tab_to_next_stop(backward) {
@@ -214,8 +233,13 @@ impl BrowserWindow {
             Stop::Places => self.sidebar().list().clone().upcast(),
             Stop::FolderTree => self.sidebar().folder_tree().clone().upcast(),
             Stop::SidebarFooter => return self.sidebar().footer(),
+            Stop::SidebarResizer => self.sidebar_resizer().clone().upcast(),
+            Stop::NetworkInfoBar => self.network_info_bar().clone().upcast(),
+            Stop::SearchStrip => self.search_strip().clone().upcast(),
             Stop::Pane(side) => self.pane_on(side).clone().upcast(),
             Stop::Details => self.details_pane().clone().upcast(),
+            Stop::Toast => imp.toast.get().upcast(),
+            Stop::UpdateNotice => imp.update_notice.get().upcast(),
             Stop::Status => self.status_bar().clone().upcast(),
             Stop::Picker => imp.picker_bar.get().upcast(),
             Stop::Tabs => self.tab_strip().clone().upcast(),
