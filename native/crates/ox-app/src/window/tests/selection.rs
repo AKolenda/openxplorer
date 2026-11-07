@@ -242,9 +242,10 @@ fn name_and_beside_it(test: &TestWindow, view: &gtk::Widget, position: u32) -> (
 }
 
 /// In a folder whose rows fill the details view, the empty part of an
-/// unselected row is blank space, as in Windows Explorer: a press there
-/// clears the selection and may start a rubber band. Its icon and name,
-/// a selected row, and the tiles of the icon views stay the item.
+/// unselected row is blank space for a rubber band, as in Windows
+/// Explorer, but a press there keeps the selection: released without a
+/// drag it selects the row (full-row select). Its icon and name, a
+/// selected row, and the tiles of the icon views stay the item.
 ///
 /// parity: SEL-002, SEL-012
 #[gtk::test]
@@ -270,11 +271,11 @@ fn the_empty_part_of_an_unselected_details_row_is_blank_space() {
         !beside_selected_is_blank,
         "a selected row is the item across its width"
     );
-    assert!(
-        after_press.is_empty(),
-        "a press beside a name clears the selection"
+    assert_eq!(
+        after_press,
+        [1],
+        "a press beside a name keeps the selection until it is a click or a band"
     );
-    assert!(test.window.folder_pane().view_has_focus());
 
     show_view(&test, "medium");
     let grid = test.window.folder_pane().view_widget();

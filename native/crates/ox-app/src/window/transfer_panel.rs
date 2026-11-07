@@ -48,6 +48,7 @@
 //! `resources/ui/transfer-panel.ui`.
 
 mod action;
+mod failure;
 mod question;
 mod rate;
 mod speed_graph;
@@ -58,6 +59,7 @@ use gtk::subclass::prelude::*;
 use ox_core::transfer::{Cancellation, Progress, ProgressScope};
 
 pub(crate) use action::{location_name, Action, Verb};
+pub(crate) use failure::{FailureChoice, FailureView, FirstButton};
 pub(crate) use question::SpaceTexts;
 
 use crate::icons::{self, Icon};
@@ -213,11 +215,19 @@ mod imp {
         pub(super) window: glib::WeakRef<ProgressWindow>,
         /// Receives the row chosen while the action asks.
         pub(super) question_answer: RefCell<Option<async_channel::Sender<Option<Row>>>>,
+        /// What "More details" compares while the action asks.
+        pub(super) compared: RefCell<Option<gtk::Box>>,
         /// Receives Try Again (true) or Cancel while the action asks
         /// about a full drive.
         pub(super) space_answer: RefCell<Option<async_channel::Sender<bool>>>,
         /// The File Conflict window the question opened, while it shows.
         pub(super) conflict_window: glib::WeakRef<FileConflictWindow>,
+        /// The question about a failed item, while it shows.
+        pub(super) failure_question: RefCell<Option<gtk::Box>>,
+        /// Its More details.
+        pub(super) failure_details: RefCell<Option<gtk::Widget>>,
+        /// Receives the answer about a failed item.
+        pub(super) failure_answer: RefCell<Option<async_channel::Sender<super::failure::FailureChoice>>>,
     }
 
     #[glib::object_subclass]
@@ -473,10 +483,17 @@ impl TransferPanel {
 
     /// Shows or hides "More details": the graph in the bar's place, the
     /// name, and the time and items remaining.
+    /// While the action asks, its bar stays hidden either way.
     pub(crate) fn show_details(&self, shown: bool) {
+        // While the action asks about a failed item, More details is
+        // where the item is and where it was going.
+        if self.asks_about_failure() {
+            self.show_failure_details(shown);
+            return;
+        }
         let imp = self.imp();
         imp.details.set_visible(shown);
-        imp.progress_bar.set_visible(!shown);
+        imp.progress_bar.set_visible(!shown && !self.is_asking());
     }
 
     /// "44% complete", or "Cancelling…" once cancelled, as the progress
@@ -494,6 +511,13 @@ impl TransferPanel {
     /// The glyph of the kind of write, for the progress window's icon.
     pub(crate) fn glyph(&self) -> Icon {
         self.imp().kind.get().unwrap_or(TransferKind::Files).glyph()
+    }
+
+    /// The file dialog this action was started in, if it was: the
+    /// dialog owns the progress window while the action runs
+    /// ([`ProgressWindow::follow_dialog`]).
+    pub(super) fn dialog(&self) -> Option<BrowserWindow> {
+        self.imp().owner.upgrade().filter(BrowserWindow::is_picking)
     }
 
     /// Records the progress window this action shows in.
@@ -546,7 +570,11 @@ impl TransferPanel {
     /// The percentage line, and the graph's progress.
     fn show_percent(&self) {
         let imp = self.imp();
-        imp.percent_label.set_text(&self.percent_text());
+        // While the action asks, the percentage's place holds what it
+        // found; a report that arrives meanwhile waits for the answer.
+        if !self.is_asking() {
+            imp.percent_label.set_text(&self.percent_text());
+        }
         let speed = imp
             .reading
             .get()

@@ -282,7 +282,8 @@ impl BrowserWindow {
     /// behind, with Ctrl+Shift to a new tab in front and with Shift to a
     /// new window, whatever is selected, as in Dolphin (TAB-026). With
     /// Folder Options' "Open each folder in its own window", a folder
-    /// opened alone goes to a new window too, as in Windows.
+    /// opened alone goes to a new window too, as in Windows
+    /// ([`BrowserWindow::activate_item`]).
     pub(super) fn activate_from_view(&self, position: u32) {
         // DND-007: the press or release of a drag never opens an item.
         if self.are_item_clicks_paused() {
@@ -300,10 +301,7 @@ impl BrowserWindow {
         }
         let selected = self.folder_pane().model().selected_positions();
         let alone = selected.is_empty() || selected == [position];
-        let own_window = alone && self.opens_folders_in_own_window();
-        if let Some(uri) = self.folder_in_view(position).filter(|_| own_window) {
-            WindowAction::OpenWindow.activate_from(self, Some(&uri.to_variant()));
-        } else if alone {
+        if alone {
             self.activate_item(position);
         } else if selected.contains(&position) {
             self.open_selection();
@@ -339,6 +337,7 @@ impl BrowserWindow {
         self.attach_file_drag(view);
         self.attach_details_hover(view);
         self.attach_file_drop_zone(view, DropZone::FolderView);
+        view.add_controller(keyboard_marker(view));
     }
 
     /// Gives the empty page's whole area in `pane` what an empty folder takes in
@@ -570,11 +569,14 @@ impl BrowserWindow {
         }
     }
 
-    /// A primary press on blank space in `view`, below the rows, between
-    /// the tiles or on the empty part of an unselected details row, clears
-    /// the selection and keeps keyboard focus on the view, as in Windows
-    /// Explorer and Dolphin; with Ctrl or Shift held the selection stays.
-    /// A drag from there draws a rubber band ([`super::rubber_band`]).
+    /// A primary press on blank space in `view`, below the rows or between
+    /// the tiles, clears the selection and keeps keyboard focus on the
+    /// view, as in Windows Explorer and Dolphin; with Ctrl or Shift held
+    /// the selection stays. A drag from there draws a rubber band
+    /// ([`super::rubber_band`]). A press on the empty part of an unselected
+    /// details row keeps the selection: released there, the row's own click
+    /// selects the row (Ctrl toggles it, Shift extends to it), and dragged
+    /// from there, the band replaces the selection as it moves.
     fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
@@ -592,6 +594,9 @@ impl BrowserWindow {
                     return;
                 }
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
+                    return;
+                }
+                if window.is_beside_item(&view, x, y) {
                     return;
                 }
                 if !press_keeps_selection(press.current_event_state()) {
@@ -615,20 +620,24 @@ impl BrowserWindow {
             return self.is_beside_item(view, x, y);
         }
         // The details view's rows are an inner list view; its titles are
-        // not inside it. The icon grid is the list itself.
-        view.pick(x, y, gtk::PickFlags::DEFAULT)
-            .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
+        // not inside it. The icon grid is the list itself, and a group's
+        // heading row in grouped Tiles and Content is blank space too.
+        view.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
+            &picked == view
+                || picked.ancestor(gtk::ListView::static_type()).is_some()
+                || crate::folder_view::cells::is_in_group_slot(&picked)
+        })
     }
 
     /// Whether (`x`, `y`) in `view` is on the empty part of an unselected
     /// details row: past the end of its name, or in its other columns. As
     /// in Windows Explorer, only the icon and the name (with the check box
-    /// and the expand arrow before them) are the item there, so a press on
-    /// the rest of the row starts a rubber band, even in a folder whose
-    /// rows fill the view, and a click there clears the selection. A
-    /// selected row stays the item across its width, and so does every
-    /// tile of the icon views. A drop still goes into the folder of the
-    /// whole row.
+    /// and the expand arrow before them) are the item to drag there, so a
+    /// drag from the rest of the row draws a rubber band, even in a folder
+    /// whose rows fill the view. A click there still selects the row, as
+    /// Windows' full-row select does. A selected row stays the item across
+    /// its width, and so does every tile of the icon views. A drop still
+    /// goes into the folder of the whole row.
     pub(super) fn is_beside_item(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
         if !view.is::<gtk::ColumnView>() {
             return false;
@@ -681,13 +690,38 @@ impl BrowserWindow {
 
     /// The location of the folder at `position` of the active pane, if a
     /// folder is there.
-    fn folder_in_view(&self, position: u32) -> Option<String> {
+    pub(super) fn folder_in_view(&self, position: u32) -> Option<String> {
         let item = self.folder_pane().model().item(position)?;
         match activation_for(item.entry()) {
             Activation::Folder(uri) => Some(uri),
             Activation::File | Activation::Archive | Activation::Refused(_) => None,
         }
     }
+}
+
+/// The class a folder view has while the keyboard is in it, which its
+/// focused row or tile outlines (folder-views.css).
+pub(super) const KEYBOARD_IN_CLASS: &str = "keyboard-in";
+
+/// Marks `view` with [`KEYBOARD_IN_CLASS`] while the window's keyboard
+/// focus is inside it, and only then: as in Windows 11 File Explorer, the
+/// focused item draws its outline only while the list has the keyboard,
+/// whatever state GTK leaves on the row it last focused once the
+/// keyboard moves to the navigation pane or the address bar.
+fn keyboard_marker(view: &gtk::Widget) -> gtk::EventControllerFocus {
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_contains_focus_notify(glib::clone!(
+        #[weak]
+        view,
+        move |focus| {
+            if focus.contains_focus() {
+                view.add_css_class(KEYBOARD_IN_CLASS);
+            } else {
+                view.remove_css_class(KEYBOARD_IN_CLASS);
+            }
+        }
+    ));
+    focus
 }
 
 #[cfg(test)]

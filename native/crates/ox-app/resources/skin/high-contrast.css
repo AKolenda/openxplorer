@@ -4,7 +4,8 @@
    rules of style.css and ui-spec.md §4.13. The current location in the
    sidebar gets an accent outline, drop targets draw 3px instead of 2px
    (`.quick-access.pin-drop-active{border-width:2px}`), keyboard focus
-   inside menus draws 2px instead of 1px, and the two-tone ring of rows,
+   inside menus draws 2px instead of 1px, the focused row's or tile's
+   outline is 2px in the text colour, and the two-tone ring of rows,
    tiles and the navigation pane is drawn opaque in the text and
    background colours. */
 
@@ -20,6 +21,12 @@ gridview.files > child.file-drop-active,
 /* The separators between inactive tabs in the tertiary text colour, as
    strong as the breadcrumb dividers (src/window/tab_strip/edges.rs). */
 .ox-titlebar .tab-separator { background-color: @ox_text_tertiary; }
+columnview.files.keyboard-in > listview > row:focus:not(:focus-visible):not(.file-drop-active),
+gridview.files.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: 2px solid @ox_text; outline-offset: -2px; }
+gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot),
+gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot) { outline: 2px solid @ox_text; outline-offset: -2px; }
+gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active),
+gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: none; }
 .sidebar list > row:focus-visible,
 .folder-tree listview > row:focus-visible,
 columnview.files > listview > row:focus-visible,

@@ -419,7 +419,7 @@ fn views_saved_by_the_old_display_style_dialog_still_load() {
     save_preferences(&mut store, &json!({"theme": "dark"}));
     let reread = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(reread.folder_views, preferences.folder_views);
-    assert!(reread.folder_views[0].subfolders);
+    assert!(reread.folder_views[0].subfolders.is_some());
     assert_eq!(reread.view_for("file:///home/someone/Projects/site").sort, "size");
 }
 
@@ -594,4 +594,23 @@ fn a_thumbnail_toggle_keeps_the_applied_columns() {
         Some(vec!["type".to_owned()]),
         "choosing the columns in Settings still reaches the shared view"
     );
+}
+
+/// Optimizing Downloads on the Customize tab changes its view but keeps
+/// the Group by date modified it shows until the user chooses another.
+/// parity: PROP-036
+#[test]
+fn a_template_keeps_downloads_grouped_by_date() {
+    const DOWNLOADS: &str = "file:///home/someone/Downloads";
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    save_preferences(&mut store, &json!({"perFolderViews": true}));
+
+    let saved = store
+        .customize_folder(DOWNLOADS, Some(DOWNLOADS), FolderTemplate::Pictures, false)
+        .unwrap();
+
+    let style = saved.view_in(DOWNLOADS, Some(DOWNLOADS));
+    assert_eq!(style.mode, "icons");
+    assert_eq!(style.grouping(), GroupBy::Modified);
 }

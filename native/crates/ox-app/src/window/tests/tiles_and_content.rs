@@ -48,14 +48,16 @@ fn cell_bounds(test: &TestWindow, position: u32) -> gtk::graphene::Rect {
 }
 
 /// View > Tiles (Ctrl+Shift+7) shows each item's type and, for a file, its
-/// size under its name; View > Content (Ctrl+Shift+8) shows a file's type
-/// under its name and the date modified and size at the right. A folder
-/// has no size, and in Content no type.
+/// size under its name, written as the status bar writes it; View >
+/// Content (Ctrl+Shift+8) shows a file's type under its name and the date
+/// modified and size at the right. A folder has no size, and in Content
+/// no type.
 ///
 /// parity: VIEW-071
 #[gtk::test]
 fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
     let fixture = Fixture::standard();
+    std::fs::write(fixture.path("Survey.bin"), vec![0; 1_300_000]).expect("fixture file");
     let test = TestWindow::open(&fixture.uri());
     let view = WindowAction::View.detailed_name();
     let keys = |target: &str| application().accels_for_action(&format!("{view}::{target}"));
@@ -68,6 +70,12 @@ fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
         assert_eq!(lines.kind, "Text Document", "{view:?}");
         assert_eq!(lines.size, "20 bytes", "{view:?}: the fixture's 20-byte file");
         assert!(!lines.modified.is_empty(), "{view:?}: a date modified");
+        let survey = cell_named(&test, "Survey.bin").shown_item_lines();
+        let survey = survey.unwrap_or_else(|| panic!("{view:?} shows the large file's lines"));
+        assert_eq!(
+            survey.size, "1.23 MB",
+            "{view:?}: three digits, as the status bar"
+        );
         let folder = cell_named(&test, "Documents").shown_item_lines();
         let folder = folder.unwrap_or_else(|| panic!("{view:?} shows the folder's lines"));
         // Windows 11's Content rows give a folder its name alone.
@@ -242,7 +250,8 @@ fn details_headings(test: &TestWindow) -> Vec<String> {
 
 /// A grouped folder keeps its groups in Tiles and Content, as in Windows
 /// 11: each group starts a row under a heading with the title and count
-/// Details shows; a file added to a group counts in its heading; Group by
+/// Details shows, which takes clicks itself (VIEW-022); a
+/// file added to a group counts in its heading; Group by
 /// (None) takes the headings away, and the items stay selectable and
 /// open as before.
 ///
@@ -267,6 +276,16 @@ fn tiles_and_content_keep_the_folders_groups_under_headings() {
             "{view:?}: under its own heading"
         );
         let pane = test.window.folder_pane();
+        let on_heading = (f64::from(first_file.x()) + 20.0, f64::from(first_file.y()) - 12.0);
+        // A heading's row takes clicks itself, selecting its group or
+        // folding it with its chevron (VIEW-022), so it is no blank space;
+        // the blanks after a short group still are.
+        assert!(
+            !test
+                .window
+                .is_blank_space(&pane.view_widget(), on_heading.0, on_heading.1),
+            "{view:?}: a click on a heading is the heading's, not blank space"
+        );
         assert_eq!(
             pane.owners().position_of(&cell_named(&test, "Notes 2").upcast()),
             Some(1)

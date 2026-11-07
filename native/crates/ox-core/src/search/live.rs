@@ -156,7 +156,9 @@ impl Walk<'_> {
                 Ok(None) => break Ok(Some(())),
                 Err(error) => break Err(SearchError::from(EntryError::from(error))),
             };
-            if self.search.hidden_items == HiddenItems::Skip && info.is_hidden() {
+            // Read as an attribute, which a share may leave out (see
+            // `reader.rs`).
+            if self.search.hidden_items == HiddenItems::Skip && info.boolean("standard::is-hidden") {
                 continue;
             }
             let entry = entry_from_info(&enumerator.child(&info), &info);

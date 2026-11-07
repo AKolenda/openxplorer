@@ -364,10 +364,32 @@ impl BrowserWindow {
         };
         let pane = self.folder_pane();
         let flags = gtk::ListScrollFlags::FOCUS;
-        if pane.details().grouped().as_ref() == Some(&model) {
+        let list: gtk::Widget = if pane.details().grouped().as_ref() == Some(&model) {
             pane.details().column_view().scroll_to(slot, None, flags, None);
+            pane.details().column_view().clone().upcast()
         } else if pane.icon_view().grouped().as_ref() == Some(&model) {
             pane.icon_view().grid().scroll_to(slot, flags, None);
+            pane.icon_view().grid().clone().upcast()
+        } else {
+            return;
+        };
+        // GTK moves its cursor to the heading but leaves the keyboard
+        // where it was when the list did not have it, as on the View
+        // button after choosing a view: the heading's row or tile takes it.
+        let has_it = GtkWindowExt::focus(self)
+            .and_then(|focus| heading_near(&focus))
+            .is_some_and(|focused| focused == *heading);
+        if !has_it {
+            let item = super::widget_tree::descendants::<FileCell>(&list)
+                .into_iter()
+                .find(|cell| cell.slot().as_ref() == Some(heading))
+                .and_then(|cell| {
+                    std::iter::successors(cell.parent(), WidgetExt::parent)
+                        .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()))
+                });
+            if let Some(item) = item {
+                item.grab_focus();
+            }
         }
         // The ring follows from here too, once GTK has moved the keyboard,
         // not only from the window's focus changes.
