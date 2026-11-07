@@ -28,10 +28,10 @@
 //!   item stays in the Recycle Bin.
 //! - With [`ReplacedFiles::Overwrite`] (Settings > Files & folders), a
 //!   file restored over a file overwrites it, as Windows does, and the
-//!   replaced file is gone ([`restore_over`]). The item first comes out
-//!   of the Recycle Bin under a private name beside the file it replaces
-//!   and then takes that name in one rename, so a restore stopped before
-//!   that leaves the old file as it was. A folder in the way still goes
+//!   replaced file is gone ([`restore_over`]). The file the Recycle Bin
+//!   keeps takes the old file's name in one rename, so a restore stopped
+//!   or failed before it leaves the old file as it was and the item in
+//!   the Recycle Bin. A folder in the way still goes
 //!   to the Recycle Bin: the setting is about files, and a folder is
 //!   never deleted as a side effect of Replace.
 //! - Both kept in the File Conflict window: the restored item takes
@@ -64,7 +64,7 @@ use super::undo::{Operation, UndoRecord};
 use crate::entry::{entry_from_info, ATTRIBUTES};
 use crate::gio_node::GioNode;
 use crate::location::{kept_both_name, ItemKind};
-use crate::transfer::{staging_name, Cancellation, Node, TransferMode};
+use crate::transfer::{is_same_file, Cancellation, Node, SourceChange, TransferMode};
 
 /// The plan of restoring the Recycle Bin items `uris`: each item goes
 /// into the folder it was deleted from, and each one whose original name
@@ -542,48 +542,86 @@ fn replace(
 /// afterwards, as Windows overwrites it ([`ReplacedFiles::Overwrite`]),
 /// and returns the restored item's URI.
 ///
-/// The item first comes out of the Recycle Bin under a private staging
-/// name beside `existing`, never overwriting, and then takes `existing`'s
-/// name in one native rename. A cancellation before that rename leaves
-/// both where they were; once the item is out of the Recycle Bin, the
-/// rename runs to the end, so the public name is never left empty. Should
-/// it fail, the item goes back to the Recycle Bin.
+/// The Recycle Bin keeps the item as a file on the same filesystem as its
+/// original folder, so that file takes `existing`'s name in one native
+/// rename. Before it, nothing has changed, so a cancellation or a failure
+/// leaves the item in the Recycle Bin with its own name and origin; no
+/// private name is ever left behind. After it, the item's Trash record
+/// is removed. Should `existing` be another name of the same file (a hard
+/// link), the rename would change nothing, so only the Recycle Bin's name
+/// for it goes.
 ///
 /// # Errors
 ///
-/// The write protection, cancellation, or a failed move; nothing was
-/// replaced then. [`OpsError::Failed`] names the staged item when it could
-/// not go back to the Recycle Bin either.
+/// The write protection, cancellation, the Recycle Bin not keeping the
+/// item as a local file, or a failed rename; nothing was replaced then.
 fn restore_over(
     item: &PlannedItem,
     existing: &GioNode,
     context: &OperationContext,
 ) -> Result<String, OpsError> {
     context.cancel.check()?;
-    context.protection.check(&existing.uri())?;
     let trashed = top_level_item(&item.uri)?;
-    let folder = gio::File::for_uri(&existing.uri())
-        .parent()
-        .ok_or_else(|| OpsError::failed(crate::i18n::gettext("Filesystem roots cannot be replaced.")))?;
-    let staged = folder.child(staging_name()?);
-    let taken = || {
-        OpsError::failed(crate::i18n::gettext(
-            "Could not reserve a temporary replacement name.",
-        ))
-    };
-    move_out(&trashed, &staged, context, taken, |_| Ok(()))?;
-    let staged = GioNode::from_file(staged);
-    // From here on the swap runs to the end, even after a cancellation.
-    match staged.replace_native(existing, None) {
-        Ok(()) => Ok(existing.uri()),
-        Err(error) => {
-            if staged.trash(&Cancellation::new()).is_err() {
-                return Err(OpsError::failed(crate::i18n::format_message(
-                    "The restored item is at {uri}. Check it, then rename or delete it. {error}",
-                    &[("uri", &staged.uri()), ("error", &error.to_string())],
-                )));
-            }
-            Err(error.into())
+    let kept = KeptFile::of(&trashed, context)?;
+    let source = GioNode::from_file(kept.file.clone());
+    // XFER-020: the original location; the Recycle Bin is no protected one.
+    context
+        .protection
+        .check_tree(&source, existing, &context.cancel, SourceChange::Kept)?;
+    context.cancel.check()?;
+    if is_same_file(&source, existing, &context.cancel)? {
+        source.delete()?;
+    } else {
+        // One rename: it either happens whole or not at all.
+        source.replace_native(existing, None)?;
+    }
+    // The item is out of the Recycle Bin: its Trash record goes. A record
+    // that stays names no file, and the Recycle Bin lists none for it.
+    let _ = kept.record.delete(gio::Cancellable::NONE);
+    Ok(existing.uri())
+}
+
+/// Where the Recycle Bin keeps one of its items: the file in its `files`
+/// folder and the `.trashinfo` record in its `info` folder, as the
+/// freedesktop.org Trash specification lays them out.
+struct KeptFile {
+    file: gio::File,
+    record: gio::File,
+}
+
+impl KeptFile {
+    /// Where the Recycle Bin keeps `trashed`.
+    ///
+    /// # Errors
+    ///
+    /// Cancellation, a failed query, or an item the Recycle Bin does not
+    /// keep as a local file in a `files` folder.
+    fn of(trashed: &gio::File, context: &OperationContext) -> Result<Self, OpsError> {
+        let info = trashed.query_info(
+            "standard::target-uri",
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            Some(context.cancellable()),
+        )?;
+        let file = info
+            .attribute_string("standard::target-uri")
+            .map(|uri| gio::File::for_uri(&uri))
+            .filter(|file| file.path().is_some());
+        let layout = file.as_ref().and_then(|file| {
+            let name = file.basename()?;
+            let files = file.parent()?;
+            let trash = files.parent()?;
+            (files.basename()?.as_os_str() == "files").then(|| {
+                let mut record = name.into_os_string();
+                record.push(".trashinfo");
+                trash.child("info").child(record)
+            })
+        });
+        match (file, layout) {
+            (Some(file), Some(record)) => Ok(Self { file, record }),
+            _ => Err(OpsError::failed(crate::i18n::gettext(
+                "The Recycle Bin does not keep this item as a file on this computer, so it cannot replace \
+                 another file. It was left in the Recycle Bin.",
+            ))),
         }
     }
 }

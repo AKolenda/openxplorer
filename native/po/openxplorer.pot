@@ -8766,22 +8766,13 @@ msgstr ""
 msgid "{name}: The file it was to replace is in the Recycle Bin. Restore it from there."
 msgstr ""
 
-#: crates/ox-core/src/ops/restore_conflicts.rs crates/ox-core/src/transfer/commit.rs
-msgid "Could not reserve a temporary replacement name."
-msgstr ""
-
-#: crates/ox-core/src/ops/restore_conflicts.rs crates/ox-core/src/transfer/commit.rs
-msgid "Filesystem roots cannot be replaced."
+#: crates/ox-core/src/ops/restore_conflicts.rs
+msgid "The Recycle Bin does not keep this item as a file on this computer, so it cannot replace another file. It was left in the Recycle Bin."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/restore_conflicts.rs
 msgid "The item named “{name}” in its original folder cannot be replaced. It was left in the Recycle Bin."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/restore_conflicts.rs
-msgid "The restored item is at {uri}. Check it, then rename or delete it. {error}"
 msgstr ""
 
 #: crates/ox-core/src/ops/run_transfer.rs crates/ox-core/src/transfer/request.rs
@@ -9262,6 +9253,14 @@ msgstr ""
 
 #: crates/ox-core/src/transfer/commit.rs
 msgid "A file and folder have the same name. Rename or remove one of them, then try again."
+msgstr ""
+
+#: crates/ox-core/src/transfer/commit.rs
+msgid "Could not reserve a temporary replacement name."
+msgstr ""
+
+#: crates/ox-core/src/transfer/commit.rs
+msgid "Filesystem roots cannot be replaced."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

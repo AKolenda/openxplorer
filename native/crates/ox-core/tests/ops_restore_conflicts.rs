@@ -634,15 +634,16 @@ fn a_cancelled_overwriting_restore_keeps_the_newer_file() {
     let free = OperationContext::default();
     let so_far = block_on(restore_free_items(&plan, &free)).expect("the free items");
 
-    // Cancel is pressed as the item is about to leave the Recycle Bin
-    // under its private name.
+    // Cancel is pressed as the newer file is checked, right before the
+    // item takes its name.
     let cancel = Cancellation::new();
     let pressed = cancel.clone();
+    let newer = file_uri(&notes);
     let context = OperationContext {
         cancel,
         replaced_files: ReplacedFiles::Overwrite,
         ..OperationContext::new(ox_core::ops::WriteProtection::new(move |uri: &str| {
-            if uri.contains(".winspace-") {
+            if uri == newer {
                 pressed.cancel();
             }
             Ok(())
@@ -659,6 +660,101 @@ fn a_cancelled_overwriting_restore_keeps_the_newer_file() {
     assert!(outcome.result.cancelled, "{:?}", outcome.result);
     assert_eq!(fs::read(&notes).unwrap(), b"newer");
     assert_eq!(recycled_now(&notes), 1, "the item stays in the Recycle Bin");
+    let names: Vec<_> = fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["notes.txt"], "no private name is left");
+}
+
+/// With the switch off, restoring a file over another name of the same
+/// file (a hard link) restores it: the Recycle Bin no longer lists it,
+/// the file keeps its contents and no other name is left behind. A rename
+/// between two names of one file changes nothing on its own.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn an_overwriting_restore_onto_a_hard_link_of_itself_leaves_no_other_name() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    let link = temp.path().join("notes link.txt");
+    fs::write(&notes, b"one file, three names").unwrap();
+    fs::hard_link(&notes, &link).unwrap();
+    trash(&[&notes]);
+    fs::hard_link(&link, &notes).unwrap();
+    fs::remove_file(&link).unwrap();
+    let uri = recycled_from(&notes, 1)[0].uri.clone();
+
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::default()
+    };
+    let outcome = restore(
+        &scan(std::slice::from_ref(&uri)),
+        &[Resolution::Replace],
+        &context,
+    );
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+    assert_eq!(outcome.result.done, [uri]);
+    assert_eq!(fs::read(&notes).unwrap(), b"one file, three names");
+    assert_eq!(recycled_now(&notes), 0, "the Recycle Bin no longer lists it");
+    let names: Vec<_> = fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["notes.txt"], "no other name is left");
+}
+
+/// With the switch off, a restore whose rename fails (another program put
+/// a folder in the newer file's place) leaves the item in the Recycle Bin
+/// under its own name and origin, so it can still be restored, and says
+/// it failed.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn a_failed_overwriting_restore_keeps_the_item_in_the_recycle_bin_as_it_was() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    fs::write(&notes, b"trashed").unwrap();
+    trash(&[&notes]);
+    fs::write(&notes, b"newer").unwrap();
+    let uri = recycled_from(&notes, 1)[0].uri.clone();
+    let plan = scan(std::slice::from_ref(&uri));
+    let free = OperationContext::default();
+    let so_far = block_on(restore_free_items(&plan, &free)).expect("the free items");
+
+    // Another program swaps a folder in as the newer file is checked,
+    // after the kind was read again.
+    let newer = file_uri(&notes);
+    let path = notes.clone();
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::new(ox_core::ops::WriteProtection::new(move |uri: &str| {
+            if uri == newer && path.is_file() {
+                fs::remove_file(&path).unwrap();
+                fs::create_dir(&path).unwrap();
+                fs::write(path.join("inside.txt"), b"another program's").unwrap();
+            }
+            Ok(())
+        }))
+    };
+    let outcome = block_on(restore_answered_items(
+        &plan,
+        &[Resolution::Replace],
+        so_far,
+        &context,
+    ))
+    .expect("an outcome");
+
+    assert_eq!(outcome.result.errors.len(), 1, "{:?}", outcome.result);
+    assert!(outcome.result.done.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(notes.join("inside.txt")).unwrap(), b"another program's");
+    let kept = recycled_from(&notes, 1);
+    assert_eq!(kept.len(), 1, "the item keeps its origin in the Recycle Bin");
+    assert_eq!(kept[0].uri, uri, "and its own name");
     let names: Vec<_> = fs::read_dir(temp.path())
         .unwrap()
         .map(|entry| entry.unwrap().file_name())

@@ -90,6 +90,7 @@ mod unstorable;
 
 pub(crate) use cancellation::check_cancelled;
 pub use cancellation::Cancellation;
+pub(crate) use commit::is_same_file;
 pub(crate) use commit::verify_installation;
 pub use engine::{ElevatedDestination, TransferEngine};
 pub use error::TransferError;
@@ -100,7 +101,6 @@ pub(crate) use limits::payload_refusal;
 pub use limits::{storable_name, stores_symbolic_links, FilesystemInfo, FAT_MAX_FILE_SIZE};
 pub(crate) use modes::{secure_local_staging, PRIVATE_DIRECTORY_MODE};
 pub use move_by_copying::{MoveByCopyingItem, MoveByCopyingQuestion};
-pub(crate) use names::staging_name;
 pub use names::{is_own_backup_name, is_own_staging_name};
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;

@@ -872,3 +872,35 @@ fn cancelling_an_overwriting_copy_midway_keeps_the_old_file() {
     assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
     assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
 }
+
+/// With the switch off, a move onto another name of the same file (a
+/// hard link) moves it: the source name goes and the destination keeps
+/// the contents. A rename between two names of one file changes nothing
+/// on its own, so the move is not reported done while its source stays.
+///
+/// parity: OPS-028
+#[test]
+fn an_overwriting_move_onto_a_hard_link_of_itself_removes_the_source_name() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"one file, two names");
+    fs::hard_link(src.join("report.png"), dst.join("report.png")).unwrap();
+
+    let scan = scan(TransferMode::Move, &src, &["report.png"], &dst);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert!(
+        !src.join("report.png").exists(),
+        "the source name goes, as a move does"
+    );
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"one file, two names");
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
+}
