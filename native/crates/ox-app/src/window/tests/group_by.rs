@@ -564,6 +564,52 @@ fn a_submenu_opens_when_the_pointer_rests_on_its_row() {
     assert!(menu.is_visible(), "the Sort menu stays open");
 }
 
+/// The keyboard moving on before the pointer has rested on Group by for
+/// the delay takes over, as in Windows: Group by does not open beside the
+/// row the keyboard went to. Once the pointer has opened it, the keyboard
+/// leaving its row closes it.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_keyboard_takes_over_from_a_resting_pointer() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sort = sort_button(&test);
+    let menu = sort
+        .popover()
+        .and_downcast::<crate::window::menu_popover::MenuPopover>()
+        .expect("an app menu");
+    sort.popup();
+    wait_until("the Sort menu", || menu.is_mapped());
+    let row = menu.row("Group by");
+    let focus = || gtk::prelude::GtkWindowExt::focus(&test.window);
+    let down = |count: i32| {
+        menu.row_list()
+            .emit_move_cursor(gtk::MovementStep::DisplayLines, count, false, false);
+    };
+    menu.hover_row(Some("Group by"));
+    assert_eq!(
+        focus(),
+        Some(row.clone().upcast()),
+        "the pointer puts the keyboard there"
+    );
+    down(1);
+    assert!(focus().is_some_and(|focus| focus != row), "Down moves on");
+    wait_past_the_submenu_delay(&test);
+    assert!(menu.open_submenu_menu().is_none(), "Group by stays closed");
+
+    // The pointer comes back and opens it; Up leaves its row and closes it.
+    menu.hover_row(None);
+    menu.hover_row(Some("Group by"));
+    wait_until("Group by to open", || menu.open_submenu_menu().is_some());
+    let group_by = menu.open_submenu_menu().expect("Group by");
+    down(-1);
+    assert!(focus().is_some_and(|focus| focus != row), "Up moves on");
+    assert!(menu.open_submenu_menu().is_none(), "it closes at once");
+    assert!(!group_by.is_visible());
+    assert!(menu.is_visible(), "the Sort menu stays open");
+}
+
 /// Moving the pointer diagonally from Group by towards its open submenu
 /// crosses other rows of the Sort menu; the submenu stays open, as on
 /// Windows, once the pointer reaches it before the delay passes. Leaving

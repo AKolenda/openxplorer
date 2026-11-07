@@ -12,6 +12,7 @@
 //! | `removal` | Trash (XFER-014) and permanent deletion (XFER-015) |
 //! | `local_delete` | Deletion relative to pinned folder descriptors |
 //! | `remote_delete` | Deletion by path on shares and phones |
+//! | `into_admin` | Copies into `admin://` that never let root open the source |
 //!
 //! Permanent deletion of a local item, and cleanup of local staging, run
 //! relative to pinned folder descriptors, so a folder swapped for a
@@ -22,6 +23,7 @@
 //! it goes to the pinned walk of [`crate::admin_delete`]. MTP behaviour is
 //! regression-tested with simulated devices, not hardware.
 
+mod into_admin;
 mod local_delete;
 mod move_item;
 mod query;
@@ -46,6 +48,17 @@ pub struct GioNode {
 }
 
 impl GioNode {
+    /// OPS-047: refuses a native move from elsewhere into `admin://`,
+    /// which `gvfsd-admin` would do by renaming the source's path as root.
+    /// The engine copies it instead (XFER-013).
+    fn refuse_move_into_admin(&self, target: &dyn Node) -> Result<(), TransferError> {
+        let target = gio::File::for_uri(&target.uri());
+        if into_admin::crosses_into_admin(&self.file, &target) {
+            return Err(into_admin::no_native_move());
+        }
+        Ok(())
+    }
+
     /// Addresses a canonical URI. Validate user-entered locations before
     /// constructing the node, using [`crate::location::normalise`].
     pub fn new(uri: &str) -> Self {
@@ -153,6 +166,10 @@ impl Node for GioNode {
     ) -> Result<(), TransferError> {
         cancel.check()?;
         let target_file = gio::File::for_uri(&target.uri());
+        // OPS-047: `gvfsd-admin` never opens the source by its path.
+        if into_admin::crosses_into_admin(&self.file, &target_file) {
+            return into_admin::copy_into_admin(&self.file, &target_file, cancel, progress);
+        }
         let mut report = |current: i64, total: i64| progress(byte_count(current), byte_count(total));
         // XFER-002: without OVERWRITE the copy refuses an existing target,
         // which keeps the engine's "never overwrite" rule for staging and
@@ -167,6 +184,7 @@ impl Node for GioNode {
     }
 
     fn move_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        self.refuse_move_into_admin(target)?;
         self.move_item(target, cancel, move_item::Overwrite::Never)
     }
 
@@ -175,6 +193,7 @@ impl Node for GioNode {
     }
 
     fn replace_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        self.refuse_move_into_admin(target)?;
         self.move_item(target, cancel, move_item::Overwrite::Replace)
     }
 
