@@ -466,7 +466,7 @@ native_note = "native/crates/ox-app/src/locations.rs and native/crates/ox-core/s
 id = "NAV-018"
 area = "NAV"
 title = "Breadcrumb buttons: click, keyboard and middle-click"
-behaviour = "Clicking a crumb navigates there without entering edit mode. Enter on a focused crumb navigates rather than opening the selected file. Left/Right arrows move focus between crumbs (clamped at the ends). Middle-click opens the crumb's location in a background tab without changing the current tab."
+behaviour = "Clicking a crumb navigates there without entering edit mode. Enter on a focused crumb navigates rather than opening the selected file. Left/Right arrows move focus between crumbs (clamped at the ends). As in Windows 11 File Explorer, the chevron or « before the first crumb (NAV-017, NAV-023) is the first stop for Tab and Left, and Down, Enter or Space opens its menu. Middle-click opens the crumb's location in a background tab without changing the current tab."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -486,7 +486,7 @@ python_tests = [
 ]
 bridge = ["list"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/address_bar.rs keeps Left and Right among the crumbs, clamped at the ends. Tested in native/crates/ox-app/src/window/tests/address_input.rs (left_and_right_stop_at_the_first_and_last_crumb, activating_a_focused_crumb_opens_it_not_the_selected_file, a_middle_clicked_crumb_opens_in_a_background_tab). The per-crumb subfolder menu is NAV-020."
+native_note = "native/crates/ox-app/src/window/address_bar/crumb_input.rs keeps Left and Right among the crumbs and the chevron or « before them (address_bar/crumb_strip.rs, keyboard_stops), clamped at the ends; the shown one of the two takes Tab and opens its menu on Down. Tested in native/crates/ox-app/src/window/tests/address_input.rs (left_and_right_stop_at_the_first_chevron_and_the_last_crumb, activating_a_focused_crumb_opens_it_not_the_selected_file, a_middle_clicked_crumb_opens_in_a_background_tab) and native/crates/ox-app/src/window/tests/address_bar.rs (the_keyboard_reaches_the_collapsed_crumbs_through_the_overflow_button: Shift+Tab and Left reach the «, Down opens its menu). The per-crumb subfolder menu is NAV-020."
 
 [[feature]]
 id = "NAV-019"
@@ -577,7 +577,7 @@ sources = ["v2.0.0:desktop/ui/app.js:344", "v2.0.0:desktop/ui/app.js:964"]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/address_bar/crumb_strip.rs measures the crumbs on every allocation and hides the leading ones that do not fit (hidden_count, unit-tested there); the last crumb always shows and is cut off only when it alone is wider than the bar. The hidden crumbs take no keyboard focus. Tests: native/crates/ox-app/src/window/tests/address_bar.rs (a_long_path_collapses_its_first_crumbs_into_a_button_as_the_width_allows: a 14-folder path at 1320 and 800 pixels, the « menu, and choosing its nearest folder; a_deep_path_and_many_tabs_do_not_widen_the_window); native/crates/ox-app/src/window/crumb_menus.rs (the_first_chevron_lists_the_places_and_the_overflow_the_hidden_crumbs_first); native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_never_switches_folders: no scrolled window and no wheel handler on a crumb)."
+native_note = "native/crates/ox-app/src/window/address_bar/crumb_strip.rs measures the crumbs on every allocation and hides the leading ones that do not fit (hidden_count, unit-tested there); the last crumb always shows and is cut off only when it alone is wider than the bar. The hidden crumbs take no keyboard focus; the « does, as the first stop for Tab and Left, and Down opens its menu (NAV-018). Tests: native/crates/ox-app/src/window/tests/address_bar.rs (a_long_path_collapses_its_first_crumbs_into_a_button_as_the_width_allows: a 14-folder path at 1320 and 800 pixels, the « menu, and choosing its nearest folder; a_deep_path_and_many_tabs_do_not_widen_the_window; the_keyboard_reaches_the_collapsed_crumbs_through_the_overflow_button); native/crates/ox-app/src/window/crumb_menus.rs (the_first_chevron_lists_the_places_and_the_overflow_the_hidden_crumbs_first); native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_never_switches_folders: no scrolled window and no wheel handler on a crumb)."
 
 [[feature]]
 id = "NAV-024"

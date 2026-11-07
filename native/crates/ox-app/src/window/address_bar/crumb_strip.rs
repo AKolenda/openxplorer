@@ -5,15 +5,16 @@
 //! fit, the leading ones collapse, from the first on, into a « button in
 //! the chevron's place, whose menu lists them; the current folder's crumb
 //! always shows in full. Each allocation decides again, so widening the
-//! window brings the crumbs back.
+//! window brings the crumbs back. The chevron or the « takes the keyboard
+//! as the crumbs do, so the hidden crumbs stay a Tab or a Left away.
 //!
 //! [`CrumbStrip`] never asks for more width than it gets: its minimum
 //! width is nothing, so a deep path never widens the window, and a last
 //! crumb wider than the bar is cut off at the bar's end.
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, glib};
 
 /// The gap between two items of the row, as the crumbs' box had.
 const SPACING: i32 = 2;
@@ -62,6 +63,7 @@ mod imp {
             let root = super::strip_button(super::ROOT_CLASS);
             let overflow = super::strip_button(super::OVERFLOW_CLASS);
             overflow.set_child_visible(false);
+            overflow.set_can_focus(false);
             root.set_parent(&*strip);
             overflow.set_parent(&*strip);
             self.root.set(root).expect("constructed runs once");
@@ -110,13 +112,26 @@ glib::wrapper! {
 
 /// A chevron button of the row, its glyph drawn by the skin
 /// (`resources/skin/navigation.css`) so it turns round right to left.
-/// It never takes the keyboard: the crumbs do.
+/// Like a crumb it takes the keyboard, and Down opens its menu as Enter
+/// and Space do, as Down on a crumb opens that crumb's.
 fn strip_button(class: &str) -> gtk::Button {
-    gtk::Button::builder()
+    let button = gtk::Button::builder()
         .css_classes([class])
-        .focusable(false)
         .focus_on_click(false)
-        .build()
+        .build();
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(|keys, key, _, modifiers| {
+        let down = matches!(key, gdk::Key::Down | gdk::Key::KP_Down);
+        if !down || !modifiers.is_empty() {
+            return glib::Propagation::Proceed;
+        }
+        if let Some(button) = keys.widget().and_downcast::<gtk::Button>() {
+            button.emit_clicked();
+        }
+        glib::Propagation::Stop
+    });
+    button.add_controller(keys);
+    button
 }
 
 /// The width `widget` asks for.
@@ -212,6 +227,20 @@ impl CrumbStrip {
         items
     }
 
+    /// The buttons the keyboard stops at, first to last: the chevron or
+    /// the «, whichever shows, then the crumbs that show.
+    pub(super) fn keyboard_stops(&self) -> Vec<gtk::Button> {
+        let mut stops = Vec::new();
+        let mut child = self.first_child();
+        while let Some(widget) = child {
+            child = widget.next_sibling();
+            if widget.is_child_visible() {
+                stops.extend(widget.downcast::<gtk::Button>().ok());
+            }
+        }
+        stops
+    }
+
     /// The crumbs collapsed into the « button, first to last.
     pub(super) fn hidden_crumbs(&self) -> Vec<gtk::Button> {
         self.items()
@@ -259,12 +288,19 @@ impl CrumbStrip {
         let row = lead
             .into_iter()
             .chain(rest.map(|((item, item_width), item_shown)| (item, item_width, item_shown)));
+        // The chevron and the « take each other's place, and the focus.
+        let lead_focused = root.has_focus() || overflow.has_focus();
+        let shown_lead = if hidden > 0 {
+            overflow.clone()
+        } else {
+            root.clone()
+        };
         let rtl = self.direction() == gtk::TextDirection::Rtl;
         let mut x = 0;
         for (widget, child_width, visible) in row {
             widget.set_child_visible(visible);
-            // A hidden crumb is no stop for Tab or the arrow keys.
-            if widget.has_css_class(CRUMB_CLASS) {
+            // A hidden crumb or chevron is no stop for Tab or the arrow keys.
+            if widget.is::<gtk::Button>() {
                 widget.set_can_focus(visible);
             }
             if !visible {
@@ -273,6 +309,9 @@ impl CrumbStrip {
             let start = if rtl { width - x - child_width } else { x };
             widget.size_allocate(&gtk::Allocation::new(start, 0, child_width, height), -1);
             x += child_width + SPACING;
+        }
+        if lead_focused && shown_lead.is_child_visible() && !shown_lead.has_focus() {
+            shown_lead.grab_focus();
         }
     }
 }
