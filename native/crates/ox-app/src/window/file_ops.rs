@@ -110,9 +110,8 @@ pub(crate) struct FileOperations {
     /// How many times the clipboard changed while the window watched, so
     /// a read that an owner change overtook is dropped.
     clipboard_generation: u64,
-    /// Whether the last clipboard read looked for a picture: Settings'
-    /// "Paste a picture from the clipboard as a new file" as it was then
-    /// (CLIP-015).
+    /// Whether the last clipboard read looked for a picture: Settings' "Paste
+    /// pictures as new files" as it was then (CLIP-015).
     pictures_read: bool,
     /// "Don't ask again" was checked when a rename hid an item (OPS-013).
     hiding_confirmed: bool,

@@ -10,15 +10,14 @@
 //! - Copy and Cut publish the file formats at once as one clipboard owner,
 //!   so Nautilus, Dolphin and other windows of this app can paste them.
 //!   The items' paths as plain text, which terminals and editors paste, are
-//!   published beside them while Settings' "Also copy file paths as text
-//!   when copying files" is on, as by default (CLIP-004); off, only the
-//!   files are copied, as Windows 11 File Explorer copies them, leaving
-//!   paths to Copy as path.
+//!   published beside them while Settings' "Also copy paths as text" is
+//!   on, as by default (CLIP-004); off, only the files are copied, as
+//!   Windows 11 File Explorer copies them, leaving paths to Copy as path.
 //! - Reading tries the app's own format, then GNOME's, then the URI
 //!   list with the KDE cut marker, each asynchronously, so a slow owner
 //!   never freezes the window. When none of them holds a file list and
-//!   Settings' "Paste a picture from the clipboard as a new file" is on,
-//!   the clipboard's picture is read, which a paste writes as one new file
+//!   Settings' "Paste pictures as new files" is on, the clipboard's
+//!   picture is read, which a paste writes as one new file
 //!   (CLIP-015); it is on by default. With it off, a picture leaves Paste
 //!   disabled, as in Windows 11 File Explorer. Plain text is neither a file
 //!   list nor a file: as in Windows Explorer, it leaves Paste disabled.
@@ -250,10 +249,10 @@ fn offers_a_picture(clipboard: &gdk::Clipboard) -> bool {
 /// picture (CLIP-005, CLIP-015). Text is neither: as in Windows Explorer,
 /// it leaves Paste disabled.
 ///
-/// With `pictures` false (Settings' "Paste a picture from the clipboard as
-/// a new file" off) a picture is not read at all, so a
-/// picture-only clipboard is no data: Paste stays disabled and Ctrl+V does
-/// nothing, as in Windows 11 File Explorer.
+/// With `pictures` false (Settings' "Paste pictures as new files" off) a
+/// picture is not read at all, so a picture-only clipboard is no data:
+/// Paste stays disabled and Ctrl+V does nothing, as in Windows 11 File
+/// Explorer.
 async fn read_clipboard_content(clipboard: &gdk::Clipboard, pictures: bool) -> ClipboardContent {
     match read_files(clipboard).await {
         Some(files) => ClipboardContent::Files(files),
@@ -388,8 +387,8 @@ impl BrowserWindow {
         // such as one owner's URI list with another's cut marker, so such a
         // read holds no data. It is not remembered either: the change
         // started a read of its own, which a stale answer must not undo.
-        // The same holds when "Paste a picture from the clipboard as a new
-        // file" changed during the read (CLIP-015): the owner is the same,
+        // The same holds when "Paste pictures as new files" changed during
+        // the read (CLIP-015): the owner is the same,
         // but the read looked, or did not look, for a picture under the old
         // setting, and the change started a read under the new one
         // (follow_picture_paste_preference).
@@ -441,23 +440,23 @@ impl BrowserWindow {
         self.update_file_commands();
     }
 
-    /// Whether Settings' "Paste a picture from the clipboard as a new file"
-    /// is on (CLIP-015), as by default; off, Paste is unavailable for a
-    /// picture, as in Windows 11 File Explorer.
+    /// Whether Settings' "Paste pictures as new files" is on (CLIP-015), as by
+    /// default; off, Paste is unavailable for a picture, as in Windows 11 File
+    /// Explorer.
     fn pastes_pictures_as_files(&self) -> bool {
         self.context().settings_data().preferences.paste_pictures_as_files
     }
 
-    /// Whether Settings' "Also copy file paths as text when copying files"
-    /// is on (CLIP-004), as by default; off, only the files are copied, as
-    /// Windows 11 File Explorer copies them.
+    /// Whether Settings' "Also copy paths as text" is on (CLIP-004), as by
+    /// default; off, only the files are copied, as Windows 11 File Explorer
+    /// copies them.
     fn copies_paths_as_text(&self) -> bool {
         self.context().settings_data().preferences.copy_paths_as_text
     }
 
-    /// Reads the clipboard again when "Paste a picture from the clipboard
-    /// as a new file" changed since the last read, so Paste follows the
-    /// setting at once.
+    /// Reads the clipboard again when "Paste pictures as new files" changed
+    /// since the last read was scheduled, so Paste follows the setting at
+    /// once.
     pub(crate) fn follow_picture_paste_preference(&self) {
         let pictures_read = self.imp().file_operations.borrow().pictures_read;
         if pictures_read != self.pastes_pictures_as_files() {
@@ -493,7 +492,14 @@ impl BrowserWindow {
     /// Reads the clipboard in the background, so opening, activating or
     /// changing a clipboard with a large picture never holds up the
     /// window.
+    ///
+    /// The setting the read will follow is noted now, not when the read
+    /// starts, so a window that applies its preferences right after
+    /// queueing its first read does not queue a second one
+    /// ([`Self::follow_picture_paste_preference`]).
     fn schedule_clipboard_read(&self) {
+        let pictures = self.pastes_pictures_as_files();
+        self.imp().file_operations.borrow_mut().pictures_read = pictures;
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,

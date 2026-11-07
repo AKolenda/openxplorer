@@ -386,9 +386,9 @@ impl TestWindow {
         });
     }
 
-    /// Turns Settings' "Paste a picture from the clipboard as a new file"
-    /// on or off, as another process would, and waits until the window
-    /// reads it, for tests of that switch (CLIP-015).
+    /// Turns Settings' "Paste pictures as new files" on or off, as another
+    /// process would, and waits until the window reads it, for tests of that
+    /// switch (CLIP-015).
     pub(crate) fn set_paste_pictures_as_files(&self, on: bool) {
         Settings::open(self.settings_directory())
             .update_preferences(&ox_core::settings::PreferencesUpdate {
@@ -402,9 +402,9 @@ impl TestWindow {
         });
     }
 
-    /// Turns Settings' "Also copy file paths as text when copying files"
-    /// on or off, as another process would, and waits until the window
-    /// reads it, for tests of that switch (CLIP-004).
+    /// Turns Settings' "Also copy paths as text" on or off, as another process
+    /// would, and waits until the window reads it, for tests of that switch
+    /// (CLIP-004).
     pub(crate) fn set_copy_paths_as_text(&self, on: bool) {
         Settings::open(self.settings_directory())
             .update_preferences(&ox_core::settings::PreferencesUpdate {

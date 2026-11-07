@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Files & folders: Dolphin's view options, item counts in a folder's Size
 //! (VIEW-037), as its "Number of items", folder sizes (the Python "Folder
-//! sizes" section, SET-008), and previews (VIEW-058), as Dolphin's
-//! Previews settings offer them, folded away, and two clipboard extras
-//! that Windows 11 File Explorer lacks, both on by default and each one
-//! able to be turned off: a picture pasted as a new file (CLIP-015) and
-//! the paths copied as text beside the files (CLIP-004). Windows 11's Compact view (VIEW-067) is built here and
-//! shown on the Appearance page. Each switch saves its preference or the
-//! folder views' options at once, and every window follows.
+//! sizes" section, SET-008), and previews (VIEW-058), as Dolphin's Previews
+//! settings offer them, folded away, and two clipboard extras that Windows 11
+//! File Explorer lacks, both on by default and each one able to be turned
+//! off: a picture pasted as a new file (CLIP-015) and the paths copied as
+//! text beside the files (CLIP-004). Windows 11's Compact view (VIEW-067) is
+//! built here and shown on the Appearance page. Each switch saves its
+//! preference or the folder views' options at once, and every window follows.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -93,16 +93,16 @@ const PREVIEW_DOCUMENTS: RowText = RowText {
 };
 
 const PASTE_PICTURES: RowText = RowText {
-    title: "Paste a picture from the clipboard as a new file",
+    title: "Paste pictures as new files",
     description: "Paste in a folder saves a copied picture, such as a screenshot, as a new \
                   image file. Off: Paste is unavailable for a picture, as in Windows.",
     keywords: "paste picture image screenshot clipboard png new file ctrl+v save",
 };
 
 const COPY_PATHS: RowText = RowText {
-    title: "Also copy file paths as text when copying files",
-    description: "Copy and Cut also put the items' paths on the clipboard, so a text editor or \
-                  terminal pastes them. Off: only the files are copied, as in Windows; \
+    title: "Also copy paths as text",
+    description: "Copy and Cut also put the items' paths on the clipboard, so a terminal or \
+                  text editor pastes them. Off: only the files are copied, as in Windows; \
                   Copy as path still copies paths.",
     keywords: "copy cut paths text clipboard terminal editor plain ctrl+c paste location",
 };

@@ -3328,7 +3328,7 @@ msgid "A frame of each video, made by the desktop's thumbnailer."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Also copy file paths as text when copying files"
+msgid "Also copy paths as text"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3348,7 +3348,7 @@ msgid "Compact view"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Copy and Cut also put the items' paths on the clipboard, so a text editor or terminal pastes them. Off: only the files are copied, as in Windows; Copy as path still copies paths."
+msgid "Copy and Cut also put the items' paths on the clipboard, so a terminal or text editor pastes them. Off: only the files are copied, as in Windows; Copy as path still copies paths."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3408,11 +3408,11 @@ msgid "PDFs, office documents, fonts and every other type the desktop can previe
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Paste a picture from the clipboard as a new file"
+msgid "Paste in a folder saves a copied picture, such as a screenshot, as a new image file. Off: Paste is unavailable for a picture, as in Windows."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Paste in a folder saves a copied picture, such as a screenshot, as a new image file. Off: Paste is unavailable for a picture, as in Windows."
+msgid "Paste pictures as new files"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs

@@ -772,8 +772,8 @@ fn the_compact_view_switch_saves_the_choice() {
 #[gtk::test]
 fn the_clipboard_switches_are_on_by_default_and_save_the_choice() {
     let settings = SettingsTest::open();
-    let pictures = switch_of(&settings.row("Paste a picture from the clipboard as a new file"));
-    let paths = switch_of(&settings.row("Also copy file paths as text when copying files"));
+    let pictures = switch_of(&settings.row("Paste pictures as new files"));
+    let paths = switch_of(&settings.row("Also copy paths as text"));
     assert!(pictures.is_active(), "pictures paste as files by default");
     assert!(paths.is_active(), "paths are copied as text by default");
 

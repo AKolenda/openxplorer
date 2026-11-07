@@ -132,14 +132,8 @@ const MOVED_ROWS: [(&str, &str); 70] = [
         "Brave saves to my Linux Downloads folder",
     ),
     ("Check for updates", "Check for updates"),
-    (
-        "Paste a picture from the clipboard as a new file",
-        "Paste a picture from the clipboard as a new file",
-    ),
-    (
-        "Also copy file paths as text when copying files",
-        "Also copy file paths as text when copying files",
-    ),
+    ("Paste pictures as new files", "Paste pictures as new files"),
+    ("Also copy paths as text", "Also copy paths as text"),
     (
         "Check for updates automatically",
         "Check for updates automatically",

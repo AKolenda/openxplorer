@@ -3,12 +3,11 @@
 //! the `clipboard` and `clipboard_interop` tests cover them on; off, the
 //! window behaves as Windows 11 File Explorer does:
 //!
-//! - "Paste a picture from the clipboard as a new file" off: a picture is
-//!   no data, so Paste and Paste into folder are unavailable and Ctrl+V
-//!   does nothing (CLIP-015, CLIP-016).
-//! - "Also copy file paths as text when copying files" off: Copy and Cut
-//!   publish only the file formats, so a text reader gets nothing
-//!   (CLIP-004).
+//! - "Paste pictures as new files" off: a picture is no data, so Paste and
+//!   Paste into folder are unavailable and Ctrl+V does nothing (CLIP-015,
+//!   CLIP-016).
+//! - "Also copy paths as text" off: Copy and Cut publish only the file
+//!   formats, so a text reader gets nothing (CLIP-004).
 
 use std::fs;
 use std::time::Duration;
@@ -47,10 +46,10 @@ fn pictures_in(fixture: &Fixture, folder: &str) -> Vec<String> {
         .collect()
 }
 
-/// With "Paste a picture from the clipboard as a new file" off, a picture
-/// is no data: Paste and Paste into folder are unavailable and Ctrl+V
-/// writes nothing and says nothing. Turning it on again enables Paste for
-/// the same clipboard at once, without copying again.
+/// With "Paste pictures as new files" off, a picture is no data: Paste and
+/// Paste into folder are unavailable and Ctrl+V writes nothing and says
+/// nothing. Turning it on again enables Paste for the same clipboard at once,
+/// without copying again.
 ///
 /// parity: CLIP-015, CLIP-016
 #[gtk::test]
@@ -77,8 +76,8 @@ fn a_picture_is_no_data_while_picture_paste_is_off() {
     wait_until("the pasted picture", || pictures_in(&fixture, "").len() == 1);
 }
 
-/// Turning "Paste a picture from the clipboard as a new file" off while a
-/// picture is on the clipboard turns Paste off at once.
+/// Turning "Paste pictures as new files" off while a picture is on the
+/// clipboard turns Paste off at once.
 ///
 /// parity: CLIP-015
 #[gtk::test]
@@ -138,10 +137,9 @@ fn a_picture_read_overtaken_by_turning_picture_paste_off_is_dropped() {
     );
 }
 
-/// With "Also copy file paths as text when copying files" off, Copy and
-/// Cut publish the file formats only: a reader that takes text only, such
-/// as a text editor, gets nothing, and pasting into a folder still copies
-/// the files.
+/// With "Also copy paths as text" off, Copy and Cut publish the file formats
+/// only: a reader that takes text only, such as a text editor, gets nothing,
+/// and pasting into a folder still copies the files.
 ///
 /// parity: CLIP-004
 #[gtk::test]
