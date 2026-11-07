@@ -85,10 +85,16 @@ impl BrowserWindow {
     /// dropped into a folder ("Local Disk - Shortcut"), as the window's
     /// one operation and reports them, then selects them, as Windows
     /// Explorer selects what a paste made; Undo moves them to the Trash.
-    /// Does nothing while another operation runs.
-    pub(in crate::window) async fn run_named_shortcuts(&self, request: &NamedShortcuts) {
+    /// False when it could not start, after saying why, as while another
+    /// operation runs: a paste or a drop then leaves its other items too.
+    pub(in crate::window) async fn run_named_shortcuts(&self, request: &NamedShortcuts) -> bool {
         let Some(context) = self.begin_operation(starting_label(TransferMode::Copy)) else {
-            return;
+            if self.is_writing_files() {
+                self.show_message(ox_core::i18n::gettext_static(
+                    "Wait for the running file operation to finish.",
+                ));
+            }
+            return false;
         };
         let outcome = create_named_shortcuts(request, &context).await;
         self.end_operation();
@@ -98,6 +104,7 @@ impl BrowserWindow {
             select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
+        true
     }
 
     /// New ▸ Link to file or folder: asks for the path and the name,

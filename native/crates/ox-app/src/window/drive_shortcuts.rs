@@ -94,16 +94,18 @@ impl BrowserWindow {
 
     /// Makes a shortcut in `folder` to each of `drives`, named as Windows
     /// names a drive's shortcut, and selects the new shortcuts; Undo moves
-    /// them to the Trash. Does nothing while another operation runs.
-    pub(super) async fn make_drive_shortcuts(&self, drives: Vec<ShortcutTarget>, folder: String) {
+    /// them to the Trash. False when they could not be made now, after
+    /// saying why, as while another operation runs, so the caller leaves
+    /// the other items of its paste or drop too.
+    pub(super) async fn make_drive_shortcuts(&self, drives: Vec<ShortcutTarget>, folder: String) -> bool {
         if drives.is_empty() {
-            return;
+            return true;
         }
         let request = NamedShortcuts {
             targets: drives,
             destination_folder: folder,
         };
-        self.run_named_shortcuts(&request).await;
+        self.run_named_shortcuts(&request).await
     }
 }
 

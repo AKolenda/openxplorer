@@ -148,11 +148,10 @@ impl BrowserWindow {
             ClipboardMode::Cut => TransferMode::Move,
         };
         let split = self.split_drives(files.uris());
-        if !split.drives.is_empty() {
-            self.make_drive_shortcuts(split.drives, destination_folder.clone())
-                .await;
-        }
-        if split.others.is_empty() {
+        let made = self
+            .make_drive_shortcuts(split.drives, destination_folder.clone())
+            .await;
+        if !made || split.others.is_empty() {
             return;
         }
         let incoming = IncomingItems {

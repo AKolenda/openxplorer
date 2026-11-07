@@ -568,8 +568,8 @@ impl BrowserWindow {
                 #[weak(rename_to = window)]
                 self,
                 async move {
-                    window.make_drive_shortcuts(split.drives, folder.clone()).await;
-                    if split.others.is_empty() {
+                    let made = window.make_drive_shortcuts(split.drives, folder.clone()).await;
+                    if !made || split.others.is_empty() {
                         return;
                     }
                     if let Err(refusal) = window.drop_into_folder(&split.others, folder, action) {
