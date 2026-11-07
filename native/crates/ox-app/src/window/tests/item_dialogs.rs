@@ -555,6 +555,47 @@ fn read_only_follows_a_change_made_in_edit() {
     wait_until("Write back", || mode_of(&path) & 0o200 != 0);
 }
 
+/// A Read-only choice on General not applied yet stays when Edit...
+/// makes the file read-only, and clearing it then is still a change
+/// against what the file has now, which gives Write back.
+///
+/// parity: PROP-003, PROP-007
+#[gtk::test]
+fn read_only_chosen_before_a_change_in_edit_compares_with_it() {
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let read_only = check(&general(&window), "Read-only");
+    read_only.set_active(true);
+    assert!(window.apply_button().is_sensitive(), "ticking it is a change");
+
+    window.select_tab("security");
+    let security = tab(&window, "security");
+    press(&security, "Edit...");
+    let edit = sub_dialog(&window, "Permissions for Notes 2.txt");
+    let names = descendants::<gtk::ListBox>(&edit).remove(0);
+    names.select_row(names.row_at_index(0).as_ref());
+    let write = descendants::<gtk::CheckButton>(&edit)
+        .into_iter()
+        .filter(WidgetExt::is_sensitive)
+        .nth(4)
+        .expect("Allow Write");
+    write.set_active(false);
+    edit.ok_button().emit_clicked();
+    wait_until("the change", || mode_of(&path) == 0o444);
+
+    wait_until("nothing left to apply", || !window.apply_button().is_sensitive());
+    assert!(read_only.is_active(), "the choice stays");
+    read_only.set_active(false);
+    assert!(window.apply_button().is_sensitive(), "clearing it is a change");
+    press(&window, "Apply");
+    wait_until("Write back", || mode_of(&path) & 0o200 != 0);
+}
+
 /// A rename on General reaches every tab: asking again for the renamed
 /// item brings the same window back, and the other tabs work on the new
 /// name.
@@ -1347,6 +1388,43 @@ fn several_items_attributes_show_mixed_and_apply_to_every_item() {
     assert!(!fixture.path("Notes 2.txt").exists() && !fixture.path("Notes 10.txt").exists());
     assert!(hidden.is_active() && read_only.is_active());
     assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    window.close();
+}
+
+/// Several files' Read-only follows a change made on the Security tab:
+/// taking the owner's write ticks it, and clearing it then gives every
+/// file write again.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn several_items_read_only_follows_a_change_made_on_security() {
+    let fixture = Fixture::standard();
+    for name in ["Notes 2.txt", "Notes 10.txt"] {
+        fs::set_permissions(fixture.path(name), fs::Permissions::from_mode(0o644)).expect("a writable file");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt, Notes 10.txt Properties");
+    let read_only = check(&tab(&window, "general"), "Read-only");
+    wait_until("the items read", || read_only.is_sensitive());
+    assert!(!read_only.is_active() && !read_only.is_inconsistent());
+
+    let security = tab(&window, "security");
+    wait_until("the editor", || {
+        !descendants::<gtk::DropDown>(&security).is_empty()
+    });
+    descendants::<gtk::DropDown>(&security)[0].set_selected(1);
+    press(&window, "Apply");
+    let modes = || ["Notes 2.txt", "Notes 10.txt"].map(|name| mode_of(&fixture.path(name)));
+    wait_until("the change", || modes() == [0o444, 0o444]);
+
+    wait_until("Read-only to follow", || read_only.is_active());
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    read_only.set_active(false);
+    assert!(window.apply_button().is_sensitive(), "clearing it is a change");
+    press(&window, "Apply");
+    wait_until("write back", || modes().iter().all(|mode| mode & 0o200 != 0));
     window.close();
 }
 
