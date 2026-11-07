@@ -539,9 +539,19 @@ fn open_heading_menu(test: &TestWindow, header: &gtk::Button) -> MenuPopover {
     menu
 }
 
-/// A group heading's right-click opens Explorer's heading menu: Collapse
-/// group, which turns into Expand group while it is collapsed, then
-/// Collapse all groups and Expand all groups. It has nothing behind it, so
+/// The shortcut text `menu`'s rows show, in order.
+fn shortcut_texts(menu: &MenuPopover) -> Vec<String> {
+    menu.rows()
+        .iter()
+        .flat_map(descendants::<gtk::Label>)
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// A group heading's right-click opens Windows 11's heading menu: Collapse
+/// group (key Left), which turns into Expand group (key Right) while it is
+/// collapsed, then Expand all groups and Collapse all groups. It has nothing behind it, so
 /// it has no "Show more options", and with the Windows 10 choice it opens
 /// in the classic style directly.
 ///
@@ -556,8 +566,9 @@ fn a_group_heading_menu_collapses_and_expands_the_groups() {
     assert_eq!(menu.style(), MenuStyle::Compact);
     assert_eq!(
         menu.row_labels(),
-        ["Collapse group", "-", "Collapse all groups", "Expand all groups"]
+        ["Collapse group", "Expand all groups", "Collapse all groups"]
     );
+    assert_eq!(shortcut_texts(&menu), ["Left"]);
     assert!(menu.strip_labels().is_empty());
     menu.click_row("Collapse group");
     let tiles_shown = || {
@@ -571,6 +582,7 @@ fn a_group_heading_menu_collapses_and_expands_the_groups() {
 
     let menu = open_heading_menu(&test, &first_header(&test));
     assert_eq!(menu.row_labels()[0], "Expand group");
+    assert_eq!(shortcut_texts(&menu), ["Right"]);
     menu.click_row("Expand all groups");
     wait_until("every group to expand", || {
         tiles_shown().iter().all(|shown| *shown)

@@ -23,7 +23,7 @@
 //! opens the drive's menu ([`super::place_menus`]), and Alt+Enter its
 //! Properties. A group heading's right-click, Menu key or Shift+F10
 //! opens its menu, as Explorer's: Collapse group (or Expand group),
-//! Collapse all groups and Expand all groups ([`heading_menu`]).
+//! Expand all groups and Collapse all groups ([`heading_menu`]).
 
 use std::rc::Rc;
 
@@ -478,14 +478,18 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
     header
 }
 
-/// A group heading's menu, as Explorer's: Collapse group (Expand group
-/// while it is collapsed), then Collapse all groups and Expand all groups.
-/// It has nothing more, so the compact style has no "Show more options".
+/// A group heading's menu, as Windows 11's (checked on Windows 11):
+/// Collapse group with its key, Left (Expand group and Right while it is
+/// collapsed), then Expand all groups and Collapse all groups. Windows
+/// also selects the group and lists the selection's menu below a divider;
+/// This PC selects one tile at a time and has no menu for several drives,
+/// so the heading's menu ends there, and the compact style has no "Show
+/// more options".
 fn heading_menu(group: Group, collapsed: bool) -> Vec<MenuEntry> {
-    let toggle = if collapsed {
-        ox_core::i18n::gettext("Expand group")
+    let (toggle, key) = if collapsed {
+        (ox_core::i18n::gettext("Expand group"), "Right")
     } else {
-        ox_core::i18n::gettext("Collapse group")
+        (ox_core::i18n::gettext("Collapse group"), "Left")
     };
     vec![
         MenuItem::with_text_target(
@@ -494,18 +498,18 @@ fn heading_menu(group: Group, collapsed: bool) -> Vec<MenuEntry> {
             WindowAction::ToggleGroup,
             group.header_class(),
         )
-        .into(),
-        MenuEntry::Divider,
-        MenuItem::new(
-            ox_core::i18n::gettext_static("Collapse all groups"),
-            Icon::ChevronRight16,
-            WindowAction::CollapseAllGroups,
-        )
+        .with_shortcut(key)
         .into(),
         MenuItem::new(
             ox_core::i18n::gettext_static("Expand all groups"),
             Icon::ChevronDown16,
             WindowAction::ExpandAllGroups,
+        )
+        .into(),
+        MenuItem::new(
+            ox_core::i18n::gettext_static("Collapse all groups"),
+            Icon::ChevronRight16,
+            WindowAction::CollapseAllGroups,
         )
         .into(),
     ]
