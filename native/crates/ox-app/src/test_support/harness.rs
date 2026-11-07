@@ -387,34 +387,34 @@ impl TestWindow {
     }
 
     /// Turns Settings' "Paste a picture from the clipboard as a new file"
-    /// on, as another process would, and waits until the window reads it,
-    /// for tests of that opt-in (CLIP-015).
-    pub(crate) fn paste_pictures_as_files(&self) {
+    /// on or off, as another process would, and waits until the window
+    /// reads it, for tests of that switch (CLIP-015).
+    pub(crate) fn set_paste_pictures_as_files(&self, on: bool) {
         Settings::open(self.settings_directory())
             .update_preferences(&ox_core::settings::PreferencesUpdate {
-                paste_pictures_as_files: Some(true),
+                paste_pictures_as_files: Some(on),
                 ..ox_core::settings::PreferencesUpdate::default()
             })
             .expect("the settings file takes the change");
         self.context.reload_settings();
-        wait_until("pictures to paste as files", || {
-            self.context.settings_data().preferences.paste_pictures_as_files
+        wait_until("picture paste to follow the setting", || {
+            self.context.settings_data().preferences.paste_pictures_as_files == on
         });
     }
 
     /// Turns Settings' "Also copy file paths as text when copying files"
-    /// on, as another process would, and waits until the window reads it,
-    /// for tests of that opt-in (CLIP-004).
-    pub(crate) fn copy_paths_as_text(&self) {
+    /// on or off, as another process would, and waits until the window
+    /// reads it, for tests of that switch (CLIP-004).
+    pub(crate) fn set_copy_paths_as_text(&self, on: bool) {
         Settings::open(self.settings_directory())
             .update_preferences(&ox_core::settings::PreferencesUpdate {
-                copy_paths_as_text: Some(true),
+                copy_paths_as_text: Some(on),
                 ..ox_core::settings::PreferencesUpdate::default()
             })
             .expect("the settings file takes the change");
         self.context.reload_settings();
-        wait_until("paths to be copied as text", || {
-            self.context.settings_data().preferences.copy_paths_as_text
+        wait_until("paths as text to follow the setting", || {
+            self.context.settings_data().preferences.copy_paths_as_text == on
         });
     }
 }

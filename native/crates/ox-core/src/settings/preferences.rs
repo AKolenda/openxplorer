@@ -473,16 +473,16 @@ pub struct Preferences {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub search_contents: bool,
     /// Paste in a folder writes a picture on the clipboard, such as a
-    /// screenshot, as a new image file (CLIP-015). Windows 11 File
-    /// Explorer leaves Paste unavailable for a picture, so this is off by
-    /// default and stored only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// screenshot, as a new image file (CLIP-015). On by default; stored
+    /// only when off, which leaves Paste unavailable for a picture, as in
+    /// Windows 11 File Explorer.
+    #[serde(skip_serializing_if = "is_true")]
     pub paste_pictures_as_files: bool,
     /// Copy and Cut also put the items' paths on the clipboard as plain
-    /// text (CLIP-004). Windows 11 File Explorer copies only the files and
-    /// leaves paths to Copy as path, so this is off by default and stored
-    /// only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// text (CLIP-004). On by default; stored only when off, which copies
+    /// only the files, as Windows 11 File Explorer does, leaving paths to
+    /// Copy as path.
+    #[serde(skip_serializing_if = "is_true")]
     pub copy_paths_as_text: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
@@ -598,8 +598,8 @@ impl Default for Preferences {
             hide_preview_handlers: false,
             type_into_search_box: false,
             search_contents: false,
-            paste_pictures_as_files: false,
-            copy_paths_as_text: false,
+            paste_pictures_as_files: true,
+            copy_paths_as_text: true,
             view_defaults: None,
             folder_views: Vec::new(),
             downloads_group_by: None,
@@ -647,8 +647,9 @@ impl Preferences {
         replace_if_some(&mut self.search_contents, update.search_contents);
     }
 
-    /// The clipboard's extras beyond Windows: a picture pasted as a file
-    /// (CLIP-015) and the paths copied as text (CLIP-004).
+    /// The clipboard's extras beyond Windows, which can be turned off: a
+    /// picture pasted as a file (CLIP-015) and the paths copied as text
+    /// (CLIP-004).
     fn apply_clipboard_options(&mut self, update: &PreferencesUpdate) {
         replace_if_some(&mut self.paste_pictures_as_files, update.paste_pictures_as_files);
         replace_if_some(&mut self.copy_paths_as_text, update.copy_paths_as_text);
@@ -1596,17 +1597,17 @@ mod tests {
         assert_eq!(read.hide_expand_arrows, Some(true));
     }
 
-    /// The clipboard's extras beyond Windows start off, as Windows 11 File
-    /// Explorer neither pastes a picture as a file nor copies paths beside
-    /// the files, and are not stored then; each one turned on is saved
-    /// under its key and read back, and turned off leaves the file again.
+    /// The clipboard's extras beyond Windows start on, as they were before
+    /// they could be turned off, and are not stored then; each one turned
+    /// off, as Windows 11 File Explorer behaves, is saved under its key and
+    /// read back, and turned on again leaves the file.
     ///
     /// parity: CLIP-004, CLIP-015
     #[test]
-    fn clipboard_extras_are_off_by_default_and_stored_only_when_on() {
+    fn clipboard_extras_are_on_by_default_and_stored_only_when_off() {
         let keys = ["pastePicturesAsFiles", "copyPathsAsText"];
         let mut preferences = Preferences::default();
-        assert!(!preferences.paste_pictures_as_files && !preferences.copy_paths_as_text);
+        assert!(preferences.paste_pictures_as_files && preferences.copy_paths_as_text);
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         for key in keys {
             assert!(stored.get(key).is_none(), "{key} is not stored by default");
@@ -1615,16 +1616,16 @@ mod tests {
             let values = keys.iter().map(|key| ((*key).to_owned(), json!(on))).collect();
             PreferencesUpdate::from_json(&Value::Object(values)).expect("valid preferences")
         };
-        preferences.apply(&all(true));
-        assert!(preferences.paste_pictures_as_files && preferences.copy_paths_as_text);
+        preferences.apply(&all(false));
+        assert!(!preferences.paste_pictures_as_files && !preferences.copy_paths_as_text);
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         for key in keys {
-            assert_eq!(stored[key], json!(true), "{key} is stored once on");
+            assert_eq!(stored[key], json!(false), "{key} is stored once off");
         }
         let mut read = Preferences::default();
         read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
         assert_eq!(read, preferences, "read back as saved");
-        preferences.apply(&all(false));
+        preferences.apply(&all(true));
         assert_eq!(preferences, Preferences::default());
     }
 }

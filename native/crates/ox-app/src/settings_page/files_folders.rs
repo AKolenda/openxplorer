@@ -3,9 +3,9 @@
 //! (VIEW-037), as its "Number of items", folder sizes (the Python "Folder
 //! sizes" section, SET-008), and previews (VIEW-058), as Dolphin's
 //! Previews settings offer them, folded away, and two clipboard extras
-//! that Windows 11 File Explorer lacks, both off by default: a picture
-//! pasted as a new file (CLIP-015) and the paths copied as text beside the
-//! files (CLIP-004). Windows 11's Compact view (VIEW-067) is built here and
+//! that Windows 11 File Explorer lacks, both on by default and each one
+//! able to be turned off: a picture pasted as a new file (CLIP-015) and
+//! the paths copied as text beside the files (CLIP-004). Windows 11's Compact view (VIEW-067) is built here and
 //! shown on the Appearance page. Each switch saves its preference or the
 //! folder views' options at once, and every window follows.
 
@@ -255,7 +255,7 @@ fn details_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
-/// The clipboard's extras beyond Windows, each off by default.
+/// The clipboard's extras beyond Windows, each on by default.
 fn clipboard_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Clipboard"));
     let rows = [

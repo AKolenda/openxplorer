@@ -309,15 +309,11 @@ fn clipboard_bytes(test: &TestWindow, mime_type: &str) -> Vec<u8> {
     })
 }
 
-/// With "Also copy file paths as text when copying files" on, a cut
-/// offers the paths as text beside the file formats (CLIP-004).
-///
 /// parity: CLIP-004, CLIP-007
 #[gtk::test]
 fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.copy_paths_as_text();
     select_names(&test, &["Notes 2.txt"]);
 
     test.activate("cut", None);
@@ -343,39 +339,6 @@ fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
     assert_eq!(text, path);
 }
 
-/// By default a copy offers only the files, as Windows 11 File Explorer
-/// copies them: no text, so a text editor or terminal pastes nothing. With
-/// "Also copy file paths as text when copying files" on, the next copy
-/// offers the paths as text too.
-///
-/// parity: CLIP-004
-#[gtk::test]
-fn a_copy_offers_no_text_until_settings_turn_paths_as_text_on() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    select_names(&test, &["Notes 2.txt"]);
-
-    test.activate("copy", None);
-
-    let formats = test.window.clipboard().formats();
-    for mime_type in [CUSTOM, GNOME, URI_LIST, KDE_CUT] {
-        assert!(formats.contain_mime_type(mime_type), "{mime_type}");
-    }
-    assert!(!formats.contain_mime_type(TEXT), "no paths as text by default");
-    let clipboard = test.window.clipboard();
-    let read = glib::MainContext::default().block_on(async { clipboard.read_text_future().await });
-    assert!(
-        !matches!(read, Ok(Some(_))),
-        "a text reader gets nothing, as from Windows Explorer"
-    );
-
-    test.copy_paths_as_text();
-    test.activate("copy", None);
-
-    let text = String::from_utf8(clipboard_bytes(&test, TEXT)).expect("UTF-8");
-    assert_eq!(text, fixture.path("Notes 2.txt").to_string_lossy());
-}
-
 /// Several items are one path per line in the text format, without quotes
 /// and without a trailing newline.
 ///
@@ -384,7 +347,6 @@ fn a_copy_offers_no_text_until_settings_turn_paths_as_text_on() {
 fn a_copy_of_several_items_publishes_their_paths_one_per_line() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.copy_paths_as_text();
     let names = ["Notes 2.txt", "Résumé.txt"];
     select_names(&test, &names);
 
@@ -527,15 +489,13 @@ fn ctrl_c_copies_while_an_operation_runs() {
 
 /// GTK stores a local clipboard's storable formats with the clipboard
 /// manager when the application quits, as `gtk_clipboard_set_can_store`
-/// asked GTK 3 to. The paths' text is published here too, as
-/// "Also copy file paths as text when copying files" is on.
+/// asked GTK 3 to.
 ///
 /// parity: CLIP-010
 #[gtk::test]
 fn every_published_format_is_offered_for_a_clipboard_manager_to_keep() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.copy_paths_as_text();
     select_names(&test, &["Notes 2.txt"]);
 
     test.activate("copy", None);

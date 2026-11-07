@@ -10,15 +10,16 @@
 //! - Copy and Cut publish the file formats at once as one clipboard owner,
 //!   so Nautilus, Dolphin and other windows of this app can paste them.
 //!   The items' paths as plain text, which terminals and editors paste, are
-//!   published beside them only with Settings' "Also copy file paths as
-//!   text when copying files" on (CLIP-004): Windows 11 File Explorer
-//!   copies only the files and leaves paths to Copy as path.
+//!   published beside them while Settings' "Also copy file paths as text
+//!   when copying files" is on, as by default (CLIP-004); off, only the
+//!   files are copied, as Windows 11 File Explorer copies them, leaving
+//!   paths to Copy as path.
 //! - Reading tries the app's own format, then GNOME's, then the URI
 //!   list with the KDE cut marker, each asynchronously, so a slow owner
 //!   never freezes the window. When none of them holds a file list and
 //!   Settings' "Paste a picture from the clipboard as a new file" is on,
 //!   the clipboard's picture is read, which a paste writes as one new file
-//!   (CLIP-015). With it off, as by default, a picture leaves Paste
+//!   (CLIP-015); it is on by default. With it off, a picture leaves Paste
 //!   disabled, as in Windows 11 File Explorer. Plain text is neither a file
 //!   list nor a file: as in Windows Explorer, it leaves Paste disabled.
 //! - An empty or failed conversion, an oversized payload or an owner
@@ -250,7 +251,7 @@ fn offers_a_picture(clipboard: &gdk::Clipboard) -> bool {
 /// it leaves Paste disabled.
 ///
 /// With `pictures` false (Settings' "Paste a picture from the clipboard as
-/// a new file" off, the default) a picture is not read at all, so a
+/// a new file" off) a picture is not read at all, so a
 /// picture-only clipboard is no data: Paste stays disabled and Ctrl+V does
 /// nothing, as in Windows 11 File Explorer.
 async fn read_clipboard_content(clipboard: &gdk::Clipboard, pictures: bool) -> ClipboardContent {
@@ -436,15 +437,15 @@ impl BrowserWindow {
     }
 
     /// Whether Settings' "Paste a picture from the clipboard as a new file"
-    /// is on (CLIP-015); off by default, as Windows 11 File Explorer leaves
-    /// Paste unavailable for a picture.
+    /// is on (CLIP-015), as by default; off, Paste is unavailable for a
+    /// picture, as in Windows 11 File Explorer.
     fn pastes_pictures_as_files(&self) -> bool {
         self.context().settings_data().preferences.paste_pictures_as_files
     }
 
     /// Whether Settings' "Also copy file paths as text when copying files"
-    /// is on (CLIP-004); off by default, as Windows 11 File Explorer copies
-    /// only the files.
+    /// is on (CLIP-004), as by default; off, only the files are copied, as
+    /// Windows 11 File Explorer copies them.
     fn copies_paths_as_text(&self) -> bool {
         self.context().settings_data().preferences.copy_paths_as_text
     }
