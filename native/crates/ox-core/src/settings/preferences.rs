@@ -472,6 +472,18 @@ pub struct Preferences {
     /// (Folder Options' "Always search file names and contents").
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub search_contents: bool,
+    /// Paste in a folder writes a picture on the clipboard, such as a
+    /// screenshot, as a new image file (CLIP-015). On by default; stored
+    /// only when off, which leaves Paste unavailable for a picture, as in
+    /// Windows 11 File Explorer.
+    #[serde(skip_serializing_if = "is_true")]
+    pub paste_pictures_as_files: bool,
+    /// Copy and Cut also put the items' paths on the clipboard as plain
+    /// text (CLIP-004). On by default; stored only when off, which copies
+    /// only the files, as Windows 11 File Explorer does, leaving paths to
+    /// Copy as path.
+    #[serde(skip_serializing_if = "is_true")]
+    pub copy_paths_as_text: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -586,6 +598,8 @@ impl Default for Preferences {
             hide_preview_handlers: false,
             type_into_search_box: false,
             search_contents: false,
+            paste_pictures_as_files: true,
+            copy_paths_as_text: true,
             view_defaults: None,
             folder_views: Vec::new(),
             downloads_group_by: None,
@@ -631,6 +645,14 @@ impl Preferences {
         replace_if_some(&mut self.hide_preview_handlers, update.hide_preview_handlers);
         replace_if_some(&mut self.type_into_search_box, update.type_into_search_box);
         replace_if_some(&mut self.search_contents, update.search_contents);
+    }
+
+    /// The clipboard's extras beyond Windows, which can be turned off: a
+    /// picture pasted as a file (CLIP-015) and the paths copied as text
+    /// (CLIP-004).
+    fn apply_clipboard_options(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.paste_pictures_as_files, update.paste_pictures_as_files);
+        replace_if_some(&mut self.copy_paths_as_text, update.copy_paths_as_text);
     }
 
     fn apply_confirmations(&mut self, update: &PreferencesUpdate) {
@@ -761,6 +783,7 @@ impl Preferences {
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
         self.apply_names_and_panes(update);
         self.apply_folder_options(update);
+        self.apply_clipboard_options(update);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
@@ -955,6 +978,10 @@ pub struct PreferencesUpdate {
     pub type_into_search_box: Option<bool>,
     /// See [`Preferences::search_contents`].
     pub search_contents: Option<bool>,
+    /// See [`Preferences::paste_pictures_as_files`].
+    pub paste_pictures_as_files: Option<bool>,
+    /// See [`Preferences::copy_paths_as_text`].
+    pub copy_paths_as_text: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
@@ -1047,6 +1074,8 @@ impl PreferencesUpdate {
             hide_preview_handlers: flag("hidePreviewHandlers"),
             type_into_search_box: flag("typeIntoSearchBox"),
             search_contents: flag("searchContents"),
+            paste_pictures_as_files: flag("pastePicturesAsFiles"),
+            copy_paths_as_text: flag("copyPathsAsText"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
             downloads_group_by: values
@@ -1566,5 +1595,37 @@ mod tests {
         assert_eq!(stored["hideExpandArrows"], json!(true));
         let read = PreferencesUpdate::from_json(&stored).expect("read back");
         assert_eq!(read.hide_expand_arrows, Some(true));
+    }
+
+    /// The clipboard's extras beyond Windows start on, as they were before
+    /// they could be turned off, and are not stored then; each one turned
+    /// off, as Windows 11 File Explorer behaves, is saved under its key and
+    /// read back, and turned on again leaves the file.
+    ///
+    /// parity: CLIP-004, CLIP-015
+    #[test]
+    fn clipboard_extras_are_on_by_default_and_stored_only_when_off() {
+        let keys = ["pastePicturesAsFiles", "copyPathsAsText"];
+        let mut preferences = Preferences::default();
+        assert!(preferences.paste_pictures_as_files && preferences.copy_paths_as_text);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert!(stored.get(key).is_none(), "{key} is not stored by default");
+        }
+        let all = |on: bool| {
+            let values = keys.iter().map(|key| ((*key).to_owned(), json!(on))).collect();
+            PreferencesUpdate::from_json(&Value::Object(values)).expect("valid preferences")
+        };
+        preferences.apply(&all(false));
+        assert!(!preferences.paste_pictures_as_files && !preferences.copy_paths_as_text);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert_eq!(stored[key], json!(false), "{key} is stored once off");
+        }
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
+        assert_eq!(read, preferences, "read back as saved");
+        preferences.apply(&all(true));
+        assert_eq!(preferences, Preferences::default());
     }
 }
