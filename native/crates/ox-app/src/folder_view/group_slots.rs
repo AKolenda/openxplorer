@@ -56,6 +56,41 @@ pub(crate) fn group_runs<'a>(titles: impl IntoIterator<Item = &'a str>) -> Vec<G
     runs
 }
 
+/// How tall a page of the grid is and how tall its rows are, in pixels,
+/// for Page Up and Page Down.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct RowHeights {
+    /// The visible height of the grid.
+    pub page: f64,
+    /// A row of items.
+    pub item: i32,
+    /// A group's heading row.
+    pub heading: i32,
+}
+
+impl RowHeights {
+    /// How tall `row` of `layout` is.
+    fn of(self, layout: &SlotLayout, row: u32) -> f64 {
+        f64::from(if layout.is_heading_row(row) {
+            self.heading
+        } else {
+            self.item
+        })
+    }
+
+    /// How far apart rows `from` and `to` of `layout` are: the heights of
+    /// the rows a move from one to the other passes, the one it lands on
+    /// included.
+    pub(crate) fn between(self, layout: &SlotLayout, from: u32, to: u32) -> f64 {
+        let rows = if to > from {
+            from + 1..=to
+        } else {
+            to..=from.saturating_sub(1)
+        };
+        rows.map(|row| self.of(layout, row)).sum()
+    }
+}
+
 /// A listing change: at `position`, `removed` items went and `added` came.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ItemsChange {
@@ -177,6 +212,13 @@ impl SlotLayout {
     /// The column the item at `position` is in.
     pub(crate) fn column_of(&self, position: u32) -> Option<u32> {
         Some(self.slot_of(position)? % self.columns)
+    }
+
+    /// Whether slot row `row` is a group's heading row.
+    pub(crate) fn is_heading_row(&self, row: u32) -> bool {
+        row.checked_mul(self.columns)
+            .and_then(|slot| self.slot(slot))
+            .is_some_and(|slot| matches!(slot, Slot::Heading(_)))
     }
 
     /// The slot row the item at `position` is in, heading rows counted.

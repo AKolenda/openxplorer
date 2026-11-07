@@ -302,6 +302,111 @@ fn tiles_and_content_keep_the_folders_groups_under_headings() {
     );
 }
 
+/// A group heading's accessible name follows its count as files come
+/// and go, as the heading itself does, though GTK keeps the heading bound.
+///
+/// parity: VIEW-071, VIEW-022
+#[gtk::test]
+fn a_group_headings_accessible_name_follows_its_count() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    show(&test, FolderView::Content);
+    let owners = test.window.folder_pane().owners();
+    let labels = || owners.bound_accessible_labels();
+    wait_until("the heading's name", || {
+        labels().contains(&"Text Document (3)".to_owned())
+    });
+    fixture.write("Notes 3.txt");
+    wait_until("the heading's new count", || {
+        grid_headings(&test).contains(&"Text Document (4)".to_owned())
+    });
+    let names = labels();
+    assert!(names.contains(&"Text Document (4)".to_owned()), "{names:?}");
+    assert!(!names.contains(&"Text Document (3)".to_owned()), "{names:?}");
+}
+
+/// A heading row is as tall as Page Up and Page Down count it, and an
+/// item row as tall as its tile or Content row, so a page moves as far
+/// as the view shows.
+///
+/// parity: VIEW-071
+#[gtk::test]
+fn heading_and_item_rows_are_as_tall_as_a_page_counts_them() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    for view in [FolderView::Tiles, FolderView::Content] {
+        show(&test, view);
+        wait_until("the headings", || !grid_headings(&test).is_empty());
+        let pane = test.window.folder_pane();
+        let heights = pane.icon_view().row_heights();
+        let grid = pane.view_widget();
+        let slot_height = |cell: &FileCell| {
+            cell.parent()
+                .and_then(|slot| slot.compute_bounds(&grid))
+                .map(|bounds| bounds.height())
+                .expect("the slot is laid out")
+        };
+        let heading = descendants::<FileCell>(&grid)
+            .into_iter()
+            .find(|cell| cell.is_mapped() && cell.group_heading().is_some())
+            .expect("a heading on screen");
+        #[expect(clippy::cast_precision_loss, reason = "row heights are small")]
+        let (heading_px, item_px) = (heights.heading as f32, heights.item as f32);
+        assert!(
+            (slot_height(&heading) - heading_px).abs() < 1.0,
+            "{view:?}: heading"
+        );
+        let item = cell_named(&test, "Notes 2");
+        assert!((slot_height(&item) - item_px).abs() < 1.0, "{view:?}: item row");
+    }
+}
+
+/// A cell that showed a group's heading and shows an item again takes
+/// the item check boxes' current click targeting: while they wait for
+/// Ctrl, an unchecked box lets clicks through to its row.
+///
+/// parity: VIEW-071, SEL-014
+#[gtk::test]
+fn a_cell_that_showed_a_heading_follows_whether_check_boxes_take_clicks() {
+    let fixture = Fixture::empty();
+    let extensions = [
+        "txt", "md", "pdf", "png", "ods", "sh", "svg", "zip", "csv", "html", "json", "xml",
+    ];
+    for (number, extension) in extensions.iter().cycle().take(36).enumerate() {
+        fixture.write(&format!("file {number:02}.{extension}"));
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    show(&test, FolderView::Content);
+    let pane = test.window.folder_pane();
+    wait_until("the headings", || grid_headings(&test).len() >= 3);
+    let grid = pane.view_widget();
+    let headings: Vec<FileCell> = descendants::<FileCell>(&grid)
+        .into_iter()
+        .filter(|cell| cell.group_heading().is_some())
+        .collect();
+    // Ctrl changes while some cells show headings.
+    let owners = pane.owners();
+    let take = !owners.item_checks_take_clicks();
+    owners.set_item_checks_take_clicks(take);
+    let adjustment = pane.icon_view().scroll_adjustment();
+    let mut reused = 0;
+    for step in 1..=12 {
+        adjustment.set_value(adjustment.upper() * f64::from(step) / 12.0);
+        wait_for_frames(&test.window, 2);
+        for cell in &headings {
+            let shows_item = cell.is_mapped() && cell.group_heading().is_none() && !cell.name().is_empty();
+            if shows_item && !cell.item_check().is_active() {
+                reused += 1;
+                assert_eq!(cell.item_check_targets_clicks(), take, "{}", cell.name());
+            }
+        }
+    }
+    assert!(reused > 0, "scrolling shows items in cells that showed headings");
+}
+
 /// Shows `view` in a folder with nothing to lay out.
 fn show_empty(test: &TestWindow, view: FolderView) {
     test.activate("view", Some(view.as_str()));

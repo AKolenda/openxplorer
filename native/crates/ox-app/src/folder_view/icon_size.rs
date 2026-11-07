@@ -207,6 +207,17 @@ fn text_line(scale: f64) -> f64 {
     17.0 * scale
 }
 
+/// Pixels of a group heading's row in Tiles and Content beside its title:
+/// 16 pixels of padding above it and 6 below (VIEW-071).
+pub(crate) const HEADING_CHROME: i32 = 16 + 6;
+
+/// The height of a group heading's row in Tiles and Content at
+/// `text_size`: one line of title with its padding, 39 pixels at 100%.
+pub(crate) fn group_heading_row(text_size: TextSize) -> i32 {
+    let scale = text_size::metrics(text_size).scale;
+    text_size::ceil_pixels(text_line(scale)) + HEADING_CHROME
+}
+
 /// Pixels of a Tiles cell beside its content: 8 pixels of padding above
 /// and below the icon and lines, and a 3-pixel margin above and below, so
 /// rows of tiles are 6 pixels apart (VIEW-071).
