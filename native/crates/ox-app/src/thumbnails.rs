@@ -383,19 +383,24 @@ async fn make_thumbnail_with(
         match by_decoding(request, cache_dir, modified, flavor).await {
             Ok(path) => return Ok(path),
             // Only a picture the app cannot read leaves room for another
-            // thumbnailer. One it read and the cache refused is refused
-            // for every thumbnailer, one too large, damaged or slow would
-            // be read the same way by the program, and a dropped request
-            // has nobody left to show a picture to: forking a program for
-            // any of them would only cost one.
+            // thumbnailer, and one larger than the app decodes itself for
+            // a thumbnailer whose memory is limited, as a scan of many
+            // megapixels still deserves its preview. One it read and the
+            // cache refused is refused for every thumbnailer, one damaged
+            // or slow would be read the same way by the program, and a
+            // dropped request has nobody left to show a picture to:
+            // forking a program for any of them would only cost one.
             Err(writer::Failure::Unreadable) => {}
+            Err(writer::Failure::TooLarge) => {
+                return by_thumbnailer(request, cache_dir, modified, flavor, catalogue, true).await;
+            }
             Err(writer::Failure::TimedOut) => return Err(Missing::Later),
             Err(writer::Failure::Unwritable | writer::Failure::Refused | writer::Failure::Cancelled) => {
                 return Err(Missing::Failed);
             }
         }
     }
-    by_thumbnailer(request, cache_dir, modified, flavor, catalogue).await
+    by_thumbnailer(request, cache_dir, modified, flavor, catalogue, false).await
 }
 
 /// The thumbnail of `request` decoded in the app, or why there is none:
@@ -422,13 +427,16 @@ async fn by_decoding(
 
 /// The thumbnail of `request` made by the desktop's thumbnailer for its
 /// type, or [`Missing::TurnedOff`] when the user turned them off for it
-/// and [`Missing::Failed`] when none makes it or it failed.
+/// and [`Missing::Failed`] when none makes it or it failed. With
+/// `oversized`, a picture too large for the app to decode, only a
+/// thumbnailer whose memory is limited runs.
 async fn by_thumbnailer(
     request: &PreviewRequest,
     cache_dir: &Path,
     modified: u64,
     flavor: ThumbnailFlavor,
     catalogue: Option<Arc<Catalogue>>,
+    oversized: bool,
 ) -> Result<PathBuf, Missing> {
     let job = thumbnailers::Job {
         cache_dir: cache_dir.to_path_buf(),
@@ -454,6 +462,9 @@ async fn by_thumbnailer(
                 }
                 Arc::new(thumbnailers::installed().with_disabled(disabled))
             };
+            if oversized && !installed.limits_memory() {
+                return Err(Missing::Failed);
+            }
             thumbnailers::write_thumbnail(&job, &installed, cancel).ok_or(Missing::Failed)
         })
         .await
@@ -657,6 +668,36 @@ mod tests {
         assert_eq!(
             thumbnail.option("tEXt::Thumb::URI").as_deref(),
             Some(request.uri.as_str())
+        );
+    }
+
+    /// A picture larger than the app decodes itself, as a scan of many
+    /// megapixels is, is made by the desktop's thumbnailer for its type,
+    /// whose memory is limited, rather than keeping its icon.
+    ///
+    /// parity: VIEW-057
+    #[gtk::test]
+    fn a_picture_too_large_to_decode_goes_to_a_limited_thumbnailer() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (thumbnailers, started) = fake_thumbnailer(folder.path());
+        let cache = folder.path().join("cache");
+        let item = crate::picture_guard::huge_png(&folder.path().join("Scan.png"));
+        let request = request_of(&item, "image/png");
+
+        let written = glib::MainContext::default()
+            .block_on(make_thumbnail_with(
+                &request,
+                &cache,
+                Some(Arc::new(thumbnailers)),
+                ThumbnailFlavor::Normal,
+                1_700_000_000,
+            ))
+            .expect("a thumbnail");
+
+        assert!(started.exists(), "the desktop's thumbnailer made it");
+        assert_eq!(
+            written,
+            thumbnail_file(&cache, &request.uri, ThumbnailFlavor::Normal)
         );
     }
 

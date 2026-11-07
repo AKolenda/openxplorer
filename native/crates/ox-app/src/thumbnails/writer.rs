@@ -48,11 +48,15 @@ pub(super) enum Failure {
     /// The picture could not be read or decoded: the app has no loader
     /// for its type, or its bytes are no picture.
     Unreadable,
-    /// The picture was read and refused ([`picture_guard`]): its header
-    /// asks for more pixels than the limit, or it is damaged or cut short.
-    /// Another thumbnailer would read the same picture, so none is asked,
-    /// and the item keeps its icon.
+    /// The picture was read and refused ([`picture_guard`]): it is
+    /// damaged or cut short. Another thumbnailer would read the same
+    /// picture, so none is asked, and the item keeps its icon.
     Refused,
+    /// The picture's header asks for more pixels than the app decodes
+    /// itself ([`picture_guard::MAX_PIXELS`]), as a large scan or panorama
+    /// may: only a desktop thumbnailer whose memory is limited is asked to
+    /// make it, in a process of its own.
+    TooLarge,
     /// Reading or decoding the picture took longer than its time limit,
     /// which a busy disk or a slow mount may cause: no other thumbnailer
     /// is asked now, and it may be tried again later.
@@ -85,7 +89,8 @@ pub(super) fn write_thumbnail(
         match refusal {
             Refusal::Unreadable => Failure::Unreadable,
             Refusal::Cancelled => Failure::Cancelled,
-            Refusal::TooLarge { .. } | Refusal::Damaged => Failure::Refused,
+            Refusal::TooLarge { .. } => Failure::TooLarge,
+            Refusal::Damaged => Failure::Refused,
             Refusal::TimedOut => Failure::TimedOut,
         }
     })?;

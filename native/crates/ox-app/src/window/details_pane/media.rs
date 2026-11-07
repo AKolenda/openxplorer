@@ -63,7 +63,12 @@ impl DetailsPane {
             MediaPreview::Image { path, size } if *size <= MAX_IMAGE_BYTES => {
                 self.load_picture(generation, Some(path.clone()), None, true);
             }
-            MediaPreview::Image { .. } => {}
+            // Too many bytes to decode for the pane: the thumbnail the
+            // views made of it, when there is one, as for a document.
+            MediaPreview::Image { path, .. } => {
+                let uri = gio::File::for_path(path).uri().to_string();
+                self.load_picture(generation, None, Some(uri), false);
+            }
             MediaPreview::Document { uri } => self.load_picture(generation, None, Some(uri.clone()), false),
             MediaPreview::Folder { uri } => self.load_folder_picture(generation, uri.clone()),
             MediaPreview::Recording { path, is_video, art } => self.show_player(path, *is_video, *art),
@@ -138,17 +143,33 @@ impl DetailsPane {
                     Some(path) => (path, Limits::DISPLAY),
                     None => (cached_thumbnail(uri.as_deref()?)?, Limits::THUMBNAIL_FILE),
                 };
-                let (width, height) = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
+                let preview = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
                 let file = gio::File::for_path(&path);
-                match picture_guard::decode_to_fit(&file, width, height, limits, None) {
+                match picture_guard::decode_to_fit(&file, preview.0, preview.1, limits, None) {
                     Ok(picture) => Some((
                         Some(gdk::Texture::for_pixbuf(&picture.pixbuf)),
                         (picture.width, picture.height),
                     )),
-                    // Too large to preview: the type icon stays, and the
-                    // header's size is still listed.
+                    // Too large to decode: the thumbnail a desktop
+                    // thumbnailer made of it for the views, when there is
+                    // one, else the type icon; the header's size is still
+                    // listed.
                     Err(Refusal::TooLarge { width, height }) if width > 0 && height > 0 => {
-                        Some((None, (width, height)))
+                        let thumbnail = cached_thumbnail(&file.uri()).and_then(|thumbnail| {
+                            let file = gio::File::for_path(thumbnail);
+                            picture_guard::decode_to_fit(
+                                &file,
+                                preview.0,
+                                preview.1,
+                                Limits::THUMBNAIL_FILE,
+                                None,
+                            )
+                            .ok()
+                        });
+                        Some((
+                            thumbnail.map(|thumbnail| gdk::Texture::for_pixbuf(&thumbnail.pixbuf)),
+                            (width, height),
+                        ))
                     }
                     Err(_) => None,
                 }

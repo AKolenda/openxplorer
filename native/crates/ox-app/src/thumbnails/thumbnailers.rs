@@ -50,7 +50,7 @@ use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::ThumbnailFlavor;
-use rustix::process::{kill_process_group, Pid, Signal};
+use rustix::process::{kill_process_group, Pid, Resource, Signal};
 
 use super::writer::{self, Source};
 
@@ -240,6 +240,19 @@ pub(super) struct Catalogue {
 }
 
 impl Catalogue {
+    /// Whether its programs run with their memory limited, by a systemd
+    /// scope or `prlimit`, so a picture too large for the app to decode
+    /// may be handed to one ([`Limits::limit_memory`]). A test's own
+    /// programs count as limited.
+    pub(super) fn limits_memory(&self) -> bool {
+        match &self.sandbox {
+            Some(Sandbox::Bubblewrap { limits, .. }) => limits.limit_memory(),
+            #[cfg(test)]
+            Some(Sandbox::Off) => true,
+            None => false,
+        }
+    }
+
     /// The thumbnailers the data folders `folders` hold, run in the
     /// sandbox `sandbox` finds: one without a working sandbox keeps none,
     /// and the sandbox is looked for only when there is a program to run
@@ -755,6 +768,16 @@ impl Limits {
         candidates
     }
 
+    /// Whether the programs' memory is limited: by the scope, or by
+    /// `prlimit` (`nice` alone limits nothing).
+    fn limit_memory(&self) -> bool {
+        match self {
+            Self::Scope { .. } => true,
+            Self::Process { prlimit, .. } => prlimit.is_some(),
+            Self::Unlimited => false,
+        }
+    }
+
     /// Whether the command needs the user's runtime folder, where
     /// `systemd-run --user` finds the user's service manager.
     fn needs_runtime_dir(&self) -> bool {
@@ -770,10 +793,14 @@ impl Limits {
             if let Some(prlimit) = prlimit {
                 words.extend([
                     prlimit.as_os_str().to_owned(),
-                    format!("--data={MEMORY_LIMIT}").into(),
-                    format!("--fsize={FILE_SIZE_LIMIT}").into(),
-                    format!("--cpu={CPU_SECONDS}").into(),
-                    format!("--nproc={}", user_tasks().saturating_add(TASKS)).into(),
+                    format!("--data={}", within_inherited(Resource::Data, MEMORY_LIMIT)).into(),
+                    format!("--fsize={}", within_inherited(Resource::Fsize, FILE_SIZE_LIMIT)).into(),
+                    format!("--cpu={}", within_inherited(Resource::Cpu, CPU_SECONDS)).into(),
+                    format!(
+                        "--nproc={}",
+                        within_inherited(Resource::Nproc, user_tasks().saturating_add(TASKS))
+                    )
+                    .into(),
                     "--core=0".into(),
                     "--".into(),
                 ]);
@@ -818,6 +845,16 @@ impl Limits {
             Self::Unlimited => Vec::new(),
         }
     }
+}
+
+/// `wanted`, or the app's own hard limit of `resource` when that is lower:
+/// `prlimit` given one value sets both limits, and raising a hard limit
+/// the app inherited is refused, which would cost the thumbnailers every
+/// limit, the scope's included ([`Sandbox::find`] would pass over it).
+fn within_inherited(resource: Resource, wanted: u64) -> u64 {
+    rustix::process::getrlimit(resource)
+        .maximum
+        .map_or(wanted, |hard| hard.min(wanted))
 }
 
 /// How many processes and threads the user runs now, as `prlimit
@@ -1952,6 +1989,15 @@ mod tests {
             .expect("a process limit");
         assert!(nproc > TASKS, "room for the user's own processes");
         assert!(!process.needs_runtime_dir());
+        // Only a scope or prlimit limits memory, which a picture too large
+        // for the app to decode needs.
+        assert!(scope.limit_memory() && process.limit_memory());
+        assert!(!Limits::Process {
+            prlimit: None,
+            nice: Some(path("nice"))
+        }
+        .limit_memory());
+        assert!(!Limits::Unlimited.limit_memory());
         assert!(Limits::Unlimited.words().is_empty());
         assert_eq!(Limits::candidates().last(), Some(&Limits::Unlimited));
 
