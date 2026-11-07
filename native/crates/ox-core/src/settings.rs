@@ -62,8 +62,8 @@ pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT}
 
 pub use tree_options::FolderTreeOptions;
 pub use view_properties::{
-    may_remember, saved_style_for, template_for, FolderTemplate, FolderView, ViewProperties, ViewScope,
-    MAX_FOLDER_VIEWS,
+    may_remember, saved_style_for, template_for, FolderTemplate, FolderView, SubfolderStyle, ViewProperties,
+    ViewScope, MAX_FOLDER_VIEWS,
 };
 
 use crate::location::same_location;

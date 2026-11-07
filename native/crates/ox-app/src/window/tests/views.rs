@@ -124,8 +124,9 @@ fn switching_views_keeps_the_selection_and_shows_the_active_view() {
     assert_eq!(status_bar.active_view_buttons(), ["Details view"]);
 }
 
-/// The command-bar toggle, View › Details pane and the pane's own close
-/// button all run `win.details-pane`, which is saved.
+/// The command-bar toggle and View › Details pane run
+/// `win.details-pane`, which is saved; like Windows' pane, the pane has
+/// no close button of its own.
 ///
 /// parity: VIEW-027
 #[gtk::test]
@@ -146,10 +147,10 @@ fn the_details_button_shows_whether_the_pane_is_open() {
     });
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
-    let runs_the_toggle = descendants::<gtk::Button>(pane)
+    let closes_itself = descendants::<gtk::Button>(pane)
         .into_iter()
         .any(|button| button.action_name().as_deref() == Some("win.details-pane"));
-    assert!(runs_the_toggle, "the pane's close button runs the same toggle");
+    assert!(!closes_itself, "like Windows' pane, it has no close button");
 }
 
 #[gtk::test]
