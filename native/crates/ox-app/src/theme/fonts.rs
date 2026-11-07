@@ -74,17 +74,14 @@ const FONT_SIZES: &[FontSize] = &[
     font(".statusbar", 11.0),
     font(".statusbar .status-mode", 10.0),
     font(".toast", 12.0),
-    font(".landing .page-title", 24.0),
-    font(".landing .page-subtitle", 12.0),
-    font(".landing .section-title", 13.0),
-    font(".landing .section-title button", 11.0),
-    font(".landing .card-name", 12.0),
-    font(".landing .drive-card .card-name", 13.0),
     font(".landing .card-sub", 11.0),
-    font(".landing .connected", 10.0),
     font(".landing .quiet", 12.0),
     font(".landing .notice", 12.0),
     font(".landing .primary", 12.0),
+    // This PC's tiles and group headers, as the folder views draw theirs.
+    font(".landing .group-header", 12.0),
+    font(".landing flowbox.drive-tiles", 12.0),
+    font(".landing .drive-tiles .card-sub", 12.0),
     // The network dialogs (`.modal` and `.auth-*` in style.css; the title
     // at the dialog title's size of ui-spec.md T10).
     font(".ox-dialog .dialog-title", 20.0),

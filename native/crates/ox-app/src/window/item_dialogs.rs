@@ -22,6 +22,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{same_location, ItemKind};
+use ox_core::settings::{template_for, FolderTemplate, SettingsError};
 use ox_core::versions::SnapshotLocation;
 
 use crate::dialog::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
@@ -387,6 +388,44 @@ impl BrowserWindow {
         frame.body().append(&quiet_text(text));
         frame.add_closing_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent, || {});
         self.present_window_dialog(&frame);
+    }
+
+    /// The template the folder at `uri` is optimized for, if it was
+    /// customized (PROP-036).
+    pub(crate) fn folder_template(&self, uri: &str) -> Option<FolderTemplate> {
+        template_for(&self.context().settings_data().preferences.folder_views, uri)
+    }
+
+    /// Optimizes the folder at `uri` for `template`, and its sub-folders
+    /// with `subfolders` (PROP-036); `reply` hears the outcome.
+    pub(crate) fn customize_folder(
+        &self,
+        uri: &str,
+        template: FolderTemplate,
+        subfolders: bool,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        let downloads = self.downloads_location();
+        self.context()
+            .customize_folder(uri.to_owned(), downloads, template, subfolders, reply);
+    }
+
+    /// Shows the new icon or folder picture of the item at `uri` in every
+    /// browser window of the application at once, as OK or Apply on the
+    /// Customize tab does in Windows (PROP-016, PROP-037).
+    pub(crate) fn announce_item_icon(&self, uri: &str) {
+        let windows = self.application().map(|app| app.windows()).unwrap_or_default();
+        let mut reached_self = false;
+        for window in windows
+            .iter()
+            .filter_map(|window| window.downcast_ref::<BrowserWindow>())
+        {
+            reached_self |= window == self;
+            window.refresh_item_icon(uri);
+        }
+        if !reached_self {
+            self.refresh_item_icon(uri);
+        }
     }
 
     /// Shows the new icon of the item at `uri` in the folder view and in
