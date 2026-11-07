@@ -139,10 +139,11 @@ pub(super) struct HeadMenuState {
 }
 
 /// The menu of This PC's or Network's row, which opens `uri`, laid out as
-/// Windows 11's navigation pane lays it out. Windows' Rename, Pin to Quick
-/// access, Pin to Start and Show more options are left out: the app
-/// cannot rename or pin a page, and has no Start menu or classic menu
-/// here. Network has no Add a network location, as in Windows, and no
+/// Windows 11's navigation pane lays it out. Windows' Pin to Quick access
+/// and Pin to Start are left out: the app cannot pin a page and has no
+/// Start menu. Rename and Delete, greyed out, go in the compact menu's
+/// icon strip and "Show more options" ends it ([`Sidebar::menu_at`]).
+/// Network has no Add a network location, as in Windows, and no
 /// Properties, whose Windows twin is the Network and Sharing Center.
 pub(super) fn head_menu(section: Section, uri: &str, state: &HeadMenuState) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
