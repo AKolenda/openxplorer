@@ -7,15 +7,20 @@
 //! ox-core encodes and decodes the formats ([`ox_core::clipboard`]); this
 //! module claims and reads the display's clipboard:
 //!
-//! - Copy and Cut publish the five formats at once as one clipboard owner,
-//!   so Nautilus, Dolphin, terminals and other windows of this app can paste
-//!   them.
+//! - Copy and Cut publish the file formats at once as one clipboard owner,
+//!   so Nautilus, Dolphin and other windows of this app can paste them.
+//!   The items' paths as plain text, which terminals and editors paste, are
+//!   published beside them while Settings' "Also copy paths as text" is
+//!   on, as by default (CLIP-004); off, only the files are copied, as
+//!   Windows 11 File Explorer copies them, leaving paths to Copy as path.
 //! - Reading tries the app's own format, then GNOME's, then the URI
 //!   list with the KDE cut marker, each asynchronously, so a slow owner
-//!   never freezes the window. When none of them holds a file list, the
-//!   clipboard's picture is read, which a paste writes as one new file
-//!   (CLIP-015). Plain text is neither a file list nor a file: as in
-//!   Windows Explorer, it leaves Paste disabled.
+//!   never freezes the window. When none of them holds a file list and
+//!   Settings' "Paste pictures as new files" is on, the clipboard's
+//!   picture is read, which a paste writes as one new file
+//!   (CLIP-015); it is on by default. With it off, a picture leaves Paste
+//!   disabled, as in Windows 11 File Explorer. Plain text is neither a file
+//!   list nor a file: as in Windows Explorer, it leaves Paste disabled.
 //! - An empty or failed conversion, an oversized payload or an owner
 //!   change during the read all mean "no data" (fail closed, CLIP-005,
 //!   CLIP-016).
@@ -240,12 +245,19 @@ fn offers_a_picture(clipboard: &gdk::Clipboard) -> bool {
 }
 
 /// What `clipboard` holds that a paste could write, in the order a paste
-/// reads it: the file list first, then a picture (CLIP-005, CLIP-015).
-/// Text is neither: as in Windows Explorer, it leaves Paste disabled.
-async fn read_clipboard_content(clipboard: &gdk::Clipboard) -> ClipboardContent {
+/// reads it: the file list first, then, when `pictures` is true, a
+/// picture (CLIP-005, CLIP-015). Text is neither: as in Windows Explorer,
+/// it leaves Paste disabled.
+///
+/// With `pictures` false (Settings' "Paste pictures as new files" off) a
+/// picture is not read at all, so a picture-only clipboard is no data:
+/// Paste stays disabled and Ctrl+V does nothing, as in Windows 11 File
+/// Explorer.
+async fn read_clipboard_content(clipboard: &gdk::Clipboard, pictures: bool) -> ClipboardContent {
     match read_files(clipboard).await {
         Some(files) => ClipboardContent::Files(files),
-        None => read_image(clipboard).await,
+        None if pictures => read_image(clipboard).await,
+        None => ClipboardContent::Nothing,
     }
 }
 
@@ -261,7 +273,8 @@ fn cut_uris(files: Option<&ClipboardFiles>) -> HashSet<String> {
 
 /// Makes `files` the clipboard's content, in every format at once.
 /// `locations` names the devices and the home folder of the paths the text
-/// format shows.
+/// format shows; that format is published only when `paths_as_text` is
+/// true (CLIP-004), as Windows 11 File Explorer copies only the files.
 ///
 /// Safety rule "a drive is never copied whole" (CLIP-001): `with_drives`,
 /// a list that names a drive, is published in this app's own format and
@@ -273,11 +286,13 @@ fn publish(
     clipboard: &gdk::Clipboard,
     files: &ClipboardFiles,
     locations: &LocationContext,
+    paths_as_text: bool,
     with_drives: bool,
 ) -> Result<(), glib::BoolError> {
     let providers: Vec<gdk::ContentProvider> = files
         .encode(locations)
         .into_iter()
+        .filter(|payload| paths_as_text || payload.mime_type != TEXT)
         .filter(|payload| !with_drives || is_for_this_app_or_text(payload.mime_type))
         .map(|payload| {
             gdk::ContentProvider::for_bytes(payload.mime_type, &glib::Bytes::from_owned(payload.bytes))
@@ -380,6 +395,7 @@ impl BrowserWindow {
             &self.clipboard(),
             &files,
             &self.imp().locations.borrow(),
+            self.copies_paths_as_text(),
             with_drives,
         );
         if published.is_err() {
@@ -399,13 +415,20 @@ impl BrowserWindow {
     pub(crate) async fn refresh_file_clipboard(&self) -> ClipboardContent {
         let clipboard = self.clipboard();
         let generation = self.clipboard_generation();
-        let content = read_clipboard_content(&clipboard).await;
+        let pictures = self.pastes_pictures_as_files();
+        self.imp().file_operations.borrow_mut().pictures_read = pictures;
+        let content = read_clipboard_content(&clipboard, pictures).await;
         // Safety rule (one owner per read, CLIP-006, CLIP-016): formats
         // read before and after an owner change could mix two clipboards,
         // such as one owner's URI list with another's cut marker, so such a
         // read holds no data. It is not remembered either: the change
         // started a read of its own, which a stale answer must not undo.
-        if self.clipboard_generation() != generation {
+        // The same holds when "Paste pictures as new files" changed during
+        // the read (CLIP-015): the owner is the same,
+        // but the read looked, or did not look, for a picture under the old
+        // setting, and the change started a read under the new one
+        // (follow_picture_paste_preference).
+        if self.clipboard_generation() != generation || self.pastes_pictures_as_files() != pictures {
             return ClipboardContent::Nothing;
         }
         self.remember_clipboard(&content);
@@ -434,6 +457,7 @@ impl BrowserWindow {
             &clipboard,
             &current,
             &self.imp().locations.borrow(),
+            self.copies_paths_as_text(),
             !self.split_drives(current.uris()).drives.is_empty(),
         )
         .is_ok()
@@ -451,6 +475,30 @@ impl BrowserWindow {
         }
         self.imp().file_operations.borrow_mut().clipboard = content.kind();
         self.update_file_commands();
+    }
+
+    /// Whether Settings' "Paste pictures as new files" is on (CLIP-015), as by
+    /// default; off, Paste is unavailable for a picture, as in Windows 11 File
+    /// Explorer.
+    fn pastes_pictures_as_files(&self) -> bool {
+        self.context().settings_data().preferences.paste_pictures_as_files
+    }
+
+    /// Whether Settings' "Also copy paths as text" is on (CLIP-004), as by
+    /// default; off, only the files are copied, as Windows 11 File Explorer
+    /// copies them.
+    fn copies_paths_as_text(&self) -> bool {
+        self.context().settings_data().preferences.copy_paths_as_text
+    }
+
+    /// Reads the clipboard again when "Paste pictures as new files" changed
+    /// since the last read was scheduled, so Paste follows the setting at
+    /// once.
+    pub(crate) fn follow_picture_paste_preference(&self) {
+        let pictures_read = self.imp().file_operations.borrow().pictures_read;
+        if pictures_read != self.pastes_pictures_as_files() {
+            self.schedule_clipboard_read();
+        }
     }
 
     /// How many times the clipboard has changed while the window watched.
@@ -481,7 +529,14 @@ impl BrowserWindow {
     /// Reads the clipboard in the background, so opening, activating or
     /// changing a clipboard with a large picture never holds up the
     /// window.
+    ///
+    /// The setting the read will follow is noted now, not when the read
+    /// starts, so a window that applies its preferences right after
+    /// queueing its first read does not queue a second one
+    /// ([`Self::follow_picture_paste_preference`]).
     fn schedule_clipboard_read(&self) {
+        let pictures = self.pastes_pictures_as_files();
+        self.imp().file_operations.borrow_mut().pictures_read = pictures;
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,

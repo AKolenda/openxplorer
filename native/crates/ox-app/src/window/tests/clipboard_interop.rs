@@ -27,7 +27,7 @@ use scripted_owner::{Script, ScriptedOwner};
 
 /// A clipboard owner in another application, played by a content
 /// provider whose answers the test scripts.
-mod scripted_owner {
+pub(super) mod scripted_owner {
     use std::cell::{Cell, OnceCell};
     use std::future::Future;
     use std::pin::Pin;
@@ -40,7 +40,7 @@ mod scripted_owner {
 
     /// How a [`ScriptedOwner`] answers a read.
     #[derive(Debug, Clone)]
-    pub(super) enum Script {
+    pub(in crate::window::tests) enum Script {
         /// The conversion fails, as when an X11 owner refuses a target
         /// (the length -1 selection data of GitHub issue #20).
         Fail,
@@ -55,11 +55,11 @@ mod scripted_owner {
 
     /// What a [`ScriptedOwner`] has done, for the test to wait on.
     #[derive(Debug, Default)]
-    pub(super) struct OwnerProgress {
+    pub(in crate::window::tests) struct OwnerProgress {
         /// A reader asked for the payload.
-        pub(super) was_asked: Cell<bool>,
+        pub(in crate::window::tests) was_asked: Cell<bool>,
         /// The owner has answered, or failed as scripted.
-        pub(super) has_answered: Cell<bool>,
+        pub(in crate::window::tests) has_answered: Cell<bool>,
     }
 
     mod imp {
@@ -145,7 +145,7 @@ mod scripted_owner {
 
     impl ScriptedOwner {
         /// An owner offering `mime_type` and answering as `script` says.
-        pub(super) fn new(mime_type: &'static str, script: Script) -> Self {
+        pub(in crate::window::tests) fn new(mime_type: &'static str, script: Script) -> Self {
             let owner: Self = glib::Object::new();
             let imp = owner.imp();
             imp.mime_type
@@ -156,7 +156,7 @@ mod scripted_owner {
         }
 
         /// What the owner has done so far.
-        pub(super) fn progress(&self) -> Rc<OwnerProgress> {
+        pub(in crate::window::tests) fn progress(&self) -> Rc<OwnerProgress> {
             Rc::clone(&self.imp().progress)
         }
     }
