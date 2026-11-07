@@ -4,7 +4,9 @@
 //! Ports `remember_network` and `visited_network` in `v2.0.0:desktop/winspace.py`.
 //! Browsing adds the share root (or the server) to the session's Network
 //! list, never every subfolder, and never saves anything: only the user
-//! keeps a share in settings. Sign out removes the server's entries.
+//! keeps a share in settings. A share mapped for this session only keeps
+//! its label, such as `Projects (Y:)`, until the app quits. Sign out
+//! removes the server's entries.
 
 use super::server::host_name;
 use crate::location::{is_remote_location, is_smb_location, split_location};
@@ -15,6 +17,9 @@ use crate::settings::Bookmark;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct VisitedNetwork {
     roots: Vec<String>,
+    /// The shares Map network drive mapped for this session only, with
+    /// the labels it gave them, in the order mapped.
+    mapped: Vec<Bookmark>,
 }
 
 impl VisitedNetwork {
@@ -31,9 +36,26 @@ impl VisitedNetwork {
         true
     }
 
-    /// Forgets every root on `host`, when signing out of it.
+    /// Remembers the share `uri` mapped for this session only under
+    /// `label`, such as `Projects (Y:)`, which its Network row then shows
+    /// instead of its mount's name. Mapping it again replaces the label.
+    pub fn remember_mapped(&mut self, uri: &str, label: &str) {
+        let bookmark = Bookmark {
+            uri: uri.to_owned(),
+            label: label.to_owned(),
+        };
+        match self.mapped.iter_mut().find(|known| known.uri == uri) {
+            Some(known) => *known = bookmark,
+            None => self.mapped.push(bookmark),
+        }
+    }
+
+    /// Forgets every root and mapped share on `host`, when signing out of
+    /// it.
     pub fn forget_host(&mut self, host: &str) {
         self.roots.retain(|root| host_name(root).as_deref() != Some(host));
+        self.mapped
+            .retain(|share| host_name(&share.uri).as_deref() != Some(host));
     }
 
     /// The remembered roots, oldest first.
@@ -41,14 +63,16 @@ impl VisitedNetwork {
         self.roots.iter().map(String::as_str)
     }
 
-    /// The remembered roots as label-less bookmarks, the visited input of
+    /// The shares mapped this session with their labels, then the
+    /// remembered roots as label-less bookmarks: the visited input of
     /// [`merge_network_locations`](crate::places::merge_network_locations).
     pub fn to_bookmarks(&self) -> Vec<Bookmark> {
         let bookmark = |root: &str| Bookmark {
             uri: root.to_owned(),
             label: String::new(),
         };
-        self.iter().map(bookmark).collect()
+        let roots = self.iter().map(bookmark);
+        self.mapped.iter().cloned().chain(roots).collect()
     }
 }
 
@@ -110,6 +134,33 @@ mod tests {
         assert_eq!(roots, expected);
         visited.forget_host("build");
         assert_eq!(visited.iter().count(), 1);
+    }
+
+    /// A share mapped for this session only is listed under its label
+    /// before the browsed roots; mapping it again changes the label, and
+    /// signing out of its server forgets it.
+    ///
+    /// parity: NET-001, NET-018
+    #[test]
+    fn a_share_mapped_for_this_session_keeps_its_label_until_sign_out() {
+        let mut visited = VisitedNetwork::default();
+        visited.remember("smb://other/share");
+        visited.remember_mapped("smb://nas/projects", "projects (Y:)");
+        visited.remember_mapped("smb://nas/projects", "projects (X:)");
+
+        let expected = [
+            Bookmark {
+                uri: "smb://nas/projects".into(),
+                label: "projects (X:)".into(),
+            },
+            Bookmark {
+                uri: "smb://other/share".into(),
+                label: String::new(),
+            },
+        ];
+        assert_eq!(visited.to_bookmarks(), expected);
+        visited.forget_host("nas");
+        assert_eq!(visited.to_bookmarks(), expected[1..]);
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_v07.py::AppManagerTests::test_session_network_root_not_every_child`
