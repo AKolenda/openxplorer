@@ -56,7 +56,7 @@ mod slot_imp {
     #[properties(wrapper_type = super::GroupSlot)]
     pub(crate) struct GroupSlot {
         pub(super) kind: Cell<SlotKind>,
-        /// A heading's "Today (3)"; empty for the others.
+        /// A heading's title, "Today"; empty for the others.
         #[property(get, set)]
         pub(super) text: RefCell<String>,
         /// Whether a heading's group is collapsed.

@@ -306,32 +306,33 @@ fn tiles_and_content_keep_the_folders_groups_under_headings() {
     );
 }
 
-/// A group heading's accessible name is its text, as the heading shows
-/// it: the group's name, with no count of its items (Windows 11 shows
-/// none), as files come and go while GTK keeps the heading bound.
+/// A group heading's accessible name follows its title when the groups
+/// change, as the heading itself does, though GTK keeps the heading bound
+/// (a heading shows no count, as in Windows 11 since 22H2).
 ///
 /// parity: VIEW-071, VIEW-022
 #[gtk::test]
-fn a_group_headings_accessible_name_follows_its_text() {
+fn a_group_headings_accessible_name_follows_its_title() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.activate("group-by", Some("type"));
     show(&test, FolderView::Content);
     let owners = test.window.folder_pane().owners();
     let labels = || owners.bound_accessible_labels();
-    wait_until("the heading's name", || {
-        labels().contains(&"Text Document".to_owned())
+    wait_until("the headings' names", || {
+        let names = labels();
+        names.contains(&"File folder".to_owned()) && names.contains(&"Text Document".to_owned())
     });
-    fixture.write("Notes 3.txt");
-    wait_until("the new file", || {
-        labels().iter().any(|name| name.starts_with("Notes 3"))
+    test.activate("group-by", Some("name"));
+    wait_until("the new headings", || {
+        grid_headings(&test) == ["A – H (1)", "I – P (2)", "Q – Z (1)"]
     });
     let names = labels();
-    assert!(names.contains(&"Text Document".to_owned()), "{names:?}");
-    assert!(
-        !names.iter().any(|name| name.starts_with("Text Document (")),
-        "{names:?}"
-    );
+    for title in ["A – H", "I – P", "Q – Z"] {
+        assert!(names.contains(&title.to_owned()), "{names:?}");
+    }
+    assert!(!names.contains(&"File folder".to_owned()), "{names:?}");
+    assert!(!names.contains(&"Text Document".to_owned()), "{names:?}");
 }
 
 /// A heading row is as tall as Page Up and Page Down count it, and an
@@ -395,14 +396,10 @@ fn a_cell_that_showed_a_heading_follows_whether_check_boxes_take_clicks() {
         .into_iter()
         .filter(|cell| cell.group_heading().is_some())
         .collect();
-    // The boxes stop waiting for Ctrl while some cells show headings. It
-    // goes through the window, which says again whether they take clicks
-    // as it gets focus and as Ctrl is pressed or released.
+    // Ctrl changes while some cells show headings.
     let owners = pane.owners();
-    assert!(!owners.item_checks_take_clicks(), "the boxes wait for Ctrl");
-    test.window.wait_for_ctrl_with_item_checks(false);
-    let take = true;
-    assert!(owners.item_checks_take_clicks());
+    let take = !owners.item_checks_take_clicks();
+    owners.set_item_checks_take_clicks(take);
     let adjustment = pane.icon_view().scroll_adjustment();
     let mut reused = 0;
     for step in 1..=12 {

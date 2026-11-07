@@ -340,7 +340,7 @@ impl FileCell {
     }
 
     /// Shows `slot` of a grouped grid in place of an item: a group's
-    /// heading (its chevron, "Today (3)" and the start of its line), the
+    /// heading (its chevron, "Today" and the start of its line), the
     /// rest of its line, or nothing. `None` brings the item's widgets back.
     pub(crate) fn show_group_slot(&self, slot: Option<&GroupSlot>) {
         let imp = self.imp();
@@ -956,9 +956,9 @@ fn show_slot_item(list_item: &gtk::ListItem, cell: &FileCell, slot: Option<&Grou
     list_item.set_focusable(is_item || is_heading);
     cell.show_group_slot(slot);
     if let Some(slot) = slot {
-        // A screen reader reads the heading's text as it changes, as the
-        // heading shows it: the slot keeps its object while its group's
-        // title stays, so GTK does not bind it again.
+        // A screen reader hears the heading's text as the heading shows
+        // it, after a change too: the slot keeps its object while its
+        // group stays, so GTK does not bind it again.
         let label = slot
             .bind_property("text", list_item, "accessible-label")
             .sync_create()

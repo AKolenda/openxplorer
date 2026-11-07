@@ -23,6 +23,22 @@ pub(crate) use group_headers::{GroupTitle, GROUPED_CLASS};
 /// The rows' grouped model, if any, shared with the cells' position map.
 type SharedGrouping = Rc<std::cell::RefCell<Option<GroupedSelection>>>;
 
+/// The heading rows of the details view whose accessible name is bound to
+/// their heading's title.
+type HeadingTitles = Rc<std::cell::RefCell<Vec<(glib::WeakRef<gtk::ColumnViewRow>, glib::Binding)>>>;
+
+/// Unbinds `row`'s name from a heading's title, and drops the bindings of
+/// rows that are gone.
+fn forget_heading_title(titles: &HeadingTitles, row: &gtk::ColumnViewRow) {
+    titles.borrow_mut().retain(|(weak, binding)| {
+        let keep = weak.upgrade().is_some_and(|bound| bound != *row);
+        if !keep {
+            binding.unbind();
+        }
+        keep
+    });
+}
+
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -435,8 +451,14 @@ impl DetailsView {
         let column_view = self.column_view();
         cells::label_view(column_view.upcast_ref());
         let rows = gtk::SignalListItemFactory::new();
-        rows.connect_bind(|_, object| {
+        // A heading row's name follows its heading's title: the grouped
+        // model retitles a heading in place when the groups change, and GTK
+        // does not bind the row again for the same object.
+        let titles: HeadingTitles = Rc::default();
+        let unbind_titles = Rc::clone(&titles);
+        rows.connect_bind(move |_, object| {
             if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
+                forget_heading_title(&titles, row);
                 let item = row.item();
                 if let Some(item) = item.and_downcast_ref::<FileItem>() {
                     row.set_accessible_label(&item.entry().name);
@@ -445,10 +467,19 @@ impl DetailsView {
                 } else if let Some(heading) = item.and_downcast_ref::<GroupSlot>() {
                     // A heading takes the keyboard, but is neither
                     // selected nor opened.
-                    row.set_accessible_label(&heading.text());
+                    let title = heading
+                        .bind_property("text", row, "accessible-label")
+                        .sync_create()
+                        .build();
+                    titles.borrow_mut().push((row.downgrade(), title));
                     row.set_selectable(false);
                     row.set_activatable(false);
                 }
+            }
+        });
+        rows.connect_unbind(move |_, object| {
+            if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
+                forget_heading_title(&unbind_titles, row);
             }
         });
         column_view.set_row_factory(Some(&rows));

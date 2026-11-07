@@ -3,7 +3,7 @@
 //! grid, for Tiles and Content (VIEW-022, VIEW-071).
 //!
 //! Windows 11 keeps a folder's groups in Tiles and Content: each group
-//! starts on a row of its own under a heading ("Today (3)" and a line to
+//! starts on a row of its own under a heading ("Today" and a line to
 //! the right edge), as in Details. GTK's grid has no headings of its own,
 //! so the grid lists slots: a heading row of `columns` slots (the heading,
 //! then the line it draws across the rest of the row), the group's items,

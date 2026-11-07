@@ -209,12 +209,12 @@ fn text_line(scale: f64) -> f64 {
 
 /// Pixels of a group heading's row in Tiles and Content beside its title:
 /// 5 pixels of padding above and below it, and the 8-pixel gap before
-/// every heading (`skin/folder-views.css`, VIEW-071, VIEW-022).
+/// every heading (VIEW-022, VIEW-071; `skin/folder-views.css`).
 pub(crate) const HEADING_CHROME: i32 = 5 + 5 + 8;
 
 /// The height of a group heading's row in Tiles and Content at
-/// `text_size`: one line of title with its padding and the gap before
-/// it, 35 pixels at 100%.
+/// `text_size`: one line of title with its padding and the gap before it,
+/// 35 pixels at 100%.
 pub(crate) fn group_heading_row(text_size: TextSize) -> i32 {
     let scale = text_size::metrics(text_size).scale;
     text_size::ceil_pixels(text_line(scale)) + HEADING_CHROME
