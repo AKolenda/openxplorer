@@ -83,8 +83,9 @@ const READING: &str = crate::i18n::message_id("Reading file properties…");
 
 #[cfg(test)]
 pub(crate) use custom_icon::set_custom_icon;
+pub(crate) use details_rows::pane_media_rows;
 pub(crate) use details_tab::focus_detail_row;
-pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNED};
+pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes};
 pub(crate) use item_window::{open_item_properties, PropertiesContext};
 #[cfg(test)]
 pub(crate) use location_panel::LocationPanel;
