@@ -308,7 +308,7 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
 }
 
 /// Classic menus are 264 pixels with Windows 11's 32-pixel rows at 100%
-/// text; the compact menu is 276 pixels with the 34-pixel icon strip.
+/// text; the compact menu is 276 pixels with the 50-pixel labeled strip.
 ///
 /// parity: LOOK-019
 #[gtk::test]
@@ -340,7 +340,9 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
         .iter()
         .find(|button| button.tooltip_text().as_deref() == Some("Cut"))
         .expect("the strip has Cut");
-    assert_eq!(bounds_in(cut, cut).height, 34, "the strip");
+    // Windows 11's labeled strip: a 44-high button, its icon over its
+    // label, inside 3 pixels of padding above and below.
+    assert_eq!(bounds_in(cut, cut).height, 50, "the strip");
     menu.popdown();
 }
 
