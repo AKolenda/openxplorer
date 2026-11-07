@@ -410,3 +410,85 @@ fn replace_restores_the_second_of_two_twins_over_the_first() {
         forget_trashed_items_of(&fixture);
     }
 }
+
+/// How many Recycle Bin items came from `fixture`.
+fn recycled_from_fixture(fixture: &Fixture) -> usize {
+    let context = gtk::glib::MainContext::default();
+    context
+        .block_on(list_recycle_bin(&Cancellation::new()))
+        .expect("a readable Recycle Bin")
+        .iter()
+        .filter(|item| {
+            item.original_path
+                .as_ref()
+                .is_some_and(|path| path.starts_with(fixture.root()))
+        })
+        .count()
+}
+
+/// Turns off Settings > Files & folders > "When replacing a file, move
+/// the old one to the Recycle Bin", as the switch does.
+pub(super) fn overwrite_replaced_files(test: &TestWindow) {
+    let update = PreferencesUpdate {
+        recycle_replaced_files: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        !test.context.settings_data().preferences.recycle_replaced_files
+    });
+}
+
+/// With the switch off, Replace restores the item over the newer file,
+/// as Windows overwrites it: the newer file is gone, not in the Recycle
+/// Bin, and nothing is reported.
+///
+/// parity: OPS-041, OPS-028
+#[gtk::test]
+fn restore_replace_overwrites_the_newer_file_when_the_switch_is_off() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let name = "Overwritten report.txt";
+    let test = trash_and_take_names(&fixture, &[name]);
+    overwrite_replaced_files(&test);
+
+    select_names(&test, &[name]);
+    test.activate("restore", None);
+    button(&question_window(&test), "Replace the file in the destination").emit_clicked();
+    ends_without_a_report(&test);
+
+    assert_eq!(fs::read(fixture.path(name)).unwrap(), TRASHED);
+    assert_eq!(
+        recycled_from_fixture(&fixture),
+        0,
+        "the newer file was not recycled"
+    );
+}
+
+/// By default Replace keeps the newer file in the Recycle Bin, as the
+/// owner chose.
+///
+/// parity: OPS-041, OPS-028
+#[gtk::test]
+fn restore_replace_recycles_the_newer_file_by_default() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let name = "Recycled report.txt";
+    let test = trash_and_take_names(&fixture, &[name]);
+    assert!(test.context.settings_data().preferences.recycle_replaced_files);
+
+    select_names(&test, &[name]);
+    test.activate("restore", None);
+    button(&question_window(&test), "Replace the file in the destination").emit_clicked();
+    ends_without_a_report(&test);
+
+    assert_eq!(fs::read(fixture.path(name)).unwrap(), TRASHED);
+    wait_until("the newer file to be in the Recycle Bin", || {
+        recycled_from_fixture(&fixture) == 1
+    });
+    drop(test);
+    forget_trashed_items_of(&fixture);
+}

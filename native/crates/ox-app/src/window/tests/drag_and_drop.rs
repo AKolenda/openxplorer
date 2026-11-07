@@ -80,6 +80,44 @@ fn files_dropped_on_blank_space_are_copied_into_the_folder_shown() {
     assert!(source.path("Notes 2.txt").is_file(), "a drop is a copy");
 }
 
+/// A drive dropped into a folder becomes a shortcut to it, whatever the
+/// drop's action, as a drive's drop effect in Windows Explorer is a link;
+/// the other items dropped with it are copied. Nothing on the drive is
+/// copied.
+///
+/// parity: DND-019, CMD-038
+#[gtk::test]
+fn a_dropped_drive_becomes_a_shortcut_and_the_other_items_are_copied() {
+    let source = Fixture::standard();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let dropped = ["file:///".to_owned(), source.uri_of("Notes 2.txt")];
+
+    let taken = test.window.drop_files(&dropped, None, DropAction::Copy);
+
+    assert!(taken);
+    wait_until("the copy beside the shortcut", || {
+        fixture.path("Documents/Notes 2.txt").is_file()
+    });
+    let link = fixture.path("Documents/Local Disk - Shortcut");
+    assert_eq!(
+        std::fs::read_link(&link).expect("a shortcut"),
+        std::path::PathBuf::from("/")
+    );
+    let mut names: Vec<String> = std::fs::read_dir(fixture.path("Documents"))
+        .expect("the folder lists")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Local Disk - Shortcut", "Notes 2.txt"]);
+}
+
 /// parity: DND-009, DND-011, OPS-026
 #[gtk::test]
 fn files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check() {

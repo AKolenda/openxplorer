@@ -46,7 +46,7 @@ msgid "- Report an issue (in this Help window and in About this build) opens the
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it."
+msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it.\n- Copy a drive and paste it into a folder, or drag it there, to make a shortcut to it, such as Local Disk - Shortcut. The drive's files are not copied."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -1900,7 +1900,7 @@ msgstr ""
 msgid "CD Drive"
 msgstr ""
 
-#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
+#: crates/ox-app/src/properties/drive_facts.rs crates/ox-app/src/window/drive_shortcuts.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Local Disk"
 msgstr ""
 
@@ -3364,6 +3364,10 @@ msgid "Copy and Cut also put the items' paths on the clipboard, so a terminal or
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Copying and moving"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Documents and other files"
 msgstr ""
 
@@ -3448,6 +3452,10 @@ msgid "Remember each folder's view"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can bring it back. Off: the new file overwrites it, as in Windows, and it is gone."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Right-click a folder → Calculate folder size. Results last for this session."
 msgstr ""
 
@@ -3477,6 +3485,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "The Size column says how many items a folder on this computer holds."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "When replacing a file, move the old one to the Recycle Bin"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3525,6 +3537,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "relative dates date modified time today yesterday absolute short format column"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "replace overwrite file conflict copy move paste drag restore recycle bin trash undo old replaced keep windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -5196,6 +5212,10 @@ msgid "This file selection is too large to drag."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
+msgid "A drive cannot be moved to the Recycle Bin."
+msgstr ""
+
+#: crates/ox-app/src/window/file_drop.rs
 msgid "A folder cannot be copied into itself."
 msgstr ""
 
@@ -5350,7 +5370,7 @@ msgstr ""
 msgid "This is not the Recycle Bin."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/send_to.rs
+#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/send_to.rs
 msgid "Wait for the running file operation to finish."
 msgstr ""
 
@@ -6250,7 +6270,7 @@ msgid "The folder's name"
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
-msgid "A whole drive cannot be copied. Open it and select what to copy."
+msgid "A phone or camera cannot be copied. Open it and select what to copy."
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
@@ -8762,6 +8782,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/resolved_transfer.rs
 msgid "{name}: The file it was to replace is in the Recycle Bin. Restore it from there."
+msgstr ""
+
+#: crates/ox-core/src/ops/restore_conflicts.rs
+msgid "The Recycle Bin does not keep this item as a file on this computer, so it cannot replace another file. It was left in the Recycle Bin."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

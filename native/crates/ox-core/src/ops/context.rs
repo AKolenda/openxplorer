@@ -183,6 +183,24 @@ impl fmt::Debug for MoveByCopyingAsker {
     }
 }
 
+/// What Replace does with the file it replaces.
+///
+/// The app's own choice is the default: the replaced file goes to the
+/// Recycle Bin first, so Undo or a cancelled copy can bring it back.
+/// Windows 11 overwrites it instead, and that is offered as a setting.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ReplacedFiles {
+    /// The replaced file goes to the Recycle Bin, where the desktop's
+    /// Trash works (the default).
+    #[default]
+    RecycleBin,
+    /// The incoming file overwrites the replaced one, which is gone, as in
+    /// Windows 11. The incoming file is first written under a temporary
+    /// name and swapped in at the end, so a cancelled Replace keeps the
+    /// old file.
+    Overwrite,
+}
+
 /// The user's cancellation, the app's write protection and the questions
 /// for one operation.
 #[derive(Debug, Clone, Default)]
@@ -201,6 +219,8 @@ pub struct OperationContext {
     /// Asks what to do about an item that failed; without it the error is
     /// recorded and the next item runs.
     pub item_failure: Option<FailureAsker>,
+    /// What Replace does with the file it replaces.
+    pub replaced_files: ReplacedFiles,
 }
 
 impl OperationContext {
@@ -212,6 +232,7 @@ impl OperationContext {
             unstorable: None,
             move_by_copying: None,
             item_failure: None,
+            replaced_files: ReplacedFiles::default(),
         }
     }
 
