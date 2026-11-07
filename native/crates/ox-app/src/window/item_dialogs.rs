@@ -145,7 +145,25 @@ impl BrowserWindow {
         }
         let uri = self.current_uri().filter(|uri| Page::from_uri(uri).is_none())?;
         let title = self.imp().locations.borrow().title_for(&uri);
-        Some(self.named_target(uri, title, ItemKind::Folder))
+        let as_drive = self.lists_as_drive(&uri);
+        Some(PropertiesTarget {
+            as_drive,
+            ..self.named_target(uri, title, ItemKind::Folder)
+        })
+    }
+
+    /// Whether `uri` is a drive This PC lists, or the root (Local Disk):
+    /// only those show as a drive in Properties. A folder that is a mount
+    /// point, such as a `tmpfs` at `/tmp`, shows as the folder it is.
+    fn lists_as_drive(&self, uri: &str) -> bool {
+        same_location(uri, "file:///")
+            || self
+                .imp()
+                .volumes
+                .borrow()
+                .iter()
+                .filter_map(|row| row.uri())
+                .any(|drive| same_location(drive, uri))
     }
 
     fn target_of_item(&self, item: &FileItem) -> PropertiesTarget {
@@ -177,11 +195,14 @@ impl BrowserWindow {
             .find(|place| place.known_folder.is_some() && same_location(&place.uri, &uri));
         let known_folder = known.as_ref().and_then(|place| place.known_folder);
         let title = known.map_or(name, |place| place.label);
+        // An item of a folder's listing shows as the item it is; the
+        // callers that open a drive say so.
         PropertiesTarget {
             uri,
             title,
             kind,
             known_folder,
+            as_drive: false,
         }
     }
 
@@ -224,10 +245,31 @@ impl BrowserWindow {
                     // The General tab says why the item cannot be read.
                     Err(_) => (window.imp().locations.borrow().base_name(&uri), ItemKind::File),
                 };
-                let target = window.named_target(uri, name, kind);
+                // From This PC, the navigation pane or another app: a
+                // drive This PC lists shows as a drive.
+                let as_drive = window.lists_as_drive(&uri);
+                let target = PropertiesTarget {
+                    as_drive,
+                    ..window.named_target(uri, name, kind)
+                };
                 window.show_properties(target, tab);
             }
         ));
+    }
+
+    /// Opens Properties of the drive mounted at the folder `uri`, titled
+    /// with the volume's name `volume`, as a Mounted Volume's Properties
+    /// button does.
+    pub(crate) fn open_drive_properties(&self, uri: &str, volume: &str) {
+        // The volume's window, even where a standard folder is mounted.
+        let target = PropertiesTarget {
+            uri: uri.to_owned(),
+            title: volume.to_owned(),
+            kind: ItemKind::Folder,
+            known_folder: None,
+            as_drive: true,
+        };
+        self.show_properties(target, PropertiesTab::General);
     }
 
     /// What a Properties window needs from this window.
@@ -249,12 +291,12 @@ impl BrowserWindow {
     }
 
     /// Opens the Properties window of `target` on `tab`, or brings the
-    /// one open for it to the front on that tab, as Windows does.
+    /// one open for it to the front on that tab, as Windows does; a
+    /// Mounted Volume and its drive each have their own.
     fn show_mounted_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
-        let open = self
-            .properties_windows()
-            .into_iter()
-            .find(|window| window.widget_name() == target.uri.as_str());
+        let open = self.properties_windows().into_iter().find(|window| {
+            window.widget_name() == target.uri.as_str() && window.shows_drive() == target.as_drive
+        });
         if let Some(window) = open {
             window.select_tab(tab.page_name());
             self.hand_over_startup_id(&window);

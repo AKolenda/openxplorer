@@ -1997,11 +1997,23 @@ msgid "Modified"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
+msgid "Mounted Volume"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_tab.rs
 msgid "No default application"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
 msgid "Opens with"
+msgstr ""
+
+#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Properties"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_tab.rs
+msgid "Properties of the mounted volume"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
@@ -4663,10 +4675,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Preview pane"
-msgstr ""
-
-#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
-msgid "Properties"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
