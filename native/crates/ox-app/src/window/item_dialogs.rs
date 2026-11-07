@@ -384,7 +384,7 @@ impl BrowserWindow {
     /// True while a dialog is in front of the items: one on the dialog
     /// layer, or a dialog window of its own over this window.
     pub(super) fn dialog_in_front(&self) -> bool {
-        self.dialog_layer().shown().is_some() || self.shows_dialog()
+        self.dialog_layer().shown().is_some() || self.has_open_dialog()
     }
 
     /// Closes every Properties window this window opened, as it closes,

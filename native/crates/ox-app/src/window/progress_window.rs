@@ -187,12 +187,16 @@ impl ProgressWindow {
 
     /// Makes the window the child of the file dialog the earliest running
     /// action was started in, or of no window when none was: a browsing
-    /// window's progress stands alone (OPS-019).
+    /// window's progress stands alone (OPS-019). GTK moves a child into
+    /// its parent's window group and, once it has no parent, into the
+    /// default one, so the window goes back to its own group each time,
+    /// where its File Conflict window blocks it alone.
     fn follow_dialog(&self) {
         let dialog = self.actions().iter().find_map(TransferPanel::dialog);
         let parent = dialog.as_ref().map(Cast::upcast_ref::<gtk::Window>);
         if self.transient_for().as_ref() != parent {
             self.set_transient_for(parent);
+            self.imp().group.add_window(self);
         }
     }
 

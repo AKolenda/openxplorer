@@ -4757,6 +4757,11 @@ mod tests {
         );
         assert!(!progress.is_modal());
         assert!(!window.has_open_dialog(), "no dialog over the dialog");
+        assert_eq!(
+            progress.group(),
+            progress.group_for_questions(),
+            "its File Conflict window still blocks it"
+        );
 
         action.finish();
         settle();
@@ -4765,6 +4770,7 @@ mod tests {
             None,
             "the browsing window's progress stands alone again"
         );
+        assert_eq!(progress.group(), progress.group_for_questions());
         elsewhere.finish();
         wait_until("the progress window to close", || !progress.is_visible());
         browsing.destroy();
@@ -4844,6 +4850,7 @@ mod tests {
         );
         assert!(!properties.is_modal(), "the dialog stays usable beside it");
         assert!(!window.has_open_dialog(), "no dialog over the dialog");
+        assert!(!window.dialog_in_front(), "the dialog's keys still work");
         let cancel = crate::test_support::harness::descendants::<gtk::Button>(&properties)
             .into_iter()
             .find(|button| button.label().as_deref() == Some("Cancel"))
