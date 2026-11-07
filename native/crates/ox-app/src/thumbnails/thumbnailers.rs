@@ -718,8 +718,14 @@ impl UserFolders {
     /// folder: never `/` or a folder directly in it (`/opt`, `/tmp`,
     /// `/home`), the home folder or a folder directly in it (Documents,
     /// `~/.local`), or a folder that holds the user's data, settings or
-    /// cache.
+    /// cache. bubblewrap shows what a link leads to, so the folder must
+    /// pass both as named and as it really is.
     fn may_show(&self, folder: &Path) -> bool {
+        self.may_name(folder) && fs::canonicalize(folder).is_ok_and(|real| self.may_name(&real))
+    }
+
+    /// Whether the path `folder` passes [`Self::may_show`]'s rules.
+    fn may_name(&self, folder: &Path) -> bool {
         let mut components = folder.components();
         let plain = components.next() == Some(std::path::Component::RootDir)
             && components.all(|component| matches!(component, std::path::Component::Normal(_)));
@@ -1647,6 +1653,10 @@ mod tests {
         }
         let linked = local.join("bin/linked");
         std::os::unix::fs::symlink(&installed, &linked).expect("the link");
+        // A folder that is a link into the home folder is not shown.
+        let into_home = root.join("opt/Linked");
+        std::os::unix::fs::symlink(&home, &into_home).expect("the link");
+        let through_link = into_home.join("bin/viewer");
 
         let folders = |program: &Path| program_folders(program, &user);
         assert_eq!(folders(&installed), [root.join("opt/App")]);
@@ -1661,6 +1671,7 @@ mod tests {
             folders(&linked),
             [local.join("bin"), local.join("lib"), root.join("opt/App")]
         );
+        assert_eq!(folders(&through_link), [through_link.clone(), own_bin.clone()]);
         // A program kept among the user's files is shown alone.
         assert_eq!(folders(&documents), std::slice::from_ref(&documents));
         assert_eq!(folders(&own_bin), std::slice::from_ref(&own_bin));
