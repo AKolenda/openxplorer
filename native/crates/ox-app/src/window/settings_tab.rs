@@ -3,8 +3,8 @@
 //! browsing area, and leaving it.
 //!
 //! Ports `settingsDialog` in `v2.0.0:desktop/ui/app.js` and the `.settings-open`
-//! rules of `v2.0.0:desktop/ui/style.css` (SET-001). Ctrl+,, the gear, Folder
-//! Options > More settings… and `win.default-file-explorer` open Settings as a tab of
+//! rules of `v2.0.0:desktop/ui/style.css` (SET-001). Ctrl+,, the gear and
+//! `win.default-file-explorer` open Settings as a tab of
 //! its own, titled Settings; an open Settings tab is shown again rather
 //! than a second one opened. The folder shown before is remembered
 //! (`state.settingsOrigin`), so the search index offers it first. While
