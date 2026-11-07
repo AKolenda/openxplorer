@@ -163,6 +163,9 @@ pub(crate) struct BrowserWindow {
     /// What the command bar's "…" menu keeps of the places the sidebar
     /// was last drawn from, until they are first drawn.
     pub(super) more_menu_places: RefCell<Option<super::location_view::MoreMenuPlaces>>,
+    /// The place menu last opened on a page (a This PC tile), its folder
+    /// pane and where in it, for "Show more options".
+    pub(super) place_menu: RefCell<Option<super::place_menus::OpenPlaceMenu>>,
     /// What every window shares: the skin, settings and places. It
     /// comes from the application, so [`super::BrowserWindow::new`]
     /// sets it.

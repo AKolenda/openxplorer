@@ -4448,7 +4448,7 @@ msgstr ""
 msgid "{len} windows have {tabs} tabs open. Close them all and quit?"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Copy"
 msgstr ""
 
@@ -4500,7 +4500,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -6194,11 +6194,19 @@ msgid "The folder's name"
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
+msgid "A whole drive cannot be copied. Open it and select what to copy."
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
 msgid "Clear recent files"
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
 msgid "Clear recent locations"
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
+msgid "Drive names cannot be changed here."
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs

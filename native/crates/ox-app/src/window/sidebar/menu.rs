@@ -25,9 +25,8 @@ use ox_core::search::Caching;
 use crate::icons::{Art, Icon};
 use crate::window::cache_folder::cache_item;
 use crate::window::command_bar::{disconnect_network_drive, NetworkDrive};
-use crate::window::context_menu::{classic_look, more_options_item};
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
-use crate::window::place_menus::caching_in;
+use crate::window::place_menus::{caching_in, facts_in, finish_menu, PlaceMenu};
 use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
@@ -243,7 +242,12 @@ impl Sidebar {
         let (mut menu, strip) = match hidden {
             HiddenRow::Place => return Some((show_place_menu(entry), Vec::new())),
             HiddenRow::Section => (Vec::new(), Vec::new()),
-            HiddenRow::Shown => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+            HiddenRow::Shown => match &entry.menu {
+                // A drive's menu is the same wherever it opens (This PC's
+                // tiles too), in Windows 11's order.
+                Some(place @ PlaceMenu::Drive { .. }) => place.styled(facts_in(place, self), style),
+                _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+            },
         };
         let strip = match style {
             MenuStyle::Compact => strip,
@@ -271,15 +275,8 @@ impl Sidebar {
             return None;
         }
         let menu = match style {
-            MenuStyle::Compact if hidden == HiddenRow::Shown => {
-                menu.extend([
-                    MenuEntry::Divider,
-                    more_options_item(WindowAction::SidebarMoreOptions),
-                ]);
-                menu
-            }
-            MenuStyle::Compact => menu,
-            MenuStyle::Classic => classic_look(menu),
+            MenuStyle::Compact if hidden != HiddenRow::Shown => menu,
+            _ => finish_menu(menu, style, WindowAction::SidebarMoreOptions),
         };
         Some((menu, strip))
     }
@@ -288,7 +285,7 @@ impl Sidebar {
     /// 11's navigation pane shows one: This PC, Network, Home, Recent
     /// files, Recent locations and the Recycle Bin have Rename and Delete,
     /// greyed out as Windows greys This PC's, since none can be renamed
-    /// or deleted; a folder, a drive or a network location has the file
+    /// or deleted; a folder or a network location has the file
     /// list's Cut, Copy, Paste, Rename and Delete, acting on the row's
     /// location, each where it can run. Only a folder the user pinned
     /// can be cut, renamed or deleted: a drive, a share and the standard

@@ -14,11 +14,13 @@ use super::geometry::{bounds, laid_out, Bounds};
 use super::support::{art_image_showing, arts_in, menu_button_with_class};
 use crate::icons::{Art, Connection, Icon};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    capture_with_menus, descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::test_support::mounted_volume;
 use crate::volumes::VolumeKind;
 use crate::window::landing;
-use crate::window::menu_popover::MenuPopover;
+use crate::window::menu_popover::{MenuPopover, MenuStyle};
 
 /// The labels `widget` shows, in order.
 fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
@@ -289,6 +291,119 @@ fn open_tile_menu(test: &TestWindow, tile: &gtk::FlowBoxChild) -> MenuPopover {
 fn close_menu(menu: &MenuPopover) {
     menu.popdown();
     wait_until("the menu to let go of the pane", || menu.parent().is_none());
+}
+
+/// A drive tile's menu is the file list's right-click menu, in its
+/// style, with Windows 11's drive items in Windows' order: Copy and Rename
+/// in the strip, greyed out, then Open, Open in new tab, Open in new
+/// window, what the drive allows (Disconnect here), Pin to Quick access
+/// and Properties, and Show more options, which opens the classic menu
+/// in its place with Open in Terminal and the cache item. Pin to Quick
+/// access pins the drive, and its menu then offers Unpin.
+///
+/// parity: HOME-003, SIDE-017
+#[gtk::test]
+fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    let (_, backup) = drive_tile(&test, "Backup");
+
+    let menu = open_tile_menu(&test, &backup);
+    assert_eq!(menu.style(), MenuStyle::Compact, "the file list's default style");
+    assert_eq!(
+        menu.strip_states(),
+        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+    );
+    assert_eq!(
+        menu.row_labels(),
+        [
+            "Open",
+            "Open in new tab",
+            "Open in new window",
+            "Disconnect",
+            "Pin to Quick access",
+            "Properties",
+            "-",
+            "Show more options",
+        ]
+    );
+    menu.click_row("Show more options");
+    let open_classic = || {
+        descendants::<MenuPopover>(test.window.folder_pane())
+            .into_iter()
+            .find(|menu| menu.is_visible() && menu.style() == MenuStyle::Classic)
+    };
+    wait_until("the classic menu", || open_classic().is_some());
+    let classic = open_classic().expect("the classic menu is open");
+    let rows = classic.row_labels();
+    for extra in ["Open in Terminal", "Copy", "Rename", "Properties"] {
+        assert!(rows.iter().any(|row| row == extra), "{extra} in {rows:?}");
+    }
+    assert!(classic.strip_labels().is_empty());
+    close_menu(&classic);
+
+    let menu = open_tile_menu(&test, &backup);
+    menu.click_row("Pin to Quick access");
+    wait_until("the drive to be pinned", || {
+        test.window
+            .sidebar()
+            .labels()
+            .iter()
+            .any(|label| label == "Backup")
+            && test
+                .window
+                .places()
+                .quick_access
+                .iter()
+                .any(|place| place.uri == fixture.uri())
+    });
+    // Pinning redraws This PC, and with it the tile.
+    wait_for_frames(&test.window, 3);
+    let (_, backup) = drive_tile(&test, "Backup");
+    let menu = open_tile_menu(&test, &backup);
+    assert!(menu.row_labels().contains(&"Unpin from Quick access".to_owned()));
+    close_menu(&menu);
+}
+
+/// This PC's Local Disk tile menu, compact and classic, and the file
+/// list's menu of a folder, light and dark: with `OX_NATIVE_CAPTURE_DIR`
+/// set, saved there as `native-drive-tile-menu-*.png`,
+/// `native-drive-tile-classic-*.png` and `native-file-menu-*.png` for
+/// visual review. Without it, they only prove the menus open in both
+/// themes.
+#[gtk::test]
+fn the_drive_tile_menu_is_captured_light_and_dark() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(960, 900);
+    wait_until("the taller window", || test.window.height() >= 860);
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.window.navigate(&fixture.uri()).expect("the fixture");
+        test.wait_for_listing("the fixture");
+        test.window.folder_model().select_only(0);
+        test.window.right_click(Some(0));
+        let file_menu = test.window.context_menu();
+        capture_with_menus(&test.window, &format!("native-file-menu-{theme}.png"));
+        file_menu.popdown();
+        wait_until("the file menu to close", || !file_menu.is_mapped());
+        test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+        wait_for_frames(&test.window, 3);
+        let (_, disk) = drive_tile(&test, "Local Disk");
+        let menu = open_tile_menu(&test, &disk);
+        capture_with_menus(&test.window, &format!("native-drive-tile-menu-{theme}.png"));
+        menu.click_row("Show more options");
+        let open_classic = || {
+            descendants::<MenuPopover>(test.window.folder_pane())
+                .into_iter()
+                .find(|menu| menu.is_visible() && menu.style() == MenuStyle::Classic)
+        };
+        wait_until("the classic menu", || open_classic().is_some());
+        let classic = open_classic().expect("the classic menu is open");
+        capture_with_menus(&test.window, &format!("native-drive-tile-classic-{theme}.png"));
+        close_menu(&classic);
+    }
 }
 
 /// A right-click selects the drive and opens the drive's menu, with

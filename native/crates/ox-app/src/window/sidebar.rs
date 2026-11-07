@@ -349,7 +349,38 @@ impl Sidebar {
             let trigger = gtk::ShortcutTrigger::parse_string(key);
             shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
         }
+        // Alt+Enter opens the Properties of the focused row's folder or
+        // drive, as a drive's menu says.
+        let properties = gtk::CallbackAction::new(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _| {
+                let Some(uri) = sidebar.focused_row_folder() else {
+                    return glib::Propagation::Proceed;
+                };
+                WindowAction::PropertiesOf.activate_from(&sidebar, Some(&uri.to_variant()));
+                glib::Propagation::Stop
+            }
+        ));
+        for key in ["<Alt>Return", "<Alt>KP_Enter"] {
+            let trigger = gtk::ShortcutTrigger::parse_string(key);
+            shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(properties.clone())));
+        }
         shortcuts
+    }
+
+    /// The real folder or drive the focused row opens, if any: not a
+    /// page such as This PC or the Recycle Bin.
+    fn focused_row_folder(&self) -> Option<String> {
+        let row = self.list().focus_child().and_downcast::<gtk::ListBoxRow>()?;
+        let index = usize::try_from(row.index()).ok()?;
+        let entries = self.imp().entries.borrow();
+        match &entries.get(index)?.target {
+            RowTarget::Location(uri) if !ox_core::location::is_virtual_location(uri) => Some(uri.clone()),
+            _ => None,
+        }
     }
 
     /// The style the window's file list opens its right-click menu in;
