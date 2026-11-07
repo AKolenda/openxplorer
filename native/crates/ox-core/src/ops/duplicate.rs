@@ -61,8 +61,19 @@ fn duplicate_items_blocking(
     }
     let mut engine = gio_transfer_engine(context, progress);
     let mut outcome = TransferOutcome::default();
-    for group in &groups {
-        duplicate_in_folder(&mut engine, group, context, &mut outcome);
+    // One question state for every folder, so Skip with "Do this for all
+    // current items" holds for the folders after the one it answered.
+    let mut questions = ItemQuestions::new(context, TransferMode::Copy);
+    for (index, group) in groups.iter().enumerate() {
+        let more_items = index + 1 < groups.len();
+        duplicate_in_folder(
+            &mut engine,
+            group,
+            context,
+            &mut questions,
+            more_items,
+            &mut outcome,
+        );
         if outcome.result.cancelled {
             break;
         }
@@ -76,13 +87,16 @@ fn duplicate_items_blocking(
 
 /// Duplicates the items of one folder and adds what happened to
 /// `outcome`. A folder that cannot be copied into any more (it vanished)
-/// is reported as an error of the whole duplicate, after the folders that
-/// were already done; a cancellation marks the outcome cancelled, which
+/// is asked about through `questions`, the whole duplicate's, as one
+/// item, after the folders that were already done (`more_items` when
+/// other folders follow); a cancellation marks the outcome cancelled, which
 /// stops the remaining folders.
 fn duplicate_in_folder(
     engine: &mut TransferEngine,
     group: &FolderGroup,
     context: &OperationContext,
+    questions: &mut ItemQuestions,
+    more_items: bool,
     outcome: &mut TransferOutcome,
 ) {
     let operation = Operation::Copy {
@@ -93,11 +107,10 @@ fn duplicate_in_folder(
     let folder = AskedItem {
         name: &folder_name,
         uri: &group.folder_uri,
-        more_items: true,
+        more_items,
     };
     // A folder that refuses the whole run is asked about in the progress
     // window (OPS-047), as one item.
-    let mut questions = ItemQuestions::new(context, TransferMode::Copy);
     let attempt = || {
         engine
             .run(operation, &group.uris, &context.cancel)
