@@ -84,6 +84,17 @@ pub(super) fn heading_at(view: &gtk::Widget, x: f64, y: f64) -> Option<GroupSlot
     heading_near(&picked)
 }
 
+/// Where the keyboard is in a grouped view: on an item or on a heading.
+#[derive(Debug, Clone)]
+pub(super) enum KeyboardSpot {
+    Item(u32),
+    Heading(GroupSlot),
+}
+
+/// The heading a first click selected the group of, the selection before
+/// it and where the keyboard was, which a double-click puts back.
+pub(super) type BeforeClick = (GroupSlot, Vec<u32>, Option<KeyboardSpot>);
+
 /// What a heading key does to its group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HeadingKey {
@@ -190,6 +201,16 @@ impl BrowserWindow {
         })
     }
 
+    /// Where the keyboard is in the active pane's list, if on an item or a
+    /// heading.
+    fn keyboard_spot(&self) -> Option<KeyboardSpot> {
+        let focus = GtkWindowExt::focus(self)?;
+        if let Some(position) = self.folder_pane().owners().position_of(&focus) {
+            return Some(KeyboardSpot::Item(position));
+        }
+        self.focused_heading().map(KeyboardSpot::Heading)
+    }
+
     /// Left, Right, Enter and Space on a group heading with the keyboard:
     /// collapse or expand its group, or select its items. `None` for
     /// every other key, or with no heading focused.
@@ -294,9 +315,10 @@ impl BrowserWindow {
                 // Kept for a double-click, which leaves the selection as it
                 // was, as in Windows 11.
                 let before = self.folder_pane().model().selected_positions();
+                let focus = self.keyboard_spot();
                 self.imp()
                     .selection_before_click
-                    .replace(Some((heading.clone(), before)));
+                    .replace(Some((heading.clone(), before, focus)));
                 if let Some((model, index)) = heading.model().zip(heading.group_index()) {
                     let add = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
                     let extend = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
@@ -306,11 +328,24 @@ impl BrowserWindow {
             }
             HeadingSpot::Title(heading) if presses == 2 => {
                 let before = self.imp().selection_before_click.take();
-                if let Some((_, positions)) = before.filter(|(clicked, _)| *clicked == heading) {
-                    self.folder_pane().model().select_positions(&positions);
-                }
+                let before = before.filter(|(clicked, _, _)| *clicked == heading);
                 heading.toggle_group();
-                self.keep_heading_focus(&heading);
+                // A double-click leaves the selection and the keyboard where
+                // they were before it, as on Windows 11.
+                match before {
+                    Some((_, positions, focus)) => {
+                        self.folder_pane().model().select_positions(&positions);
+                        match focus {
+                            Some(KeyboardSpot::Item(position)) => {
+                                self.imp().key_heading.replace(None);
+                                self.folder_pane().focus_item(position);
+                            }
+                            Some(KeyboardSpot::Heading(other)) => self.keep_heading_focus(&other),
+                            None => {}
+                        }
+                    }
+                    None => self.keep_heading_focus(&heading),
+                }
             }
             _ => {}
         }
