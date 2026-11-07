@@ -95,16 +95,6 @@ glib::wrapper! {
 }
 
 impl FixedWidth {
-    /// Holds `child`, asking for at most `width` pixels across, or its
-    /// minimum when that is wider.
-    pub(crate) fn new(child: &impl IsA<gtk::Widget>, width: i32) -> Self {
-        let holder: Self = glib::Object::new();
-        holder.imp().width.set(width);
-        child.set_parent(&holder);
-        holder.imp().child.replace(Some(child.clone().upcast()));
-        holder
-    }
-
     /// The height the child is held at; 0 when it takes its own.
     pub(crate) fn height(&self) -> i32 {
         self.imp().height.get()
@@ -116,5 +106,15 @@ impl FixedWidth {
         if self.imp().height.replace(height) != height {
             self.queue_resize();
         }
+    }
+
+    /// Holds `child`, asking for at most `width` pixels across, or its
+    /// minimum when that is wider.
+    pub(crate) fn new(child: &impl IsA<gtk::Widget>, width: i32) -> Self {
+        let holder: Self = glib::Object::new();
+        holder.imp().width.set(width);
+        child.set_parent(&holder);
+        holder.imp().child.replace(Some(child.clone().upcast()));
+        holder
     }
 }

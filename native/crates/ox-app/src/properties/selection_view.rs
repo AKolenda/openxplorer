@@ -63,6 +63,7 @@ pub(crate) fn open_selection_properties(
     let art = entries.first().map(Art::for_entry);
     let names: Vec<String> = entries.iter().map(|entry| entry.name.clone()).collect();
     let window = PropertiesWindow::new(&selection_title(&names), art, Some(opener));
+    window.hold_sheet_size();
     let general = page();
     let security = page();
     window.add_tab(

@@ -101,6 +101,7 @@ pub(crate) fn open_item_properties(
         (target.kind == ItemKind::Folder).then_some(Art::Folder)
     };
     let window = PropertiesWindow::new(&target.dialog_title(), art, Some(opener));
+    window.hold_sheet_size();
     window.set_widget_name(&target.uri);
     let general = page();
     general.append(&quiet_text(ox_core::i18n::gettext_static(READING)));

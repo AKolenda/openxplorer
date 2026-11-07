@@ -464,6 +464,59 @@ fn every_kind_of_properties_size_is_captured() {
     }
 }
 
+/// A window built on the Properties window that is not an item's
+/// Properties, as Folder Options and the Security tab's dialogs are,
+/// keeps its own size: it takes its content's height, not every item's
+/// Properties' fixed one, and a stylesheet that gives its notebook a
+/// margin of its own, as Folder Options' does, does not add a second
+/// margin to the tab area's and widen it.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn other_windows_on_the_properties_window_keep_their_own_size() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Short")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Short");
+    let folder = properties_of_selection(&test, "Short Properties");
+    let width = shown_width(&folder);
+    let sheet_height = folder.height();
+    folder.close();
+
+    // Folder Options' rule at the end of the Properties stylesheet, where
+    // it gives the notebook its own margin, as the skin would load it.
+    let style = gtk::CssProvider::new();
+    style.load_from_string(&format!(
+        "{}\n.ox-folder-options notebook.properties-notebook {{ margin: 6px 8px 0 8px; }}",
+        include_str!("../../../resources/skin/properties.css")
+    ));
+    let display = gtk::gdk::Display::default().expect("a display");
+    gtk::style_context_add_provider_for_display(&display, &style, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    let options = PropertiesWindow::new("Folder Options", None, Some(&test.window));
+    options.add_css_class("ox-folder-options");
+    for label in ["General", "View", "Search"] {
+        let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        page.append(&gtk::Label::new(Some(label)));
+        options.add_tab(&label.to_lowercase(), label, &page);
+    }
+    options.present();
+    wait_for_frames(&options, 6);
+    let (shown_width, shown_height) = (options.width(), options.height());
+    options.close();
+    gtk::style_context_remove_provider_for_display(&display, &style);
+
+    // Folder Options' own margin is narrower than Properties': one
+    // margin around the tabs, never the notebook's and the tab area's.
+    assert!(
+        shown_width <= width,
+        "one margin around the tabs, not two: {shown_width} wide, Properties {width}"
+    );
+    assert!(
+        shown_height < sheet_height,
+        "it takes its content's height ({shown_height}), not Properties' ({sheet_height})"
+    );
+}
+
 /// How many tabs each row of `window`'s tabs holds, top to bottom. The
 /// tab shown stands a little taller than its row, so tabs whose tops are
 /// within a few pixels share a row.
@@ -491,6 +544,7 @@ fn tab_rows(window: &PropertiesWindow) -> Vec<usize> {
 /// one row at Windows' width.
 fn seven_tab_properties(test: &TestWindow) -> PropertiesWindow {
     let window = PropertiesWindow::new("Data (D:) Properties", None, Some(&test.window));
+    window.hold_sheet_size();
     for label in [
         "General",
         "Tools",
