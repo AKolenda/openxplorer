@@ -148,6 +148,13 @@ speedgraph .speed-label { font-size: 11px; }
 .progress-action.asking .progress-percent { font-size: 16px; }
 .progress-action.asking .conflict-question { margin-top: 6px; }
 .progress-action.asking .space-question { margin-top: 2px; }
+/* A question about a failed item in place of the progress, as Windows'
+   "1 Interrupted Action" (src/window/transfer_panel/failure.rs): its words,
+   the item, the progress window's More details (where the item is and
+   where it was going), Do this for all current items and the buttons. */
+.progress-action.asking .failure-question { margin-top: 2px; }
+.progress-action .failure-question grid.failure-details { border-spacing: 16px 4px; }
+.progress-action .failure-question grid.failure-details .property-name { color: @ox_muted; }
 .progress-action .space-drive { color: @ox_muted; }
 window.ox button.conflict-command { min-height: 32px; padding: 3px 8px 3px 16px; border-radius: 4px; }
 window.ox button.conflict-command label { font-size: 15px; }

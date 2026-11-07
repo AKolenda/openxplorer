@@ -20,6 +20,7 @@
 //! | [`folder_locations`] | Moving a standard folder safely | `folder_locations.py` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
+//! | [`admin_copy`] | Whether a copy or move may finish under `admin://`, and where | (new) |
 //! | [`admin_delete`] | Permanent deletion of a whole folder under `admin://`, through a privileged helper | (new) |
 //! | [`i18n`] | The interface's translations: gettext catalogues in the desktop's language | (new, after Dolphin) |
 //! | [`search`] | The metadata-only filename search cache and its index service | `search_index.py`, `index_service.py`, `local_watch.py` |
@@ -33,6 +34,7 @@
 //! | [`session`] | Tab handoff state and `FileManager1` request validation | `window_state.py` |
 //! | [`ops`] | File operations as the interface starts them: New, Rename, paste conflicts, the Delete plan, copy and move, Duplicate, the Recycle Bin, Undo and tab moves | `winspace.py`, `file_services.py`, `gio_backend.py`, `tab_transfers.py`, `ui/app.js` |
 
+pub mod admin_copy;
 pub mod admin_delete;
 pub mod archive;
 pub mod checksums;
