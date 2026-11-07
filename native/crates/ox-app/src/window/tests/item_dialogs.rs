@@ -1393,6 +1393,94 @@ fn several_items_attributes_show_mixed_and_apply_to_every_item() {
     window.close();
 }
 
+/// A folder that happens to be a mount point, such as a `tmpfs` at
+/// `/tmp`, is a Mounted Volume when it is reached in a folder's listing,
+/// and also from the navigation pane when This PC does not list it as a
+/// drive, as Windows shows a drive mounted in a folder: Type says so,
+/// Target names the volume in place of the sizes, and Properties beside
+/// it opens the drive's own window, with its Hardware tab, apart from the
+/// folder's. Only This PC's drives and the root open as a drive straight
+/// away. The harness cannot mount anything, so this uses a mount point the
+/// machine has, and says so when it has none.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_mount_point_reached_as_a_folder_is_a_mounted_volume() {
+    let Some(name) = ["dev", "proc", "sys", "run"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let uri = format!("file:///{name}");
+    let shows_mounted_volume = |window: &PropertiesWindow| {
+        let general = general(window);
+        assert_eq!(value_after(&general, "Type:").as_deref(), Some("Mounted Volume"));
+        assert!(value_after(&general, "Target:").is_some_and(|target| !target.is_empty()));
+        for row in ["Size:", "Size on disk:", "Contains:"] {
+            assert!(value_after(&general, row).is_none(), "no {row} row");
+        }
+        assert!(!window.shows_drive());
+        assert!(
+            window.tab_page("hardware").is_none(),
+            "no Hardware tab for a folder"
+        );
+        general
+    };
+    let test = TestWindow::open("file:///");
+    test.select_named(name);
+    test.activate("properties", None);
+    let window = test.wait_for_properties(&format!("{name} Properties"));
+    let general = shows_mounted_volume(&window);
+    let volume = value_after(&general, "Target:").expect("a target");
+    press(&general, "Properties");
+    let drive = test.wait_for_properties(&format!("{volume} Properties"));
+    assert!(drive.shows_drive());
+    assert!(drive.tab_page("hardware").is_some(), "the drive's Hardware tab");
+    assert_eq!(test.window.properties_windows().len(), 2, "a window of its own");
+    drive.close();
+    window.close();
+
+    test.activate("properties-of", Some(&uri));
+    let window = test.wait_for_properties(&format!("{name} Properties"));
+    shows_mounted_volume(&window);
+    window.close();
+}
+
+/// A mount point reached as a folder and the root reached as a drive,
+/// light and dark, for review with `OX_NATIVE_CAPTURE_DIR` (and
+/// `GDK_SCALE=2`): `mount-point-{folder,drive}-{light,dark}.png`.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_mount_point_and_a_drive_are_captured() {
+    let _theme = ThemeGuard::keep();
+    let Some(name) = ["dev", "proc"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let test = TestWindow::open("file:///");
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.select_named(name);
+        test.activate("properties", None);
+        let folder = test.wait_for_properties(&format!("{name} Properties"));
+        general(&folder);
+        capture_dialog(&folder, &format!("mount-point-folder-{theme}.png"));
+        folder.close();
+        test.activate("properties-of", Some("file:///"));
+        let drive = test.wait_for_properties("Local Disk Properties");
+        let page = tab(&drive, "general");
+        wait_until("the drive's details", || value_after(&page, "Type:").is_some());
+        capture_dialog(&drive, &format!("mount-point-drive-{theme}.png"));
+        drive.close();
+    }
+}
+
 /// Several files' Read-only follows a change made on the Security tab:
 /// taking the owner's write ticks it, and clearing it then gives every
 /// file write again.
