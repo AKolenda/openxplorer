@@ -156,30 +156,39 @@ fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
     let volume = PlaceMenu::Volume {
         id: "1234-ABCD".into(),
     };
+    // The classic menu ("Show more options") lists every item.
     assert_eq!(
         labels(&drive),
         [
             "Open",
+            "Open in new tab",
             "Open in new window",
+            "Pin to Quick access",
             "Open in Terminal",
             "Cache this folder for search",
             "-",
+            "Format…",
+            "Open in Disks",
             "Disconnect",
             "Eject",
             "Safely remove",
-            "Open in Disks",
-            "Format…",
+            "-",
+            "Copy",
+            "Rename",
             "-",
             "Properties"
         ]
     );
     assert_eq!(
-        labels(&without_disks)[5..],
+        labels(&without_disks)[7..],
         [
+            "Format…",
             "Disconnect",
             "Eject",
             "Safely remove",
-            "Format…",
+            "-",
+            "Copy",
+            "Rename",
             "-",
             "Properties"
         ]
@@ -188,9 +197,14 @@ fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
         labels(&local_disk),
         [
             "Open",
+            "Open in new tab",
             "Open in new window",
+            "Pin to Quick access",
             "Open in Terminal",
             "Cache this folder for search",
+            "-",
+            "Copy",
+            "Rename",
             "-",
             "Properties"
         ]
@@ -261,7 +275,7 @@ fn drives_and_shares_offer_to_cache_their_folder() {
     };
     let cache = "Cache this folder for search";
 
-    assert_eq!(labels(&drive)[3], cache);
+    assert_eq!(labels(&drive)[5], cache);
     assert_eq!(labels(&share)[4], cache);
     assert_eq!(labels(&saved)[2], cache);
     let checked = share
@@ -270,4 +284,84 @@ fn drives_and_shares_offer_to_cache_their_folder() {
         .any(|entry| matches!(entry, MenuEntry::Item(item) if item.check == ItemCheck::Fixed(true)));
     assert!(checked, "a cached share's item is checked");
     assert!(!labels(&PlaceMenu::Network(studio_nas_server())).contains(&cache.to_owned()));
+}
+
+/// The compact menu of a drive is Windows 11's (checked on Windows 11,
+/// 2026-11-07): Copy and Rename in the strip, greyed out, then Open, Open
+/// in new tab, Open in new window, Format… and Eject where the drive
+/// allows them, Pin to Quick access (Unpin while pinned) and Properties;
+/// Open in Terminal and the cache item wait in the classic menu.
+///
+/// parity: HOME-003, SIDE-017, DEV-012
+#[test]
+fn a_drive_menu_follows_windows_11_in_the_compact_style() {
+    let usb = PlaceMenu::Drive {
+        uri: "file:///media/demo/USB".into(),
+        kind: VolumeKind::Drive,
+        controls: MountControls {
+            can_unmount: false,
+            can_eject: true,
+            can_stop: false,
+            can_open_in_disks: true,
+            can_format: true,
+        },
+    };
+    let local_disk = PlaceMenu::Drive {
+        uri: "file:///".into(),
+        kind: VolumeKind::Drive,
+        controls: MountControls::FIXED,
+    };
+    let names = |entries: &[MenuEntry]| -> Vec<String> {
+        entries
+            .iter()
+            .map(|entry| match entry {
+                MenuEntry::Item(item) => item.label.clone(),
+                MenuEntry::Divider => "-".to_owned(),
+            })
+            .collect()
+    };
+    let facts = PlaceFacts {
+        caching: Some(Caching::Disabled),
+        pinned: false,
+    };
+
+    let (entries, strip) = usb.styled(facts, MenuStyle::Compact);
+    assert_eq!(
+        names(&entries),
+        [
+            "Open",
+            "Open in new tab",
+            "Open in new window",
+            "Format…",
+            "Eject",
+            "Pin to Quick access",
+            "Properties"
+        ]
+    );
+    let strip: Vec<(String, bool)> = strip
+        .into_iter()
+        .map(|item| (item.label, item.availability == ItemAvailability::Disabled))
+        .collect();
+    assert_eq!(
+        strip,
+        [("Copy".to_owned(), true), ("Rename".to_owned(), true)],
+        "greyed out: the app neither copies a whole drive nor renames one"
+    );
+    let pinned = PlaceFacts {
+        pinned: true,
+        ..facts
+    };
+    let (entries, _) = local_disk.styled(pinned, MenuStyle::Compact);
+    assert_eq!(
+        names(&entries),
+        [
+            "Open",
+            "Open in new tab",
+            "Open in new window",
+            "Unpin from Quick access",
+            "Properties"
+        ]
+    );
+    let finished = finish_menu(entries, MenuStyle::Compact, WindowAction::PlaceMoreOptions);
+    assert_eq!(names(&finished)[5..], ["-", "Show more options"]);
 }

@@ -352,8 +352,8 @@ const MORE_MENU_IN_THIS_PC_WITHOUT_SYSTEM_INFORMATION: [&str; 10] = [
 /// connect dialog, and Disconnect network drive says why it cannot run
 /// while no share is connected. Network's Properties says pages have
 /// none; This PC's opens the system information app, and is left out here,
-/// where the test session has none. The sidebar keeps its Map network
-/// location button.
+/// where the test session has none. With the navigation pane's button
+/// gone, as Windows has none, "…" is where This PC maps a drive.
 ///
 /// parity: CMD-007, NET-001, CMD-031
 #[gtk::test]
@@ -401,12 +401,6 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
     for moved in MOVED_FROM_MORE_MENU {
         assert!(!labels.iter().any(|label| label == moved), "{moved} moved");
     }
-    let sidebar_maps = descendants::<gtk::Button>(test.window.sidebar())
-        .into_iter()
-        .any(|button| {
-            button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
-        });
-    assert!(sidebar_maps, "the sidebar keeps Map network drive");
 }
 
 /// Disconnect network drive lists each network mount once, by the root

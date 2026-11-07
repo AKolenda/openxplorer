@@ -108,6 +108,9 @@ pub(crate) enum WindowAction {
     PinSelected,
     /// Pins the current folder to Quick access.
     PinFolder,
+    /// Pins the location in the string target to Quick access: a drive's
+    /// Pin to Quick access.
+    PinLocation,
     /// Copies the path of the selection, or of the folder.
     CopyPath,
     /// Emails the selected files through the desktop's Email portal.
@@ -266,6 +269,12 @@ pub(crate) enum WindowAction {
     /// Opens the classic context menu where the compact one was ("Show
     /// more options").
     ShowMoreOptions,
+    /// Opens the navigation pane's classic menu where its compact one
+    /// was ("Show more options" in a sidebar menu).
+    SidebarMoreOptions,
+    /// Opens the classic menu of the place (a This PC tile) whose compact
+    /// menu was open, where it was.
+    PlaceMoreOptions,
     /// Opens the Sort menu where the folder's context menu was (its
     /// "Sort by", CMD-012).
     ShowSortMenu,
@@ -496,6 +505,7 @@ impl WindowAction {
             WindowAction::SelectMatching => "select-matching",
             WindowAction::PinSelected => "pin-selected",
             WindowAction::PinFolder => "pin-folder",
+            WindowAction::PinLocation => "pin-location",
             WindowAction::CopyPath => "copy-path",
             WindowAction::Share => "share",
             WindowAction::About => "about",
@@ -563,6 +573,8 @@ impl WindowAction {
             WindowAction::ClearRecentLocations => "clear-recent-locations",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
+            WindowAction::SidebarMoreOptions => "sidebar-more-options",
+            WindowAction::PlaceMoreOptions => "place-more-options",
             WindowAction::ShowSortMenu => "show-sort-menu",
             WindowAction::ShowViewMenu => "show-view-menu",
             WindowAction::Unpin => "unpin",

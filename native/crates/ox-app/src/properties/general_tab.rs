@@ -13,6 +13,12 @@
 //! while the folder is measured off the main thread
 //! ([`super::folder_count`]); closing the window stops the count.
 //!
+//! A folder a file system is mounted at, when it is not shown as a drive,
+//! is a Mounted Volume as Windows shows a drive mounted in a folder: Type
+//! says so, and in place of the sizes Target names the volume, with
+//! Properties beside it opening the drive's own window; nothing is
+//! counted.
+//!
 //! The name, Read-only and Hidden are held until OK or Apply
 //! ([`GeneralEdits`]). Hidden is a leading dot in the name, so ticking it
 //! renames `notes.txt` to `.notes.txt`, with the normal refusal when that
@@ -35,7 +41,7 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
 use super::folder_count::FolderCountRows;
-use super::metadata::ItemProperties;
+use super::metadata::{ItemProperties, MountFacts};
 use super::window::{divider, push_button, ApplyFuture, Pending, PropertiesWindow, Rows};
 use crate::icons::{Art, ArtImage};
 
@@ -89,7 +95,12 @@ pub(super) fn general_tab(
 
     let kind = Rows::new();
     let mut opens_with = None;
-    if is_folder {
+    if properties.mount.is_some() {
+        kind.add(
+            &ox_core::i18n::gettext("Type"),
+            &ox_core::i18n::gettext("Mounted Volume"),
+        );
+    } else if is_folder {
         kind.add(&ox_core::i18n::gettext("Type"), &entry.type_label);
     } else {
         kind.add(&ox_core::i18n::gettext("Type of file"), &type_of_file(entry));
@@ -109,7 +120,10 @@ pub(super) fn general_tab(
     if let Some(target) = &properties.link_target {
         place.add_line(&ox_core::i18n::gettext("Target"), target);
     }
-    let folder_rows = if is_folder {
+    let folder_rows = if let Some(mount) = &properties.mount {
+        place.add_control(&ox_core::i18n::gettext("Target"), &volume_row(mount, uri));
+        None
+    } else if is_folder {
         let size = place.add(&ox_core::i18n::gettext("Size"), "");
         let on_disk = place.add(&ox_core::i18n::gettext("Size on disk"), "");
         let contains = place.add(&ox_core::i18n::gettext("Contains"), "");
@@ -222,6 +236,43 @@ fn opens_with_row(
     });
     row.append(&change);
     (row, value)
+}
+
+/// A Mounted Volume's Target: the volume's label, else its type, and
+/// Properties, which opens the drive's own Properties window, titled
+/// with that name.
+fn volume_row(mount: &MountFacts, uri: &Rc<RefCell<String>>) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let name = if mount.label.is_empty() {
+        mount.drive_type.label()
+    } else {
+        mount.label.clone()
+    };
+    row.append(
+        &gtk::Label::builder()
+            .label(&name)
+            .xalign(0.0)
+            .hexpand(true)
+            .selectable(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .css_classes(["property-value"])
+            .build(),
+    );
+    let properties = push_button(&ox_core::i18n::gettext("Properties"));
+    properties.set_valign(gtk::Align::Center);
+    properties.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "Properties of the mounted volume",
+    ))]);
+    // The folder's location now: a rename on this tab changes it.
+    let uri = Rc::clone(uri);
+    properties.connect_clicked(move |button| {
+        let opener = PropertiesWindow::of(button).and_then(|window| window.opener());
+        if let Some(opener) = opener {
+            opener.open_drive_properties(&uri.borrow(), &name);
+        }
+    });
+    row.append(&properties);
+    row
 }
 
 /// The item's picture and its name: a field when it can be renamed,
