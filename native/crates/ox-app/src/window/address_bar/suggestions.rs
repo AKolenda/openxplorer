@@ -93,6 +93,15 @@ impl AddressBar {
             move |_, key, _, modifiers| bar.suggestion_key(key, modifiers)
         ));
         imp.entry.add_controller(keys);
+        imp.entry.connect_changed(glib::clone!(
+            #[weak(rename_to = bar)]
+            self,
+            move |entry| {
+                if !bar.imp().quiet_change.get() {
+                    bar.imp().text_typed.replace(entry.text().into());
+                }
+            }
+        ));
         imp.entry.connect_activate(glib::clone!(
             #[weak(rename_to = bar)]
             self,
@@ -123,7 +132,7 @@ impl AddressBar {
             gdk::Key::Down | gdk::Key::KP_Down => self.move_suggestion(1),
             gdk::Key::Up | gdk::Key::KP_Up => self.move_suggestion(-1),
             gdk::Key::Escape => {
-                let typed = self.imp().text_before_list.borrow().clone();
+                let typed = self.imp().text_typed.borrow().clone();
                 self.set_text_quietly(&typed);
                 self.hide_suggestions();
             }
@@ -148,7 +157,7 @@ impl AddressBar {
             }
         } else {
             list.unselect_all();
-            let typed = self.imp().text_before_list.borrow().clone();
+            let typed = self.imp().text_typed.borrow().clone();
             self.set_text_quietly(&typed);
         }
     }
@@ -226,7 +235,6 @@ impl AddressBar {
             return;
         };
         list.remove_all();
-        imp.text_before_list.replace(imp.entry.text().into());
         for text in rows.iter().take(LIST_LENGTH) {
             list.append(&row_contents(text));
         }
