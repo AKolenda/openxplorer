@@ -50,7 +50,7 @@ impl BrowserWindow {
                 "Only files can be attached to an email.",
             )),
             WindowAction::OpenFileLocation => Some(ox_core::i18n::gettext_static(
-                "Only a search result has a file location to open.",
+                "Only a search result or a recent file has a file location to open.",
             )),
             _ => None,
         }

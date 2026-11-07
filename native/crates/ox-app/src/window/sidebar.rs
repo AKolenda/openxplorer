@@ -4,15 +4,18 @@
 //! Ports `renderSidebar` and `.sidebar` in `v2.0.0:desktop/ui/app.js` and
 //! `style.css`: the rows of [`entries::sidebar_entries`], separated by
 //! list-row headers so keyboard and screen-reader users never land on an
-//! empty separator row, and the "Map network drive" button pinned below
-//! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
+//! empty separator row. As in Windows 11's navigation pane, nothing is
+//! pinned below the list: the Python app's "Map network drive" button
+//! (`.sidebar-bottom`) is gone, and Map network drive is in This PC's and
+//! Network's menus and in their "…". Rows run [`WindowAction::GoTo`] or
 //! [`WindowAction::MountVolume`]; a middle-click or Ctrl+click opens a
 //! place in a tab, and the current location highlights the closest place
 //! that holds it.
 //! A right-click opens the row's menu: a Quick access pin's ([`menu`],
 //! `sidebarMenu` in app.js), or a drive's or a network location's
 //! (`driveMenu` and `networkLocationMenu`,
-//! [`PlaceMenu`](super::place_menus::PlaceMenu)).
+//! [`PlaceMenu`](super::place_menus::PlaceMenu)), or This PC's or
+//! Network's, laid out as Windows 11's.
 //!
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
 //! so the list's header function and its middle-click and right-click
@@ -33,16 +36,15 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::location::same_location;
 
-use crate::icons::{self, Icon};
-
+use super::context_menu::{menu_style_for, CLASSIC_MENU_KEY, MENU_KEY};
 use super::folder_tree::FolderTree;
-use super::menu_popover::MenuPopover;
+use super::menu_popover::{MenuPopover, MenuStyle};
 use super::window_action::WindowAction;
 use super::{gestures, preferences};
 
 pub(super) use drop_spots::SidebarDropSpot;
 pub(super) use entries::{recent_and_bin_entries, sidebar_entries};
-use entries::{RowTarget, Section, SidebarEntry};
+use entries::{RowLevel, RowTarget, Section, SidebarEntry};
 
 /// Whether a row shows something hidden, listed while "Show all
 /// entries" is on (SIDE-010).
@@ -59,9 +61,6 @@ pub(super) enum HiddenRow {
 
 /// The class that dims a hidden row.
 const HIDDEN_ROW_CLASS: &str = "hidden-place";
-
-/// The "+" of Map network drive.
-const MAP_NETWORK_GLYPH: i32 = 17;
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
@@ -83,6 +82,9 @@ mod imp {
         pub(super) entries: RefCell<Vec<SidebarEntry>>,
         /// The rows' context menu, built by `constructed`.
         pub(super) menu: OnceCell<MenuPopover>,
+        /// Where in the list the menu last opened, for "Show more options",
+        /// which opens the classic menu there.
+        pub(super) menu_point: Cell<Option<(f64, f64)>>,
         /// The rows' icon size in pixels, 0 for automatic (SIDE-012).
         pub(super) icon_size: Cell<u32>,
         /// Which rows show something hidden, in row order (SIDE-010).
@@ -125,7 +127,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    /// The navigation pane: the scrolling list above the footer button.
+    /// The navigation pane: the scrolling list, and the folder tree below
+    /// it while shown.
     pub(crate) struct Sidebar(ObjectSubclass<imp::Sidebar>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
@@ -145,16 +148,19 @@ impl Sidebar {
             .expect("constructed builds the folder tree")
     }
 
-    /// Builds the list and, below it, the footer into the pane.
+    /// Builds the list and the folder tree into the pane.
     fn build_pane(&self) {
         self.set_orientation(gtk::Orientation::Vertical);
         self.add_css_class("sidebar");
         self.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
             "Folders and network locations",
         ))]);
+        // Its own class: the sidebar's row rules must not reach the rows
+        // of its right-click menu, which the file list's menu rules draw.
         let list = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::Single)
             .activate_on_single_click(true)
+            .css_classes(["places"])
             .build();
         list.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
             "Navigation pane",
@@ -182,7 +188,6 @@ impl Sidebar {
             .vexpand(true)
             .build();
         self.append(&panes);
-        self.append(&map_network_button());
         let imp = self.imp();
         imp.list.set(list).expect("constructed runs once per object");
         imp.folder_tree
@@ -285,11 +290,17 @@ impl Sidebar {
         list.add_controller(click);
     }
 
-    /// A right-click on a Quick access pin, a drive or a network location
-    /// opens its menu there.
+    /// A right-click on a row opens its menu there, in the style the file
+    /// list's right-click menu takes (the Settings choice "Right-click
+    /// menu"), or the classic one while Shift is held, as in Windows 11.
+    /// From the keyboard, the Menu key opens the focused row's menu and
+    /// Shift+F10 its classic menu, as on the file list.
     fn open_menus_on_right_click(&self, list: &gtk::ListBox) {
         let menu = MenuPopover::new(Vec::new());
+        // Placed as the file list's right-click menu is: at the pointer,
+        // without a drop-down's offset.
         menu.set_offset(0, 0);
+        menu.set_position(gtk::PositionType::Bottom);
         menu.set_parent(self);
         self.imp()
             .menu
@@ -303,20 +314,121 @@ impl Sidebar {
             #[weak(rename_to = sidebar)]
             self,
             move |gesture, _, x, y| {
-                if sidebar.show_menu(x, y) {
+                let style = menu_style_for(sidebar.preferred_menu_style(), gesture.current_event_state());
+                if sidebar.show_menu(x, y, style) {
                     gesture.set_state(gtk::EventSequenceState::Claimed);
                 }
             }
         ));
         list.add_controller(click);
+        list.add_controller(self.menu_shortcuts());
     }
 
-    /// Opens the menu of the row at (`x`, `y`) of the list; false where
-    /// the row has none.
-    fn show_menu(&self, x: f64, y: f64) -> bool {
-        let Some(entries) = self.menu_entries_at(y) else {
+    /// The Menu key and Shift+F10 on the list.
+    fn menu_shortcuts(&self) -> gtk::ShortcutController {
+        let shortcuts = gtk::ShortcutController::new();
+        for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+            let action = gtk::CallbackAction::new(glib::clone!(
+                #[weak(rename_to = sidebar)]
+                self,
+                #[upgrade_or]
+                glib::Propagation::Proceed,
+                move |_, _| {
+                    let style = if classic {
+                        MenuStyle::Classic
+                    } else {
+                        sidebar.preferred_menu_style()
+                    };
+                    if sidebar.show_focused_row_menu(style) {
+                        glib::Propagation::Stop
+                    } else {
+                        glib::Propagation::Proceed
+                    }
+                }
+            ));
+            let trigger = gtk::ShortcutTrigger::parse_string(key);
+            shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
+        }
+        // Alt+Enter opens the Properties of the focused row's folder or
+        // drive, as a drive's menu says, or This PC's where its menu has
+        // them. It never reaches the file list's selection.
+        let properties = gtk::CallbackAction::new(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _| {
+                let Some(entry) = sidebar.focused_entry() else {
+                    return glib::Propagation::Proceed;
+                };
+                match &entry.target {
+                    RowTarget::Location(uri) if !ox_core::location::is_virtual_location(uri) => {
+                        WindowAction::PropertiesOf.activate_from(&sidebar, Some(&uri.to_variant()));
+                    }
+                    RowTarget::Location(_)
+                        if entry.level == RowLevel::Group
+                            && entry.section == Section::ThisPc
+                            && crate::integration::system_information().is_some() =>
+                    {
+                        WindowAction::SystemProperties.activate_from(&sidebar, None);
+                    }
+                    _ => {}
+                }
+                glib::Propagation::Stop
+            }
+        ));
+        for key in ["<Alt>Return", "<Alt>KP_Enter"] {
+            let trigger = gtk::ShortcutTrigger::parse_string(key);
+            shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(properties.clone())));
+        }
+        shortcuts
+    }
+
+    /// The entry of the focused row, if any.
+    fn focused_entry(&self) -> Option<SidebarEntry> {
+        let row = self.list().focus_child().and_downcast::<gtk::ListBoxRow>()?;
+        let index = usize::try_from(row.index()).ok()?;
+        self.imp().entries.borrow().get(index).cloned()
+    }
+
+    /// The style the window's file list opens its right-click menu in;
+    /// the compact one outside a window.
+    fn preferred_menu_style(&self) -> MenuStyle {
+        self.root()
+            .and_downcast::<super::BrowserWindow>()
+            .map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
+    }
+
+    /// Opens the menu of the focused row in `style`, below the start of
+    /// its label; false without a focused row.
+    fn show_focused_row_menu(&self, style: MenuStyle) -> bool {
+        let list = self.list();
+        let Some(row) = list.focus_child().and_downcast::<gtk::ListBoxRow>() else {
             return false;
         };
+        let Some(bounds) = row.compute_bounds(list) else {
+            return false;
+        };
+        let x = f64::from(bounds.x()) + 24.0;
+        let y = f64::from(bounds.y() + bounds.height() / 2.0);
+        self.show_menu(x, y, style)
+    }
+
+    /// "Show more options": the classic menu of the row whose compact
+    /// menu was open, where it was.
+    pub(super) fn show_more_options(&self) {
+        if let Some((x, y)) = self.imp().menu_point.get() {
+            self.show_menu(x, y, MenuStyle::Classic);
+        }
+    }
+
+    /// Opens the menu of the row at (`x`, `y`) of the list in `style`;
+    /// false where the row has none.
+    fn show_menu(&self, x: f64, y: f64, style: MenuStyle) -> bool {
+        let Some((entries, strip)) = self.menu_at(y, style) else {
+            return false;
+        };
+        self.imp().menu_point.set(Some((x, y)));
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let in_list = gtk::graphene::Point::new(x as f32, y as f32);
         let Some(point) = self.list().compute_point(self, &in_list) else {
@@ -324,6 +436,7 @@ impl Sidebar {
         };
         let menu = self.imp().menu.get().expect("constructed builds the menu");
         menu.set_entries(entries);
+        menu.set_style_and_strip(style, strip);
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let target = gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
         menu.set_pointing_to(Some(&target));
@@ -559,30 +672,10 @@ fn section_separator() -> gtk::Separator {
     line
 }
 
-/// The "Map network drive" button below the list (`#connect-sidebar`).
-fn map_network_button() -> gtk::Box {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
-    content.append(&icons::image(Icon::Add, MAP_NETWORK_GLYPH));
-    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext(
-        "Map network drive",
-    ))));
-    let button = gtk::Button::builder()
-        .child(&content)
-        .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(ox_core::i18n::gettext("Map network drive"))
-        .build();
-    let footer = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .css_classes(["sidebar-bottom"])
-        .build();
-    footer.append(&button);
-    footer
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::icons::Art;
+    use crate::icons::{Art, Icon};
 
     fn place(label: &str, uri: &str) -> SidebarEntry {
         SidebarEntry {
