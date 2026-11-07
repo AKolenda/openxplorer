@@ -33,12 +33,19 @@
 //! and Try again of "This location is unavailable". Dialogs, menus and
 //! the Settings page keep GTK's order.
 
+use std::rc::Rc;
+
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::session::PaneSide;
 use super::widget_tree::descendants;
 use super::BrowserWindow;
+
+/// The CSS class of a scrolled window that holds the keyboard itself
+/// (`base.css`).
+const KEYBOARD_ON_ITSELF: &str = "keyboard-on-itself";
 
 /// A stop of the Tab order, in the order Tab visits them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,13 +123,33 @@ impl BrowserWindow {
                 window.stop_signal_emission_by_name("move-focus");
             }
         });
+        let ringed = Rc::new(glib::WeakRef::<gtk::Widget>::new());
         for property in ["focus-widget", "focus-visible"] {
-            self.connect_notify_local(Some(property), |window, _| {
+            let ringed = Rc::clone(&ringed);
+            self.connect_notify_local(Some(property), move |window, _| {
                 for pane in window.folder_panes() {
                     pane.show_keyboard_on_empty_list();
                 }
+                window.ring_a_scroller_with_the_keyboard(&ringed);
             });
         }
+    }
+
+    /// Rings a scrolled window that holds the keyboard itself, for the
+    /// keyboard only: GTK gives one the keyboard, so that the keys scroll
+    /// it, when nothing inside it can take it, such as the Details pane
+    /// with no file selected, and it draws nothing then (ACC-016).
+    /// `ringed` is the one ringed last.
+    fn ring_a_scroller_with_the_keyboard(&self, ringed: &glib::WeakRef<gtk::Widget>) {
+        if let Some(previous) = ringed.upgrade() {
+            previous.remove_css_class(KEYBOARD_ON_ITSELF);
+        }
+        let focus = gtk::prelude::GtkWindowExt::focus(self)
+            .filter(|focus| focus.is::<gtk::ScrolledWindow>() && self.gets_focus_visible());
+        if let Some(scroller) = &focus {
+            scroller.add_css_class(KEYBOARD_ON_ITSELF);
+        }
+        ringed.set(focus.as_ref());
     }
 
     /// Whether Tab follows GTK's order: while a dialog, a menu or the

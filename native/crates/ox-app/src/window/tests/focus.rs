@@ -531,19 +531,21 @@ fn stop_name(stop: Option<Stop>) -> String {
 }
 
 /// The user's steps on Windows' order: open OX-Test > Template test >
-/// Inside A in Large icons (and in Details), click blank space in the
-/// address bar, press Esc, then press Tab. Esc leaves the keyboard on an
-/// item of the file list, which draws its ring: Large icons had taken it
-/// on the list itself, which draws nothing. Tab goes on from there as in
-/// Windows File Explorer: the status bar's view buttons, the tab in front
+/// Inside A in Large icons (and in Details, with the Details pane open and
+/// closed), click blank space in the address bar, press Esc, then press
+/// Tab. Esc leaves the keyboard on an item of the file list, which draws
+/// its ring: Large icons had taken it on the list itself, which draws
+/// nothing. Tab goes on from there as in Windows File Explorer: the Details
+/// pane where it shows (its scrolled window, ringed, when it has no control
+/// to take the keyboard), the status bar's view buttons, the tab in front
 /// and its Close button, New tab, the navigation buttons, then the address
 /// bar (the chevron first, each crumb, the history chevron), the search
-/// box, the command bar, the navigation pane as one stop, the pane's
-/// footer where it has one and back to the file list. Every stop draws its
-/// focus, light and dark: no key leaves the keyboard where nothing shows
-/// it. In a narrow window the « takes the chevron's place as the address
-/// bar's first stop. The keys are real ones on the private display, so
-/// GTK's own key handling decides what each one does.
+/// box, the command bar, the navigation pane as one stop, the pane's footer
+/// where it has one and back to the file list. Every stop draws its focus,
+/// light and dark: no key leaves the keyboard where nothing shows it. In a
+/// narrow window the « takes the chevron's place as the address bar's first
+/// stop. The keys are real ones on the private display, so GTK's own key
+/// handling decides what each one does.
 ///
 /// parity: ACC-016, NAV-018, NAV-023
 #[gtk::test]
@@ -555,21 +557,26 @@ fn tab_after_escaping_the_address_goes_round_in_explorers_order_with_every_stop_
     for name in ["Plan.txt", "Notes.txt", "Budget.txt"] {
         std::fs::write(inside.join(name), "x").expect("a file");
     }
-    let cases = [
-        ("light", "large"),
-        ("dark", "large"),
-        ("light", "details"),
-        ("dark", "details"),
-    ];
-    for (theme, view) in cases {
-        let test = TestWindow::open(&file_uri(&inside));
-        test.activate("theme", Some(theme));
-        test.activate("view", Some(view));
-        test.wait_for_listing("Inside A");
-        test.window.present();
-        wait_for_frames(&test.window, 3);
-        let mut pointer = Pointer::connect();
-        walk_the_tab_order(&test, &mut pointer, &format!("{theme}-{view}"));
+    // Large icons is where the user found the list taking the keyboard on
+    // itself; the open Details pane, with no file selected, took it on its
+    // scrolled window. Neither drew anything.
+    for theme in ["light", "dark"] {
+        for view in ["large", "details"] {
+            for details_pane in [true, false] {
+                let test = TestWindow::open(&file_uri(&inside));
+                test.activate("theme", Some(theme));
+                test.activate("view", Some(view));
+                test.wait_for_listing("Inside A");
+                if details_pane {
+                    test.open_details_pane();
+                }
+                test.window.present();
+                wait_for_frames(&test.window, 3);
+                let mut pointer = Pointer::connect();
+                let pane = if details_pane { "pane" } else { "nopane" };
+                walk_the_tab_order(&test, &mut pointer, &format!("{theme}-{view}-{pane}"));
+            }
+        }
     }
 }
 
@@ -666,19 +673,23 @@ fn walk_the_tab_order(test: &TestWindow, pointer: &mut Pointer, theme: &str) {
     stops.dedup();
     assert_eq!(
         stops,
-        [
-            Stop::Status,
-            Stop::Tabs,
-            Stop::NewTab,
-            Stop::Navigation,
-            Stop::Address,
-            Stop::Search,
-            Stop::Commands,
-            Stop::Places,
-        ]
-        .into_iter()
-        .chain(test.window.sidebar().footer().map(|_| Stop::SidebarFooter))
-        .collect::<Vec<_>>(),
+        test.window
+            .details_pane()
+            .is_mapped()
+            .then_some(Stop::Details)
+            .into_iter()
+            .chain([
+                Stop::Status,
+                Stop::Tabs,
+                Stop::NewTab,
+                Stop::Navigation,
+                Stop::Address,
+                Stop::Search,
+                Stop::Commands,
+                Stop::Places,
+            ])
+            .chain(test.window.sidebar().footer().map(|_| Stop::SidebarFooter))
+            .collect::<Vec<_>>(),
         "Windows' order from the file list round to it"
     );
     assert!(
