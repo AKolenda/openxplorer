@@ -2,7 +2,10 @@
 //! Up and Down in the icon grid and in Tiles keep to one column across
 //! rows of different lengths (SEL-010). In grouped Tiles and Content the
 //! window moves between the items for every arrow, Home, End, Page Up and
-//! Page Down, across the groups' headings (VIEW-071).
+//! Page Down, across the groups' headings (VIEW-071). Up and Down rest on
+//! a heading on the way, selecting its group's items, as Windows 11 does,
+//! where Left and Right collapse and expand its group ([`super::group_headings`]); the items of a
+//! collapsed group are passed by.
 //!
 //! GTK's grid moves Down into a shorter last row by clamping to its last
 //! item and then forgets the column, so the next Up lands elsewhere.
@@ -17,7 +20,7 @@ use gtk::{gdk, glib};
 
 use super::folder_pane::FolderView;
 use super::BrowserWindow;
-use crate::folder_view::group_slots::{RowHeights, SlotLayout};
+use crate::folder_view::group_slots::{GroupTarget, RowHeights, SlotLayout};
 
 /// The column Up and Down keep to, and the item they last moved to.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -85,40 +88,47 @@ impl GroupedMove {
     }
 }
 
-/// Where `movement` goes from the item at `from` of `layout`, whose last
-/// item is `last`, keeping to `column`; a page is as tall as `heights`
-/// says.
+/// Where `movement` goes from `from` in `layout`, keeping to `column`; a
+/// page is as tall as `heights` says. Left and Right go to the shown item
+/// before or after, Home and End to the first and last; Up and Down a row,
+/// to a heading on the way; Page Up and Page Down a page.
 fn grouped_step(
     layout: &SlotLayout,
     movement: GroupedMove,
-    from: u32,
+    from: GroupTarget,
     column: u32,
-    last: u32,
     heights: RowHeights,
-) -> Option<u32> {
+) -> Option<GroupTarget> {
+    let item = |position: Option<u32>| position.map(GroupTarget::Item).filter(|to| *to != from);
     // A page moves as far as the view shows, measured in pixels: the
     // heading rows it passes count at their own height, which is less
-    // than a row of items. It always moves at least one row of items.
+    // than a row of items. It always moves at least one row.
     let rows = |down: bool| {
         let start = layout.row_of(from)?;
-        let mut at = layout.row_step(from, column, down)?;
-        while let Some(next) = layout.row_step(at, column, down) {
-            if heights.between(layout, start, layout.row_of(next)?) > heights.page {
+        let mut at = from;
+        loop {
+            let next = match at {
+                GroupTarget::Item(position) => layout.row_step(position, column, down).map(GroupTarget::Item),
+                GroupTarget::Heading(_) => layout.row_target(at, column, down),
+            };
+            let Some(next) = next else { break };
+            if at != from && heights.between(layout, start, layout.row_of(next)?) > heights.page {
                 break;
             }
             at = next;
         }
-        Some(at)
+        (at != from).then_some(at)
     };
-    match movement {
-        GroupedMove::Back => from.checked_sub(1),
-        GroupedMove::Forward => (from < last).then_some(from + 1),
-        GroupedMove::Up => layout.row_step(from, column, false),
-        GroupedMove::Down => layout.row_step(from, column, true),
-        GroupedMove::PageUp => rows(false),
-        GroupedMove::PageDown => rows(true),
-        GroupedMove::First => (from != 0).then_some(0),
-        GroupedMove::Last => (from != last).then_some(last),
+    match (movement, from) {
+        (GroupedMove::Back, GroupTarget::Item(position)) => item(layout.item_step(position, false)),
+        (GroupedMove::Forward, GroupTarget::Item(position)) => item(layout.item_step(position, true)),
+        (GroupedMove::Back | GroupedMove::Forward, GroupTarget::Heading(_)) => None,
+        (GroupedMove::Up, _) => layout.row_target(from, column, false),
+        (GroupedMove::Down, _) => layout.row_target(from, column, true),
+        (GroupedMove::PageUp, _) => rows(false),
+        (GroupedMove::PageDown, _) => rows(true),
+        (GroupedMove::First, _) => item(layout.end_item(false)),
+        (GroupedMove::Last, _) => item(layout.end_item(true)),
     }
 }
 
@@ -144,18 +154,41 @@ impl BrowserWindow {
         let movement = GroupedMove::of(key, icons.direction() == gtk::TextDirection::Rtl)?;
         let layout = grouped.layout()?;
         let focus = GtkWindowExt::focus(self)?;
-        let from = pane.owners().position_of(&focus)?;
-        let last = pane.model().n_items().checked_sub(1)?;
+        let from = match pane.owners().position_of(&focus) {
+            Some(position) => GroupTarget::Item(position),
+            None => GroupTarget::Heading(self.focused_heading()?.group_index()?),
+        };
         let remembered = self
             .imp()
             .grid_column
             .get()
-            .filter(|memory| memory.position == from);
-        let column = remembered.map_or_else(|| layout.column_of(from).unwrap_or(0), |memory| memory.column);
-        let Some(to) = grouped_step(&layout, movement, from, column, last, icons.row_heights()) else {
+            .filter(|memory| GroupTarget::Item(memory.position) == from);
+        let column = match (remembered, from) {
+            (Some(memory), _) => memory.column,
+            (None, GroupTarget::Item(position)) => layout.column_of(position).unwrap_or(0),
+            (None, GroupTarget::Heading(_)) => 0,
+        };
+        let Some(to) = grouped_step(&layout, movement, from, column, icons.row_heights()) else {
             return Some(glib::Propagation::Stop);
         };
         self.reset_typeahead();
+        let to = match to {
+            GroupTarget::Item(to) => to,
+            GroupTarget::Heading(index) => {
+                // The heading takes the keyboard and, as in Windows 11, its
+                // group's items the selection: Shift extends it to them,
+                // Ctrl moves the keyboard alone.
+                self.imp().grid_column.set(None);
+                let extends = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+                if !modifiers.contains(gdk::ModifierType::CONTROL_MASK) {
+                    grouped.select_group(index, false, extends);
+                }
+                if let Some(heading) = grouped.heading(index) {
+                    self.keep_heading_focus(&heading);
+                }
+                return Some(glib::Propagation::Stop);
+            }
+        };
         let memory = movement
             .keeps_column()
             .then_some(GridColumn { column, position: to });
@@ -163,11 +196,11 @@ impl BrowserWindow {
         let extends = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
         let keeps = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
         if extends {
-            let anchor = grouped.anchor().unwrap_or(from);
-            let first = anchor.min(to);
-            pane.model()
-                .selection()
-                .select_range(first, anchor.abs_diff(to) + 1, !keeps);
+            let anchor = grouped.anchor().unwrap_or(match from {
+                GroupTarget::Item(position) => position,
+                GroupTarget::Heading(_) => to,
+            });
+            grouped.select_shown_between(anchor, to, !keeps);
             pane.reveal(to);
         } else if keeps {
             pane.reveal(to);
@@ -217,52 +250,69 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::folder_view::group_slots::{group_runs, SlotLayout};
+    use crate::folder_view::group_slots::{collapsed_runs, group_runs, SlotLayout};
 
-    /// Every key moves between items in grouped Tiles; none lands on a
-    /// heading, a page counts the heading rows it passes, and Page Down
-    /// stops at the last row.
+    /// A page two rows of items tall, with heading rows about half as tall.
+    const PAGE: RowHeights = RowHeights {
+        page: 150.0,
+        item: 75,
+        heading: 39,
+    };
+
+    /// Every key moves between items in grouped Tiles; Up and Down rest
+    /// on a heading on the way, and Page Down stops at the last row.
     ///
-    /// parity: VIEW-071
+    /// parity: VIEW-071, VIEW-022
     #[test]
     fn grouped_keys_move_between_the_items_across_the_headings() {
+        use GroupTarget::{Heading, Item};
         let titles = ["Today", "Today", "Today", "Today", "Yesterday", "Older", "Older"];
         let layout = SlotLayout::new(group_runs(titles), 3);
-        let heights = RowHeights {
-            page: 150.0,
-            item: 75,
-            heading: 39,
-        };
-        let step = |movement, from, column| grouped_step(&layout, movement, from, column, 6, heights);
+        let step = |movement, from, column| grouped_step(&layout, movement, from, column, PAGE);
         assert_eq!(
-            step(GroupedMove::Forward, 3, 0),
-            Some(4),
+            step(GroupedMove::Forward, Item(3), 0),
+            Some(Item(4)),
             "Right into the next group"
         );
-        assert_eq!(step(GroupedMove::Back, 4, 0), Some(3));
-        assert_eq!(step(GroupedMove::Back, 0, 0), None);
-        assert_eq!(step(GroupedMove::Forward, 6, 0), None);
+        assert_eq!(step(GroupedMove::Back, Item(4), 0), Some(Item(3)));
+        assert_eq!(step(GroupedMove::Back, Item(0), 0), None);
+        assert_eq!(step(GroupedMove::Forward, Item(6), 0), None);
         assert_eq!(
-            step(GroupedMove::Down, 1, 1),
-            Some(3),
+            step(GroupedMove::Down, Item(1), 1),
+            Some(Item(3)),
             "a shorter row's last item"
         );
-        assert_eq!(step(GroupedMove::Down, 3, 1), Some(4));
         assert_eq!(
-            step(GroupedMove::PageDown, 0, 0),
-            Some(3),
-            "two rows down, not past the heading under them"
+            step(GroupedMove::Down, Item(3), 1),
+            Some(Heading(1)),
+            "the next heading"
         );
-        assert_eq!(step(GroupedMove::PageDown, 4, 1), Some(6), "to the last row");
+        assert_eq!(step(GroupedMove::Down, Heading(1), 1), Some(Item(4)));
         assert_eq!(
-            step(GroupedMove::PageUp, 6, 1),
-            Some(4),
-            "a heading row counts in the page"
+            step(GroupedMove::Up, Item(0), 0),
+            Some(Heading(0)),
+            "its own heading"
         );
-        assert_eq!(step(GroupedMove::PageUp, 4, 0), Some(3), "at least one row");
-        assert_eq!(step(GroupedMove::First, 5, 0), Some(0));
-        assert_eq!(step(GroupedMove::Last, 5, 0), Some(6));
-        assert_eq!(step(GroupedMove::Last, 6, 0), None);
+        assert_eq!(step(GroupedMove::Up, Heading(0), 0), None);
+        assert_eq!(step(GroupedMove::Up, Heading(1), 0), Some(Item(3)));
+        assert_eq!(
+            step(GroupedMove::PageDown, Item(0), 0),
+            Some(Item(3)),
+            "two rows down: the next row of items, then a heading row"
+        );
+        assert_eq!(
+            step(GroupedMove::PageDown, Item(4), 1),
+            Some(Item(6)),
+            "to the last row"
+        );
+        assert_eq!(
+            step(GroupedMove::PageUp, Item(6), 1),
+            Some(Item(4)),
+            "two rows up, the heading between counted"
+        );
+        assert_eq!(step(GroupedMove::First, Item(5), 0), Some(Item(0)));
+        assert_eq!(step(GroupedMove::Last, Item(5), 0), Some(Item(6)));
+        assert_eq!(step(GroupedMove::Last, Item(6), 0), None);
         assert_eq!(GroupedMove::of(gdk::Key::Left, true), Some(GroupedMove::Forward));
     }
 
@@ -273,6 +323,7 @@ mod tests {
     /// parity: VIEW-071
     #[test]
     fn a_page_measures_heading_rows_at_their_height() {
+        use GroupTarget::Item;
         let titles = ["A", "B", "C", "D", "E", "F", "G"];
         let layout = SlotLayout::new(group_runs(titles), 3);
         let heights = |page| RowHeights {
@@ -281,13 +332,65 @@ mod tests {
             heading: 39,
         };
         // Each item is a heading (39) and a row (75) below the last.
-        let down = |page| grouped_step(&layout, GroupedMove::PageDown, 0, 0, 6, heights(page));
-        assert_eq!(down(300.0), Some(2), "two groups fit in 300 pixels");
-        assert_eq!(down(400.0), Some(3), "three fit in 400, not 400 / 75 rows");
-        assert_eq!(down(50.0), Some(1), "at least one row");
-        let up = grouped_step(&layout, GroupedMove::PageUp, 6, 0, 6, heights(400.0));
-        assert_eq!(up, Some(3));
+        let down = |page| grouped_step(&layout, GroupedMove::PageDown, Item(0), 0, heights(page));
+        assert_eq!(down(300.0), Some(Item(2)), "two groups fit in 300 pixels");
+        assert_eq!(down(400.0), Some(Item(3)), "three fit in 400, not 400 / 75 rows");
+        assert_eq!(down(50.0), Some(Item(1)), "at least one row");
+        let up = grouped_step(&layout, GroupedMove::PageUp, Item(6), 0, heights(400.0));
+        assert_eq!(up, Some(Item(3)));
         assert_eq!(GroupedMove::of(gdk::Key::a, false), None);
+    }
+
+    /// Page Down counts the heading rows it passes, so a page of many
+    /// small groups moves about as far as the view shows, not that many
+    /// rows of items plus every heading between (Codex review of #289).
+    ///
+    /// parity: VIEW-071, VIEW-022
+    #[test]
+    fn a_page_counts_the_heading_rows_it_passes() {
+        use GroupTarget::Item;
+        let titles = ["A", "B", "C", "D", "E", "F"];
+        let layout = SlotLayout::new(group_runs(titles), 3);
+        // Rows: heading A, A's item, heading B, B's item, heading C, ...
+        let step = |movement, from| grouped_step(&layout, movement, from, 0, PAGE);
+        assert_eq!(
+            step(GroupedMove::PageDown, Item(0)),
+            Some(Item(1)),
+            "two rows: a heading and an item"
+        );
+        assert_eq!(step(GroupedMove::PageUp, Item(3)), Some(Item(2)));
+        assert_eq!(
+            step(GroupedMove::PageDown, Item(5)),
+            None,
+            "nothing below the last row"
+        );
+        let one_group = SlotLayout::new(group_runs(["A"; 9]), 3);
+        assert_eq!(
+            grouped_step(&one_group, GroupedMove::PageDown, Item(0), 0, PAGE),
+            Some(Item(6)),
+            "without headings a page is that many rows of items"
+        );
+    }
+
+    /// A collapsed group's items are passed by: Right, Down and End skip
+    /// them, and Down from its heading goes to the next heading.
+    ///
+    /// parity: VIEW-022
+    #[test]
+    fn grouped_keys_pass_a_collapsed_group_by() {
+        use GroupTarget::{Heading, Item};
+        let titles = ["Today", "Today", "Yesterday", "Yesterday", "Older"];
+        let collapsed = std::collections::HashSet::from(["Yesterday".to_owned()]);
+        let layout = SlotLayout::new(collapsed_runs(titles, &collapsed), 3);
+        let step = |movement, from| grouped_step(&layout, movement, from, 0, PAGE);
+        assert_eq!(step(GroupedMove::Forward, Item(1)), Some(Item(4)));
+        assert_eq!(step(GroupedMove::Back, Item(4)), Some(Item(1)));
+        assert_eq!(step(GroupedMove::Down, Item(0)), Some(Heading(1)));
+        assert_eq!(step(GroupedMove::Down, Heading(1)), Some(Heading(2)));
+        assert_eq!(step(GroupedMove::Up, Heading(2)), Some(Heading(1)));
+        assert_eq!(step(GroupedMove::Up, Heading(1)), Some(Item(0)));
+        assert_eq!(step(GroupedMove::PageDown, Item(0)), Some(Item(4)));
+        assert_eq!(step(GroupedMove::Last, Item(0)), Some(Item(4)));
     }
 
     /// parity: SEL-010

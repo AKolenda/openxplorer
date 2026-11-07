@@ -8,15 +8,22 @@
 //! selects, so Details, the status bar and the window's commands see one
 //! selection. Headings, their lines and blanks are [`GroupSlot`]s, which
 //! cannot be selected.
+//!
+//! Details lists the same model in one column. A heading collapses and
+//! expands its group ([`GroupedSelection::set_collapsed`]); which groups
+//! are collapsed is kept in [`CollapsedGroups`], which the folder model
+//! shares between Details, Tiles and Content.
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::folder_view::details::{header_text, GroupTitle};
-use crate::folder_view::group_slots::{group_runs, ItemsChange, Slot, SlotLayout};
+use crate::folder_view::details::GroupTitle;
+use crate::folder_view::group_slots::{collapsed_runs, ItemsChange, Slot, SlotLayout};
 use crate::folder_view::item::FileItem;
 
 /// What a [`GroupSlot`] draws.
@@ -49,9 +56,34 @@ mod slot_imp {
     #[properties(wrapper_type = super::GroupSlot)]
     pub(crate) struct GroupSlot {
         pub(super) kind: Cell<SlotKind>,
-        /// A heading's "Today (3)"; empty for the others.
+        /// A heading's title, "Today"; empty for the others.
         #[property(get, set)]
         pub(super) text: RefCell<String>,
+        /// Whether a heading's group is collapsed.
+        #[property(get, set)]
+        pub(super) collapsed: Cell<bool>,
+        /// Whether the pointer is over the heading's row: its heading or
+        /// one of the slots carrying its line, which all draw the hover.
+        #[property(get, set)]
+        pub(super) hovered: Cell<bool>,
+        /// Whether the heading has the keyboard, which its whole row
+        /// shows with the focus ring.
+        #[property(get, set)]
+        pub(super) focused: Cell<bool>,
+        /// Whether the heading's row is filled as selected: its group is
+        /// collapsed and every item of it selected, as Windows 11 fills it.
+        #[property(get, set)]
+        pub(super) filled: Cell<bool>,
+        /// Whether the slot ends its heading's row at the right: the last
+        /// slot carrying its line, or a heading alone on its row. A
+        /// property, so a cell drawing the row's right edge follows when
+        /// the columns change.
+        #[property(get, set)]
+        pub(super) ends_row: Cell<bool>,
+        /// The title of the group whose heading row holds the slot.
+        pub(super) title: RefCell<String>,
+        /// The model listing the slot.
+        pub(super) model: glib::WeakRef<super::GroupedSelection>,
     }
 
     #[glib::object_subclass]
@@ -81,7 +113,89 @@ impl GroupSlot {
     pub(crate) fn kind(&self) -> SlotKind {
         self.imp().kind.get()
     }
+
+    /// Collapses a heading's group, or expands it with `collapsed` false.
+    pub(crate) fn set_group_collapsed(&self, collapsed: bool) {
+        let title = self.imp().title.borrow().clone();
+        if let Some(model) = self.imp().model.upgrade() {
+            model.set_collapsed(&title, collapsed);
+        }
+    }
+
+    /// Collapses a heading's group while it is expanded, else expands it.
+    pub(crate) fn toggle_group(&self) {
+        self.set_group_collapsed(!self.collapsed());
+    }
+
+    /// The index of a heading's group, in the model listing it.
+    pub(crate) fn group_index(&self) -> Option<usize> {
+        let model = self.imp().model.upgrade()?;
+        let title = self.imp().title.borrow();
+        let layout = model.layout()?;
+        layout.groups().iter().position(|group| group.title == *title)
+    }
+
+    /// The model listing the slot.
+    pub(crate) fn model(&self) -> Option<GroupedSelection> {
+        self.imp().model.upgrade()
+    }
+
+    /// The heading of the row the slot is in: itself for a heading, the
+    /// heading whose line it carries on for a line; `None` for a blank.
+    pub(crate) fn row_heading(&self) -> Option<GroupSlot> {
+        match self.kind() {
+            SlotKind::Heading => Some(self.clone()),
+            SlotKind::Rule => {
+                let model = self.model()?;
+                let index = self.group_index()?;
+                model.heading(index)
+            }
+            SlotKind::Blank => None,
+        }
+    }
+
+    /// Shows the pointer over the heading's row, or not, on every slot
+    /// of the row.
+    pub(crate) fn set_row_hovered(&self, hovered: bool) {
+        self.for_row(|slot| {
+            if slot.hovered() != hovered {
+                slot.set_hovered(hovered);
+            }
+        });
+    }
+
+    /// Shows the keyboard on the heading's row, or not, on every slot of
+    /// the row.
+    pub(crate) fn set_row_focused(&self, focused: bool) {
+        self.for_row(|slot| {
+            if slot.focused() != focused {
+                slot.set_focused(focused);
+            }
+        });
+    }
+
+    /// Runs `change` on the heading and every slot carrying its line.
+    fn for_row(&self, change: impl Fn(&GroupSlot)) {
+        let Some(heading) = self.row_heading() else {
+            return;
+        };
+        let rules = heading
+            .model()
+            .zip(heading.group_index())
+            .map(|(model, index)| model.rules(index))
+            .unwrap_or_default();
+        change(&heading);
+        for rule in &rules {
+            change(rule);
+        }
+    }
 }
+
+/// The titles of the collapsed groups of a listing, shared by the views
+/// that head its groups. They last while the folder stays shown in its
+/// pane: another folder, another tab or another Group by expands them
+/// all again ([`crate::folder_view::model::FolderModel`]).
+pub(crate) type CollapsedGroups = Rc<RefCell<HashSet<String>>>;
 
 /// The slot objects of one group. GTK warns of an object listed twice,
 /// so every slot has its own; they are kept while the group's title is,
@@ -94,19 +208,26 @@ struct GroupObjects {
 }
 
 impl GroupObjects {
-    fn new() -> Self {
+    fn new(model: &GroupedSelection, title: &str) -> Self {
+        let heading = GroupSlot::new(SlotKind::Heading);
+        heading.imp().model.set(Some(model));
+        heading.imp().title.replace(title.to_owned());
         Self {
-            heading: GroupSlot::new(SlotKind::Heading),
+            heading,
             rules: Vec::new(),
             blanks: Vec::new(),
         }
     }
 
-    /// Keeps `count` objects of `kind` in `slots`.
-    fn fit(slots: &mut Vec<GroupSlot>, count: usize, kind: SlotKind) {
+    /// Keeps `count` objects of `kind` in `slots`, of the group titled
+    /// `title` in `model`.
+    fn fit(slots: &mut Vec<GroupSlot>, count: usize, kind: SlotKind, model: &GroupedSelection, title: &str) {
         slots.truncate(count);
         while slots.len() < count {
-            slots.push(GroupSlot::new(kind));
+            let slot = GroupSlot::new(kind);
+            slot.imp().model.set(Some(model));
+            slot.imp().title.replace(title.to_owned());
+            slots.push(slot);
         }
     }
 }
@@ -129,11 +250,16 @@ mod imp {
         pub(super) items: OnceCell<gtk::MultiSelection>,
         /// Names each item's group.
         pub(super) title: OnceCell<GroupTitle>,
+        /// The titles of the collapsed groups.
+        pub(super) collapsed: OnceCell<super::CollapsedGroups>,
         pub(super) layout: RefCell<Option<SlotLayout>>,
         pub(super) objects: RefCell<Vec<GroupObjects>>,
         /// The item a plain or Ctrl click or move last selected, which
         /// Shift extends from.
         pub(super) anchor: Cell<Option<u32>>,
+        /// Whether every item of each group is selected, by group: its
+        /// heading row then shows as selected.
+        pub(super) groups_selected: RefCell<Vec<bool>>,
         pub(super) handlers: RefCell<Vec<glib::SignalHandlerId>>,
     }
 
@@ -182,10 +308,7 @@ mod imp {
             let selected = gtk::Bitset::new_empty();
             let obj = self.obj();
             for slot in position..position.saturating_add(n_items).min(self.n_items()) {
-                if obj
-                    .item_at(slot)
-                    .is_some_and(|item| obj.items().is_selected(item))
-                {
+                if obj.slot_selected(slot) {
                     selected.add(slot);
                 }
             }
@@ -193,9 +316,7 @@ mod imp {
         }
 
         fn is_selected(&self, position: u32) -> bool {
-            let obj = self.obj();
-            obj.item_at(position)
-                .is_some_and(|item| obj.items().is_selected(item))
+            self.obj().slot_selected(position)
         }
 
         fn select_all(&self) -> bool {
@@ -226,17 +347,21 @@ mod imp {
 
         fn select_range(&self, position: u32, n_items: u32, unselect_rest: bool) -> bool {
             let obj = self.obj();
-            match obj.items_in(position, n_items) {
-                Some((first, count)) => obj.items().select_range(first, count, unselect_rest),
-                None if unselect_rest => obj.items().unselect_all(),
-                None => false,
-            }
+            let items = obj.items_in(position, n_items);
+            obj.select_items(&items, unselect_rest)
         }
 
         fn unselect_range(&self, position: u32, n_items: u32) -> bool {
             let obj = self.obj();
-            obj.items_in(position, n_items)
-                .is_some_and(|(first, count)| obj.items().unselect_range(first, count))
+            let items = obj.items_in(position, n_items);
+            if items.is_empty() {
+                return false;
+            }
+            let mask = gtk::Bitset::new_empty();
+            for item in items {
+                mask.add(item);
+            }
+            obj.items().set_selection(&gtk::Bitset::new_empty(), &mask)
         }
 
         fn set_selection(&self, selected: &gtk::Bitset, mask: &gtk::Bitset) -> bool {
@@ -266,8 +391,14 @@ glib::wrapper! {
 }
 
 impl GroupedSelection {
-    /// `items` grouped by `title`, in `columns` columns.
-    pub(crate) fn new(items: &gtk::MultiSelection, title: GroupTitle, columns: u32) -> Self {
+    /// `items` grouped by `title`, in `columns` columns, with the groups
+    /// `collapsed` names collapsed.
+    pub(crate) fn new(
+        items: &gtk::MultiSelection,
+        title: GroupTitle,
+        collapsed: &CollapsedGroups,
+        columns: u32,
+    ) -> Self {
         let model: Self = glib::Object::new();
         let imp = model.imp();
         imp.items
@@ -275,6 +406,9 @@ impl GroupedSelection {
             .expect("a new model has no items yet");
         if imp.title.set(title).is_err() {
             unreachable!("a new model has no titles yet");
+        }
+        if imp.collapsed.set(Rc::clone(collapsed)).is_err() {
+            unreachable!("a new model has no collapsed groups yet");
         }
         model.relayout(columns, None, false);
         let on_items = items.connect_items_changed(glib::clone!(
@@ -347,15 +481,236 @@ impl GroupedSelection {
         self.imp().anchor.get()
     }
 
-    /// The first item at or after `slot` and how many items lie in the
-    /// `count` slots from it; `None` when they hold none.
-    fn items_in(&self, slot: u32, count: u32) -> Option<(u32, u32)> {
+    /// Makes `anchor` the item Shift extends a selection from, as it was
+    /// before a double-click on a heading.
+    pub(crate) fn set_anchor(&self, anchor: Option<u32>) {
+        self.imp().anchor.set(anchor);
+    }
+
+    /// Whether `slot` shows as selected: a selected item, or a slot of the
+    /// heading row of a collapsed group whose items are all selected, which
+    /// Windows 11 fills; an expanded group's heading shows no fill.
+    fn slot_selected(&self, slot: u32) -> bool {
+        let imp = self.imp();
+        let layout = imp.layout.borrow();
+        let Some(layout) = layout.as_ref() else {
+            return false;
+        };
+        match layout.slot(slot) {
+            Some(Slot::Item(item)) => self.items().is_selected(item),
+            Some(Slot::Heading(index)) => imp.groups_selected.borrow().get(index).copied().unwrap_or(false),
+            Some(Slot::Rule) => layout
+                .place(slot)
+                .and_then(|(index, _)| imp.groups_selected.borrow().get(index).copied())
+                .unwrap_or(false),
+            Some(Slot::Blank) | None => false,
+        }
+    }
+
+    /// Works out which collapsed groups have every item selected, and
+    /// returns the indexes of those that changed.
+    fn count_selected_groups(&self) -> Vec<usize> {
+        let imp = self.imp();
+        let selection = self.items().selection();
+        let now: Vec<bool> = imp
+            .layout
+            .borrow()
+            .as_ref()
+            .map(|layout| {
+                layout
+                    .groups()
+                    .iter()
+                    .map(|group| {
+                        group.collapsed
+                            && group.len() > 0
+                            && (group.start..group.end).all(|item| selection.contains(item))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let before = imp.groups_selected.replace(now.clone());
+        // The row's own fill, which does not wait for GTK to show the slots
+        // as selected: GTK may not, for slots that cannot be selected.
+        for (index, filled) in now.iter().enumerate() {
+            let slots = self.heading(index).into_iter().chain(self.rules(index));
+            for slot in slots.filter(|slot| slot.filled() != *filled) {
+                slot.set_filled(*filled);
+            }
+        }
+        (0..now.len())
+            .filter(|index| before.get(*index) != now.get(*index))
+            .collect()
+    }
+
+    /// Tells the view that the heading rows of the groups at `indexes`
+    /// changed their selected look.
+    fn heading_rows_changed(&self, indexes: &[usize]) {
+        let Some(layout) = self.layout() else {
+            return;
+        };
+        for index in indexes {
+            if let Some(slot) = layout.heading_slot(*index) {
+                self.selection_changed(slot, layout.columns());
+            }
+        }
+    }
+
+    /// Selects every item of the group at `index`, shown or collapsed: all
+    /// of them in place of the selection, added to it with `add`, or from
+    /// the anchor to the group with `extend`, as a click on a Windows 11
+    /// group heading does.
+    pub(crate) fn select_group(&self, index: usize, add: bool, extend: bool) {
+        let Some(layout) = self.layout() else {
+            return;
+        };
+        let Some(group) = layout.groups().get(index) else {
+            return;
+        };
+        let mut items: Vec<u32> = (group.start..group.end).collect();
+        if extend {
+            if let Some(anchor) = self.anchor() {
+                let far = if anchor < group.start {
+                    group.end.saturating_sub(1)
+                } else {
+                    group.start
+                };
+                items.extend(layout.shown_between(anchor, far));
+            }
+        } else {
+            self.imp().anchor.set(Some(group.start));
+        }
+        // Whether every item of the group is selected now, folded or not:
+        // the fill's record covers collapsed groups only.
+        let selection = self.items().selection();
+        let all_selected = group.len() > 0 && (group.start..group.end).all(|item| selection.contains(item));
+        if add && !extend && all_selected {
+            // Ctrl on a selected group takes it out, as Ctrl on an item.
+            let mask = gtk::Bitset::new_empty();
+            for item in items {
+                mask.add(item);
+            }
+            self.items().set_selection(&gtk::Bitset::new_empty(), &mask);
+            return;
+        }
+        self.select_items(&items, !add);
+    }
+
+    /// The heading objects of every group's line slots, by group.
+    pub(crate) fn rules(&self, index: usize) -> Vec<GroupSlot> {
+        self.imp()
+            .objects
+            .borrow()
+            .get(index)
+            .map(|objects| objects.rules.clone())
+            .unwrap_or_default()
+    }
+
+    /// The heading object of the group at `index`.
+    pub(crate) fn heading(&self, index: usize) -> Option<GroupSlot> {
+        self.imp()
+            .objects
+            .borrow()
+            .get(index)
+            .map(|objects| objects.heading.clone())
+    }
+
+    /// The listing positions of the items the `count` slots from `slot`
+    /// show (none of a collapsed group's), and the group of a heading at
+    /// either end.
+    fn items_in(&self, slot: u32, count: u32) -> Vec<u32> {
         let layout = self.imp().layout.borrow();
-        let layout = layout.as_ref()?;
-        let end = slot.saturating_add(count).min(layout.len());
-        let first = (slot..end).find_map(|slot| layout.item_at(slot))?;
-        let last = (slot..end).rev().find_map(|slot| layout.item_at(slot))?;
-        Some((first, last - first + 1))
+        let Some(layout) = layout.as_ref() else {
+            return Vec::new();
+        };
+        let mut items = layout.items_in_slots(slot, count);
+        // A Shift range that ends on a heading takes in its group, as the
+        // keyboard moving onto a heading selects it.
+        let last = slot.saturating_add(count.saturating_sub(1));
+        for end in [slot, last] {
+            if let Some(Slot::Heading(index)) = layout.slot(end) {
+                if let Some(group) = layout.groups().get(index) {
+                    items.extend(group.start..group.end);
+                }
+            }
+        }
+        items.sort_unstable();
+        items.dedup();
+        items
+    }
+
+    /// Selects the items at the listing's `positions`, and no other with
+    /// `unselect_rest`.
+    pub(crate) fn select_items(&self, positions: &[u32], unselect_rest: bool) -> bool {
+        let selected = gtk::Bitset::new_empty();
+        for position in positions {
+            selected.add(*position);
+        }
+        let mask = if unselect_rest {
+            gtk::Bitset::new_range(0, self.items().n_items())
+        } else {
+            selected.copy()
+        };
+        if mask.is_empty() {
+            return false;
+        }
+        self.items().set_selection(&selected, &mask)
+    }
+
+    /// Selects the items the slots show from the item at `from` to the
+    /// item at `to`, passing over collapsed groups, and no other with
+    /// `unselect_rest`: a Shift range.
+    pub(crate) fn select_shown_between(&self, from: u32, to: u32, unselect_rest: bool) {
+        let shown = self
+            .imp()
+            .layout
+            .borrow()
+            .as_ref()
+            .map(|layout| layout.shown_between(from, to))
+            .unwrap_or_default();
+        self.select_items(&shown, unselect_rest);
+    }
+
+    /// The titles of the collapsed groups.
+    fn collapsed(&self) -> &CollapsedGroups {
+        self.imp()
+            .collapsed
+            .get()
+            .expect("GroupedSelection::new sets the collapsed groups")
+    }
+
+    /// Collapses the group titled `title`, or expands it with `collapsed`
+    /// false. Its items keep their selection.
+    pub(crate) fn set_collapsed(&self, title: &str, collapsed: bool) {
+        let changed = {
+            let mut titles = self.collapsed().borrow_mut();
+            if collapsed {
+                titles.insert(title.to_owned())
+            } else {
+                titles.remove(title)
+            }
+        };
+        if changed {
+            self.regroup();
+        }
+    }
+
+    /// Collapses every group, or expands every one with `collapsed` false.
+    pub(crate) fn set_all_collapsed(&self, collapsed: bool) {
+        let titles: Vec<String> = self
+            .imp()
+            .layout
+            .borrow()
+            .as_ref()
+            .map(|layout| layout.groups().iter().map(|group| group.title.clone()).collect())
+            .unwrap_or_default();
+        {
+            let mut set = self.collapsed().borrow_mut();
+            set.clear();
+            if collapsed {
+                set.extend(titles);
+            }
+        }
+        self.regroup();
     }
 
     /// The object the grid shows in `slot`.
@@ -371,7 +726,7 @@ impl GroupedSelection {
             Slot::Heading(_) => &group_objects.heading,
             Slot::Rule => group_objects.rules.get(usize::try_from(offset).ok()? - 1)?,
             Slot::Blank => {
-                let past = offset - layout.columns() - layout.groups()[group].len();
+                let past = offset - layout.columns() - layout.groups()[group].shown();
                 group_objects.blanks.get(usize::try_from(past).ok()?)?
             }
         };
@@ -393,9 +748,11 @@ impl GroupedSelection {
                     .unwrap_or_default()
             })
             .collect();
-        let layout = SlotLayout::new(group_runs(titles.iter().map(String::as_str)), columns);
+        let runs = collapsed_runs(titles.iter().map(String::as_str), &self.collapsed().borrow());
+        let layout = SlotLayout::new(runs, columns);
         self.keep_objects(&layout);
         let old = imp.layout.replace(Some(layout));
+        let regrouped = self.count_selected_groups();
         if !notify {
             return;
         }
@@ -410,6 +767,9 @@ impl GroupedSelection {
         if let Some((position, removed, added)) = changed {
             self.items_changed(position, removed, added);
         }
+        // Only once the view knows the new slots: GTK crashed looking up a
+        // slot it was told changed before it was told the list grew.
+        self.heading_rows_changed(&regrouped);
     }
 
     /// Gives every group of `layout` its slot objects, keeping those of a
@@ -432,14 +792,30 @@ impl GroupedSelection {
             .groups()
             .iter()
             .map(|group| {
-                let mut objects = kept.remove(&group.title).unwrap_or_else(GroupObjects::new);
+                let mut objects = kept
+                    .remove(&group.title)
+                    .unwrap_or_else(|| GroupObjects::new(self, &group.title));
                 let rules = usize::try_from(columns - 1).unwrap_or_default();
-                let blanks = usize::try_from((columns - group.len() % columns) % columns).unwrap_or_default();
-                GroupObjects::fit(&mut objects.rules, rules, SlotKind::Rule);
-                GroupObjects::fit(&mut objects.blanks, blanks, SlotKind::Blank);
-                let text = header_text(&group.title, group.len());
-                if objects.heading.text() != text {
-                    objects.heading.set_text(text);
+                let blanks =
+                    usize::try_from((columns - group.shown() % columns) % columns).unwrap_or_default();
+                GroupObjects::fit(&mut objects.rules, rules, SlotKind::Rule, self, &group.title);
+                GroupObjects::fit(&mut objects.blanks, blanks, SlotKind::Blank, self, &group.title);
+                let alone = objects.rules.is_empty();
+                if objects.heading.ends_row() != alone {
+                    objects.heading.set_ends_row(alone);
+                }
+                let last = objects.rules.len().saturating_sub(1);
+                for (index, rule) in objects.rules.iter().enumerate() {
+                    if rule.ends_row() != (index == last) {
+                        rule.set_ends_row(index == last);
+                    }
+                }
+                // The title alone: Windows 11 (since 22H2) shows no count.
+                if objects.heading.text() != group.title {
+                    objects.heading.set_text(group.title.clone());
+                }
+                if objects.heading.collapsed() != group.collapsed {
+                    objects.heading.set_collapsed(group.collapsed);
                 }
                 objects
             })
@@ -450,6 +826,8 @@ impl GroupedSelection {
     /// Tells the grid the folder's selection changed for `count` items
     /// from `position`.
     fn follow_selection(&self, position: u32, count: u32) {
+        let headings = self.count_selected_groups();
+        self.heading_rows_changed(&headings);
         let first = self.slot_of(position);
         let last = count
             .checked_sub(1)
@@ -463,5 +841,88 @@ impl GroupedSelection {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::folder_view::item::store_of_files;
+
+    /// Items grouped by their first letter, in one column.
+    fn grouped(names: &[&str]) -> (GroupedSelection, gtk::MultiSelection) {
+        let items = gtk::MultiSelection::new(Some(store_of_files(names)));
+        let title: GroupTitle = Rc::new(|item: &FileItem| item.entry().name.chars().next().map(String::from));
+        let model = GroupedSelection::new(&items, title, &CollapsedGroups::default(), 1);
+        (model, items)
+    }
+
+    fn selected(items: &gtk::MultiSelection) -> Vec<u32> {
+        (0..items.n_items())
+            .filter(|item| items.is_selected(*item))
+            .collect()
+    }
+
+    /// Ctrl on an expanded group whose items are all selected takes the
+    /// group out, as Ctrl on a selected item does; the collapsed-heading
+    /// fill does not decide it (Codex review of #289).
+    ///
+    /// parity: VIEW-022
+    #[gtk::test]
+    fn ctrl_takes_out_an_expanded_group_that_is_all_selected() {
+        let (model, items) = grouped(&["a1.txt", "a2.txt", "b1.txt"]);
+        model.select_group(0, false, false);
+        assert_eq!(selected(&items), [0, 1]);
+        model.select_group(0, true, false);
+        assert_eq!(selected(&items), Vec::<u32>::new(), "Ctrl took the group out");
+        model.select_group(1, false, false);
+        model.select_group(0, true, false);
+        assert_eq!(
+            selected(&items),
+            [0, 1, 2],
+            "Ctrl adds a group that is not all selected"
+        );
+    }
+
+    /// The Shift anchor can be put back, as a double-click on a heading
+    /// does after its first click moved it.
+    #[gtk::test]
+    fn the_shift_anchor_can_be_put_back() {
+        let (model, _items) = grouped(&["a1.txt", "a2.txt", "b1.txt"]);
+        model.set_anchor(Some(2));
+        model.select_group(0, false, false);
+        assert_eq!(model.anchor(), Some(0), "a click on a heading anchors its group");
+        model.set_anchor(Some(2));
+        assert_eq!(model.anchor(), Some(2));
+    }
+
+    /// A cell that showed a heading stops telling assistive technology it
+    /// is expanded or collapsed once GTK reuses it for a heading's line or
+    /// a file (Codex review of #289).
+    ///
+    /// parity: VIEW-022
+    #[gtk::test]
+    fn a_reused_heading_cell_stops_announcing_its_state() {
+        use crate::folder_view::cells::{CellLayout, FileCell};
+        let items = gtk::MultiSelection::new(Some(store_of_files(&["a1.txt", "b1.txt"])));
+        let title: GroupTitle = Rc::new(|item: &FileItem| item.entry().name.chars().next().map(String::from));
+        let model = GroupedSelection::new(&items, title, &CollapsedGroups::default(), 3);
+        let heading = model.heading(0).expect("a heading");
+        let rule = model.rules(0).into_iter().next().expect("a line slot");
+        let cell = FileCell::new(CellLayout::Tile, 48);
+        cell.show_group_slot(Some(&heading));
+        assert_eq!(cell.announced_expanded(), Some(true));
+        model.set_collapsed(&heading_title(&heading), true);
+        assert_eq!(cell.announced_expanded(), Some(false));
+        cell.show_group_slot(Some(&rule));
+        assert_eq!(cell.announced_expanded(), None, "a heading's line is no heading");
+        cell.show_group_slot(Some(&heading));
+        cell.show_group_slot(None);
+        assert_eq!(cell.announced_expanded(), None, "a file is no heading");
+    }
+
+    /// The title of the group `heading` heads.
+    fn heading_title(heading: &GroupSlot) -> String {
+        heading.imp().title.borrow().clone()
     }
 }

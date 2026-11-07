@@ -23,10 +23,10 @@
 //! opens the drive's menu ([`super::place_menus`]), and Alt+Enter its
 //! Properties. A group heading's right-click, Menu key or Shift+F10
 //! opens its menu, as Explorer's: Collapse group (or Expand group),
-//! Expand all groups and Collapse all groups ([`heading_menu`]). Select
-//! all (Ctrl+A), Select none (Escape) and Invert selection act on the
-//! tiles of both groups, as in Windows 11's This PC
-//! ([`change_tile_selection`]).
+//! Expand all groups and Collapse all groups, the commands of a folder's
+//! group headings (`group_headings.rs`). Select all (Ctrl+A), Select none
+//! (Escape) and Invert selection act on the tiles of both groups, as in
+//! Windows 11's This PC ([`change_tile_selection`]).
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -47,7 +47,7 @@ use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
-use super::menu_popover::{MenuEntry, MenuItem, MenuPopover, MenuStyle};
+use super::menu_popover::{MenuPopover, MenuStyle};
 use super::place_menus::{classic_or_compact, popup_place_menu, PlaceMenu};
 use super::selection_keys::SelectionChange;
 use super::widget_tree::remove_children;
@@ -489,43 +489,6 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
     header
 }
 
-/// A group heading's menu, as Windows 11's (checked on Windows 11):
-/// Collapse group with its key, Left (Expand group and Right while it is
-/// collapsed), then Expand all groups and Collapse all groups. Windows
-/// also selects the group and lists the selection's menu below a divider;
-/// This PC selects one tile at a time and has no menu for several drives,
-/// so the heading's menu ends there, and the compact style has no "Show
-/// more options".
-fn heading_menu(group: Group, collapsed: bool) -> Vec<MenuEntry> {
-    let (toggle, key) = if collapsed {
-        (ox_core::i18n::gettext("Expand group"), "Right")
-    } else {
-        (ox_core::i18n::gettext("Collapse group"), "Left")
-    };
-    vec![
-        MenuItem::with_text_target(
-            &toggle,
-            Icon::ChevronDown16,
-            WindowAction::ToggleGroup,
-            group.header_class(),
-        )
-        .with_shortcut(key)
-        .into(),
-        MenuItem::new(
-            ox_core::i18n::gettext_static("Expand all groups"),
-            Icon::ChevronDown16,
-            WindowAction::ExpandAllGroups,
-        )
-        .into(),
-        MenuItem::new(
-            ox_core::i18n::gettext_static("Collapse all groups"),
-            Icon::ChevronRight16,
-            WindowAction::CollapseAllGroups,
-        )
-        .into(),
-    ]
-}
-
 /// Opens a heading's menu for `group` of This PC drawn in `page`, at
 /// `point` in `page`, in the right-click menu's style, or the classic one
 /// when `classic` asks for it. It reads the group's state from `page`,
@@ -545,7 +508,13 @@ fn popup_heading_menu(page: &gtk::Box, group: Group, point: gtk::graphene::Point
         .unwrap_or_else(|| page.clone().upcast());
     let point = page.compute_point(&owner, &point).unwrap_or(point);
     let collapsed = page.has_css_class(group.collapsed_class());
-    let popover = MenuPopover::new(classic_or_compact(heading_menu(group, collapsed), style));
+    if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
+        window.set_this_pc_menu_group(group.header_class());
+    }
+    // The folder view's heading menu, as Windows 11 words both
+    // (`group_headings.rs`), with nothing below it.
+    let entries = super::group_headings::this_pc_heading_entries(collapsed);
+    let popover = MenuPopover::new(classic_or_compact(entries, style));
     popover.set_style_and_strip(style, Vec::new());
     popover.set_offset(0, 0);
     popover.set_position(gtk::PositionType::Bottom);

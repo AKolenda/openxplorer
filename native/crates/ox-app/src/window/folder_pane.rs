@@ -23,7 +23,7 @@ use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
-use crate::folder_view::grid::IconView;
+use crate::folder_view::grid::{GroupedSelection, IconView};
 use crate::folder_view::model::FolderModel;
 use crate::text_size::TextSize;
 
@@ -459,15 +459,14 @@ impl FolderPane {
         let switching_the_listing = self.page() == Some(PanePage::Listing) && self.view_has_focus();
         let parts = self.parts();
         let selection = parts.model.selection();
-        let column_view = parts.details.column_view();
         match view.grid_layout() {
             None => {
                 parts.icon_view.set_model(None);
-                column_view.set_model(Some(selection));
+                parts.details.set_model(Some(selection));
             }
             Some(layout) => {
                 parts.icon_view.set_layout(layout);
-                column_view.set_model(None::<&gtk::MultiSelection>);
+                parts.details.set_model(None);
                 parts.icon_view.set_model(Some(selection));
                 parts.icon_view.fit_lines();
             }
@@ -630,6 +629,14 @@ impl FolderPane {
             _ if self.model().n_items() == 0 => self.focus_empty_list(),
             _ => {
                 self.view_widget().grab_focus();
+                self.keep_focus_off_headings();
+                // Again once GTK has finished: a click on blank space
+                // hands the keyboard to the list's first row after this.
+                glib::idle_add_local_once(glib::clone!(
+                    #[weak(rename_to = pane)]
+                    self,
+                    move || pane.keep_focus_off_headings()
+                ));
             }
         }
     }
@@ -710,6 +717,43 @@ impl FolderPane {
         rows.grab_focus();
     }
 
+    /// The grouped model the visible view lists, while it heads the
+    /// folder's groups: Details, Tiles or Content of a grouped folder.
+    pub(super) fn grouped(&self) -> Option<GroupedSelection> {
+        match self.view() {
+            FolderView::Details => self.details().grouped(),
+            _ => self.icon_view().grouped(),
+        }
+    }
+
+    /// Moves the keyboard from a group heading to an item when the list
+    /// takes it: GTK starts at the list's first row, which is a heading
+    /// in a grouped view, and the heading's outline would show while an
+    /// item is selected. As in Windows 11, the keyboard starts on the first
+    /// selected item shown, else the first item shown; a heading takes it
+    /// only from a click or an arrow.
+    fn keep_focus_off_headings(&self) {
+        let Some(layout) = self.grouped().and_then(|grouped| grouped.layout()) else {
+            return;
+        };
+        let on_item = self
+            .root()
+            .and_then(|root| root.focus())
+            .and_then(|focus| self.owners().position_of(&focus))
+            .is_some();
+        if on_item {
+            return;
+        }
+        let selected = self
+            .model()
+            .selected_positions()
+            .into_iter()
+            .find(|position| layout.shows(*position));
+        if let Some(position) = selected.or_else(|| layout.end_item(false)) {
+            self.focus_item(position);
+        }
+    }
+
     /// Scrolls to `position` and gives it keyboard focus.
     pub(super) fn reveal(&self, position: u32) {
         self.scroll_to(position, gtk::ListScrollFlags::FOCUS, None);
@@ -741,10 +785,7 @@ impl FolderPane {
             self.parts().top_keeper.let_go();
         }
         match self.view() {
-            FolderView::Details => self
-                .details()
-                .column_view()
-                .scroll_to(position, None, flags, scroll),
+            FolderView::Details => self.details().scroll_to(position, flags, scroll),
             _ => {
                 self.icon_view().scroll_to(position, flags, scroll);
             }

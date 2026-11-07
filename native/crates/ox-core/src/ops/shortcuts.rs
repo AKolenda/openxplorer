@@ -34,11 +34,12 @@ use gio::prelude::*;
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::links::LinkRequest;
+use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
 use super::undo::UndoRecord;
 use crate::location::{file_uri, fitted_name, normalise, ItemKind};
 use crate::network::local_path;
-use crate::transfer::MAX_ITEMS;
+use crate::transfer::{TransferMode, MAX_ITEMS};
 
 /// Why a folder takes no shortcuts.
 pub const NO_LINKS_HERE: &str = crate::i18n::message_id(
@@ -248,25 +249,32 @@ fn create_shortcuts_blocking(
     let folder = normalise(&request.destination_folder)?;
     context.protection.check(&folder)?;
     let mut outcome = TransferOutcome::default();
-    for target in &request.targets {
+    let mut questions = ItemQuestions::new(context, TransferMode::Copy);
+    for (index, target) in request.targets.iter().enumerate() {
         let uri = &target.uri;
         if context.cancel.is_cancelled() {
             outcome.result.cancelled = true;
             break;
         }
-        match create_shortcut_named(uri, &folder, target.name.as_deref()) {
-            Ok(link) => {
-                outcome.result.done.push(uri.clone());
-                outcome.created.push(link);
-            }
-            Err(error) => {
-                let name = target.name.clone().unwrap_or_else(|| {
-                    gio::File::for_uri(uri)
-                        .basename()
-                        .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned())
-                });
-                outcome.result.errors.push(format!("{name}: {error}"));
-            }
+        let name = target.name.clone().unwrap_or_else(|| {
+            gio::File::for_uri(uri)
+                .basename()
+                .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned())
+        });
+        let asked = AskedItem {
+            name: &name,
+            uri,
+            more_items: index + 1 < request.targets.len(),
+        };
+        // An item that gets no shortcut is asked about in the progress
+        // window (OPS-047).
+        let attempt = || create_shortcut_named(uri, &folder, target.name.as_deref());
+        if let Some(link) = questions.run(&mut outcome.result, asked, attempt) {
+            outcome.result.done.push(uri.clone());
+            outcome.created.push(link);
+        }
+        if outcome.result.cancelled {
+            break;
         }
     }
     if !outcome.created.is_empty() {

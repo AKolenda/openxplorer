@@ -233,6 +233,7 @@ impl BrowserWindow {
     }
 
     fn install_selection_actions(&self) {
+        self.install_group_heading_actions();
         self.add_action_entries([
             plain_action(WindowAction::Open, BrowserWindow::open_selection),
             plain_action(WindowAction::SelectAll, |window| {
@@ -425,7 +426,7 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 13] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
@@ -449,6 +450,10 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 13] = [
     // Dolphin's Handbook and GNOME's Keyboard Shortcuts (CMD-033, CMD-032).
     (WindowAction::Help, &["F1"]),
     (WindowAction::KeyboardShortcuts, &["<Primary>question"]),
+    // Windows File Explorer's Ctrl+plus on the number pad: "Resize all
+    // columns to fit text" (VIEW-072). Ctrl+plus on the main keyboard
+    // keeps changing the text size.
+    (WindowAction::FitAllColumns, &["<Primary>KP_Add"]),
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).

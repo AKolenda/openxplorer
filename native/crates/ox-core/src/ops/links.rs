@@ -26,11 +26,12 @@ use gio::prelude::*;
 use super::context::{on_worker, OperationContext};
 use super::create::name_taken_or;
 use super::error::OpsError;
+use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
 use super::shortcuts::create_shortcut;
 use super::undo::UndoRecord;
 use crate::location::{file_uri, normalise, typed_local_path, validate_name};
-use crate::transfer::{TransferResult, MAX_ITEMS};
+use crate::transfer::{TransferMode, MAX_ITEMS};
 
 /// Why the folder takes no links.
 const NOT_LOCAL_FOLDER: &str =
@@ -170,17 +171,27 @@ fn create_links_blocking(
         .path()
         .ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_FOLDER)))?;
     let mut outcome = TransferOutcome::default();
-    for uri in &request.uris {
+    let mut questions = ItemQuestions::new(context, TransferMode::Copy);
+    for (index, uri) in request.uris.iter().enumerate() {
         if context.cancel.is_cancelled() {
             outcome.result.cancelled = true;
             break;
         }
-        match link_item(uri, &folder) {
-            Ok(link) => {
-                outcome.result.done.push(uri.clone());
-                outcome.created.push(file_uri(&link));
-            }
-            Err(reason) => record_refusal(&mut outcome.result, uri, &reason),
+        let name = item_name(uri);
+        let asked = AskedItem {
+            name: &name,
+            uri,
+            more_items: index + 1 < request.uris.len(),
+        };
+        // An item that gets no link is asked about in the progress window
+        // (OPS-047).
+        let attempt = || link_item(uri, &folder).map_err(OpsError::Failed);
+        if let Some(link) = questions.run(&mut outcome.result, asked, attempt) {
+            outcome.result.done.push(uri.clone());
+            outcome.created.push(file_uri(&link));
+        }
+        if outcome.result.cancelled {
+            break;
         }
     }
     if !outcome.created.is_empty() {
@@ -206,13 +217,11 @@ fn link_item(uri: &str, folder: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))
 }
 
-/// Records that the item at `uri` got no link, as `name: reason`.
-fn record_refusal(result: &mut TransferResult, uri: &str, reason: &str) {
-    let file = gio::File::for_uri(uri);
-    let name = file
+/// The name of the item at `uri`, as a question shows it.
+fn item_name(uri: &str) -> String {
+    gio::File::for_uri(uri)
         .basename()
-        .map_or_else(|| uri.to_owned(), |name| name.to_string_lossy().into_owned());
-    result.errors.push(format!("{name}: {reason}"));
+        .map_or_else(|| uri.to_owned(), |name| name.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
