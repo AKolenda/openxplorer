@@ -487,6 +487,53 @@ fn arrows_move_through_tiles_and_content() {
     assert_eq!(test.selected_names(), ["file 0004.txt"], "type-ahead selects");
 }
 
+/// In grouped Tiles and Content every key moves between items across
+/// the headings, as in Details: Down from a group's last row goes to the
+/// next group's first, Right from a group's last item to the next group's
+/// first, Up comes back to the column, and Shift and Ctrl work as
+/// elsewhere.
+///
+/// parity: VIEW-071, VIEW-022, SEL-007, SEL-009, SEL-010
+#[gtk::test]
+fn arrows_cross_the_group_headings_in_tiles_and_content() {
+    let fixture = Fixture::standard();
+    fixture.write("Plan.md");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let none = gdk::ModifierType::empty();
+    let shift = gdk::ModifierType::SHIFT_MASK;
+    let last = test.window.folder_pane().model().n_items() - 1;
+    for view in ["tiles", "content"] {
+        show_view(&test, view);
+        start_at(&test, 0);
+        press_key(&test, gdk::Key::Down, none);
+        assert_eq!(selected(&test), [1], "{view}: Down passes the heading");
+        press_key(&test, gdk::Key::Up, none);
+        assert_eq!(selected(&test), [0], "{view}: Up passes it back");
+        press_key(&test, gdk::Key::Right, none);
+        assert_eq!(selected(&test), [1], "{view}: Right into the next group");
+        press_key(&test, gdk::Key::Left, none);
+        assert_eq!(selected(&test), [0]);
+        press_key(&test, gdk::Key::End, none);
+        assert_eq!(selected(&test), [last], "{view}: End");
+        press_key(&test, gdk::Key::Home, shift);
+        assert_eq!(
+            selected(&test),
+            (0..=last).collect::<Vec<u32>>(),
+            "{view}: Shift+Home"
+        );
+        press_key(&test, gdk::Key::Down, none);
+        assert_eq!(selected(&test), [1], "{view}: a plain key selects one item");
+        press_key(&test, gdk::Key::Down, gdk::ModifierType::CONTROL_MASK);
+        assert_eq!(selected(&test), [1], "{view}: Ctrl moves the focus alone");
+        let focused = test.window.folder_pane().focused_position().expect("focus");
+        assert!(focused > 1, "{view}: the focus moved on");
+        press_key(&test, gdk::Key::Right, shift);
+        let extended: Vec<u32> = (1..=focused + 1).collect();
+        assert_eq!(selected(&test), extended, "{view}: Shift extends from the anchor");
+    }
+}
+
 /// parity: SEL-016
 #[gtk::test]
 fn a_created_item_is_selected_and_scrolled_into_view() {
