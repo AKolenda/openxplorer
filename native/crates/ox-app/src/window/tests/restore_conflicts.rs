@@ -213,15 +213,12 @@ fn restore_conflicts_are_captured_light_and_dark() {
         let conflicts = super::name_conflicts::conflict_window(&window);
         wait_for(Duration::from_millis(1500));
         capture_dialog(&conflicts, &format!("native-restore-file-conflict-{theme}.png"));
+        // Closing it goes back to the question, as in Windows 11.
         conflicts.close();
-        ends_without_a_report(&test);
-        test.window.refresh();
-        wait_until("the cancelled item to be listed still", || {
-            !test.window.is_loading() && test.names().contains(&one.to_owned())
+        wait_until("the question again", || {
+            window.conflict_window().is_none() && window.actions()[0].waits_for_a_row()
         });
-        select_names(&test, &[one]);
-        test.activate("restore", None);
-        button(&question_window(&test), "Replace the file in the destination").emit_clicked();
+        button(&window, "Replace the file in the destination").emit_clicked();
         ends_without_a_report(&test);
         test.activate("go-to", Some(&fixture.uri()));
         test.wait_for_listing("the original folder");
@@ -307,6 +304,11 @@ fn the_question_greys_more_details_and_compares_the_files_only_in_the_file_confl
         button(&window, "Compare info for both files").emit_clicked();
         let conflicts = super::name_conflicts::conflict_window(&window);
         conflicts.cancel();
+        let window = question_window(&test);
+        wait_until("the question again", || {
+            window.conflict_window().is_none() && window.actions()[0].waits_for_a_row()
+        });
+        button(&window, "Skip this file").emit_clicked();
         ends_without_a_report(&test);
         drop(test);
         forget_trashed_items_of(&fixture);

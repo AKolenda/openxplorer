@@ -11,8 +11,9 @@
 //! date modified and its size. "Skip N files with the same date and
 //! size" skips those at once. Continue is enabled once every file has a
 //! side; only the incoming side replaces, only the existing side skips,
-//! and both keep both, the copy numbered `report (2).png`. Cancel stops
-//! the whole action.
+//! and both keep both, the copy numbered `report (2).png`. Cancel, the
+//! close button and Escape close only this window, unanswered: the action
+//! asks Replace or Skip Files again, still waiting, as Windows 11 does.
 //!
 //! The window belongs to the progress window: it is its transient child,
 //! modal within a window group of the two alone, so it blocks only the
@@ -83,7 +84,7 @@ mod imp {
     impl WidgetImpl for FileConflictWindow {}
 
     impl WindowImpl for FileConflictWindow {
-        /// Closing the window is Cancel.
+        /// Closing the window is Cancel: back to the question.
         fn close_request(&self) -> glib::Propagation {
             // GTK destroys the window once this returns.
             self.obj().send(None);

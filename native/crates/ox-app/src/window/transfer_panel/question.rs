@@ -16,9 +16,10 @@
 //! | N | The destination has N files with the same names | Replace the files in the destination · Skip these files · Let me decide for each file |
 //!
 //! A file meeting a folder of its name says "a folder named". The last row
-//! opens the File Conflict window ([`FileConflictWindow`]), whose Cancel
-//! stops the action, as in Windows. The action's Cancel stays beside the
-//! question, and stops it too; nothing has changed then. Each row is a
+//! opens the File Conflict window ([`FileConflictWindow`]). Its Cancel,
+//! close button and Escape close only that window, and the same question
+//! shows again, unanswered, as in Windows 11. The action's Cancel stays
+//! beside the question and stops the action; nothing has changed then. Each row is a
 //! button named by its text, reachable with Tab, with the glyph Windows
 //! shows: a check mark, a turning arrow and two documents.
 //!
@@ -137,18 +138,30 @@ impl TransferPanel {
     /// an answer per conflict, or `None` when the user cancelled.
     pub(crate) async fn ask_about_conflicts(&self, scan: &ConflictScan) -> Option<Vec<Resolution>> {
         let count = scan.conflicts.len();
-        let answers = match self.ask_row(scan).await {
-            None => None,
-            Some(Row::Replace) => Some(vec![Resolution::Replace; count]),
-            Some(Row::Skip) => Some(vec![Resolution::Skip; count]),
-            Some(Row::Decide) => self.decide_each(scan).await,
+        let answers = loop {
+            match self.ask_row(scan).await {
+                None => break None,
+                Some(Row::Replace) => break Some(vec![Resolution::Replace; count]),
+                Some(Row::Skip) => break Some(vec![Resolution::Skip; count]),
+                Some(Row::Decide) => {
+                    if let Some(answers) = self.decide_each(scan).await {
+                        break Some(answers);
+                    }
+                    if self.is_cancelled_now() {
+                        break None;
+                    }
+                    // Closed unanswered: the same question asks again.
+                }
+            }
         };
         self.end_question();
         answers
     }
 
-    /// Opens the File Conflict window and waits for its answers; Cancel
-    /// there stops the whole action, as in Windows.
+    /// Opens the File Conflict window and waits for its answers. Its
+    /// Cancel, close button and Escape close only that window, unanswered
+    /// (`None`), and the action goes back to its question, as in Windows
+    /// 11, still waiting.
     async fn decide_each(&self, scan: &ConflictScan) -> Option<Vec<Resolution>> {
         let window = self.imp().window.upgrade()?;
         let source = self.source_folder();
@@ -156,10 +169,17 @@ impl TransferPanel {
         self.imp().conflict_window.set(Some(&conflicts));
         let answers = conflicts.answers().await;
         self.imp().conflict_window.set(None);
-        if answers.is_none() {
-            self.cancel();
-        }
         answers
+    }
+
+    /// Whether the action was cancelled, by its Cancel or the progress
+    /// window's close button.
+    fn is_cancelled_now(&self) -> bool {
+        self.imp()
+            .cancel
+            .borrow()
+            .as_ref()
+            .is_some_and(ox_core::transfer::Cancellation::is_cancelled)
     }
 
     /// Asks, in place of the progress, about a drive too full for what
@@ -228,6 +248,12 @@ impl TransferPanel {
     /// True while the action asks Replace or Skip Files.
     pub(crate) fn asks_about_names(&self) -> bool {
         self.imp().question.get_visible()
+    }
+
+    /// True while a row of Replace or Skip Files answers, for tests.
+    #[cfg(test)]
+    pub(crate) fn waits_for_a_row(&self) -> bool {
+        self.asks_about_names() && self.imp().question_answer.borrow().is_some()
     }
 
     /// True while the action asks about a full drive.
