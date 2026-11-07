@@ -7,7 +7,9 @@
 //! from one table of base sizes (the values in `v2.0.0:desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
-use crate::folder_view::icon_size::{compact_row, content_row, tiles_cell};
+use crate::folder_view::icon_size::{
+    compact_row, content_row, group_heading_row, tiles_cell, CONTENT_CHROME, HEADING_CHROME, TILES_CHROME,
+};
 use crate::text_size::{self, TextSize};
 
 /// The stylesheet for `text_size`: every font size, the bars, rows, menus
@@ -61,8 +63,7 @@ const FONT_SIZES: &[FontSize] = &[
     font(".address entry", 13.0),
     font(".search-wrap entry", 12.0),
     font(".commandbar .text-command", 12.0),
-    font(".sidebar list > row", 12.0),
-    font(".sidebar-bottom button", 12.0),
+    font(".sidebar list.places > row", 12.0),
     font("columnview.files", 12.0),
     font("columnview.files > header > button", 12.0),
     font("gridview.files", 12.0),
@@ -193,12 +194,13 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
 /// A sidebar row (`.side-entry`): 31 pixels at 100%, 32 apart with the
 /// 1-pixel gap, as Windows 11's navigation pane rows are (owner decision
 /// 2026-11-06; the web's were 35).
-const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list > row", 31, 20.0, 11.0);
+const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list.places > row", 31, 20.0, 11.0);
 
 /// A sidebar row in Compact view: 24 pixels at 100% instead of 31, as
 /// Windows 11's Compact view packs them, and no lower, as Compact view's
 /// details rows, growing with the text as the usual rows do.
-const COMPACT_SIDEBAR_ROW: ScaledHeight = grows("window.compact-density .sidebar list > row", 24, 20.0, 4.0);
+const COMPACT_SIDEBAR_ROW: ScaledHeight =
+    grows("window.compact-density .sidebar list.places > row", 24, 20.0, 4.0);
 
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
@@ -349,14 +351,18 @@ fn compact_rule(text_size: TextSize) -> String {
 
 /// The heights of Tiles' tiles and Content's rows at `text_size`
 /// ([`tiles_cell`], [`content_row`]), less what lies outside their content
-/// box: a tile's 8 pixels of padding above and below and the 2-pixel gap,
-/// a row's 1-pixel line under it.
-fn tiles_and_content_rules(text_size: TextSize) -> [String; 2] {
-    let tile = tiles_cell(text_size).height - 18;
-    let row = content_row(text_size) - 1;
+/// box ([`TILES_CHROME`], [`CONTENT_CHROME`]). Both views size and draw an
+/// item on its cell, not on the grid's slot, which a group's heading has
+/// too (VIEW-071).
+fn tiles_and_content_rules(text_size: TextSize) -> [String; 3] {
+    let tile = tiles_cell(text_size).height - TILES_CHROME;
+    let row = content_row(text_size) - CONTENT_CHROME;
+    // A heading's row is as tall as Page Up and Page Down count it.
+    let heading = group_heading_row(text_size) - HEADING_CHROME;
     [
-        format!("gridview.files.tiles > child {{ min-height: {tile}px; }}"),
-        format!("gridview.files.content > child {{ min-height: {row}px; }}"),
+        format!("gridview.files.tiles > child > .item-cell:not(.group-slot) {{ min-height: {tile}px; }}"),
+        format!("gridview.files.content > child > .item-cell:not(.group-slot) {{ min-height: {row}px; }}"),
+        format!("gridview.files > child > .item-cell.group-slot {{ min-height: {heading}px; }}"),
     ]
 }
 
@@ -380,13 +386,13 @@ mod tests {
         assert!(
             css.contains("window.compact-density columnview.files > listview > row { min-height: 24px; }")
         );
-        assert!(css.contains("window.compact-density .sidebar list > row { min-height: 24px; }"));
+        assert!(css.contains("window.compact-density .sidebar list.places > row { min-height: 24px; }"));
         let larger = css_at(150);
         assert!(
             larger.contains("window.compact-density columnview.files > listview > row { min-height: 36px; }")
         );
-        assert!(larger.contains("window.compact-density .sidebar list > row { min-height: 34px; }"));
-        assert!(larger.contains(".sidebar list > row { min-height: 41px; }"));
+        assert!(larger.contains("window.compact-density .sidebar list.places > row { min-height: 34px; }"));
+        assert!(larger.contains(".sidebar list.places > row { min-height: 41px; }"));
         assert!(larger.contains("columnview.files > listview > row { min-height: 42px; }"));
     }
 
@@ -414,8 +420,12 @@ mod tests {
         assert!(css.contains("columnview.files > listview > row { min-height: 30px; }"));
         assert!(css.contains("gridview.files.icons-large > child { min-width: 96px; min-height: 144px; }"));
         assert!(css.contains("gridview.files.icons-56 > child { min-width: 56px; min-height: 104px; }"));
-        assert!(css.contains("gridview.files.tiles > child { min-height: 51px; }"));
-        assert!(css.contains("gridview.files.content > child { min-height: 57px; }"));
+        assert!(
+            css.contains("gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 53px; }")
+        );
+        assert!(css
+            .contains("gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }"));
+        assert!(css.contains("gridview.files > child > .item-cell.group-slot { min-height: 17px; }"));
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 32px; }"));
         assert!(
@@ -467,7 +477,7 @@ mod tests {
         let normal = css_at(100);
         let large = css_at(200);
         for (selector, at_100, at_200) in [
-            (".sidebar list > row", 31, 51),
+            (".sidebar list.places > row", 31, 51),
             (".commandbar", 47, 72),
             ("columnview.files > header > button", 31, 55),
             (".statusbar", 29, 39),

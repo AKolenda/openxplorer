@@ -211,8 +211,9 @@ impl CommandFacts {
         }
     }
 
-    /// Why `command` is disabled, in the words a menu item's tooltip
-    /// shows; `None` while it is enabled.
+    /// Why `command` is disabled, in the words a menu item's accessible
+    /// description or a command bar button's tooltip gives; `None` while
+    /// it is enabled.
     pub(crate) fn refusal(&self, command: FileCommand) -> Option<&'static str> {
         if self.allows(command) {
             return None;
