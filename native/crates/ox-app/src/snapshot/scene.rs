@@ -42,8 +42,11 @@
 //!   the search to finish, so a last `search=` pictures a search while it
 //!   runs;
 //! - `option=<name>`: opens the search strip's option list `<name>`
-//!   (`Kind`, `Date modified`, `Size`, `Search in`), as a click does;
-//! - `choose=<name>:<label>`: chooses `<label>` in that list.
+//!   (`Kind`, `Date modified`, `Size`, `Search in`), or with `Search
+//!   options` the command bar's Search options, as a click does; a
+//!   following `submenu=` opens one of its submenus;
+//! - `choose=<name>:<label>`: chooses `<label>` in that list, whether the
+//!   search filter bar shows or not.
 //!
 //! The steps drive the window through the same actions its buttons, menus
 //! and keys use, so the picture shows the app as a user would see it. They
@@ -174,10 +177,10 @@ impl SceneStep {
                     .map(|()| crate::window::MENU_OPENING_MOTION)
                     .map_err(|_| format!("the window has no action “{name}”"))
             }
-            Self::Submenu(label) => window
-                .open_context_submenu(label)
-                .then_some(crate::window::MENU_OPENING_MOTION)
-                .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
+            Self::Submenu(label) => (window.open_context_submenu(label)
+                || window.open_search_options_submenu(label))
+            .then_some(crate::window::MENU_OPENING_MOTION)
+            .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
             Self::Tab(name) => {
                 let properties = window
                     .properties_windows()

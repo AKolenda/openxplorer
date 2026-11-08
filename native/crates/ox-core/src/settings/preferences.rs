@@ -492,6 +492,11 @@ pub struct Preferences {
     /// (Folder Options' "Always search file names and contents").
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub search_contents: bool,
+    /// A search shows the search filter bar above the results, as before,
+    /// in place of Windows 11's Search options and Close search in the
+    /// command bar (Settings > Search > "Show the search filter bar").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub show_search_filter_bar: bool,
     /// Paste in a folder writes a picture on the clipboard, such as a
     /// screenshot, as a new image file (CLIP-015). On by default; stored
     /// only when off, which leaves Paste unavailable for a picture, as in
@@ -620,6 +625,7 @@ impl Default for Preferences {
             hide_status_bar: false,
             hide_preview_handlers: false,
             type_into_search_box: false,
+            show_search_filter_bar: false,
             search_contents: false,
             paste_pictures_as_files: true,
             copy_paths_as_text: true,
@@ -668,6 +674,7 @@ impl Preferences {
         replace_if_some(&mut self.hide_preview_handlers, update.hide_preview_handlers);
         replace_if_some(&mut self.type_into_search_box, update.type_into_search_box);
         replace_if_some(&mut self.search_contents, update.search_contents);
+        replace_if_some(&mut self.show_search_filter_bar, update.show_search_filter_bar);
     }
 
     /// The clipboard's extras beyond Windows, which can be turned off: a
@@ -1015,6 +1022,8 @@ pub struct PreferencesUpdate {
     pub type_into_search_box: Option<bool>,
     /// See [`Preferences::search_contents`].
     pub search_contents: Option<bool>,
+    /// See [`Preferences::show_search_filter_bar`].
+    pub show_search_filter_bar: Option<bool>,
     /// See [`Preferences::paste_pictures_as_files`].
     pub paste_pictures_as_files: Option<bool>,
     /// See [`Preferences::copy_paths_as_text`].
@@ -1113,6 +1122,7 @@ impl PreferencesUpdate {
             hide_status_bar: flag("hideStatusBar"),
             hide_preview_handlers: flag("hidePreviewHandlers"),
             type_into_search_box: flag("typeIntoSearchBox"),
+            show_search_filter_bar: flag("showSearchFilterBar"),
             search_contents: flag("searchContents"),
             paste_pictures_as_files: flag("pastePicturesAsFiles"),
             copy_paths_as_text: flag("copyPathsAsText"),
@@ -1559,7 +1569,10 @@ mod tests {
         let mut preferences = Preferences::default();
         assert!(!preferences.show_search_filter_bar);
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert!(stored.get("showSearchFilterBar").is_none(), "not stored while off");
+        assert!(
+            stored.get("showSearchFilterBar").is_none(),
+            "not stored while off"
+        );
 
         let on = PreferencesUpdate::from_json(&json!({ "showSearchFilterBar": true }))
             .expect("a valid preference");
@@ -1573,7 +1586,10 @@ mod tests {
             ..PreferencesUpdate::default()
         });
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert!(stored.get("showSearchFilterBar").is_none(), "off again, not stored");
+        assert!(
+            stored.get("showSearchFilterBar").is_none(),
+            "off again, not stored"
+        );
     }
 
     /// File name extensions are hidden by default for known types, as in

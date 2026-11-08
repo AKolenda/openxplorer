@@ -268,6 +268,9 @@ pub(crate) enum Icon {
     /// Select items matching, the settings search and the Search &
     /// indexing settings.
     Search,
+    /// Search options in the command bar while searching, as Windows 11
+    /// File Explorer shows it (SRCH-046).
+    SearchSettings,
     /// Select all in the "…" menu: an original icon
     /// made for `OpenXplorer` to match Windows 11's command-bar glyph
     /// (`native/icon-sources`).
@@ -440,6 +443,7 @@ impl Icon {
             Icon::RectangleLandscape => "ox-rectangle-landscape-20-symbolic",
             Icon::Rename => "ox-rename-20-symbolic",
             Icon::Search => "ox-search-20-symbolic",
+            Icon::SearchSettings => "ox-search-settings-20-symbolic",
             Icon::SelectAll24 => "ox-select-all-24-symbolic",
             Icon::SelectAllOff => "ox-select-all-off-20-symbolic",
             Icon::SelectAllOn => "ox-select-all-on-20-symbolic",
@@ -490,7 +494,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 123] = [
+pub(crate) const ALL_ICONS: [Icon; 124] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
@@ -586,6 +590,7 @@ pub(crate) const ALL_ICONS: [Icon; 123] = [
     Icon::RectangleLandscape,
     Icon::Rename,
     Icon::Search,
+    Icon::SearchSettings,
     Icon::SelectAll24,
     Icon::SelectAllOff,
     Icon::SelectAllOn,

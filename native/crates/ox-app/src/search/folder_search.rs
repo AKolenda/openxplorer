@@ -67,6 +67,9 @@ pub(crate) struct FolderSearch {
     typed: TypedQuery,
     /// The scope the strip shows.
     scope: SearchScope,
+    /// Only the folder itself is searched, not its subfolders (Search
+    /// options > Current folder, SRCH-046).
+    current_folder_only: bool,
     /// Whether names or names and contents are searched (SRCH-036); kept
     /// when the search ends, as Dolphin remembers it.
     search_in: SearchIn,
@@ -116,6 +119,7 @@ impl FolderSearch {
         self.query.clear();
         self.typed = TypedQuery::default();
         self.scope = SearchScope::default();
+        self.current_folder_only = false;
         self.facets = SearchFacets::default();
         self.report = None;
     }
@@ -134,6 +138,9 @@ impl FolderSearch {
         } else {
             SearchSource::choose(roots, folder, self.scope)
         };
+        if self.current_folder_only && self.scope == SearchScope::ThisFolder {
+            return SearchSource::CurrentFolderOnly;
+        }
         if source == SearchSource::CurrentFolder && !walks_subfolders(folder) {
             SearchSource::CurrentFolderOnly
         } else {
@@ -191,6 +198,17 @@ impl FolderSearch {
     /// Chooses the scope; the caller runs the search again.
     pub(crate) fn set_scope(&mut self, scope: SearchScope) {
         self.scope = scope;
+    }
+
+    /// Whether only the folder itself is searched, not its subfolders.
+    pub(crate) fn is_current_folder_only(&self) -> bool {
+        self.current_folder_only
+    }
+
+    /// Searches the folder alone, or with its subfolders; the caller runs
+    /// the search again.
+    pub(crate) fn set_current_folder_only(&mut self, only: bool) {
+        self.current_folder_only = only;
     }
 
     /// Whether names or names and contents are searched.

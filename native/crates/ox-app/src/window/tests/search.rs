@@ -738,7 +738,9 @@ fn a_walk_that_finds_nothing_more_keeps_the_rows_typing_filtered() {
         test.window.imp().search.borrow().results().is_none(),
         "the walk found nothing more, so the filtered listing stays"
     );
-    let position = model.position_of_uri(&fixture.uri_of("file 0010.txt")).expect("listed");
+    let position = model
+        .position_of_uri(&fixture.uri_of("file 0010.txt"))
+        .expect("listed");
     let first = model.item(position).expect("a row");
     // One more key, as typing adds it.
     let entry = test.window.search_box().entry();

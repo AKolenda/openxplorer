@@ -170,7 +170,7 @@ impl BrowserWindow {
 
     /// Runs the search once typing paused (`runSearch`), as a step of
     /// the tab's history of its own ("Search Results in Documents").
-    fn run_search(&self) {
+    pub(super) fn run_search(&self) {
         self.run_search_as(StepChange::New);
     }
 
@@ -285,13 +285,16 @@ impl BrowserWindow {
     /// Opens the search strip's option list named `name`, as the snapshot
     /// hook's scenes ask; false when the strip has none.
     pub(crate) fn open_search_option(&self, name: &str) -> bool {
+        if name == ox_core::i18n::gettext_static("Search options") || name == "Search options" {
+            return self.open_search_options();
+        }
         self.search_strip().is_visible() && self.search_strip().open_option(name)
     }
 
     /// Chooses `label` in the search strip's option list named `name`, as
     /// the snapshot hook's scenes ask; false when there is no such option.
     pub(crate) fn choose_search_option(&self, name: &str, label: &str) -> bool {
-        self.search_strip().is_visible() && self.search_strip().choose_option(name, label)
+        self.search_strip().choose_option(name, label)
     }
 
     /// Searches the cache for `run` off the main thread and shows what it
@@ -433,6 +436,7 @@ impl BrowserWindow {
         // Released first: the strip's lists change as it shows them.
         drop(search);
         self.search_strip().show_report(report.as_ref(), options);
+        self.show_search_layout();
         self.folder_pane().owners().set_row_tooltip(row_tooltip);
         self.update_expandability();
         self.update_content();

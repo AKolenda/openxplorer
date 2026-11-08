@@ -71,10 +71,20 @@ fn a_search_shows_search_options_and_close_search_and_no_filter_bar() {
     assert!(!test.window.search_strip().is_visible(), "no filter bar");
     let names = command_bar_names(&test);
     let view = names.iter().position(|name| name == "View").expect("View");
-    assert_eq!(names[view + 1..view + 3], ["Search options", "Close search"], "{names:?}");
-    assert_eq!(test.active_tab_title(), format!("notes - Search Results in {root}"));
+    assert_eq!(
+        names[view + 1..view + 3],
+        ["Search options", "Close search"],
+        "{names:?}"
+    );
+    assert_eq!(
+        test.active_tab_title(),
+        format!("notes - Search Results in {root}")
+    );
     let title = test.window.title().map(|title| title.to_string());
-    assert_eq!(title, Some(format!("notes - Search Results in {root} — OpenXplorer")));
+    assert_eq!(
+        title,
+        Some(format!("notes - Search Results in {root} — OpenXplorer"))
+    );
     let crumbs = test.crumb_labels();
     assert_eq!(crumbs.last(), Some(&format!("Search Results in {root}")));
 
@@ -103,10 +113,28 @@ fn the_search_options_menu_lists_windows_items_in_order() {
     let dates = menu.open_submenu_of("Date modified").row_labels();
     assert_eq!(
         dates,
-        ["Any date", "Today", "Yesterday", "This week", "Last week", "This month", "This year"]
+        [
+            "Any date",
+            "Today",
+            "Yesterday",
+            "This week",
+            "Last week",
+            "This month",
+            "This year"
+        ]
     );
     let kinds = menu.open_submenu_of("Kind").row_labels();
-    assert_eq!(kinds, ["Any kind", "Folders", "Documents", "Images", "Audio files", "Videos"]);
+    assert_eq!(
+        kinds,
+        [
+            "Any kind",
+            "Folders",
+            "Documents",
+            "Images",
+            "Audio files",
+            "Videos"
+        ]
+    );
     let sizes = menu.open_submenu_of("Size").row_labels();
     assert_eq!(sizes[0], "Any size");
     assert_eq!(sizes[7], "Gigantic (> 4 GB)");

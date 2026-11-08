@@ -169,6 +169,8 @@ pub(crate) struct CellOwners {
     item_checks_pass_clicks: Cell<bool>,
     /// Whether names show the extensions of known types (VIEW-069).
     extensions: Cell<Extensions>,
+    /// The words marked in the names, lower-cased (SRCH-046).
+    marked_words: RefCell<Vec<String>>,
 }
 
 impl CellOwners {
@@ -463,9 +465,28 @@ impl CellOwners {
     /// Shows names with or without the extensions of known types; a cell
     /// bound later follows when it is bound.
     pub(crate) fn set_extensions(&self, extensions: Extensions) {
-        if self.extensions.replace(extensions) == extensions {
-            return;
+        if self.extensions.replace(extensions) != extensions {
+            self.show_names_again();
         }
+    }
+
+    /// The words a search marks in the names it shows (SRCH-046); none
+    /// while nothing is searched or the search filter bar shows.
+    pub(crate) fn marked_words(&self) -> Vec<String> {
+        self.marked_words.borrow().clone()
+    }
+
+    /// Marks `words` in the names shown, and in those bound later.
+    pub(crate) fn set_marked_words(&self, words: Vec<String>) {
+        if *self.marked_words.borrow() != words {
+            self.marked_words.replace(words);
+            self.show_names_again();
+        }
+    }
+
+    /// Shows the names of the bound cells again, after what they show of
+    /// them changed.
+    fn show_names_again(&self) {
         let bound: Vec<(gtk::ListItem, gtk::Widget, FileItem)> = self
             .owners
             .borrow()
@@ -475,13 +496,14 @@ impl CellOwners {
                 Some((owner.list_item.upgrade()?, cell, item))
             })
             .collect();
+        let words = self.marked_words();
         for (list_item, cell, item) in bound {
             if let Some(cell) = cell.downcast_ref::<FileCell>() {
                 // The name a screen reader reads follows the one shown,
                 // as binding set them together.
                 let name = self.shown_name(&item);
                 list_item.set_accessible_label(&name);
-                cell.show_name(&name);
+                cell.show_name(&name, &words);
             }
         }
     }
