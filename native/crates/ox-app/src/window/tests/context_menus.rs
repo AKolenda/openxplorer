@@ -817,6 +817,68 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     assert!(!test.window.is_action_enabled("back"), "the history stays behind");
 }
 
+/// The Menu key and Shift+F10 on the focused tab open that tab's menu
+/// under it, with the keyboard on its first item, as Shift+F10 opens
+/// "the context menu for the selected item" in Windows 11 and arrow keys
+/// move along the tab row
+/// (support.microsoft.com, "Keyboard shortcuts in Windows").
+///
+/// parity: TAB-012
+#[gtk::test]
+fn the_menu_key_and_shift_f10_open_the_focused_tabs_menu() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let tab = test
+        .window
+        .tab_strip()
+        .tab_list()
+        .first_child()
+        .expect("the window has a tab");
+    let keys: Vec<gtk::Shortcut> = tab
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let shortcut_for = |key: gtk::gdk::Key, modifiers: gtk::gdk::ModifierType| {
+        keys.iter()
+            .find(|shortcut| {
+                shortcut
+                    .trigger()
+                    .and_downcast::<gtk::KeyvalTrigger>()
+                    .is_some_and(|trigger| trigger.keyval() == key && trigger.modifiers() == modifiers)
+            })
+            .and_then(gtk::Shortcut::action)
+    };
+
+    for (key, modifiers) in [
+        (gtk::gdk::Key::Menu, gtk::gdk::ModifierType::empty()),
+        (gtk::gdk::Key::F10, gtk::gdk::ModifierType::SHIFT_MASK),
+    ] {
+        let action = shortcut_for(key, modifiers).unwrap_or_else(|| panic!("a focused tab takes {key:?}"));
+        assert!(action.activate(gtk::ShortcutActionFlags::empty(), &tab, None));
+        let menu = test.window.tab_strip().menu();
+        assert!(menu.is_visible(), "{key:?} opens the tab menu");
+        assert_eq!(menu.row_labels()[0], "Move tab to new window");
+        assert!(
+            !menu.row("Close other tabs").is_sensitive(),
+            "the only tab has no others to close"
+        );
+        assert!(
+            !test.window.context_menu().is_visible(),
+            "the file list's menu stays shut"
+        );
+        menu.popdown();
+    }
+}
+
 /// Mount disk image and Analyse disk usage start their tool on the
 /// item's local path.
 ///
