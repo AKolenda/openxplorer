@@ -340,6 +340,56 @@ mod tests {
         assert!(matches!(preview_page(&notes, on), PreviewPage::Text(_)));
     }
 
+    /// A Recent files row previews the file it stands for, judged by that
+    /// file's own type and location.
+    ///
+    /// parity: VIEW-070
+    #[test]
+    fn a_recent_row_previews_the_file_it_stands_for() {
+        let mut entry = file_entry("Notes.txt");
+        entry.uri = "recent:///4f0c1a".to_owned();
+        entry.content_type = Some("text/plain".to_owned());
+        entry.meta.recent_target = Some("file:///tmp/ox-test/Notes.txt".to_owned());
+        let PreviewPage::Text(file) = preview_page(&[FileItem::new(entry)], LOCAL) else {
+            panic!("the target's text");
+        };
+        assert_eq!(file.uri, "file:///tmp/ox-test/Notes.txt");
+    }
+
+    /// A file browsed on an SMB share is previewed with network previews
+    /// on, its local path (a CIFS mount or GVfs's FUSE export) found off
+    /// the main thread when it is read, and never with them off.
+    ///
+    /// parity: VIEW-070
+    #[test]
+    fn an_smb_file_is_previewed_only_with_network_previews_on() {
+        let mut entry = file_entry("Notes.txt");
+        entry.uri = "smb://studio-nas/projects/Notes.txt".to_owned();
+        entry.content_type = Some("text/plain".to_owned());
+        let notes = [FileItem::new(entry)];
+        let on = PreviewRules {
+            remote: true,
+            remote_previews: true,
+        };
+        let PreviewPage::Text(file) = preview_page(&notes, on) else {
+            panic!("the share's text");
+        };
+        assert_eq!(file.uri, "smb://studio-nas/projects/Notes.txt");
+        let off = PreviewRules {
+            remote_previews: false,
+            ..on
+        };
+        assert_eq!(preview_page(&notes, off), PreviewPage::Message(NO_PREVIEW));
+        let mut member = file_entry("inside.txt");
+        member.uri = "archive://file%3A%2F%2F%2Ftmp%2Fa.zip/inside.txt".to_owned();
+        member.content_type = Some("text/plain".to_owned());
+        assert_eq!(
+            preview_page(&[FileItem::new(member)], on),
+            PreviewPage::Message(NO_PREVIEW),
+            "a location without a file of its own is not read"
+        );
+    }
+
     /// parity: VIEW-070
     #[test]
     fn text_is_decoded_and_binary_refused() {

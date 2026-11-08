@@ -231,3 +231,58 @@ fn the_preview_pane_keeps_the_player_for_audio() {
     wait_until("the column", || pane.shows_details_column());
     assert_eq!(pane.preview_message(), None);
 }
+
+/// Opening the Preview pane while no pane is open shows the selected
+/// file's contents at once, in every view, not the Details column's
+/// picture of it.
+///
+/// parity: VIEW-070
+#[gtk::test]
+fn opening_the_preview_pane_shows_the_selected_files_contents_at_once() {
+    for view in ["details", "compact", "tiles"] {
+        let fixture = Fixture::standard();
+        let test = super::geometry::laid_out(&fixture.uri());
+        test.activate("view", Some(view));
+        let pane = test.window.imp().details_pane.get();
+        assert!(!pane.is_visible(), "no pane open in a new window");
+        test.select_named("Notes 2.txt");
+        wait_for_frames(&test.window, 2);
+
+        test.activate("preview-pane", None);
+
+        wait_until(&format!("the text in {view}"), || {
+            pane.preview_text().as_deref() == Some("Synthetic test data\n")
+        });
+        assert!(
+            !pane.shows_details_column(),
+            "{view}: the contents, not the column"
+        );
+    }
+}
+
+/// A Preview pane hidden by a narrow window shows the selection made
+/// meanwhile once the window is wide again.
+///
+/// parity: VIEW-070, LOOK-022
+#[gtk::test]
+fn a_preview_pane_back_from_a_narrow_window_shows_the_new_selection() {
+    let fixture = Fixture::standard();
+    std::fs::write(fixture.path("main.rs"), "fn main() {}\n").expect("source");
+    let test = preview_window(&fixture);
+    let pane = test.window.imp().details_pane.get();
+    test.select_named("Notes 2.txt");
+    wait_until("the first text", || {
+        pane.preview_text().as_deref() == Some("Synthetic test data\n")
+    });
+    super::narrow_windows::resize(&test, 940);
+    assert!(!pane.is_visible(), "no room for the pane");
+
+    test.select_named("main.rs");
+    wait_for_frames(&test.window, 2);
+    super::narrow_windows::resize(&test, 1320);
+
+    assert!(pane.is_visible(), "the pane comes back");
+    wait_until("the new selection's text", || {
+        pane.preview_text().as_deref() == Some("fn main() {}\n")
+    });
+}

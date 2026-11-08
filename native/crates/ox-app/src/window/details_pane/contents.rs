@@ -514,3 +514,54 @@ fn decode_picture(path: &Path, edge: i32, cancellation: &gio::Cancellable) -> Op
             .ok()?;
     Some(gdk::Texture::for_pixbuf(&decoded.pixbuf))
 }
+
+#[cfg(test)]
+mod tests {
+    use gtk::prelude::*;
+
+    use super::super::content::{pane_content, PaneFacts};
+    use super::super::preview_page::PreviewRules;
+    use super::super::{DetailsPane, PaneMode};
+    use crate::folder_view::item::FileItem;
+    use crate::test_support::harness::{wait_until, Fixture};
+    use ox_core::location::LocationContext;
+
+    /// A Preview pane given its content while hidden reads it once it is
+    /// shown, without waiting for the window to ask again.
+    ///
+    /// parity: VIEW-070
+    #[gtk::test]
+    fn a_pane_shown_again_reads_the_page_it_was_given_while_hidden() {
+        let fixture = Fixture::standard();
+        let pane: DetailsPane = gtk::glib::Object::new();
+        let window = gtk::Window::builder().child(&pane).build();
+        window.present();
+        pane.set_mode(PaneMode::Preview);
+        pane.set_visible(false);
+        let mut entry = crate::test_support::file_entry("Notes 2.txt");
+        entry.uri = fixture.uri_of("Notes 2.txt");
+        entry.content_type = Some("text/plain".to_owned());
+        let selection = [FileItem::new(entry)];
+        let locations = LocationContext::default();
+        let content = pane_content(&PaneFacts {
+            selection: &selection,
+            folder_uri: &fixture.uri(),
+            folder_item_count: 1,
+            locations: &locations,
+            network: &[],
+            condensed_dates: false,
+            preview_rules: PreviewRules {
+                remote: false,
+                remote_previews: false,
+            },
+        });
+        pane.set_content(&content);
+
+        pane.set_visible(true);
+
+        wait_until("the text", || {
+            pane.preview_text().as_deref() == Some("Synthetic test data\n")
+        });
+        window.destroy();
+    }
+}
