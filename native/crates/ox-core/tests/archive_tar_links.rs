@@ -224,9 +224,12 @@ fn tar_gz_and_tar_bz2_are_written_and_the_level_changes_the_size() {
     let temporary = tempfile::tempdir().expect("a temporary folder");
     let sources = temporary.path().join("sources");
     fs::create_dir_all(&sources).expect("a folder");
-    let text: String = (0..20_000)
-        .map(|n| format!("line {} of the report\n", n % 997))
-        .collect();
+    let mut text = String::new();
+    for n in 0..20_000 {
+        text.push_str("line ");
+        text.push_str(&(n % 997).to_string());
+        text.push_str(" of the report\n");
+    }
     fs::write(sources.join("report.txt"), &text).expect("a file");
     let output = temporary.path().join("out");
     fs::create_dir(&output).expect("a folder");

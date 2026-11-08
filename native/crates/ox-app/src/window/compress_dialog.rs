@@ -118,12 +118,12 @@ impl BrowserWindow {
             return;
         };
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
-        self.ask_compress(uris, folder, &first.entry().name);
+        self.ask_compress(uris, &folder, &first.entry().name);
     }
 
     /// Shows the Create archive dialog for `uris` in `folder`, suggesting
     /// an archive named after `first_name` beside them.
-    pub(super) fn ask_compress(&self, uris: Vec<String>, folder: String, first_name: &str) {
+    pub(super) fn ask_compress(&self, uris: Vec<String>, folder: &str, first_name: &str) {
         let suggested = compressed_file_name(first_name, ZIP_ENDING)
             .next()
             .unwrap_or_default();
@@ -133,7 +133,7 @@ impl BrowserWindow {
             ACCESSIBLE_NAME,
         ))]);
         let body = frame.body();
-        let path = path_field(&body, &location_text(&folder, &suggested));
+        let path = path_field(&body, &location_text(folder, &suggested));
         let format_labels: Vec<&str> = FORMATS.iter().map(|format| format.label).collect();
         let format = labelled_dropdown(&body, &ox_core::i18n::gettext("Archive format:"), &format_labels);
         let method = labelled_dropdown(&body, &ox_core::i18n::gettext("Compression method:"), &[]);

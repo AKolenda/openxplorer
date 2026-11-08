@@ -79,7 +79,7 @@ impl BrowserWindow {
             }),
             text_action(WindowAction::CompressToOf, |window, uri| {
                 if let Some((folder, name)) = parent_and_name(uri) {
-                    window.ask_compress(vec![uri.to_owned()], folder, &name);
+                    window.ask_compress(vec![uri.to_owned()], &folder, &name);
                 }
             }),
             text_action(WindowAction::NewIn, BrowserWindow::new_in),
