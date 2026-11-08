@@ -140,9 +140,24 @@ impl SnapshotRequest {
             "select=<name> or action=<name>[:<target>] steps separated by ;",
             SceneStep::parse_scene,
         )?;
+        let start = non_empty(&lookup, START_VARIABLE);
+        let save_dialog = parse_variable(&lookup, SAVE_DIALOG_VARIABLE, "1", |value| {
+            (value == "1").then_some(true)
+        })?
+        .unwrap_or(false);
+        if let Some(start) = start.as_deref().filter(|_| save_dialog) {
+            if save_dialog_folder(start).is_none() {
+                return Err(SnapshotError::InvalidValue {
+                    variable: START_VARIABLE,
+                    value: start.to_owned(),
+                    expected:
+                        "an absolute local folder, as a Save dialog (OPENXPLORER_SAVE_DIALOG=1) starts in one",
+                });
+            }
+        }
         Ok(Some(Self {
             png: PathBuf::from(png),
-            start: non_empty(&lookup, START_VARIABLE),
+            start,
             theme,
             view,
             size,
@@ -151,10 +166,7 @@ impl SnapshotRequest {
             search: non_empty(&lookup, SEARCH_VARIABLE),
             scene: scene.unwrap_or_default(),
             hotspots: non_empty(&lookup, HOTSPOTS_VARIABLE).map(PathBuf::from),
-            save_dialog: parse_variable(&lookup, SAVE_DIALOG_VARIABLE, "1", |value| {
-                (value == "1").then_some(true)
-            })?
-            .unwrap_or(false),
+            save_dialog,
             dialog: parse_variable(&lookup, DIALOG_VARIABLE, "1", |value| {
                 (value == "1").then_some(true)
             })?
@@ -169,6 +181,19 @@ impl SnapshotRequest {
             )?,
         }))
     }
+}
+
+/// The local folder a Save dialog for `start` opens in: an absolute path,
+/// or a `file://` URI's path; `None` for a share's address, a page such as
+/// `pc:` or a relative path, which the desktop portal cannot name.
+pub(crate) fn save_dialog_folder(start: &str) -> Option<PathBuf> {
+    use gtk::gio::prelude::FileExt;
+    let path = if start.contains("://") {
+        gtk::gio::File::for_uri(start).path()?
+    } else {
+        PathBuf::from(start)
+    };
+    path.is_absolute().then_some(path)
 }
 
 /// The value of the variable `name`, or `None` when it is unset or empty.

@@ -29,7 +29,8 @@
 //!   the scene opened last and saves that window instead, once it has
 //!   read its item;
 //! - `OPENXPLORER_SAVE_DIALOG=1`: the window is another application's
-//!   Save dialog for `Untitled.txt` in the first tab's folder, as the
+//!   Save dialog for `Untitled.txt` in the first tab's folder, which must
+//!   then be an absolute local folder (a share's address is refused), as the
 //!   desktop portal opens one; no application waits for its answer;
 //! - `OPENXPLORER_DIALOG=1`: once the scene has run, saves the dialog
 //!   window it opened last (such as the keyboard shortcuts window) in
@@ -68,7 +69,7 @@ use crate::window::BrowserWindow;
 use render::{open_menus, render_png_with_menus};
 #[cfg(test)]
 pub(crate) use render::{render_png, save_png, save_png_with_menus};
-pub(crate) use request::{SnapshotRequest, WindowSize};
+pub(crate) use request::{save_dialog_folder, SnapshotRequest, WindowSize};
 
 /// Frames drawn after the listing, so late layout changes (column widths,
 /// collapsed crumbs, icons) are in the picture.

@@ -185,7 +185,9 @@ fn describe(name: &str) -> Option<(Group, String)> {
 /// own: Ctrl+Shift+E and the keypad's plus, minus and asterisk.
 fn describe_navigation_pane_key(name: &str) -> Option<(Group, String)> {
     let label = match name {
-        REVEAL_KEY_NAME => crate::i18n::message_id("Open the navigation pane to the current folder"),
+        REVEAL_KEY_NAME => {
+            crate::i18n::message_id("Open the navigation pane to the current folder, while it is shown")
+        }
         "tree-open" => crate::i18n::message_id("Expand the selected folder in the navigation pane"),
         "tree-close" => crate::i18n::message_id("Collapse the selected folder in the navigation pane"),
         "tree-open-all" => crate::i18n::message_id("Expand every folder under the selected one"),

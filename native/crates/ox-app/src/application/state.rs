@@ -328,18 +328,19 @@ pub(super) fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item =
 }
 
 /// The Save dialog the snapshot hook pictures (`OPENXPLORER_SAVE_DIALOG`):
-/// `Untitled.txt` in the folder `start` names, else the home folder, as
+/// `Untitled.txt` in the local folder `start` names (the request refuses
+/// any other start), else the home folder, as
 /// the desktop portal asks for it, answering nobody.
 fn snapshot_save_call(app: &gtk::Application, start: Option<&str>) -> ox_core::integration::ChooserCall {
     use ox_core::integration::{
         options_from_entries, path_variant, ChooserCall, ChooserReply, ChooserRequest,
     };
     let folder = match start {
-        Some(uri) if uri.contains("://") => gio::File::for_uri(uri).path(),
-        Some(path) => Some(std::path::PathBuf::from(path)),
-        None => None,
-    }
-    .unwrap_or_else(glib::home_dir);
+        Some(start) => {
+            crate::snapshot::save_dialog_folder(start).expect("the snapshot request checked its start")
+        }
+        None => glib::home_dir(),
+    };
     let options = options_from_entries(&[
         ("current_folder", path_variant(&folder.to_string_lossy())),
         ("current_name", "Untitled.txt".to_variant()),

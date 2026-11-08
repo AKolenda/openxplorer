@@ -6585,7 +6585,7 @@ msgid "Open Terminal here"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
-msgid "Open the navigation pane to the current folder"
+msgid "Open the navigation pane to the current folder, while it is shown"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
