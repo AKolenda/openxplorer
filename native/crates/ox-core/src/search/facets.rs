@@ -293,4 +293,145 @@ mod tests {
             "the folder has no time"
         );
     }
+
+    fn sized(name: &str, size: Option<u64>) -> Entry {
+        let mut item = entry(name, "text/plain", None);
+        item.size = size;
+        item
+    }
+
+    /// The size groups are Windows' own (`System.Size`, Windows 10
+    /// version 1809 and later), each starting at its documented
+    /// `minValue`; a folder, which has no size, is in none.
+    ///
+    /// parity: SRCH-043
+    #[test]
+    fn sizes_follow_the_documented_groups() {
+        let sizes: [u64; 13] = [
+            0,
+            1,
+            16_382,
+            16_383,
+            1_048_576,
+            1_048_577,
+            134_217_728,
+            134_217_729,
+            1_073_741_824,
+            1_073_741_825,
+            4_294_967_296,
+            4_294_967_297,
+            u64::MAX,
+        ];
+        let mut items: Vec<Entry> = sizes
+            .iter()
+            .map(|size| sized(&size.to_string(), Some(*size)))
+            .collect();
+        let mut folder = sized("Work", None);
+        folder.is_dir = true;
+        items.push(folder);
+        let now = local(2026, 9, 16, 12);
+        let shown = |size: SizeFacet| -> Vec<String> {
+            let matcher = SearchFacets {
+                size,
+                ..SearchFacets::default()
+            }
+            .matcher(&now);
+            items
+                .iter()
+                .filter(|item| matcher.matches(item))
+                .map(|item| item.name.clone())
+                .collect()
+        };
+        assert_eq!(shown(SizeFacet::Any).len(), 14);
+        assert_eq!(shown(SizeFacet::Empty), ["0"]);
+        assert_eq!(shown(SizeFacet::Tiny), ["1", "16382"]);
+        assert_eq!(shown(SizeFacet::Small), ["16383", "1048576"]);
+        assert_eq!(shown(SizeFacet::Medium), ["1048577", "134217728"]);
+        assert_eq!(shown(SizeFacet::Large), ["134217729", "1073741824"]);
+        assert_eq!(shown(SizeFacet::Huge), ["1073741825", "4294967296"]);
+        assert_eq!(shown(SizeFacet::Gigantic), ["4294967297", u64::MAX.to_string().as_str()]);
+        assert_eq!(shown(SizeFacet::Larger(16_382)).len(), 10);
+        assert_eq!(shown(SizeFacet::Smaller(16_383)), ["0", "1", "16382"]);
+        assert_eq!(shown(SizeFacet::Larger(4_294_967_296)).len(), 2);
+        assert!(shown(SizeFacet::Smaller(0)).is_empty());
+        assert_eq!(
+            SizeFacet::ALL.map(SizeFacet::label),
+            [
+                "Any size",
+                "Empty (0 KB)",
+                "Tiny (0 - 16 KB)",
+                "Small (16 KB - 1 MB)",
+                "Medium (1 - 128 MB)",
+                "Large (128 MB - 1 GB)",
+                "Huge (1 - 4 GB)",
+                "Gigantic (> 4 GB)",
+            ]
+        );
+    }
+
+    /// Last week runs from the Monday before this week's to this week's.
+    ///
+    /// parity: SRCH-043
+    #[test]
+    fn last_week_is_the_week_before_this_one() {
+        // Wednesday 16 September 2026, noon.
+        let now = local(2026, 9, 16, 12);
+        let (from, until) = DateFacet::LastWeek.range(&now).expect("a range");
+        assert_eq!(from, local(2026, 9, 7, 0).to_unix());
+        assert_eq!(until, local(2026, 9, 14, 0).to_unix());
+        assert!(DateFacet::ALL.contains(&DateFacet::LastWeek));
+        assert_eq!(DateFacet::LastWeek.label(), "Last week");
+    }
+
+    /// Options typed into the box and options chosen from the lists
+    /// narrow together: an item must pass both.
+    ///
+    /// parity: SRCH-044
+    #[test]
+    fn typed_and_chosen_options_narrow_together() {
+        let now = local(2026, 9, 16, 12);
+        let mut small_doc = entry("a.txt", "text/plain", at(&now));
+        small_doc.size = Some(20_000);
+        let mut tiny_doc = entry("b.txt", "text/plain", at(&now));
+        tiny_doc.size = Some(10);
+        let mut tiny_old = entry("c.txt", "text/plain", at(&local(2025, 1, 1, 9)));
+        tiny_old.size = Some(10);
+        let mut tiny_photo = entry("d.png", "image/png", at(&now));
+        tiny_photo.size = Some(10);
+        let all = [&small_doc, &tiny_doc, &tiny_old, &tiny_photo];
+        let chosen = SearchFacets {
+            kind: KindFacet::Documents,
+            ..SearchFacets::default()
+        };
+        let typed = SearchFacets {
+            size: SizeFacet::Tiny,
+            date: DateFacet::ThisYear,
+            ..SearchFacets::default()
+        };
+        let matcher = chosen.matcher_with(&typed, &now);
+        let shown: Vec<&str> = all
+            .iter()
+            .filter(|item| matcher.matches(item))
+            .map(|item| item.name.as_str())
+            .collect();
+        assert_eq!(shown, ["b.txt"]);
+        let clash = SearchFacets {
+            kind: KindFacet::Images,
+            ..SearchFacets::default()
+        };
+        let matcher = chosen.matcher_with(&clash, &now);
+        assert!(all.iter().all(|item| !matcher.matches(item)), "a document is not a picture");
+        let matcher = SearchFacets {
+            date: DateFacet::Today,
+            ..SearchFacets::default()
+        }
+        .matcher_with(
+            &SearchFacets {
+                date: DateFacet::Yesterday,
+                ..SearchFacets::default()
+            },
+            &now,
+        );
+        assert!(all.iter().all(|item| !matcher.matches(item)), "today is not yesterday");
+    }
 }

@@ -17,7 +17,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::search::{DateFacet, KindFacet, SearchFacets, SearchIn};
+use ox_core::search::{DateFacet, KindFacet, SearchFacets, SearchIn, SizeFacet};
 
 use super::report::{SearchReport, FRESHNESS_TOOLTIP};
 use super::source::SearchScope;
@@ -463,6 +463,22 @@ impl SearchInfoStrip {
         Self::option_list(&self.imp().kind)
             .choices
             .choose_labelled(kind.label());
+    }
+
+    /// Chooses a size as the user would, for tests.
+    #[cfg(test)]
+    pub(crate) fn choose_size(&self, size: SizeFacet) {
+        Self::option_list(&self.imp().size)
+            .choices
+            .choose_labelled(size.label());
+    }
+
+    /// Chooses a date range as the user would, for tests.
+    #[cfg(test)]
+    pub(crate) fn choose_date(&self, date: DateFacet) {
+        Self::option_list(&self.imp().date)
+            .choices
+            .choose_labelled(date.label());
     }
 
     /// Clicks "Save search", for tests.
