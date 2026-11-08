@@ -24,7 +24,10 @@
 //! Ubuntu and Debian keep `/etc/polkit-1/rules.d` unreadable to users, so
 //! the helper also writes [`PASSWORDLESS_RECORD`], which anyone may read.
 //! The app shows the setting on when the rule file is there; only when it
-//! cannot look into the rules folder does it go by the record.
+//! cannot look into the rules folder does it go by the record. The helper
+//! writes the record before the rule and removes the rule before the
+//! record, so an interrupted change can never leave the rule active while
+//! the switch shows off.
 
 use std::ffi::OsString;
 use std::io;
@@ -211,24 +214,41 @@ impl PasswordlessUpdates {
     }
 }
 
-/// Turns the setting on: copies the template to the rule, then writes the
-/// record. Doing it again changes nothing.
+/// Turns the setting on: writes the record, then copies the template to
+/// the rule. Doing it again changes nothing.
 ///
 /// # Errors
 ///
 /// [`PasswordlessError::UntrustedTemplate`] for a template that is not
 /// root's, [`PasswordlessError::NotARegularFile`] where a link or anything
 /// else but a file is in the way, and the file system's errors. Nothing is
-/// left half-done: a rule whose record could not be written is removed.
+/// left half-done: a record whose rule could not be written is removed.
 pub fn enable_passwordless(files: &RuleFiles) -> Result<(), PasswordlessError> {
+    enable_with_checkpoint(files, &mut || false)
+}
+
+/// [`enable_passwordless`], which asks `stopped` between its two writes
+/// whether the helper was stopped there, as a test simulates a helper
+/// that is killed or a computer that loses power.
+fn enable_with_checkpoint(
+    files: &RuleFiles,
+    stopped: &mut dyn FnMut() -> bool,
+) -> Result<(), PasswordlessError> {
     let rule = read_template(files)?;
     let rule_target = Target::open(&files.rule, true)?;
     let record_target = Target::open(&files.record, true)?;
     rule_target.refuse_anything_but_a_file()?;
     record_target.refuse_anything_but_a_file()?;
-    rule_target.replace(rule.as_bytes(), files.owner)?;
-    if let Err(error) = record_target.replace(RECORD_TEXT.as_bytes(), files.owner) {
-        let _ = rule_target.remove();
+    // The record first, synced, then the rule: an interruption between
+    // them can only leave the switch showing ON with no rule, never an
+    // active rule the app shows as OFF where it reads only the record.
+    record_target.replace(RECORD_TEXT.as_bytes(), files.owner)?;
+    if stopped() {
+        return Ok(());
+    }
+    if let Err(error) = rule_target.replace(rule.as_bytes(), files.owner) {
+        let _ = record_target.remove();
+        record_target.remove_folder_if_empty();
         return Err(error);
     }
     Ok(())
@@ -242,12 +262,25 @@ pub fn enable_passwordless(files: &RuleFiles) -> Result<(), PasswordlessError> {
 /// [`PasswordlessError::NotARegularFile`] where a link or anything else
 /// but a file is in the way, and the file system's errors.
 pub fn disable_passwordless(files: &RuleFiles) -> Result<(), PasswordlessError> {
+    disable_with_checkpoint(files, &mut || false)
+}
+
+/// [`disable_passwordless`], which asks `stopped` between its two
+/// deletions whether the helper was stopped there.
+fn disable_with_checkpoint(
+    files: &RuleFiles,
+    stopped: &mut dyn FnMut() -> bool,
+) -> Result<(), PasswordlessError> {
     let rule_target = Target::open(&files.rule, false)?;
     let record_target = Target::open(&files.record, false)?;
     for target in [&rule_target, &record_target] {
         target.refuse_anything_but_a_file()?;
     }
+    // The rule first, then the record, for the same reason.
     rule_target.remove()?;
+    if stopped() {
+        return Ok(());
+    }
     record_target.remove()?;
     record_target.remove_folder_if_empty();
     Ok(())
@@ -545,6 +578,68 @@ mod tests {
         assert!(!system.files.record.parent().unwrap().exists());
         assert!(system.rules_folder().is_dir());
         assert!(!system.files.is_on());
+    }
+
+    /// Whether the switch can show OFF while the rule is active: the rule
+    /// is there, and the app, which on Ubuntu reads only the record,
+    /// finds none.
+    fn shows_off_while_active(files: &RuleFiles) -> bool {
+        files.rule.exists() && !files.record.exists()
+    }
+
+    /// A helper killed, or a computer that loses power, between the two
+    /// writes of turning the setting on never leaves the rule active
+    /// with the switch showing OFF: the record is written first.
+    /// parity: UPD-003
+    #[test]
+    fn an_interrupted_enable_never_hides_an_active_rule() {
+        let system = FakeSystem::new();
+
+        enable_with_checkpoint(&system.files, &mut || true).unwrap();
+
+        assert!(!shows_off_while_active(&system.files));
+        assert!(system.files.record.exists(), "the record is written first");
+        assert!(!system.files.rule.exists());
+        enable_passwordless(&system.files).unwrap();
+        assert!(system.files.rule.exists() && system.files.record.exists());
+    }
+
+    /// The same for turning it off: the rule goes first, so an
+    /// interruption can only leave the switch showing ON with the rule
+    /// already gone, and turning it off again finishes.
+    /// parity: UPD-003
+    #[test]
+    fn an_interrupted_disable_never_hides_an_active_rule() {
+        let system = FakeSystem::new();
+        enable_passwordless(&system.files).unwrap();
+
+        disable_with_checkpoint(&system.files, &mut || true).unwrap();
+
+        assert!(!shows_off_while_active(&system.files));
+        assert!(!system.files.rule.exists(), "the rule is removed first");
+        assert!(system.files.record.exists());
+        disable_passwordless(&system.files).unwrap();
+        assert!(!system.files.rule.exists() && !system.files.record.exists());
+    }
+
+    /// A rule that cannot be written takes the record back with it, so
+    /// the switch does not show ON for nothing.
+    #[test]
+    fn a_rule_that_cannot_be_written_removes_the_record_again() {
+        if rustix::process::geteuid().is_root() {
+            // Root writes into any folder.
+            return;
+        }
+        let system = FakeSystem::new();
+        let folder = system.rules_folder();
+        std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let enabled = enable_passwordless(&system.files);
+        std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(enabled.is_err());
+        assert!(!system.files.rule.exists());
+        assert!(!system.files.record.exists());
     }
 
     /// A link where the rule goes is never followed, and nothing changes.
