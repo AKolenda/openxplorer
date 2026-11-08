@@ -773,6 +773,7 @@ dialog over the browsing window asks in Windows 11's words. Source:
 | Destination folder not writable | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder ("move to") | Try Again, Skip, Cancel (Windows' Continue needs an administrator path a running copy does not have) |
 | Busy (EBUSY, ETXTBSY) | File In Use (Folder In Use) | The action can't be completed because the file is open in another program; Close the file and try again. | Try Again, Skip, Cancel |
 | Gone | Item Not Found | Could not find this item; This is no longer located in <folder>. Verify the item's location and try again. | Try Again, Skip, Cancel |
+| A folder pasted into a folder inside it | Interrupted Action | You can't copy a folder into a folder inside it. ("move"); plain wording, as Microsoft documents no text for it | Skip, Cancel |
 | Anything else | Interrupted Action | An unexpected error is keeping you from copying the file. …; the system's error | Try Again, Skip, Cancel |
 
 The caption is the dialog's heading (the app's dialogs draw no title bar),
