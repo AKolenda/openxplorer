@@ -50,7 +50,7 @@ msgid "- This PC lists drives, USB sticks and connected phones. Click one to ope
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
+msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size column to fit and Size all columns to fit, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -543,7 +543,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -804,11 +804,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/folder_view/details/column_text.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "{count} items"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/details/group_headers.rs crates/ox-app/src/window/landing.rs
-msgid "{title} ({count})"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/details/select_all.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -2846,7 +2841,19 @@ msgid "update version release upgrade software updates install restart flatpak"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Always at the bottom"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Always at the top"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "As in Windows, the navigation pane's arrows (This PC, Network and the folder tree) show only while you point at the pane or move through it with the keyboard."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Buttons in the right-click menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2867,6 +2874,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/theme/appearance_button.rs
 msgid "Light"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Near the pointer (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
@@ -2910,6 +2921,10 @@ msgid "Use the desktop font"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Where the Cut, Copy, Rename and Delete buttons appear in the right-click menu. Near the pointer puts them at the top of a menu that opens downward and at the bottom of one that opens upward, as Windows does."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Windows 10 is compact and shows familiar text commands."
 msgstr ""
 
@@ -2923,6 +2938,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "appearance dark light system colour color mode"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "context menu right-click strip buttons icons cut copy rename share delete paste top bottom pointer position windows 11 compact"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -4584,7 +4603,7 @@ msgstr ""
 msgid "More options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
 
@@ -4616,7 +4635,7 @@ msgstr ""
 msgid "Settings (Ctrl+,)"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Share"
 msgstr ""
 
@@ -4769,7 +4788,7 @@ msgstr ""
 msgid "Tiles"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs crates/ox-core/src/ops/undo_apply.rs
 msgid "Undo"
 msgstr ""
 
@@ -4847,6 +4866,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Additional options"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/disk_tools.rs
 msgid "Analyse disk usage"
 msgstr ""
@@ -4867,8 +4890,8 @@ msgstr ""
 msgid "Compare files"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs
-msgid "Compress to ZIP file"
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Compress to"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -4958,10 +4981,6 @@ msgid "Open with…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
-msgid "Paste into folder"
-msgstr ""
-
-#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Pin this folder"
 msgstr ""
 
@@ -4974,11 +4993,19 @@ msgid "Rename items…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Restore previous versions"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Select only one item for this command."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Send to"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Share with"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4995,6 +5022,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Sort by"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "ZIP File"
 msgstr ""
 
 #: crates/ox-app/src/window/copy_path.rs
@@ -5997,6 +6028,22 @@ msgstr ""
 msgid "Show hidden folders"
 msgstr ""
 
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Collapse all groups"
+msgstr ""
+
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Collapse group"
+msgstr ""
+
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Expand all groups"
+msgstr ""
+
+#: crates/ox-app/src/window/group_headings.rs
+msgid "Expand group"
+msgstr ""
+
 #: crates/ox-app/resources/manual.md crates/ox-app/src/window/help.rs
 msgid "Getting started"
 msgstr ""
@@ -6054,6 +6101,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/landing.rs
 msgid "{free} free of {size}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/landing.rs
+msgid "{title} ({count})"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6479,6 +6531,10 @@ msgid "Context menu"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Ctrl+Plus (numeric keypad)"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Full screen"
 msgstr ""
 
@@ -6545,6 +6601,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Show hidden files"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/view_options.rs
+msgid "Size all columns to fit"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -7066,6 +7126,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/version_restore.rs
 msgid "Another file operation is still running."
+msgstr ""
+
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size column to fit"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8695,7 +8759,7 @@ msgid "The Recycle Bin does not record where “{name}” came from."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/recycle_bin_drag.rs
+#: crates/ox-core/src/ops/recycle_bin_drag.rs crates/ox-core/src/ops/restore_conflicts.rs
 msgid "An item named “{name}” already exists here. It was left in the Recycle Bin."
 msgstr ""
 
@@ -8708,71 +8772,7 @@ msgid "Undo can only rename an item back within its own folder."
 msgstr ""
 
 #: crates/ox-core/src/ops/report.rs
-msgid "Operation result"
-msgstr ""
-
-#: crates/ox-core/src/ops/report.rs
 msgid "Operation stopped"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} completed."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) copied."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) duplicated."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) linked."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) moved to the Recycle Bin."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) moved."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) permanently deleted."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) renamed."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) restored."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} skipped (name already exists)."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} redone."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} undone."
 msgstr ""
 
 #: crates/ox-core/src/ops/resolved_transfer.rs
@@ -9796,6 +9796,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "OpenXplorer contributors"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "OpenXplorer now looks and works much more like Windows 11's File Explorer: its command bar, status bar, menus with side flyouts, title bar, address bar, navigation pane and row density follow Windows 11, with new Tiles and Content views, groups that collapse under their headings, and This PC shown as drive tiles. Right-click menus have labeled Cut, Copy, Rename, Share and Delete buttons on the side nearest the pointer, address bar suggestions show the current one as Windows 11 does, Show more options has Send to, a right-button drag asks whether to copy or move, a drive can be pasted into a folder as a shortcut, and the progress window asks about replaced and failed items, offering Continue as administrator when a copy, move or delete is denied. Properties, the Details pane, the Open and Save dialogs, Folder Options, Open with, Map network drive and the Recycle Bin are laid out as in Windows 11, and Recent files opens from the navigation pane. Previews also come from the desktop's own thumbnailers, run in a sandbox with resource limits, and a picture on the clipboard can be pasted as a new file. The file list no longer stays blank after opening a folder on a slow share."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml

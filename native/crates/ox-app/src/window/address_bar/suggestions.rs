@@ -11,7 +11,17 @@
 //! hears typed text through [`AddressBar::connect_typed`] and answers with
 //! [`AddressBar::show_completions`]. Up and Down move through the list and
 //! put the row into the entry, Enter goes there, a click on a row goes
-//! there at once, and Escape closes the list before it cancels editing.
+//! there at once, and Escape puts back the typed text and closes the list
+//! before it cancels editing.
+//!
+//! The keys follow Windows' autocomplete list (the shell's `IAutoComplete`
+//! drop-down, as `ReactOS`'s `CAutoComplete::OnListUpDown` reimplements it):
+//! Down with no row selected selects the first and Up the last; Down on
+//! the last row and Up on the first leave the list with no row selected
+//! and the typed text back in the entry, so the next key wraps round.
+//! The selected row has Windows 11's list selection look, a light fill
+//! and a short accent bar at its left edge; the pointer's hover draws the
+//! fill alone (`resources/skin/menus.css`).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -59,13 +69,19 @@ impl AddressBar {
                 }
             }
         ));
+        let scroller = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::Automatic)
+            .propagate_natural_height(true)
+            .child(&list)
+            .build();
         let popover = gtk::Popover::builder()
             .autohide(false)
             .has_arrow(false)
             .can_focus(false)
             .position(gtk::PositionType::Bottom)
             .halign(gtk::Align::Start)
-            .child(&list)
+            .child(&scroller)
             .css_classes(["ox-menu"])
             .build();
         popover.set_parent(self);
@@ -83,6 +99,23 @@ impl AddressBar {
             move |_, key, _, modifiers| bar.suggestion_key(key, modifiers)
         ));
         imp.entry.add_controller(keys);
+        // A real edit is the text typed last, which Escape and moving off
+        // the list put back, and no row matches it any more.
+        imp.entry.connect_changed(glib::clone!(
+            #[weak(rename_to = bar)]
+            self,
+            move |entry| {
+                let imp = bar.imp();
+                if imp.quiet_change.get() {
+                    return;
+                }
+                imp.text_typed.replace(entry.text().into());
+                imp.list_dismissed.set(false);
+                if let Some(list) = imp.suggestion_list.get() {
+                    list.unselect_all();
+                }
+            }
+        ));
         imp.entry.connect_activate(glib::clone!(
             #[weak(rename_to = bar)]
             self,
@@ -112,26 +145,36 @@ impl AddressBar {
         match key {
             gdk::Key::Down | gdk::Key::KP_Down => self.move_suggestion(1),
             gdk::Key::Up | gdk::Key::KP_Up => self.move_suggestion(-1),
-            gdk::Key::Escape => self.hide_suggestions(),
+            gdk::Key::Escape => {
+                let typed = self.imp().text_typed.borrow().clone();
+                self.set_text_quietly(&typed);
+                self.hide_suggestions();
+                self.imp().list_dismissed.set(true);
+            }
             _ => return glib::Propagation::Proceed,
         }
         glib::Propagation::Stop
     }
 
-    /// Selects the row `step` rows on and puts it into the entry.
+    /// Selects the row `step` rows on and puts it into the entry. Past
+    /// either end no row is selected and the typed text comes back, as
+    /// Windows' autocomplete list does.
     fn move_suggestion(&self, step: i32) {
         let Some(list) = self.imp().suggestion_list.get() else {
             return;
         };
         let count = i32::try_from(row_count(list)).unwrap_or(i32::MAX);
-        let current = list.selected_row().map_or(-1, |row| row.index());
-        let next = (current + step).clamp(0, count - 1);
-        let Some(row) = list.row_at_index(next) else {
-            return;
-        };
-        list.select_row(Some(&row));
-        if let Some(text) = row_text(&row) {
-            self.set_text_quietly(&text);
+        let current = list.selected_row().map(|row| row.index());
+        if let Some(row) = next_index(current, step, count).and_then(|next| list.row_at_index(next)) {
+            list.select_row(Some(&row));
+            scroll_to(list, &row);
+            if let Some(text) = row_text(&row) {
+                self.set_text_quietly(&text);
+            }
+        } else {
+            list.unselect_all();
+            let typed = self.imp().text_typed.borrow().clone();
+            self.set_text_quietly(&typed);
         }
     }
 
@@ -174,9 +217,10 @@ impl AddressBar {
         self.mode() == AddressMode::Entry && self.imp().entry.focus_child().is_some()
     }
 
-    /// Lists `completions` of `typed`, unless the entry has moved on.
+    /// Lists `completions` of `typed`, unless the entry has moved on or
+    /// Escape closed the list since the last edit.
     pub(in crate::window) fn show_completions(&self, typed: &str, completions: &[String]) {
-        if self.imp().entry.text() != typed {
+        if self.imp().entry.text() != typed || self.imp().list_dismissed.get() {
             return;
         }
         self.show_suggestions(completions);
@@ -209,19 +253,32 @@ impl AddressBar {
         };
         list.remove_all();
         for text in rows.iter().take(LIST_LENGTH) {
-            let label = gtk::Label::builder()
-                .label(text)
-                .xalign(0.0)
-                .ellipsize(gtk::pango::EllipsizeMode::Middle)
-                .build();
-            list.append(&label);
+            list.append(&row_contents(text));
         }
         if rows.is_empty() || self.mode() != AddressMode::Entry {
             popover.popdown();
             return;
         }
         popover.set_size_request(imp.stack.width(), -1);
+        if let Some(scroller) = list_scroller(list) {
+            scroller.set_max_content_height(self.list_height_limit());
+            scroller.vadjustment().set_value(0.0);
+        }
         popover.popup();
+    }
+
+    /// The tallest the list may be: half the monitor's height less the
+    /// address bar's. GTK opens the list on whichever side of the bar has
+    /// room, and the side with more room always has that much, so every
+    /// row can be scrolled to however large the text or the window's
+    /// place. Windows' address bar drop-down scrolls its list too.
+    fn list_height_limit(&self) -> i32 {
+        let monitor_height = self
+            .native()
+            .and_then(|native| native.surface())
+            .and_then(|surface| gdk::Display::default()?.monitor_at_surface(&surface))
+            .map_or(DEFAULT_MONITOR_HEIGHT, |monitor| monitor.geometry().height());
+        list_height_limit(monitor_height, self.height())
     }
 
     /// Closes the list.
@@ -252,10 +309,63 @@ impl AddressBar {
 
 #[cfg(test)]
 impl AddressBar {
+    /// The scrolled window around the list, for tests.
+    pub(in crate::window) fn suggestion_scroller(&self) -> gtk::ScrolledWindow {
+        let list = self.imp().suggestion_list.get().expect("the list is built");
+        list_scroller(list).expect("the list scrolls")
+    }
+
     /// The row at `index` of the list, for tests.
     pub(in crate::window) fn suggestion_row(&self, index: i32) -> gtk::ListBoxRow {
         let list = self.imp().suggestion_list.get().expect("the list is built");
         list.row_at_index(index).expect("a row there")
+    }
+}
+
+/// The monitor height assumed before the window is on one.
+const DEFAULT_MONITOR_HEIGHT: i32 = 768;
+
+/// Room kept between the list and the monitor's edge, for the flyout's
+/// border, padding and shadow.
+const LIST_EDGE_ROOM: i32 = 24;
+
+/// The tallest the list may be under or over a bar `bar_height` high on a
+/// monitor `monitor_height` high (logical pixels), and never less than
+/// one row.
+fn list_height_limit(monitor_height: i32, bar_height: i32) -> i32 {
+    (monitor_height / 2 - bar_height - LIST_EDGE_ROOM).max(64)
+}
+
+/// The scrolled window around `list`.
+fn list_scroller(list: &gtk::ListBox) -> Option<gtk::ScrolledWindow> {
+    list.ancestor(gtk::ScrolledWindow::static_type()).and_downcast()
+}
+
+/// Scrolls the list so that `row` shows whole.
+fn scroll_to(list: &gtk::ListBox, row: &gtk::ListBoxRow) {
+    let Some(scroller) = list_scroller(list) else {
+        return;
+    };
+    let Some(bounds) = row.compute_bounds(list) else {
+        return;
+    };
+    let adjustment = scroller.vadjustment();
+    // The first and the last row take the list's ends, past their margins.
+    let top = if row.index() == 0 {
+        adjustment.lower()
+    } else {
+        f64::from(bounds.y())
+    };
+    let bottom = if row.next_sibling().is_none() {
+        adjustment.upper()
+    } else {
+        f64::from(bounds.y() + bounds.height())
+    };
+    let page = adjustment.page_size();
+    if top < adjustment.value() {
+        adjustment.set_value(top);
+    } else if bottom > adjustment.value() + page {
+        adjustment.set_value(bottom - page);
     }
 }
 
@@ -264,15 +374,72 @@ fn row_count(list: &gtk::ListBox) -> usize {
     (0..).map_while(|index| list.row_at_index(index)).count()
 }
 
+/// The row after `current` (none selected) `step` rows on in a list of
+/// `count`, or none past either end, as Windows' autocomplete list moves.
+fn next_index(current: Option<i32>, step: i32, count: i32) -> Option<i32> {
+    if count <= 0 {
+        return None;
+    }
+    let next = match current {
+        None if step > 0 => 0,
+        None => count - 1,
+        Some(index) => index + step,
+    };
+    (0..count).contains(&next).then_some(next)
+}
+
+/// A row's contents: the accent bar the selected row shows at its left
+/// edge, then the address.
+fn row_contents(text: &str) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    let pill = gtk::Box::builder()
+        .css_classes(["pill"])
+        .valign(gtk::Align::Center)
+        .build();
+    let label = gtk::Label::builder()
+        .label(text)
+        .xalign(0.0)
+        .hexpand(true)
+        .ellipsize(gtk::pango::EllipsizeMode::Middle)
+        .build();
+    row.append(&pill);
+    row.append(&label);
+    row
+}
+
 /// The address a row shows.
 fn row_text(row: &gtk::ListBoxRow) -> Option<String> {
-    let label = row.child().and_downcast::<gtk::Label>()?;
+    let contents = row.child()?;
+    let label = contents.last_child().and_downcast::<gtk::Label>()?;
     Some(label.text().to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Down from no row selects the first and Up the last; past either
+    /// end the selection leaves the list, so the next key wraps round.
+    /// The list fits in half a 768-pixel monitor less the bar, so at 200%
+    /// text, with 64-pixel rows, 12 rows scroll; a tiny monitor still
+    /// shows a row.
+    #[test]
+    fn the_list_is_never_taller_than_half_the_monitor() {
+        assert_eq!(list_height_limit(768, 40), 384 - 40 - LIST_EDGE_ROOM);
+        assert!(list_height_limit(768, 40) < 12 * 64);
+        assert_eq!(list_height_limit(100, 40), 64);
+    }
+
+    #[test]
+    fn up_and_down_wrap_through_the_typed_text() {
+        assert_eq!(next_index(None, 1, 3), Some(0));
+        assert_eq!(next_index(Some(0), 1, 3), Some(1));
+        assert_eq!(next_index(Some(2), 1, 3), None);
+        assert_eq!(next_index(None, -1, 3), Some(2));
+        assert_eq!(next_index(Some(1), -1, 3), Some(0));
+        assert_eq!(next_index(Some(0), -1, 3), None);
+        assert_eq!(next_index(None, 1, 0), None);
+    }
 
     /// parity: NAV-043
     #[test]

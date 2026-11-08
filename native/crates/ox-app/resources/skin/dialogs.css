@@ -199,11 +199,26 @@ popover.ox-menu.compact list > row {
   border-radius: 4px;
 }
 popover.ox-menu.compact list > separator { margin: 1px 0; }
-/* Five 34-high icon buttons, 20% of the width each, 2px apart. */
+/* Windows 11's labeled strip: up to six buttons of equal width, each an
+   icon with its label under it, set apart by thin lines. */
 popover.ox-menu .context-strip { padding: 2px; border-bottom: 1px solid @ox_border; margin-bottom: 2px; }
 window.ox popover.ox-menu .context-strip button,
 popover.ox-menu .context-strip button {
-  min-height: 34px;
+  min-height: 44px;
+  padding: 3px 2px;
   margin: 0 1px;
   border-radius: 4px;
+}
+window.ox popover.ox-menu .context-strip button:not(:first-child),
+popover.ox-menu .context-strip button:not(:first-child) {
+  border-left: 1px solid alpha(@ox_border, 0.7);
+}
+popover.ox-menu .context-strip .strip-label { font-size: 0.85em; }
+/* Below the rows when the menu opened above the pointer, as Windows 11
+   keeps the strip on the side nearest the pointer. */
+popover.ox-menu .context-strip.at-bottom {
+  border-bottom: none;
+  margin-bottom: 0;
+  border-top: 1px solid @ox_border;
+  margin-top: 2px;
 }

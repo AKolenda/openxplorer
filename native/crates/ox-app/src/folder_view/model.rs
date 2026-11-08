@@ -11,12 +11,13 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use gtk::gio;
 use gtk::prelude::*;
+use gtk::{gio, glib};
 use ox_core::search::SearchFacets;
 
 use crate::folder_view::details::GroupTitle;
 use crate::folder_view::filter::{ChooserListing, FilterState};
+use crate::folder_view::grid::CollapsedGroups;
 use crate::folder_view::groups::{self, GroupClocks, Grouping};
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sort_roles::SortRole;
@@ -58,6 +59,11 @@ pub(crate) struct FolderModel {
     folders_first: gtk::CustomSorter,
     role_sorter: gtk::CustomSorter,
     group_sorter: gtk::CustomSorter,
+    /// The groups collapsed under their headings, shared by the views
+    /// (VIEW-022).
+    collapsed: CollapsedGroups,
+    /// The store shown, whose collapsed groups stay while it does.
+    store: RefCell<Option<glib::WeakRef<gio::ListStore>>>,
 }
 
 impl FolderModel {
@@ -88,6 +94,8 @@ impl FolderModel {
             role_sorter: role_sorter(&sort_options),
             group_sorter: group_sorter(&sort_options),
             sort_options,
+            collapsed: CollapsedGroups::default(),
+            store: RefCell::default(),
         }
     }
 
@@ -130,6 +138,10 @@ impl FolderModel {
     pub(crate) fn set_grouping(&self, grouping: Option<Grouping>) {
         let grouping = grouping.and_then(|grouping| Some((grouping, GroupClocks::now()?)));
         let was_grouped = self.sort_options.get().grouping.is_some();
+        if self.grouping() != grouping.map(|(grouping, _)| grouping) {
+            // Other groups: none of them is collapsed.
+            self.collapsed.borrow_mut().clear();
+        }
         self.change_sort_options(&self.group_sorter, |options| options.grouping = grouping);
         if grouping.is_some() && was_grouped {
             // GTK 4.14 sorts again when the section sorter changes but keeps
@@ -180,6 +192,20 @@ impl FolderModel {
         })
     }
 
+    /// Expands every collapsed group while `store` is the one shown, as
+    /// it is about to list another folder.
+    pub(crate) fn expand_groups_of(&self, store: &gio::ListStore) {
+        let shown = self.store.borrow().as_ref().and_then(glib::WeakRef::upgrade);
+        if shown.as_ref() == Some(store) {
+            self.collapsed.borrow_mut().clear();
+        }
+    }
+
+    /// The titles of the groups collapsed under their headings.
+    pub(crate) fn collapsed_groups(&self) -> &CollapsedGroups {
+        &self.collapsed
+    }
+
     /// Applies `change` to the sort options and sorts again with `sorter`
     /// when they changed.
     fn change_sort_options(&self, sorter: &gtk::CustomSorter, change: impl FnOnce(&mut SortOptions)) {
@@ -209,8 +235,15 @@ impl FolderModel {
         &self.tree
     }
 
-    /// Shows another tab's items, with no folder expanded.
+    /// Shows another tab's items, with no folder expanded and, unless the
+    /// store is the one shown, no group collapsed: Windows keeps groups
+    /// collapsed only while the folder stays open.
     pub(crate) fn set_store(&self, store: Option<&gio::ListStore>) {
+        let shown = self.store.borrow().as_ref().and_then(glib::WeakRef::upgrade);
+        if shown.as_ref() != store {
+            self.collapsed.borrow_mut().clear();
+            self.store.replace(store.map(ObjectExt::downgrade));
+        }
         self.tree.collapse_all();
         self.filter_model.set_model(store);
     }

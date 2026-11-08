@@ -1,3 +1,46 @@
+# 2.0.15 — 2026-11-08
+
+OpenXplorer now looks and works much more like Windows 11's File Explorer, from the command bar, menus and status bar to Properties, This PC and the progress window. It also makes previews with the desktop's own thumbnailers in a sandbox, can paste a picture as a file, and offers to continue as administrator when a copy, move or delete is denied. Much of this release is the work of @addition-official and @clansty.
+
+## Security
+* Previews made by the desktop's own thumbnailers, new in this release, run in bubblewrap, as GNOME's Files runs them: with no network, no session bus and no other processes, a private empty home and `/tmp`, and only the previewed item of your files, read-only. Together they may use at most 2 GiB of memory, 64 processes and one processor's worth of time, at a lower priority than the app. Where bubblewrap is missing or can't run, no outside thumbnailer is started.
+* A picture whose header asks for more than 64 megapixels (256 for a JPEG), a damaged picture, or one that takes longer than about 10 seconds to decode keeps its type icon instead of being decoded, in thumbnails, the Details pane's preview and custom icons, and is not handed to a thumbnailer either.
+* **Continue**, offered when a copy, move or delete is denied, checks the location with the same refusals as the **Open as administrator** folder delete before it asks for a password: a folder other accounts can change, or one on a drive users can mount, is refused and the reason is shown. It uses the existing administrator paths and adds no new privilege mechanism. GVfs has no administrator Recycle Bin, so in a Recycle Bin delete Continue first asks whether to delete the item permanently.
+
+## What's Changed
+* **Look:** Windows 11's density, with 32 px rows, 48 px bars and 16 px icons, about 22 rows in a 900 px window. The title bar and tab strip, the file list's sort chevron, hover, selection and focus ring, and the menus' rounded corners, spacing and fade-in are drawn as in Windows 11. The classic menu shows a bold Open and no shortcut text, menu rows show no tooltips, and the Back, Forward, Up and Refresh tooltips name where they lead. File types are named as Windows names them ("ODS Spreadsheet", "PNG File").
+* **Command bar and status bar:** "…", View and This PC's commands are laid out as in Windows 11, and the Recycle Bin has Empty Recycle Bin and Restore all items there. The status bar reads like Windows 11's: the item count, the selection and its size, and the Details and Large icons toggles.
+* **Views:** new Tiles and Content views (Ctrl+Shift+7 and Ctrl+Shift+8), which keep a folder's groups. Groups collapse and expand under their headings in Details, Tiles and Content. In Details, a click anywhere on a row selects it, a rubber band can start beside a name, and Ctrl+plus on the number pad or the column titles' menu sizes the columns to fit. New users start with the Details pane closed and en-US dates written as 9/13/2026.
+* **Details pane:** laid out as in Windows 11: the picture, the name, Share, Properties and the file's details, photo details included.
+* **Navigation pane:** in Windows 11's order: Home, the pinned folders, then This PC and Network. This PC, Network and drives have Windows 11's right-click menus, and the Map network drive button below the pane is gone (it stays in those menus and in "…"). **Recent files** now opens, and its rows offer Open file location.
+* **This PC and Network:** This PC shows drives and network locations as tiles with a capacity bar, in collapsible groups. Network lists the computers on your network as items, with an info bar when discovery is off. A drive can be copied and pasted or dragged into a folder as a shortcut, as in Windows. Map network drive, Enter network credentials and Disconnect use Windows 11's layout and words, and Map network drive offers only free drive letters.
+* **Address bar and keys:** a chevron before the crumbs lists the top-level places, a long path folds its first crumbs into «, and a crumb's menu lists every subfolder. The keyboard reaches the « and the chevron, and every Tab stop shows where the keyboard is. Address bar suggestions have 40 px rows and show the current one with a light fill and a blue bar; Up and Down wrap back to what you typed, and Escape puts it back. F3 goes to search, Space only selects, and scrolling over the address bar no longer changes folder. The file list's focused item is outlined only while the list has the keyboard.
+* **Menus and dragging:** right-click menus are laid out as in Windows 11 24H2: the top strip's Cut, Copy, Rename, Share and Delete buttons carry labels, with thin lines between them, and the strip sits on the side nearest the pointer; Settings › Appearance › Buttons in the right-click menu can keep it always at the top or the bottom instead. This PC's group headings have Collapse group, Expand all groups and Collapse all groups, as the file list's do. Submenus fly out to the side on hover. Show more options has Send to: a compressed folder, a shortcut on the desktop, Documents, a mail recipient, drives and Bluetooth devices. A right-button drag asks Copy here, Move here or Create shortcuts here, and a drag says what a drop will do ("Move to Documents"). New lists Windows 11's items and creates each file at once, ready to rename. Open with chooses an app as Windows 11 does: the current default, suggested apps, More apps, Just once and Always.
+* **Copying, moving and deleting:** Delete sends items to the Recycle Bin without asking, and a permanent delete asks Windows' Yes or No question. Copy, cut and drag take up to 100,000 items, and a folder held under a drag no longer opens. The progress window asks Replace or Skip Files, with a File Conflict window to compare both files, and asks about every failed item in Windows 11's words, with nothing reported afterwards; the Operation result dialog is gone. Compress and extract show their progress there too. A new setting lets Replace overwrite the old file as Windows does; by default it still goes to the Recycle Bin first, and cancelling the copy brings it back.
+* **Renaming:** the part of the name Windows 11 selects is selected, shortcuts are treated as Windows treats them, Windows' forbidden characters are refused as you type, and a taken name offers "name (2)".
+* **Properties:** every Properties window has Windows 11's fixed size and 9-point text. Files gain a Details tab, local folders the whole Customize tab (folder templates, a folder picture and Change Icon's grid of icons), drives Windows 11's used and free space ring without counting their files, and several items show their names, Read-only and Hidden. A folder that is a mount point shows as a folder, and Read-only stays in step with a change made on the Security tab.
+* **Folder Options:** its own compact window, with Windows 11's General, View and Search tabs: Browse folders, Privacy, the View tree and the search options.
+* **Open and Save dialogs:** laid out as Windows lays them out. The name is drawn selected only while it has the keyboard, and a window opened from inside a dialog belongs to it.
+* **Recycle Bin:** a restore that meets a taken name asks Replace or Skip Files, also when two items go back to the same name.
+* **Search:** results are a step in the tab's history ("Search Results in Documents"), so Back and Forward move between a folder and its results, also in a middle-clicked tab, and files whose text matches are kept.
+* **Thumbnails and clipboard:** the desktop's own thumbnailers make previews of videos and other files, also when installed outside `/usr` or on NixOS, and pictures no gdk-pixbuf loader declares get previews. Paste writes a picture on the clipboard, such as a screenshot, as a new image file, and Copy and Cut also put the items' paths on the clipboard as text; Settings › Files & folders › Clipboard can turn either off. Open in Terminal can start kitty, and pasting into a folder opened through a symbolic link works.
+* **Fixes:** the file list is drawn again after "Working on it..." on a slow share, instead of staying blank. A hovered submenu no longer opens after the keyboard moves on. Select all, Select none and Invert selection work on This PC's drives. A template given to subfolders is kept when only the folder changes later. Tiles and Content write sizes as the status bar does.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.15_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.15-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.15-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.15-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.15-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.14...v2.0.15
+
 # 2.0.14 — 2026-11-05
 
 ## Security

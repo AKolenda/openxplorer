@@ -13,9 +13,7 @@
 //! they reverse ("Undo Rename"). Before Undo moves copies to the Trash
 //! that were changed after the copy, it asks, as Dolphin does (OPS-030).
 
-use ox_core::ops::{
-    changed_copies, reverse, summarize_journal_step, JournalDirection, JournalEntry, STOPPED_TITLE,
-};
+use ox_core::ops::{changed_copies, reverse, JournalDirection, JournalEntry, STOPPED_TITLE};
 
 use super::FileCommand;
 use crate::dialog::{self, Dialog};
@@ -59,9 +57,9 @@ impl BrowserWindow {
             Ok(reversal) => {
                 self.context()
                     .record_reversal(direction, step.operation, reversal.inverse);
+                // Each failure was asked about while the reversal ran:
+                // nothing more is said, as in Windows Explorer.
                 self.reload_selecting(reversal.result.done.clone());
-                let summary = summarize_journal_step(direction, step.operation.title(), &reversal.result);
-                self.report(summary).await;
             }
             Err(error) => {
                 self.context().put_back_journal_step(direction, step);

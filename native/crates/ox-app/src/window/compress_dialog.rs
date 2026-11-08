@@ -27,7 +27,13 @@ impl BrowserWindow {
             return;
         };
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
-        let suggested = compressed_file_name(&first.entry().name)
+        self.ask_compress(uris, folder, &first.entry().name);
+    }
+
+    /// Asks for the name and format of a new archive of `uris` in
+    /// `folder`, suggesting one after `first_name`.
+    pub(super) fn ask_compress(&self, uris: Vec<String>, folder: String, first_name: &str) {
+        let suggested = compressed_file_name(first_name)
             .next()
             .unwrap_or_default()
             .trim_end_matches(".zip")

@@ -51,10 +51,15 @@ pub(crate) struct FailureView {
     pub(crate) for_all: bool,
     /// The first button.
     pub(crate) first: FirstButton,
-    /// The second button's label: "Skip", or "No".
-    pub(crate) second: String,
+    /// The second button's label: "Skip", or "No"; none for a notice,
+    /// whose first button only reads "OK".
+    pub(crate) second: Option<String>,
     /// Whether the question has a Cancel button of its own.
     pub(crate) cancel: bool,
+    /// Whether it shows after the action was cancelled too, as a problem
+    /// the user must sort out by hand does; otherwise a cancelled action
+    /// answers it with Cancel at once.
+    pub(crate) after_cancel: bool,
 }
 
 /// What the user answered.
@@ -110,9 +115,12 @@ impl TransferPanel {
         // Windows puts the keyboard on the first button: Continue or Try
         // Again, which Enter and Space press.
         let focused = first.clone();
-        let second = gtk::Button::with_label(&view.second);
-        second.add_css_class("bordered");
-        let mut answers = vec![(first, FailureChoice::First), (second, FailureChoice::Second)];
+        let mut answers = vec![(first, FailureChoice::First)];
+        if let Some(label) = &view.second {
+            let second = gtk::Button::with_label(label);
+            second.add_css_class("bordered");
+            answers.push((second, FailureChoice::Second));
+        }
         if view.cancel {
             let cancel = gtk::Button::with_label(&ox_core::i18n::gettext("Cancel"));
             cancel.add_css_class("bordered");
@@ -149,12 +157,12 @@ impl TransferPanel {
         imp.failure_question.replace(Some(question));
         imp.failure_details.replace(Some(details.upcast()));
         imp.failure_answer.replace(Some(sender));
-        if imp
+        let cancelled = imp
             .cancel
             .borrow()
             .as_ref()
-            .is_some_and(ox_core::transfer::Cancellation::is_cancelled)
-        {
+            .is_some_and(ox_core::transfer::Cancellation::is_cancelled);
+        if cancelled && !view.after_cancel {
             self.answer_failure(FailureChoice::Cancel);
         }
         if let Some(window) = imp.window.upgrade() {

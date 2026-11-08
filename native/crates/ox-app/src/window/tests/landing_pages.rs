@@ -641,6 +641,198 @@ fn a_this_pc_tile_menu_survives_the_page_being_drawn_again() {
     assert!(still_open, "the redraw does not close the menu");
 }
 
+/// Right-clicks `header` and returns the menu it opens in the folder pane.
+fn open_heading_menu(test: &TestWindow, header: &gtk::Button) -> MenuPopover {
+    press_heading(header);
+    let menu = descendants::<MenuPopover>(test.window.folder_pane())
+        .into_iter()
+        .find(gtk::prelude::WidgetExt::is_visible)
+        .expect("the heading's menu is open in the folder pane");
+    wait_for_frames(&test.window, 2);
+    menu
+}
+
+/// The shortcut text `menu`'s rows show, in order.
+fn shortcut_texts(menu: &MenuPopover) -> Vec<String> {
+    menu.rows()
+        .iter()
+        .flat_map(descendants::<gtk::Label>)
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// A group heading's right-click opens Windows 11's heading menu: Collapse
+/// group (key Left), which turns into Expand group (key Right) while it is
+/// collapsed, then Expand all groups and Collapse all groups. It has nothing behind it, so
+/// it has no "Show more options", and with the Windows 10 choice it opens
+/// in the classic style directly.
+///
+/// parity: HOME-001, CMD-010
+#[gtk::test]
+fn a_group_heading_menu_collapses_and_expands_the_groups() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    let header = first_header(&test);
+
+    let menu = open_heading_menu(&test, &header);
+    assert_eq!(menu.style(), MenuStyle::Compact);
+    assert_eq!(
+        menu.row_labels(),
+        ["Collapse group", "Expand all groups", "Collapse all groups"]
+    );
+    assert_eq!(shortcut_texts(&menu), ["Left"]);
+    assert!(menu.strip_labels().is_empty());
+    menu.click_row("Collapse group");
+    let tiles_shown = || {
+        landing::tile_groups(test.window.folder_pane().landing())
+            .iter()
+            .map(|(flow, _)| flow.is_visible())
+            .collect::<Vec<bool>>()
+    };
+    wait_until("the group to collapse", || tiles_shown().first() == Some(&false));
+    close_menu(&menu);
+
+    let menu = open_heading_menu(&test, &first_header(&test));
+    assert_eq!(menu.row_labels()[0], "Expand group");
+    assert_eq!(shortcut_texts(&menu), ["Right"]);
+    menu.click_row("Expand all groups");
+    wait_until("every group to expand", || {
+        tiles_shown().iter().all(|shown| *shown)
+    });
+    close_menu(&menu);
+
+    super::context_menus::choose_menu_style(&test, ox_core::settings::ContextMenu::Win10);
+    let menu = open_heading_menu(&test, &first_header(&test));
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Classic,
+        "the classic choice opens it directly"
+    );
+    menu.click_row("Collapse all groups");
+    wait_until("every group to collapse", || {
+        tiles_shown().iter().all(|shown| !*shown)
+    });
+    close_menu(&menu);
+}
+
+/// Presses the secondary button on `header`, as a right-click does.
+fn press_heading(header: &gtk::Button) {
+    let right_click = header
+        .observe_controllers()
+        .into_iter()
+        .filter_map(|controller| controller.ok().and_downcast::<gtk::GestureClick>())
+        .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
+        .expect("the heading opens its menu on a right-click");
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
+}
+
+/// With This PC in both panes of a split tab, a right-click on a heading
+/// of the inactive pane opens its menu there, although making that pane
+/// active draws This PC again under the press, and Collapse group acts
+/// on that pane alone: This PC beside it keeps its groups open.
+///
+/// parity: VIEW-059
+#[gtk::test]
+fn a_group_heading_menu_acts_on_its_own_pane_only() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    test.activate("split-view", None);
+    test.window.render_places();
+    let first = test.window.active_side();
+    let second = first.other();
+    let groups_shown = |side| {
+        landing::tile_groups(test.window.pane_on(side).landing())
+            .iter()
+            .map(|(flow, _)| flow.is_visible())
+            .collect::<Vec<bool>>()
+    };
+    wait_until("This PC in both panes", || {
+        groups_shown(second).first() == Some(&true) && groups_shown(first).first() == Some(&true)
+    });
+    wait_for_frames(&test.window, 2);
+    let pressed = landing::group_headers(test.window.pane_on(second).landing())
+        .into_iter()
+        .next()
+        .expect("This PC heads its groups");
+
+    // The press makes its pane active first, which draws This PC again.
+    test.window.activate_pane(second);
+    assert_eq!(test.window.active_side(), second);
+    assert!(
+        pressed.parent().is_none(),
+        "This PC was drawn again under the press"
+    );
+    wait_for_frames(&test.window, 2);
+    press_heading(&pressed);
+    let menu = descendants::<MenuPopover>(test.window.pane_on(second))
+        .into_iter()
+        .find(gtk::prelude::WidgetExt::is_visible)
+        .expect("the heading's menu is open in its pane");
+    wait_for_frames(&test.window, 2);
+    menu.click_row("Collapse group");
+    wait_until("the group to collapse", || {
+        groups_shown(second).first() == Some(&false)
+    });
+    close_menu(&menu);
+
+    assert_eq!(groups_shown(first).first(), Some(&true));
+}
+
+/// The right-click menus of a file, a folder, several items and a drive,
+/// compact and classic, light and dark: with `OX_NATIVE_CAPTURE_DIR` set,
+/// saved there as `context-menu-match-<item>-<style>-<theme>.png` for
+/// comparing with Windows 11's. Without it, they only prove each menu
+/// opens in the style the Settings choice asks for.
+#[gtk::test]
+fn the_right_click_menus_are_captured_compact_and_classic() {
+    use ox_core::settings::ContextMenu;
+
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(960, 900);
+    wait_until("the taller window", || test.window.height() >= 860);
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        for (choice, style, name) in [
+            (ContextMenu::Win11, MenuStyle::Compact, "compact"),
+            (ContextMenu::Win10, MenuStyle::Classic, "classic"),
+        ] {
+            super::context_menus::choose_menu_style(&test, choice);
+            test.window.navigate(&fixture.uri()).expect("the fixture");
+            test.wait_for_listing("the fixture");
+            for (item, names) in [
+                ("file", &["Notes 2.txt"][..]),
+                ("folder", &["Documents"][..]),
+                ("several", &["Notes 2.txt", "Notes 10.txt"][..]),
+            ] {
+                super::file_ops_support::select_names(&test, names);
+                let position = super::context_menus::position_of(&test, names[0]);
+                test.window.right_click(Some(position));
+                let menu = test.window.context_menu();
+                assert_eq!(menu.style(), style, "{item} {name}");
+                capture_with_menus(
+                    &test.window,
+                    &format!("context-menu-match-{item}-{name}-{theme}.png"),
+                );
+                menu.popdown();
+                wait_until("the menu to close", || !menu.is_mapped());
+            }
+            test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+            wait_for_frames(&test.window, 3);
+            let (_, disk) = drive_tile(&test, "Local Disk");
+            let menu = open_tile_menu(&test, &disk);
+            assert_eq!(menu.style(), style, "drive {name}");
+            capture_with_menus(
+                &test.window,
+                &format!("context-menu-match-drive-{name}-{theme}.png"),
+            );
+            close_menu(&menu);
+        }
+    }
+}
+
 /// The drive tile named `name`, selected with the keyboard on it, as a
 /// click selects it.
 fn select_tile(test: &TestWindow, name: &str) {

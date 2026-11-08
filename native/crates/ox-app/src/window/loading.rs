@@ -202,6 +202,10 @@ impl BrowserWindow {
 
     fn clear_rows(&self, id: TabId) {
         let Some(store) = self.tab_store(id) else { return };
+        // Another folder, or a failed reload: its groups start expanded.
+        for pane in self.folder_panes() {
+            pane.model().expand_groups_of(&store);
+        }
         self.change_model(|| store.remove_all());
     }
 

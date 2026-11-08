@@ -98,6 +98,15 @@ pub(crate) enum WindowAction {
     Open,
     /// Selects every item (Ctrl+A).
     SelectAll,
+    /// Collapses the group whose heading the menu opened on (VIEW-022):
+    /// a group of the folder's view, or of This PC on This PC.
+    CollapseGroup,
+    /// Expands the group whose heading the menu opened on.
+    ExpandGroup,
+    /// Collapses every group of a grouped view, or of This PC on This PC.
+    CollapseAllGroups,
+    /// Expands every group of a grouped view, or of This PC on This PC.
+    ExpandAllGroups,
     /// Clears the selection.
     SelectNone,
     /// Selects exactly the items that were not selected.
@@ -142,6 +151,13 @@ pub(crate) enum WindowAction {
     /// Shows or hides the details column whose key is the string target
     /// (the column titles' menu, VIEW-033).
     DetailsColumn,
+    /// Fits the details column whose key is the string target to its
+    /// widest content and title ("Size column to fit" in the column
+    /// titles' menu, VIEW-072).
+    FitColumn,
+    /// Fits every shown details column to its widest content and title
+    /// ("Size all columns to fit", Ctrl+keypad plus, VIEW-072).
+    FitAllColumns,
     /// Stops the listing of the folder shown (VIEW-049).
     Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
@@ -263,6 +279,17 @@ pub(crate) enum WindowAction {
     ClearRecentFiles,
     /// Forgets the recently visited folders (SIDE-026).
     ClearRecentLocations,
+    /// Copy as path for the folder at the location given (a pinned
+    /// folder's menu).
+    CopyPathOf,
+    /// Compresses the folder at the location given into a ZIP beside it.
+    CompressToZipOf,
+    /// Asks for the name and format of an archive of the folder at the
+    /// location given.
+    CompressToOf,
+    /// Opens a folder and runs a New menu item there; the target holds
+    /// the folder, the action and its target (`place_commands.rs`).
+    NewIn,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -500,6 +527,10 @@ impl WindowAction {
             WindowAction::MountVolume => "mount-volume",
             WindowAction::Open => "open",
             WindowAction::SelectAll => "select-all",
+            WindowAction::CollapseGroup => "collapse-group",
+            WindowAction::ExpandGroup => "expand-group",
+            WindowAction::CollapseAllGroups => "collapse-all-groups",
+            WindowAction::ExpandAllGroups => "expand-all-groups",
             WindowAction::SelectNone => "select-none",
             WindowAction::InvertSelection => "invert-selection",
             WindowAction::SelectMatching => "select-matching",
@@ -519,6 +550,8 @@ impl WindowAction {
             WindowAction::FileNameExtensions => "file-name-extensions",
             WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::DetailsColumn => "details-column",
+            WindowAction::FitColumn => "fit-column",
+            WindowAction::FitAllColumns => "fit-all-columns",
             WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SplitView => "split-view",
@@ -571,6 +604,10 @@ impl WindowAction {
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ClearRecentFiles => "clear-recent-files",
             WindowAction::ClearRecentLocations => "clear-recent-locations",
+            WindowAction::CopyPathOf => "copy-path-of",
+            WindowAction::CompressToZipOf => "compress-to-zip-of",
+            WindowAction::CompressToOf => "compress-to-of",
+            WindowAction::NewIn => "new-in",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::SidebarMoreOptions => "sidebar-more-options",

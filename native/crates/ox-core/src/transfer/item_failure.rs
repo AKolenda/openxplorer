@@ -18,8 +18,13 @@
 //! Inside a folder, the question is about the one entry that failed, as
 //! in Windows Explorer: "Retry" copies that entry again, "Skip" leaves only
 //! it out, and the rest of the folder is still copied and published. The
-//! entries left out are reported at the end, and a move keeps them, with
+//! entries left out are recorded as answered, and a move keeps them, with
 //! their folders, where they were.
+//!
+//! Nothing is said once the run ends: as in Windows Explorer, which has no
+//! summary of an operation, every failure is asked about while it
+//! happens. A problem that needs recovery by hand, such as a kept backup,
+//! is told in the same place ([`FailureCause::NeedsAttention`]).
 
 use std::collections::HashSet;
 
@@ -42,6 +47,10 @@ pub enum FailureCause {
     NotFound,
     /// Anything else; the question shows the system's error.
     Other,
+    /// Something the user must sort out by hand, such as a backup kept
+    /// after a replacement or staging left behind: the question says what
+    /// and where, and only lets the run go on (OPS-023).
+    NeedsAttention,
 }
 
 impl FailureCause {
@@ -52,6 +61,7 @@ impl FailureCause {
             TransferError::NoSpace(_) => Self::NoSpace,
             TransferError::Busy(_) => Self::InUse,
             TransferError::NotFound(_) => Self::NotFound,
+            TransferError::RecoveryRequired(_) => Self::NeedsAttention,
             _ => Self::Other,
         }
     }
@@ -81,6 +91,10 @@ pub struct FailedItem {
     pub destination_folder: Option<String>,
     /// For a full drive, how many bytes the run needs there, when known.
     pub needed: Option<u64>,
+    /// Whether the run can do the item again as administrator, so the
+    /// question may offer Continue with the shield; only the transfer
+    /// engine can. Operations outside it offer Try Again instead.
+    pub administrator: bool,
 }
 
 impl FailedItem {
@@ -102,6 +116,7 @@ impl FailedItem {
             uri: uri.to_owned(),
             destination_folder: destination_folder.map(str::to_owned),
             needed: None,
+            administrator: true,
         }
     }
 }
@@ -303,6 +318,19 @@ impl ItemFailures {
         let answer = (self.question.as_mut()?)(item);
         self.skip_all = answer == FailureAnswer::SkipAll;
         Some(answer)
+    }
+
+    /// Tells the user, in the question about failed items, about `item`,
+    /// whose cause is [`FailureCause::NeedsAttention`] or a failure the
+    /// run cannot ask about otherwise, and waits until they read it; also
+    /// after "Skip all" and a cancellation, because the user must act on
+    /// it. True when the question showed it.
+    pub(crate) fn tell(&mut self, item: &FailedItem) -> bool {
+        let Some(question) = self.question.as_mut() else {
+            return false;
+        };
+        question(item);
+        true
     }
 }
 

@@ -353,11 +353,17 @@ impl BrowserWindow {
         let (Some(first), Some(folder)) = (selected.first(), self.current_uri()) else {
             return;
         };
+        let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
+        let first_name = first.entry().name.clone();
+        self.compress_items(uris, folder, first_name);
+    }
+
+    /// Compresses `uris` into a new ZIP in `folder`, named after
+    /// `first_name`, the first item's name.
+    pub(super) fn compress_items(&self, uris: Vec<String>, folder: String, first_name: String) {
         if !self.may_start_archive_operation() {
             return;
         }
-        let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
-        let first_name = first.entry().name.clone();
         let cancel = Cancellation::new();
         let label = ox_core::i18n::gettext_static(PREPARING_COMPRESSION);
         if !self.claim_transfer_panel(TransferKind::Archive, label, &cancel) {
