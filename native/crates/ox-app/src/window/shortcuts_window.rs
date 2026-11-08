@@ -323,12 +323,11 @@ impl BrowserWindow {
     /// The keyboard shortcuts window: a search field, then one list per
     /// group, which the search narrows to the lines that match
     /// ([`query_matches`]) as you type. Names and keys wrap, so the window
-    /// fits over a narrow window, and the list keeps clear of the scroll
-    /// bar.
+    /// keeps its usual width however long they are, and the list keeps
+    /// clear of the scroll bar.
     pub(super) fn shortcuts_dialog(&self) -> Dialog {
         let dialog = Dialog::new(self, ox_core::i18n::gettext_static("Keyboard shortcuts"), "");
         dialog.keep_clear_of_scroll_bar();
-        self.fit_shortcuts_dialog(&dialog);
         let search = dialog.add_text_field(ox_core::i18n::gettext_static("Search shortcuts"), "");
         let (rows, _) = self.shortcut_rows();
         let mut groups: BTreeMap<Group, Vec<&ShortcutRow>> = BTreeMap::new();
@@ -360,24 +359,7 @@ impl BrowserWindow {
         dialog.add_button(ox_core::i18n::gettext_static("Close"), ButtonStyle::Accent);
         dialog
     }
-
-    /// Keeps `dialog` within this window's width, less the room a dialog
-    /// keeps around it, when the window is narrower than the dialog's
-    /// usual width.
-    fn fit_shortcuts_dialog(&self, dialog: &Dialog) {
-        let room = self.width() - 2 * DIALOG_MARGIN;
-        if room > 0 && room < dialog.default_width() {
-            dialog.set_default_size(room.max(NARROWEST_DIALOG), -1);
-        }
-    }
 }
-
-/// The room a dialog keeps on either side of a narrow window
-/// (`.modal-layer`'s 25px, as above and below it).
-const DIALOG_MARGIN: i32 = 25;
-
-/// The narrowest the shortcuts window gets.
-const NARROWEST_DIALOG: i32 = 280;
 
 /// One line of the shortcuts window and what its search looks at.
 struct ShortcutLine {
