@@ -417,6 +417,10 @@ mod tests {
             "file:///srv/notes.txt",
             "commands act on the file"
         );
+        let item = row.as_item();
+        assert_eq!(item.uri, "file:///srv/notes.txt", "described as the file");
+        assert_eq!(item.meta.recent_target, None);
+        assert_eq!(item.name, row.name);
 
         let shortcut = file_info(gio::FileType::Shortcut, "plan.txt", Some("text/plain"));
         let shortcut_row = entry_for_uri(
@@ -460,6 +464,7 @@ mod tests {
         );
         assert_eq!(plain.meta.recent_target, None, "only Recent rows");
         assert_eq!(plain.item_uri(), "file:///srv/notes.txt");
+        assert_eq!(plain.as_item().uri, plain.uri, "anything else stays itself");
     }
 
     #[test]

@@ -70,25 +70,57 @@ impl BrowserWindow {
     /// stack. An item that cannot be opened from here is left out.
     fn open_each(&self, entries: &[Entry]) {
         for entry in entries {
-            // Inside a ZIP opened like a folder: folders in background
-            // tabs, files as their private copies (ARC-026).
-            if let Some(inside) = ArchiveLocation::from_uri(&entry.uri) {
-                if inside.is_folder() {
-                    self.open_tab_or_report(&entry.uri, TabPlacement::Background);
-                } else {
-                    self.activate_zip_member(entry);
+            // A row of Recent files opens as the file it stands for, read
+            // again, its share mounted first when it has to be, as opening
+            // it alone does.
+            if entry.meta.recent_target.is_some() {
+                self.open_recent_row_with_others(entry);
+            } else {
+                self.open_with_others(entry);
+            }
+        }
+    }
+
+    /// Opens the file the Recent row `entry` stands for as
+    /// [`Self::open_each`] opens an item, once it is read again; says
+    /// "Item Not Found" when it is gone.
+    fn open_recent_row_with_others(&self, entry: &Entry) {
+        let entry = entry.clone();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                match window.read_again(entry.opened_uri()).await {
+                    Ok(fresh) => window.open_with_others(&fresh),
+                    Err(super::activation::ReadAgain::Gone(_)) => {
+                        window.report_item_not_found(entry.opened_uri());
+                    }
+                    Err(failure) => window.report_open_failure(&failure.to_string(), &entry),
                 }
-                continue;
             }
-            match activation_for(entry) {
-                Activation::Folder(uri) => self.open_tab_or_report(&uri, TabPlacement::Background),
-                Activation::File => match desktop_link(entry) {
-                    Some(target) => self.follow_link_in_background(entry, target),
-                    None => self.open_file(entry),
-                },
-                Activation::Archive => self.open_file(entry),
-                Activation::Refused(_) => {}
+        ));
+    }
+
+    /// Opens `entry` as one of several items, as [`Self::open_each`] says.
+    fn open_with_others(&self, entry: &Entry) {
+        // Inside a ZIP opened like a folder: folders in background tabs,
+        // files as their private copies (ARC-026).
+        if let Some(inside) = ArchiveLocation::from_uri(&entry.uri) {
+            if inside.is_folder() {
+                self.open_tab_or_report(&entry.uri, TabPlacement::Background);
+            } else {
+                self.activate_zip_member(entry);
             }
+            return;
+        }
+        match activation_for(entry) {
+            Activation::Folder(uri) => self.open_tab_or_report(&uri, TabPlacement::Background),
+            Activation::File => match desktop_link(entry) {
+                Some(target) => self.follow_link_in_background(entry, target),
+                None => self.open_file(entry),
+            },
+            Activation::Archive => self.open_file(entry),
+            Activation::Refused(_) => {}
         }
     }
 }

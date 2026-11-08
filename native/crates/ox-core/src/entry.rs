@@ -302,6 +302,20 @@ impl Entry {
         self.meta.recent_target.as_deref().unwrap_or(&self.uri)
     }
 
+    /// This row as the item it stands for: a row of Recent files becomes
+    /// its file, at that file's address, for what describes items by
+    /// their address (several items' Properties); anything else is
+    /// returned as it is.
+    #[must_use]
+    pub fn as_item(&self) -> Entry {
+        let mut item = self.clone();
+        if let Some(target) = item.meta.recent_target.take() {
+            item.uri = target;
+            item.target_uri = None;
+        }
+        item
+    }
+
     /// The URI to open when the item is activated, as
     /// [`Entry::navigation_uri`], except that a row of Recent files opens
     /// the file it stands for.

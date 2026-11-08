@@ -313,9 +313,13 @@ fn waits_for_running_jobs(command: FileCommand, clipboard: ClipboardKind, jobs: 
 /// The facts about `items`, the selected items (`canOperate` and
 /// `readonlyLocation` in app.js).
 pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -> SelectionFacts {
+    // A row of Recent files that names its file is copied as that file,
+    // whether `GVfs` types it as a file or as a shortcut; its Cut, Rename
+    // and Delete are refused as `has_recent`.
     let has_inoperable = items.iter().any(|item| {
         let entry = item.entry();
-        !entry.can_operate || entry.is_virtual || is_smb_share_root(&entry.uri)
+        let stands_for_a_file = entry.meta.recent_target.is_some();
+        !stands_for_a_file && (!entry.can_operate || entry.is_virtual || is_smb_share_root(&entry.uri))
     });
     let has_read_only = items.iter().any(|item| {
         let uri = &item.entry().uri;

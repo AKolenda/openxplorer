@@ -13,7 +13,6 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::entry::EntryError;
 use ox_core::integration::TerminalError;
 use ox_core::location::{is_smb_server, parent_location};
 use ox_core::settings::PreferencesUpdate;
@@ -169,12 +168,28 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                match super::activation::query_entry(&subject.uri).await {
-                    Err(EntryError::NotFound(_)) => window.report_item_not_found(&subject.uri),
-                    _ => window.present_open_with(subject),
+                if window.recent_file_is_there(&subject.uri).await {
+                    window.present_open_with(subject);
                 }
             }
         ));
+    }
+
+    /// Whether the file at `uri` that a Recent row stands for can be read
+    /// now, its share mounted first when it has to be, as opening the row
+    /// does; says "Item Not Found" when it is gone, and why otherwise.
+    async fn recent_file_is_there(&self, uri: &str) -> bool {
+        match self.read_again(uri).await {
+            Ok(_) => true,
+            Err(super::activation::ReadAgain::Gone(_)) => {
+                self.report_item_not_found(uri);
+                false
+            }
+            Err(failure) => {
+                self.show_message(&failure.to_string());
+                false
+            }
+        }
     }
 
     /// Open folder with…: the Open with dialog for the folder at `uri`,
@@ -440,18 +455,12 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
+                if subject.is_recent_file && !window.recent_file_is_there(&subject.uri).await {
+                    return;
+                }
                 let prepared = integration::prepare_launch(subject.uri.clone(), app_id.clone()).await;
                 let launched = prepared
                     .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
-                if subject.is_recent_file
-                    && matches!(
-                        launched,
-                        Err(integration::OpenWithError::Entry(EntryError::NotFound(_)))
-                    )
-                {
-                    window.report_item_not_found(&subject.uri);
-                    return;
-                }
                 let message = match launched {
                     Ok(_) => ox_core::i18n::format_message("Opened with {name}", &[("name", &name)]),
                     Err(error) => error.to_string(),
