@@ -132,7 +132,7 @@ fn build_card() -> StatusCard {
     let about_build = parts::button(&ox_core::i18n::gettext("About this build"), ButtonStyle::Bordered);
     WindowAction::About.assign_to(&about_build);
     let text = ox_core::i18n::gettext(
-        "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs.",
+        "An independent Windows 11–inspired file manager for Linux. Desktop: GTK 4 + GIO/GVfs.",
     );
     let status = StatusText {
         glyph: Icon::Info,
