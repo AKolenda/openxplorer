@@ -242,7 +242,8 @@ fn compact_view_rows_keep_their_spacing_at_twice_the_scale() {
     if !isolated() {
         return;
     }
-    gtk::init().expect("the test display");
+    // Only the pictures are read here, which needs no display: GTK is
+    // initialised once per process, by the other test's thread.
     let folder = tempfile::tempdir().expect("a folder to show");
     for name in ["Alpha", "Beta", "Gamma"] {
         std::fs::create_dir(folder.path().join(name)).expect("a subfolder");
@@ -257,7 +258,7 @@ fn compact_view_rows_keep_their_spacing_at_twice_the_scale() {
     )
     .expect("the settings");
     for (config, pitch) in [(None, 32), (Some(compact_config.as_path()), 21)] {
-        for scale in [1, 2] {
+        for scale in [1_i32, 2] {
             let picture = pictures.path().join(format!("rows-{pitch}-{scale}.png"));
             let texture = snapshot_with_config(folder.path(), scale.unsigned_abs(), &picture, config);
             let tops = folder_row_tops(&pixels(&texture), scale);

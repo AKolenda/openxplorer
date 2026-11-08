@@ -342,7 +342,7 @@ fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
             .to_owned(),
         format!(
             "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
-             {{ min-height: {content_heading}px; margin: 3px 0 2px 0; padding: 5px 0; }}"
+             {{ min-height: {content_heading}px; margin: 1px 0 4px 0; padding: 5px 0; }}"
         ),
     ]
 }
@@ -466,7 +466,7 @@ mod tests {
             "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
              { min-height: 17px; margin: 1px 0 4px 0; padding: 2px 0; }",
             "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
-             { min-height: 17px; margin: 3px 0 2px 0; padding: 5px 0; }",
+             { min-height: 17px; margin: 1px 0 4px 0; padding: 5px 0; }",
         ] {
             assert!(css.contains(rule), "{rule}");
         }

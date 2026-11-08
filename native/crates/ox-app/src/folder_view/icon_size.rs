@@ -285,10 +285,10 @@ pub(crate) fn compact_density_tiles_row(text_size: TextSize) -> i32 {
 pub(crate) const COMPACT_TILES_HEADING_CHROME: i32 = 1 + 2 + 2 + 4;
 
 /// Pixels of a group heading's row in Content beside its title in Compact
-/// view: a 3-pixel gap above, 5 pixels of padding above and below the
-/// title, as in the usual view, and a 2-pixel gap under it, so its title
+/// view: a 1-pixel gap above, 5 pixels of padding above and below the
+/// title, as in the usual view, and a 4-pixel gap under it, so its title
 /// stands as far from the items' names as in Windows 11's Compact view.
-pub(crate) const COMPACT_CONTENT_HEADING_CHROME: i32 = 3 + 5 + 5 + 2;
+pub(crate) const COMPACT_CONTENT_HEADING_CHROME: i32 = 1 + 5 + 5 + 4;
 
 /// The height of a group heading's row in Compact view at `text_size`, in
 /// Content or else in Tiles: one line of title with

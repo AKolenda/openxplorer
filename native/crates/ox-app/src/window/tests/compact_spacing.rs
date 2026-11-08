@@ -125,14 +125,16 @@ fn tile_row_pitch(test: &TestWindow) -> i32 {
 }
 
 /// The height of the column header, its line under the titles included,
-/// as the line was counted in the measurements.
+/// as the line was counted in the measurements: how far down the column
+/// view its list starts.
 fn column_header_height(test: &TestWindow) -> i32 {
-    test.window
-        .folder_pane()
-        .details()
-        .column_view()
-        .first_child()
-        .map_or(0, |header| header.height())
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    let list = descendants::<gtk::Widget>(&column_view)
+        .into_iter()
+        .find(|widget| widget.css_name() == "listview")
+        .expect("the column view's list");
+    let bounds = list.compute_bounds(&column_view).expect("the list is laid out");
+    super::geometry::pixels(bounds.y())
 }
 
 /// How far below the middle of the item `name`'s name the middle of its
@@ -302,19 +304,17 @@ fn compact_view_spaces_tiles_and_content_as_windows() {
     assert!((31..=32).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
     assert!((48..=49).contains(&above), "last item to heading: {above}");
-    assert_eq!(
-        second_line_distance(&test, "Notes 1", "Text Document"),
-        18,
-        "a name to its type"
-    );
+    // 17.5 to 18 pixels as the display scale rounds the labels.
+    let second = second_line_distance(&test, "Notes 1", "Text Document");
+    assert!((17..=18).contains(&second), "a name to its type: {second}");
     assert_page_counts_rows(&test, FolderView::Content);
 }
 
 /// The usual view keeps its spacing: Details rows 32 apart, a heading 40
 /// below the row before it and 32 above its first row, the column header
-/// 32 tall with its line, the navigation pane's rows 32 apart and 56 across a
-/// separator; Tiles' rows 75 apart and a heading over one row 110 from the
-/// next; Content's items 48 apart, their lines 15 apart, a heading 29.5
+/// 32 tall with its line, the navigation pane's rows 32 apart and 56
+/// across a separator; Tiles' rows 75 apart and a heading over one row 110 from the
+/// next; Content's items 48 apart, their lines 14.5 apart, a heading 29.5
 /// above its first item and 53.5 below the last before it.
 ///
 /// parity: VIEW-067
@@ -325,7 +325,7 @@ fn the_usual_view_keeps_its_spacing() {
     assert!(!test.window.shows_compact_density());
     assert_eq!(
         details_spacing(&test),
-        (32, 40, 32, 31),
+        (32, 40, 32, 32),
         "(row, above heading, below heading, header)"
     );
     assert_eq!(
@@ -351,9 +351,7 @@ fn the_usual_view_keeps_its_spacing() {
     assert!((29..=30).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
     assert!((53..=54).contains(&above), "last item to heading: {above}");
-    assert_eq!(
-        second_line_distance(&test, "Notes 1", "Text Document"),
-        15,
-        "a name to its type"
-    );
+    // 14.5 pixels, which the display scale rounds either way.
+    let second = second_line_distance(&test, "Notes 1", "Text Document");
+    assert!((14..=15).contains(&second), "a name to its type: {second}");
 }
