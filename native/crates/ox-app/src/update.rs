@@ -30,6 +30,7 @@
 
 mod dialog;
 mod launch_guard;
+mod passwordless;
 mod report;
 mod service;
 mod state;
@@ -49,6 +50,7 @@ use ox_core::update::{
 
 pub(crate) use dialog::UpdateDialog;
 pub(crate) use launch_guard::{LaunchCheck, RuntimeInfo, LAUNCHER_OPTIONS};
+pub(crate) use passwordless::{change_passwordless, passwordless_for_this_build, PasswordlessChange};
 pub(crate) use state::{AvailableUpdate, UpdateState};
 
 /// Emitted whenever [`Updates::state`] changes.

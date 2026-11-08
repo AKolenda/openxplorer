@@ -19,10 +19,17 @@
   manager.
 
   The defaults ask for an administrator, and allow_active remembers the
-  answer for a few minutes. The rules file beside it
-  (install-update.rules.in) lets an administrator in an active local
-  session through without a password, as Ubuntu's Software lets them
-  install system updates.
+  answer for a few minutes. The rule in install-update.rules.in lets an
+  administrator in an active local session through without a password, as
+  Ubuntu's Software lets them install system updates, but only once the
+  user turns on "Install updates without asking for a password", which is
+  off by default: the package installs that rule only as a template, and
+  the setting has the helper copy it to /etc/polkit-1/rules.d.
+
+  The same action covers turning that setting on and off: the helper's
+  only two other arguments, enable-passwordless and disable-passwordless
+  (each after two hyphens), take nothing with them and write only the
+  package's fixed rule.
 
   There is no exec.allow_gui annotation: the helper opens no window, so
   pkexec passes it neither DISPLAY nor XAUTHORITY.

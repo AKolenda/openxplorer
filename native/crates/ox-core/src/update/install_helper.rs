@@ -11,12 +11,18 @@
 //! administrator's password every time, and must: whoever may run it
 //! without a password may install any package file at all. This helper has
 //! a polkit action of its own (`<id>.install-update`, with
-//! `org.freedesktop.policykit.exec.path` naming exactly this program), and
-//! the Debian package's polkit rule lets an administrator (a member of
-//! `sudo`, `admin` or `wheel`) in an active local session run it without
-//! authenticating, as Ubuntu's Software lets them install system updates.
-//! Anyone else is asked for an administrator's password, as before
-//! (`allow_active` is `auth_admin_keep`).
+//! `org.freedesktop.policykit.exec.path` naming exactly this program),
+//! which asks for an administrator's password (`allow_active` is
+//! `auth_admin_keep`). Once the user turns on "Install updates without
+//! asking for a password", which is off by default, a polkit rule lets an
+//! administrator (a member of `sudo`, `admin` or `wheel`) in an active
+//! local session run it without authenticating, as Ubuntu's Software lets
+//! them install system updates. Anyone else is still asked for an
+//! administrator's password. The helper itself turns the setting on and
+//! off ([`super::passwordless`]): with `--enable-passwordless` it copies
+//! the rule the package installed as a template to
+//! `/etc/polkit-1/rules.d`, and with `--disable-passwordless` it deletes
+//! it.
 //!
 //! # Threat model
 //!
@@ -27,7 +33,9 @@
 //! state; it controls nothing else. So the helper:
 //!
 //! - takes one argument, a `MAJOR.MINOR.PATCH` version
-//!   ([`ReleaseVersion`]), and no path, address, digest or option;
+//!   ([`ReleaseVersion`]), and no path, address, digest or option other
+//!   than `--enable-passwordless` and `--disable-passwordless`, which take
+//!   nothing and write only the package's fixed rule;
 //! - runs only as root, real and effective, so a helper that was somehow
 //!   made set-user-ID is refused rather than run without polkit;
 //! - throws its environment away before anything reads it and sets a
@@ -152,6 +160,8 @@ pub const REPORT_GRACE: Duration = Duration::from_secs(5);
 /// check that it starts at all.
 const USAGE: &str = "\
 Usage: openxplorer-install-update <version>
+       openxplorer-install-update --enable-passwordless
+       openxplorer-install-update --disable-passwordless
 
 Installs OpenXplorer <version> (MAJOR.MINOR.PATCH) as root, if it is the
 latest stable release on GitHub and newer than the installed openxplorer
@@ -162,6 +172,12 @@ pkexec when the user installs an update; it takes no path and no option.
 
 It writes one JSON report per line on standard output, and stops before
 apt-get starts when it reads a line 'cancel' on standard input.
+
+--enable-passwordless copies the polkit rule the package installed in
+/usr/share/openxplorer to /etc/polkit-1/rules.d, so that an administrator
+at the machine installs updates without a password; --disable-passwordless
+deletes it. OpenXplorer runs them for its setting \"Install updates without
+asking for a password\", which is off by default.
 ";
 
 /// What the program was asked to do.
@@ -169,6 +185,9 @@ apt-get starts when it reads a line 'cancel' on standard input.
 enum Request {
     /// Install this version.
     Install(ReleaseVersion),
+    /// Turn "Install updates without asking for a password" on (`true`)
+    /// or off.
+    Passwordless(bool),
     /// Print the usage text and stop.
     Usage,
     /// Anything else.
@@ -196,6 +215,7 @@ pub fn install_update_command(arguments: impl IntoIterator<Item = OsString>) -> 
             say(std::io::stderr(), format!("{INSTALL_HELPER_COMMAND}: {reason}\n"));
             return REFUSED;
         }
+        Request::Passwordless(on) => return change_passwordless(on),
         Request::Install(version) => version,
     };
     if let Err(reason) = prepare_process() {
@@ -223,6 +243,29 @@ pub fn install_update_command(arguments: impl IntoIterator<Item = OsString>) -> 
     };
     reporter.finish(REPORT_GRACE);
     status
+}
+
+/// Turns "Install updates without asking for a password" on or off as
+/// root, with the same checks of the caller as an installation, and
+/// returns the exit status.
+fn change_passwordless(on: bool) -> u8 {
+    if let Err(reason) = prepare_process() {
+        say(std::io::stderr(), format!("{INSTALL_HELPER_COMMAND}: {reason}\n"));
+        return REFUSED;
+    }
+    let files = super::RuleFiles::system();
+    let changed = if on {
+        super::enable_passwordless(&files)
+    } else {
+        super::disable_passwordless(&files)
+    };
+    match changed {
+        Ok(()) => INSTALLED,
+        Err(error) => {
+            say(std::io::stderr(), format!("{INSTALL_HELPER_COMMAND}: {error}\n"));
+            FAILED
+        }
+    }
 }
 
 /// Installs `requested` as root: the steps of the threat model in the
@@ -366,6 +409,12 @@ fn read_request(arguments: impl IntoIterator<Item = OsString>) -> Request {
     if argument == "--help" || argument == "-h" {
         return Request::Usage;
     }
+    if argument == super::ENABLE_PASSWORDLESS {
+        return Request::Passwordless(true);
+    }
+    if argument == super::DISABLE_PASSWORDLESS {
+        return Request::Passwordless(false);
+    }
     match argument.to_str().map(str::parse::<ReleaseVersion>) {
         Some(Ok(version)) => Request::Install(version),
         _ => Request::Refuse("The version must be MAJOR.MINOR.PATCH."),
@@ -496,6 +545,31 @@ mod tests {
             &["https://example.invalid/openxplorer.deb"],
             &["--version=2.0.16"],
             &[" 2.0.16"],
+        ];
+        for arguments in refused {
+            assert!(
+                matches!(request(arguments), Request::Refuse(_)),
+                "{arguments:?} is refused"
+            );
+        }
+    }
+
+    /// The setting's two arguments take nothing with them: no path, no
+    /// text and no second argument.
+    #[test]
+    fn the_setting_is_changed_only_by_its_two_exact_arguments() {
+        assert_eq!(request(&["--enable-passwordless"]), Request::Passwordless(true));
+        assert_eq!(request(&["--disable-passwordless"]), Request::Passwordless(false));
+        let refused: [&[&str]; 9] = [
+            &["--enable-passwordless", "/tmp/rule"],
+            &["--enable-passwordless", "--disable-passwordless"],
+            &["--disable-passwordless", "2.0.16"],
+            &["--enable-passwordless=yes"],
+            &["--enable-passwordless "],
+            &["--Enable-Passwordless"],
+            &["-enable-passwordless"],
+            &["--enable"],
+            &["--passwordless"],
         ];
         for arguments in refused {
             assert!(

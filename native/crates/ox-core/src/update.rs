@@ -22,7 +22,9 @@
 //! - Where the package installed the update helper, the app hands it only
 //!   the version; the helper fetches, verifies and installs that release
 //!   as root under its own polkit action, which lets an administrator at
-//!   the machine update without a password ([`install_update_command`]).
+//!   the machine update without a password once they turn on "Install
+//!   updates without asking for a password", which is off by default
+//!   ([`install_update_command`], [`enable_passwordless`]).
 //! - Only the packaged build installs; Flatpak and other packages update
 //!   through their own package manager ([`Installation`]).
 //! - APT is never interrupted ([`PackageCommand::time_limit`]), and the
@@ -48,6 +50,7 @@
 //! | `package` | [`PackageCommand`] and what its output must say | `updater.py` |
 //! | `install_helper` | [`install_update_command`]: the root helper | new |
 //! | `helper_report` | [`HelperReport`]: what the helper tells the app | new |
+//! | `passwordless` | [`PasswordlessUpdates`]: the opt-in setting that skips the password | new |
 //! | `process` | Running package tools and the launcher | `updater.py`, `winspace.py` |
 //! | `updater` | [`Updater`]: one check or installation at a time | `updater.py` |
 //! | `service` | [`UpdateService`]: the application-wide rules | `winspace.py` |
@@ -68,6 +71,7 @@ mod install_helper;
 mod installation;
 mod instance;
 mod package;
+mod passwordless;
 mod process;
 mod release;
 mod restart;
@@ -90,6 +94,10 @@ pub use install_helper::{
 pub use installation::Installation;
 pub use instance::{InstanceBus, InstanceGuard, InstanceStatus, LaunchMode, StopTiming};
 pub use package::{CommandOutput, PackageCommand, PackageManager};
+pub use passwordless::{
+    disable_passwordless, enable_passwordless, PasswordlessError, PasswordlessUpdates, RuleFiles,
+    DISABLE_PASSWORDLESS, ENABLE_PASSWORDLESS, PASSWORDLESS_RECORD, PASSWORDLESS_RULE, RULE_TEMPLATE,
+};
 pub use process::SystemPackageManager;
 pub use release::{
     installer_name, parse_release, Installer, Release, Sha256Digest, MAX_INSTALLER_SIZE, MAX_NOTES_CHARS,

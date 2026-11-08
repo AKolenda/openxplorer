@@ -125,7 +125,8 @@ def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
     if paths.admin_delete is not None:
         files += [paths.admin_delete, paths.admin_delete_policy]
     if paths.install_update is not None:
-        files += [paths.install_update, paths.install_update_policy, paths.install_update_rules]
+        files += [paths.install_update, paths.install_update_policy,
+                  paths.install_update_rule_template]
     return files
 
 
@@ -320,11 +321,20 @@ def check_install_update(report: Report, tree: InstalledTree) -> None:
     because it covers this one action, whose program is exactly the
     installed helper, and only in an active local session; anyone else
     falls back to the action's defaults, which ask for an administrator.
+    And it does so only once the user turns on "Install updates without
+    asking for a password": the package installs it as a template, never
+    in a folder polkit reads.
     """
     paths = tree.paths
     helper = paths.install_update
-    if helper is None or paths.install_update_policy is None or paths.install_update_rules is None:
+    if (helper is None or paths.install_update_policy is None
+            or paths.install_update_rule_template is None):
         raise VerificationError('This package installs no update helper')
+    active = [path for folder in package_data.POLKIT_RULES_FOLDERS
+              for path in tree.path_of(folder).rglob('*')]
+    report.check('No polkit rule is active after installing',
+                 not active and not any(str(paths.install_update_rule_template).startswith(
+                     str(folder) + '/') for folder in package_data.POLKIT_RULES_FOLDERS))
     installed = tree.path_of(helper)
     with installed.open('rb') as program:
         report.check('The update helper is a compiled program', program.read(4) == ELF_MAGIC)
@@ -348,7 +358,7 @@ def check_install_update(report: Report, tree: InstalledTree) -> None:
                  and found[0].findtext('defaults/allow_active', '') == 'auth_admin_keep')
     report.check('The update action gives the helper no display',
                  'org.freedesktop.policykit.exec.allow_gui' not in annotations)
-    rules = tree.path_of(paths.install_update_rules).read_text(encoding='utf-8')
+    rules = tree.path_of(paths.install_update_rule_template).read_text(encoding='utf-8')
     code = '\n'.join(line for line in rules.splitlines() if not line.lstrip().startswith('//'))
     report.check('The update rule covers only the update action',
                  code.count('action.id') == 1 and f'action.id !== "{action_id}"' in code

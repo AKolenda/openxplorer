@@ -169,8 +169,79 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
 
                 verify_deb.check_maintainer_scripts(report, channel, control)
 
-                self.assertIn('postinst and postrm only refresh caches', report.passed)
+                self.assertIn('postinst only refreshes caches', report.passed)
+                self.assertIn("postrm refreshes caches and removes only the update setting's files",
+                              report.passed)
                 shutil.rmtree(control)
+
+    def run_postrm(self, control: Path, action: str, root: Path) -> subprocess.CompletedProcess[str]:
+        """Run the postrm for action, as dpkg --root=root would."""
+        environment = dict(os.environ, DPKG_ROOT=str(root))
+        return subprocess.run(['sh', str(control / 'postrm'), action], capture_output=True,
+                              text=True, env=environment)
+
+    def turned_on(self, root: Path) -> tuple[Path, Path]:
+        """Write what "Install updates without asking for a password" leaves under root."""
+        rule = root / 'etc/polkit-1/rules.d/60-io.winspace.Development.install-update.rules'
+        record = root / 'var/lib/openxplorer/install-updates-without-password'
+        for path in (rule, record):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n', encoding='utf-8')
+        return rule, record
+
+    # parity: UPD-003
+    def test_removing_the_stable_package_removes_the_passwordless_rule(self) -> None:
+        """Uninstalling never leaves updates without a password behind,
+        and an upgrade keeps the user's choice."""
+        control = self.write_scripts(Channel.STABLE)
+        for action, kept in (('remove', False), ('purge', False), ('upgrade', True),
+                             ('failed-upgrade', True)):
+            with self.subTest(action=action):
+                root = self.folder / f'root-{action}'
+                rule, record = self.turned_on(root)
+
+                result = self.run_postrm(control, action, root)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(rule.exists(), kept)
+                self.assertEqual(record.exists(), kept)
+                self.assertTrue(rule.parent.is_dir())
+                if not kept:
+                    self.assertFalse(record.parent.exists())
+
+    def test_removing_the_stable_package_with_the_setting_off_succeeds(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        for action in ('remove', 'purge'):
+            with self.subTest(action=action):
+                result = self.run_postrm(control, action, self.folder / f'empty-{action}')
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_removing_the_stable_package_never_follows_a_link_at_the_rule(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        root = self.folder / 'root'
+        rule, _record = self.turned_on(root)
+        elsewhere = self.folder / 'elsewhere.rules'
+        elsewhere.write_text('kept\n', encoding='utf-8')
+        rule.unlink()
+        rule.symlink_to(elsewhere)
+
+        result = self.run_postrm(control, 'purge', root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(rule.is_symlink())
+        self.assertEqual(elsewhere.read_text(encoding='utf-8'), 'kept\n')
+
+    def test_the_preview_postrm_leaves_the_stable_setting_alone(self) -> None:
+        control = self.write_scripts(Channel.PREVIEW)
+        root = self.folder / 'root'
+        rule, record = self.turned_on(root)
+
+        result = self.run_postrm(control, 'purge', root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(rule.exists())
+        self.assertTrue(record.exists())
 
     def test_the_stable_preinst_refuses_a_foreign_processor(self) -> None:
         control = self.write_scripts(Channel.STABLE)

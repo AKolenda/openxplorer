@@ -1,0 +1,14 @@
+# The stable package's postrm only, ahead of the cache refreshes: removing
+# or purging the package deletes the polkit rule and the record that the
+# setting "Install updates without asking for a password" writes
+# (crates/ox-core/src/update/passwordless.rs), so no rule that skips the
+# password outlives the package. An upgrade keeps them, and so keeps the
+# user's choice. rm never follows a link it is given.
+case "$1" in
+    remove|purge)
+        rm -f "$DPKG_ROOT/etc/polkit-1/rules.d/60-io.winspace.Development.install-update.rules"
+        rm -f "$DPKG_ROOT/var/lib/openxplorer/install-updates-without-password"
+        rmdir "$DPKG_ROOT/var/lib/openxplorer" 2>/dev/null || true
+        ;;
+esac
+

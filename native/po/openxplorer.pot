@@ -2757,6 +2757,10 @@ msgid "About this build"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Administrators at this computer install OpenXplorer updates without typing their password. Changing this asks for an administrator's password once."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs."
 msgstr ""
 
@@ -2778,6 +2782,14 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Help"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Install updates without asking for a password"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Install updates without asking for a password could not be changed."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -2834,6 +2846,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "password prompt administrator admin sudo polkit pkexec authentication install update without password passwordless"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
