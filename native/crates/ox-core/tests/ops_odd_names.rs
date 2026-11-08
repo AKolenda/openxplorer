@@ -5,6 +5,8 @@
 //! new name); an item already listed is renamed, copied and moved to the
 //! Recycle Bin like any other, as Windows Explorer handles every item it
 //! lists.
+//! The clipboard alone keeps refusing them (CLIP-005, SAFE-010), so they
+//! are copied here with a transfer, as Copy to and a drag copy them.
 
 mod ops_support;
 #[path = "ops_support/private_trash.rs"]
