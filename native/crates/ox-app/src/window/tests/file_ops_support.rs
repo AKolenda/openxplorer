@@ -310,3 +310,17 @@ pub(in crate::window) fn answer_conflicts(test: &TestWindow, answer: ConflictAns
         .expect("Continue")
         .emit_clicked();
 }
+
+/// The progress window's action that asks about a failed item, once one
+/// of the operations of `test` asks.
+pub(super) fn failure_question(test: &TestWindow) -> crate::window::transfer_panel::TransferPanel {
+    let window = crate::window::progress_window::ProgressWindow::of(&test.context);
+    let asking = || {
+        window
+            .actions()
+            .into_iter()
+            .find(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+    };
+    wait_until("the action to ask about a failed item", || asking().is_some());
+    asking().expect("the asking action")
+}

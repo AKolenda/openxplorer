@@ -11,8 +11,8 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{
-    assert_ended_without_a_message, dialog_over, is_renaming_in_place, name_editor, open_dialog,
-    select_names, text_field, wait_for_no_dialog,
+    assert_ended_without_a_message, dialog_over, failure_question, is_renaming_in_place, name_editor,
+    open_dialog, select_names, text_field, wait_for_no_dialog,
 };
 use crate::dialog::Dialog;
 use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
@@ -213,12 +213,13 @@ fn escape_renames_none_of_the_selected_items() {
 }
 
 /// An item that cannot be renamed, here one that went away while the
-/// name was typed, is left out and named in the result; the others are
-/// renamed and stay selected, and Undo renames them back.
+/// name was typed, is asked about in the progress window as Windows asks,
+/// "Item Not Found", and Skip leaves it out; the others are renamed and
+/// stay selected, nothing is said afterwards, and Undo renames them back.
 ///
-/// parity: OPS-050, OPS-023
+/// parity: OPS-050, OPS-023, OPS-047
 #[gtk::test]
-fn an_item_that_cannot_be_renamed_is_reported_and_the_rest_are_renamed() {
+fn an_item_that_cannot_be_renamed_is_asked_about_and_the_rest_are_renamed() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Map.jpg"), "a map").expect("the file is written");
     let test = TestWindow::open(&fixture.uri());
@@ -230,17 +231,18 @@ fn an_item_that_cannot_be_renamed_is_reported_and_the_rest_are_renamed() {
     field.set_text("Plan");
     field.emit_activate();
 
-    let report = open_dialog(&test);
-    assert_eq!(report.title_text(), "Operation result");
+    let failed = failure_question(&test);
+    assert_eq!(failed.caption_shown(), "Item Not Found");
     assert!(
-        report.message_text().contains("Notes 2.txt"),
-        "{}",
-        report.message_text()
+        failed.failure_texts().iter().any(|text| text == "Notes 2.txt"),
+        "{:?}",
+        failed.failure_texts()
     );
-    report.press("OK");
+    failed.press_failure("Skip");
     wait_until("the renamed items to be selected", || {
         test.selected_names() == ["Plan (1).jpg", "Plan (2).txt"]
     });
+    assert!(dialog_over(&test).is_none(), "nothing is said afterwards");
     assert_eq!(content(&fixture, "Plan (2).txt"), "Synthetic test data\n");
 
     test.activate("undo", None);

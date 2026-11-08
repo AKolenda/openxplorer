@@ -236,6 +236,40 @@ fn a_phone_is_not_cached_or_opened_in_a_terminal_and_drive_items_target_the_driv
     }
 }
 
+/// A phone's Copy is greyed out, saying why: its root has no path a
+/// shortcut could point to, so a paste of it could make none. A drive's
+/// Copy stays enabled.
+///
+/// parity: HOME-003, CLIP-001
+#[test]
+fn a_phone_cannot_be_copied_and_a_drive_can() {
+    let phone = PlaceMenu::Drive {
+        uri: "mtp://%5Busb%3A001%2C010%5D/".into(),
+        kind: VolumeKind::Device,
+        controls: MountControls::UNMOUNTABLE,
+    };
+    let drive = PlaceMenu::Drive {
+        uri: "file:///".into(),
+        kind: VolumeKind::Drive,
+        controls: MountControls::FIXED,
+    };
+    let copy = |menu: &PlaceMenu| {
+        let (_, strip) = menu.styled(PlaceFacts::default(), MenuStyle::Compact);
+        strip
+            .into_iter()
+            .find(|item| item.label == "Copy")
+            .expect("the strip has Copy")
+    };
+
+    let phone_copy = copy(&phone);
+    assert_eq!(phone_copy.availability, ItemAvailability::Disabled);
+    assert_eq!(
+        phone_copy.disabled_reason,
+        Some("A phone or camera cannot be copied. Open it and select what to copy.")
+    );
+    assert_ne!(copy(&drive).availability, ItemAvailability::Disabled);
+}
+
 /// parity: NET-030
 #[test]
 fn a_connected_sftp_folder_can_be_kept_and_disconnected() {
@@ -344,8 +378,8 @@ fn a_drive_menu_follows_windows_11_in_the_compact_style() {
         .collect();
     assert_eq!(
         strip,
-        [("Copy".to_owned(), true), ("Rename".to_owned(), true)],
-        "greyed out: the app neither copies a whole drive nor renames one"
+        [("Copy".to_owned(), false), ("Rename".to_owned(), true)],
+        "Copy copies the drive for a paste to make a shortcut to it; Rename is greyed out"
     );
     let pinned = PlaceFacts {
         pinned: true,

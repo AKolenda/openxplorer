@@ -21,6 +21,11 @@
 //! Where the folder's file system has no symbolic links (an SMB share
 //! through `GVfs`, a FAT-formatted USB stick), nothing is written and
 //! [`NO_LINKS_HERE`] says why.
+//!
+//! A drive is pasted or dropped as a shortcut too, never copied
+//! ([`create_named_shortcuts`]): Windows Explorer makes "Local Disk (C:) -
+//! Shortcut" there. Its mount root has no name of its own ("/" for Local
+//! Disk), so the caller names it as This PC shows the drive.
 
 use std::path::PathBuf;
 
@@ -29,11 +34,12 @@ use gio::prelude::*;
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::links::LinkRequest;
+use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
 use super::undo::UndoRecord;
 use crate::location::{file_uri, fitted_name, normalise, ItemKind};
 use crate::network::local_path;
-use crate::transfer::MAX_ITEMS;
+use crate::transfer::{TransferMode, MAX_ITEMS};
 
 /// Why a folder takes no shortcuts.
 pub const NO_LINKS_HERE: &str = crate::i18n::message_id(
@@ -74,6 +80,21 @@ pub fn shortcut_name(name: &str, number: u32) -> String {
 /// ([`OpsError::NotSupported`] with [`NO_LINKS_HERE`]), every numbered
 /// name is taken ([`OpsError::Exists`]), or the system's failure.
 pub fn create_shortcut(target_uri: &str, folder_uri: &str) -> Result<String, OpsError> {
+    create_shortcut_named(target_uri, folder_uri, None)
+}
+
+/// [`create_shortcut`], the shortcut's name made from `name` where it is
+/// given, such as a drive's name as This PC shows it, rather than from the
+/// item's own name.
+///
+/// # Errors
+///
+/// As [`create_shortcut`].
+pub fn create_shortcut_named(
+    target_uri: &str,
+    folder_uri: &str,
+    name: Option<&str>,
+) -> Result<String, OpsError> {
     let target_uri = normalise(target_uri)?;
     let folder = gio::File::for_uri(&normalise(folder_uri)?);
     let target = gio::File::for_uri(&target_uri);
@@ -82,7 +103,7 @@ pub fn create_shortcut(target_uri: &str, folder_uri: &str) -> Result<String, Ops
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         gio::Cancellable::NONE,
     )?;
-    let name = info.display_name().to_string();
+    let name = name.map_or_else(|| info.display_name().to_string(), ToOwned::to_owned);
     let kind = if info.file_type() == gio::FileType::Directory {
         ItemKind::Folder
     } else {
@@ -159,17 +180,68 @@ pub async fn create_shortcuts(
     request: &LinkRequest,
     context: &OperationContext,
 ) -> Result<TransferOutcome, OpsError> {
+    create_named_shortcuts(&unnamed(request), context).await
+}
+
+/// `request` as shortcuts named after their items.
+fn unnamed(request: &LinkRequest) -> NamedShortcuts {
+    NamedShortcuts {
+        targets: request
+            .uris
+            .iter()
+            .map(|uri| ShortcutTarget {
+                uri: uri.clone(),
+                name: None,
+            })
+            .collect(),
+        destination_folder: request.destination_folder.clone(),
+    }
+}
+
+/// One shortcut to make: the item it points to and, where the item's own
+/// name is not what Explorer shows, the name it is made from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShortcutTarget {
+    /// The item the shortcut points to.
+    pub uri: String,
+    /// The name the shortcut's name is made from, such as "Local Disk" for
+    /// a drive; `None` for the item's own name.
+    pub name: Option<String>,
+}
+
+/// Shortcuts to make in one folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedShortcuts {
+    /// What each shortcut points to, in order.
+    pub targets: Vec<ShortcutTarget>,
+    /// The folder the shortcuts go into.
+    pub destination_folder: String,
+}
+
+/// Makes a shortcut in the request's folder to each of its targets, named
+/// from the target's given name, on a worker thread: a drive pasted or
+/// dropped into a folder, as Windows Explorer makes "Local Disk (C:) -
+/// Shortcut" rather than copying the drive. The outcome lists the new
+/// shortcuts, and Undo moves them, never their targets, to the Trash.
+///
+/// # Errors
+///
+/// As [`create_shortcuts`].
+pub async fn create_named_shortcuts(
+    request: &NamedShortcuts,
+    context: &OperationContext,
+) -> Result<TransferOutcome, OpsError> {
     let request = request.clone();
     let context = context.clone();
     on_worker(move || create_shortcuts_blocking(&request, &context)).await
 }
 
-/// [`create_shortcuts`] on the calling thread.
+/// [`create_named_shortcuts`] on the calling thread.
 fn create_shortcuts_blocking(
-    request: &LinkRequest,
+    request: &NamedShortcuts,
     context: &OperationContext,
 ) -> Result<TransferOutcome, OpsError> {
-    if request.uris.is_empty() || request.uris.len() > MAX_ITEMS {
+    if request.targets.is_empty() || request.targets.len() > MAX_ITEMS {
         return Err(OpsError::failed(crate::i18n::gettext(
             "Select between 1 and 100,000 items.",
         )));
@@ -177,22 +249,32 @@ fn create_shortcuts_blocking(
     let folder = normalise(&request.destination_folder)?;
     context.protection.check(&folder)?;
     let mut outcome = TransferOutcome::default();
-    for uri in &request.uris {
+    let mut questions = ItemQuestions::new(context, TransferMode::Copy);
+    for (index, target) in request.targets.iter().enumerate() {
+        let uri = &target.uri;
         if context.cancel.is_cancelled() {
             outcome.result.cancelled = true;
             break;
         }
-        match create_shortcut(uri, &folder) {
-            Ok(link) => {
-                outcome.result.done.push(uri.clone());
-                outcome.created.push(link);
-            }
-            Err(error) => {
-                let name = gio::File::for_uri(uri)
-                    .basename()
-                    .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
-                outcome.result.errors.push(format!("{name}: {error}"));
-            }
+        let name = target.name.clone().unwrap_or_else(|| {
+            gio::File::for_uri(uri)
+                .basename()
+                .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned())
+        });
+        let asked = AskedItem {
+            name: &name,
+            uri,
+            more_items: index + 1 < request.targets.len(),
+        };
+        // An item that gets no shortcut is asked about in the progress
+        // window (OPS-047).
+        let attempt = || create_shortcut_named(uri, &folder, target.name.as_deref());
+        if let Some(link) = questions.run(&mut outcome.result, asked, attempt) {
+            outcome.result.done.push(uri.clone());
+            outcome.created.push(link);
+        }
+        if outcome.result.cancelled {
+            break;
         }
     }
     if !outcome.created.is_empty() {
@@ -290,6 +372,48 @@ mod tests {
         assert!(matches!(missing, Err(OpsError::NotFound(_))), "{missing:?}");
     }
 
+    /// A drive's shortcut is named as This PC shows the drive, not after
+    /// its mount root, and points to the mount root; a second one is
+    /// numbered (2). Nothing on the drive is copied.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn a_drive_shortcut_is_named_after_the_drive_and_numbered() {
+        let folder = temporary_folder();
+        let mount = folder.path().join("mnt-data");
+        std::fs::create_dir(&mount).expect("fixture drive");
+        std::fs::write(mount.join("budget.ods"), b"Synthetic data").expect("fixture file");
+        let projects = folder.path().join("Projects");
+        std::fs::create_dir(&projects).expect("fixture folder");
+
+        let first = create_shortcut_named(&file_uri(&mount), &file_uri(&projects), Some("Local Disk"));
+        let second = create_shortcut_named(&file_uri(&mount), &file_uri(&projects), Some("Local Disk"));
+
+        let first_link = projects.join("Local Disk - Shortcut");
+        let second_link = projects.join("Local Disk - Shortcut (2)");
+        assert_eq!(first, Ok(file_uri(&first_link)));
+        assert_eq!(second, Ok(file_uri(&second_link)));
+        assert_eq!(std::fs::read_link(&first_link).expect("a link"), mount);
+        assert_eq!(std::fs::read_link(&second_link).expect("a link"), mount);
+        let listed: Vec<_> = std::fs::read_dir(&projects).expect("listed").collect();
+        assert_eq!(listed.len(), 2, "only the two shortcuts");
+    }
+
+    /// The root of the file system, Local Disk, gets a shortcut named
+    /// from the name given, as "/" names no file.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn local_disk_gets_a_shortcut_to_the_root() {
+        let folder = temporary_folder();
+
+        let link = create_shortcut_named("file:///", &file_uri(folder.path()), Some("Local Disk"));
+
+        let made = folder.path().join("Local Disk - Shortcut");
+        assert_eq!(link, Ok(file_uri(&made)));
+        assert_eq!(std::fs::read_link(&made).expect("a link"), PathBuf::from("/"));
+    }
+
     /// A file system without symbolic links says so clearly.
     ///
     /// parity: CMD-038
@@ -327,8 +451,8 @@ mod tests {
             Err(TransferError::failed("This folder is read-only."))
         }));
 
-        let outcome = create_shortcuts_blocking(&request, &open).expect("the folder is writable");
-        let refused = create_shortcuts_blocking(&request, &guarded);
+        let outcome = create_shortcuts_blocking(&unnamed(&request), &open).expect("the folder is writable");
+        let refused = create_shortcuts_blocking(&unnamed(&request), &guarded);
 
         let links = [
             file_uri(&desktop.join("a.txt - Shortcut")),

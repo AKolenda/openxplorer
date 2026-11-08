@@ -13,7 +13,8 @@ use glib::clone;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::ops::{
-    create_link, create_links, create_shortcuts, starting_label, summarize_links, LinkRequest, NewLink,
+    create_link, create_links, create_named_shortcuts, create_shortcuts, starting_label, LinkRequest,
+    NamedShortcuts, NewLink,
 };
 use ox_core::transfer::TransferMode;
 
@@ -53,7 +54,6 @@ impl BrowserWindow {
         let outcome = create_links(request, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });
@@ -73,11 +73,36 @@ impl BrowserWindow {
         let outcome = create_shortcuts(request, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: selected,
         });
         self.conclude_operation(finished).await;
+    }
+
+    /// Makes the shortcuts `request` names, such as a drive's pasted or
+    /// dropped into a folder ("Local Disk - Shortcut"), as the window's
+    /// one operation, asking about a failure in the progress window
+    /// (OPS-047), then selects them, as Windows
+    /// Explorer selects what a paste made; Undo moves them to the Trash.
+    /// False when it could not start, after saying why, as while another
+    /// operation runs: a paste or a drop then leaves its other items too.
+    pub(in crate::window) async fn run_named_shortcuts(&self, request: &NamedShortcuts) -> bool {
+        let Some(context) = self.begin_operation(starting_label(TransferMode::Copy)) else {
+            if self.is_writing_files() {
+                self.show_message(ox_core::i18n::gettext_static(
+                    "Wait for the running file operation to finish.",
+                ));
+            }
+            return false;
+        };
+        let outcome = create_named_shortcuts(request, &context).await;
+        self.end_operation();
+        let finished = outcome.map(|outcome| FinishedOperation {
+            undo: outcome.undo,
+            select_after: outcome.created,
+        });
+        self.conclude_operation(finished).await;
+        true
     }
 
     /// New ▸ Link to file or folder: asks for the path and the name,

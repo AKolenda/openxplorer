@@ -297,17 +297,17 @@ fn mount_at(file: &gio::File) -> Option<MountFacts> {
     })
 }
 
-/// The width and height of a local image, from its header only.
+/// The width and height of a local image, from its header only
+/// ([`crate::picture_guard::dimensions`]).
 fn image_dimensions(file: &gio::File, entry: &Entry) -> Option<(i32, i32)> {
     let is_image = entry
         .content_type
         .as_deref()
         .is_some_and(|kind| kind.starts_with("image/"));
-    if entry.is_dir || !is_image {
+    if entry.is_dir || !is_image || file.path().is_none() {
         return None;
     }
-    let (_, width, height) = gtk::gdk_pixbuf::Pixbuf::file_info(file.path()?)?;
-    Some((width, height))
+    crate::picture_guard::dimensions(file)
 }
 
 /// The name of the application a file opens with; `None` for a folder

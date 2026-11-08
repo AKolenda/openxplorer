@@ -1,8 +1,6 @@
 # OpenXplorer
 
-A Windows File Explorer-inspired file manager, **developed for Zorin OS first and foremost**. Zorin is the primary target for its desktop experience and integration; Ubuntu and Debian are secondary compatibility targets and require compatible system packages.
-
-Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, split panes, a folder tree, Details, Compact, List and icon views with thumbnails, clickable paths, pinned folders, search, undoable file operations and light/dark themes.
+A Windows File Explorer-inspired file manager for Linux, **developed for Zorin OS first and foremost**. Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, split panes, a folder tree, Details, Compact, List and icon views with thumbnails, clickable paths, pinned folders, search, undoable file operations and light/dark themes.
 
 **[Releases](https://github.com/AKolenda/openxplorer/releases)** · **[Website](https://openxplorer.app)** · **[Installation](docs/installation.md)** · **[Documentation](docs/introduction.md)**
 
@@ -14,9 +12,11 @@ Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with ta
 
 ## Install
 
-Version **2.0.14** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.14 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
+Zorin OS is the primary target for its desktop experience and integration; Ubuntu and Debian are secondary compatibility targets and require compatible system packages.
 
-- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.14_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
+Version **2.0.15** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.15 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
+
+- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.15_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
 - **Fedora, openSUSE Tumbleweed, Arch Linux:** the `.rpm` or `.pkg.tar.zst` of the release, when the release lists one.
 - **Any distribution with Flatpak**, including Debian 12 and others with GTK older than 4.14: `io.winspace.Development.flatpak`.
 

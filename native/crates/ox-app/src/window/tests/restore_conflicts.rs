@@ -2,7 +2,8 @@
 //! Restore from the Recycle Bin onto a name taken again in the original
 //! folder, as Windows 11 asks it: the progress window's "Replace or Skip
 //! Files" question, under "Moving 1 item to <folder>", never the
-//! "Operation result" dialog (OPS-041, OPS-026, OPS-028). Every file is a
+//! 1.x app's "Operation result" dialog, which is gone (OPS-041, OPS-026,
+//! OPS-028, OPS-023). Every file is a
 //! fictional one of the fixture, in the test run's private Recycle Bin.
 
 use std::fs;
@@ -81,7 +82,10 @@ fn forget_trashed_items_of(fixture: &Fixture) {
         .map(|item| item.uri)
         .collect();
     context
-        .block_on(delete_from_recycle_bin(&uris, &Cancellation::new()))
+        .block_on(delete_from_recycle_bin(
+            &uris,
+            &ox_core::ops::OperationContext::default(),
+        ))
         .expect("the test's own items are deleted");
 }
 
@@ -90,7 +94,7 @@ fn forget_trashed_items_of(fixture: &Fixture) {
 fn ends_without_a_report(test: &TestWindow) {
     wait_until("the action to end", || test.context.progress_window().is_none());
     wait_for(Duration::from_millis(300));
-    assert!(dialog_over(test).is_none(), "no Operation result dialog");
+    assert!(dialog_over(test).is_none(), "nothing is said afterwards");
 }
 
 /// Restore onto a taken name asks in the progress window, as a move
@@ -150,11 +154,81 @@ fn restoring_onto_a_taken_name_asks_replace_or_skip_files() {
     });
 
     select_names(&test, &[name]);
+    let trashed_at = fs::metadata(fixture.path(name)).unwrap().modified().unwrap();
+    let restored_uri = test.window.folder_model().selected_uris()[0].clone();
     test.activate("restore", None);
     let window = question_window(&test);
     button(&window, "Replace the file in the destination").emit_clicked();
     ends_without_a_report(&test);
+    // The restored file is in its place, with its own date, and has left
+    // the Recycle Bin; the file it replaced is the one there now.
     assert_eq!(fs::read(fixture.path(name)).unwrap(), TRASHED);
+    let modified = fs::metadata(fixture.path(name)).unwrap().modified().unwrap();
+    assert!(modified <= trashed_at, "the restored file keeps its older date");
+    assert!(
+        !gio::File::for_uri(&restored_uri).query_exists(None::<&gio::Cancellable>),
+        "the restored item left the Recycle Bin"
+    );
+    let left = gtk::glib::MainContext::default()
+        .block_on(list_recycle_bin(&Cancellation::new()))
+        .expect("a readable Recycle Bin")
+        .into_iter()
+        .filter(|item| item.original_path.as_deref() == Some(fixture.path(name).as_path()))
+        .collect::<Vec<_>>();
+    assert_eq!(left.len(), 1, "only the replaced file: {left:?}");
+    let (replaced, _) = gio::File::for_uri(&left[0].uri)
+        .load_contents(None::<&gio::Cancellable>)
+        .expect("the replaced file is readable in the Recycle Bin");
+    assert_eq!(replaced.as_ref(), NEWER, "the file it replaced");
+    test.window.refresh();
+    wait_until("the listing to show only the replaced file", || {
+        !test.window.is_loading() && test.names().iter().filter(|shown| *shown == name).count() == 1
+    });
+    forget_trashed_items_of(&fixture);
+}
+
+/// Two Recycle Bin items deleted from the same place, restored together:
+/// the second finds its name taken by the first and asks "Replace or Skip
+/// Files" in the progress window, as Windows does, never the 1.x app's
+/// "Operation result"; Skip leaves it in the Recycle Bin without a word.
+///
+/// parity: OPS-041, OPS-026, OPS-023
+#[gtk::test]
+fn restoring_two_items_from_the_same_place_asks_about_the_second() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let name = "Twin.txt";
+    fixture.write(name);
+    trash(&fixture.path(name));
+    fs::write(fixture.path(name), NEWER).expect("the newer file is written");
+    trash(&fixture.path(name));
+    let test = TestWindow::open(TRASH_URI);
+    wait_until("both trashed files to be listed", || {
+        test.names().iter().filter(|shown| *shown == name).count() == 2
+    });
+    // Both rows read "Twin.txt"; any other item stays unselected.
+    let model = test.window.folder_model();
+    model.select_none();
+    for position in 0..model.n_items() {
+        if model.name_at(position).as_deref() == Some(name) {
+            model.selection().select_item(position, false);
+        }
+    }
+    assert_eq!(test.selected_names(), [name, name]);
+
+    test.activate("restore", None);
+    let window = question_window(&test);
+    let shown = texts(&window);
+
+    assert!(
+        shown.contains(&format!("The destination already has a file named \"{name}\"")),
+        "{shown:?}"
+    );
+    assert!(dialog_over(&test).is_none(), "nothing over the browsing window");
+    button(&window, "Skip this file").emit_clicked();
+    ends_without_a_report(&test);
+    assert!(fixture.path(name).is_file(), "one of them is back");
+    forget_trashed_items_of(&fixture);
 }
 
 /// Restore all items with two taken names asks once, in the plural, and
@@ -213,15 +287,12 @@ fn restore_conflicts_are_captured_light_and_dark() {
         let conflicts = super::name_conflicts::conflict_window(&window);
         wait_for(Duration::from_millis(1500));
         capture_dialog(&conflicts, &format!("native-restore-file-conflict-{theme}.png"));
+        // Closing it goes back to the question, as in Windows 11.
         conflicts.close();
-        ends_without_a_report(&test);
-        test.window.refresh();
-        wait_until("the cancelled item to be listed still", || {
-            !test.window.is_loading() && test.names().contains(&one.to_owned())
+        wait_until("the question again", || {
+            window.conflict_window().is_none() && window.actions()[0].waits_for_a_row()
         });
-        select_names(&test, &[one]);
-        test.activate("restore", None);
-        button(&question_window(&test), "Replace the file in the destination").emit_clicked();
+        button(&window, "Replace the file in the destination").emit_clicked();
         ends_without_a_report(&test);
         test.activate("go-to", Some(&fixture.uri()));
         test.wait_for_listing("the original folder");
@@ -253,22 +324,16 @@ fn restore_conflicts_are_captured_light_and_dark() {
     }
 }
 
-/// Whether every one of `wanted` is a shown text of `window`.
-fn shows_all(window: &impl IsA<gtk::Widget>, wanted: &[&str]) -> bool {
-    let shown = texts(window);
-    wanted.iter().all(|text| shown.iter().any(|shown| shown == text))
-}
-
-/// "More details" stays as it was left, as in Windows: a question opened
-/// with the details remembered open reads "Fewer details" and compares
-/// both files (name, folders, dates and sizes) under it, never an empty
-/// body; folded, it reads "More details" and shows none. Saves
-/// `native-restore-question-expanded-*.png` and
-/// `native-restore-question-collapsed-*.png`.
+/// While Replace or Skip Files shows, the toggle is greyed, as in
+/// Windows, with the details remembered open: it still reads "Fewer
+/// details", as Windows' greyed toggle does, Tab passes it, and the
+/// details stay hidden, so nothing compares the files under the
+/// question; "Compare info for both files" still opens the File Conflict
+/// window. Saves `replace-skip-details-*.png`.
 ///
 /// parity: OPS-021, OPS-026
 #[gtk::test]
-fn the_question_keeps_the_remembered_details_and_compares_both_files_in_them() {
+fn the_question_greys_more_details_and_compares_the_files_only_in_the_file_conflict_window() {
     require_private_trash();
     let _theme = ThemeGuard::keep();
     for theme in ["light", "dark"] {
@@ -291,30 +356,33 @@ fn the_question_keeps_the_remembered_details_and_compares_both_files_in_them() {
             "20 bytes".to_owned(),
             "23 bytes".to_owned(),
         ];
-        let compared: Vec<&str> = compared.iter().map(String::as_str).collect();
 
         test.activate("restore", None);
         let window = question_window(&test);
 
         assert!(window.shows_details(), "the remembered choice is kept");
+        assert!(!window.offers_details(), "the toggle is greyed");
         assert_eq!(window.details_text(), "Fewer details");
-        assert!(shows_all(&window, &compared), "{:?}", texts(&window));
-        button(&window, "Skip this file");
-        capture_dialog(&window, &format!("native-restore-question-expanded-{theme}.png"));
-
-        window.press_details();
-
-        assert_eq!(window.details_text(), "More details");
-        let folded = texts(&window);
+        let shown = texts(&window);
+        assert!(!shown.iter().any(|text| compared.contains(text)), "{shown:?}");
+        let tabbed = focus_after_tabs(&window, 8);
         assert!(
-            !folded.iter().any(|text| compared.contains(&text.as_str())),
-            "{folded:?}"
+            !tabbed
+                .iter()
+                .any(|widget| widget.has_css_class("progress-details-toggle")),
+            "Tab passes the greyed toggle"
         );
-        capture_dialog(&window, &format!("native-restore-question-collapsed-{theme}.png"));
+        GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
+        window.set_focus_visible(false);
+        capture_dialog(&window, &format!("replace-skip-details-{theme}.png"));
 
-        window.press_details();
-        assert_eq!(window.details_text(), "Fewer details");
-        assert!(shows_all(&window, &compared), "{:?}", texts(&window));
+        button(&window, "Compare info for both files").emit_clicked();
+        let conflicts = super::name_conflicts::conflict_window(&window);
+        conflicts.cancel();
+        let window = question_window(&test);
+        wait_until("the question again", || {
+            window.conflict_window().is_none() && window.actions()[0].waits_for_a_row()
+        });
         button(&window, "Skip this file").emit_clicked();
         ends_without_a_report(&test);
         drop(test);
@@ -415,4 +483,86 @@ fn replace_restores_the_second_of_two_twins_over_the_first() {
         drop(test);
         forget_trashed_items_of(&fixture);
     }
+}
+
+/// How many Recycle Bin items came from `fixture`.
+fn recycled_from_fixture(fixture: &Fixture) -> usize {
+    let context = gtk::glib::MainContext::default();
+    context
+        .block_on(list_recycle_bin(&Cancellation::new()))
+        .expect("a readable Recycle Bin")
+        .iter()
+        .filter(|item| {
+            item.original_path
+                .as_ref()
+                .is_some_and(|path| path.starts_with(fixture.root()))
+        })
+        .count()
+}
+
+/// Turns off Settings > Files & folders > "When replacing a file, move
+/// the old one to the Recycle Bin", as the switch does.
+pub(super) fn overwrite_replaced_files(test: &TestWindow) {
+    let update = PreferencesUpdate {
+        recycle_replaced_files: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        !test.context.settings_data().preferences.recycle_replaced_files
+    });
+}
+
+/// With the switch off, Replace restores the item over the newer file,
+/// as Windows overwrites it: the newer file is gone, not in the Recycle
+/// Bin, and nothing is reported.
+///
+/// parity: OPS-041, OPS-028
+#[gtk::test]
+fn restore_replace_overwrites_the_newer_file_when_the_switch_is_off() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let name = "Overwritten report.txt";
+    let test = trash_and_take_names(&fixture, &[name]);
+    overwrite_replaced_files(&test);
+
+    select_names(&test, &[name]);
+    test.activate("restore", None);
+    button(&question_window(&test), "Replace the file in the destination").emit_clicked();
+    ends_without_a_report(&test);
+
+    assert_eq!(fs::read(fixture.path(name)).unwrap(), TRASHED);
+    assert_eq!(
+        recycled_from_fixture(&fixture),
+        0,
+        "the newer file was not recycled"
+    );
+}
+
+/// By default Replace keeps the newer file in the Recycle Bin, as the
+/// owner chose.
+///
+/// parity: OPS-041, OPS-028
+#[gtk::test]
+fn restore_replace_recycles_the_newer_file_by_default() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let name = "Recycled report.txt";
+    let test = trash_and_take_names(&fixture, &[name]);
+    assert!(test.context.settings_data().preferences.recycle_replaced_files);
+
+    select_names(&test, &[name]);
+    test.activate("restore", None);
+    button(&question_window(&test), "Replace the file in the destination").emit_clicked();
+    ends_without_a_report(&test);
+
+    assert_eq!(fs::read(fixture.path(name)).unwrap(), TRASHED);
+    wait_until("the newer file to be in the Recycle Bin", || {
+        recycled_from_fixture(&fixture) == 1
+    });
+    drop(test);
+    forget_trashed_items_of(&fixture);
 }

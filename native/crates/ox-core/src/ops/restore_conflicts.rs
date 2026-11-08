@@ -25,23 +25,32 @@
 //!   ([`replace_through_recycle_bin`]); should it not arrive, the
 //!   replaced item comes back at once. Where nothing can go to the
 //!   Recycle Bin, or a file meets a folder, nothing is replaced and the
-//!   item stays in the Recycle Bin, so no restore ever overwrites.
+//!   item stays in the Recycle Bin.
+//! - With [`ReplacedFiles::Overwrite`] (Settings > Files & folders), a
+//!   file restored over a file overwrites it, as Windows does, and the
+//!   replaced file is gone ([`restore_over`]). The file the Recycle Bin
+//!   keeps takes the old file's name in one rename, so a restore stopped
+//!   or failed before it leaves the old file as it was and the item in
+//!   the Recycle Bin. A folder in the way still goes
+//!   to the Recycle Bin: the setting is about files, and a folder is
+//!   never deleted as a side effect of Replace.
 //! - Both kept in the File Conflict window: the restored item takes
 //!   Windows' number, `report (2).txt`, the first free one.
 //! - A folder meeting a folder of its name is a conflict too: the insides
 //!   of a trashed folder are part of that item, so they cannot be merged
 //!   one by one.
 //!
-//! Every step moves the item natively and never overwrites
-//! ([`super::recycle_bin`]), and Undo puts the restored items back in
-//! the Recycle Bin, then restores the replaced ones.
+//! Every step moves the item natively and, but for that chosen
+//! overwrite, never overwrites ([`super::recycle_bin`]), and Undo puts
+//! the restored items back in the Recycle Bin, then restores the replaced
+//! ones that went there.
 
 use std::path::PathBuf;
 
 use gio::prelude::*;
 
 use super::conflicts::{facts, ConflictScan, NameConflict, PlannedItem, PlannedKind};
-use super::context::{on_worker, OperationContext};
+use super::context::{on_worker, OperationContext, ReplacedFiles};
 use super::error::OpsError;
 use super::recycle_bin::{
     forget_removed_items, move_out, path_name, recreate_original_folder, restore_item, top_level_item,
@@ -49,13 +58,13 @@ use super::recycle_bin::{
 use super::resolved_transfer::{
     check_answers, failed, replace_through_recycle_bin, Resolution, MAX_KEPT_NUMBER,
 };
-use super::results::{merge_results, record_failure};
+use super::results::{merge_results, AskedItem, ItemQuestions};
 use super::run_transfer::{unix_seconds_now, TransferOutcome};
 use super::undo::{Operation, UndoRecord};
 use crate::entry::{entry_from_info, ATTRIBUTES};
 use crate::gio_node::GioNode;
 use crate::location::{kept_both_name, ItemKind};
-use crate::transfer::{Cancellation, Node, TransferMode};
+use crate::transfer::{is_same_file, Cancellation, Node, SourceChange, TransferMode};
 
 /// The plan of restoring the Recycle Bin items `uris`: each item goes
 /// into the folder it was deleted from, and each one whose original name
@@ -76,7 +85,27 @@ pub async fn scan_restore_conflicts(
 ) -> Result<ConflictScan, OpsError> {
     let uris = uris.to_vec();
     let cancel = cancel.clone();
-    on_worker(move || scan_blocking(&uris, &cancel)).await
+    on_worker(move || scan_blocking(&uris, None, &cancel)).await
+}
+
+/// The plan of moving the Recycle Bin items `uris`, dragged out of it,
+/// into the folder at `folder_uri` under their original names (OPS-046):
+/// as [`scan_restore_conflicts`], with that folder in place of each
+/// item's original one, so a name taken there asks "Replace or Skip
+/// Files" as Windows does, and the restore functions below move them.
+///
+/// # Errors
+///
+/// An invalid folder address, or cancellation.
+pub async fn scan_drag_out_conflicts(
+    uris: &[String],
+    folder_uri: &str,
+    cancel: &Cancellation,
+) -> Result<ConflictScan, OpsError> {
+    let folder = crate::location::normalise(folder_uri)?;
+    let uris = uris.to_vec();
+    let cancel = cancel.clone();
+    on_worker(move || scan_blocking(&uris, Some(&folder), &cancel)).await
 }
 
 /// True when every item of the restore `scan` goes into its
@@ -126,8 +155,13 @@ pub fn restore_questions(scan: &ConflictScan) -> Vec<(ConflictScan, Vec<usize>)>
     questions
 }
 
-/// [`scan_restore_conflicts`] on the calling thread.
-fn scan_blocking(uris: &[String], cancel: &Cancellation) -> Result<ConflictScan, OpsError> {
+/// [`scan_restore_conflicts`] on the calling thread, or, with `into`,
+/// [`scan_drag_out_conflicts`].
+fn scan_blocking(
+    uris: &[String],
+    into: Option<&str>,
+    cancel: &Cancellation,
+) -> Result<ConflictScan, OpsError> {
     let mut scan = ConflictScan {
         mode: TransferMode::Move,
         destination_folder: String::new(),
@@ -139,14 +173,14 @@ fn scan_blocking(uris: &[String], cancel: &Cancellation) -> Result<ConflictScan,
     let mut earlier: Vec<(PathBuf, String)> = Vec::new();
     for uri in uris {
         cancel.check()?;
-        let (destination_folder, conflict) = match plan_item(uri, &earlier, cancel) {
-            Ok((original_path, folder, conflict)) => {
-                earlier.push((original_path, uri.clone()));
+        let (destination_folder, conflict) = match plan_item(uri, into, &earlier, cancel) {
+            Ok((target_path, folder, conflict)) => {
+                earlier.push((target_path, uri.clone()));
                 (folder, conflict)
             }
             Err(error) if error.is_cancelled() => return Err(error),
-            // The restore itself reports it.
-            Err(_) => (String::new(), None),
+            // The restore itself asks about it.
+            Err(_) => (into.unwrap_or_default().to_owned(), None),
         };
         let kind = match conflict {
             Some(conflict) => {
@@ -171,30 +205,36 @@ fn scan_blocking(uris: &[String], cancel: &Cancellation) -> Result<ConflictScan,
     Ok(scan)
 }
 
-/// The folder the Recycle Bin item `uri` goes back into, and its
-/// conflict when its original name is taken there, or will be: an item
-/// of `earlier`, the items planned before it with their original paths,
-/// goes back to that name first and is the item it meets.
+/// The folder the Recycle Bin item `uri` goes back into, its original
+/// one or `into`, the path it goes to there, and its conflict when that
+/// name is taken, or will be: an item of `earlier`, the items planned
+/// before it with the paths they go to, goes to that name first and is
+/// the item it meets.
 fn plan_item(
     uri: &str,
+    into: Option<&str>,
     earlier: &[(PathBuf, String)],
     cancel: &Cancellation,
 ) -> Result<(PathBuf, String, Option<NameConflict>), OpsError> {
     let item = top_level_item(uri)?;
     let original_path = original_path(&item, cancel)?;
-    let target = gio::File::for_path(&original_path);
+    let target = match into {
+        Some(folder) => gio::File::for_uri(folder).child(path_name(&original_path)),
+        None => gio::File::for_path(&original_path),
+    };
     let folder = target
         .parent()
         .map(|parent| parent.uri().to_string())
         .unwrap_or_default();
+    let target_path = target.path().unwrap_or_else(|| original_path.clone());
     let existing = GioNode::from_file(target);
     let existing_facts = if existing.exists(Some(cancel)) {
         facts(&existing, cancel)?
-    } else if let Some((_, first)) = earlier.iter().find(|(path, _)| *path == original_path) {
+    } else if let Some((_, first)) = earlier.iter().find(|(path, _)| *path == target_path) {
         facts(&GioNode::new(first), cancel)?
     } else {
         cancel.check()?;
-        return Ok((original_path, folder, None));
+        return Ok((target_path, folder, None));
     };
     let conflict = NameConflict {
         incoming_uri: uri.to_owned(),
@@ -202,7 +242,7 @@ fn plan_item(
         incoming: facts(&GioNode::new(uri), cancel)?,
         existing: existing_facts,
     };
-    Ok((original_path, folder, Some(conflict)))
+    Ok((target_path, folder, Some(conflict)))
 }
 
 /// Where the Recycle Bin item `item` was deleted from.
@@ -217,9 +257,9 @@ fn original_path(item: &gio::File, cancel: &Cancellation) -> Result<PathBuf, Ops
         .ok_or_else(|| OpsError::failed(String::new()))
 }
 
-/// What a restore with conflicts did so far: the items whose names were
-/// free, restored while the user has not answered yet.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// What a restore with conflicts did so far: the items restored while
+/// the user has not answered yet, and those answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RestoreSoFar {
     /// Its outcome so far.
     outcome: TransferOutcome,
@@ -229,36 +269,73 @@ pub struct RestoreSoFar {
     placed: Vec<(String, String)>,
     /// When the restore started, in seconds since the Unix epoch.
     started: u64,
+    /// The Recycle Bin items whose names were found free but were taken
+    /// when they were restored, as by an item restored before them from
+    /// the same place: asked about as conflicts next
+    /// ([`RestoreSoFar::take_taken`]).
+    taken: Vec<String>,
+    /// Whether the user answered a failure Skip with "Do this for all
+    /// current items", which holds for the rest of the restore.
+    skip_all: bool,
+}
+
+impl Default for RestoreSoFar {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RestoreSoFar {
+    /// A restore that starts now.
+    pub fn new() -> Self {
+        Self {
+            outcome: TransferOutcome::default(),
+            replaced: Vec::new(),
+            placed: Vec::new(),
+            started: unix_seconds_now(),
+            taken: Vec::new(),
+            skip_all: false,
+        }
+    }
+
     /// True when the user cancelled while the free items were restored.
     pub fn cancelled(&self) -> bool {
         self.outcome.result.cancelled
     }
 
+    /// The items whose names were taken when they were restored, which
+    /// stay in the Recycle Bin until the user answers about them: Windows
+    /// asks "Replace or Skip Files" about such an item as it meets it, so
+    /// the restore scans them again ([`scan_restore_conflicts`]) and asks.
+    pub fn take_taken(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.taken)
+    }
+
+    /// True while an item waits because its name was taken
+    /// ([`Self::take_taken`]).
+    pub fn has_taken(&self) -> bool {
+        !self.taken.is_empty()
+    }
+
     /// The outcome of the restore stopped at the question: only these
-    /// items count, and it reads as cancelled, so nothing more is said.
+    /// items count, and it reads as cancelled.
     pub fn into_outcome(mut self) -> TransferOutcome {
         self.outcome.result.cancelled = true;
         self.finish()
     }
 
-    /// Adds the restore of the item `uri` to `restored`, or its failure.
-    fn add(&mut self, uri: &str, restored: Result<String, OpsError>, name: &str) {
-        match restored {
-            Ok(restored) => {
-                self.outcome.result.done.push(uri.to_owned());
-                self.placed.push((uri.to_owned(), restored.clone()));
-                self.outcome.created.push(restored);
-            }
-            Err(error) => record_failure(&mut self.outcome.result, name, &error),
+    /// Adds `restored`, the Recycle Bin item `uri` restored, if it was.
+    fn add(&mut self, uri: &str, restored: Option<String>) {
+        if let Some(restored) = restored {
+            self.outcome.result.done.push(uri.to_owned());
+            self.placed.push((uri.to_owned(), restored.clone()));
+            self.outcome.created.push(restored);
         }
     }
 
     /// The outcome, with how Undo reverses it: the restored items go to
     /// the Trash again, then the items they replaced come back.
-    fn finish(mut self) -> TransferOutcome {
+    pub fn finish(mut self) -> TransferOutcome {
         if self.outcome.created.is_empty() {
             return self.outcome;
         }
@@ -280,39 +357,98 @@ impl RestoreSoFar {
     }
 }
 
-/// Restores the items of the restore `scan` whose names are free, before
-/// the user answers about the others.
+/// Restores the items of the restore `scan` whose names are free, adding
+/// them to `so_far`, before the user answers about the others. A failure
+/// is asked about in the progress window, as Windows asks (OPS-047); an
+/// item whose name was taken meanwhile waits in
+/// [`RestoreSoFar::take_taken`].
 ///
 /// # Errors
 ///
 /// None for the whole request; each item's failure is in the outcome.
 pub async fn restore_free_items(
     scan: &ConflictScan,
+    so_far: RestoreSoFar,
     context: &OperationContext,
 ) -> Result<RestoreSoFar, OpsError> {
     let scan = scan.clone();
     let context = context.clone();
     on_worker(move || {
-        let mut so_far = RestoreSoFar {
-            started: unix_seconds_now(),
-            ..RestoreSoFar::default()
-        };
-        for item in scan.items.iter().filter(|item| item.kind == PlannedKind::Free) {
-            let restored = restore_item(&item.uri, &context);
-            so_far.add(&item.uri, restored, &GioNode::new(&item.uri).display_name());
+        let mut so_far = so_far;
+        let mut questions = ItemQuestions::new(&context, TransferMode::Move).skipping_all(so_far.skip_all);
+        let free: Vec<&PlannedItem> = scan
+            .items
+            .iter()
+            .filter(|item| item.kind == PlannedKind::Free)
+            .collect();
+        for (index, item) in free.iter().enumerate() {
+            let name = original_name(&item.uri);
+            let asked = AskedItem {
+                name: &name,
+                uri: &item.uri,
+                // The conflicts asked about next are current items too.
+                more_items: index + 1 < free.len() || scan.has_conflicts(),
+            };
+            let restore = || match restore_into(&item.uri, &item.destination_folder, &context) {
+                Ok(restored) => Ok(Some(restored)),
+                Err(OpsError::Exists(_)) => Ok(None),
+                Err(error) => Err(error),
+            };
+            match questions.run(&mut so_far.outcome.result, asked, restore) {
+                Some(None) => so_far.taken.push(item.uri.clone()),
+                restored => so_far.add(&item.uri, restored.flatten()),
+            }
             if so_far.cancelled() {
                 break;
             }
+        }
+        so_far.skip_all = questions.skips_all();
+        Ok(so_far)
+    })
+    .await
+}
+
+/// Asks, in the progress window, about each item of `so_far` still
+/// waiting because its name was taken after it was planned
+/// ([`RestoreSoFar::take_taken`]), when the restore stops planning them
+/// again: another program keeps taking the names. Each stays in the
+/// Recycle Bin, and "Interrupted Action" says so, as nothing is said once
+/// the restore ends.
+///
+/// # Errors
+///
+/// None for the whole request; each item is in the outcome.
+pub async fn tell_taken_items(
+    so_far: RestoreSoFar,
+    context: &OperationContext,
+) -> Result<RestoreSoFar, OpsError> {
+    let context = context.clone();
+    on_worker(move || {
+        let mut so_far = so_far;
+        let mut questions = ItemQuestions::new(&context, TransferMode::Move);
+        for uri in so_far.take_taken() {
+            let name = original_name(&uri);
+            let asked = AskedItem {
+                name: &name,
+                uri: &uri,
+                more_items: false,
+            };
+            let taken = OpsError::Exists(crate::i18n::format_message(
+                "An item named “{name}” already exists here. It was left in the Recycle Bin.",
+                &[("name", &name)],
+            ));
+            questions.tell(&mut so_far.outcome.result, asked, &taken);
         }
         Ok(so_far)
     })
     .await
 }
 
-/// Goes on with the restore whose free items are `so_far`: the
-/// conflicts of `scan` as `answers` says, one per conflict in order,
-/// Keep both before Replace. A skipped item stays in the Recycle Bin and
-/// is not reported, as in Windows.
+/// Goes on with the restore `so_far`: the conflicts of `scan` as
+/// `answers` says, one per conflict in order, Keep both before Replace.
+/// A skipped item stays in the Recycle Bin and is not mentioned again, as
+/// in Windows; a failure is asked about in the progress window.
+/// [`RestoreSoFar::finish`] ends the restore.
 ///
 /// # Errors
 ///
@@ -322,7 +458,7 @@ pub async fn restore_answered_items(
     answers: &[Resolution],
     so_far: RestoreSoFar,
     context: &OperationContext,
-) -> Result<TransferOutcome, OpsError> {
+) -> Result<RestoreSoFar, OpsError> {
     check_answers(scan, answers)?;
     let scan = scan.clone();
     let answers = answers.to_vec();
@@ -330,8 +466,9 @@ pub async fn restore_answered_items(
     on_worker(move || {
         let mut so_far = so_far;
         if so_far.cancelled() {
-            return Ok(so_far.finish());
+            return Ok(so_far);
         }
+        let mut questions = ItemQuestions::new(&context, TransferMode::Move).skipping_all(so_far.skip_all);
         'answers: for resolution in [Resolution::KeepBoth, Resolution::Replace] {
             for item in &scan.items {
                 let PlannedKind::Conflict(index) = item.kind else {
@@ -349,19 +486,27 @@ pub async fn restore_answered_items(
                     so_far.outcome.result.cancelled = true;
                     break 'answers;
                 }
+                let asked = AskedItem {
+                    name: &name,
+                    uri: &item.uri,
+                    more_items: true,
+                };
                 match resolution {
                     Resolution::KeepBoth => {
-                        let restored = keep_both(item, conflict, &context);
-                        so_far.add(&item.uri, restored, &name);
+                        let restored = questions.run(&mut so_far.outcome.result, asked, || {
+                            keep_both(item, conflict, &context)
+                        });
+                        so_far.add(&item.uri, restored);
                     }
-                    _ => replace(item, conflict, &context, &mut so_far),
+                    _ => replace(item, conflict, &context, &mut so_far, &mut questions),
                 }
                 if so_far.cancelled() {
                     break 'answers;
                 }
             }
         }
-        Ok(so_far.finish())
+        so_far.skip_all = questions.skips_all();
+        Ok(so_far)
     })
     .await
 }
@@ -379,6 +524,51 @@ fn replaced_later(scan: &ConflictScan, answers: &[Resolution], index: usize) -> 
         .enumerate()
         .skip(index + 1)
         .any(|(later, conflict)| answers[later] == Resolution::Replace && conflict.existing_uri == *existing)
+}
+
+/// The name the Recycle Bin item `uri` had where it was deleted from, as
+/// the user knows it, for its questions: the Recycle Bin may keep it as
+/// "Twin.2.txt" beside another "Twin.txt". Its own name when the Recycle
+/// Bin did not record where it came from.
+fn original_name(uri: &str) -> String {
+    let item = gio::File::for_uri(uri);
+    item.query_info(
+        ATTRIBUTES,
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        gio::Cancellable::NONE,
+    )
+    .ok()
+    .and_then(|info| entry_from_info(&item, &info).trash_orig_path)
+    .map_or_else(|| GioNode::new(uri).display_name(), |path| path_name(&path))
+}
+
+/// Moves the Recycle Bin item `uri` into `folder` under its original
+/// name, never overwriting, and returns its new URI; with no folder, as
+/// for an item the plan could not place, back where it came from, which
+/// says why it cannot be.
+fn restore_into(uri: &str, folder: &str, context: &OperationContext) -> Result<String, OpsError> {
+    if folder.is_empty() {
+        return restore_item(uri, context);
+    }
+    context.cancel.check()?;
+    let item = top_level_item(uri)?;
+    let info = item.query_info(
+        ATTRIBUTES,
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        Some(context.cancellable()),
+    )?;
+    let entry = entry_from_info(&item, &info);
+    let name = entry.trash_orig_path.as_deref().map_or(entry.name, path_name);
+    let target = gio::File::for_uri(folder).child(&name);
+    let taken = || {
+        OpsError::Exists(crate::i18n::format_message(
+            "An item named “{name}” already exists here. It was left in the Recycle Bin.",
+            &[("name", &name)],
+        ))
+    };
+    move_out(&item, &target, context, taken, |target| {
+        recreate_original_folder(target, context)
+    })
 }
 
 /// Restores the item of `conflict` under the first free "name (N)" name
@@ -436,13 +626,21 @@ fn replace(
     conflict: &NameConflict,
     context: &OperationContext,
     so_far: &mut RestoreSoFar,
+    questions: &mut ItemQuestions,
 ) {
     let name = conflict.name();
+    let asked = AskedItem {
+        name: &name,
+        uri: &item.uri,
+        more_items: true,
+    };
     let existing = GioNode::new(&conflict.existing_uri);
     let cancel = &context.cancel;
     if !existing.exists(Some(cancel)) {
-        let restored = restore_item(&item.uri, context);
-        so_far.add(&item.uri, restored, &name);
+        let restored = questions.run(&mut so_far.outcome.result, asked, || {
+            restore_into(&item.uri, &item.destination_folder, context)
+        });
+        so_far.add(&item.uri, restored);
         return;
     }
     // The item this restore already put there, if any.
@@ -455,6 +653,31 @@ fn replace(
     let same_kind = facts(&existing, cancel).is_ok_and(|now| {
         now.is_folder == conflict.incoming.is_folder && now.is_folder == conflict.existing.is_folder
     });
+    let overwrites = context.replaced_files == ReplacedFiles::Overwrite
+        && same_kind
+        && !conflict.incoming.is_folder
+        && existing.path().is_some();
+    if overwrites {
+        // A failure changed nothing, so it is asked about in the progress
+        // window (OPS-047) and Try Again restores it over again.
+        let overwritten = questions.run(&mut so_far.outcome.result, asked, || {
+            restore_over(item, &existing, context)
+        });
+        if let Some(restored) = overwritten {
+            // An item this restore already put there is overwritten: it
+            // is gone, and no longer restored.
+            if let Some(at) = restored_there {
+                let (earlier, _) = so_far.placed.remove(at);
+                so_far.outcome.result.done.retain(|done| *done != earlier);
+            }
+            so_far.outcome.result.done.push(item.uri.clone());
+            so_far.placed.push((item.uri.clone(), restored.clone()));
+            if !so_far.outcome.created.contains(&restored) {
+                so_far.outcome.created.push(restored);
+            }
+        }
+        return;
+    }
     let kept = existing
         .path()
         .filter(|_| same_kind && existing.can_trash(Some(cancel)).unwrap_or(false));
@@ -463,12 +686,12 @@ fn replace(
             "The item named “{name}” in its original folder cannot be replaced. It was left in the Recycle Bin.",
             &[("name", &name)],
         ));
-        record_failure(&mut so_far.outcome.result, &name, &refusal);
+        questions.tell(&mut so_far.outcome.result, asked, &refusal);
         return;
     };
     let place = || {
         let mut part = TransferOutcome::default();
-        match restore_item(&item.uri, context) {
+        match restore_into(&item.uri, &item.destination_folder, context) {
             Ok(restored) => {
                 part.result.done.push(item.uri.clone());
                 part.created.push(restored);
@@ -501,8 +724,100 @@ fn replace(
                 }
             }
             merge_results(&mut so_far.outcome.result, part.result);
+            // The restore that failed after the item in the way went to
+            // the Recycle Bin, and anything to recover by hand, are told
+            // now, as nothing is said once the restore ends.
+            questions.tell_unseen(&mut so_far.outcome.result);
         }
-        Err(error) => record_failure(&mut so_far.outcome.result, &name, &error),
+        Err(error) => questions.tell(&mut so_far.outcome.result, asked, &error),
+    }
+}
+
+/// Restores the item of `item` over the file `existing`, which is gone
+/// afterwards, as Windows overwrites it ([`ReplacedFiles::Overwrite`]),
+/// and returns the restored item's URI.
+///
+/// The Recycle Bin keeps the item as a file on the same filesystem as its
+/// original folder, so that file takes `existing`'s name in one native
+/// rename. Before it, nothing has changed, so a cancellation or a failure
+/// leaves the item in the Recycle Bin with its own name and origin; no
+/// private name is ever left behind. After it, the item's Trash record
+/// is removed. Should `existing` be another name of the same file (a hard
+/// link), the rename would change nothing, so only the Recycle Bin's name
+/// for it goes.
+///
+/// # Errors
+///
+/// The write protection, cancellation, the Recycle Bin not keeping the
+/// item as a local file, or a failed rename; nothing was replaced then.
+fn restore_over(
+    item: &PlannedItem,
+    existing: &GioNode,
+    context: &OperationContext,
+) -> Result<String, OpsError> {
+    context.cancel.check()?;
+    let trashed = top_level_item(&item.uri)?;
+    let kept = KeptFile::of(&trashed, context)?;
+    let source = GioNode::from_file(kept.file.clone());
+    // XFER-020: the original location; the Recycle Bin is no protected one.
+    context
+        .protection
+        .check_tree(&source, existing, &context.cancel, SourceChange::Kept)?;
+    context.cancel.check()?;
+    if is_same_file(&source, existing, &context.cancel)? {
+        source.delete()?;
+    } else {
+        // One rename: it either happens whole or not at all.
+        source.replace_native(existing, None)?;
+    }
+    // The item is out of the Recycle Bin: its Trash record goes. A record
+    // that stays names no file, and the Recycle Bin lists none for it.
+    let _ = kept.record.delete(gio::Cancellable::NONE);
+    Ok(existing.uri())
+}
+
+/// Where the Recycle Bin keeps one of its items: the file in its `files`
+/// folder and the `.trashinfo` record in its `info` folder, as the
+/// freedesktop.org Trash specification lays them out.
+struct KeptFile {
+    file: gio::File,
+    record: gio::File,
+}
+
+impl KeptFile {
+    /// Where the Recycle Bin keeps `trashed`.
+    ///
+    /// # Errors
+    ///
+    /// Cancellation, a failed query, or an item the Recycle Bin does not
+    /// keep as a local file in a `files` folder.
+    fn of(trashed: &gio::File, context: &OperationContext) -> Result<Self, OpsError> {
+        let info = trashed.query_info(
+            "standard::target-uri",
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            Some(context.cancellable()),
+        )?;
+        let file = info
+            .attribute_string("standard::target-uri")
+            .map(|uri| gio::File::for_uri(&uri))
+            .filter(|file| file.path().is_some());
+        let layout = file.as_ref().and_then(|file| {
+            let name = file.basename()?;
+            let files = file.parent()?;
+            let trash = files.parent()?;
+            (files.basename()?.as_os_str() == "files").then(|| {
+                let mut record = name.into_os_string();
+                record.push(".trashinfo");
+                trash.child("info").child(record)
+            })
+        });
+        match (file, layout) {
+            (Some(file), Some(record)) => Ok(Self { file, record }),
+            _ => Err(OpsError::failed(crate::i18n::gettext(
+                "The Recycle Bin does not keep this item as a file on this computer, so it cannot replace \
+                 another file. It was left in the Recycle Bin.",
+            ))),
+        }
     }
 }
 

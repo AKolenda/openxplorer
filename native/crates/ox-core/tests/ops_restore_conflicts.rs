@@ -17,9 +17,9 @@ use std::time::{Duration, Instant};
 
 use ox_core::ops::{
     list_recycle_bin, restore_answered_items, restore_free_items, restore_questions,
-    restores_into_one_folder, reverse, run_transfer, scan_restore_conflicts, summarize_restore, ConflictScan,
-    OperationContext, OperationSummary, PlannedKind, RecycledItem, Resolution, TransferOutcome,
-    TransferRequest, UndoRecord,
+    restores_into_one_folder, reverse, run_transfer, scan_restore_conflicts, ConflictScan, OperationContext,
+    PlannedKind, RecycledItem, ReplacedFiles, Resolution, RestoreSoFar, TransferOutcome, TransferRequest,
+    UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -48,22 +48,27 @@ fn trash(items: &[&Path]) {
 }
 
 /// Every Recycle Bin item that came from `path`, waiting up to five
-/// seconds for `count` of them: the backend may list an item late.
+/// seconds for `count` of them: the backend may list an item late, and a
+/// Recycle Bin daemon that is still starting may refuse the first reads.
 fn recycled_from(path: &Path, count: usize) -> Vec<RecycledItem> {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let items: Vec<RecycledItem> = block_on(list_recycle_bin(&Cancellation::new()))
-            .expect("a readable Recycle Bin")
-            .into_iter()
-            .filter(|item| item.original_path.as_deref() == Some(path))
-            .collect();
-        if items.len() >= count {
-            return items;
+        let listed = block_on(list_recycle_bin(&Cancellation::new()));
+        if let Ok(listed) = &listed {
+            let items: Vec<RecycledItem> = listed
+                .iter()
+                .filter(|item| item.original_path.as_deref() == Some(path))
+                .cloned()
+                .collect();
+            if items.len() >= count {
+                return items;
+            }
         }
         assert!(
             Instant::now() < deadline,
-            "{} is not in the Recycle Bin",
-            path.display()
+            "{} is not in the Recycle Bin: {:?}",
+            path.display(),
+            listed.err()
         );
         thread::sleep(Duration::from_millis(50));
     }
@@ -76,8 +81,10 @@ fn scan(uris: &[String]) -> ConflictScan {
 /// Restores `scan` with `answers`, as the window does: the free items
 /// first, then the answered ones.
 fn restore(scan: &ConflictScan, answers: &[Resolution], context: &OperationContext) -> TransferOutcome {
-    let so_far = block_on(restore_free_items(scan, context)).expect("the free items");
-    block_on(restore_answered_items(scan, answers, so_far, context)).expect("the answered items")
+    let so_far = block_on(restore_free_items(scan, RestoreSoFar::new(), context)).expect("the free items");
+    block_on(restore_answered_items(scan, answers, so_far, context))
+        .expect("the answered items")
+        .finish()
 }
 
 /// A taken name is a conflict of the plan, named as the original folder
@@ -113,10 +120,8 @@ fn skip_leaves_the_item_in_the_recycle_bin_without_a_report() {
     assert_eq!(fs::read(&plan).unwrap(), b"plan");
     assert_eq!(recycled_from(&notes, 1).len(), 1, "the skipped item stays");
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
-    assert_eq!(
-        summarize_restore(&outcome.result),
-        OperationSummary::Toast("1 item(s) restored.".into())
-    );
+    assert_eq!(outcome.result.done.len(), 1, "only the free item");
+    assert!(outcome.result.skipped.is_empty(), "nothing to say about Skip");
 }
 
 /// Replace moves the newer file to the Recycle Bin and restores the old
@@ -554,11 +559,311 @@ fn cancel_at_the_question_keeps_the_free_items_and_says_nothing() {
         recycled_from(&plan, 1)[0].uri.clone(),
     ];
 
-    let so_far = block_on(restore_free_items(&scan(&uris), &OperationContext::default())).unwrap();
+    let so_far = block_on(restore_free_items(
+        &scan(&uris),
+        RestoreSoFar::new(),
+        &OperationContext::default(),
+    ))
+    .unwrap();
     let outcome = so_far.into_outcome();
 
     assert!(plan.is_file());
     assert_eq!(fs::read(&notes).unwrap(), b"newer");
     assert_eq!(outcome.created, [file_uri(&plan)]);
-    assert_eq!(summarize_restore(&outcome.result), OperationSummary::Cancelled);
+    assert!(outcome.result.cancelled);
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+}
+
+/// A name another program takes after the restore was planned: the item
+/// planned as free finds it taken and waits in the Recycle Bin, without a
+/// report, to be asked about; planned again, it is a conflict with that
+/// file, as Windows asks "Replace or Skip Files" about it as it meets it,
+/// and Skip leaves it in the Recycle Bin without a word.
+///
+/// parity: OPS-041, OPS-026, OPS-023
+#[test]
+fn a_name_taken_after_the_plan_is_asked_about_as_a_conflict() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let twin = temp.path().join("Twin.txt");
+    fs::write(&twin, b"trashed").unwrap();
+    trash(&[&twin]);
+    let uris: Vec<String> = recycled_from(&twin, 1).into_iter().map(|item| item.uri).collect();
+    let context = OperationContext::default();
+
+    let first = scan(&uris);
+    assert!(!first.has_conflicts(), "nothing has the name yet");
+    // Another program takes the name before the item is restored.
+    fs::write(&twin, b"newer").unwrap();
+    let mut so_far = block_on(restore_free_items(&first, RestoreSoFar::new(), &context)).unwrap();
+    let taken = so_far.take_taken();
+    let again = scan(&taken);
+    let so_far = block_on(restore_answered_items(
+        &again,
+        &[Resolution::Skip],
+        so_far,
+        &context,
+    ))
+    .unwrap();
+    let outcome = so_far.finish();
+
+    assert_eq!(taken, uris, "the item waits to be asked about");
+    assert_eq!(again.conflicts.len(), 1);
+    assert_eq!(again.conflicts[0].name(), "Twin.txt");
+    assert_eq!(again.conflicts[0].existing_uri, file_uri(&twin));
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+    assert!(outcome.result.done.is_empty());
+    assert_eq!(fs::read(&twin).unwrap(), b"newer");
+    assert_eq!(recycled_from(&twin, 1).len(), 1, "the skipped item stays");
+}
+
+/// An item still waiting when the restore stops planning taken names
+/// again is asked about in the progress window, "Interrupted Action" with
+/// why it stayed in the Recycle Bin, never left there without a word
+/// (Codex review of #286).
+///
+/// parity: OPS-041, OPS-023
+#[test]
+fn an_item_still_taken_when_the_restore_stops_is_asked_about() {
+    use std::sync::{Arc, Mutex};
+
+    use ox_core::ops::{tell_taken_items, FailureAsker};
+    use ox_core::transfer::{FailedItem, FailureAnswer, FailureCause};
+
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let twin = temp.path().join("Twin.txt");
+    fs::write(&twin, b"trashed").unwrap();
+    trash(&[&twin]);
+    let uris: Vec<String> = recycled_from(&twin, 1).into_iter().map(|item| item.uri).collect();
+    let asked = Arc::new(Mutex::new(Vec::<FailedItem>::new()));
+    let log = Arc::clone(&asked);
+    let context = OperationContext {
+        item_failure: Some(FailureAsker::new(move |item: &FailedItem| {
+            log.lock().unwrap().push(item.clone());
+            FailureAnswer::Skip
+        })),
+        ..OperationContext::default()
+    };
+
+    let plan = scan(&uris);
+    // Another program takes the name before the item is restored.
+    fs::write(&twin, b"newer").unwrap();
+    let so_far = block_on(restore_free_items(&plan, RestoreSoFar::new(), &context)).unwrap();
+    assert!(so_far.has_taken(), "the item waits");
+    let outcome = block_on(tell_taken_items(so_far, &context)).unwrap().finish();
+
+    let asked = asked.lock().unwrap();
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_eq!(asked[0].cause, FailureCause::NeedsAttention);
+    assert_eq!(asked[0].name, "Twin.txt");
+    assert_eq!(outcome.result.errors.len(), 1);
+    assert_eq!(outcome.result.presented, outcome.result.errors, "the user saw it");
+    assert_eq!(fs::read(&twin).unwrap(), b"newer");
+    assert_eq!(
+        recycled_from(&twin, 1).len(),
+        1,
+        "the item stays in the Recycle Bin"
+    );
+}
+
+/// The Recycle Bin items that came from `path`, as listed now.
+fn recycled_now(path: &Path) -> usize {
+    block_on(list_recycle_bin(&Cancellation::new()))
+        .expect("a readable Recycle Bin")
+        .iter()
+        .filter(|item| item.original_path.as_deref() == Some(path))
+        .count()
+}
+
+/// With the switch off ("When replacing a file, move the old one to the
+/// Recycle Bin"), Replace restores the item over the newer file, as
+/// Windows 11 overwrites it: the newer file is gone, not recycled, no
+/// private name is left, and Undo only puts the restored file back in
+/// the Recycle Bin.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn replace_overwrites_the_newer_file_when_chosen() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    fs::write(&notes, b"trashed").unwrap();
+    trash(&[&notes]);
+    fs::write(&notes, b"newer").unwrap();
+    let uri = recycled_from(&notes, 1)[0].uri.clone();
+
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::default()
+    };
+    let outcome = restore(
+        &scan(std::slice::from_ref(&uri)),
+        &[Resolution::Replace],
+        &context,
+    );
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+    assert_eq!(outcome.result.done, [uri]);
+    assert_eq!(fs::read(&notes).unwrap(), b"trashed");
+    assert_eq!(outcome.created, [file_uri(&notes)]);
+    assert_eq!(recycled_now(&notes), 0, "the newer file was not recycled");
+    let names: Vec<_> = fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["notes.txt"], "no private name is left");
+    assert_eq!(
+        outcome.undo,
+        Some(UndoRecord::Restore {
+            restored: vec![file_uri(&notes)]
+        })
+    );
+}
+
+/// With the switch off, a restore cancelled before the swap leaves the
+/// newer file as it was and the item in the Recycle Bin.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn a_cancelled_overwriting_restore_keeps_the_newer_file() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    fs::write(&notes, b"trashed").unwrap();
+    trash(&[&notes]);
+    fs::write(&notes, b"newer").unwrap();
+    let uri = recycled_from(&notes, 1)[0].uri.clone();
+    let plan = scan(&[uri]);
+    let free = OperationContext::default();
+    let so_far = block_on(restore_free_items(&plan, RestoreSoFar::new(), &free)).expect("the free items");
+
+    // Cancel is pressed as the newer file is checked, right before the
+    // item takes its name.
+    let cancel = Cancellation::new();
+    let pressed = cancel.clone();
+    let newer = file_uri(&notes);
+    let context = OperationContext {
+        cancel,
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::new(ox_core::ops::WriteProtection::new(move |uri: &str| {
+            if uri == newer {
+                pressed.cancel();
+            }
+            Ok(())
+        }))
+    };
+    let outcome = block_on(restore_answered_items(
+        &plan,
+        &[Resolution::Replace],
+        so_far,
+        &context,
+    ))
+    .expect("an outcome")
+    .finish();
+
+    assert!(outcome.result.cancelled, "{:?}", outcome.result);
+    assert_eq!(fs::read(&notes).unwrap(), b"newer");
+    assert_eq!(recycled_now(&notes), 1, "the item stays in the Recycle Bin");
+    let names: Vec<_> = fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["notes.txt"], "no private name is left");
+}
+
+/// With the switch off, restoring a file over another name of the same
+/// file (a hard link) restores it: the Recycle Bin no longer lists it,
+/// the file keeps its contents and no other name is left behind. A rename
+/// between two names of one file changes nothing on its own.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn an_overwriting_restore_onto_a_hard_link_of_itself_leaves_no_other_name() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    let link = temp.path().join("notes link.txt");
+    fs::write(&notes, b"one file, three names").unwrap();
+    fs::hard_link(&notes, &link).unwrap();
+    trash(&[&notes]);
+    fs::hard_link(&link, &notes).unwrap();
+    fs::remove_file(&link).unwrap();
+    let uri = recycled_from(&notes, 1)[0].uri.clone();
+
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::default()
+    };
+    let outcome = restore(
+        &scan(std::slice::from_ref(&uri)),
+        &[Resolution::Replace],
+        &context,
+    );
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
+    assert_eq!(outcome.result.done, [uri]);
+    assert_eq!(fs::read(&notes).unwrap(), b"one file, three names");
+    assert_eq!(recycled_now(&notes), 0, "the Recycle Bin no longer lists it");
+    let names: Vec<_> = fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["notes.txt"], "no other name is left");
+}
+
+/// With the switch off, a restore whose rename fails (another program put
+/// a folder in the newer file's place) leaves the item in the Recycle Bin
+/// under its own name and origin, so it can still be restored, and says
+/// it failed.
+///
+/// parity: OPS-041, OPS-028
+#[test]
+fn a_failed_overwriting_restore_keeps_the_item_in_the_recycle_bin_as_it_was() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    fs::write(&notes, b"trashed").unwrap();
+    trash(&[&notes]);
+    fs::write(&notes, b"newer").unwrap();
+    let uri = recycled_from(&notes, 1)[0].uri.clone();
+    let plan = scan(std::slice::from_ref(&uri));
+    let free = OperationContext::default();
+    let so_far = block_on(restore_free_items(&plan, RestoreSoFar::new(), &free)).expect("the free items");
+
+    // Another program swaps a folder in as the newer file is checked,
+    // after the kind was read again.
+    let newer = file_uri(&notes);
+    let path = notes.clone();
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::new(ox_core::ops::WriteProtection::new(move |uri: &str| {
+            if uri == newer && path.is_file() {
+                fs::remove_file(&path).unwrap();
+                fs::create_dir(&path).unwrap();
+                fs::write(path.join("inside.txt"), b"another program's").unwrap();
+            }
+            Ok(())
+        }))
+    };
+    let outcome = block_on(restore_answered_items(
+        &plan,
+        &[Resolution::Replace],
+        so_far,
+        &context,
+    ))
+    .expect("an outcome")
+    .finish();
+
+    assert_eq!(outcome.result.errors.len(), 1, "{:?}", outcome.result);
+    assert!(outcome.result.done.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(notes.join("inside.txt")).unwrap(), b"another program's");
+    let kept = recycled_from(&notes, 1);
+    assert_eq!(kept.len(), 1, "the item keeps its origin in the Recycle Bin");
+    assert_eq!(kept[0].uri, uri, "and its own name");
+    let names: Vec<_> = fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["notes.txt"], "no private name is left");
 }

@@ -14,6 +14,7 @@ mod cell_owners;
 mod custom_icon;
 mod expander;
 mod folder_picture;
+mod heading_span;
 mod item_check;
 pub(crate) use item_check::own_clicks;
 mod row_tooltip;
@@ -24,14 +25,17 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{glib, pango};
 
-pub(crate) use cell_owners::CellOwners;
+pub(crate) use cell_owners::{CellOwners, PositionMap};
 pub(crate) use custom_icon::{icon_texture, CUSTOM_ICON};
 pub(crate) use expander::connect_expanders;
 pub(crate) use folder_picture::{folder_picture_of, FolderPicture, FOLDER_PICTURE};
 pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip, TooltipCell};
 
+use crate::folder_view::grid::{GroupSlot, SlotKind};
 use crate::folder_view::item::FileItem;
-use crate::icons::Art;
+use crate::icons::{self, Art, Icon};
+use crate::window::widget_tree::toggle_class;
+use heading_span::HeadingSpan;
 
 /// Gap between a row's icon and its name (`.name-cell{gap:11px}`).
 const ROW_ICON_GAP: i32 = 11;
@@ -126,6 +130,49 @@ pub(crate) enum CellLayout {
     ContentRow,
 }
 
+/// The CSS class of a cell that shows a grid slot with no item: a group's
+/// heading, its line or a blank (VIEW-071).
+const GROUP_SLOT_CLASS: &str = "group-slot";
+
+/// The CSS class of a slot row that heads a group, which the keyboard
+/// can rest on.
+const HEADING_CLASS: &str = "group-heading";
+
+/// The CSS class of a cell in a heading's row: the heading or a slot
+/// carrying its line.
+const HEADING_ROW_CLASS: &str = "heading-row";
+
+/// The CSS class of a heading row's cells while the pointer is over the
+/// row.
+const ROW_HOVER_CLASS: &str = "row-hover";
+
+/// The CSS class of a heading row's cells while its heading has the
+/// keyboard.
+const ROW_FOCUS_CLASS: &str = "row-focus";
+
+/// The CSS class of a heading row's cells, and of a Details heading's
+/// row, while the heading's group is collapsed with every item selected.
+const ROW_FILLED_CLASS: &str = "row-filled";
+
+/// The CSS class of the cell starting a heading's row: the heading.
+const ROW_START_CLASS: &str = "row-start";
+
+/// The CSS class of the cell ending a heading's row at the right.
+const ROW_END_CLASS: &str = "row-end";
+
+/// The edge of a heading's chevron, as Windows 11 draws it.
+const HEADING_CHEVRON: i32 = 16;
+
+/// A heading's chevron: down while its group is expanded, right while
+/// it is collapsed, as Windows 11 draws them.
+fn chevron_icon(collapsed: bool) -> Icon {
+    if collapsed {
+        Icon::ChevronRight16
+    } else {
+        Icon::ChevronDown16
+    }
+}
+
 /// What a Tile or Content row says about its item beside the name: the
 /// type, the size of a file (empty for a folder) and the date modified.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,6 +237,9 @@ mod imp {
         pub(super) folder_picture: super::FolderPicture,
         /// Whether the cell is an icon-view tile.
         pub(super) is_tile: Cell<bool>,
+        /// Whether the cell is a Details row's Name cell, whose group
+        /// heading spans the whole row.
+        pub(super) is_details_row: Cell<bool>,
         /// The running lookup of the custom icon or preview.
         pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
         /// Holds the icon, and on a tile spans it, with the check box in
@@ -219,6 +269,24 @@ mod imp {
         pub(super) properties: RefCell<Vec<gtk::Box>>,
         /// Whether the cell shows [`super::ItemLines`].
         pub(super) shows_item_lines: Cell<bool>,
+        /// Whether the cell is a Content row, which shows no type under a
+        /// folder's name, as Windows 11.
+        pub(super) is_content_row: Cell<bool>,
+        /// A group's heading or its line, shown in place of the item's
+        /// widgets while the cell shows a [`super::GroupSlot`].
+        pub(super) slot_row: RefCell<Option<gtk::Box>>,
+        /// The heading's text, bound to its slot's.
+        pub(super) slot_binding: RefCell<Vec<glib::Binding>>,
+        /// Follows whether the heading's group is collapsed.
+        pub(super) slot_watch: RefCell<Option<glib::SignalHandlerId>>,
+        /// The expanded state the cell last told assistive technology:
+        /// `None` while it shows no heading.
+        pub(super) announced_expanded: Cell<Option<bool>>,
+        /// The slot the cell shows, while it shows one.
+        pub(super) slot: RefCell<Option<super::GroupSlot>>,
+        /// Which of the item's widgets were shown when a slot took the
+        /// cell, to show them again after.
+        pub(super) hidden_for_slot: RefCell<Vec<(gtk::Widget, bool)>>,
     }
 
     #[glib::object_subclass]
@@ -276,12 +344,282 @@ impl FileCell {
         cell
     }
 
+    /// Shows `slot` of a grouped grid in place of an item: a group's
+    /// heading (its chevron, "Today" and the start of its line), the
+    /// rest of its line, or nothing. `None` brings the item's widgets back.
+    pub(crate) fn show_group_slot(&self, slot: Option<&GroupSlot>) {
+        let imp = self.imp();
+        for binding in imp.slot_binding.take() {
+            binding.unbind();
+        }
+        let watched = imp.slot.replace(slot.cloned());
+        if let (Some(watched), Some(handler)) = (watched, imp.slot_watch.take()) {
+            watched.disconnect(handler);
+            // The cell goes on to show something else: the row it showed
+            // loses the pointer it had through it.
+            if slot != Some(&watched) && watched.hovered() {
+                // Later: the row's other cells restyle, which GTK must not
+                // see while it binds this one. The window follows the
+                // keyboard itself (`window/group_headings.rs`).
+                glib::idle_add_local_once(move || watched.set_row_hovered(false));
+            }
+        }
+        let Some(slot) = slot else {
+            self.clear_row_classes();
+            if !self.has_css_class(GROUP_SLOT_CLASS) {
+                return;
+            }
+            self.remove_css_class(GROUP_SLOT_CLASS);
+            if let Some(span) = imp.slot_row.borrow().as_ref().and_then(WidgetExt::parent) {
+                span.set_visible(false);
+            }
+            for (widget, shown) in imp.hidden_for_slot.take() {
+                widget.set_visible(shown);
+            }
+            return;
+        };
+        if !self.has_css_class(GROUP_SLOT_CLASS) {
+            self.hide_name_editor();
+            let row = self.slot_row();
+            let hidden: Vec<(gtk::Widget, bool)> =
+                std::iter::successors(self.first_child(), WidgetExt::next_sibling)
+                    .filter(|widget| Some(widget) != row.parent().as_ref())
+                    .map(|widget| {
+                        let shown = widget.is_visible();
+                        widget.set_visible(false);
+                        (widget, shown)
+                    })
+                    .collect();
+            imp.hidden_for_slot.replace(hidden);
+            self.add_css_class(GROUP_SLOT_CLASS);
+        }
+        let row = self.slot_row();
+        let hit = row.first_child().expect("a slot row starts with its heading");
+        let chevron = hit
+            .first_child()
+            .and_downcast::<gtk::Image>()
+            .expect("a heading starts with its chevron");
+        let title = chevron
+            .next_sibling()
+            .and_downcast::<gtk::Label>()
+            .expect("the title follows the chevron");
+        let line = hit.next_sibling().expect("a slot row ends with its line");
+        let kind = slot.kind();
+        let is_heading = kind == SlotKind::Heading;
+        hit.set_visible(is_heading);
+        line.set_visible(kind != SlotKind::Blank);
+        row.set_visible(true);
+        if let Some(span) = row.parent() {
+            span.set_visible(true);
+        }
+        toggle_class(&row, HEADING_CLASS, is_heading);
+        if is_heading {
+            let text = slot.bind_property("text", &title, "label").sync_create().build();
+            imp.slot_binding.borrow_mut().push(text);
+        }
+        let show_state = glib::clone!(
+            #[weak(rename_to = cell)]
+            self,
+            #[weak]
+            chevron,
+            move |slot: &GroupSlot| {
+                let in_row = slot.kind() != SlotKind::Blank;
+                if slot.kind() == SlotKind::Heading {
+                    let collapsed = slot.collapsed();
+                    icons::set_icon(&chevron, chevron_icon(collapsed), HEADING_CHEVRON);
+                    cell.announce_expanded(Some(!collapsed));
+                } else {
+                    cell.announce_expanded(None);
+                }
+                toggle_class(&cell, HEADING_ROW_CLASS, in_row);
+                toggle_class(&cell, ROW_HOVER_CLASS, in_row && slot.hovered());
+                toggle_class(&cell, ROW_FOCUS_CLASS, in_row && slot.focused());
+                toggle_class(&cell, ROW_START_CLASS, slot.kind() == SlotKind::Heading);
+                toggle_class(&cell, ROW_END_CLASS, in_row && slot.ends_row());
+                toggle_class(&cell, ROW_FILLED_CLASS, in_row && slot.filled());
+                cell.mark_item_widget(in_row, in_row && slot.filled());
+            }
+        );
+        show_state(slot);
+        let handler = slot.connect_notify_local(None, move |slot, _| show_state(slot));
+        imp.slot_watch.replace(Some(handler));
+    }
+
+    /// Tells assistive technology whether the heading the cell shows is
+    /// expanded, or, with `None`, that the cell shows no heading: GTK
+    /// reuses a heading's cell for files, lines and blanks.
+    fn announce_expanded(&self, expanded: Option<bool>) {
+        if self.imp().announced_expanded.replace(expanded) == expanded {
+            return;
+        }
+        match expanded {
+            Some(expanded) => self.update_state(&[gtk::accessible::State::Expanded(Some(expanded))]),
+            None => self.reset_state(gtk::AccessibleState::Expanded),
+        }
+    }
+
+    /// Whether the cell tells assistive technology it is expanded, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn announced_expanded(&self) -> Option<bool> {
+        self.imp().announced_expanded.get()
+    }
+
+    /// Takes the heading row's looks off the cell, which shows an item.
+    fn clear_row_classes(&self) {
+        self.announce_expanded(None);
+        for class in [
+            HEADING_ROW_CLASS,
+            ROW_HOVER_CLASS,
+            ROW_FOCUS_CLASS,
+            ROW_START_CLASS,
+            ROW_END_CLASS,
+        ] {
+            toggle_class(self, class, false);
+        }
+        self.mark_item_widget(false, false);
+    }
+
+    /// Marks the row or tile GTK wraps the cell in as a heading's, or not,
+    /// and as filled while its folded group is all selected: Details draws
+    /// a heading's row by these classes. Never on the pointer's account, as restyling GTK's rows under the
+    /// pointer can make it send the pointer's crossings again. Done once
+    /// GTK has bound the cell, as changing a row's classes while GTK binds
+    /// its cells upsets the list (see `cells/cell_owners.rs`).
+    fn mark_item_widget(&self, heading: bool, filled: bool) {
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = cell)]
+            self,
+            move || {
+                let item = std::iter::successors(cell.parent(), WidgetExt::parent)
+                    .find(|widget| ["row", "child"].contains(&widget.css_name().as_str()));
+                // Details fills a folded, selected heading's row by this
+                // class, as its line cells cannot see the heading.
+                if let Some(item) = item
+                    .as_ref()
+                    .filter(|item| item.has_css_class(ROW_FILLED_CLASS) != filled)
+                {
+                    toggle_class(item, ROW_FILLED_CLASS, filled);
+                }
+                if let Some(item) = item.filter(|item| item.has_css_class(HEADING_ROW_CLASS) != heading) {
+                    toggle_class(&item, HEADING_ROW_CLASS, heading);
+                    // A Details heading's box is drawn across the columns
+                    // by each column's cell, which GTK clips to the column:
+                    // its pieces overlap only while the cells let them.
+                    let overflow = if heading {
+                        gtk::Overflow::Visible
+                    } else {
+                        gtk::Overflow::Hidden
+                    };
+                    for cell in std::iter::successors(item.first_child(), WidgetExt::next_sibling) {
+                        cell.set_overflow(overflow);
+                    }
+                }
+            }
+        ));
+    }
+
+    /// The group slot the cell shows, while it shows one.
+    pub(crate) fn slot(&self) -> Option<GroupSlot> {
+        self.imp().slot.borrow().clone()
+    }
+
+    /// Lays a Details heading out across its row again, once a column's
+    /// width changed where the Name cell's own did not.
+    pub(crate) fn respan_heading(&self) {
+        if !self.has_css_class(GROUP_SLOT_CLASS) {
+            return;
+        }
+        let span = self.imp().slot_row.borrow().as_ref().and_then(WidgetExt::parent);
+        if let Some(span) = span.and_downcast::<HeadingSpan>() {
+            span.respan();
+        }
+    }
+
+    /// The heading row of a slot, made the first time a slot shows: the
+    /// chevron, the title and the line. The window handles clicks on it
+    /// (`window/group_headings.rs`).
+    fn slot_row(&self) -> gtk::Box {
+        let imp = self.imp();
+        if let Some(row) = imp.slot_row.borrow().as_ref() {
+            return row.clone();
+        }
+        let chevron = icons::image(chevron_icon(false), HEADING_CHEVRON);
+        chevron.add_css_class("group-chevron");
+        let title = gtk::Label::builder()
+            .xalign(0.0)
+            .ellipsize(pango::EllipsizeMode::End)
+            .single_line_mode(true)
+            .css_classes(["group-title"])
+            .build();
+        let line = gtk::Separator::builder()
+            .hexpand(true)
+            .valign(gtk::Align::Center)
+            .build();
+        let row = gtk::Box::builder()
+            .spacing(10)
+            .hexpand(true)
+            .css_classes(["group-header"])
+            .build();
+        // The chevron and the title, which the line follows.
+        let hit = gtk::Box::builder()
+            .spacing(8)
+            .css_classes(["group-heading-hit"])
+            .build();
+        hit.append(&chevron);
+        hit.append(&title);
+        row.append(&hit);
+        row.append(&line);
+        // The pointer anywhere over a heading's row, its heading or a slot
+        // carrying its line, lights the whole row, as in Windows 11. Only
+        // a change of state restyles anything.
+        let motion = gtk::EventControllerMotion::new();
+        let hover = glib::clone!(
+            #[weak(rename_to = cell)]
+            self,
+            move |hovered: bool| {
+                if let Some(slot) = cell.slot() {
+                    if slot.hovered() != hovered {
+                        slot.set_row_hovered(hovered);
+                    }
+                }
+            }
+        );
+        let enter = hover.clone();
+        motion.connect_enter(move |_, _, _| enter(true));
+        let moved = hover.clone();
+        motion.connect_motion(move |_, _, _| moved(true));
+        motion.connect_leave(move |_| hover(false));
+        self.add_controller(motion);
+        // The keyboard on a heading rings its whole row; the grid gives it
+        // to the item widget around the cell.
+        self.append(&HeadingSpan::new(&row, imp.is_details_row.get()));
+        imp.slot_row.replace(Some(row.clone()));
+        row
+    }
+
+    /// The heading text the cell shows while it is a heading, for tests.
+    #[cfg(test)]
+    pub(crate) fn group_heading(&self) -> Option<String> {
+        let row = self.imp().slot_row.borrow().clone()?;
+        let title = row
+            .first_child()?
+            .first_child()?
+            .next_sibling()
+            .and_downcast::<gtk::Label>()?;
+        (row.is_visible() && title.is_visible()).then(|| title.text().to_string())
+    }
+
     /// The check box and the icon left of the name with the type under
     /// it: a tile with the size under them, or a Content row with the date
     /// modified and the size at its right (VIEW-071).
     fn lay_out_with_lines(&self, content: bool) {
         let imp = self.imp();
         imp.shows_item_lines.set(true);
+        imp.is_content_row.set(content);
+        // Tiles and Content draw an item's hover and selection on its cell,
+        // not on the grid's slot, so a heading's slots show none.
+        self.add_css_class("item-cell");
         // The cell spans its tile or row, so the lines can use its width
         // and Content's date and size line up at its right on every row.
         self.set_hexpand(true);
@@ -343,6 +681,7 @@ impl FileCell {
     /// The check box and the icon left of a one-line name that is cut off
     /// with an ellipsis.
     fn lay_out_as_row(&self) {
+        self.imp().is_details_row.set(true);
         self.set_orientation(gtk::Orientation::Horizontal);
         self.set_spacing(ROW_ICON_GAP);
         self.put_check_before_icon();
@@ -411,7 +750,12 @@ impl FileCell {
         imp.image.set_emblems(item.emblems(), icon_size);
         imp.label.set_text(&item.entry().name);
         if imp.shows_item_lines.get() {
-            self.show_item_lines(&ItemLines::of(item));
+            let mut lines = ItemLines::of(item);
+            if imp.is_content_row.get() && item.entry().is_dir {
+                // Windows 11's Content rows give a folder its name alone.
+                lines.kind.clear();
+            }
+            self.show_item_lines(&lines);
         }
     }
 
@@ -553,19 +897,22 @@ pub(crate) fn label_view(view: &gtk::Widget) {
 /// Connects `factory` so every list item shows a [`FileCell`] in
 /// `layout`, with icons of `icon_size` logical pixels, its row's tooltip,
 /// and each cell registered in `owners`, which dims the cells of cut
-/// items.
-pub(crate) fn connect_file_cells(
+/// items. `positions` maps the view's positions to the listing's when
+/// it lists group slots among the items ([`GroupSlot`]): a slot's cell
+/// shows its heading or line, and can be neither selected nor activated.
+pub(crate) fn connect_mapped_file_cells(
     factory: &gtk::SignalListItemFactory,
     layout: CellLayout,
     icon_size: i32,
     owners: &Rc<CellOwners>,
+    positions: Option<PositionMap>,
 ) {
     let setup_owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
         let cell = FileCell::new(layout, icon_size);
         let list_item = as_list_item(object);
         list_item.set_child(Some(&cell));
-        setup_owners.register(&cell, list_item);
+        setup_owners.register_mapped(&cell, list_item, positions.clone());
         show_row_tooltip(&cell, &setup_owners, |_| None, TooltipCell::Item);
         cell.follow_item_check(list_item, &setup_owners);
     });
@@ -573,6 +920,14 @@ pub(crate) fn connect_file_cells(
     factory.connect_bind(move |_, object| {
         let list_item = as_list_item(object);
         let cell = list_item.child().and_downcast::<FileCell>();
+        if let (Some(slot), Some(cell)) = (list_item.item().and_downcast::<GroupSlot>(), cell.as_ref()) {
+            show_slot_item(list_item, cell, Some(&slot));
+            CellOwners::unstyle_cell(cell);
+            return;
+        }
+        if let Some(cell) = cell.as_ref().filter(|cell| cell.has_css_class(GROUP_SLOT_CLASS)) {
+            show_slot_item(list_item, cell, None);
+        }
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
             // A tile is named after its item (`aria-label` in app.js), as
             // it shows the name.
@@ -581,6 +936,10 @@ pub(crate) fn connect_file_cells(
             cell.bind(&item);
             cell.show_name(&name);
             cell.show_item_check(bind_owners.shows_item_checks());
+            // A cell bound while it showed a group's heading, or while no
+            // item, missed the last change of whether check boxes take
+            // clicks (Ctrl held or not).
+            cell.item_check_takes_clicks(bind_owners.item_checks_take_clicks());
             cell.look_up_picture(&item, bind_owners.previews());
             bind_owners.style_cell(&cell, &item);
         }
@@ -590,4 +949,41 @@ pub(crate) fn connect_file_cells(
             cell.cancel_picture_lookup();
         }
     });
+}
+
+/// Whether `widget` is part of a grid slot that shows no item and is no
+/// heading's row (a blank), or the grid's child holding one: blank space
+/// for clicks and the rubber band (VIEW-071). A group's heading row takes
+/// clicks and the keyboard itself (VIEW-022).
+pub(crate) fn is_in_group_slot(widget: &gtk::Widget) -> bool {
+    std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+        .chain(widget.first_child())
+        .filter_map(|widget| widget.downcast::<FileCell>().ok())
+        .any(|cell| {
+            cell.has_css_class(GROUP_SLOT_CLASS)
+                && cell.slot().is_none_or(|slot| slot.kind() == SlotKind::Blank)
+        })
+}
+
+/// Makes `list_item` show `slot`, which no one selects or opens, or an
+/// item again with `None`. A heading takes the keyboard, as Windows 11
+/// rests it on a group's heading, where Left and Right collapse and expand
+/// the group; a heading's line and a blank do not.
+fn show_slot_item(list_item: &gtk::ListItem, cell: &FileCell, slot: Option<&GroupSlot>) {
+    let is_item = slot.is_none();
+    let is_heading = slot.is_some_and(|slot| slot.kind() == SlotKind::Heading);
+    list_item.set_selectable(is_item);
+    list_item.set_activatable(is_item);
+    list_item.set_focusable(is_item || is_heading);
+    cell.show_group_slot(slot);
+    if let Some(slot) = slot {
+        // A screen reader hears the heading's text as the heading shows
+        // it, after a change too: the slot keeps its object while its
+        // group stays, so GTK does not bind it again.
+        let label = slot
+            .bind_property("text", list_item, "accessible-label")
+            .sync_create()
+            .build();
+        cell.imp().slot_binding.borrow_mut().push(label);
+    }
 }

@@ -21,7 +21,7 @@
 use gtk::glib::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::location::parent_location;
-use ox_core::ops::{rename_numbered_items, summarize_batch_rename, BatchItem, NumberedRename};
+use ox_core::ops::{rename_numbered_items, BatchItem, NumberedRename};
 
 use super::extension_confirm::changes_extension;
 use super::name_dialog::{ask_for_name, NameRequest};
@@ -118,7 +118,6 @@ impl BrowserWindow {
         let outcome = rename_numbered_items(batch, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_batch_rename(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });

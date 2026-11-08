@@ -188,6 +188,20 @@ pub(crate) struct BrowserWindow {
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
+    /// The group heading the heading menu opened on, which its commands
+    /// act on (VIEW-022).
+    pub(super) menu_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The header class of This PC's group whose heading menu opened
+    /// last, which its Collapse group and Expand group act on.
+    pub(super) this_pc_menu_group: Cell<Option<&'static str>>,
+    /// The group heading whose row shows the keyboard ring.
+    pub(super) focused_row: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The group heading last clicked or moved to, which keeps the
+    /// keyboard while the list has it and no row or tile does.
+    pub(super) key_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The heading a first click selected the group of, and the selection
+    /// and the keyboard's place before it, which a double-click puts back.
+    pub(super) selection_before_click: RefCell<Option<super::group_headings::BeforeClick>>,
     pub(super) typeahead: RefCell<Typeahead>,
     /// The input method of the view that last had the keyboard, so a dead key
     /// or an IME commit typed on the window's chrome composes as it does in
@@ -360,6 +374,11 @@ impl ObjectImpl for BrowserWindow {
         self.parent_constructed();
         crate::i18n::translate_template(&*self.obj(), "window.ui");
         let window = self.obj();
+        // Each window has a window group of its own, which the dialogs
+        // over it join, so a modal dialog holds back only the window it
+        // belongs to and every other window stays usable, as in Windows.
+        // In GTK's one default group a modal dialog held back them all.
+        gtk::WindowGroup::new().add_window(&*window);
         window.finish_title_bar();
         window.add_navigation_buttons();
         self.transfer_panel

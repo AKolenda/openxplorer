@@ -28,12 +28,14 @@ use crate::integration::{self, ApplicationChoice, Tool};
 use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
-use super::command_bar::{group_by_menu, new_menu, sort_menu, view_menu};
+use super::command_bar::{group_by_menu, new_menu, sort_menu};
 use super::disk_tools::is_installed;
+use super::group_headings::heading_at;
 use super::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::folder_view::grid::GroupSlot;
 
 use entries::{
     background_menu, compact_background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu,
@@ -133,7 +135,10 @@ impl BrowserWindow {
                 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
                 let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
                 let style = menu_style_for(window.preferred_menu_style(), gesture.current_event_state());
-                window.open_context_menu(&view, &point, style);
+                // On a group heading's row, the menu of the group's items,
+                // headed by the group's commands, as in Windows 11.
+                let heading = heading_at(&view, x, y);
+                window.open_context_menu(&view, &point, style, heading.as_ref());
             }
         ));
         view.add_controller(right_click);
@@ -150,6 +155,14 @@ impl BrowserWindow {
     /// A right-click on an unselected item selects only it; on blank space
     /// it clears the selection.
     fn select_for_context_menu(&self, view: &gtk::Widget, x: f64, y: f64) {
+        // A right-click on a group heading's row selects the group's
+        // items, as in Windows 11.
+        if let Some(heading) = heading_at(view, x, y) {
+            if let Some((model, index)) = heading.model().zip(heading.group_index()) {
+                model.select_group(index, false, false);
+            }
+            return;
+        }
         let model = self.folder_pane().model();
         match self.folder_pane().owners().position_at(view, x, y) {
             Some(position) if !model.selection().is_selected(position) => model.select_only(position),
@@ -159,12 +172,25 @@ impl BrowserWindow {
     }
 
     /// Opens the menu of the selection, or of the folder without one, in
-    /// `style`, pointing at `point` in `view`.
-    fn open_context_menu(&self, view: &gtk::Widget, point: &gdk::Rectangle, style: MenuStyle) {
+    /// `style`, pointing at `point` in `view`; opened on a group
+    /// `heading`, the group's commands head it (VIEW-022).
+    fn open_context_menu(
+        &self,
+        view: &gtk::Widget,
+        point: &gdk::Rectangle,
+        style: MenuStyle,
+        heading: Option<&GroupSlot>,
+    ) {
         let Some(popover) = context_menu_of(view) else {
             return;
         };
+        self.imp().menu_heading.replace(None);
         let mut menu = self.menu_for_selection(style);
+        if let Some(heading) = heading {
+            let mut entries = self.heading_menu_for(heading);
+            entries.append(&mut menu.entries);
+            menu.entries = entries;
+        }
         let mut extras = Vec::new();
         // Service actions run programs on files: the Recycle Bin's items
         // and those inside a ZIP (ARC-026) are not files they can open.
@@ -215,7 +241,7 @@ impl BrowserWindow {
                 compact_background_menu(
                     &self.journal_label(JournalDirection::Undo),
                     BackgroundSubmenus {
-                        view: view_menu(),
+                        view: self.background_view_menu(),
                         sort: sort_menu(),
                         group: group_by_menu(),
                         new: new_menu(self.template_menu_entries()),
@@ -229,7 +255,7 @@ impl BrowserWindow {
                     &self.journal_label(JournalDirection::Redo),
                     &self.folder_applications(),
                     BackgroundSubmenus {
-                        view: view_menu(),
+                        view: self.background_view_menu(),
                         sort: sort_menu(),
                         group: group_by_menu(),
                         new: new_menu(self.template_menu_entries()),
@@ -290,6 +316,7 @@ impl BrowserWindow {
             delete_label: self.delete_label(),
             disk_tool: disk_tool_of(entry),
             send_to: self.send_to_targets(),
+            can_share: self.share_portal().is_some(),
         }
     }
 
@@ -309,13 +336,18 @@ impl BrowserWindow {
     /// selected item, or near the top of the view without one.
     fn open_keyboard_menu(&self, style: MenuStyle) {
         let view = self.folder_pane().input_widget();
+        if let Some(heading) = self.focused_heading() {
+            let row = GtkWindowExt::focus(self).and_then(|focus| focus.compute_bounds(&view));
+            self.open_context_menu(&view, &keyboard_menu_anchor(row), style, Some(&heading));
+            return;
+        }
         let selected = self.folder_pane().model().first_selected();
         if let Some(position) = selected {
             self.folder_pane().reveal(position);
         }
         let row = selected.and_then(|position| self.folder_pane().owners().widget_at(position));
         let bounds = row.and_then(|row| row.compute_bounds(&view));
-        self.open_context_menu(&view, &keyboard_menu_anchor(bounds), style);
+        self.open_context_menu(&view, &keyboard_menu_anchor(bounds), style, None);
     }
 
     /// "Show more options": the classic menu where the compact one was.
@@ -324,7 +356,10 @@ impl BrowserWindow {
         let Some(point) = context_menu_of(&view).and_then(|popover| popover.pointing_to().1.into()) else {
             return;
         };
-        self.open_context_menu(&view, &point, MenuStyle::Classic);
+        // Opened on a group heading, the classic menu keeps its commands.
+        let heading = self.imp().menu_heading.borrow().clone();
+        let heading = heading.filter(|heading| heading.model().is_some());
+        self.open_context_menu(&view, &point, MenuStyle::Classic, heading.as_ref());
     }
 
     /// The folder menu's "New…", "Sort by" and "View": `entries`, the
@@ -340,9 +375,11 @@ impl BrowserWindow {
     }
 
     /// Adds the actions the context menus run themselves: "Show more
-    /// options", "New…", "Sort by", "View", "Unpin from Quick access" and "Open windows…".
+    /// options", "New…", "Sort by", "View", "Unpin from Quick access",
+    /// "Open windows…" and a group heading's collapse and expand commands.
     pub(super) fn install_context_menu_actions(&self) {
         self.install_sidebar_hiding();
+        self.install_place_commands();
         self.add_action_entries([
             plain_action(WindowAction::ShowMoreOptions, BrowserWindow::show_more_options),
             plain_action(WindowAction::ShowNewMenu, |window| {
@@ -353,7 +390,7 @@ impl BrowserWindow {
                 window.show_menu_in_place(sort_menu());
             }),
             plain_action(WindowAction::ShowViewMenu, |window| {
-                window.show_menu_in_place(view_menu());
+                window.show_menu_in_place(window.background_view_menu());
             }),
             text_action(WindowAction::Unpin, BrowserWindow::unpin),
             plain_action(WindowAction::AddPlace, |window| {
@@ -420,7 +457,7 @@ impl BrowserWindow {
         };
         self.select_for_context_menu(&view, x, y);
         let point = gdk::Rectangle::new(KEYBOARD_MENU_INSET, KEYBOARD_MENU_INSET, 1, 1);
-        self.open_context_menu(&view, &point, self.preferred_menu_style());
+        self.open_context_menu(&view, &point, self.preferred_menu_style(), None);
     }
 
     /// The view's right-button gesture and a point on the item at

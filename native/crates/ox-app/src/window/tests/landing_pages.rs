@@ -360,9 +360,9 @@ fn close_menu(menu: &MenuPopover) {
 
 /// A drive tile's menu is the file list's right-click menu, in its
 /// style, with Windows 11's drive items in Windows' order: Copy and Rename
-/// in the strip, greyed out, then Open, Open in new tab, Open in new
-/// window, what the drive allows (Disconnect here), Pin to Quick access
-/// and Properties, and Show more options, which opens the classic menu
+/// in the strip, Copy enabled and Rename greyed out, then Open, Open in
+/// new tab, Open in new window, what the drive allows (Disconnect here),
+/// Pin to Quick access and Properties, and Show more options, which opens the classic menu
 /// in its place with Open in Terminal and the cache item. Pin to Quick
 /// access pins the drive, and its menu then offers Unpin.
 ///
@@ -378,7 +378,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     assert_eq!(menu.style(), MenuStyle::Compact, "the file list's default style");
     assert_eq!(
         menu.strip_states(),
-        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        [("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     assert_eq!(
         menu.row_labels(),
@@ -452,7 +452,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     wait_for_frames(&test.window, 2);
     assert_eq!(
         pin.strip_states(),
-        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        [("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     assert!(pin.row_labels().contains(&"Unpin from Quick access".to_owned()));
     pin.popdown();
@@ -477,7 +477,7 @@ fn a_drive_tile_menu_is_the_file_menu_with_windows_drive_items() {
     wait_for_frames(&test.window, 2);
     assert_eq!(
         pin.strip_states(),
-        [("Copy".to_owned(), false), ("Rename".to_owned(), false)]
+        [("Copy".to_owned(), true), ("Rename".to_owned(), false)]
     );
     pin.popdown();
 }
@@ -639,4 +639,337 @@ fn a_this_pc_tile_menu_survives_the_page_being_drawn_again() {
     close_menu(&menu);
 
     assert!(still_open, "the redraw does not close the menu");
+}
+
+/// Right-clicks `header` and returns the menu it opens in the folder pane.
+fn open_heading_menu(test: &TestWindow, header: &gtk::Button) -> MenuPopover {
+    press_heading(header);
+    let menu = descendants::<MenuPopover>(test.window.folder_pane())
+        .into_iter()
+        .find(gtk::prelude::WidgetExt::is_visible)
+        .expect("the heading's menu is open in the folder pane");
+    wait_for_frames(&test.window, 2);
+    menu
+}
+
+/// The shortcut text `menu`'s rows show, in order.
+fn shortcut_texts(menu: &MenuPopover) -> Vec<String> {
+    menu.rows()
+        .iter()
+        .flat_map(descendants::<gtk::Label>)
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// A group heading's right-click opens Windows 11's heading menu: Collapse
+/// group (key Left), which turns into Expand group (key Right) while it is
+/// collapsed, then Expand all groups and Collapse all groups. It has nothing behind it, so
+/// it has no "Show more options", and with the Windows 10 choice it opens
+/// in the classic style directly.
+///
+/// parity: HOME-001, CMD-010
+#[gtk::test]
+fn a_group_heading_menu_collapses_and_expands_the_groups() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    let header = first_header(&test);
+
+    let menu = open_heading_menu(&test, &header);
+    assert_eq!(menu.style(), MenuStyle::Compact);
+    assert_eq!(
+        menu.row_labels(),
+        ["Collapse group", "Expand all groups", "Collapse all groups"]
+    );
+    assert_eq!(shortcut_texts(&menu), ["Left"]);
+    assert!(menu.strip_labels().is_empty());
+    menu.click_row("Collapse group");
+    let tiles_shown = || {
+        landing::tile_groups(test.window.folder_pane().landing())
+            .iter()
+            .map(|(flow, _)| flow.is_visible())
+            .collect::<Vec<bool>>()
+    };
+    wait_until("the group to collapse", || tiles_shown().first() == Some(&false));
+    close_menu(&menu);
+
+    let menu = open_heading_menu(&test, &first_header(&test));
+    assert_eq!(menu.row_labels()[0], "Expand group");
+    assert_eq!(shortcut_texts(&menu), ["Right"]);
+    menu.click_row("Expand all groups");
+    wait_until("every group to expand", || {
+        tiles_shown().iter().all(|shown| *shown)
+    });
+    close_menu(&menu);
+
+    super::context_menus::choose_menu_style(&test, ox_core::settings::ContextMenu::Win10);
+    let menu = open_heading_menu(&test, &first_header(&test));
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Classic,
+        "the classic choice opens it directly"
+    );
+    menu.click_row("Collapse all groups");
+    wait_until("every group to collapse", || {
+        tiles_shown().iter().all(|shown| !*shown)
+    });
+    close_menu(&menu);
+}
+
+/// Presses the secondary button on `header`, as a right-click does.
+fn press_heading(header: &gtk::Button) {
+    let right_click = header
+        .observe_controllers()
+        .into_iter()
+        .filter_map(|controller| controller.ok().and_downcast::<gtk::GestureClick>())
+        .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
+        .expect("the heading opens its menu on a right-click");
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
+}
+
+/// With This PC in both panes of a split tab, a right-click on a heading
+/// of the inactive pane opens its menu there, although making that pane
+/// active draws This PC again under the press, and Collapse group acts
+/// on that pane alone: This PC beside it keeps its groups open.
+///
+/// parity: VIEW-059
+#[gtk::test]
+fn a_group_heading_menu_acts_on_its_own_pane_only() {
+    let fixture = Fixture::standard();
+    let test = this_pc_with_drives(&fixture);
+    test.activate("split-view", None);
+    test.window.render_places();
+    let first = test.window.active_side();
+    let second = first.other();
+    let groups_shown = |side| {
+        landing::tile_groups(test.window.pane_on(side).landing())
+            .iter()
+            .map(|(flow, _)| flow.is_visible())
+            .collect::<Vec<bool>>()
+    };
+    wait_until("This PC in both panes", || {
+        groups_shown(second).first() == Some(&true) && groups_shown(first).first() == Some(&true)
+    });
+    wait_for_frames(&test.window, 2);
+    let pressed = landing::group_headers(test.window.pane_on(second).landing())
+        .into_iter()
+        .next()
+        .expect("This PC heads its groups");
+
+    // The press makes its pane active first, which draws This PC again.
+    test.window.activate_pane(second);
+    assert_eq!(test.window.active_side(), second);
+    assert!(
+        pressed.parent().is_none(),
+        "This PC was drawn again under the press"
+    );
+    wait_for_frames(&test.window, 2);
+    press_heading(&pressed);
+    let menu = descendants::<MenuPopover>(test.window.pane_on(second))
+        .into_iter()
+        .find(gtk::prelude::WidgetExt::is_visible)
+        .expect("the heading's menu is open in its pane");
+    wait_for_frames(&test.window, 2);
+    menu.click_row("Collapse group");
+    wait_until("the group to collapse", || {
+        groups_shown(second).first() == Some(&false)
+    });
+    close_menu(&menu);
+
+    assert_eq!(groups_shown(first).first(), Some(&true));
+}
+
+/// The right-click menus of a file, a folder, several items and a drive,
+/// compact and classic, light and dark: with `OX_NATIVE_CAPTURE_DIR` set,
+/// saved there as `context-menu-match-<item>-<style>-<theme>.png` for
+/// comparing with Windows 11's. Without it, they only prove each menu
+/// opens in the style the Settings choice asks for.
+#[gtk::test]
+fn the_right_click_menus_are_captured_compact_and_classic() {
+    use ox_core::settings::ContextMenu;
+
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(960, 900);
+    wait_until("the taller window", || test.window.height() >= 860);
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        for (choice, style, name) in [
+            (ContextMenu::Win11, MenuStyle::Compact, "compact"),
+            (ContextMenu::Win10, MenuStyle::Classic, "classic"),
+        ] {
+            super::context_menus::choose_menu_style(&test, choice);
+            test.window.navigate(&fixture.uri()).expect("the fixture");
+            test.wait_for_listing("the fixture");
+            for (item, names) in [
+                ("file", &["Notes 2.txt"][..]),
+                ("folder", &["Documents"][..]),
+                ("several", &["Notes 2.txt", "Notes 10.txt"][..]),
+            ] {
+                super::file_ops_support::select_names(&test, names);
+                let position = super::context_menus::position_of(&test, names[0]);
+                test.window.right_click(Some(position));
+                let menu = test.window.context_menu();
+                assert_eq!(menu.style(), style, "{item} {name}");
+                capture_with_menus(
+                    &test.window,
+                    &format!("context-menu-match-{item}-{name}-{theme}.png"),
+                );
+                menu.popdown();
+                wait_until("the menu to close", || !menu.is_mapped());
+            }
+            test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+            wait_for_frames(&test.window, 3);
+            let (_, disk) = drive_tile(&test, "Local Disk");
+            let menu = open_tile_menu(&test, &disk);
+            assert_eq!(menu.style(), style, "drive {name}");
+            capture_with_menus(
+                &test.window,
+                &format!("context-menu-match-drive-{name}-{theme}.png"),
+            );
+            close_menu(&menu);
+        }
+    }
+}
+
+/// The drive tile named `name`, selected with the keyboard on it, as a
+/// click selects it.
+fn select_tile(test: &TestWindow, name: &str) {
+    let (flow, tile) = drive_tile(test, name);
+    flow.select_child(&tile);
+    tile.grab_focus();
+}
+
+/// The names in `folder`, sorted.
+fn names_in(folder: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(folder)
+        .expect("the folder lists")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// A drive selected on This PC can be copied, as in Windows 11: the
+/// command bar's Copy is enabled, Cut is not, and a paste of it into a
+/// folder makes a shortcut named after the drive, which points to the
+/// drive; a second paste makes "(2)". Nothing on the drive is copied.
+///
+/// parity: HOME-003, CLIP-001, CMD-038
+#[gtk::test]
+fn a_copied_drive_tile_pastes_as_a_shortcut_named_after_the_drive() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+    select_tile(&test, "Backup");
+
+    wait_until("Copy to be enabled", || is_enabled(&test, "copy"));
+    assert!(!is_enabled(&test, "cut"), "a drive is never cut");
+    assert!(!is_enabled(&test, "rename") && !is_enabled(&test, "trash"));
+    assert!(press_shortcut_where_focused(
+        &test,
+        gtk::gdk::Key::c,
+        gtk::gdk::ModifierType::CONTROL_MASK
+    ));
+    // Only this app's own format and the path as text: no other file
+    // manager may paste the drive as a folder and copy all of it.
+    let formats = test.window.clipboard().formats();
+    assert!(formats.contain_mime_type(ox_core::clipboard::CUSTOM));
+    assert!(formats.contain_mime_type(ox_core::clipboard::TEXT));
+    for generic in [ox_core::clipboard::GNOME, ox_core::clipboard::URI_LIST] {
+        assert!(!formats.contain_mime_type(generic), "{generic} is not offered");
+    }
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the shortcut to be selected", || {
+        test.selected_names() == ["Backup - Shortcut"]
+    });
+    wait_until("Paste to be enabled again", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the second shortcut", || {
+        fixture.path("Projects/Backup - Shortcut (2)").is_symlink()
+    });
+
+    assert_eq!(
+        names_in(&fixture.path("Projects")),
+        ["Backup - Shortcut", "Backup - Shortcut (2)"],
+        "two shortcuts and nothing copied"
+    );
+    for name in ["Backup - Shortcut", "Backup - Shortcut (2)"] {
+        let target = std::fs::read_link(fixture.path(&format!("Projects/{name}"))).expect("a link");
+        assert_eq!(target, fixture.path(""), "{name} points to the drive");
+    }
+}
+
+/// Copy on a drive's menu, wherever it opens, copies the drive, and Cut
+/// is not offered: Ctrl+X on a selected drive tile puts nothing on the
+/// clipboard, as Windows Explorer cuts no drive.
+///
+/// parity: HOME-003, CLIP-001
+#[gtk::test]
+fn a_drive_is_copied_from_its_menu_and_never_cut() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+    // Text is no file list: Paste stays off unless Ctrl+X puts the drive
+    // on the clipboard.
+    test.window.clipboard().set_text("Synthetic text");
+    select_tile(&test, "USB");
+    press_shortcut_where_focused(&test, gtk::gdk::Key::x, gtk::gdk::ModifierType::CONTROL_MASK);
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    assert!(!is_enabled(&test, "paste"), "Ctrl+X cut nothing");
+
+    test.activate("copy-folder", Some("file:///"));
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the shortcut to Local Disk", || {
+        fixture.path("Projects/Local Disk - Shortcut").is_symlink()
+    });
+
+    let target = std::fs::read_link(fixture.path("Projects/Local Disk - Shortcut")).expect("a link");
+    assert_eq!(target, std::path::PathBuf::from("/"));
+    assert_eq!(names_in(&fixture.path("Projects")), ["Local Disk - Shortcut"]);
+}
+
+/// Select all on This PC, then Copy, copies every drive, and a paste
+/// makes a shortcut to each, as Windows Explorer does with several drives
+/// selected; nothing on them is copied.
+///
+/// parity: HOME-003, CLIP-001, CMD-038
+#[gtk::test]
+fn every_selected_drive_pastes_as_its_own_shortcut() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Projects")).expect("fixture folder");
+    let test = this_pc_with_drives(&fixture);
+
+    test.activate("select-all", None);
+    wait_until("Copy to be enabled", || is_enabled(&test, "copy"));
+    assert!(!is_enabled(&test, "cut"), "drives are never cut");
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Projects")));
+    test.wait_for_listing("the Projects folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the three shortcuts", || {
+        names_in(&fixture.path("Projects")).len() == 3
+    });
+
+    assert_eq!(
+        names_in(&fixture.path("Projects")),
+        ["Backup - Shortcut", "Local Disk - Shortcut", "USB - Shortcut"]
+    );
+    let target = |name: &str| std::fs::read_link(fixture.path(&format!("Projects/{name}"))).expect("a link");
+    assert_eq!(target("Local Disk - Shortcut"), std::path::PathBuf::from("/"));
+    assert_eq!(target("Backup - Shortcut"), fixture.path(""));
+    assert_eq!(target("USB - Shortcut"), fixture.path("Documents"));
 }

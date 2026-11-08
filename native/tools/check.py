@@ -41,7 +41,9 @@ NATIVE = Path(__file__).resolve().parents[1]
 REQUIRED_TOOLS = ('cargo', 'git', 'python3', 'dbus-run-session', 'xvfb-run', 'Xvfb', 'xauth',
                   'mkfifo')
 
-DEFAULT_TEST_TIMEOUT = 600.0
+# The ox-app test binary runs about 2,000 GTK tests one at a time and takes
+# close to ten minutes on a hosted runner, so each binary gets twenty.
+DEFAULT_TEST_TIMEOUT = 1200.0
 # How long a stop signal may take before the next, stronger one is sent.
 STOP_GRACE_SECONDS = 5.0
 # How often to look whether a stopped process group has emptied.

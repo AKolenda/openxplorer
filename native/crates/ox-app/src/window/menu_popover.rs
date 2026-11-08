@@ -9,9 +9,10 @@
 //! window or application action: a disabled action, or an item disabled
 //! in this menu, greys its row out, and a checked item shows the check
 //! check mark in a column at its left, before its own glyph, as Windows
-//! 11 draws it. The compact style (CMD-008) puts a strip of icon buttons
-//! above the list: Cut, Copy, Paste, Rename and Delete in the context
-//! menus.
+//! 11 draws it. The compact style (CMD-008) puts a strip of buttons, each
+//! an icon with its label under it, above the list: Cut, Copy, Rename,
+//! Share and Delete in the context menus, and Paste on a folder while
+//! there is something to paste.
 //!
 //! An item with a submenu (a chevron at the far right of its row) opens it
 //! beside the menu, as Windows 11's menus do: resting the pointer on the
@@ -38,7 +39,7 @@ mod height;
 #[cfg(test)]
 mod inspection;
 #[cfg(test)]
-pub(crate) use inspection::{row_label, row_tooltip};
+pub(crate) use inspection::row_label;
 mod items;
 mod motion;
 
@@ -117,7 +118,7 @@ mod imp {
     /// Private state of [`super::MenuPopover`].
     #[derive(Debug, Default)]
     pub(crate) struct MenuPopover {
-        /// The compact style's icon buttons, above the list.
+        /// The compact style's labeled buttons, above or below the list.
         pub(super) strip: OnceCell<gtk::Box>,
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
@@ -222,6 +223,9 @@ mod imp {
             // Before GTK places the menu, so it is placed at its full size.
             self.obj().open_below_button_again();
             self.obj().fit_to_monitor();
+            // The strip where it goes for a menu opening downward; GTK's
+            // placement moves it if the menu opens upward (motion.rs).
+            self.obj().place_strip_for(false);
             // It fades and slides in, as Windows 11's menus open.
             self.obj().start_opening_motion();
             #[expect(
@@ -259,7 +263,7 @@ glib::wrapper! {
             gtk::Native, gtk::ShortcutManager;
 }
 
-/// The row of icon buttons of the compact style (`.context-strip`).
+/// The row of labeled buttons of the compact style (`.context-strip`).
 fn strip_box() -> gtk::Box {
     let strip = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
@@ -619,7 +623,7 @@ impl MenuPopover {
             let can_choose = self.can_choose(item);
             let row = item_row(item, self.check_mark(item), marks, glyphs);
             row.set_sensitive(can_choose);
-            explain_availability(self, row.upcast_ref(), item, can_choose);
+            describe_unavailable_row(self, &row, item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
@@ -643,16 +647,77 @@ impl MenuPopover {
         if !shows_strip {
             return;
         }
-        for item in items.iter() {
+        let shown = items.iter().filter(|item| {
+            item.availability != ItemAvailability::ShownWhileEnabled
+                || item.action.is_enabled(self.upcast_ref())
+        });
+        for item in shown {
             strip.append(&self.strip_button(item));
         }
     }
 
-    /// An icon button of the strip.
+    /// Where Settings puts the strip ("Buttons in the right-click menu"): the
+    /// pointer's side unless the window's settings say otherwise.
+    fn strip_position(&self) -> ox_core::settings::StripPosition {
+        self.root()
+            .and_downcast::<crate::window::BrowserWindow>()
+            .map(|window| window.context().settings_data().preferences.strip_position)
+            .unwrap_or_default()
+    }
+
+    /// Puts the strip where Settings asks for a menu that opened upward
+    /// (`opened_upward`) or downward.
+    pub(super) fn place_strip_for(&self, opened_upward: bool) {
+        self.place_strip(self.strip_position().at_bottom(opened_upward));
+    }
+
+    /// Puts the strip at the bottom of the menu, `at_bottom` when it opened
+    /// above the pointer, or at its top, as Windows 11 keeps it on the side
+    /// nearest the pointer.
+    pub(super) fn place_strip(&self, at_bottom: bool) {
+        let strip = self.strip();
+        let Some(content) = strip.parent().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        if at_bottom {
+            if content.last_child().as_ref() != Some(strip.upcast_ref()) {
+                content.reorder_child_after(strip, content.last_child().as_ref());
+            }
+            strip.add_css_class("at-bottom");
+        } else {
+            if content.first_child().as_ref() != Some(strip.upcast_ref()) {
+                content.reorder_child_after(strip, None::<&gtk::Widget>);
+            }
+            strip.remove_css_class("at-bottom");
+        }
+    }
+
+    /// Whether the strip sits at the bottom of the menu, for tests.
+    #[cfg(test)]
+    pub(crate) fn strip_at_bottom(&self) -> bool {
+        self.strip().has_css_class("at-bottom")
+    }
+
+    /// A button of the strip: its icon with its label under it, as
+    /// Windows 11 draws Cut, Copy, Rename, Share and Delete.
     fn strip_button(&self, item: &MenuItem) -> gtk::Button {
         let can_choose = self.can_choose(item);
+        let face = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(2)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .build();
+        face.append(&icons::image(item.glyph, ROW_GLYPH));
+        let label = gtk::Label::builder()
+            .label(&item.label)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(9)
+            .css_classes(["strip-label"])
+            .build();
+        face.append(&label);
         let button = gtk::Button::builder()
-            .child(&icons::image(item.glyph, ROW_GLYPH))
+            .child(&face)
             .tooltip_text(item_tooltip(item))
             .sensitive(can_choose)
             .build();
@@ -1110,8 +1175,8 @@ fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
     item.action.disabled_reason(menu.upcast_ref()).map(str::to_owned)
 }
 
-/// Adds to the tooltip of `control`, which shows `item` in `menu`, why it
-/// cannot be chosen, and tells screen readers too.
+/// Adds to the tooltip of the strip button `control`, which shows `item`
+/// in `menu`, why it cannot be chosen, and tells screen readers too.
 fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
     let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten();
     let Some(reason) = reason else {
@@ -1119,6 +1184,15 @@ fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuIt
     };
     control.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
     control.update_property(&[gtk::accessible::Property::Description(&reason)]);
+}
+
+/// Tells screen readers why `row`, which shows `item` in `menu`, cannot
+/// be chosen. The row shows no tooltip, as Windows 11's menu rows show
+/// none.
+fn describe_unavailable_row(menu: &MenuPopover, row: &gtk::ListBoxRow, item: &MenuItem, can_choose: bool) {
+    if let Some(reason) = (!can_choose).then(|| disabled_reason(menu, item)).flatten() {
+        row.update_property(&[gtk::accessible::Property::Description(&reason)]);
+    }
 }
 
 /// Whether a menu's rows keep a column for check marks and dots before
@@ -1229,14 +1303,6 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: Gl
     content
 }
 
-/// The whole label of `row` while the menu cuts it short, else `None`.
-fn cut_short_label(row: &gtk::ListBoxRow) -> Option<String> {
-    let content = row.child()?;
-    let label = crate::window::widget_tree::children(&content)
-        .find_map(|child| child.downcast::<gtk::Label>().ok())?;
-    label.layout().is_ellipsized().then(|| label.text().to_string())
-}
-
 /// The row for `item`, showing `check` in the menu's `marks` column, and
 /// its glyph, or an empty slot, in the `glyphs` column.
 fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::ListBoxRow {
@@ -1249,22 +1315,10 @@ fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphC
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // No tooltip that would only repeat the label (`b.title=it.label` in
-    // app.js), as Windows 11's menus show none: only a label the menu cuts
-    // short shows whole, which adds what the row cannot show. A disabled
-    // row's own tooltip, saying why ([`explain_availability`]), comes
-    // first.
-    row.set_has_tooltip(true);
-    row.connect_query_tooltip(|row, _, _, _, tooltip| {
-        if row.tooltip_text().is_some() {
-            return false;
-        }
-        let Some(label) = cut_short_label(row) else {
-            return false;
-        };
-        tooltip.set_text(Some(&label));
-        true
-    });
+    // No tooltip, as Windows 11's menus show none on their rows (not
+    // `b.title=it.label` in app.js): not for a label the menu cuts short,
+    // nor for a disabled row, which tells screen readers why in its
+    // accessible description ([`describe_unavailable_row`]).
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

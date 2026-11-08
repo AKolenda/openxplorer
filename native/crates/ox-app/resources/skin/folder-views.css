@@ -163,12 +163,67 @@ columnview.files .row-icon { margin-top: 1px; }
   border-radius: 0;
 }
 
-/* A group's header in the details view (VIEW-022): Explorer's semibold
-   title and count, then a line to the right edge. */
-columnview.files > listview > header { padding: 0; background: none; }
-columnview.files .group-header { padding: 12px 26px 4px 26px; }
-columnview.files .group-title { font-weight: 600; color: @ox_text; }
-columnview.files .group-header separator { background-color: @ox_border; min-height: 1px; }
+/* A group's heading in the details view (VIEW-022), a row of its own:
+   Windows 11's chevron (down while the group is expanded, right while it
+   is collapsed), the semibold title, then a line to the right edge. The
+   Name cell holds the heading and lays it out across the whole row, over
+   the other columns, whatever Name's width (FileCell's
+   span_heading_across_row in src/folder_view/cells.rs); the other
+   columns' cells in the row draw nothing. The chevron changes at once,
+   with no animation, so reduced motion has nothing to stop. */
+columnview.files .group-slot .group-header {
+  padding: 0 0 0 14px;
+  margin: 0;
+  border-spacing: 8px;
+  border-radius: 4px;
+}
+/* A heading's row: an 8px gap before every heading, the first one
+   included, then a box as tall as an item's row (src/theme/fonts.rs sets
+   its height). The gap is the top margin of the heading's cells, so the
+   row has its whole height when GTK binds it, and the hover, the
+   selection and the keyboard's outline are drawn on the heading's box
+   alone, across the row. The grouped list adds no padding of its own
+   above the first heading. */
+columnview.files.grouped > listview { padding-top: 1px; }
+columnview.files > listview > row > cell > .group-slot {
+  margin: 8px 0 0 0;
+  padding: 0;
+}
+columnview.files > listview > row.heading-row,
+columnview.files > listview > row.heading-row:hover,
+columnview.files > listview > row.heading-row:selected,
+columnview.files > listview > row.heading-row:focus-visible,
+columnview.files > listview > row.heading-row:focus-within {
+  background: none;
+  outline: none;
+  box-shadow: none;
+}
+/* The focused row's 1px outline while the list has the keyboard
+   (.keyboard-in) would go round the heading's gap too: the heading draws
+   its own, round its box. */
+columnview.files.keyboard-in > listview > row.heading-row:focus:not(:focus-visible):not(.file-drop-active) {
+  outline: none;
+}
+columnview.files > listview > row.heading-row:hover > cell > .group-slot .group-header { background-color: @ox_item_hover; }
+columnview.files > listview > row.heading-row:selected > cell > .group-slot .group-header,
+columnview.files > listview > row.heading-row.row-filled > cell > .group-slot .group-header { background-color: @ox_item_selected; }
+columnview.files > listview > row.heading-row:selected:hover > cell > .group-slot .group-header,
+columnview.files > listview > row.heading-row.row-filled:hover > cell > .group-slot .group-header {
+  background-color: @ox_item_selected_hover;
+}
+columnview.files > listview > row.heading-row:focus-within > cell > .group-slot .group-header {
+  box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
+}
+columnview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
+columnview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
+/* Another column's cell in a heading's row: the gap and the height alone,
+   as the Name cell's heading is drawn over it. */
+columnview.files .group-rule {
+  padding: 0;
+  margin: 8px 0 0 0;
+  background: none;
+}
+.files .group-chevron { color: @ox_muted; }
 
 /* The arrow before a folder that expands in place (VIEW-035). */
 columnview.files .folder-expander {
@@ -292,23 +347,120 @@ gridview.files.compact > child { padding: 0 8px 0 6px; margin: 0 2px 0 0; border
 gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
 
 /* ---- Tiles and Content (Explorer's, VIEW-071) ---- */
-/* Tiles: the icon left of its name, type and size, 8px of padding round
-   a tile. Content: one row per item across the width, with a thin line
-   under each, as Windows 11 draws them. Their heights follow the text
-   size (src/theme/fonts.rs). */
-gridview.files.tiles > child { padding: 8px; margin: 1px 2px; }
-gridview.files.content > child {
-  padding: 0 12px;
+/* Both draw an item's padding, hover, selection and focus ring on its
+   cell, not on the grid's slot: a grouped folder's heading rows are slots
+   of the grid too, and show none (src/folder_view/grid/grouped.rs).
+   Tiles: the icon left of its name, type and size, 8px apart across and
+   6px down, as Windows 11 spaces them. Content: one row per item across
+   the width, 16px in from each side, with a thin line under each. Their
+   heights follow the text size (src/theme/fonts.rs). */
+gridview.files.tiles > child, gridview.files.content > child {
+  padding: 0;
   margin: 0;
   border-radius: 0;
+}
+gridview.files.tiles > child, gridview.files.tiles > child:hover,
+gridview.files.tiles > child:active, gridview.files.tiles > child:selected,
+gridview.files.tiles > child:selected:hover, gridview.files.tiles > child:focus-visible,
+gridview.files.content > child, gridview.files.content > child:hover,
+gridview.files.content > child:active, gridview.files.content > child:selected,
+gridview.files.content > child:selected:hover, gridview.files.content > child:focus-visible {
+  background: none;
+  outline: none;
+  box-shadow: none;
+}
+gridview.files.tiles > child > .item-cell:not(.group-slot) {
+  padding: 8px 12px 8px 8px;
+  margin: 3px 4px;
+  border-radius: 4px;
+  transition: background-color 83ms linear;
+}
+gridview.files.content > child > .item-cell:not(.group-slot) {
+  padding: 6px 16px;
   border-bottom: 1px solid @ox_border;
+  transition: background-color 83ms linear;
+}
+gridview.files.tiles > child:hover > .item-cell:not(.group-slot),
+gridview.files.content > child:hover > .item-cell:not(.group-slot) { background-color: @ox_item_hover; }
+gridview.files.tiles > child:active > .item-cell:not(.group-slot),
+gridview.files.content > child:active > .item-cell:not(.group-slot),
+gridview.files.tiles > child:selected > .item-cell:not(.group-slot),
+gridview.files.content > child:selected > .item-cell:not(.group-slot) {
+  background-color: @ox_item_selected;
+  color: @ox_text;
+}
+gridview.files.tiles > child:selected:hover > .item-cell:not(.group-slot),
+gridview.files.content > child:selected:hover > .item-cell:not(.group-slot) {
+  background-color: @ox_item_selected_hover;
+}
+gridview.files.tiles > child:focus-visible > .item-cell:not(.group-slot),
+gridview.files.content > child:focus-visible > .item-cell:not(.group-slot) {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
+/* The focused item's 1px outline while the list has the keyboard, on
+   the cell too. */
+gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active),
+gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: none; }
+gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot),
+gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot) {
+  outline: 1px solid @ox_item_focus_outer;
+  outline-offset: -1px;
 }
 /* GTK's theme gives every box in a tile a 12px margin; the lines beside
    the icon have none. */
 gridview.files.tiles > child box, gridview.files.content > child box { margin: 0; }
 gridview.files > child .item-lines { border-spacing: 1px; }
-gridview.files > child .item-properties { border-spacing: 2px; margin-right: 24px; }
+gridview.files > child .item-properties { border-spacing: 1px; margin: 0 8px 0 24px; }
 gridview.files > child .item-properties > box { border-spacing: 4px; }
+/* A group's heading, as the details view draws it (VIEW-022): the
+   semibold title and count over the items' left edge, then a line across
+   the row, which the heading row's other slots carry on. */
+gridview.files .group-slot { padding: 0; }
+/* A heading's row in Tiles and Content: one line of title tall, its
+   hover box that size, after an 8px gap before every heading, the first
+   one included, which is a margin outside the box. */
+gridview.files .group-slot.heading-row { padding: 5px 0; margin-top: 8px; }
+gridview.files.tiles.grouped { padding-top: 3px; }
+gridview.files.content.grouped { padding-top: 0; }
+gridview.files.tiles .group-slot .group-header.group-heading { margin-left: 12px; }
+gridview.files.content .group-slot .group-header.group-heading { margin-left: 16px; }
+gridview.files .group-slot .group-header { border-spacing: 8px; }
+/* A heading's row acts as one, as Windows 11's does (VIEW-022): the
+   pointer anywhere over it lights the whole row in the items' hover
+   colour, the row is filled as selected while its group is
+   collapsed with every item selected, and the keyboard on the heading
+   draws a 1px outline round the whole row, after a click too. The heading and
+   the slots carrying its line each draw their part (row-start, row-end),
+   following the row's state (src/folder_view/cells.rs). Details draws
+   these on its rows. */
+gridview.files .item-cell.heading-row { transition: background-color 83ms linear; }
+gridview.files .item-cell.heading-row.row-start { border-radius: 4px 0 0 4px; }
+gridview.files .item-cell.heading-row.row-end { border-radius: 0 4px 4px 0; }
+gridview.files .item-cell.heading-row.row-start.row-end { border-radius: 4px; }
+gridview.files .item-cell.heading-row.row-hover { background-color: @ox_item_hover; }
+gridview.files > child:selected > .item-cell.heading-row,
+gridview.files .item-cell.heading-row.row-filled { background-color: @ox_item_selected; }
+gridview.files > child:selected > .item-cell.heading-row.row-hover,
+gridview.files .item-cell.heading-row.row-filled.row-hover { background-color: @ox_item_selected_hover; }
+gridview.files .item-cell.heading-row.row-focus {
+  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
+}
+gridview.files .item-cell.heading-row.row-focus.row-start {
+  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer,
+    inset 1px 0 @ox_item_focus_outer;
+}
+gridview.files .item-cell.heading-row.row-focus.row-end {
+  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer,
+    inset -1px 0 @ox_item_focus_outer;
+}
+gridview.files .item-cell.heading-row.row-focus.row-start.row-end,
+gridview.files.content > child:focus-within > .item-cell.heading-row {
+  box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
+}
+gridview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
+gridview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
 
 /* The type-to-select hint is accent-coloured, and muted when no name
    matches (`.type-select-status[data-miss=true]`). */
@@ -323,6 +475,16 @@ gridview.files > child .item-properties > box { border-spacing: 4px; }
 /* An empty folder keeps its list and says so near its top, under the
    column titles, in small grey text as Windows Explorer does. */
 .empty-folder-note { color: @ox_muted; }
+/* An empty list that has the keyboard has no item to ring, so the note
+   takes the items' ring (ACC-016): no Tab stop is invisible. */
+.folder-pane-overlay.keyboard-on-empty-list > label.empty-folder-note {
+  padding: 4px 10px;
+  margin: -4px -10px;
+  border-radius: 4px;
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 
 /* ---- Drag and drop (DND-007, DND-011, DND-026; style.css
    .file-dragging .drag-source, .file-drop-active, .tab-drag-hint) ---- */

@@ -48,7 +48,7 @@ impl From<AppAction> for MenuAction {
 
 impl MenuAction {
     /// The name a row runs the action by, such as `win.sort`.
-    pub(super) fn detailed_name(self) -> String {
+    pub(in crate::window) fn detailed_name(self) -> String {
         match self {
             MenuAction::Window(action) => action.detailed_name(),
             MenuAction::Application(action) => action.detailed_name(),
@@ -86,6 +86,10 @@ pub(in crate::window) enum ItemAvailability {
     /// Disabled in this menu, such as Open with several items selected
     /// (`disabled: true` in app.js).
     Disabled,
+    /// It follows its action, and the compact menu's strip leaves it out
+    /// while the action is off, as Windows 11 shows Paste there only
+    /// while there is something to paste.
+    ShownWhileEnabled,
 }
 
 /// One menu item.
@@ -108,7 +112,8 @@ pub(in crate::window) struct MenuItem {
     /// Shown in bold, as a crumb's subfolder menu shows the folder the
     /// address goes on to (NAV-020).
     pub emphasised: bool,
-    /// Why it is disabled in this menu, which its tooltip says.
+    /// Why it is disabled in this menu, which its accessible description
+    /// tells screen readers (a strip button also shows it in its tooltip).
     pub disabled_reason: Option<&'static str>,
     /// The icon of the application it opens
     /// ([`ox_core::integration::ApplicationInfo::icon`]), which replaces
@@ -261,6 +266,15 @@ impl MenuItem {
         }
     }
 
+    /// The same item, left out of the compact menu's strip while its
+    /// action is off ([`ItemAvailability::ShownWhileEnabled`]).
+    pub(in crate::window) fn shown_while_enabled(self) -> Self {
+        Self {
+            availability: ItemAvailability::ShownWhileEnabled,
+            ..self
+        }
+    }
+
     /// The same item, disabled in this menu when `disabled` holds.
     pub(in crate::window) fn disabled_when(self, disabled: bool) -> Self {
         let availability = if disabled {
@@ -272,7 +286,7 @@ impl MenuItem {
     }
 
     /// The same item, disabled in this menu when `disabled` holds, with
-    /// `reason` in its tooltip.
+    /// `reason` in its accessible description.
     pub(in crate::window) fn disabled_because(self, disabled: bool, reason: &'static str) -> Self {
         if !disabled {
             return self;
@@ -324,7 +338,8 @@ pub(in crate::window) enum MenuStyle {
     /// Windows 10 classic: a square text menu, the default.
     #[default]
     Classic,
-    /// Windows 11 compact: rounded, with a strip of icon buttons on top.
+    /// Windows 11 compact: rounded, with a strip of labeled buttons on the
+    /// side nearest the pointer.
     Compact,
 }
 

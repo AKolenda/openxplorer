@@ -21,9 +21,12 @@
 //! [`WindowAction::MountVolume`] for a volume); a middle-click opens a
 //! folder in a background tab. A right-click, the Menu key or Shift+F10
 //! opens the drive's menu ([`super::place_menus`]), and Alt+Enter its
-//! Properties. Select all (Ctrl+A), Select none (Escape) and Invert
-//! selection act on the tiles of both groups, as in Windows 11's This PC
-//! ([`change_tile_selection`]).
+//! Properties. A group heading's right-click, Menu key or Shift+F10
+//! opens its menu, as Explorer's: Collapse group (or Expand group),
+//! Expand all groups and Collapse all groups, the commands of a folder's
+//! group headings (`group_headings.rs`). Select all (Ctrl+A), Select none
+//! (Escape) and Invert selection act on the tiles of both groups, as in
+//! Windows 11's This PC ([`change_tile_selection`]).
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -44,8 +47,8 @@ use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
-use super::menu_popover::MenuStyle;
-use super::place_menus::{popup_place_menu, PlaceMenu};
+use super::menu_popover::{MenuPopover, MenuStyle};
+use super::place_menus::{classic_or_compact, popup_place_menu, PlaceMenu};
 use super::selection_keys::SelectionChange;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
@@ -68,6 +71,8 @@ const CHEVRON: i32 = 16;
 const MOST_TILES_PER_ROW: u32 = 32;
 /// The class This PC's page carries, for its tighter padding.
 const THIS_PC_CLASS: &str = "this-pc";
+/// The class of a mounted drive's tile, which Copy copies when selected.
+const DRIVE_TILE_CLASS: &str = "drive-tile";
 
 /// How full a file system is, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,6 +287,10 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
         VolumeState::Mounted { uri, controls } => {
             show_capacity(&lines, uri, true);
             gestures::open_folder_on_middle_click(&child, uri);
+            // What Copy copies while the tile is selected, and what a drag
+            // of it carries ([`drive_tile_at`]): a shortcut to the drive,
+            // never its contents ([`super::drive_shortcuts`]).
+            child.add_css_class(DRIVE_TILE_CLASS);
             Tile {
                 child,
                 open: Opening {
@@ -476,7 +485,141 @@ fn group_header(page: &gtk::Box, group: Group, count: usize, tiles: &gtk::FlowBo
         }
     ));
     connect_header_keys(&header, tiles);
+    connect_header_menu(&header, group, page);
     header
+}
+
+/// Opens a heading's menu for `group` of This PC drawn in `page`, at
+/// `point` in `page`, in the right-click menu's style, or the classic one
+/// when `classic` asks for it. It reads the group's state from `page`,
+/// and hangs from the folder pane, both of which outlive a redraw of This
+/// PC: a press in the other pane of a split tab makes that pane active,
+/// which draws This PC again before the heading sees the press.
+fn popup_heading_menu(page: &gtk::Box, group: Group, point: gtk::graphene::Point, classic: bool) {
+    let style = if classic {
+        MenuStyle::Classic
+    } else {
+        page.root()
+            .and_downcast::<BrowserWindow>()
+            .map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
+    };
+    let owner = page
+        .ancestor(super::folder_pane::FolderPane::static_type())
+        .unwrap_or_else(|| page.clone().upcast());
+    let point = page.compute_point(&owner, &point).unwrap_or(point);
+    let collapsed = page.has_css_class(group.collapsed_class());
+    if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
+        window.set_this_pc_menu_group(group.header_class());
+    }
+    // The folder view's heading menu, as Windows 11 words both
+    // (`group_headings.rs`), with nothing below it.
+    let entries = super::group_headings::this_pc_heading_entries(collapsed);
+    let popover = MenuPopover::new(classic_or_compact(entries, style));
+    popover.set_style_and_strip(style, Vec::new());
+    popover.set_offset(0, 0);
+    popover.set_position(gtk::PositionType::Bottom);
+    popover.set_parent(&owner);
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let pointing_to = gtk::gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
+    popover.set_pointing_to(Some(&pointing_to));
+    popover.connect_closed(|popover| {
+        let closed = popover.clone();
+        glib::idle_add_local_once(move || closed.unparent());
+    });
+    popover.popup();
+}
+
+/// Where `gesture`'s press on `group`'s heading landed, in `page`: from
+/// the heading it pressed
+/// while that is still drawn there, else from the press's place in the
+/// window, as This PC was drawn again under it.
+fn press_point_in(
+    page: &gtk::Box,
+    group: Group,
+    gesture: &gtk::GestureClick,
+    x: f64,
+    y: f64,
+) -> Option<gtk::graphene::Point> {
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let at = gtk::graphene::Point::new(x as f32, y as f32);
+    if let Some(header) = gesture.widget().filter(|header| header.is_ancestor(page)) {
+        return header.compute_point(page, &at);
+    }
+    let native = page.native()?;
+    if let Some((surface_x, surface_y)) = gesture.current_event().and_then(|event| event.position()) {
+        let (offset_x, offset_y) = native.surface_transform();
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let in_native =
+            gtk::graphene::Point::new((surface_x - offset_x) as f32, (surface_y - offset_y) as f32);
+        return native.compute_point(page, &in_native);
+    }
+    // No event to read, as when a test emits the press: the group's
+    // heading as drawn now, at the same place in it.
+    let header =
+        super::widget_tree::children(page).find(|child| child.has_css_class(group.header_class()))?;
+    header.compute_point(page, &at)
+}
+
+/// Gives `header`, drawn in `page`, its menu: a right-click (Shift for the
+/// classic style), opened on the press as a tile's menu is, the Menu key
+/// and Shift+F10.
+fn connect_header_menu(header: &gtk::Button, group: Group, page: &gtk::Box) {
+    let right_click = gtk::GestureClick::new();
+    right_click.set_button(gtk::gdk::BUTTON_SECONDARY);
+    right_click.connect_pressed(glib::clone!(
+        #[weak]
+        page,
+        move |gesture, _, x, y| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            let shift = gesture
+                .current_event_state()
+                .contains(gtk::gdk::ModifierType::SHIFT_MASK);
+            if let Some(point) = press_point_in(&page, group, gesture, x, y) {
+                popup_heading_menu(&page, group, point, shift);
+            }
+        }
+    ));
+    header.add_controller(right_click);
+    let shortcuts = gtk::ShortcutController::new();
+    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+        let action = gtk::CallbackAction::new(glib::clone!(
+            #[weak]
+            page,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |header, _| {
+                #[expect(clippy::cast_precision_loss, reason = "a heading is a few pixels high")]
+                let below = gtk::graphene::Point::new(24.0, header.height() as f32);
+                let Some(point) = header.compute_point(&page, &below) else {
+                    return glib::Propagation::Proceed;
+                };
+                popup_heading_menu(&page, group, point, classic);
+                glib::Propagation::Stop
+            }
+        ));
+        shortcuts.add_shortcut(gtk::Shortcut::new(
+            gtk::ShortcutTrigger::parse_string(key),
+            Some(action),
+        ));
+    }
+    header.add_controller(shortcuts);
+}
+
+/// Collapses or expands the groups of This PC drawn in `body`: the one
+/// whose header carries the class `header`, or every one without it;
+/// toggled, or as `collapse` says.
+pub(super) fn collapse_groups(body: &gtk::Box, header: Option<&str>, collapse: Option<bool>) {
+    let headers = super::widget_tree::children(body)
+        .filter_map(|child| child.downcast::<gtk::Button>().ok())
+        .filter(|child| child.has_css_class("group-header"))
+        .filter(|child| header.is_none_or(|class| child.has_css_class(class)));
+    for button in headers {
+        let tiles = button.next_sibling().and_downcast::<gtk::FlowBox>();
+        let expanded = tiles.is_some_and(|tiles| tiles.is_visible());
+        if collapse.is_none_or(|collapse| collapse == expanded) {
+            button.emit_clicked();
+        }
+    }
 }
 
 /// Gives `header` the keyboard. An expanded group's header is no Tab
@@ -755,6 +898,38 @@ fn tile_boxes(page: &gtk::Box) -> impl Iterator<Item = gtk::FlowBox> {
     super::widget_tree::children(page).filter_map(|child| child.downcast::<gtk::FlowBox>().ok())
 }
 
+/// The class This PC's page carries once its drive tiles can be dragged.
+const DRIVE_DRAG_CLASS: &str = "drive-tiles-drag";
+
+/// The drive whose tile is at `x`, `y` of `page`, for a drag of it.
+fn drive_tile_at(page: &gtk::Box, x: f64, y: f64) -> Option<String> {
+    let picked = page.pick(x, y, gtk::PickFlags::DEFAULT)?;
+    let tile = std::iter::successors(Some(picked), WidgetExt::parent)
+        .take_while(|widget| widget != page.upcast_ref::<gtk::Widget>())
+        .find(|widget| widget.has_css_class(DRIVE_TILE_CLASS))?;
+    Some(tile.widget_name().to_string())
+}
+
+/// Lets `page`'s drive tiles be dragged, once for the page, which is
+/// drawn again whenever a drive comes or goes.
+fn allow_drive_drags(page: &gtk::Box) {
+    if page.has_css_class(DRIVE_DRAG_CLASS) {
+        return;
+    }
+    page.add_css_class(DRIVE_DRAG_CLASS);
+    super::file_drag::attach_drive_tile_drag(page, drive_tile_at);
+}
+
+/// The drives whose tiles are selected on `page`, in order: what Copy
+/// copies on This PC, for a paste to make a shortcut to each.
+pub(super) fn selected_drives(page: &gtk::Box) -> Vec<String> {
+    tile_boxes(page)
+        .flat_map(|flow| flow.selected_children())
+        .filter(|child| child.has_css_class(DRIVE_TILE_CLASS))
+        .map(|child| child.widget_name().to_string())
+        .collect()
+}
+
 /// The tiles of `flow`.
 fn tiles_in(flow: &gtk::FlowBox) -> impl Iterator<Item = gtk::FlowBoxChild> {
     super::widget_tree::children(flow).filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
@@ -802,13 +977,17 @@ pub(super) fn change_tile_selection(page: &gtk::Box, change: SelectionChange) ->
 }
 
 /// A click or an arrow selects in one group at a time, as in one item
-/// view: selecting a tile in one group clears the others.
+/// view: selecting a tile in one group clears the others. The window's
+/// commands follow the selection, as Copy copies the selected drives.
 fn select_one_group(page: &gtk::Box) {
     for flow in tile_boxes(page) {
         flow.connect_selected_children_changed(glib::clone!(
             #[weak]
             page,
             move |flow| {
+                if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
+                    window.update_file_commands();
+                }
                 if ACROSS_GROUPS.get() || flow.selected_children().is_empty() {
                     return;
                 }
@@ -926,6 +1105,7 @@ pub(super) fn render(
     match page {
         Page::ThisPc => {
             body.add_css_class(THIS_PC_CLASS);
+            allow_drive_drags(body);
             this_pc(body, places, locations, text_size);
             select_one_group(body);
             kept.restore(body);

@@ -14,7 +14,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::folder_view::model::FolderModel;
+use super::folder_pane::FolderPane;
 use crate::typeahead::{self, PrefixMatch, Rows};
 
 use super::status_bar::TypeaheadMatch;
@@ -66,10 +66,19 @@ pub(super) fn monotonic_now() -> Duration {
 }
 
 /// The folder's rows in display order, as type-to-select searches them.
-fn typeahead_rows(model: &FolderModel) -> Rows<impl Fn(u32) -> String + '_> {
+/// The items of a group collapsed under its heading have no name to
+/// match: the typed prefix passes them by, as the arrows do.
+fn typeahead_rows(pane: &FolderPane) -> Rows<impl Fn(u32) -> String + '_> {
+    let model = pane.model();
+    let layout = pane.grouped().and_then(|grouped| grouped.layout());
     Rows {
         count: model.n_items(),
-        name_at: |row| model.name_at(row).unwrap_or_default(),
+        name_at: move |row| {
+            if layout.as_ref().is_some_and(|layout| !layout.shows(row)) {
+                return String::new();
+            }
+            model.name_at(row).unwrap_or_default()
+        },
         current: model.first_selected(),
     }
 }
@@ -78,7 +87,7 @@ impl BrowserWindow {
     /// Backspace: removes the last typed character and selects what the
     /// shorter prefix matches.
     pub(super) fn erase_typed_character(&self, now: Duration) {
-        let rows = typeahead_rows(self.folder_pane().model());
+        let rows = typeahead_rows(self.folder_pane());
         let result = self.imp().typeahead.borrow_mut().controller.backspace(&rows, now);
         if let Some(result) = result {
             self.apply_typeahead(&result);
@@ -106,7 +115,7 @@ impl BrowserWindow {
         if self.folder_pane().model().n_items() == 0 {
             return;
         }
-        let rows = typeahead_rows(self.folder_pane().model());
+        let rows = typeahead_rows(self.folder_pane());
         let typed = character.to_string();
         let result = self
             .imp()
