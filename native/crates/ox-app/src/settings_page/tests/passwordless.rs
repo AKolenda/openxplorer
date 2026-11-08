@@ -97,7 +97,11 @@ impl FakeSystem {
     /// What the package's postinst does by default: the rule in place,
     /// recorded on.
     fn install_rule(&self) {
-        std::fs::copy(self.path("usr/share/openxplorer/install-update.rules"), self.rule()).unwrap();
+        std::fs::copy(
+            self.path("usr/share/openxplorer/install-update.rules"),
+            self.rule(),
+        )
+        .unwrap();
         let record = self.path("var/lib/openxplorer/install-updates-without-password");
         std::fs::create_dir_all(record.parent().unwrap()).unwrap();
         std::fs::write(record, "on\n").unwrap();

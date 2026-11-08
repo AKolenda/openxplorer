@@ -643,7 +643,7 @@ mod tests {
     }
 
     /// Without the rule the setting is off; the package's postinst is what
-    /// turns it on by default (tested in native/tools/test_build_deb.py).
+    /// turns it on by default (tested in `native/tools/test_build_deb.py`).
     #[test]
     fn without_the_rule_the_setting_is_off() {
         let system = FakeSystem::new();
