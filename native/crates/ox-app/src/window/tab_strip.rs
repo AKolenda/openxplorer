@@ -10,9 +10,10 @@
 //! with its selected state; a press or Enter shows it, a double-click
 //! opens a copy of it and a middle-click closes it; a right-click opens
 //! the tab's menu ([`super::tab_menu`]), as do the Menu key and Shift+F10
-//! on the focused tab. The close button inside claims its own clicks. Only the tab in front takes keyboard focus (a roving
-//! tab stop, ACC-008), and the arrow keys, Home and End show another tab
-//! and move focus with it, as GTK's own tab bars do.
+//! on the focused tab. The close button inside claims its own clicks.
+//! Only the tab in front takes keyboard focus (a roving tab stop,
+//! ACC-008), and the arrow keys, Home and End show another tab and move
+//! focus with it, as GTK's own tab bars do.
 //!
 //! [`TabStrip`] is a widget subclass whose scroller and tab list are the
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
@@ -313,13 +314,13 @@ impl TabStrip {
         ));
     }
 
-    /// The widget of the tab in front.
     /// Puts the keyboard on the tab in front (F6, ACC-015); false when no
     /// tab is shown.
     pub(super) fn focus_front_tab(&self) -> bool {
         self.front_widget().is_some_and(|front| front.grab_focus())
     }
 
+    /// The widget of the tab in front.
     fn front_widget(&self) -> Option<gtk::Box> {
         let shown = self.imp().shown.borrow();
         shown
@@ -512,9 +513,9 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
 
 /// The Menu key and Shift+F10 on the focused tab `id`, which shows `uri`,
 /// open its menu under it with the keyboard on its first item, and the
-/// keyboard goes back where it was when the menu closes, as
-/// Shift+F10 opens the selected item's menu in Windows 11
-/// (support.microsoft.com, "Keyboard shortcuts in Windows").
+/// keyboard goes back where it was when the menu closes, as Shift+F10
+/// opens the selected item's menu in Windows 11 (support.microsoft.com,
+/// "Keyboard shortcuts in Windows").
 fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
     let shortcuts = gtk::ShortcutController::new();
     for key in [
