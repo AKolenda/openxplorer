@@ -338,3 +338,95 @@ fn a_protected_folder_still_stops_a_move_with_a_missing_item() {
     assert!(src.join("A.txt").is_file(), "nothing moved");
     assert!(questions.asked().is_empty());
 }
+
+/// A folder merged into the folder of its name is planned entry by entry,
+/// so a part of it that cannot be read when the paste runs stops the
+/// whole paste before anything moves: a protected snapshot in it must
+/// keep the whole selected tree as it is (XFER-020). Here the folder can
+/// still be passed through but no longer listed (mode 0300).
+///
+/// parity: XFER-020
+#[test]
+fn a_merged_folder_that_cannot_be_listed_moves_nothing() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("Projects/a.txt"), b"a");
+    write(&src.join("Projects/sub/.snapshot/version.txt"), b"kept");
+    fs::create_dir_all(dst.join("Projects")).unwrap();
+    let uris = vec![file_uri(&src.join("Projects"))];
+    let scan = block_on(scan_name_conflicts(
+        TransferMode::Move,
+        &uris,
+        &file_uri(&dst),
+        &Cancellation::new(),
+    ))
+    .expect("a scan");
+    fs::set_permissions(src.join("Projects"), fs::Permissions::from_mode(0o300)).unwrap();
+    let unlisted = fs::read_dir(src.join("Projects")).is_err();
+    let questions = Questions::default();
+
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[],
+        &questions.context(FailureAnswer::Skip),
+        |_| {},
+    ));
+
+    fs::set_permissions(src.join("Projects"), fs::Permissions::from_mode(0o755)).unwrap();
+    if !unlisted {
+        eprintln!("skipped: this user lists folders with mode 0300 (root)");
+        return;
+    }
+    assert!(outcome.is_err(), "{outcome:?}");
+    assert!(src.join("Projects/a.txt").is_file(), "nothing moved");
+    assert!(!dst.join("Projects/a.txt").exists());
+}
+
+/// A folder the copy could not list is asked about; once the user made it
+/// readable and answered Try Again, what it holds is checked like the
+/// rest of the tree, so a protected snapshot in it stops the whole item
+/// and nothing of it is published (XFER-020).
+///
+/// parity: XFER-020, OPS-047
+#[test]
+fn a_retried_folder_with_a_snapshot_inside_publishes_nothing() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("CopyTest/ok.txt"), b"readable");
+    write(&src.join("CopyTest/Locked/.snapshot/version.txt"), b"kept");
+    let locked = Locked(src.join("CopyTest/Locked"));
+    fs::set_permissions(&locked.0, fs::Permissions::from_mode(0o000)).unwrap();
+    if !locked.holds() {
+        return;
+    }
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&asked);
+    let path = locked.0.clone();
+    let context = OperationContext {
+        item_failure: Some(FailureAsker::new(move |item: &FailedItem| {
+            let mut seen = seen.lock().unwrap();
+            seen.push((item.name.clone(), item.cause));
+            if seen.len() == 1 {
+                // The user makes the folder readable and tries again.
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+                FailureAnswer::Retry
+            } else {
+                FailureAnswer::Skip
+            }
+        })),
+        ..OperationContext::new(snapshot_protection())
+    };
+
+    paste(TransferMode::Copy, &src, &["CopyTest"], &dst, &context);
+
+    assert!(
+        !dst.join("CopyTest/Locked/.snapshot").exists(),
+        "the snapshot is never copied"
+    );
+    assert!(!dst.join("CopyTest").exists(), "nothing of the item is published");
+    let asked = asked.lock().unwrap().clone();
+    assert_eq!(
+        asked.first().map(|(_, cause)| *cause),
+        Some(FailureCause::AccessDenied)
+    );
+}

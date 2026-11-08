@@ -84,20 +84,23 @@ impl WriteProtection {
     }
 
     /// [`check_tree`](Self::check_tree) for a selected item of a paste,
-    /// before any item runs: what cannot be read is left to the transfer
-    /// engine, which asks about that item alone while the others go on
-    /// (OPS-047), and checks it again before changing it.
+    /// before any item runs. With [`Unreadable::NotWalked`], what cannot be
+    /// read is left to the transfer engine, which asks about that item
+    /// alone while the others go on (OPS-047), and checks it again before
+    /// changing it.
     ///
     /// # Errors
     ///
     /// The refusal for the first protected location, the nesting limit or
-    /// cancellation.
+    /// cancellation; with [`Unreadable::Fails`], also a failure to read the
+    /// tree.
     pub(crate) fn check_selected_tree(
         &self,
         source: &dyn Node,
         destination: &dyn Node,
         cancel: &Cancellation,
         source_change: SourceChange,
+        unreadable: Unreadable,
     ) -> Result<(), OpsError> {
         check_write_tree_reading(
             self.guard.as_deref(),
@@ -106,7 +109,7 @@ impl WriteProtection {
             Some(destination),
             cancel,
             source_change,
-            Unreadable::NotWalked,
+            unreadable,
         )?;
         Ok(())
     }

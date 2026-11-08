@@ -10,6 +10,11 @@
 //!   denied, a special file) is asked about by itself, as Windows Explorer
 //!   asks: Retry copies it again, Skip leaves only it out, and the rest of
 //!   the folder is still copied ([`ItemFailures::entry_failed`]).
+//! - XFER-020: every entry's final location is asked of the write guard
+//!   before it is written, so a protected location the check before the
+//!   copy could not see (inside a folder it could not list, which the user
+//!   then made readable and tried again) stops the whole item, and nothing
+//!   of it is published.
 //! - Nesting deeper than [`MAX_DEPTH`] stops the copy.
 //! - XFER-016: meeting the engine's own staging name inside the source
 //!   means the destination is an alias of a folder inside the source (for
@@ -37,7 +42,7 @@ use super::modes::{
     PRIVATE_DIRECTORY_MODE,
 };
 use super::names::child_node;
-use super::node::{Node, NodeInfo, NodeKind};
+use super::node::{Node, NodeInfo, NodeKind, WriteGuard};
 use super::source_removal::CopiedItem;
 use super::staged_name::StagedName;
 use super::staging::clean_staging;
@@ -64,6 +69,9 @@ pub(crate) struct Copier<'a> {
     /// The run's accounting, which a retried entry takes the bytes of
     /// its discarded attempt back from (OPS-021).
     accounting: Option<&'a SharedAccounting>,
+    /// Asked about each entry's final location before it is written
+    /// (XFER-020).
+    guard: Option<&'a WriteGuard>,
     /// The names from the top item down to the entry being copied.
     entry_path: Vec<String>,
     /// Set when a safety rule stopped the copy (the nesting limit, an
@@ -90,6 +98,7 @@ impl<'a> Copier<'a> {
             copied: None,
             failures: None,
             accounting: None,
+            guard: None,
             entry_path: Vec::new(),
             stopped: false,
         }
@@ -99,6 +108,13 @@ impl<'a> Copier<'a> {
     /// copied, instead of failing the whole item (OPS-047).
     pub(crate) fn asking(mut self, failures: &'a mut ItemFailures) -> Self {
         self.failures = Some(failures);
+        self
+    }
+
+    /// Asks `guard` about each entry's final location before it is
+    /// written; a refusal stops the whole item (XFER-020).
+    pub(crate) fn guarded(mut self, guard: Option<&'a WriteGuard>) -> Self {
+        self.guard = guard;
         self
     }
 
@@ -317,9 +333,21 @@ impl<'a> Copier<'a> {
             return Ok(None);
         };
         let child_target = child_node(target, &name)?;
+        self.check_guard(child_target.as_ref())?;
         *made = Some(name);
         self.copy_inspected(child, child_target.as_ref(), &info, depth)?;
         Ok(Some(info))
+    }
+
+    /// Asks the write guard about the final location of `target`, an
+    /// entry in staging; a refusal is a safety stop of the whole item.
+    fn check_guard(&mut self, target: &dyn Node) -> Result<(), TransferError> {
+        let Some(guard) = self.guard else {
+            return Ok(());
+        };
+        // Staging sits where the item is published, so the real name in
+        // place of the staging's spells the final location.
+        guard(&self.name.reword(&target.uri())).inspect_err(|_| self.stopped = true)
     }
 
     /// Removes what a failed entry left in staging under `name` in the

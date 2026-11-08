@@ -54,11 +54,11 @@ use super::run_transfer::{
 use super::undo::{MovedItem, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::location::{kept_both_name, ItemKind};
-use crate::transfer::SourceChange;
 use crate::transfer::{
     ConflictPolicy, Landed, Node, Operation, Progress, ProgressScope, TransferEngine, TransferMode,
     TransferResult, MAX_ITEMS,
 };
+use crate::transfer::{SourceChange, Unreadable};
 
 /// The most numbers tried for a kept-both name.
 pub(super) const MAX_KEPT_NUMBER: u32 = 10_000;
@@ -205,7 +205,11 @@ pub async fn run_answered_items(
 /// folder, which alone would let a free file move before a protected
 /// folder merged elsewhere in the same selected tree is refused. An item
 /// that is gone or cannot be read does not stop the others: the engine
-/// asks about it when its turn comes (OPS-047).
+/// asks about it when its turn comes, as one item, and checks it whole
+/// before changing it (OPS-047). A selected folder merged into a folder of
+/// its name is no such item: the scan has already turned it into steps
+/// for its entries, so it must be read whole here, and a part of it that
+/// cannot be read stops the paste before anything changes.
 fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsError> {
     let source_change = if scan.mode == TransferMode::Move {
         SourceChange::Changed
@@ -216,9 +220,19 @@ fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsE
     for uri in &scan.selection {
         let source = GioNode::new(uri);
         let target = destination.child(&source.name());
-        context
-            .protection
-            .check_selected_tree(&source, target.as_ref(), &context.cancel, source_change)?;
+        let merged = scan.merged_folders.iter().any(|folder| folder == uri);
+        let unreadable = if merged {
+            Unreadable::Fails
+        } else {
+            Unreadable::NotWalked
+        };
+        context.protection.check_selected_tree(
+            &source,
+            target.as_ref(),
+            &context.cancel,
+            source_change,
+            unreadable,
+        )?;
     }
     Ok(())
 }
