@@ -313,7 +313,15 @@ impl FolderTree {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
-                if !modifiers.is_empty() {
+                // Caps Lock and Num Lock do not make it another key, as in
+                // the picker and the Properties tabs (CMD-039).
+                let held = gdk::ModifierType::CONTROL_MASK
+                    | gdk::ModifierType::SHIFT_MASK
+                    | gdk::ModifierType::ALT_MASK
+                    | gdk::ModifierType::SUPER_MASK
+                    | gdk::ModifierType::HYPER_MASK
+                    | gdk::ModifierType::META_MASK;
+                if modifiers.intersects(held) {
                     return glib::Propagation::Proceed;
                 }
                 let moved = match key {
