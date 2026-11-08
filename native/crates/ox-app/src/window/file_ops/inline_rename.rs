@@ -260,7 +260,10 @@ impl BrowserWindow {
             Some(extension) if !editor.text().trim().is_empty() => format!("{}{extension}", editor.text()),
             _ => editor.text().to_string(),
         };
-        if typed == target.name {
+        // A name the shell trims back to the old one ("Notes.txt." for
+        // "Notes.txt") is no new name either.
+        let unchanged = typed == target.name || check_typed_name(&typed).is_ok_and(|name| name == target.name);
+        if unchanged {
             self.end_rename_in_place(cell);
             if let Some(next) = self.take_rename_next() {
                 let model = self.folder_pane().model();

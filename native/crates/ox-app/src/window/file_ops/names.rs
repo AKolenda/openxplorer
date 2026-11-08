@@ -15,8 +15,15 @@
 )]
 pub(super) struct InvalidName;
 
-/// `name`, when it is not empty, `.` or `..`, and has no slash,
-/// backslash or control character (`[\/\\\x00-\x1f]` in app.js).
+/// `name` without the periods and spaces at its end, when it is not
+/// empty, `.` or `..`, and has no slash, backslash or control character
+/// (`[\/\\\x00-\x1f]` in app.js).
+///
+/// The Windows shell trims a typed name's trailing periods and spaces, as
+/// Microsoft's Naming Files, Paths, and Namespaces says it does not
+/// support a name ending in either, so "Archive." names an item
+/// "Archive". A name of nothing else ("...") is kept as typed, as the
+/// Python app took it.
 ///
 /// # Errors
 ///
@@ -28,7 +35,8 @@ pub(super) fn check_typed_name(name: &str) -> Result<&str, InvalidName> {
     if name.is_empty() || name == "." || name == ".." || has_forbidden_character {
         return Err(InvalidName);
     }
-    Ok(name)
+    let trimmed = name.trim_end_matches(['.', ' ']);
+    Ok(if trimmed.is_empty() { name } else { trimmed })
 }
 
 /// What the name dialogs say, while the user types, about a valid `name`
