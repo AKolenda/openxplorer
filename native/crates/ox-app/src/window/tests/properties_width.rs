@@ -921,6 +921,66 @@ fn the_tab_row_is_one_stop_and_moves_with_the_keyboard() {
     window.close();
 }
 
+/// Ctrl+1 to Ctrl+9 show the tab of that number from anywhere in the
+/// window, as in Windows' dialogs (Microsoft's "Move to that tab
+/// number"); a number with no tab does nothing.
+///
+/// parity: PROP-001, CMD-039
+#[gtk::test]
+fn ctrl_and_a_number_show_that_tab_of_properties() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Short")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Short");
+    let window = properties_of_selection(&test, "Short Properties");
+    general(&window);
+    let count = window.tab_labels().len();
+    let press = |keyval: gtk::gdk::Key| {
+        let shortcuts: Vec<gtk::Shortcut> = window
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+            .flat_map(|controller| {
+                controller
+                    .iter::<glib::Object>()
+                    .filter_map(Result::ok)
+                    .filter_map(|item| item.downcast::<gtk::Shortcut>().ok())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let found = shortcuts
+            .into_iter()
+            .find(|shortcut| {
+                shortcut
+                    .trigger()
+                    .and_downcast::<gtk::KeyvalTrigger>()
+                    .is_some_and(|trigger| {
+                        trigger.keyval() == keyval
+                            && trigger.modifiers() == gtk::gdk::ModifierType::CONTROL_MASK
+                    })
+            })
+            .expect("a Ctrl shortcut for the number");
+        found
+            .action()
+            .expect("an action")
+            .activate(gtk::ShortcutActionFlags::empty(), &window, None);
+    };
+
+    press(gtk::gdk::Key::_2);
+    assert_eq!(window.selected_tab().as_deref(), Some("sharing"), "Ctrl+2");
+    press(gtk::gdk::Key::_1);
+    assert_eq!(window.selected_tab().as_deref(), Some("general"), "Ctrl+1");
+    assert!(count < 9, "fewer than nine tabs: {count}");
+    press(gtk::gdk::Key::_9);
+    assert_eq!(
+        window.selected_tab().as_deref(),
+        Some("general"),
+        "no ninth tab, nothing changes"
+    );
+    window.close();
+}
+
 /// General of a folder, a file, several items, the system drive, another
 /// drive (when the computer has one) and seven tabs in two rows, light and
 /// dark, for review with `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):

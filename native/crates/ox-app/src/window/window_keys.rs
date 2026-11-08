@@ -4,7 +4,10 @@
 //!
 //! Ports the keys `onKey` in `v2.0.0:desktop/ui/app.js` handles after its
 //! `if(input)return`: Ctrl+H, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab and
-//! Ctrl+Shift+Tab, and Alt+Left, Alt+Right and Alt+Up. A text field keeps
+//! Ctrl+Shift+Tab, and Alt+Left, Alt+Right and Alt+Up. Windows 11 File
+//! Explorer's Ctrl+1 to Ctrl+9 show the tab of that number, beside the
+//! Alt+digit of Dolphin, and its Ctrl+Shift+E opens the navigation pane
+//! down to the folder shown (CMD-039). A text field keeps
 //! them, and while a dialog is open they do nothing. The one exception is
 //! `state.modalOwner`: while the active tab's Properties dialog is open,
 //! Ctrl+Tab and Ctrl+Shift+Tab switch tabs from any focus, the dialog's
@@ -30,8 +33,11 @@ enum KeyCommand {
     Window(WindowAction),
     /// Ctrl+N: the application's New window.
     NewWindow,
-    /// Alt+digit: the tab of that number, 0 for the last.
+    /// Alt+digit or Ctrl+digit: the tab of that number, 0 for the last.
     TabNumber(u32),
+    /// Ctrl+Shift+E: the navigation pane opened down to the folder shown,
+    /// with keyboard focus on it.
+    RevealInNavigationPane,
 }
 
 impl KeyCommand {
@@ -41,6 +47,7 @@ impl KeyCommand {
             KeyCommand::Window(action) => action.detailed_name(),
             KeyCommand::NewWindow => AppAction::NewWindow.detailed_name(),
             KeyCommand::TabNumber(_) => WindowAction::ShowTabNumber.detailed_name(),
+            KeyCommand::RevealInNavigationPane => REVEAL_KEY_NAME.to_owned(),
         }
     }
 
@@ -48,16 +55,21 @@ impl KeyCommand {
     fn target(self) -> Option<glib::Variant> {
         match self {
             KeyCommand::TabNumber(number) => Some(number.to_variant()),
-            KeyCommand::Window(_) | KeyCommand::NewWindow => None,
+            KeyCommand::Window(_) | KeyCommand::NewWindow | KeyCommand::RevealInNavigationPane => None,
         }
     }
 }
 
+/// The name the keyboard shortcuts window knows Ctrl+Shift+E by; it runs
+/// no action of its own.
+pub(super) const REVEAL_KEY_NAME: &str = "reveal-in-navigation-pane";
+
 /// Each command and its keys, as GTK parses them. Ctrl+Page Down and
 /// Ctrl+Page Up are the tab keys of GNOME apps and browsers, and Ctrl+]
 /// and Ctrl+[ Dolphin's, added to app.js's Ctrl+Tab; Alt+digit and
-/// Ctrl+Shift+T are Dolphin's too.
-const WINDOW_KEYS: [(KeyCommand, &str); 22] = [
+/// Ctrl+Shift+T are Dolphin's too. Ctrl+1 to Ctrl+9 are Windows 11 File
+/// Explorer's tab keys; Ctrl+0 stays the text size's reset.
+const WINDOW_KEYS: [(KeyCommand, &str); 23] = [
     (KeyCommand::Window(WindowAction::Hidden), "<Primary>h"),
     (KeyCommand::Window(WindowAction::Sidebar), "F9"),
     (KeyCommand::Window(WindowAction::FolderTree), "F7"),
@@ -76,19 +88,20 @@ const WINDOW_KEYS: [(KeyCommand, &str); 22] = [
         KeyCommand::Window(WindowAction::PreviousTab),
         "<Primary><Shift>ISO_Left_Tab|<Primary><Shift>Tab|<Primary>Page_Up|<Primary>bracketleft",
     ),
-    (KeyCommand::TabNumber(1), "<Alt>1|<Alt>KP_1"),
-    (KeyCommand::TabNumber(2), "<Alt>2|<Alt>KP_2"),
-    (KeyCommand::TabNumber(3), "<Alt>3|<Alt>KP_3"),
-    (KeyCommand::TabNumber(4), "<Alt>4|<Alt>KP_4"),
-    (KeyCommand::TabNumber(5), "<Alt>5|<Alt>KP_5"),
-    (KeyCommand::TabNumber(6), "<Alt>6|<Alt>KP_6"),
-    (KeyCommand::TabNumber(7), "<Alt>7|<Alt>KP_7"),
-    (KeyCommand::TabNumber(8), "<Alt>8|<Alt>KP_8"),
-    (KeyCommand::TabNumber(9), "<Alt>9|<Alt>KP_9"),
+    (KeyCommand::TabNumber(1), "<Alt>1|<Alt>KP_1|<Primary>1"),
+    (KeyCommand::TabNumber(2), "<Alt>2|<Alt>KP_2|<Primary>2"),
+    (KeyCommand::TabNumber(3), "<Alt>3|<Alt>KP_3|<Primary>3"),
+    (KeyCommand::TabNumber(4), "<Alt>4|<Alt>KP_4|<Primary>4"),
+    (KeyCommand::TabNumber(5), "<Alt>5|<Alt>KP_5|<Primary>5"),
+    (KeyCommand::TabNumber(6), "<Alt>6|<Alt>KP_6|<Primary>6"),
+    (KeyCommand::TabNumber(7), "<Alt>7|<Alt>KP_7|<Primary>7"),
+    (KeyCommand::TabNumber(8), "<Alt>8|<Alt>KP_8|<Primary>8"),
+    (KeyCommand::TabNumber(9), "<Alt>9|<Alt>KP_9|<Primary>9"),
     (KeyCommand::TabNumber(0), "<Alt>0|<Alt>KP_0"),
     (KeyCommand::Window(WindowAction::Back), "<Alt>Left"),
     (KeyCommand::Window(WindowAction::Forward), "<Alt>Right"),
     (KeyCommand::Window(WindowAction::Up), "<Alt>Up"),
+    (KeyCommand::RevealInNavigationPane, "<Primary><Shift>e"),
 ];
 
 /// Each of these keys and the action it runs, by its detailed name; a
@@ -98,7 +111,9 @@ pub(super) fn window_key_bindings() -> impl Iterator<Item = (String, &'static st
     WINDOW_KEYS.into_iter().map(|(command, keys)| {
         let name = match command {
             KeyCommand::TabNumber(number) => format!("{}::{number}", command.detailed_name()),
-            KeyCommand::Window(_) | KeyCommand::NewWindow => command.detailed_name(),
+            KeyCommand::Window(_) | KeyCommand::NewWindow | KeyCommand::RevealInNavigationPane => {
+                command.detailed_name()
+            }
         };
         (name, keys)
     })
@@ -127,6 +142,10 @@ impl BrowserWindow {
     fn run_window_key(&self, command: KeyCommand) -> glib::Propagation {
         if !self.window_key_applies(command) {
             return glib::Propagation::Proceed;
+        }
+        if command == KeyCommand::RevealInNavigationPane {
+            self.reveal_in_navigation_pane();
+            return glib::Propagation::Stop;
         }
         // GTK fails only for an action no ancestor has; the window and
         // the application register all of these.
@@ -172,7 +191,7 @@ mod tests {
             .map_or_else(|| panic!("{command:?} has keys"), |(_, keys)| *keys)
     }
 
-    /// parity: TAB-001, TAB-002, TAB-005, TAB-006, TAB-007, TAB-016, TAB-043
+    /// parity: TAB-001, TAB-002, TAB-005, TAB-006, TAB-007, TAB-016, TAB-043, CMD-039
     #[gtk::test]
     fn the_tab_and_window_keys_are_those_of_on_key() {
         assert_eq!(keys_of(KeyCommand::Window(WindowAction::NewTab)), "<Primary>t");
@@ -188,6 +207,13 @@ mod tests {
         );
         assert!(keys_of(KeyCommand::TabNumber(1)).starts_with("<Alt>1"));
         assert!(keys_of(KeyCommand::TabNumber(0)).starts_with("<Alt>0"));
+        assert!(keys_of(KeyCommand::TabNumber(1)).ends_with("|<Primary>1"));
+        assert!(keys_of(KeyCommand::TabNumber(9)).ends_with("|<Primary>9"));
+        assert!(
+            !keys_of(KeyCommand::TabNumber(0)).contains("<Primary>"),
+            "Ctrl+0 resets the text size"
+        );
+        assert_eq!(keys_of(KeyCommand::RevealInNavigationPane), "<Primary><Shift>e");
         for (_, keys) in WINDOW_KEYS {
             let trigger = gtk::ShortcutTrigger::parse_string(keys);
             assert!(trigger.is_some(), "GTK parses {keys}");

@@ -173,6 +173,24 @@ impl ChooserReply {
         self.state.responder.borrow().is_none()
     }
 
+    /// A reply no application waits for, over `connection`: the developer
+    /// snapshot hook shows a Save dialog with it for a picture
+    /// (`OPENXPLORER_SAVE_DIALOG`). Answering it does nothing.
+    #[doc(hidden)]
+    pub fn unattended(request: ChooserRequest, connection: gio::DBusConnection) -> Self {
+        let (responder, _nobody) = oneshot::channel();
+        Self {
+            state: Rc::new(ReplyState {
+                request,
+                connection,
+                requester: String::new(),
+                responder: RefCell::new(Some(responder)),
+                handle: RefCell::new(None),
+                on_close: RefCell::new(None),
+            }),
+        }
+    }
+
     /// Runs `on_close` when the portal closes the dialog (its `Request`'s
     /// `Close`). The call has then been answered with "other".
     pub fn connect_closed(&self, on_close: impl FnOnce() + 'static) {

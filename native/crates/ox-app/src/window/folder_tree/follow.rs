@@ -55,6 +55,45 @@ impl FolderTree {
         ));
     }
 
+    /// Ctrl+Shift+E (CMD-039): opens the folders from the top down to the
+    /// folder shown, and its own subfolders, selects it and puts keyboard
+    /// focus on it, as Windows 11's navigation pane does. False while the
+    /// tree is hidden or the tab shows no folder.
+    pub(in crate::window) fn reveal_shown(&self) -> bool {
+        let imp = self.imp();
+        if !imp.options.get().shown || !self.is_mapped() {
+            return false;
+        }
+        let Some(shown) = imp.shown.borrow().clone() else {
+            return false;
+        };
+        let walk = imp.walk.get() + 1;
+        imp.walk.set(walk);
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = tree)]
+            self,
+            async move {
+                tree.walk_to(&shown, walk).await;
+                if tree.imp().walk.get() != walk {
+                    return;
+                }
+                let Some((position, row)) = tree.selected_row() else {
+                    return;
+                };
+                tree.focus_row(position);
+                // Scrolling focuses the row only where the list has focus.
+                if let Some(view) = tree.imp().view.get() {
+                    view.grab_focus();
+                }
+                row.set_expanded(true);
+                if let Some(listing) = model::load_children(&row) {
+                    model::loaded(&listing).await;
+                }
+            }
+        ));
+        true
+    }
+
     /// Opens the folders from the top down to `target` and selects it, or
     /// the closest folder on the way that is still there.
     async fn walk_to(&self, target: &gio::File, walk: u64) {
