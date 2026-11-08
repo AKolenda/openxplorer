@@ -555,6 +555,66 @@ mod tests {
         }
     }
 
+    /// The pixels "9,999,999 KB", a Size of 9.5 GB, takes in the list's
+    /// own font, which a larger desktop font or text size widens.
+    fn size_text_width(view: &DetailsView) -> i32 {
+        let text = ox_core::format::column_size_text(Some(9_999_999 * 1024));
+        view.column_view().create_pango_layout(Some(&text)).pixel_size().0
+    }
+
+    /// The room a Size cell's text has in a Size column `fixed` pixels
+    /// wide: its padding (folder-views.css) is 12 pixels at the start and
+    /// 26 at the end, the list's own 14 among them.
+    fn size_text_room(fixed: i32) -> i32 {
+        fixed - 12 - 26
+    }
+
+    /// Size's default and narrowest width follow the list's font: with a
+    /// font as large as the desktop's at 125% text size, "9,999,999 KB"
+    /// still fits a Size column nobody resized, one restored from a saved
+    /// width narrower than that, and one dragged as narrow as it goes; a
+    /// wider width the user chose is kept.
+    ///
+    /// parity: VIEW-028
+    #[gtk::test]
+    fn size_fits_nine_digits_of_kilobytes_in_the_lists_own_font() {
+        let (view, _model) = view_of(&["a.txt"]);
+        let large = gtk::CssProvider::new();
+        large.load_from_string("columnview { font-family: \"Noto Sans\", sans-serif; font-size: 18.3px; }");
+        let display = gdk::Display::default().expect("a display");
+        gtk::style_context_add_provider_for_display(&display, &large, gtk::STYLE_PROVIDER_PRIORITY_USER);
+        let window = gtk::Window::new();
+        window.set_child(Some(&view));
+        window.present();
+        wait_until("the list to be shown", || view.column_view().is_mapped());
+        let size = view.column(SortColumn::Size).expect("a Size column");
+        let text = size_text_width(&view);
+        let fits = |what: &str| {
+            assert!(
+                text <= size_text_room(size.fixed_width()),
+                "{what}: {text} pixels of text in a {}-pixel column",
+                size.fixed_width()
+            );
+        };
+
+        view.apply_column_widths(None);
+        fits("the default width");
+        let narrow = ox_core::settings::ColumnWidths {
+            size: Some(90),
+            ..Default::default()
+        };
+        view.apply_column_widths(Some(&narrow));
+        fits("a narrower saved width");
+        size.set_fixed_width(0);
+        fits("a drag past the column's start");
+        let wide = size.fixed_width() + 60;
+        size.set_fixed_width(wide);
+        assert_eq!(size.fixed_width(), wide, "a wider width the user chose is kept");
+
+        gtk::style_context_remove_provider_for_display(&display, &large);
+        window.destroy();
+    }
+
     /// Name fills the spare width until it is resized; then its width is
     /// exact.
     ///
