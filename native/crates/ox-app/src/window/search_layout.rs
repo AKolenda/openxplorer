@@ -176,7 +176,7 @@ impl BrowserWindow {
         self.set_action_state(WindowAction::SearchContents, &contents.to_variant());
         let words = if windows_layout { words } else { Vec::new() };
         for pane in self.folder_panes() {
-            let marks = if self.is_active_pane(&pane) {
+            let marks = if self.is_active_pane(pane) {
                 words.clone()
             } else {
                 Vec::new()

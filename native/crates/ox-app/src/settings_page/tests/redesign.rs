@@ -20,7 +20,7 @@ use crate::test_support::harness::{descendants, wait_until};
 /// then, and the row that offers it now, then the rows added since and the
 /// rows of the commands that came from the command bar's "…" menu
 /// (CMD-007), by their menu labels.
-const MOVED_ROWS: [(&str, &str); 72] = [
+const MOVED_ROWS: [(&str, &str); 73] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
