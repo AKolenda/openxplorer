@@ -730,7 +730,11 @@ fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
             .expect("a third group");
         let (_, title, line) = heading_parts(&test, 2);
         press_on(&test, &line, 1);
-        assert_eq!(selected(&test), group, "{view}: the rest of the row selects the group");
+        assert_eq!(
+            selected(&test),
+            group,
+            "{view}: the rest of the row selects the group"
+        );
         test.window.folder_pane().model().select_only(0);
         press_on(&test, &title, 1);
         assert_eq!(selected(&test), group, "{view}: the title selects the group");
