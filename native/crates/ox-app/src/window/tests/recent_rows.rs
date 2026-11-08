@@ -293,3 +293,28 @@ fn a_recent_location_opens_in_place_in_a_new_tab_and_in_a_new_window() {
         opened.window().current_uri().as_deref() == Some(folder.as_str())
     });
 }
+
+/// Open with on a Recent row whose file is gone, an application from the
+/// menu or Choose another app, says "Item Not Found", as opening it does.
+///
+/// parity: SIDE-026
+#[gtk::test]
+fn open_with_on_a_recent_file_that_is_gone_says_item_not_found() {
+    let (fixture, test, _) = selected_recent_file();
+    let _tool = TextTool::install();
+    fs::rename(fixture.path("Documents"), fixture.path("Moved")).expect("the folder can move");
+
+    for (action, target) in [("open-with-app", Some(TextTool::ID)), ("open-with", None)] {
+        test.activate(action, target);
+
+        let dialog = open_dialog(&test);
+        assert_eq!(dialog.title_text(), "Item Not Found", "{action}");
+        let message = dialog.message_text();
+        assert!(
+            message.contains("Could not find this item"),
+            "{action}: {message}"
+        );
+        dialog.press("OK");
+        super::file_ops_support::wait_for_no_dialog(&test);
+    }
+}
