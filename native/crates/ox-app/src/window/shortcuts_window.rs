@@ -321,9 +321,14 @@ impl BrowserWindow {
     }
 
     /// The keyboard shortcuts window: a search field, then one list per
-    /// group, which the search narrows to the lines that match.
+    /// group, which the search narrows to the lines that match
+    /// ([`query_matches`]) as you type. Names and keys wrap, so the window
+    /// fits over a narrow window, and the list keeps clear of the scroll
+    /// bar.
     pub(super) fn shortcuts_dialog(&self) -> Dialog {
         let dialog = Dialog::new(self, ox_core::i18n::gettext_static("Keyboard shortcuts"), "");
+        dialog.keep_clear_of_scroll_bar();
+        self.fit_shortcuts_dialog(&dialog);
         let search = dialog.add_text_field(ox_core::i18n::gettext_static("Search shortcuts"), "");
         let (rows, _) = self.shortcut_rows();
         let mut groups: BTreeMap<Group, Vec<&ShortcutRow>> = BTreeMap::new();
@@ -335,36 +340,18 @@ impl BrowserWindow {
             let Some(rows) = groups.get(&group) else {
                 continue;
             };
-            let grid = gtk::Grid::builder().column_spacing(24).row_spacing(6).build();
-            let mut lines = Vec::new();
-            for (line, row) in (0..).zip(rows.iter()) {
-                let name = gtk::Label::builder()
-                    .label(&row.label)
-                    .xalign(0.0)
-                    .hexpand(true)
-                    .build();
-                let keys = row.keys.join(", ");
-                let key_label = gtk::Label::builder()
-                    .label(&keys)
-                    .xalign(1.0)
-                    .css_classes(["dialog-hint"])
-                    .build();
-                grid.attach(&name, 0, line, 1, 1);
-                grid.attach(&key_label, 1, line, 1, 1);
-                let haystack = format!("{} {keys}", row.label).to_lowercase();
-                lines.push((name, key_label, haystack));
-            }
+            let (grid, lines) = shortcut_grid(group, rows);
             dialog.add_labelled(group.label(), &grid);
             lists.push((grid, lines));
         }
         search.connect_changed(move |search| {
-            let query = search.text().to_lowercase();
+            let query = search.text();
             for (grid, lines) in &lists {
                 let mut any = false;
-                for (name, keys, haystack) in lines {
-                    let matches = haystack.contains(query.trim());
-                    name.set_visible(matches);
-                    keys.set_visible(matches);
+                for line in lines {
+                    let matches = line.matches(&query);
+                    line.name.set_visible(matches);
+                    line.keys.set_visible(matches);
                     any |= matches;
                 }
                 Dialog::set_field_visible(grid, any);
@@ -373,6 +360,139 @@ impl BrowserWindow {
         dialog.add_button(ox_core::i18n::gettext_static("Close"), ButtonStyle::Accent);
         dialog
     }
+
+    /// Keeps `dialog` within this window's width, less the room a dialog
+    /// keeps around it, when the window is narrower than the dialog's
+    /// usual width.
+    fn fit_shortcuts_dialog(&self, dialog: &Dialog) {
+        let room = self.width() - 2 * DIALOG_MARGIN;
+        if room > 0 && room < dialog.default_width() {
+            dialog.set_default_size(room.max(NARROWEST_DIALOG), -1);
+        }
+    }
+}
+
+/// The room a dialog keeps on either side of a narrow window
+/// (`.modal-layer`'s 25px, as above and below it).
+const DIALOG_MARGIN: i32 = 25;
+
+/// The narrowest the shortcuts window gets.
+const NARROWEST_DIALOG: i32 = 280;
+
+/// One line of the shortcuts window and what its search looks at.
+struct ShortcutLine {
+    name: gtk::Label,
+    keys: gtk::Label,
+    label: String,
+    section: String,
+    combinations: Vec<String>,
+}
+
+impl ShortcutLine {
+    /// Whether the search `query` shows this line.
+    fn matches(&self, query: &str) -> bool {
+        query_matches(query, &self.label, &self.section, &self.combinations)
+    }
+}
+
+/// The grid of `group`'s `rows`: names at the left and keys at the right,
+/// both wrapping when the window is narrow.
+fn shortcut_grid(group: Group, rows: &[&ShortcutRow]) -> (gtk::Grid, Vec<ShortcutLine>) {
+    let grid = gtk::Grid::builder().column_spacing(24).row_spacing(6).build();
+    let mut lines = Vec::new();
+    for (line, row) in (0..).zip(rows.iter()) {
+        let name = gtk::Label::builder()
+            .label(&row.label)
+            .xalign(0.0)
+            .hexpand(true)
+            .wrap(true)
+            .wrap_mode(gtk::pango::WrapMode::WordChar)
+            .build();
+        let key_label = gtk::Label::builder()
+            .label(row.keys.join(", "))
+            .xalign(1.0)
+            .justify(gtk::Justification::Right)
+            .wrap(true)
+            .wrap_mode(gtk::pango::WrapMode::WordChar)
+            .css_classes(["dialog-hint"])
+            .build();
+        grid.attach(&name, 0, line, 1, 1);
+        grid.attach(&key_label, 1, line, 1, 1);
+        lines.push(ShortcutLine {
+            name,
+            keys: key_label,
+            label: row.label.clone(),
+            section: group.label().to_owned(),
+            combinations: row.keys.clone(),
+        });
+    }
+    (grid, lines)
+}
+
+/// The words of `text` as the search compares them: lower case, with a
+/// "+" or "-" between two keys read as a space, a "+", "-" or "*" on its
+/// own read as the key's name, brackets dropped, and each word in one
+/// spelling: "ctrl" for "control", "esc" for "escape", "del" for
+/// "delete", "num" for "keypad" and "numeric".
+fn search_words(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.to_lowercase().chars().collect();
+    let mut spaced = String::new();
+    for (index, &character) in chars.iter().enumerate() {
+        let before = index.checked_sub(1).and_then(|before| chars.get(before));
+        let after = chars.get(index + 1);
+        let joins_keys = |character: Option<&char>| {
+            character.is_some_and(|other| !other.is_whitespace() && !matches!(other, '+' | '-'))
+        };
+        match character {
+            '+' | '-' if joins_keys(before) && after.is_some_and(|other| !other.is_whitespace()) => {
+                spaced.push(' ');
+            }
+            '+' => spaced.push_str(" plus "),
+            '-' => spaced.push_str(" minus "),
+            '*' => spaced.push_str(" asterisk "),
+            '(' | ')' => spaced.push(' '),
+            other => spaced.push(other),
+        }
+    }
+    spaced
+        .split_whitespace()
+        .map(|word| match word {
+            "control" => "ctrl",
+            "escape" => "esc",
+            "delete" => "del",
+            "keypad" | "numeric" => "num",
+            other => other,
+        })
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Whether the search `query` finds the shortcut named `label` in the
+/// section `section`, whose key combinations, as the window shows them,
+/// are `combinations`: when the query's text is in its name, section or
+/// keys, or when each word of the query is a key of one of the
+/// combinations, in any order, or begins a word of its name or section.
+/// A one-letter word must be a key, so "shift e" finds Ctrl+Shift+E and
+/// not every Shift key whose name has a word starting with "e".
+fn query_matches(query: &str, label: &str, section: &str, combinations: &[String]) -> bool {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return true;
+    }
+    let text = format!("{label} {section} {}", combinations.join(", ")).to_lowercase();
+    if text.contains(&query) {
+        return true;
+    }
+    let words = search_words(&query);
+    let named = search_words(&format!("{label} {section}"));
+    let in_name = |word: &str| word.chars().count() > 1 && named.iter().any(|named| named.starts_with(word));
+    let fits = |keys: &[String]| words.iter().all(|word| keys.contains(word) || in_name(word));
+    if combinations.is_empty() {
+        return fits(&[]);
+    }
+    combinations
+        .iter()
+        .any(|combination| fits(&search_words(combination)))
 }
 
 #[cfg(test)]
@@ -485,6 +605,61 @@ mod tests {
         assert!(shown_after("f3").contains(&"Search".to_owned()));
         assert!(shown_after("alt+p").contains(&"Details pane".to_owned()));
         dialog.finish();
+    }
+
+    /// The search's words: one spelling, the separators between keys
+    /// dropped, a key that is "+", "-" or "*" named.
+    ///
+    /// parity: CMD-032
+    #[test]
+    fn the_search_reads_keys_however_typed() {
+        assert_eq!(search_words("Ctrl+Shift+E"), ["ctrl", "shift", "e"]);
+        assert_eq!(search_words("control-shift-e"), ["ctrl", "shift", "e"]);
+        assert_eq!(search_words("  ctrl   shift e "), ["ctrl", "shift", "e"]);
+        assert_eq!(search_words("Num +"), ["num", "plus"]);
+        assert_eq!(search_words("Num -"), ["num", "minus"]);
+        assert_eq!(search_words("Num *"), ["num", "asterisk"]);
+        assert_eq!(search_words("Ctrl++"), ["ctrl", "plus"]);
+        assert_eq!(
+            search_words("Ctrl+Plus (numeric keypad)"),
+            ["ctrl", "plus", "num", "num"]
+        );
+        assert_eq!(search_words("Escape"), ["esc"]);
+        assert_eq!(search_words("Delete"), ["del"]);
+        assert_eq!(search_words("Ctrl+,"), ["ctrl", ","]);
+    }
+
+    /// A query finds a shortcut by one of its key combinations in any
+    /// order, by words of its name or section, or as plain text; a
+    /// one-letter word must be a key.
+    ///
+    /// parity: CMD-032
+    #[test]
+    fn a_query_finds_a_shortcut_by_its_keys_or_words() {
+        let keys = ["Shift+Ctrl+E".to_owned()];
+        let reveal = |query: &str| query_matches(query, "Open the navigation pane", "Navigation", &keys);
+        for query in [
+            "ctrl shift e",
+            "Ctrl+Shift+E",
+            "shift e",
+            "e shift ctrl",
+            "control-shift-e",
+            "",
+            "nav pane",
+        ] {
+            assert!(reveal(query), "{query:?}");
+        }
+        for query in ["ctrl shift x", "alt e", "shift o"] {
+            assert!(!reveal(query), "{query:?}");
+        }
+        let copy = ["Ctrl+C".to_owned(), "Ctrl+Insert".to_owned()];
+        assert!(query_matches("control insert", "Copy", "Files", &copy));
+        assert!(
+            !query_matches("c insert", "Copy", "Files", &copy),
+            "keys of two combinations"
+        );
+        let close = ["Esc".to_owned()];
+        assert!(query_matches("escape", "Close", "Dialogs", &close));
     }
 
     /// The labels the search leaves shown after typing `query`.
