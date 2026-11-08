@@ -320,6 +320,8 @@ fn path_field(body: &gtk::Box, text: &str) -> gtk::Entry {
     caption.set_mnemonic_widget(Some(&entry));
     let browse = gtk::Button::with_label(&ox_core::i18n::gettext("Browse…"));
     browse.add_css_class(ButtonStyle::Bordered.css_class());
+    // Drawn as the Extract dialog's Browse…, as tall as the field.
+    browse.add_css_class("extract-browse");
     browse.set_valign(gtk::Align::Center);
     browse.connect_clicked(glib::clone!(
         #[weak]

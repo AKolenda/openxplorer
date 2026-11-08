@@ -140,3 +140,19 @@ window.ox .size-scan button { min-height: 25px; min-width: 82px; }
    level slider's "Faster" and "Smaller" in the muted colour. */
 ox-dialog-layer .ox-dialog.create-archive .dialog-title { color: @ox_accent; font-size: 1.25em; font-weight: 400; }
 ox-dialog-layer .ox-dialog.create-archive .quiet-level { color: @ox_muted; }
+/* Its drop-downs as Windows' combo boxes: a push button's frame around
+   the choice and its chevron, as Properties draws them. */
+ox-dialog-layer .ox-dialog.create-archive dropdown > button {
+  min-height: 30px;
+  padding: 0 8px 0 10px;
+  border-radius: 4px;
+  border: 1px solid @ox_control_stroke;
+  border-bottom-color: @ox_control_stroke_bottom;
+  background-color: @ox_control_fill;
+  color: @ox_text;
+  box-shadow: none;
+}
+ox-dialog-layer .ox-dialog.create-archive dropdown > button:hover { background-color: @ox_control_fill_hover; }
+ox-dialog-layer .ox-dialog.create-archive dropdown > button:checked,
+ox-dialog-layer .ox-dialog.create-archive dropdown > button:active { background-color: @ox_control_fill_pressed; }
+ox-dialog-layer .ox-dialog.create-archive dropdown > button arrow { -gtk-icon-size: 12px; color: @ox_muted; }
