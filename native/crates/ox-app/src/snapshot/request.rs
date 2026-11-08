@@ -288,6 +288,38 @@ mod tests {
         assert!(refused.is_err(), "rename is not a scene step");
     }
 
+    /// A Save dialog starts in a local folder, as the desktop portal names
+    /// it by its path: a start with no local path, such as a share's
+    /// address, or a relative path is refused, never replaced by the home
+    /// folder.
+    #[test]
+    fn a_save_dialog_needs_a_local_folder_to_start_in() {
+        let with_start = |start: &str| {
+            request(&[
+                (SNAPSHOT_VARIABLE, "a.png"),
+                (SAVE_DIALOG_VARIABLE, "1"),
+                (START_VARIABLE, start),
+            ])
+        };
+        for refused in ["smb://studio-nas/projects", "Documents", "pc:"] {
+            let message = with_start(refused).expect_err(refused).to_string();
+            assert!(message.starts_with("OPENXPLORER_START cannot be"), "{message}");
+        }
+        for accepted in ["/home/demo/Documents", "file:///home/demo/Documents"] {
+            let asked = with_start(accepted)
+                .expect(accepted)
+                .expect("a snapshot is asked for");
+            assert!(asked.save_dialog);
+        }
+        let home = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SAVE_DIALOG_VARIABLE, "1")]);
+        assert!(home.is_ok(), "without a start, the home folder");
+        let shared = request(&[
+            (SNAPSHOT_VARIABLE, "a.png"),
+            (START_VARIABLE, "smb://studio-nas/projects"),
+        ]);
+        assert!(shared.is_ok(), "a browser window may start on a share");
+    }
+
     #[test]
     fn an_unknown_value_is_refused_with_its_variable() {
         let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (VIEW_VARIABLE, "filmstrip")]);

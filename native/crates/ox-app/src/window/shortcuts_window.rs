@@ -509,7 +509,7 @@ mod tests {
         assert_eq!(keys_of("Refresh"), ["F5", "Ctrl+R", "Ctrl+F5"]);
         assert_eq!(keys_of("Paste"), ["Ctrl+V", "Shift+Insert"]);
         assert_eq!(
-            keys_of("Open the navigation pane to the current folder"),
+            keys_of("Open the navigation pane to the current folder, while it is shown"),
             ["Shift+Ctrl+E"]
         );
         assert_eq!(
