@@ -324,7 +324,8 @@ fn refresh_names_its_folder_and_f5_and_ctrl_r_work_even_from_text_fields() {
 
     // Application accelerators run before the focused widget, so a text
     // field never keeps them (`onKey` handles F5 before its input check).
-    assert_eq!(keys, ["F5", "<Control>r"]);
+    // Ctrl+F5 is Windows' other Refresh key (CMD-039).
+    assert_eq!(keys, ["F5", "<Control>r", "<Control>F5"]);
 }
 
 /// parity: NAV-015

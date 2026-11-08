@@ -34,8 +34,10 @@ use crate::window::BrowserWindow;
 const FILE_SHORTCUTS: [(WindowAction, &str); 11] = [
     (WindowAction::SelectNone, "Escape"),
     (WindowAction::Cut, "<Primary>x"),
-    (WindowAction::Copy, "<Primary>c"),
-    (WindowAction::Paste, "<Primary>v"),
+    // Ctrl+Insert and Shift+Insert are Windows' other Copy and Paste keys
+    // (CMD-039).
+    (WindowAction::Copy, "<Primary>c|<Primary>Insert"),
+    (WindowAction::Paste, "<Primary>v|<Shift>Insert"),
     (WindowAction::CopyPath, "<Primary><Shift>c|<Primary><Alt>c"),
     (WindowAction::Rename, "F2"),
     // Ctrl+D is Explorer's other Delete key (CMD-036).

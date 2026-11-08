@@ -17,9 +17,10 @@ use gtk::{gdk, glib};
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::file_ops::file_key_bindings;
 use super::focus_regions::region_key_bindings;
+use super::folder_tree::tree_key_bindings;
 use super::navigation_buttons::navigation_key_bindings;
 use super::selection_keys::selection_key_bindings;
-use super::window_keys::window_key_bindings;
+use super::window_keys::{window_key_bindings, REVEAL_KEY_NAME};
 use super::BrowserWindow;
 use super::ButtonStyle;
 use crate::dialog::Dialog;
@@ -99,7 +100,7 @@ fn describe(name: &str) -> Option<(Group, String)> {
         };
         return Some((Group::TabsAndWindows, label));
     }
-    if let Some(found) = describe_view(name) {
+    if let Some(found) = describe_view(name).or_else(|| describe_navigation_pane_key(name)) {
         return Some(found);
     }
     let (group, label) = match name {
@@ -180,6 +181,19 @@ fn describe(name: &str) -> Option<(Group, String)> {
     Some((group, label.to_owned()))
 }
 
+/// The navigation pane's keys of CMD-039, which run no action of their
+/// own: Ctrl+Shift+E and the keypad's plus, minus and asterisk.
+fn describe_navigation_pane_key(name: &str) -> Option<(Group, String)> {
+    let label = match name {
+        REVEAL_KEY_NAME => crate::i18n::message_id("Open the navigation pane to the current folder"),
+        "tree-open" => crate::i18n::message_id("Expand the selected folder in the navigation pane"),
+        "tree-close" => crate::i18n::message_id("Collapse the selected folder in the navigation pane"),
+        "tree-open-all" => crate::i18n::message_id("Expand every folder under the selected one"),
+        _ => return None,
+    };
+    Some((Group::Navigation, ox_core::i18n::gettext_static(label).to_owned()))
+}
+
 /// What the keys of a command's `triggers`, alternatives split at `|`,
 /// read as: GTK's own labels, without `ISO_Left_Tab`'s duplicates. Keypad
 /// keys are left out as duplicates while the command has another key, and
@@ -206,10 +220,17 @@ fn key_labels<'a>(triggers: impl IntoIterator<Item = &'a str>) -> Vec<String> {
 }
 
 /// What a key reads as: GTK's label, except Ctrl with the keypad's plus,
-/// which reads as Windows lists it, "Ctrl+Plus (numeric keypad)".
+/// which reads as Windows lists it, "Ctrl+Plus (numeric keypad)", and the
+/// navigation pane's keypad plus, minus and asterisk alone, which read
+/// "Num +", "Num -" and "Num *", as Windows names them after Num Lock
+/// (CMD-039).
 fn key_label(key: gdk::Key, modifiers: gdk::ModifierType) -> String {
     if key == gdk::Key::KP_Add && modifiers == gdk::ModifierType::CONTROL_MASK {
         return ox_core::i18n::gettext_static("Ctrl+Plus (numeric keypad)").to_owned();
+    }
+    let keypad = [gdk::Key::KP_Add, gdk::Key::KP_Subtract, gdk::Key::KP_Multiply];
+    if let (true, Some(symbol)) = (modifiers.is_empty() && keypad.contains(&key), key.to_unicode()) {
+        return ox_core::i18n::format_message("Num {key}", &[("key", &symbol.to_string())]);
     }
     gtk::accelerator_get_label(key, modifiers).to_string()
 }
@@ -228,6 +249,7 @@ fn bindings(app: &gtk::Application) -> Vec<(String, String)> {
         .chain(selection_key_bindings())
         .chain(navigation_key_bindings())
         .chain(region_key_bindings())
+        .chain(tree_key_bindings())
         .chain([
             ("menu-key".to_owned(), MENU_KEY),
             ("win.context-menu".to_owned(), CLASSIC_MENU_KEY),
@@ -382,7 +404,7 @@ mod tests {
             .find(|row| row.label == "Copy")
             .expect("Copy is listed");
         assert_eq!(copy.group, Group::Files);
-        assert_eq!(copy.keys, ["Ctrl+C"]);
+        assert_eq!(copy.keys, ["Ctrl+C", "Ctrl+Insert"]);
         assert!(rows.iter().any(|row| row.label == "Keyboard shortcuts"));
         assert!(rows.iter().any(|row| row.label == "Help" && row.keys == ["F1"]));
         let fit = rows
@@ -461,5 +483,43 @@ mod tests {
         assert!(shown_after("f3").contains(&"Search".to_owned()));
         assert!(shown_after("alt+p").contains(&"Details pane".to_owned()));
         dialog.finish();
+    }
+
+    /// The keys of CMD-039 are listed: Ctrl+1 beside Alt+1, Ctrl+F5 for
+    /// Refresh, Ctrl+Insert and Shift+Insert, Ctrl+Shift+E and the
+    /// navigation pane's keypad keys, each under its own name.
+    ///
+    /// parity: CMD-032, CMD-039
+    #[gtk::test]
+    fn the_shortcuts_window_lists_the_navigation_pane_and_tab_keys() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+
+        let (rows, unknown) = test.window.shortcut_rows();
+        let keys_of = |label: &str| {
+            rows.iter()
+                .find(|row| row.label == label)
+                .map_or_else(|| panic!("{label} is listed"), |row| row.keys.clone())
+        };
+
+        assert!(unknown.is_empty(), "every binding has a name: {unknown:?}");
+        assert_eq!(keys_of("Go to tab 1"), ["Alt+1", "Ctrl+1"]);
+        assert_eq!(keys_of("Go to tab 9"), ["Alt+9", "Ctrl+9"]);
+        assert_eq!(keys_of("Go to the last tab"), ["Alt+0"]);
+        assert_eq!(keys_of("Refresh"), ["F5", "Ctrl+R", "Ctrl+F5"]);
+        assert_eq!(keys_of("Paste"), ["Ctrl+V", "Shift+Insert"]);
+        assert_eq!(
+            keys_of("Open the navigation pane to the current folder"),
+            ["Shift+Ctrl+E"]
+        );
+        assert_eq!(
+            keys_of("Expand the selected folder in the navigation pane"),
+            ["Num +"]
+        );
+        assert_eq!(
+            keys_of("Collapse the selected folder in the navigation pane"),
+            ["Num -"]
+        );
+        assert_eq!(keys_of("Expand every folder under the selected one"), ["Num *"]);
     }
 }

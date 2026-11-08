@@ -2951,7 +2951,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "Ctrl+1 Icons, Ctrl+2 Compact, Ctrl+3 Details"
 native = "done"
-native_note = "Explorer's keys: Ctrl+Shift+1 to 4 choose Extra large, Large, Medium and Small icons, Ctrl+Shift+6 chooses Details and Ctrl+Shift+7 and 8 choose Tiles and Content (VIEW-071; window/tests/tiles_and_content.rs, tiles_and_content_show_each_items_type_and_size_beside_its_name); the View menu shows them (native/crates/ox-app/src/window/actions.rs, native/crates/ox-app/src/window/command_bar/menus.rs; native/crates/ox-app/src/window/tests/views.rs, a_chosen_view_starts_at_the_top_and_has_explorers_keys). Ctrl+Shift+5 (List) waits for the compact view (VIEW-008); Ctrl+1 to 3 are not bound. Since 2026-11-04 the View menu no longer shows the keys as text, as Windows 11's shows none; they still choose the views."
+native_note = "Explorer's keys: Ctrl+Shift+1 to 4 choose Extra large, Large, Medium and Small icons, Ctrl+Shift+6 chooses Details and Ctrl+Shift+7 and 8 choose Tiles and Content (VIEW-071; window/tests/tiles_and_content.rs, tiles_and_content_show_each_items_type_and_size_beside_its_name); the View menu shows them (native/crates/ox-app/src/window/actions.rs, native/crates/ox-app/src/window/command_bar/menus.rs; native/crates/ox-app/src/window/tests/views.rs, a_chosen_view_starts_at_the_top_and_has_explorers_keys). Ctrl+Shift+5 (List) waits for the compact view (VIEW-008); Ctrl+1 to 3 are not view keys: Ctrl+1 to 9 show tabs, as in Windows 11 File Explorer (CMD-039). The keys also work as a keyboard sends them, with the digit key's shifted symbol (CMD-039, view_keys.rs). Since 2026-11-04 the View menu no longer shows the keys as text, as Windows 11's shows none; they still choose the views."
 
 [[feature]]
 id = "VIEW-010"
@@ -6695,6 +6695,22 @@ python_tests = []
 bridge = []
 native = "done"
 native_note = "Tests: native/crates/ox-app/src/window/context_menu/entries.rs (send_to_lists_windows_destinations_in_windows_order, send_to_leaves_out_what_the_computer_lacks, send_to_disables_what_cannot_run_and_says_why, a_folder_classic_menu_keeps_the_python_order_and_shortcuts), native/crates/ox-core/src/ops/shortcuts.rs (the naming, numbering, never-replace, unsupported-location and Undo tests), native/crates/ox-core/src/integration/bluetooth_sender.rs (adapter and sender detection, argument lists) and native/crates/ox-app/src/window/tests/send_to.rs (the submenu from the keyboard, a copy to Documents with Undo, the Desktop shortcut, a saved share that is not connected connecting first). It opens beside the menu, as Windows cascades it and like every submenu (ui-spec 4.9). Windows puts a hidden .lnk on a shortcut; a symbolic link has none, so the name is exactly what Explorer shows. Mail recipient uses the Email portal rather than xdg-email: the portal is the desktop's own way, already used by Share, and passes the files as descriptors."
+
+[[feature]]
+id = "CMD-039"
+area = "CMD"
+title = "More of Windows 11 File Explorer's keys: tabs, the navigation pane, Refresh, Copy and Paste"
+behaviour = "As in Windows 11 File Explorer (Microsoft's list of keyboard shortcuts in Windows): Ctrl+1 to Ctrl+9 show the tab of that number, beside Alt+1 to Alt+9 (TAB-007), from anywhere but a text field; Ctrl+0 stays the text size's reset. Ctrl+Shift+E opens the navigation pane down to the folder shown and puts keyboard focus on it: in the folder tree (SIDE-028) when it is shown, with the folders on the way and the folder's own subfolders opened and the folder selected, else on the place's row, its collapsed section (SIDE-033) expanded; a text field keeps the key and a hidden navigation pane stays hidden. In the navigation pane the keypad's plus (Num Lock with plus) opens the selected folder of the tree or expands a collapsed section, its minus closes it, and its asterisk opens every folder below the selected one (at most 1,000 folders and 32 levels) or expands the section; on any row of the pane the keys stay there instead of being typed into the file list. Ctrl+F5 refreshes as F5 and Ctrl+R do. Ctrl+Insert copies and Shift+Insert pastes the selection as Ctrl+C and Ctrl+V do, where a text field keeps both for its text. Ctrl+Shift+1 to 8 switch the view as a keyboard sends them: Ctrl+Shift with the digit key's shifted symbol (% for 5 on a US layout), which GTK does not match to the accelerators; the window takes each digit key's shifted symbol from the keyboard layout. The keyboard shortcuts window (CMD-032) lists them, the keypad's keys as Num +, Num - and Num *."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "https://support.microsoft.com/en-us/windows/keyboard-shortcuts-in-windows-dcc61a57-8ff0-cffe-9796-cb9706c75eec (File Explorer keyboard shortcuts)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "Ctrl+1 to 9 are further triggers of win.show-tab-number and Ctrl+Shift+E a key of its own in the capture-phase window keys (native/crates/ox-app/src/window/window_keys.rs), which a text field and a dialog keep; folder_tree/actions.rs (reveal_in_navigation_pane), folder_tree/follow.rs (reveal_shown) and sidebar/collapsing.rs (reveal_location) carry it out. The keypad keys are in the folder tree's and the places list's own key handlers (folder_tree.rs, sidebar/collapsing.rs). Ctrl+F5 is an application accelerator of win.refresh (actions.rs); Ctrl+Insert and Shift+Insert are bubble-phase file keys (file_ops/shortcuts.rs). view_keys.rs adds the shifted-symbol triggers of the view keys. Backspace in an Open or Save dialog stays Back (NAV-004), not the Windows dialog's up one level, until the owner decides. Tests: native/crates/ox-app/src/window/tests/more_explorer_keys.rs, window_keys.rs, view_keys.rs and shortcuts_window.rs (the_shortcuts_window_lists_the_navigation_pane_and_tab_keys); the job's real-input checks drove the built app with xdotool on Xvfb."
 
 [[feature]]
 id = "OPS-001"

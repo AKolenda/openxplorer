@@ -13,7 +13,7 @@ OpenXplorer shows your folders, drives, phones and network shares in one tabbed 
 - The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.
 - The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.
 - Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.
-- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.
+- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+1 to Ctrl+9, or Alt+1 to Alt+9, show the tab of that number. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.
 - Type the start of a name to select it in the folder.
 
 The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
@@ -41,6 +41,8 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 - As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.
 - F11 shows the window full screen; press it again to get the window back as it was.
 - Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size.
+- Ctrl+Shift+E opens the navigation pane down to the folder you are in and moves to it there. In the navigation pane, the keypad's plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it.
+- Ctrl+F5 refreshes like F5. Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V.
 
 ## Search
 

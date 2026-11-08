@@ -152,6 +152,19 @@ impl Sidebar {
                 if !modifiers.is_empty() {
                     return glib::Propagation::Proceed;
                 }
+                // The keypad's plus and asterisk expand the section, and
+                // its minus collapses it, as Num Lock with them does in
+                // Windows' navigation pane; on any row they stay here
+                // rather than typing into the file list (CMD-039).
+                let keypad = match key {
+                    gdk::Key::KP_Add | gdk::Key::KP_Multiply => Some(true),
+                    gdk::Key::KP_Subtract => Some(false),
+                    _ => None,
+                };
+                if let Some(expand) = keypad {
+                    sidebar.expand_focused_section(expand);
+                    return glib::Propagation::Stop;
+                }
                 let expand = match key {
                     gdk::Key::Right | gdk::Key::KP_Right => true,
                     gdk::Key::Left | gdk::Key::KP_Left => false,
@@ -165,6 +178,21 @@ impl Sidebar {
             }
         ));
         list.add_controller(keys);
+    }
+
+    /// Ctrl+Shift+E (CMD-039): expands the collapsed section whose head
+    /// stands for the location, and puts keyboard focus on the row
+    /// highlighted for it, as Windows 11's navigation pane opens down to
+    /// the folder shown; false when no row stands for it.
+    pub(in crate::window) fn reveal_location(&self) -> bool {
+        let head = self.list().selected_row().and_then(|row| self.head_section(&row));
+        if let Some(section) = head.filter(|section| self.is_collapsed(*section)) {
+            self.collapse_section(section, false);
+        }
+        match self.list().selected_row() {
+            Some(row) => row.grab_focus(),
+            None => false,
+        }
     }
 
     /// Expands, or collapses, the section whose head row has keyboard
