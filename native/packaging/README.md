@@ -61,6 +61,8 @@ never takes over the Python app's name. Every package build sets it.
 | Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
 | Permanent-delete helper | `/opt/<command>/libexec/openxplorer-admin-delete` | `/usr/libexec/<command>/openxplorer-admin-delete` | none |
 | Its polkit action | `/usr/share/polkit-1/actions/<id>.policy` | same | none |
+| Update helper (stable) | `/opt/openxplorer/libexec/openxplorer-install-update` | none | none |
+| Its polkit action and rule | `/usr/share/polkit-1/actions/<id>.install-update.policy`, `/usr/share/polkit-1/rules.d/60-<id>.install-update.rules` | none | none |
 | Translations | `/usr/share/locale/<lang>/LC_MESSAGES/<package>.mo` | same | under `/app/share` |
 
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
@@ -99,6 +101,25 @@ never takes over the Python app's name. Every package build sets it.
   `pkexec` to start one with, so the app refuses a whole-folder `admin://`
   deletion there and says why, rather than falling back to the walk by path
   that `crates/ox-core/src/admin_delete.rs` exists to replace.
+- **Update helper.** `openxplorer-install-update`
+  (`crates/ox-core/src/bin/openxplorer-install-update.rs`) installs the
+  latest release as root when the user updates the app, so that an
+  administrator at the machine is not asked for a password. Only the
+  stable Debian package installs it, because only that package updates
+  itself; the RPM, Arch and Flatpak packages update through their own
+  package manager. It takes only a version: it fetches the release itself,
+  refuses anything but the latest release newer than the installed
+  package, verifies the download's size, SHA-256 digest and package
+  identity, and installs it with `apt-get`
+  (`crates/ox-core/src/update/install_helper.rs` documents the threat
+  model). Its polkit action (`<id>.install-update`) asks for an
+  administrator by default (`auth_admin_keep`), and its polkit rule lets a
+  member of `sudo`, `admin` or `wheel` in an active local session through
+  without a password. An administrator who wants the prompt back adds a
+  rule that runs earlier, in `/etc/polkit-1/rules.d`. Polkit older than
+  0.106 reads no rules files and keeps asking. The app falls back to
+  `pkexec apt-get` on its own download when a package has no helper, or
+  when the helper cannot reach GitHub.
 - **Translations.** One compiled catalogue for each `native/po/<lang>.po`,
   written by `tools/i18n.py` without GNU gettext; the app looks for it in the
   `locale` folder of every XDG data directory (`crates/ox-core/src/i18n.rs`).

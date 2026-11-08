@@ -4,14 +4,26 @@
 //! of `v2.0.0:desktop/updater.py` and `v2.0.0:desktop/winspace.py`.
 
 use std::ffi::{OsStr, OsString};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::iter;
+use std::os::unix::process::ExitStatusExt;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use gio::prelude::*;
 
 use super::{CommandOutput, PackageCommand, PackageManager, UpdateError};
+use crate::transfer::Cancellation;
+
+/// How often the cancellation watcher looks whether the user cancelled.
+const CANCEL_POLL: Duration = Duration::from_millis(100);
+
+/// The line that asks the update helper to stop before APT starts.
+pub(super) const CANCEL_LINE: &[u8] = b"cancel\n";
 
 /// Runs the real package tools.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -19,29 +31,148 @@ pub struct SystemPackageManager;
 
 impl PackageManager for SystemPackageManager {
     fn run(&self, command: &PackageCommand) -> Result<CommandOutput, UpdateError> {
-        run_to_completion(command.program(), &command.arguments(), command.time_limit())
+        run_command(
+            command.program(),
+            &command.arguments(),
+            command.time_limit(),
+            command.reads_input(),
+        )
+    }
+
+    /// Streams the output of a command without a time limit (the update
+    /// helper); a command with one runs as [`run`](PackageManager::run)
+    /// does.
+    fn run_reporting(
+        &self,
+        command: &PackageCommand,
+        on_line: &mut dyn FnMut(&str),
+        cancel: &Cancellation,
+    ) -> Result<CommandOutput, UpdateError> {
+        if command.time_limit().is_some() {
+            let output = self.run(command)?;
+            output.stdout.lines().for_each(&mut *on_line);
+            return Ok(output);
+        }
+        run_streaming(command.program(), &command.arguments(), on_line, cancel)
     }
 }
 
-/// Runs `program` with `arguments` and the parent's standard input, as
-/// Python's `subprocess.run(..., capture_output=True)`, and collects its
-/// output. With a `time_limit`, a command still running then is killed.
+/// Runs `program` with `arguments`, handing each line of its standard
+/// output to `on_line` as it comes, and writes [`CANCEL_LINE`] to its
+/// standard input once `cancel` is cancelled. It is never killed.
+///
+/// # Errors
+///
+/// [`UpdateError::Io`] if it cannot start or be waited for.
+fn run_streaming(
+    program: &'static str,
+    arguments: &[OsString],
+    on_line: &mut dyn FnMut(&str),
+    cancel: &Cancellation,
+) -> Result<CommandOutput, UpdateError> {
+    let mut child = Command::new(program)
+        .args(arguments)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| UpdateError::io(program, error))?;
+    let watcher = CancelWatcher::start(child.stdin.take(), cancel);
+    let errors = child.stderr.take().map(|mut stderr| {
+        thread::spawn(move || {
+            let mut bytes = Vec::new();
+            // A broken pipe only ends what there is to read.
+            let _ = stderr.read_to_end(&mut bytes);
+            bytes
+        })
+    });
+    let mut stdout = Vec::new();
+    if let Some(output) = child.stdout.take() {
+        let mut reader = BufReader::new(output);
+        let mut line = Vec::new();
+        while matches!(reader.read_until(b'\n', &mut line), Ok(count) if count > 0) {
+            let text = String::from_utf8_lossy(&line);
+            on_line(text.trim_end_matches('\n'));
+            stdout.extend_from_slice(&line);
+            line.clear();
+        }
+    }
+    let status = child.wait().map_err(|error| UpdateError::io(program, error));
+    watcher.stop();
+    let stderr = errors.and_then(|thread| thread.join().ok()).unwrap_or_default();
+    let status = status?;
+    Ok(CommandOutput {
+        exit_status: status
+            .code()
+            .unwrap_or_else(|| -status.signal().unwrap_or_default()),
+        stdout: String::from_utf8_lossy(&stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+    })
+}
+
+/// Writes [`CANCEL_LINE`] to a child's standard input once the user
+/// cancels, and closes it when stopped.
+struct CancelWatcher {
+    stopped: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl CancelWatcher {
+    /// Watches `cancel` for the child whose standard input is `input`.
+    fn start(input: Option<std::process::ChildStdin>, cancel: &Cancellation) -> Self {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let thread = input.map(|mut input| {
+            let watching = Arc::clone(&stopped);
+            let cancel = cancel.clone();
+            thread::spawn(move || {
+                while !watching.load(Ordering::SeqCst) {
+                    if cancel.is_cancelled() {
+                        // A helper that already ended no longer reads.
+                        let _ = input.write_all(CANCEL_LINE);
+                        let _ = input.flush();
+                        return;
+                    }
+                    thread::sleep(CANCEL_POLL);
+                }
+            })
+        });
+        Self { stopped, thread }
+    }
+
+    /// Ends the watch and waits for its thread.
+    fn stop(mut self) {
+        self.stopped.store(true, Ordering::SeqCst);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// Runs `program` with `arguments`, as Python's `subprocess.run(...,
+/// capture_output=True)`, and collects its output. It reads the parent's
+/// standard input only if `reads_input`; otherwise it reads `/dev/null`.
+/// With a `time_limit`, a command still running then is killed.
 ///
 /// # Errors
 ///
 /// [`UpdateError::Io`] if it cannot start or be waited for, and
 /// [`UpdateError::PackageToolTimedOut`] if it was killed at its limit.
-pub(super) fn run_to_completion(
+pub(super) fn run_command(
     program: &'static str,
     arguments: &[OsString],
     time_limit: Option<Duration>,
+    reads_input: bool,
 ) -> Result<CommandOutput, UpdateError> {
     let argv: Vec<&OsStr> = iter::once(OsStr::new(program))
         .chain(arguments.iter().map(OsString::as_os_str))
         .collect();
-    let flags = gio::SubprocessFlags::STDIN_INHERIT
-        | gio::SubprocessFlags::STDOUT_PIPE
-        | gio::SubprocessFlags::STDERR_PIPE;
+    // Without STDIN_INHERIT, GIO gives the command /dev/null.
+    let input = if reads_input {
+        gio::SubprocessFlags::STDIN_INHERIT
+    } else {
+        gio::SubprocessFlags::NONE
+    };
+    let flags = input | gio::SubprocessFlags::STDOUT_PIPE | gio::SubprocessFlags::STDERR_PIPE;
     let process = gio::Subprocess::newv(&argv, flags).map_err(|error| process_error(program, &error))?;
     let cancellable = gio::Cancellable::new();
     let watchdog = time_limit.map(|limit| Watchdog::start(cancellable.clone(), limit));
@@ -163,7 +294,7 @@ mod tests {
     fn output_and_exit_status_are_collected() {
         let arguments = script_arguments("echo out; echo err >&2; exit 3");
 
-        let output = run_to_completion(SHELL, &arguments, None).unwrap();
+        let output = run_command(SHELL, &arguments, None, true).unwrap();
 
         assert_eq!(output.exit_status, 3);
         assert_eq!(output.stdout, "out\n");
@@ -174,7 +305,7 @@ mod tests {
     fn a_command_ended_by_a_signal_reports_minus_the_signal_number() {
         let arguments = script_arguments("kill -TERM $$");
 
-        let output = run_to_completion(SHELL, &arguments, None).unwrap();
+        let output = run_command(SHELL, &arguments, None, true).unwrap();
 
         assert_eq!(output.exit_status, -Signal::TERM.as_raw());
     }
@@ -183,10 +314,11 @@ mod tests {
     fn a_command_past_its_time_limit_is_killed() {
         let started = Instant::now();
 
-        let result = run_to_completion(
+        let result = run_command(
             SHELL,
             &script_arguments("sleep 30"),
             Some(Duration::from_millis(100)),
+            true,
         );
 
         let error = result.unwrap_err();
@@ -198,8 +330,59 @@ mod tests {
     }
 
     #[test]
+    fn a_command_that_reads_no_input_gets_dev_null() {
+        let arguments = script_arguments("readlink /proc/self/fd/0");
+
+        let output = run_command(SHELL, &arguments, None, false).unwrap();
+
+        assert_eq!(output.stdout.trim(), "/dev/null");
+    }
+
+    #[test]
+    fn streamed_lines_arrive_one_by_one_with_the_whole_output() {
+        let arguments = script_arguments("echo one; echo two >&2; printf 'three'; exit 4");
+        let mut lines = Vec::new();
+
+        let output = run_streaming(
+            SHELL,
+            &arguments,
+            &mut |line| lines.push(line.to_owned()),
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+        assert_eq!(lines, ["one", "three"]);
+        assert_eq!(output.exit_status, 4);
+        assert_eq!(output.stdout, "one\nthree");
+        assert_eq!(output.stderr, "two\n");
+    }
+
+    /// The update helper hears `cancel` on its standard input, and nothing
+    /// else is written there.
+    #[test]
+    fn a_cancelled_stream_tells_the_command_to_cancel() {
+        let arguments = script_arguments("echo ready; read -r line; echo \"got $line\"");
+        let cancel = Cancellation::new();
+        let mut lines = Vec::new();
+
+        let output = run_streaming(
+            SHELL,
+            &arguments,
+            &mut |line| {
+                lines.push(line.to_owned());
+                cancel.cancel();
+            },
+            &cancel,
+        )
+        .unwrap();
+
+        assert_eq!(lines, ["ready", "got cancel"]);
+        assert!(output.is_success());
+    }
+
+    #[test]
     fn a_missing_program_is_an_io_error() {
-        let result = run_to_completion("/nonexistent/fixture-tool", &[], None);
+        let result = run_command("/nonexistent/fixture-tool", &[], None, true);
 
         assert!(matches!(result, Err(UpdateError::Io { .. })));
     }
