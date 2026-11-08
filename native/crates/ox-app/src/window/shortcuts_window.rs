@@ -784,6 +784,15 @@ mod tests {
         dialog.finish();
     }
 
+    /// Puts the text size back to its default when dropped.
+    struct TextSizeReset<'a>(&'a TestWindow);
+
+    impl Drop for TextSizeReset<'_> {
+        fn drop(&mut self) {
+            self.0.activate("text-reset", None);
+        }
+    }
+
     /// Over the narrowest window (670 pixels, its minimum) with the largest
     /// text, the shortcuts window is no wider than the window: long names
     /// and keys wrap instead.
@@ -793,6 +802,9 @@ mod tests {
     fn the_shortcuts_window_fits_a_narrow_window() {
         let fixture = Fixture::standard();
         let test = TestWindow::open(&fixture.uri());
+        // The text size is shared by every test window: put it back after
+        // this test, also when it fails.
+        let _reset = TextSizeReset(&test);
         for _ in 0..10 {
             test.activate("text-larger", None);
         }
