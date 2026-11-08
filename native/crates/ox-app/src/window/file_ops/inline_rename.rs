@@ -262,7 +262,8 @@ impl BrowserWindow {
         };
         // A name the shell trims back to the old one ("Notes.txt." for
         // "Notes.txt") is no new name either.
-        let unchanged = typed == target.name || check_typed_name(&typed).is_ok_and(|name| name == target.name);
+        let unchanged =
+            typed == target.name || check_typed_name(&typed).is_ok_and(|name| name == target.name);
         if unchanged {
             self.end_rename_in_place(cell);
             if let Some(next) = self.take_rename_next() {

@@ -137,7 +137,9 @@ impl BrowserWindow {
                 };
                 let back = left.replace(glib::WeakRef::new()).upgrade();
                 match back {
-                    Some(widget) if window.focused_region() == Some(Region::Commands) && widget.is_mapped() => {
+                    Some(widget)
+                        if window.focused_region() == Some(Region::Commands) && widget.is_mapped() =>
+                    {
                         widget.grab_focus();
                         glib::Propagation::Stop
                     }

@@ -553,13 +553,20 @@ fn alt_alone_moves_the_keyboard_to_the_command_bar_and_escape_brings_it_back() {
         focused == first || focused.is_ancestor(&first),
         "the first control, {first:?}, has the keyboard, not {focused:?}"
     );
-    assert!(gtk::prelude::GtkWindowExt::gets_focus_visible(&test.window), "the focus ring shows");
+    assert!(
+        gtk::prelude::GtkWindowExt::gets_focus_visible(&test.window),
+        "the focus ring shows"
+    );
 
     pointer.tap_key(gdk::Key::Escape);
     wait_until("the file list to take the keyboard back", || {
         test.window.focused_region() == Some(Region::Files)
     });
-    assert_eq!(test.window.folder_pane().focused_position(), item, "the same item");
+    assert_eq!(
+        test.window.folder_pane().focused_position(),
+        item,
+        "the same item"
+    );
 
     pointer.hold_key(gdk::Key::Alt_L);
     pointer.tap_key(gdk::Key::d);

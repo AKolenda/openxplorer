@@ -190,7 +190,9 @@ fn listed_item_uri(uri: &str) -> Option<String> {
     let path: Vec<u8> = percent_encoding::percent_decode_str(escaped_path).collect();
     let typed_would_be_refused = std::str::from_utf8(&path).map_or(true, has_control_character);
     let segments = path[1..].split(|byte| *byte == b'/');
-    let is_listed_path = segments.into_iter().all(|segment| !matches!(segment, b"" | b"." | b".."))
+    let is_listed_path = segments
+        .into_iter()
+        .all(|segment| !matches!(segment, b"" | b"." | b".."))
         && !(scheme.eq_ignore_ascii_case("smb") && path.contains(&b'\\'));
     if !typed_would_be_refused || !is_listed_path {
         return None;
@@ -814,7 +816,10 @@ mod tests {
             "escaped as Python escapes"
         );
         assert!(require_item_uri("smb://nas/a%0Ab").is_err(), "a whole share");
-        assert!(require_item_uri("file:///tmp/../a%0Ab").is_err(), "not a listed item's URI");
+        assert!(
+            require_item_uri("file:///tmp/../a%0Ab").is_err(),
+            "not a listed item's URI"
+        );
         assert!(require_item_uri("file:///tmp/a%0Ab?x").is_err());
         assert!(canonical("smb://nas/a%00b").is_err(), "a typed address");
         assert!(canonical("file:///tmp/a%0Ab").is_err(), "a typed address");

@@ -166,8 +166,13 @@ mod tests {
         let size_line = |bytes| {
             let mut entry = file_entry("Notes 2.txt");
             entry.size = Some(bytes);
-            let tooltip = RowTooltip::default().text(&FileItem::new(entry)).unwrap_or_default();
-            tooltip.lines().find(|line| line.starts_with("Size:")).map(str::to_owned)
+            let tooltip = RowTooltip::default()
+                .text(&FileItem::new(entry))
+                .unwrap_or_default();
+            tooltip
+                .lines()
+                .find(|line| line.starts_with("Size:"))
+                .map(str::to_owned)
         };
         assert_eq!(size_line(4_486).as_deref(), Some("Size: 4.38 KB"));
         assert_eq!(size_line(1).as_deref(), Some("Size: 1 byte"));
