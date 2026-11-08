@@ -818,7 +818,8 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
 }
 
 /// The Menu key and Shift+F10 on the focused tab open that tab's menu
-/// under it, with the keyboard on its first item, as Shift+F10 opens
+/// under it, with the keyboard on its first item, and closing it gives
+/// the keyboard back to the tab, as Shift+F10 opens
 /// "the context menu for the selected item" in Windows 11 and arrow keys
 /// move along the tab row
 /// (support.microsoft.com, "Keyboard shortcuts in Windows").
@@ -863,6 +864,7 @@ fn the_menu_key_and_shift_f10_open_the_focused_tabs_menu() {
         (gtk::gdk::Key::F10, gtk::gdk::ModifierType::SHIFT_MASK),
     ] {
         let action = shortcut_for(key, modifiers).unwrap_or_else(|| panic!("a focused tab takes {key:?}"));
+        assert!(tab.grab_focus(), "the tab in front takes the keyboard");
         assert!(action.activate(gtk::ShortcutActionFlags::empty(), &tab, None));
         let menu = test.window.tab_strip().menu();
         assert!(menu.is_visible(), "{key:?} opens the tab menu");
@@ -876,6 +878,11 @@ fn the_menu_key_and_shift_f10_open_the_focused_tabs_menu() {
             "the file list's menu stays shut"
         );
         menu.popdown();
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&test.window),
+            Some(tab.clone()),
+            "Escape gives the keyboard back to the tab"
+        );
     }
 }
 

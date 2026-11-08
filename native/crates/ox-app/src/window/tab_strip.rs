@@ -112,6 +112,10 @@ mod imp {
         pub(super) layout: TemplateChild<TabLayout>,
         /// The tabs' context menu, built by `constructed`.
         pub(super) menu: OnceCell<MenuPopover>,
+        /// What had the keyboard when the Menu key or Shift+F10 opened the
+        /// tabs' menu, which takes it back when the menu closes; `None`
+        /// when a right-click opened it.
+        pub(super) menu_opener: glib::WeakRef<gtk::Widget>,
         /// The list of open windows, shown below the tab in front.
         pub(super) windows_menu: OnceCell<MenuPopover>,
         /// The widgets the skin draws the separators and the curves at the
@@ -167,6 +171,11 @@ mod imp {
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
+            menu.connect_closed(glib::clone!(
+                #[weak(rename_to = strip)]
+                self.obj(),
+                move |_| strip.give_the_keyboard_back()
+            ));
             self.menu.set(menu).expect("constructed runs once per object");
             let windows_menu = MenuPopover::new(Vec::new());
             windows_menu.set_position(gtk::PositionType::Bottom);
@@ -349,6 +358,17 @@ impl TabStrip {
         })
     }
 
+    /// Gives the keyboard back to what had it when a key opened the tabs'
+    /// menu, as the file list's menu does, when that is still shown: a
+    /// closed or moved tab has nothing to take it back.
+    fn give_the_keyboard_back(&self) {
+        if let Some(opener) = self.imp().menu_opener.upgrade() {
+            if opener.is_drawable() {
+                opener.grab_focus();
+            }
+        }
+    }
+
     /// Opens the tab menu `entries` at `point` in the strip.
     fn show_menu(&self, entries: Vec<MenuEntry>, point: graphene::Point) {
         let Some(menu) = self.imp().menu.get() else {
@@ -485,7 +505,8 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
 }
 
 /// The Menu key and Shift+F10 on the focused tab `id`, which shows `uri`,
-/// open its menu under it with the keyboard on its first item, as
+/// open its menu under it with the keyboard on its first item, and the
+/// keyboard goes back where it was when the menu closes, as
 /// Shift+F10 opens the selected item's menu in Windows 11
 /// (support.microsoft.com, "Keyboard shortcuts in Windows").
 fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
@@ -500,6 +521,8 @@ fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
                 return glib::Propagation::Proceed;
             };
             let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let focus = tab.root().and_then(|root| root.focus());
+            strip.imp().menu_opener.set(focus.as_ref());
             strip.show_menu_under_tab(id, tab_menu(id, &uri, is_only_tab));
             glib::Propagation::Stop
         });
@@ -526,6 +549,7 @@ fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
         let in_tab = graphene::Point::new(x as f32, y as f32);
         if let Some(point) = tab.compute_point(&strip, &in_tab) {
             let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            strip.imp().menu_opener.set(None);
             strip.show_menu(tab_menu(id, &uri, is_only_tab), point);
         }
     });
