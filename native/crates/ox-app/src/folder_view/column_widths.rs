@@ -51,18 +51,16 @@ const fn edge_gutter(column: SortColumn) -> u32 {
 /// Width of a column nobody resized (`columnDefaults` in app.js). Name has
 /// none: it takes the remaining space. Date modified shows the time too,
 /// so it starts wider than the web app's 152 pixels, enough for
-/// `12/31/2026 11:59 PM` at 125% text size. Size writes whole kilobytes,
-/// as Windows' Size column does, so it starts wider than the web app's 90
-/// pixels, enough for ten digits of them (`9,999,999,999 KB`, a 9 TB file)
-/// and so for a 6 GB file's `6,291,456 KB`.
+/// `12/31/2026 11:59 PM` at 125% text size. Size keeps the web app's 90
+/// pixels here, but the view widens it to [`size_minimum`], measured in the
+/// list's font, which is wider for a size such as `6,291,456 KB`.
 const fn default_width(column: SortColumn) -> Option<u32> {
     match column {
         SortColumn::Name => None,
         SortColumn::Modified | SortColumn::Created | SortColumn::Deleted => Some(176),
         SortColumn::FolderPath | SortColumn::OriginalLocation => Some(330),
         SortColumn::Type => Some(135),
-        SortColumn::Size => Some(130),
-        SortColumn::Extension => Some(90),
+        SortColumn::Size | SortColumn::Extension => Some(90),
         SortColumn::Owner | SortColumn::Permissions => Some(110),
     }
 }
@@ -74,6 +72,25 @@ pub(crate) fn start_width(column: SortColumn, saved: Option<&ColumnWidths>) -> O
     let saved = saved.and_then(|widths| widths.get(settings_column(column)));
     let width = saved.or(default_width(column))?;
     Some(width.clamp(*limits.start(), *limits.end()))
+}
+
+/// The size the Size column fits whole at its narrowest and by default:
+/// `9,999,999 KB`, 9.5 GB, as Windows' Size column writes it.
+pub(crate) const SIZE_THAT_FITS: u64 = 9_999_999 * 1024;
+
+/// A Size cell's padding beside its text, without the list's end gutter:
+/// 12 pixels at the start and 26 at the end, 14 of them the gutter
+/// (folder-views.css), and 2 more so rounding never cuts the last digit.
+const SIZE_TEXT_PADDING: i32 = 12 + 26 - 14 + 2;
+
+/// The narrowest width Size may have, in the pixels settings save, when
+/// [`SIZE_THAT_FITS`] is `text_width` pixels wide in the list's font:
+/// the text and its padding, within the column's limits. A larger desktop
+/// font or text size makes it wider, so the size is never cut short.
+pub(crate) fn size_minimum(text_width: i32) -> u32 {
+    let limits = width_limits(SortColumn::Size);
+    let wanted = u32::try_from(text_width + SIZE_TEXT_PADDING).unwrap_or(0);
+    wanted.clamp(*limits.start(), *limits.end())
 }
 
 /// GTK's fixed width for `column` starting `width` pixels wide: the width
@@ -151,7 +168,7 @@ mod tests {
         assert_eq!(start_width(SortColumn::Modified, None), Some(176));
         assert_eq!(start_width(SortColumn::FolderPath, None), Some(330));
         assert_eq!(start_width(SortColumn::Type, None), Some(135));
-        assert_eq!(start_width(SortColumn::Size, None), Some(130));
+        assert_eq!(start_width(SortColumn::Size, None), Some(90));
     }
 
     /// parity: VIEW-028
@@ -218,5 +235,16 @@ mod tests {
             None,
             "Name still fills the space"
         );
+    }
+
+    /// Size's narrowest width is its measured text and padding, never
+    /// below the Python app's 70 pixels nor above its 600.
+    ///
+    /// parity: VIEW-028
+    #[test]
+    fn size_holds_its_measured_text() {
+        assert_eq!(size_minimum(80), 106);
+        assert_eq!(size_minimum(10), 70);
+        assert_eq!(size_minimum(900), 600);
     }
 }

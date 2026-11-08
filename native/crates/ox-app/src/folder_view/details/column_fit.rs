@@ -75,6 +75,12 @@ impl DetailsView {
             }
         ));
         header.add_controller(double_click);
+        // The list's font is known once it is shown, and Size follows it.
+        self.column_view().connect_map(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |_| view.fit_size_to_its_font()
+        ));
         let titles = self.titles(&header);
         for ((column, view_column), (_, title)) in self.view_columns().zip(titles) {
             // The title holds its column, so the column holds it weakly.
@@ -82,6 +88,7 @@ impl DetailsView {
                 title.update_property(&[gtk::accessible::Property::ValueNow(start)]);
             }
             let title = title.downgrade();
+            let view = self.downgrade();
             view_column.connect_fixed_width_notify(move |view_column| {
                 let width = view_column.fixed_width();
                 let saved = column_widths::saved_width(column, width);
@@ -95,7 +102,15 @@ impl DetailsView {
                     // A column with a width of its own stops filling the
                     // space: after a resize, every width is exact.
                     view_column.set_expand(false);
-                    let clamped = column_widths::clamped_fixed_width(column, width);
+                    let mut clamped = column_widths::clamped_fixed_width(column, width);
+                    // Size never gets narrower than its text in the list's
+                    // font, whatever drags or keys ask.
+                    if column == SortColumn::Size {
+                        if let Some(view) = view.upgrade() {
+                            let narrowest = column_widths::fixed_width(column, Some(view.size_minimum()));
+                            clamped = clamped.max(narrowest);
+                        }
+                    }
                     if clamped != width {
                         view_column.set_fixed_width(clamped);
                     }
@@ -364,11 +379,11 @@ mod tests {
         for _ in 0..20 {
             view.title_key(SortColumn::Size, gdk::Key::Left);
         }
-        let narrowest = column_widths::clamped_fixed_width(SortColumn::Size, 0);
+        let narrowest = column_widths::fixed_width(SortColumn::Size, Some(view.size_minimum()));
         assert_eq!(
             size.fixed_width(),
             narrowest,
-            "Size stops at its 70-pixel minimum"
+            "Size stops where its text still fits"
         );
     }
 
@@ -451,7 +466,11 @@ mod tests {
             let text = column_widths::fixed_width(column, Some(column_widths::fitted_width(column, widest)));
             let title = view.title_width(column);
             assert!(title > 0, "{column:?} has a title");
-            let expected = text.max(column_widths::clamped_fixed_width(column, title));
+            let mut expected = text.max(column_widths::clamped_fixed_width(column, title));
+            if column == SortColumn::Size {
+                // Never narrower than its text in the list's font.
+                expected = expected.max(column_widths::fixed_width(column, Some(view.size_minimum())));
+            }
             assert_eq!(view_column.fixed_width(), expected, "{column:?}");
             assert!(!view_column.expands(), "{column:?}");
         }
@@ -517,42 +536,6 @@ mod tests {
             "{text} pixels of text in a {}-pixel column",
             column.fixed_width()
         );
-    }
-
-    /// Size starts wide enough for a size of ten digits of kilobytes, as
-    /// the Size column writes a 9 TB file ("9,999,999,999 KB"), and so for
-    /// a 6 GB one ("6,291,456 KB"), in the window's font stack at its 13
-    /// pixels, when one of its fonts is installed.
-    ///
-    /// parity: VIEW-028
-    #[gtk::test]
-    fn the_default_size_width_fits_ten_digits_of_kilobytes() {
-        let (view, _model) = view_of(&["a.txt"]);
-        if let Err(fallback) = window_font(view.column_view()) {
-            eprintln!(
-                "none of the window's fonts is installed ({fallback} draws instead); nothing to measure"
-            );
-            return;
-        }
-        let column = view.column(SortColumn::Size).expect("a Size column");
-        for text in [
-            ox_core::format::column_size_text(Some(9_999_999_999 * 1024)),
-            ox_core::format::column_size_text(Some(6 << 30)),
-        ] {
-            let layout = view.column_view().create_pango_layout(Some(&text));
-            let mut font = gtk::pango::FontDescription::from_string(WINDOW_FONT_STACK);
-            font.set_absolute_size(13.0 * f64::from(gtk::pango::SCALE));
-            layout.set_font_description(Some(&font));
-            let width = layout.pixel_size().0;
-            // The last cell's padding (folder-views.css): 12 pixels at the
-            // start, 26 at the end, the list's own 14 among them.
-            let cell_padding = 12 + 26;
-            assert!(
-                width + cell_padding <= column.fixed_width(),
-                "{text}: {width} pixels of text in a {}-pixel column",
-                column.fixed_width()
-            );
-        }
     }
 
     /// The pixels "9,999,999 KB", a Size of 9.5 GB, takes in the list's
