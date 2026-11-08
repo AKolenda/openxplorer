@@ -4,7 +4,7 @@
 //! Flatpak and other-package cases are new.
 
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rustix::fs::Access;
 
@@ -108,6 +108,22 @@ impl Installation {
         self == Self::DebianPackage
     }
 
+    /// The update helper the Debian package installed beside the app,
+    /// `/opt/openxplorer/libexec/openxplorer-install-update`, if this build
+    /// may install updates and the helper is an executable file. An older
+    /// package has none, and the app then runs `pkexec apt-get` itself.
+    ///
+    /// The path is built from the fixed package folder, never from the
+    /// running program's path or the environment, and without a `..`: it
+    /// is what pkexec compares with the polkit action's `exec.path`.
+    pub fn install_helper(self, filesystem_root: &Path) -> Option<PathBuf> {
+        if !self.can_install() {
+            return None;
+        }
+        let helper = super::install_helper::helper_beside(&filesystem_root.join(PACKAGE_ROOT));
+        is_executable_file(&helper).then_some(helper)
+    }
+
     /// Why this build cannot install updates itself, and what to use
     /// instead. The Debian and unpackaged wording is the Python app's.
     pub fn install_refusal(self) -> &'static str {
@@ -182,6 +198,39 @@ mod tests {
         assert!(installations
             .iter()
             .all(|installation| !installation.can_install()));
+    }
+
+    /// The app hands the installation to the helper only where the Debian
+    /// package put an executable one; any other build, or an older package
+    /// without it, keeps today's path.
+    #[test]
+    fn the_update_helper_is_used_only_where_the_debian_package_installed_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let helper = root
+            .path()
+            .join("opt/openxplorer/libexec/openxplorer-install-update");
+
+        assert_eq!(Installation::DebianPackage.install_helper(root.path()), None);
+        std::fs::create_dir_all(helper.parent().unwrap()).unwrap();
+        std::fs::write(&helper, b"fixture").unwrap();
+        std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(Installation::DebianPackage.install_helper(root.path()), None);
+        std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert_eq!(
+            Installation::DebianPackage.install_helper(root.path()),
+            Some(helper)
+        );
+        let others = [
+            Installation::DebianPackageWithoutTools,
+            Installation::Flatpak,
+            Installation::OtherPackage,
+            Installation::Unpackaged,
+        ];
+        for installation in others {
+            assert_eq!(installation.install_helper(root.path()), None, "{installation:?}");
+        }
     }
 
     #[test]

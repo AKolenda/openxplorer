@@ -16,9 +16,10 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::transfer::Cancellation;
 use ox_core::update::{
-    installer_name, CommandOutput, FetchError, Installation, InstalledBuild, PackageCommand, PackageManager,
-    ReleaseServer, ReleaseVersion, RestartLauncher, RuntimeIdentity, TrustedUrl, UpdateError, UpdateService,
-    UpdateServiceParts, Updater, UpdaterParts, LATEST_RELEASE_URL, REPOSITORY, RUNTIME_PROTOCOL,
+    installer_name, CommandOutput, FetchError, HelperReport, Installation, InstalledBuild, PackageCommand,
+    PackageManager, ReleaseServer, ReleaseVersion, RestartLauncher, RuntimeIdentity, TrustedUrl, UpdateError,
+    UpdateService, UpdateServiceParts, Updater, UpdaterParts, LATEST_RELEASE_URL, REPOSITORY,
+    RUNTIME_PROTOCOL,
 };
 use tempfile::TempDir;
 
@@ -109,20 +110,39 @@ impl PackageManager for SimulatedPackages {
                 "Package: openxplorer\nVersion: {NEXT}\nArchitecture: all\n"
             )),
             PackageCommand::Install(_) => {
-                let hold = self
-                    .hold_installation
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .take();
-                if let Some(hold) = hold {
-                    // The test lets APT go on; a dropped sender does too.
-                    let _ = hold.recv();
-                }
+                self.wait_while_held();
                 success("")
             }
+            // The update helper, which reports its steps as it goes.
+            PackageCommand::InstallRelease { version, .. } => {
+                self.wait_while_held();
+                let reports = [
+                    HelperReport::Downloading,
+                    HelperReport::Installing,
+                    HelperReport::Installed(*version),
+                ];
+                let lines: Vec<String> = reports.iter().map(HelperReport::encode).collect();
+                success(&lines.join("\n"))
+            }
+            PackageCommand::InstallAsRoot(_) => panic!("only the update helper runs APT as root"),
             PackageCommand::QueryInstalled => success(&format!("install ok installed\n{NEXT}")),
         };
         Ok(output)
+    }
+}
+
+impl SimulatedPackages {
+    /// Waits until the test lets the installation go on, if it holds it.
+    fn wait_while_held(&self) {
+        let hold = self
+            .hold_installation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(hold) = hold {
+            // The test lets APT go on; a dropped sender does too.
+            let _ = hold.recv();
+        }
     }
 }
 
@@ -149,6 +169,12 @@ struct SimulatedUpdates {
 
 impl SimulatedUpdates {
     fn new(installation: Installation) -> Self {
+        Self::with_helper(installation, None)
+    }
+
+    /// The simulated update service of a build whose package installed
+    /// the update helper at `helper`, or none.
+    fn with_helper(installation: Installation, helper: Option<&str>) -> Self {
         let root = tempfile::tempdir().expect("a temporary folder");
         let installed = root.path().join("openxplorer");
         std::fs::write(&installed, b"installed build").expect("the temporary folder is writable");
@@ -161,6 +187,7 @@ impl SimulatedUpdates {
                 updates_folder: root.path().join("updates"),
                 server: Box::new(SimulatedGitHub),
                 package_manager: Box::new(packages.clone()),
+                install_helper: helper.map(Into::into),
             }),
             running: running_identity(),
             installed_build: installed_build(&installed),
@@ -317,6 +344,67 @@ fn installing_verifies_installs_and_offers_the_restart() {
     assert_eq!(
         simulated.updates.new_window_refusal().as_deref(),
         Some("Finish the application update and restart before opening another window.")
+    );
+    assert_eq!(
+        simulated.updates.file_refusal().as_deref(),
+        Some("Restart OpenXplorer to finish the application update before using files.")
+    );
+    dialog.click("Restart now");
+    let launched = simulated
+        .launches
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    assert_eq!(launched, [["/usr/bin/openxplorer", "--restart"]]);
+    dialog.close();
+}
+
+/// Where the package installed the update helper, Install update… hands
+/// it the version instead of running `pkexec apt-get`, so an
+/// administrator at the machine is not asked for a password. Nothing else
+/// changes: every window stays locked while it installs, the dialog shows
+/// the same steps, and the restart is offered and required just the same.
+///
+/// parity: UPD-003, UPD-005, UPD-006, UPD-007
+#[gtk::test]
+fn the_update_helper_installs_with_the_same_lock_and_restart() {
+    let fixture = Fixture::standard();
+    let helper = "/opt/openxplorer/libexec/openxplorer-install-update";
+    let simulated = SimulatedUpdates::with_helper(Installation::DebianPackage, Some(helper));
+    let (let_helper_finish, hold) = channel();
+    simulated
+        .packages
+        .hold_installation
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .replace(hold);
+    let test = simulated.window(&fixture);
+    let dialog = open_dialog(&test, &simulated.updates);
+
+    dialog.click("Install update…");
+    wait_until("the helper to start", || {
+        simulated.packages.programs().contains(&"/usr/bin/pkexec")
+    });
+    test.window.close();
+    settle();
+    assert!(test.window.is_visible(), "the window stays open");
+    assert!(!test.window.is_sensitive(), "the window is locked");
+    let_helper_finish.send(()).expect("the helper is waiting");
+    wait_until("the installation", || !simulated.updates.state().is_installing());
+
+    assert_eq!(
+        simulated.updates.state(),
+        UpdateState::Installed { version: NEXT }
+    );
+    assert_eq!(
+        simulated.packages.programs(),
+        ["/usr/bin/pkexec", "/usr/bin/dpkg-query"],
+        "no download or dpkg-deb in the app, and no pkexec apt-get"
+    );
+    assert_eq!(
+        dialog.status(),
+        "OpenXplorer 1.0.1 is installed. Restart to use the update."
     );
     assert_eq!(
         simulated.updates.file_refusal().as_deref(),
