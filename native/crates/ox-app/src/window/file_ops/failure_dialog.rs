@@ -756,22 +756,6 @@ mod tests {
             .heading
             .starts_with("An unexpected error is keeping you from copying the file."));
         assert_eq!(unexpected.message, "Input/output error");
-        for (mode, heading) in [
-            (TransferMode::Copy, "You can't copy a folder into a folder inside it."),
-            (TransferMode::Move, "You can't move a folder into a folder inside it."),
-        ] {
-            let inside = wording(
-                Question::InsideSource,
-                &item(mode, FailureCause::InsideSource),
-                true,
-                "",
-            );
-            assert_eq!(
-                (inside.caption.as_str(), inside.heading.as_str(), inside.message.as_str()),
-                ("Interrupted Action", heading, ""),
-                "no unexpected error, no system error"
-            );
-        }
     }
 
     /// A full drive says how much the item needs and what to do, as
@@ -799,5 +783,39 @@ mod tests {
         let unknown = space_texts(TransferMode::Move, "Local Disk", None, None);
         assert_eq!(unknown.needed, "Delete or move files so you have enough space.");
         assert!(unknown.drive.is_empty());
+    }
+
+    /// A folder pasted into a folder inside it is refused in plain words,
+    /// never as an unexpected error with the system's text.
+    ///
+    /// parity: XFER-016
+    #[test]
+    fn a_folder_pasted_into_itself_is_refused_in_plain_words() {
+        for (mode, heading) in [
+            (
+                TransferMode::Copy,
+                "You can't copy a folder into a folder inside it.",
+            ),
+            (
+                TransferMode::Move,
+                "You can't move a folder into a folder inside it.",
+            ),
+        ] {
+            let inside = wording(
+                Question::InsideSource,
+                &item(mode, FailureCause::InsideSource),
+                true,
+                "",
+            );
+            assert_eq!(
+                (
+                    inside.caption.as_str(),
+                    inside.heading.as_str(),
+                    inside.message.as_str()
+                ),
+                ("Interrupted Action", heading, ""),
+                "no unexpected error, no system error"
+            );
+        }
     }
 }

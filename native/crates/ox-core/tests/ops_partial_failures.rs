@@ -290,7 +290,11 @@ fn a_folder_pasted_into_its_own_subfolder_is_refused_as_such() {
 
         let asked = questions.asked();
         assert_eq!(asked.len(), 1, "{mode:?}: {asked:?}");
-        assert_ne!(asked[0].1, FailureCause::Other, "{mode:?}: not an unexpected error");
+        assert_ne!(
+            asked[0].1,
+            FailureCause::Other,
+            "{mode:?}: not an unexpected error"
+        );
         assert_eq!(asked[0].1, FailureCause::InsideSource, "{mode:?}");
         assert!(src.join("Projects/Sub/plan.txt").is_file());
         assert!(!src.join("Projects/Sub/Projects").exists());

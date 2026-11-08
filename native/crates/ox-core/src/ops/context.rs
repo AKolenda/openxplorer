@@ -14,8 +14,9 @@ use std::sync::Arc;
 
 use super::error::OpsError;
 use crate::transfer::{
-    check_write_tree, check_write_tree_reading, Cancellation, FailedItem, FailureAnswer, MoveByCopyingItem, Node, SourceChange,
-    TransferEngine, TransferError, Unreadable, UnstorableAnswer, UnstorableItem, WriteGuard,
+    check_write_tree, check_write_tree_reading, Cancellation, FailedItem, FailureAnswer, MoveByCopyingItem,
+    Node, SourceChange, TransferEngine, TransferError, Unreadable, UnstorableAnswer, UnstorableItem,
+    WriteGuard,
 };
 
 /// Locations that must never change, such as previous versions

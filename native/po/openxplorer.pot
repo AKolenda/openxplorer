@@ -5575,6 +5575,14 @@ msgid "Try Again"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You can't copy a folder into a folder inside it."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "You can't move a folder into a folder inside it."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "You need permission to perform this action"
 msgstr ""
 
