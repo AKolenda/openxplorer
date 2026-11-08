@@ -288,6 +288,11 @@ pub struct Preferences {
     /// The last window's size, once a window was resized.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_size: Option<WindowSize>,
+    /// The size other applications' Open and Save dialogs open at, once
+    /// one was resized (INT-032), kept apart from the windows' size as
+    /// Windows keeps its common file dialog's. Never maximized.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dialog_size: Option<WindowSize>,
     /// The address bar's crumbs start at `/` instead of the closest place
     /// (Dolphin's `ShowFullPath`). Stored only when on, as are the next
     /// two, so the Python app's file keeps its layout.
@@ -573,6 +578,7 @@ impl Default for Preferences {
             sidebar_width: None,
             column_widths: None,
             window_size: None,
+            dialog_size: None,
             show_full_path: false,
             editable_location: false,
             external_folders_in_new_window: false,
@@ -773,6 +779,12 @@ impl Preferences {
         if let Some(size) = update.window_size.filter(|size| size.is_valid()) {
             self.window_size = Some(size);
         }
+        if let Some(size) = update.dialog_size.filter(|size| size.is_valid()) {
+            self.dialog_size = Some(WindowSize {
+                maximized: false,
+                ..size
+            });
+        }
         replace_if_some(&mut self.browse_archives, update.browse_archives);
         replace_if_some(&mut self.zip_opening, update.zip_opening);
         replace_if_some(&mut self.strip_position, update.strip_position);
@@ -913,6 +925,8 @@ pub struct PreferencesUpdate {
     pub network_interval: Option<u32>,
     /// The size new windows open at.
     pub window_size: Option<WindowSize>,
+    /// The size Open and Save dialogs open at.
+    pub dialog_size: Option<WindowSize>,
     /// Show the full path in the address bar, or start at the closest place.
     pub show_full_path: Option<bool>,
     /// Open new windows with an editable address.
@@ -1052,6 +1066,7 @@ impl PreferencesUpdate {
             strip_position: text("menuStripPosition").and_then(StripPosition::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
+            dialog_size: values.get("dialogSize").and_then(WindowSize::from_json),
             show_full_path: flag("showFullPath"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
@@ -1331,7 +1346,7 @@ mod tests {
         assert_eq!(bounded_width(f64::INFINITY, SIDEBAR_WIDTHS), None);
     }
 
-    /// parity: TAB-054
+    /// parity: TAB-054, INT-032
     #[test]
     fn the_window_size_is_kept_only_within_the_window_limits() {
         let read = |value| PreferencesUpdate::from_json(&json!({ "windowSize": value })).unwrap();
@@ -1359,6 +1374,27 @@ mod tests {
         );
         assert_eq!(read(json!({"width": 1000.5, "height": 700})).window_size, None);
         assert_eq!(read(json!("big")).window_size, None);
+
+        // An Open or Save dialog's size is kept apart, the same way, and
+        // never maximized (INT-032).
+        let dialog = PreferencesUpdate::from_json(&json!({
+            "dialogSize": {"width": 1100, "height": 720, "maximized": true}
+        }))
+        .unwrap();
+        preferences.apply(&dialog);
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(
+            stored["dialogSize"],
+            json!({"width": 1100, "height": 720, "maximized": false})
+        );
+        assert_eq!(
+            preferences.window_size.map(|size| size.width),
+            Some(1000),
+            "the windows' own"
+        );
+        let small =
+            PreferencesUpdate::from_json(&json!({"dialogSize": {"width": 300, "height": 200}})).unwrap();
+        assert_eq!(small.dialog_size, None, "below the minimum");
     }
 
     /// parity: VIEW-028
