@@ -5,15 +5,15 @@
 //! The Windows numbers were measured at 100% scaling, in pixels from one
 //! line of text to the next: Details rows 21 apart, a group heading 26
 //! below the last row before it and 27 above the first row under it, the
-//! column header 26 tall and the navigation pane's rows 24 apart, a
-//! separator taking one row's room. Tiles' rows are 57 apart, a heading
-//! over one row of tiles 83 from the next heading; Content's items are 48
-//! apart, a heading 31 to 32 above its first item and 48 to 49 below the
-//! last item before it. The distances are logical pixels, so they hold at every
-//! display scale (`GDK_SCALE=2` doubles the device pixels alike).
-//! Text-to-text distances are measured between the middles of labels of
-//! one font size, which are as far apart as their lines of text whatever
-//! the labels' line heights.
+//! column header 26 tall with its line, and the navigation pane's rows 24
+//! apart, a separator taking one row's room. A heading over one row of
+//! Tiles stands 83 from the next heading, which makes rows of tiles 57
+//! apart; Content's items are 48 apart, their lines 18 apart, a heading 31
+//! to 32 above its first item and 48 to 49 below the last item before it.
+//! The distances are logical pixels, so they hold at every display scale
+//! (`GDK_SCALE=2` doubles the device pixels alike). Text-to-text distances
+//! are measured between the middles of labels of one font size, which are
+//! as far apart as their lines of text whatever the labels' line heights.
 
 use gtk::prelude::*;
 
@@ -124,15 +124,30 @@ fn tile_row_pitch(test: &TestWindow) -> i32 {
     tops[1] - tops[0]
 }
 
-/// The height of the Name column's title.
+/// The height of the column header, its line under the titles included,
+/// as the line was counted in the measurements.
 fn column_header_height(test: &TestWindow) -> i32 {
     test.window
         .folder_pane()
         .details()
         .column_view()
         .first_child()
-        .and_then(|header| header.first_child())
-        .map_or(0, |title| title.height())
+        .map_or(0, |header| header.height())
+}
+
+/// How far below the middle of the item `name`'s name the middle of its
+/// next line (its type) stands.
+fn second_line_distance(test: &TestWindow, name: &str, second: &str) -> i32 {
+    let view = test.window.folder_pane().view_widget();
+    let cell = descendants::<FileCell>(&view)
+        .into_iter()
+        .find(|cell| cell.is_mapped() && cell.group_heading().is_none() && cell.name() == name)
+        .unwrap_or_else(|| panic!("an item shows {name}"));
+    let line = descendants::<gtk::Label>(&cell)
+        .into_iter()
+        .find(|label| label.is_mapped() && label.text() == second)
+        .unwrap_or_else(|| panic!("{name} shows {second}"));
+    super::geometry::pixels(middle(test, &line) - middle(test, &name_label(test, name)))
 }
 
 /// The places' rows of the navigation pane top to bottom, each with its
@@ -256,10 +271,11 @@ fn compact_view_spaces_details_and_the_navigation_pane_as_windows() {
     );
 }
 
-/// Compact view's Tiles rows are 57 pixels apart, a heading over one row of
-/// tiles 83 from the next heading; Content's items are 48 apart, a heading
-/// 32 above its first item's name and 49 below the last name before it
-/// (Windows: 31 to 32, and 48 to 49).
+/// Compact view's Tiles rows are 57 pixels apart (inferred: Windows' tile
+/// row with the gap under it, as measured between headings), a heading
+/// over one row of tiles 83 from the next heading; Content's items are 48
+/// apart, a heading 32 above its first item's name and 49 below the last name before it
+/// (Windows: 31 to 32, and 48 to 49), an item's lines 18 apart.
 ///
 /// parity: VIEW-067, VIEW-071
 #[gtk::test]
@@ -286,15 +302,20 @@ fn compact_view_spaces_tiles_and_content_as_windows() {
     assert!((31..=32).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
     assert!((48..=49).contains(&above), "last item to heading: {above}");
+    assert_eq!(
+        second_line_distance(&test, "Notes 1", "Text Document"),
+        18,
+        "a name to its type"
+    );
     assert_page_counts_rows(&test, FolderView::Content);
 }
 
 /// The usual view keeps its spacing: Details rows 32 apart, a heading 40
 /// below the row before it and 32 above its first row, the column header
-/// 31 tall, the navigation pane's rows 32 apart and 56 across a
+/// 32 tall with its line, the navigation pane's rows 32 apart and 56 across a
 /// separator; Tiles' rows 75 apart and a heading over one row 110 from the
-/// next; Content's items 48 apart, a heading 29.5 above its first item and
-/// 53.5 below the last before it.
+/// next; Content's items 48 apart, their lines 15 apart, a heading 29.5
+/// above its first item and 53.5 below the last before it.
 ///
 /// parity: VIEW-067
 #[gtk::test]
@@ -330,4 +351,9 @@ fn the_usual_view_keeps_its_spacing() {
     assert!((29..=30).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
     assert!((53..=54).contains(&above), "last item to heading: {above}");
+    assert_eq!(
+        second_line_distance(&test, "Notes 1", "Text Document"),
+        15,
+        "a name to its type"
+    );
 }
