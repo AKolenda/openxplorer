@@ -7,12 +7,23 @@
 //! [`crate::thumbnails`] before it is decoded, and the program itself
 //! runs in a sandbox with its own limits.)
 //!
-//! A picture is fed to gdk-pixbuf in chunks. As soon as the loader has
-//! read the size from the header, and before it allocates any pixels, a
-//! raster picture of more than [`MAX_PIXELS`] is refused (the loader is
-//! told to load nothing, as gdk-pixbuf's own `file_info` stops after the
-//! header); a smaller one is decoded straight to the size it is shown at,
-//! which the JPEG loader does while decoding. Vector pictures (SVG) are
+//! Before any byte reaches gdk-pixbuf, the size a PNG, JPEG, GIF, WebP or
+//! BMP declares is read from its own header ([`declared_size`]), and a
+//! raster picture of more than [`MAX_PIXELS`] is refused there. This
+//! matters most where gdk-pixbuf decodes through glycin (2.43 and later,
+//! as on Fedora, openSUSE and Arch): its loaders take in the whole file
+//! and decode it only once the loader is closed, so they report the size
+//! only then, and a picture declaring a huge size that its data does not
+//! fill aborts the whole process inside gdk-pixbuf (`GBytes is too small
+//! to fit the pixbuf's declared width and height`).
+//!
+//! The picture is then fed to gdk-pixbuf in chunks. Another format is
+//! refused once the loader has read the size from its header, before it
+//! allocates any pixels (the loader is told to load nothing, as
+//! gdk-pixbuf's own `file_info` stops after the header, or, where it only
+//! decodes once closed, to decode to a single pixel, as glycin otherwise
+//! decodes it whole); a picture within the limit is decoded straight to
+//! the size it is shown at, which the JPEG loader does while decoding. Vector pictures (SVG) are
 //! drawn at the size shown whatever size they declare. An animated GIF
 //! is fed only up to the end of its first frame, as Windows shows a GIF's
 //! first frame, so thousands of frames are never held. Reading stops
@@ -24,6 +35,7 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use gtk::gdk_pixbuf::{Pixbuf, PixbufFormat, PixbufLoader};
@@ -48,6 +60,12 @@ pub(crate) const TIME_LIMIT: Duration = Duration::from_secs(10);
 
 /// How much of a picture is read at a time.
 const READ_CHUNK: usize = 64 * 1024;
+
+/// The most of a picture's first bytes held back from gdk-pixbuf while
+/// its header is looked for: room for a JPEG's EXIF, XMP and color profile
+/// segments, which come before its frame header. A picture whose header
+/// is not found in them is left to gdk-pixbuf's own reading of its size.
+const HEADER_LIMIT: usize = 256 * 1024;
 
 /// The most pixels a JPEG may have to be decoded for display: 256
 /// megapixels (16384 × 16384). gdk-pixbuf's JPEG loader decodes a large
@@ -122,6 +140,14 @@ struct Header {
     size: Cell<Option<(i32, i32)>>,
     /// The picture was refused at its header.
     refused: Cell<bool>,
+    /// The picture is no longer wanted (it was refused, timed out or
+    /// cancelled before the loader read its size): whatever size the
+    /// loader reads while it is closed, nothing is decoded.
+    unwanted: Cell<bool>,
+    /// The loader reads the size only while it is closed, and then
+    /// decodes the whole picture unless told a size of its own: a refused
+    /// picture is decoded to one pixel instead of nothing.
+    decoded_when_closed: Cell<bool>,
 }
 
 /// The picture in `file`, decoded to fit `width` × `height`, or at its own
@@ -139,6 +165,9 @@ pub(crate) fn decode_to_fit(
     let header = Rc::new(Header::default());
     watch_header(&loader, &header, (width.max(1), height.max(1)), limits);
     let mut buffer = vec![0; READ_CHUNK];
+    // The first bytes, held back from the loader until the header's size
+    // is known.
+    let mut start = Some(Vec::new());
     let mut first_frame = FirstFrame::default();
     let mut ending = Ending::default();
     let fed = loop {
@@ -151,10 +180,26 @@ pub(crate) fn decode_to_fit(
         let Ok(read) = stream.read(&mut buffer, cancellable) else {
             break Err(refusal_for(cancellable));
         };
-        if read == 0 {
+        let held;
+        let bytes = if let Some(mut first) = start.take() {
+            first.extend_from_slice(&buffer[..read]);
+            let declared = declared_size(&first);
+            if declared == Declared::Incomplete && read > 0 && first.len() < HEADER_LIMIT {
+                start = Some(first);
+                continue;
+            }
+            if let Some(refusal) = refusal_by_header(declared, limits) {
+                break Err(refusal);
+            }
+            held = first;
+            &held[..]
+        } else {
+            &buffer[..read]
+        };
+        if bytes.is_empty() {
             break Ok(());
         }
-        let (chunk, first_frame_done) = first_frame.take(&buffer[..read]);
+        let (chunk, first_frame_done) = first_frame.take(bytes);
         let (chunk, png_done) = ending.take(chunk);
         let done = first_frame_done || png_done;
         let written = loader.write(chunk).and_then(|()| {
@@ -179,6 +224,11 @@ pub(crate) fn decode_to_fit(
             break Ok(());
         }
     };
+    if header.size.get().is_none() {
+        // The loader may still read the size while it is closed.
+        header.unwanted.set(fed.is_err());
+        header.decoded_when_closed.set(decodes_when_closed());
+    }
     let closed = loader.close();
     if header.refused.get() {
         let (width, height) = header.size.get().unwrap_or((0, 0));
@@ -226,22 +276,26 @@ fn refusal_for(cancellable: Option<&gio::Cancellable>) -> Refusal {
 fn watch_header(loader: &PixbufLoader, header: &Rc<Header>, fit: (i32, i32), limits: Limits) {
     let header = Rc::clone(header);
     loader.connect_size_prepared(move |loader, width, height| {
+        // A size of zero makes every gdk-pixbuf loader that reads as it is
+        // fed stop before it allocates the picture, as
+        // `gdk_pixbuf_get_file_info` does. A glycin loader, which decodes
+        // once closed, takes zero for no size at all and decodes the
+        // whole picture, which aborts the process when its data does not
+        // fill the size its header declares: it is asked for one pixel.
+        let nothing = i32::from(header.decoded_when_closed.get());
+        if header.unwanted.get() {
+            loader.set_size(nothing, nothing);
+            return;
+        }
         header.size.set(Some((width, height)));
         let format = loader.format();
         let is_vector = format.as_ref().is_some_and(PixbufFormat::is_scalable);
         let is_jpeg = format
             .as_ref()
             .is_some_and(|format| format.name().as_deref() == Some("jpeg"));
-        let max_pixels = if is_jpeg {
-            limits.max_jpeg_pixels.max(limits.max_pixels)
-        } else {
-            limits.max_pixels
-        };
-        if width <= 0 || height <= 0 || (!is_vector && pixels(width, height) > max_pixels) {
+        if width <= 0 || height <= 0 || (!is_vector && pixels(width, height) > max_pixels(is_jpeg, limits)) {
             header.refused.set(true);
-            // A size of zero makes every gdk-pixbuf loader stop before it
-            // allocates the picture, as gdk_pixbuf_get_file_info does.
-            loader.set_size(0, 0);
+            loader.set_size(nothing, nothing);
             return;
         }
         if width > fit.0 || height > fit.1 {
@@ -249,6 +303,296 @@ fn watch_header(loader: &PixbufLoader, header: &Rc<Header>, fit: (i32, i32), lim
             loader.set_size(width, height);
         }
     });
+}
+
+/// Whether this gdk-pixbuf reads a picture only once its loader is
+/// closed, as the loaders built on glycin do: they report no size while
+/// they are fed. Found once, by feeding a picture of one pixel.
+fn decodes_when_closed() -> bool {
+    /// A PNG of one transparent pixel.
+    const ONE_PIXEL: &[u8] =
+        b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x06\0\0\0\x1f\x15\xc4\x89\
+        \0\0\0\nIDATx\x9cc\0\x01\0\0\x05\0\x01\r\n-\xb4\0\0\0\0IEND\xaeB`\x82";
+    static ANSWER: OnceLock<bool> = OnceLock::new();
+    *ANSWER.get_or_init(|| {
+        let Ok(loader) = PixbufLoader::with_type("png") else {
+            return false;
+        };
+        let sized = Rc::new(Cell::new(false));
+        let reported = Rc::clone(&sized);
+        loader.connect_size_prepared(move |_, _, _| reported.set(true));
+        let written = loader.write(ONE_PIXEL).is_ok();
+        let while_fed = sized.get();
+        let _ = loader.close();
+        written && !while_fed
+    })
+}
+
+/// The most pixels `limits` allow a raster picture, a JPEG's own limit
+/// when `is_jpeg`.
+fn max_pixels(is_jpeg: bool, limits: Limits) -> u64 {
+    if is_jpeg {
+        limits.max_jpeg_pixels.max(limits.max_pixels)
+    } else {
+        limits.max_pixels
+    }
+}
+
+/// What a picture's first bytes say of its size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Declared {
+    /// The header gives this size.
+    Size {
+        /// The picture is a JPEG, which has a limit of its own.
+        jpeg: bool,
+        /// The width the header gives.
+        width: u32,
+        /// The height the header gives.
+        height: u32,
+    },
+    /// The bytes may be a picture whose header is not yet whole.
+    Incomplete,
+    /// The bytes are no PNG, JPEG, GIF, WebP or BMP whose header can be
+    /// read: gdk-pixbuf reads their size itself.
+    Unknown,
+}
+
+/// Reads the size a picture's header declares.
+type HeaderReader = fn(&[u8]) -> Declared;
+
+/// The size a PNG, JPEG, GIF, WebP or BMP declares in its first `bytes`.
+fn declared_size(bytes: &[u8]) -> Declared {
+    let readers: [(&[u8], HeaderReader); 5] = [
+        (PNG_SIGNATURE, png_size),
+        (b"\xFF\xD8", jpeg_size),
+        (b"GIF87a", gif_size),
+        (b"GIF89a", gif_size),
+        (b"BM", bmp_size),
+    ];
+    let mut incomplete = false;
+    for (signature, read) in readers {
+        match starts_with(bytes, signature) {
+            Some(true) => return read(bytes),
+            Some(false) => {}
+            None => incomplete = true,
+        }
+    }
+    match starts_with(bytes, b"RIFF") {
+        Some(true) => match bytes.get(8..12) {
+            Some(b"WEBP") => return webp_size(bytes),
+            Some(_) => {}
+            None => incomplete = true,
+        },
+        Some(false) => {}
+        None => incomplete = true,
+    }
+    if incomplete {
+        Declared::Incomplete
+    } else {
+        Declared::Unknown
+    }
+}
+
+/// Whether `bytes` start with `signature`; `None` while they are a part
+/// of it.
+fn starts_with(bytes: &[u8], signature: &[u8]) -> Option<bool> {
+    if bytes.len() >= signature.len() {
+        Some(bytes.starts_with(signature))
+    } else if signature.starts_with(bytes) {
+        None
+    } else {
+        Some(false)
+    }
+}
+
+/// The refusal of a picture whose header declares no pixels or more than
+/// `limits` allow, with the header's size.
+fn refusal_by_header(declared: Declared, limits: Limits) -> Option<Refusal> {
+    let Declared::Size { jpeg, width, height } = declared else {
+        return None;
+    };
+    let pixels = u64::from(width) * u64::from(height);
+    let side = |side: u32| i32::try_from(side).unwrap_or(i32::MAX);
+    (pixels == 0 || pixels > max_pixels(jpeg, limits)).then(|| Refusal::TooLarge {
+        width: side(width),
+        height: side(height),
+    })
+}
+
+/// The bytes of `bytes` from `at`, `N` of them.
+fn field<const N: usize>(bytes: &[u8], at: usize) -> Option<[u8; N]> {
+    bytes.get(at..at.checked_add(N)?)?.try_into().ok()
+}
+
+/// The size in a PNG's IHDR chunk, which comes first.
+fn png_size(bytes: &[u8]) -> Declared {
+    if bytes.len() < 24 {
+        return Declared::Incomplete;
+    }
+    if &bytes[12..16] != b"IHDR" {
+        return Declared::Unknown;
+    }
+    match (field(bytes, 16), field(bytes, 20)) {
+        (Some(width), Some(height)) => Declared::Size {
+            jpeg: false,
+            width: u32::from_be_bytes(width),
+            height: u32::from_be_bytes(height),
+        },
+        _ => Declared::Incomplete,
+    }
+}
+
+/// The size in a JPEG's frame header (SOF0 to SOF15), after the segments
+/// before it, EXIF and the like, are skipped by their lengths.
+fn jpeg_size(bytes: &[u8]) -> Declared {
+    let mut at = 2;
+    loop {
+        match bytes.get(at) {
+            None => return Declared::Incomplete,
+            Some(0xFF) => {}
+            // Not a marker where one belongs: left to gdk-pixbuf.
+            Some(_) => return Declared::Unknown,
+        }
+        // Any number of fill bytes may come before the marker's code.
+        let mut code_at = at + 1;
+        while bytes.get(code_at) == Some(&0xFF) {
+            code_at += 1;
+        }
+        let Some(&code) = bytes.get(code_at) else {
+            return Declared::Incomplete;
+        };
+        match code {
+            // Markers without a length.
+            0x01 | 0xD0..=0xD8 => {
+                at = code_at + 1;
+                continue;
+            }
+            // The scan, the end, or no marker at all, before any frame.
+            0x00 | 0xD9 | 0xDA => return Declared::Unknown,
+            _ => {}
+        }
+        let Some(length) = field(bytes, code_at + 1).map(u16::from_be_bytes) else {
+            return Declared::Incomplete;
+        };
+        if length < 2 {
+            return Declared::Unknown;
+        }
+        // The frame headers, but DHT (C4), JPG (C8) and DAC (CC): the
+        // length (2) and the precision (1), then the height and width.
+        if (0xC0..=0xCF).contains(&code) && !matches!(code, 0xC4 | 0xC8 | 0xCC) {
+            return match (field(bytes, code_at + 4), field(bytes, code_at + 6)) {
+                (Some(height), Some(width)) => Declared::Size {
+                    jpeg: true,
+                    width: u32::from(u16::from_be_bytes(width)),
+                    height: u32::from(u16::from_be_bytes(height)),
+                },
+                _ => Declared::Incomplete,
+            };
+        }
+        at = code_at + 1 + usize::from(length);
+    }
+}
+
+/// The size of a GIF's logical screen, which gdk-pixbuf's loader reports.
+fn gif_size(bytes: &[u8]) -> Declared {
+    match (field(bytes, 6), field(bytes, 8)) {
+        (Some(width), Some(height)) => Declared::Size {
+            jpeg: false,
+            width: u32::from(u16::from_le_bytes(width)),
+            height: u32::from(u16::from_le_bytes(height)),
+        },
+        _ => Declared::Incomplete,
+    }
+}
+
+/// The size in a BMP's information header: an OS/2 core header's two
+/// 16-bit sides, or a Windows header's 32-bit ones, whose height is
+/// negative for rows stored from the top.
+fn bmp_size(bytes: &[u8]) -> Declared {
+    let Some(header) = field(bytes, 14).map(u32::from_le_bytes) else {
+        return Declared::Incomplete;
+    };
+    let size = if header == 12 {
+        field(bytes, 18).zip(field(bytes, 20)).map(|(width, height)| {
+            (
+                u32::from(u16::from_le_bytes(width)),
+                u32::from(u16::from_le_bytes(height)),
+            )
+        })
+    } else if header >= 16 {
+        match (
+            field(bytes, 18).map(i32::from_le_bytes),
+            field(bytes, 22).map(i32::from_le_bytes),
+        ) {
+            (Some(width), _) if width < 0 => return Declared::Unknown,
+            (Some(width), Some(height)) => Some((width.unsigned_abs(), height.unsigned_abs())),
+            _ => None,
+        }
+    } else {
+        return Declared::Unknown;
+    };
+    size.map_or(Declared::Incomplete, |(width, height)| Declared::Size {
+        jpeg: false,
+        width,
+        height,
+    })
+}
+
+/// The size in a WebP's first chunk: a lossy (VP8) frame's, a lossless
+/// (VP8L) picture's, or an extended file's (VP8X) canvas.
+fn webp_size(bytes: &[u8]) -> Declared {
+    let Some(kind) = field::<4>(bytes, 12) else {
+        return Declared::Incomplete;
+    };
+    // The chunk's data follows its kind and length.
+    let size = match &kind {
+        b"VP8 " => match (field::<3>(bytes, 23), field(bytes, 26), field(bytes, 28)) {
+            (Some(start), _, _) if start != [0x9D, 0x01, 0x2A] => return Declared::Unknown,
+            (Some(_), Some(width), Some(height)) => Some((
+                u32::from(u16::from_le_bytes(width) & 0x3FFF),
+                u32::from(u16::from_le_bytes(height) & 0x3FFF),
+            )),
+            _ => None,
+        },
+        b"VP8L" => match (bytes.get(20), field(bytes, 21).map(u32::from_le_bytes)) {
+            (Some(&signature), _) if signature != 0x2F => return Declared::Unknown,
+            (Some(_), Some(bits)) => Some(((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)),
+            _ => None,
+        },
+        b"VP8X" => {
+            let side = |at: usize| {
+                field::<3>(bytes, at)
+                    .map(|[low, middle, high]| u32::from_le_bytes([low, middle, high, 0]) + 1)
+            };
+            side(24).zip(side(27))
+        }
+        _ => return Declared::Unknown,
+    };
+    size.map_or(Declared::Incomplete, |(width, height)| Declared::Size {
+        jpeg: false,
+        width,
+        height,
+    })
+}
+
+/// A picture's own width and height, from its header, without decoding
+/// it: `gdk_pixbuf_get_file_info` stops after the header only where
+/// gdk-pixbuf reads as it is fed, and where it decodes through glycin it
+/// decodes the whole picture to find its size, and aborts the process on
+/// a huge one. A vector picture is drawn at one pixel. Blocks.
+pub(crate) fn dimensions(file: &gio::File) -> Option<(i32, i32)> {
+    // No raster picture is allowed any pixels, so each is refused at its
+    // header, which gives its size.
+    let header_only = Limits {
+        max_pixels: 0,
+        max_jpeg_pixels: 0,
+        time: TIME_LIMIT,
+    };
+    match decode_to_fit(file, 1, 1, header_only, None) {
+        Ok(decoded) => Some((decoded.width, decoded.height)),
+        Err(Refusal::TooLarge { width, height }) if width > 0 && height > 0 => Some((width, height)),
+        Err(_) => None,
+    }
 }
 
 /// The pixels of a `width` × `height` picture.
@@ -623,7 +967,7 @@ mod tests {
         bytes[frame + 5..frame + 7].copy_from_slice(&30_000_u16.to_be_bytes());
         bytes[frame + 7..frame + 9].copy_from_slice(&30_000_u16.to_be_bytes());
         let jpeg = folder.path().join("Huge scan.jpg");
-        std::fs::write(&jpeg, bytes).expect("the huge JPEG");
+        std::fs::write(&jpeg, &bytes).expect("the huge JPEG");
         assert_eq!(
             decode(&jpeg, Limits::DISPLAY).map(|decoded| decoded.width),
             Err(Refusal::TooLarge {
@@ -631,6 +975,157 @@ mod tests {
                 height: 30_000
             })
         );
+        // Its frame header is found after large EXIF-like segments.
+        let mut with_metadata = bytes[..2].to_vec();
+        for _ in 0..3 {
+            with_metadata.extend_from_slice(&[0xFF, 0xE1, 0xFF, 0xFF]);
+            with_metadata.extend(std::iter::repeat_n(b'E', 0xFFFF - 2));
+        }
+        with_metadata.extend_from_slice(&bytes[2..]);
+        assert_eq!(
+            declared_size(&with_metadata),
+            Declared::Size {
+                jpeg: true,
+                width: 30_000,
+                height: 30_000
+            }
+        );
+        std::fs::write(&jpeg, &with_metadata).expect("the huge JPEG");
+        assert_eq!(
+            decode(&jpeg, Limits::DISPLAY).map(|decoded| decoded.width),
+            Err(Refusal::TooLarge {
+                width: 30_000,
+                height: 30_000
+            })
+        );
+
+        // A GIF, a WebP and a BMP are refused from their own headers too.
+        let mut gif = animated_gif(1, 16);
+        gif[6..8].copy_from_slice(&30_000_u16.to_le_bytes());
+        gif[8..10].copy_from_slice(&30_000_u16.to_le_bytes());
+        let mut bmp = bmp_header(30_000, -30_000);
+        bmp.extend_from_slice(&[0; 64]);
+        let mut webp = webp_extended(30_000, 30_000);
+        webp.extend_from_slice(&[0; 64]);
+        for (name, bytes) in [
+            ("Huge loop.gif", gif),
+            ("Huge scan.bmp", bmp),
+            ("Huge banner.webp", webp),
+        ] {
+            let path = folder.path().join(name);
+            std::fs::write(&path, bytes).expect("the huge picture");
+            assert_eq!(
+                decode(&path, Limits::DISPLAY).map(|decoded| decoded.width),
+                Err(Refusal::TooLarge {
+                    width: 30_000,
+                    height: 30_000
+                }),
+                "{name}"
+            );
+        }
+    }
+
+    /// The first bytes of a BMP of `width` × `height` pixels with a
+    /// Windows information header.
+    fn bmp_header(width: i32, height: i32) -> Vec<u8> {
+        let mut bmp = b"BM".to_vec();
+        bmp.extend_from_slice(&[0; 12]);
+        bmp.extend_from_slice(&40_u32.to_le_bytes());
+        bmp.extend_from_slice(&width.to_le_bytes());
+        bmp.extend_from_slice(&height.to_le_bytes());
+        bmp.extend_from_slice(&[1, 0, 24, 0]);
+        bmp.extend_from_slice(&[0; 24]);
+        bmp
+    }
+
+    /// The first bytes of an extended WebP whose canvas is `width` ×
+    /// `height` pixels.
+    fn webp_extended(width: u32, height: u32) -> Vec<u8> {
+        let mut webp = b"RIFF\x40\0\0\0WEBPVP8X\x0a\0\0\0\x10\0\0\0".to_vec();
+        webp.extend_from_slice(&(width - 1).to_le_bytes()[..3]);
+        webp.extend_from_slice(&(height - 1).to_le_bytes()[..3]);
+        webp
+    }
+
+    /// Each format's size is read from its own header, however few of
+    /// its first bytes were read; other bytes are left to gdk-pixbuf.
+    #[test]
+    fn a_pictures_size_is_read_from_its_own_header() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let size = |jpeg, width, height| Declared::Size { jpeg, width, height };
+        let png = std::fs::read(saved_picture(folder.path(), "Beach.png", "png", 1200, 600)).expect("PNG");
+        let jpeg = std::fs::read(saved_picture(folder.path(), "Pier.jpg", "jpeg", 640, 480)).expect("JPEG");
+        let gif = animated_gif(2, 40);
+        let mut lossy = b"RIFF\0\0\0\0WEBPVP8 \0\0\0\0\0\0\0\x9d\x01\x2a".to_vec();
+        lossy.extend_from_slice(&[0x80, 0x02, 0xE0, 0x01]);
+        let mut lossless = b"RIFF\0\0\0\0WEBPVP8L\0\0\0\0\x2f".to_vec();
+        lossless.extend_from_slice(&(799_u32 | (599 << 14)).to_le_bytes());
+        let mut core_bmp = b"BM".to_vec();
+        core_bmp.extend_from_slice(&[0; 12]);
+        core_bmp.extend_from_slice(&[12, 0, 0, 0, 0x20, 0x03, 0x58, 0x02]);
+        let cases = [
+            (png, size(false, 1200, 600)),
+            (jpeg, size(true, 640, 480)),
+            (gif, size(false, 40, 40)),
+            (lossy, size(false, 640, 480)),
+            (lossless, size(false, 800, 600)),
+            (webp_extended(4000, 3000), size(false, 4000, 3000)),
+            (bmp_header(300, -200), size(false, 300, 200)),
+            (core_bmp, size(false, 800, 600)),
+        ];
+        for (bytes, declared) in cases {
+            assert_eq!(declared_size(&bytes), declared, "{:?}", &bytes[..4]);
+            // Cut inside its header, more is read before deciding.
+            for cut in [0, 1, 3, 9] {
+                assert_eq!(declared_size(&bytes[..cut]), Declared::Incomplete, "cut at {cut}");
+            }
+        }
+        assert_eq!(declared_size(b"Not a picture at all"), Declared::Unknown);
+        assert_eq!(
+            declared_size(b"\x89PNG\r\n\x1a\nnot really a picture"),
+            Declared::Unknown
+        );
+        assert_eq!(declared_size(b"RIFF\0\0\0\0WAVEfmt "), Declared::Unknown);
+        assert_eq!(
+            declared_size(b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"),
+            Declared::Unknown
+        );
+        // No pixels at all is refused too, with the header's size.
+        assert_eq!(
+            refusal_by_header(size(false, 0, 600), Limits::DISPLAY),
+            Some(Refusal::TooLarge {
+                width: 0,
+                height: 600
+            })
+        );
+        assert_eq!(refusal_by_header(Declared::Unknown, Limits::DISPLAY), None);
+        assert_eq!(
+            refusal_by_header(size(true, 16_384, 16_384), Limits::DISPLAY),
+            None,
+            "a JPEG within its own limit"
+        );
+    }
+
+    /// A picture's own size is read from its header without decoding it,
+    /// however large it is; a vector picture's is the size it declares.
+    #[test]
+    fn a_pictures_dimensions_are_read_without_decoding_it() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let huge = huge_png(&folder.path().join("Huge poster.png"));
+        assert_eq!(dimensions(&gio::File::for_path(&huge)), Some((30_000, 30_000)));
+        let photo = saved_picture(folder.path(), "Pier.jpg", "jpeg", 640, 480);
+        assert_eq!(dimensions(&gio::File::for_path(&photo)), Some((640, 480)));
+        let banner = folder.path().join("Banner.svg");
+        std::fs::write(
+            &banner,
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"500\">\
+             <rect width=\"1000\" height=\"500\" fill=\"#3a7\"/></svg>",
+        )
+        .expect("svg");
+        assert_eq!(dimensions(&gio::File::for_path(&banner)), Some((1000, 500)));
+        let notes = folder.path().join("Notes.png");
+        std::fs::write(&notes, b"not a picture").expect("notes");
+        assert_eq!(dimensions(&gio::File::for_path(&notes)), None);
     }
 
     /// A picture within the limit is decoded to fit the size asked, and
