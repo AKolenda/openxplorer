@@ -127,8 +127,9 @@ never takes over the Python app's name. Every package build sets it.
   user turned the setting off. Polkit rules cannot read the app's
   settings, so the switch runs
   `pkexec openxplorer-install-update --disable-passwordless` (or
-  `--enable-passwordless`), which asks for an administrator's password
-  once. As root, the helper deletes the rule, or copies the template,
+  `--enable-passwordless`) under the update action: turning it on asks for
+  an administrator's password, while turning it off does not for an
+  administrator at the machine, whom the rule still lets through. As root, the helper deletes the rule, or copies the template,
   never text from the caller, to it (0644, owned by root, written
   atomically and never through a link;
   `crates/ox-core/src/update/passwordless.rs`). Because Ubuntu and Debian

@@ -15,9 +15,9 @@
 // /usr/share/openxplorer/install-update.rules, which polkit does not read,
 // and its postinst copies it to /etc/polkit-1/rules.d/60-@ACTION_ID@.rules.
 // Turning off "Install updates without asking for a password" in
-// OpenXplorer's Settings deletes that copy, after an administrator's
-// password, and an upgrade keeps it off; removing the package deletes it
-// too.
+// OpenXplorer's Settings deletes that copy, and an upgrade keeps it off;
+// turning it back on asks for an administrator's password. Removing the
+// package deletes the copy too.
 polkit.addRule(function (action, subject) {
     if (action.id !== "@ACTION_ID@") {
         return polkit.Result.NOT_HANDLED;

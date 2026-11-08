@@ -11,8 +11,9 @@
 //! asking for a password", on by default and shown only in the stable
 //! Debian package, has the update helper remove or add the polkit rule
 //! that lets an administrator at the machine update without a password;
-//! it asks for an administrator's password once, and shows whether the
-//! rule is there. "Read license & source
+//! turning it on asks for an administrator's password (turning it off
+//! does not, for an administrator at the machine, whom the rule already
+//! lets through), and it shows whether the rule is there. "Read license & source
 //! information" runs `win.license`, the licence dialog. "Keyboard
 //! shortcuts" and "Help" run `win.keyboard-shortcuts` (Ctrl+?) and
 //! `win.help` (F1): they, the licence and the build left the command
@@ -74,7 +75,7 @@ const AUTOMATIC_CHECKS: RowText = RowText {
 const PASSWORDLESS_UPDATES: RowText = RowText {
     title: "Install updates without asking for a password",
     description: "Administrators at this computer install OpenXplorer updates without typing their \
-                  password. Changing this asks for an administrator's password once.",
+                  password. Turning it on asks for an administrator's password.",
     keywords: "password prompt administrator admin sudo polkit pkexec authentication install update \
                without password passwordless",
 };

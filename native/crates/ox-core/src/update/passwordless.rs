@@ -15,8 +15,9 @@
 //! deletes the copy, and turning it back on copies the template again.
 //! Both run as root in the update helper (`openxplorer-install-update
 //! --disable-passwordless` or `--enable-passwordless`), started through
-//! `pkexec`, so changing the setting asks for an administrator's password
-//! once. The package's `postrm` deletes the copy and the record when the
+//! `pkexec` under the update action: turning the setting on asks for an
+//! administrator's password, and turning it off does not for an
+//! administrator at the machine, whom the rule still lets through. The package's `postrm` deletes the copy and the record when the
 //! package is removed or purged; an upgrade keeps them.
 //!
 //! The rule's text is always the installed template's, never the

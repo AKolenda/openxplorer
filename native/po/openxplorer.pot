@@ -2757,7 +2757,7 @@ msgid "About this build"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "Administrators at this computer install OpenXplorer updates without typing their password. Changing this asks for an administrator's password once."
+msgid "Administrators at this computer install OpenXplorer updates without typing their password. Turning it on asks for an administrator's password."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs

@@ -7,8 +7,9 @@
 # turns the setting on. While it is on, every configure copies this
 # version's template to the rule again. The record says "on" before the
 # rule is written, so an interruption can never leave the rule active while
-# the switch shows off. Each file is written beside its target and renamed
-# over it, so a link in the way is replaced, never followed. polkit reads
+# the switch shows off. Each file is written to a fresh name beside its
+# target and renamed over it (mv -T), so a link in the way is replaced,
+# never followed. polkit reads
 # only files ending in .rules, so it never reads a half-written one.
 case "$1" in
     configure)
@@ -24,13 +25,15 @@ case "$1" in
         fi
         if [ "$(cat "$record" 2>/dev/null || true)" != off ]; then
             mkdir -p "${record%/*}"
+            rm -f "$record.dpkg-new"
             printf 'on\n' > "$record.dpkg-new"
             chmod 0644 "$record.dpkg-new"
-            mv -f "$record.dpkg-new" "$record"
+            mv -fT "$record.dpkg-new" "$record"
             if [ -d "${rule%/*}" ]; then
+                rm -f "$rule.dpkg-new"
                 cp "$DPKG_ROOT/usr/share/openxplorer/install-update.rules" "$rule.dpkg-new"
                 chmod 0644 "$rule.dpkg-new"
-                mv -f "$rule.dpkg-new" "$rule"
+                mv -fT "$rule.dpkg-new" "$rule"
             fi
         fi
         ;;
