@@ -8,7 +8,8 @@
 //! a name whose extension names no type keeps it, so it is never mistaken
 //! for another file. The desktop's register of file types here is the
 //! shared MIME database, which GIO reads: an extension is known when GIO
-//! names a type for it from the name alone, without guessing. Folders
+//! names a type for it from the name alone, also when it is unsure which
+//! of several types sharing the extension it is. Folders
 //! never lose anything, a name that starts with a dot and has no other
 //! (`.bashrc`) keeps it whole, and only the last extension goes, so
 //! `backup.tar.gz` shows as `backup.tar`, as in Windows.
@@ -36,12 +37,16 @@ pub(crate) fn shows_whole(entry: &Entry) -> bool {
 
 /// The extension a view hides of `name`, with its dot, or `None` when the
 /// name shows whole; `is_folder` is true for a name that always shows
-/// whole ([`shows_whole`]).
+/// whole ([`shows_whole`]). An extension of digits alone ("Notes v2.1",
+/// "Q3.2025") is part of the name, as people number versions that way,
+/// though the desktop knows `.1` as a manual page; the Open and Save
+/// dialog reads such a name the same way.
 pub(crate) fn hidden_extension(name: &str, is_folder: bool, extensions: Extensions) -> Option<&str> {
     if is_folder || extensions == Extensions::Shown {
         return None;
     }
     ox_core::entry::known_extension(name)
+        .filter(|extension| !extension[1..].chars().all(|character| character.is_ascii_digit()))
 }
 
 /// The name a view shows for `name`.
