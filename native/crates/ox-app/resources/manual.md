@@ -41,7 +41,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 - As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.
 - F11 shows the window full screen; press it again to get the window back as it was.
 - Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size.
-- Ctrl+Shift+E opens the navigation pane down to the folder you are in and moves to it there. In the navigation pane, the keypad's plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it.
+- While the navigation pane is shown, Ctrl+Shift+E opens it down to the folder you are in and moves to it there. In the navigation pane, the keypad's plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it.
 - Ctrl+F5 refreshes like F5. Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V.
 
 ## Search
