@@ -14,7 +14,7 @@ use crate::test_support::harness::{settle, wait_until, Fixture, TestWindow};
 
 /// Presses `key` in the in-place name field `editor`, as far as its own
 /// key handler goes.
-fn press_in(editor: &gtk::Entry, key: gdk::Key) {
+pub(super) fn press_in(editor: &gtk::Entry, key: gdk::Key) {
     let keys = editor
         .observe_controllers()
         .iter::<glib::Object>()

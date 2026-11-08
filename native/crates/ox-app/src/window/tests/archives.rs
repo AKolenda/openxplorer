@@ -835,3 +835,41 @@ fn compress_to_tar_puts_the_selection_into_a_new_tar_beside_it() {
         });
     }
 }
+
+/// Compress to › TAR File and ZIP File work as in Windows 11: the new
+/// archive appears beside the item under the next free name ("(2)" when
+/// the name is taken), selected and renamed in place, and Undo takes it
+/// away again, to the Recycle Bin.
+///
+/// parity: ARC-023, OPS-029
+#[gtk::test]
+fn a_new_archive_is_renamed_in_place_and_undo_takes_it_away() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Notes 2.tar"), b"taken").expect("a file with the TAR's name");
+    let test = TestWindow::open(&fixture.uri());
+    for (action, archive) in [
+        ("compress-to-tar", "Notes 2 (2).tar"),
+        ("compress-to-zip", "Notes 2.zip"),
+    ] {
+        test.wait_for_listing("the folder");
+        test.select_named("Notes 2.txt");
+        test.activate(action, None);
+
+        wait_until("the new archive renamed in place", || {
+            super::file_ops_support::is_renaming_in_place(&test)
+        });
+        assert_eq!(test.selected_names(), [archive], "{action}");
+        let field = super::file_ops_support::name_editor(&test);
+        super::new_folder::press_in(&field, gtk::gdk::Key::Escape);
+        wait_until("the rename to end", || {
+            !super::file_ops_support::is_renaming_in_place(&test)
+        });
+        assert!(fixture.path(archive).exists(), "{action}");
+
+        test.activate("undo", None);
+
+        wait_until("the archive to go", || !fixture.path(archive).exists());
+    }
+    assert_eq!(fs::read(fixture.path("Notes 2.tar")).expect("kept"), b"taken");
+}
