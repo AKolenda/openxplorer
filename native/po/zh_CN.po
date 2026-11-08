@@ -6079,6 +6079,11 @@ msgstr "TB"
 msgid "{bytes} bytes"
 msgstr "{bytes} 字节"
 
+#: crates/ox-core/src/format/explorer_text.rs
+msgid "{bytes} byte"
+msgid_plural "{bytes} bytes"
+msgstr[0] "{bytes} 字节"
+
 #: crates/ox-core/src/format.rs
 msgid "{value} {unit}"
 msgstr "{value} {unit}"

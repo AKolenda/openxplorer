@@ -64,7 +64,7 @@ fn infotip(item: &FileItem) -> Option<String> {
             lines.push(format_message("Type: {type}", &[("type", &entry.type_label)]));
         }
         if let Some(size) = item.file_size() {
-            let size = format::size_text(Some(size));
+            let size = format::short_size(size);
             lines.push(format_message("Size: {size}", &[("size", &size)]));
         }
         if entry.modified.is_some() {
@@ -189,7 +189,7 @@ mod tests {
             RowTooltip::default().text(&item),
             Some(format!(
                 "Type: Text document\nSize: {}\nDate modified: {}",
-                format::size_text(Some(2_048)),
+                format::short_size(2_048),
                 format::date_short_time_text(Some(1_789_378_200))
             ))
         );

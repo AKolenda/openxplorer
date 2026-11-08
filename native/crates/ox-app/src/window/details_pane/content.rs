@@ -245,7 +245,7 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
     let size = if entry.is_dir {
         String::new()
     } else {
-        entry.size.map(format::pretty_bytes).unwrap_or_default()
+        entry.size.map(format::short_size).unwrap_or_default()
     };
     // A folder lists Type, File location and Date modified, as Windows'
     // pane does; a file adds its Size and Date created.
@@ -357,7 +357,7 @@ fn total_size_text(items: &[FileItem]) -> Option<String> {
         let size = entry.size.filter(|_| !entry.is_dir)?;
         total = total.saturating_add(size);
     }
-    Some(format::pretty_bytes(total))
+    Some(format::short_size(total))
 }
 
 /// A date row: the day and the time without seconds, as the Date
@@ -454,7 +454,7 @@ mod tests {
         assert_eq!(content.name, "Notes.txt");
         assert_eq!(
             property(&content, keys::SIZE),
-            Some(format::pretty_bytes(2048).as_str())
+            Some(format::short_size(2048).as_str())
         );
         assert_eq!(
             property(&content, keys::MODIFIED),
@@ -609,7 +609,7 @@ mod tests {
         assert_eq!(names(&content), ["Size"]);
         assert_eq!(
             property(&content, keys::SIZE),
-            Some(format::pretty_bytes(3000).as_str())
+            Some(format::short_size(3000).as_str())
         );
 
         let with_folder = [FileItem::new(first), FileItem::new(folder_entry("Projects"))];

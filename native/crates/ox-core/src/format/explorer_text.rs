@@ -15,16 +15,19 @@ const LONG_DATE: &str = crate::i18n::message_id("%B %-d, %Y");
 /// `314 KB (322,003 bytes)`: the short size with three significant
 /// digits, truncated as Explorer truncates them, then every byte.
 pub fn exact_size_text(bytes: u64) -> String {
+    let pattern = crate::i18n::ngettext("{short} ({bytes} byte)", "{short} ({bytes} bytes)", bytes);
     crate::i18n::format_message(
-        "{short} ({bytes} bytes)",
+        &pattern,
         &[("short", &short_size(bytes)), ("bytes", &grouped(bytes))],
     )
 }
 
 /// A size as Explorer writes it in Properties before the parenthesis and
-/// in its status bar: `912 bytes`, `1.50 KB`, `15.4 MB`, `314 KB`. A size
-/// from 1000 of a unit up is written in the next unit (`0.97 MB`), as
-/// Explorer writes it, so it never has four digits.
+/// in its status bar: `1 byte`, `912 bytes`, `1.50 KB`, `15.4 MB`, `314
+/// KB`. A size from 1000 of a unit up is written in the next unit (`0.97
+/// MB`), as Explorer writes it, so it never has four digits. The status
+/// bar, the details pane and an item's tooltip all write a size with it,
+/// so one file has one size wherever it is shown outside the Size column.
 pub fn short_size(bytes: u64) -> String {
     short_size_with(bytes, &Separators::current())
 }
@@ -37,8 +40,9 @@ fn short_size_with(bytes: u64, separators: &Separators) -> String {
         .find(|unit| u128::from(bytes) * 1024 >= u128::from(unit.bytes) * 1000)
         .filter(|_| bytes >= 1024)
     else {
+        let pattern = crate::i18n::ngettext("{bytes} byte", "{bytes} bytes", bytes);
         return crate::i18n::format_message(
-            "{bytes} bytes",
+            &pattern,
             &[("bytes", &grouped_with(bytes, &separators.thousands))],
         );
     };
