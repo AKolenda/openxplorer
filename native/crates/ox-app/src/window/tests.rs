@@ -44,6 +44,7 @@ mod folder_options;
 mod folder_tree;
 mod geometry;
 mod group_by;
+mod group_heading_look;
 mod history;
 mod icons;
 mod input;
