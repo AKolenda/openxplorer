@@ -39,6 +39,8 @@ const HOTSPOTS_VARIABLE: &str = "OPENXPLORER_HOTSPOTS";
 /// The variable naming the tab of the Properties window to save in the
 /// browser window's place.
 const PROPERTIES_VARIABLE: &str = "OPENXPLORER_PROPERTIES";
+/// Whether the window is a Save dialog (`1`).
+const SAVE_DIALOG_VARIABLE: &str = "OPENXPLORER_SAVE_DIALOG";
 
 /// The size of a window's title bar and contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +88,10 @@ pub(crate) struct SnapshotRequest {
     /// place of the browser window (`general`, `customize`, ...), or
     /// `None` to save the browser window.
     pub properties: Option<String>,
+    /// Whether the window is another application's Save dialog, saving
+    /// `Untitled.txt` in the first tab's folder, as the desktop portal
+    /// asks for one (`OPENXPLORER_SAVE_DIALOG=1`).
+    pub save_dialog: bool,
 }
 
 impl SnapshotRequest {
@@ -139,6 +145,10 @@ impl SnapshotRequest {
             search: non_empty(&lookup, SEARCH_VARIABLE),
             scene: scene.unwrap_or_default(),
             hotspots: non_empty(&lookup, HOTSPOTS_VARIABLE).map(PathBuf::from),
+            save_dialog: parse_variable(&lookup, SAVE_DIALOG_VARIABLE, "1", |value| {
+                (value == "1").then_some(true)
+            })?
+            .unwrap_or(false),
             properties: parse_variable(
                 &lookup,
                 PROPERTIES_VARIABLE,
@@ -226,6 +236,7 @@ mod tests {
             scene: Vec::new(),
             hotspots: None,
             properties: None,
+            save_dialog: false,
         };
         assert_eq!(asked.expect("valid variables"), Some(expected));
     }

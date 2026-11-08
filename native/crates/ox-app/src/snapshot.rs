@@ -27,7 +27,10 @@
 //! - `OPENXPLORER_PROPERTIES`: once the scene has run, shows this tab
 //!   (`general`, `security`, `customize`, ...) of the Properties window
 //!   the scene opened last and saves that window instead, once it has
-//!   read its item.
+//!   read its item;
+//! - `OPENXPLORER_SAVE_DIALOG=1`: the window is another application's
+//!   Save dialog for `Untitled.txt` in the first tab's folder, as the
+//!   desktop portal opens one; no application waits for its answer.
 //!
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it

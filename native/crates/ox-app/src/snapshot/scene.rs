@@ -25,7 +25,14 @@
 //!   as a Tab to it would; with several, the last in the window, which is
 //!   the details pane's;
 //! - `wait=<milliseconds>`: lets work the app does in the background, such
-//!   as building the search cache, finish first (at most ten seconds).
+//!   as building the search cache, finish first (at most ten seconds);
+//! - `key=<accelerator>`: presses the key, as GTK writes it (such as
+//!   `<Primary><Shift>e` or `KP_Multiply`), where keyboard focus is: the
+//!   application's accelerators first, then the key handlers and shortcut
+//!   controllers from the window down to the focused widget and back up,
+//!   as GTK hands a key event round (GTK cannot make a key event itself);
+//! - `zoom=<steps>`: the layout that many steps bigger, or smaller when
+//!   negative, as Ctrl+wheel notches over the file list give it.
 //!
 //! The steps drive the window through the same actions its buttons, menus
 //! and keys use, so the picture shows the app as a user would see it. They
@@ -34,7 +41,9 @@
 
 use std::time::Duration;
 
+use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
+use gtk::{gdk, gio, glib};
 
 use crate::window::BrowserWindow;
 
@@ -64,6 +73,10 @@ pub(crate) enum SceneStep {
     Focus(String),
     /// Wait this long before the next step.
     Wait(Duration),
+    /// Press this key, as GTK parses it, where keyboard focus is.
+    Key(String),
+    /// Zoom the layout this many Ctrl+wheel steps.
+    Zoom(i32),
 }
 
 impl SceneStep {
@@ -101,6 +114,9 @@ impl SceneStep {
                     target,
                 })
             }
+            // GTK reads the key when the step runs: it is not started yet.
+            "key" => Some(Self::Key(argument.to_owned())),
+            "zoom" => argument.parse().ok().map(Self::Zoom),
             "wait" => {
                 let pause = Duration::from_millis(argument.parse().ok()?);
                 (pause <= LONGEST_WAIT).then_some(Self::Wait(pause))
@@ -159,8 +175,116 @@ impl SceneStep {
                 Ok(Duration::ZERO)
             }
             Self::Wait(pause) => Ok(*pause),
+            Self::Key(accelerator) => {
+                // A key shows where keyboard focus is, as on a desktop.
+                window.set_focus_visible(true);
+                press_key(window, accelerator)
+                    .then_some(crate::window::MENU_OPENING_MOTION)
+                    .ok_or_else(|| format!("{accelerator} is not a key, or nothing in the window took it"))
+            }
+            Self::Zoom(steps) => {
+                window.zoom_view(*steps);
+                Ok(Duration::ZERO)
+            }
         }
     }
+}
+
+/// Presses `accelerator` where keyboard focus is in `window`, as GTK
+/// hands a key event round: the application's accelerators, then each
+/// widget's key handlers and shortcuts from the window down to the
+/// focused widget in the capture phase, and back up in the bubble phase.
+/// Whether something took the key.
+fn press_key(window: &BrowserWindow, accelerator: &str) -> bool {
+    let Some((key, modifiers)) = gtk::accelerator_parse(accelerator) else {
+        return false;
+    };
+    if let Some(app) = window.application() {
+        for detailed in app.actions_for_accel(accelerator) {
+            let Ok((name, target)) = gio::Action::parse_detailed_name(&detailed) else {
+                continue;
+            };
+            if WidgetExt::activate_action(window, &name, target.as_ref()).is_ok() {
+                return true;
+            }
+        }
+    }
+    let mut chain: Vec<gtk::Widget> = Vec::new();
+    let mut widget = GtkWindowExt::focus(window).or_else(|| Some(window.clone().upcast()));
+    while let Some(current) = widget {
+        widget = current.parent();
+        chain.push(current);
+    }
+    let capture = chain
+        .iter()
+        .rev()
+        .any(|widget| takes_key(widget, gtk::PropagationPhase::Capture, key, modifiers));
+    capture
+        || chain.iter().enumerate().any(|(index, widget)| {
+            (index == 0 && takes_key(widget, gtk::PropagationPhase::Target, key, modifiers))
+                || takes_key(widget, gtk::PropagationPhase::Bubble, key, modifiers)
+        })
+}
+
+/// Whether one of `widget`'s controllers in `phase` takes the key.
+fn takes_key(
+    widget: &gtk::Widget,
+    phase: gtk::PropagationPhase,
+    key: gdk::Key,
+    modifiers: gdk::ModifierType,
+) -> bool {
+    let controllers: Vec<gtk::EventController> = widget
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::EventController>().ok())
+        .filter(|controller| controller.propagation_phase() == phase)
+        .collect();
+    controllers.iter().any(|controller| {
+        if let Some(shortcuts) = controller.downcast_ref::<gtk::ShortcutController>() {
+            return shortcuts
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .filter(|shortcut| {
+                    shortcut
+                        .trigger()
+                        .is_some_and(|trigger| triggered(&trigger, key, modifiers))
+                })
+                .any(|shortcut| {
+                    shortcut.action().is_some_and(|action| {
+                        action.activate(
+                            gtk::ShortcutActionFlags::empty(),
+                            widget,
+                            shortcut.arguments().as_ref(),
+                        )
+                    })
+                });
+        }
+        controller
+            .downcast_ref::<gtk::EventControllerKey>()
+            .is_some_and(|keys| {
+                keys.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &0_u32, &modifiers])
+            })
+    })
+}
+
+/// Whether `trigger`, or one of its alternatives, is `key` with exactly
+/// `modifiers`.
+fn triggered(trigger: &gtk::ShortcutTrigger, key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+    if let Some(alternatives) = trigger.downcast_ref::<gtk::AlternativeTrigger>() {
+        if let Some(list) = alternatives.dynamic_cast_ref::<gio::ListModel>() {
+            return list
+                .iter::<gtk::ShortcutTrigger>()
+                .filter_map(Result::ok)
+                .any(|alternative| triggered(&alternative, key, modifiers));
+        }
+        return triggered(&alternatives.first(), key, modifiers)
+            || triggered(&alternatives.second(), key, modifiers);
+    }
+    trigger
+        .downcast_ref::<gtk::KeyvalTrigger>()
+        .is_some_and(|keys| keys.keyval() == key && keys.modifiers() == modifiers)
 }
 
 #[cfg(test)]
@@ -207,6 +331,19 @@ mod tests {
             SceneStep::parse_scene("wait=60000"),
             None,
             "longer than ten seconds"
+        );
+        assert_eq!(SceneStep::parse_scene("zoom=big"), None);
+    }
+
+    #[test]
+    fn a_scene_takes_keys_and_zoom_steps() {
+        assert_eq!(
+            SceneStep::parse_scene("key=<Primary><Shift>e; key=KP_Multiply; zoom=-2"),
+            Some(vec![
+                SceneStep::Key("<Primary><Shift>e".to_owned()),
+                SceneStep::Key("KP_Multiply".to_owned()),
+                SceneStep::Zoom(-2),
+            ])
         );
     }
 }
