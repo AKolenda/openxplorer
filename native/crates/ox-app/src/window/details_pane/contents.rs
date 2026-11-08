@@ -486,10 +486,14 @@ pub(super) fn allowed(path: &Path, local_only: bool) -> bool {
 }
 
 /// The plain file at `path`, opened for reading: a link is followed, but
-/// a pipe or a device is not waited on (the open does not block) and is
-/// refused by the opened descriptor's own type, so nothing swapped in
-/// after a check is read. Blocks.
+/// a pipe or a device is never opened (opening some devices does
+/// something, as a tape rewinds), nor waited on when one is swapped in
+/// after that check (the open does not block), and it is refused by the
+/// opened descriptor's own type, so nothing swapped in is read. Blocks.
 fn open_plain_file(path: &Path) -> Option<fs::File> {
+    if !fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
     let file = fs::OpenOptions::new()
         .read(true)
         .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed())
