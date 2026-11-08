@@ -3,8 +3,9 @@
 //! Compress to ZIP file.
 //!
 //! With `OX_NATIVE_CAPTURE_DIR` set, these also save
-//! `native-archive-browser.png`, `native-extract-dialog.png` and
-//! `native-extract-conflict-{light,dark}.png`.
+//! `native-archive-browser.png`, `native-extract-dialog.png`,
+//! `native-extract-conflict-{light,dark}.png` and
+//! `native-compress-to-submenu-{light,dark}.png`.
 
 use std::fs;
 use std::path::Path;
@@ -772,6 +773,27 @@ fn compress_to_tar_puts_the_selection_into_a_new_tar_beside_it() {
     };
     test.context
         .update_preferences(choose, |result| result.expect("saved"));
+    test.wait_for_listing("the folder");
+    test.select_named("Notes 2.txt");
+    let notes = test
+        .window
+        .folder_pane()
+        .model()
+        .first_selected()
+        .expect("Notes 2.txt is selected");
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.window.right_click(Some(notes));
+        let menu = test.window.context_menu();
+        assert!(test.window.open_context_submenu("Compress to"));
+        crate::test_support::harness::capture_with_menus(
+            &test.window,
+            &format!("native-compress-to-submenu-{theme}.png"),
+        );
+        menu.popdown();
+        wait_until("the menu to close", || !menu.is_mapped());
+    }
     let cases: [(&[&str], &str, &[&str]); 3] = [
         (&["Notes 2.txt"], "Notes 2.tar", &["Notes 2.txt"]),
         (
