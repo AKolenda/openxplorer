@@ -429,7 +429,11 @@ gridview.files .group-slot { padding: 0; }
 gridview.files .group-slot.heading-row { padding: 5px 0; margin-top: 8px; }
 gridview.files.tiles.grouped { padding-top: 3px; }
 gridview.files.content.grouped { padding-top: 0; }
-gridview.files.tiles .group-slot .group-header.group-heading { margin-left: 12px; }
+/* A heading's box in Tiles starts and ends 4px in from the row's edges,
+   as the tiles' boxes do, and its chevron and title stay where they were. */
+gridview.files.tiles .item-cell.heading-row.row-start { margin-left: 4px; }
+gridview.files.tiles .item-cell.heading-row.row-end { margin-right: 4px; }
+gridview.files.tiles .group-slot .group-header.group-heading { margin-left: 8px; }
 gridview.files.content .group-slot .group-header.group-heading { margin-left: 16px; }
 gridview.files .group-slot .group-header { border-spacing: 8px; }
 /* A heading's row acts as one, as Windows 11's does (VIEW-022): the

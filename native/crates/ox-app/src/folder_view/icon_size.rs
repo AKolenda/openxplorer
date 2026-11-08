@@ -278,11 +278,12 @@ pub(crate) fn compact_density_tiles_row(text_size: TextSize) -> i32 {
 }
 
 /// Pixels of a group heading's row in Tiles beside its title in Compact
-/// view: a 2-pixel gap above, 2 pixels of padding above and below the
-/// title and a 3-pixel gap under it (`theme/fonts.rs`), so a heading over
+/// view: no gap above, 4 pixels of padding above and below the title,
+/// room inside its hover box, and a 1-pixel gap under it
+/// (`theme/fonts.rs`), so a heading over
 /// one row of tiles stands 83 pixels above the next at 100%, as in
 /// Windows 11's Compact view.
-pub(crate) const COMPACT_TILES_HEADING_CHROME: i32 = 2 + 2 + 2 + 3;
+pub(crate) const COMPACT_TILES_HEADING_CHROME: i32 = 4 + 4 + 1;
 
 /// Pixels of a group heading's row in Content beside its title in Compact
 /// view: a 2-pixel gap above, 5 pixels of padding above and below the
