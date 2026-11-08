@@ -142,7 +142,7 @@ pub fn require_share(address: &str) -> Result<String, LocationError> {
 /// the device storage first for a whole SMB server or share or a device
 /// root.
 pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
-    let uri = normalise(uri)?;
+    let uri = normalise(uri).or_else(|refusal| listed_item_uri(uri).ok_or(refusal))?;
     let parts = split_location(&uri)?;
     // Safety rule (`core.py::require_item_uri`): a whole server, share or
     // device is never renamed, moved, copied or trashed as if it were a
@@ -166,6 +166,38 @@ pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
         )));
     }
     Ok(uri)
+}
+
+/// The canonical URI of an item another program named with a control
+/// character (a line break) or with bytes that are not UTF-8, which Linux
+/// allows in any name but `/` and NUL; `None` for any other URI.
+///
+/// [`normalise`] refuses such a name, as it must for an address the user
+/// types (`core.py`: `CONTROL.search(decoded)`), but an item already listed
+/// is no typed address: its URI comes from GIO, and Windows Explorer
+/// renames, copies and deletes every item it lists. The server, share or
+/// device part still goes through [`normalise`], and the path must be the
+/// absolute, already normal path GIO lists an item with (no `.` or `..`,
+/// no empty segment, no query or fragment), so nothing here can reach
+/// outside the item. The name keeps its exact bytes, escaped as
+/// [`normalise`] escapes every path.
+fn listed_item_uri(uri: &str) -> Option<String> {
+    let (scheme, rest) = uri.split_once("://")?;
+    let (authority, escaped_path) = rest.split_at(rest.find('/')?);
+    if escaped_path.contains(['?', '#']) {
+        return None;
+    }
+    let path: Vec<u8> = percent_encoding::percent_decode_str(escaped_path).collect();
+    let typed_would_be_refused = std::str::from_utf8(&path).map_or(true, has_control_character);
+    let segments = path[1..].split(|byte| *byte == b'/');
+    let is_listed_path = segments.into_iter().all(|segment| !matches!(segment, b"" | b"." | b".."))
+        && !(scheme.eq_ignore_ascii_case("smb") && path.contains(&b'\\'));
+    if !typed_would_be_refused || !is_listed_path {
+        return None;
+    }
+    let root = normalise(&format!("{scheme}://{authority}/")).ok()?;
+    let root = root.strip_suffix('/')?;
+    Some(format!("{root}{}", percent_encode(&path, PYTHON_PATH_SAFE)))
 }
 
 /// True for an SMB server listing (`smb://host/`): it holds shares, not
