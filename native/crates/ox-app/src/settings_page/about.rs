@@ -67,7 +67,7 @@ const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
     text: RowText {
         title: "OpenXplorer · License & source",
         description: "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty.",
-        keywords: "licence agpl source code copyright mit notice. Original component notices are \
+        keywords: "license licence agpl source code copyright mit notice. Original component notices are \
                    preserved.",
     },
     button: crate::i18n::message_id("Read license & source information"),

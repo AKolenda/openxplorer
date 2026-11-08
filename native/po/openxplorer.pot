@@ -54,7 +54,7 @@ msgid "- View switches between Details, Compact list and icon sizes; its slider 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the license and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -2833,7 +2833,7 @@ msgid "keys keyboard shortcuts hotkeys accelerators bindings list ctrl+? cheat s
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgid "license licence agpl source code copyright mit notice. Original component notices are preserved."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -4093,7 +4093,7 @@ msgid "What OpenXplorer asks before it deletes, runs or closes."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs
-msgid "What this build is, how it is updated and its licence."
+msgid "What this build is, how it is updated and its license."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs

@@ -2052,7 +2052,7 @@ msgid "Updates"
 msgstr "更新"
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgid "license licence agpl source code copyright mit notice. Original component notices are preserved."
 msgstr "许可证 agpl 源代码 版权 mit 声明。原始组件的声明均已保留。"
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -3230,7 +3230,7 @@ msgid "What OpenXplorer asks before it deletes, runs or closes."
 msgstr "OpenXplorer 在删除、运行或关闭前会询问什么。"
 
 #: crates/ox-app/src/settings_page/pages.rs
-msgid "What this build is, how it is updated and its licence."
+msgid "What this build is, how it is updated and its license."
 msgstr "此构建是什么、如何更新及其许可证。"
 
 #: crates/ox-app/src/settings_page/pages.rs
