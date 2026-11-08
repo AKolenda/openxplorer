@@ -8,7 +8,9 @@
 
 use crate::folder_view::grid::{self, IconSize};
 use crate::folder_view::icon_size::{
-    compact_row, content_row, group_heading_row, tiles_cell, CONTENT_CHROME, HEADING_CHROME, TILES_CHROME,
+    compact_density_details_row, compact_density_heading_row, compact_density_tiles_row, compact_row,
+    content_row, group_heading_row, tiles_cell, COMPACT_CONTENT_HEADING_CHROME, COMPACT_TILES_CHROME,
+    COMPACT_TILES_HEADING_CHROME, CONTENT_CHROME, HEADING_CHROME, TILES_CHROME,
 };
 use crate::text_size::{self, TextSize};
 
@@ -208,11 +210,22 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
 /// 2026-11-06; the web's were 35).
 const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list.places > row", 31, 20.0, 11.0);
 
-/// A sidebar row in Compact view: 24 pixels at 100% instead of 31, as
-/// Windows 11's Compact view packs them, and no lower, as Compact view's
-/// details rows, growing with the text as the usual rows do.
+/// A sidebar row in Compact view: 23 pixels at 100% instead of 31, 24
+/// apart with the 1-pixel gap, as Windows 11's Compact view packs them,
+/// growing with the text as the usual rows do. A separator keeps its 24
+/// pixels, one row's room, as in Windows.
 const COMPACT_SIDEBAR_ROW: ScaledHeight =
-    grows("window.compact-density .sidebar list.places > row", 24, 20.0, 4.0);
+    grows("window.compact-density .sidebar list.places > row", 23, 20.0, 3.0);
+
+/// The column titles in Compact view: 26 pixels at 100% instead of 31, as
+/// Windows 11's Compact view draws its column header, growing with the
+/// text as the usual titles do.
+const COMPACT_COLUMN_TITLES: ScaledHeight = grows(
+    "window.compact-density columnview.files > header > button",
+    26,
+    24.0,
+    2.0,
+);
 
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
@@ -283,23 +296,44 @@ fn details_row_rule(detail_row: i32) -> String {
     )
 }
 
-/// Compact view's rows (`window.compact-density`, set by
-/// `window/compact_density.rs`, VIEW-067): the sidebar's rows stand
-/// closer, and the details rows as close as the List layout's items
-/// ([`compact_row`]), less the 1-pixel margin above and below each, so
-/// rows 32 pixels apart at 100% stand 26 apart. The window class makes
-/// these rules win over the usual heights above. The folder tree's rows
-/// are in `skin/sidebar.css`, as their usual height is.
-fn compact_density_rules(scale: f64, text_size: TextSize) -> [String; 2] {
-    let row = compact_row(text_size) - 2;
-    [
+/// Compact view (`window.compact-density`, set by
+/// `window/compact_density.rs`, VIEW-067), spaced as Windows 11's Compact
+/// view at 100%: Details rows 21 pixels apart (19 less the 1-pixel margin
+/// above and below each), a group heading's box as tall as a row with 5
+/// pixels above it and 6 below, so its title stands 26 pixels under the
+/// row before and 27 over the row after; the column titles 26 tall; the
+/// sidebar's rows 24 apart; rows of Tiles 57 apart, a heading 26 tall;
+/// Content's items as usual (Windows 11 spaces them 48 apart in both
+/// views) under a heading 32 tall. The window class makes these rules win
+/// over the usual ones. The folder tree's rows are in `skin/sidebar.css`,
+/// as their usual height is.
+fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
+    let row = compact_density_details_row(text_size) - 2;
+    let tile = compact_density_tiles_row(text_size) - COMPACT_TILES_CHROME;
+    let tiles_heading = compact_density_heading_row(text_size, false) - COMPACT_TILES_HEADING_CHROME;
+    let content_heading = compact_density_heading_row(text_size, true) - COMPACT_CONTENT_HEADING_CHROME;
+    vec![
+        format!("window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}"),
         format!(
-            "window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}\n\
-             window.compact-density columnview.files > listview > row > cell > .group-slot, \
+            "window.compact-density columnview.files > listview > row > cell > .group-slot, \
              window.compact-density columnview.files > listview > row > cell > .group-rule \
-             {{ min-height: {row}px; }}"
+             {{ min-height: {row}px; margin-top: 5px; padding-bottom: 6px; }}"
         ),
+        COMPACT_COLUMN_TITLES.rule(scale),
         COMPACT_SIDEBAR_ROW.rule(scale),
+        format!(
+            "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) \
+             {{ min-height: {tile}px; padding-top: 4px; padding-bottom: 4px; margin: 0 4px 1px 4px; }}"
+        ),
+        "window.compact-density gridview.files.tiles > child .item-lines { border-spacing: 2px; }".to_owned(),
+        format!(
+            "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
+             {{ min-height: {tiles_heading}px; margin: 1px 0 4px 0; padding: 2px 0; }}"
+        ),
+        format!(
+            "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
+             {{ min-height: {content_heading}px; margin: 3px 0 2px 0; padding: 5px 0; }}"
+        ),
     ]
 }
 
