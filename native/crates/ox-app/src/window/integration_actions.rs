@@ -13,6 +13,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::entry::EntryError;
 use ox_core::integration::TerminalError;
 use ox_core::location::{is_smb_server, parent_location};
 use ox_core::settings::PreferencesUpdate;
@@ -59,6 +60,9 @@ struct CommandSubject {
     name: String,
     /// It opens as a folder.
     is_folder: bool,
+    /// It is the file a row of Recent files stands for, which may have
+    /// gone since the row was listed.
+    is_recent_file: bool,
 }
 
 impl BrowserWindow {
@@ -122,6 +126,7 @@ impl BrowserWindow {
                     uri: entry.opened_uri().to_owned(),
                     name: entry.name.clone(),
                     is_folder: entry.is_dir,
+                    is_recent_file: entry.meta.recent_target.is_some(),
                 })
             }
             _ => None,
@@ -139,20 +144,37 @@ impl BrowserWindow {
             uri,
             name,
             is_folder: true,
+            is_recent_file: false,
         })
     }
 
-    /// Open with…: the Open with dialog for the item.
+    /// Open with…: the Open with dialog for the item. The file a Recent
+    /// row stands for is looked up first: when it is gone, "Item Not
+    /// Found" says so, as opening the row does.
     fn open_with(&self) {
         let Some(subject) = self.command_subject() else {
             return;
         };
+        let is_recent_file = subject.is_recent_file;
         let subject = OpenWithSubject {
             uri: subject.uri,
             name: subject.name,
             is_folder: subject.is_folder,
         };
-        self.present_open_with(subject);
+        if !is_recent_file {
+            self.present_open_with(subject);
+            return;
+        }
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                match super::activation::query_entry(&subject.uri).await {
+                    Err(EntryError::NotFound(_)) => window.report_item_not_found(&subject.uri),
+                    _ => window.present_open_with(subject),
+                }
+            }
+        ));
     }
 
     /// Open folder with…: the Open with dialog for the folder at `uri`,
@@ -418,9 +440,18 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let prepared = integration::prepare_launch(subject.uri, app_id.clone()).await;
+                let prepared = integration::prepare_launch(subject.uri.clone(), app_id.clone()).await;
                 let launched = prepared
                     .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
+                if subject.is_recent_file
+                    && matches!(
+                        launched,
+                        Err(integration::OpenWithError::Entry(EntryError::NotFound(_)))
+                    )
+                {
+                    window.report_item_not_found(&subject.uri);
+                    return;
+                }
                 let message = match launched {
                     Ok(_) => ox_core::i18n::format_message("Opened with {name}", &[("name", &name)]),
                     Err(error) => error.to_string(),
