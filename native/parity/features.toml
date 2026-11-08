@@ -5953,7 +5953,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order, the_edit_commands_follow_the_selection_with_their_python_tooltips); native/crates/ox-app/src/window/file_ops/delete_label.rs (delete_reads_delete_except_in_the_recycle_bin)."
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order, the_edit_commands_follow_the_selection_with_their_python_tooltips); native/crates/ox-app/src/window/file_ops/delete_label.rs (delete_reads_delete_except_in_the_recycle_bin). Since 2026-11-08 the \u2026 button's tooltip and accessible name are 'See more', as Microsoft names it (https://support.microsoft.com/en-us/windows/experience/fileexplorer/file-explorer-in-windows), in place of the Python app's 'More options' (the_command_bar_has_the_current_controls_in_order)."
 
 [[feature]]
 id = "CMD-002"
