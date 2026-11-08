@@ -5068,7 +5068,7 @@ msgstr[1] ""
 msgid "{selected} items selected"
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/media.rs
+#: crates/ox-app/src/window/details_pane/contents.rs crates/ox-app/src/window/details_pane/media.rs
 msgid "Preview"
 msgstr ""
 
@@ -5087,6 +5087,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/details_pane/options_menu.rs
 msgid "Show the item under the pointer"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/preview_page.rs
+msgid "No preview available."
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/preview_page.rs
+msgid "Select a file to preview."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
