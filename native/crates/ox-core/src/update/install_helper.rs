@@ -45,8 +45,10 @@
 //!   runs is refused at once, before it asks anything or downloads, so
 //!   repeated starts cannot pile up root processes or downloads;
 //! - never waits on its standard output or error, which belong to the
-//!   caller: a report the caller does not read is dropped, so a caller
-//!   that stops reading cannot hold a root process or its download;
+//!   caller: a thread of their own writes them from a short queue, a
+//!   report that does not fit is dropped, and at the end the helper waits
+//!   at most [`REPORT_GRACE`] for the last one, so a caller that stops
+//!   reading cannot hold a root process, its lock or its download;
 //! - downloads into a fresh 0700 folder in its own root-owned
 //!   [`STAGING_FOLDER`], which only root can write, and accepts the file
 //!   only with the release's exact size and SHA-256 digest
@@ -78,9 +80,10 @@
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::fd::AsFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::time::Duration;
 
 use super::download::download_installer;
 use super::helper_report::{HelperFailure, HelperReport};
@@ -137,6 +140,14 @@ const REFUSED: u8 = 2;
 /// process hold an endless line.
 const MAX_INPUT_LINE: usize = 64;
 
+/// How many reports may wait for a caller that is slow to read them. An
+/// installation makes at most four.
+const REPORT_QUEUE: usize = 16;
+
+/// How long the helper waits, after it has finished, for its last report
+/// to be read before it exits anyway.
+pub const REPORT_GRACE: Duration = Duration::from_secs(5);
+
 /// The usage text, which `verify_layout.py` runs the installed helper to
 /// check that it starts at all.
 const USAGE: &str = "\
@@ -178,20 +189,17 @@ pub struct RootInstallParts<'a> {
 pub fn install_update_command(arguments: impl IntoIterator<Item = OsString>) -> u8 {
     let version = match read_request(arguments) {
         Request::Usage => {
-            let _ = write!(std::io::stdout().lock(), "{USAGE}");
+            say(std::io::stdout(), USAGE.to_owned());
             return INSTALLED;
         }
         Request::Refuse(reason) => {
-            let _ = writeln!(std::io::stderr().lock(), "{INSTALL_HELPER_COMMAND}: {reason}");
+            say(std::io::stderr(), format!("{INSTALL_HELPER_COMMAND}: {reason}\n"));
             return REFUSED;
         }
         Request::Install(version) => version,
     };
-    // From here on, nothing waits for the caller to read.
-    never_block(std::io::stdout().as_fd());
-    never_block(std::io::stderr().as_fd());
     if let Err(reason) = prepare_process() {
-        let _ = writeln!(std::io::stderr().lock(), "{INSTALL_HELPER_COMMAND}: {reason}");
+        say(std::io::stderr(), format!("{INSTALL_HELPER_COMMAND}: {reason}\n"));
         return REFUSED;
     }
     let cancel = Cancellation::new();
@@ -204,14 +212,17 @@ pub fn install_update_command(arguments: impl IntoIterator<Item = OsString>) -> 
         package_manager: &SystemPackageManager,
         staging_folder: Path::new(STAGING_FOLDER),
     };
-    let mut report = |line: HelperReport| write_report(std::io::stdout().as_fd(), &line);
-    match install_as_root(&parts, version, &mut report, &cancel) {
+    let reporter = Reporter::start(std::io::stdout());
+    let mut report = |line: HelperReport| reporter.send(line.encode() + "\n");
+    let status = match install_as_root(&parts, version, &mut report, &cancel) {
         Ok(()) => INSTALLED,
         Err(error) => {
             report(HelperReport::Failed(HelperFailure::of(&error)));
             FAILED
         }
-    }
+    };
+    reporter.finish(REPORT_GRACE);
+    status
 }
 
 /// Installs `requested` as root: the steps of the threat model in the
@@ -288,21 +299,62 @@ fn lock_staging_folder(staging_folder: &Path) -> Result<File, UpdateError> {
     }
 }
 
-/// Makes writes to `output` fail rather than wait when the reader does
-/// not read.
-fn never_block(output: impl AsFd) {
-    use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
-    if let Ok(flags) = fcntl_getfl(&output) {
-        let _ = fcntl_setfl(&output, flags | OFlags::NONBLOCK);
+/// Writes to an output the caller owns from a thread of its own, so the
+/// helper never waits for the caller to read.
+///
+/// Setting `O_NONBLOCK` would not do: the caller shares the open file
+/// description and can clear the flag again.
+struct Reporter {
+    /// Where texts wait for the writer; `None` once finished.
+    queue: Option<SyncSender<String>>,
+    /// Told when the writer has written everything, or given up.
+    written: Receiver<()>,
+}
+
+impl Reporter {
+    /// Starts the writer for `output`.
+    fn start(mut output: impl Write + Send + 'static) -> Self {
+        let (queue, texts) = mpsc::sync_channel::<String>(REPORT_QUEUE);
+        let (done, written) = mpsc::channel();
+        // Not joined: the process may end while it still waits.
+        std::thread::spawn(move || {
+            for text in texts {
+                if output
+                    .write_all(text.as_bytes())
+                    .and_then(|()| output.flush())
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            let _ = done.send(());
+        });
+        Self {
+            queue: Some(queue),
+            written,
+        }
+    }
+
+    /// Queues `text`, or drops it if the queue is full or the writer gave
+    /// up. Never waits.
+    fn send(&self, text: String) {
+        if let Some(queue) = &self.queue {
+            let _ = queue.try_send(text);
+        }
+    }
+
+    /// Waits at most `grace` for everything queued to be written.
+    fn finish(mut self, grace: Duration) {
+        drop(self.queue.take());
+        let _ = self.written.recv_timeout(grace);
     }
 }
 
-/// Writes `report` as one line to `output` with a single write, and drops
-/// it if the reader is gone or not reading.
-fn write_report(output: impl AsFd, report: &HelperReport) {
-    let mut line = report.encode().into_bytes();
-    line.push(b'\n');
-    let _ = rustix::io::write(output, &line);
+/// Writes `text` to `output` without waiting longer than [`REPORT_GRACE`].
+fn say(output: impl Write + Send + 'static, text: String) {
+    let reporter = Reporter::start(output);
+    reporter.send(text);
+    reporter.finish(REPORT_GRACE);
 }
 
 /// Reads the command line: one version, or `--help`.
@@ -526,20 +578,50 @@ mod tests {
         assert!(watched(&long));
     }
 
-    /// A caller that never reads the reports cannot hold the helper: once
-    /// the pipe is full, reports are dropped instead of waited on.
-    #[test]
-    fn reports_never_wait_for_a_reader() {
-        let (reader, writer) = std::io::pipe().unwrap();
-        never_block(&writer);
+    /// An output whose writes never return, as a pipe nobody reads.
+    struct NeverRead(Receiver<()>);
 
-        // Far more than a pipe holds; this returns only if no write waits.
-        for _ in 0..100_000 {
-            write_report(&writer, &HelperReport::Downloading);
+    impl Write for NeverRead {
+        fn write(&mut self, _bytes: &[u8]) -> std::io::Result<usize> {
+            let _ = self.0.recv();
+            Err(std::io::ErrorKind::BrokenPipe.into())
         }
 
-        drop(reader);
-        write_report(&writer, &HelperReport::Installing);
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// A caller that never reads the reports cannot hold the helper:
+    /// sending never waits, and finishing waits only the grace period.
+    #[test]
+    fn reports_never_wait_for_a_reader() {
+        let (_never, blocked) = mpsc::channel();
+        let started = std::time::Instant::now();
+        let reporter = Reporter::start(NeverRead(blocked));
+
+        for _ in 0..100_000 {
+            reporter.send(HelperReport::Downloading.encode());
+        }
+        reporter.finish(Duration::from_millis(100));
+
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    /// A caller that reads gets every report, in order.
+    #[test]
+    fn a_reading_caller_gets_every_report() {
+        let (reader, writer) = std::io::pipe().unwrap();
+        let reporter = Reporter::start(writer);
+
+        reporter.send(HelperReport::Downloading.encode() + "\n");
+        reporter.send(HelperReport::Installing.encode() + "\n");
+        reporter.finish(REPORT_GRACE);
+
+        let mut text = String::new();
+        std::io::BufReader::new(reader).read_to_string(&mut text).unwrap();
+        let reports: Vec<_> = text.lines().filter_map(HelperReport::decode).collect();
+        assert_eq!(reports, [HelperReport::Downloading, HelperReport::Installing]);
     }
 
     /// Only one installation runs at a time.
