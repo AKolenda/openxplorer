@@ -294,6 +294,23 @@ impl Entry {
     pub fn navigation_uri(&self) -> &str {
         self.target_uri.as_deref().unwrap_or(&self.uri)
     }
+
+    /// The address of the item a command acts on: for a row of Recent
+    /// files, the file it stands for ([`EntryMeta::recent_target`]);
+    /// otherwise the item's own address.
+    pub fn item_uri(&self) -> &str {
+        self.meta.recent_target.as_deref().unwrap_or(&self.uri)
+    }
+
+    /// The URI to open when the item is activated, as
+    /// [`Entry::navigation_uri`], except that a row of Recent files opens
+    /// the file it stands for.
+    pub fn opened_uri(&self) -> &str {
+        self.meta
+            .recent_target
+            .as_deref()
+            .unwrap_or_else(|| self.navigation_uri())
+    }
 }
 
 /// Whether the item named `name` at `uri` is a shortcut: a symbolic link,

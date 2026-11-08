@@ -110,7 +110,8 @@ impl BrowserWindow {
     }
 
     /// The one selected item, or the folder shown when nothing is
-    /// selected; `None` for several items or a landing page.
+    /// selected; `None` for several items or a landing page. A row of
+    /// Recent files is the file it stands for.
     fn command_subject(&self) -> Option<CommandSubject> {
         let items = self.folder_pane().model().selected_items();
         match items.as_slice() {
@@ -118,7 +119,7 @@ impl BrowserWindow {
             [item] => {
                 let entry = item.entry();
                 Some(CommandSubject {
-                    uri: entry.navigation_uri().to_owned(),
+                    uri: entry.opened_uri().to_owned(),
                     name: entry.name.clone(),
                     is_folder: entry.is_dir,
                 })
@@ -332,9 +333,9 @@ impl BrowserWindow {
         for item in items {
             let entry = item.entry();
             let folder = if entry.is_dir {
-                Some(entry.navigation_uri().to_owned())
+                Some(entry.opened_uri().to_owned())
             } else {
-                parent_location(&entry.uri)
+                parent_location(entry.item_uri())
             };
             if let Some(folder) = folder.filter(|folder| !folders.contains(folder)) {
                 folders.push(folder);

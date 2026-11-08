@@ -347,7 +347,16 @@ impl BrowserWindow {
             ));
             return;
         }
-        let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
+        // Copy puts the file a row of Recent files stands for on the
+        // clipboard; Cut keeps the row's own address, which the clipboard
+        // refuses, so it never moves a file out of its folder from Recent.
+        let uris: Vec<String> = items
+            .iter()
+            .map(|item| match mode {
+                ClipboardMode::Copy => item.entry().item_uri().to_owned(),
+                ClipboardMode::Cut => item.entry().uri.clone(),
+            })
+            .collect();
         // Inside a ZIP opened like a folder, copies are extracted first
         // (ARC-026).
         if let Some(inside) = crate::window::zip_copies::zip_items(&uris) {

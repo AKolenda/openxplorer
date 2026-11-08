@@ -173,7 +173,7 @@ impl BrowserWindow {
         } else {
             ItemKind::File
         };
-        self.named_target(entry.navigation_uri().to_owned(), entry.name.clone(), kind)
+        self.named_target(entry.opened_uri().to_owned(), entry.name.clone(), kind)
     }
 
     /// Whether `uri` is a standard folder (Documents, Downloads and the

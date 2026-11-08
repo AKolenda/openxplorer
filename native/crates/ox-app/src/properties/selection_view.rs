@@ -92,7 +92,7 @@ pub(crate) fn open_selection_properties(
     security.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
     let standard_folders = entries
         .iter()
-        .map(|entry| opener.is_standard_folder(entry.navigation_uri()))
+        .map(|entry| opener.is_standard_folder(entry.opened_uri()))
         .collect();
     let read = ReadItems {
         entries,
@@ -254,7 +254,7 @@ fn read_permissions(panel: &gtk::Box, read: ReadItems) {
         } = read;
         let mut items: Vec<ItemProperties> = Vec::new();
         for entry in entries {
-            let Ok(properties) = read_properties(entry.navigation_uri().to_owned()).await else {
+            let Ok(properties) = read_properties(entry.opened_uri().to_owned()).await else {
                 items.clear();
                 break;
             };
