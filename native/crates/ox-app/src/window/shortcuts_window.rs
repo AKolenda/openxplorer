@@ -378,7 +378,7 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::harness::{descendants, Fixture, TestWindow};
+    use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 
     /// The window lists every bound key under a known name, Copy with
     /// Ctrl+C among them, and the search narrows the list.
@@ -484,6 +484,154 @@ mod tests {
         assert!(shown_after("ctrl+e").contains(&"Search".to_owned()));
         assert!(shown_after("f3").contains(&"Search".to_owned()));
         assert!(shown_after("alt+p").contains(&"Details pane".to_owned()));
+        dialog.finish();
+    }
+
+    /// The labels the search leaves shown after typing `query`.
+    fn shown_after(dialog: &Dialog, query: &str) -> Vec<String> {
+        let search = descendants::<gtk::Entry>(dialog).remove(0);
+        search.set_text(query);
+        descendants::<gtk::Label>(dialog)
+            .iter()
+            .filter(|label| label.get_visible() && label.parent().is_some_and(|grid| grid.get_visible()))
+            .filter(|label| !label.has_css_class("dialog-hint"))
+            .map(|label| label.text().to_string())
+            .collect()
+    }
+
+    /// The search finds a shortcut by its keys however they are typed:
+    /// with spaces, "+" or "-" between them, in any case and any order of
+    /// the modifiers, with "control", "escape", "delete" and "keypad" for
+    /// "Ctrl", "Esc", "Del" and "Num"; and by the words of its name and of
+    /// its section. Keys that no shortcut has find nothing.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_shortcuts_window_finds_a_shortcut_by_its_keys_however_typed() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let dialog = test.window.shortcuts_dialog();
+        let reveal = "Open the navigation pane to the current folder, while it is shown".to_owned();
+
+        for query in [
+            "ctrl shift e",
+            "ctrl+shift+e",
+            "Ctrl+Shift+E",
+            "shift e",
+            "control-shift-e",
+            "Shift Ctrl E",
+            "e ctrl shift",
+            "navigation pane current",
+        ] {
+            assert!(
+                shown_after(&dialog, query).contains(&reveal),
+                "{query:?} finds Ctrl+Shift+E"
+            );
+        }
+        assert!(shown_after(&dialog, "keypad +")
+            .contains(&"Expand the selected folder in the navigation pane".to_owned()));
+        assert!(shown_after(&dialog, "control c").contains(&"Copy".to_owned()));
+        assert!(shown_after(&dialog, "delete").contains(&"Delete".to_owned()));
+        assert!(
+            shown_after(&dialog, "tabs and windows").contains(&"New tab".to_owned()),
+            "a section's name finds its shortcuts"
+        );
+        let nothing = shown_after(&dialog, "ctrl shift x");
+        assert!(!nothing.contains(&reveal), "other keys do not find it");
+        assert!(!nothing.contains(&"Copy".to_owned()));
+        dialog.finish();
+    }
+
+    /// The shortcuts window, opened over `test`'s window and laid out.
+    fn opened(test: &TestWindow) -> Dialog {
+        let dialog = test.window.shortcuts_dialog();
+        dialog.open();
+        wait_until("the shortcuts window to be shown", || {
+            dialog.is_mapped() && dialog.width() > 0
+        });
+        wait_for_frames(&dialog, 3);
+        dialog
+    }
+
+    /// The scrolling body of the shortcuts window.
+    fn body_scroller(dialog: &Dialog) -> gtk::ScrolledWindow {
+        descendants::<gtk::ScrolledWindow>(dialog).remove(0)
+    }
+
+    /// The largest right edge of the shown key labels in `scroller`.
+    fn right_edge_of_keys(scroller: &gtk::ScrolledWindow) -> f32 {
+        descendants::<gtk::Label>(scroller)
+            .iter()
+            .filter(|label| label.has_css_class("dialog-hint") && label.is_drawable())
+            .filter_map(|label| label.compute_bounds(scroller))
+            .map(|bounds| bounds.x() + bounds.width())
+            .fold(0.0, f32::max)
+    }
+
+    /// The scroll bar never covers the keys: they keep 12 pixels clear of
+    /// the right edge, the width of an overlay scroll bar under the
+    /// pointer, and sit left of an always-shown scroll bar.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_scroll_bar_never_covers_the_keys() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window.set_default_size(900, 480);
+        wait_until("the window to be short", || {
+            (test.window.height() - 480).abs() <= 8
+        });
+        let dialog = opened(&test);
+        let scroller = body_scroller(&dialog);
+        assert!(scroller.vscrollbar().is_visible(), "the list scrolls");
+
+        #[expect(clippy::cast_precision_loss, reason = "widths are small")]
+        let width = scroller.width() as f32;
+        let right = right_edge_of_keys(&scroller);
+        assert!(right > 0.0, "keys are shown");
+        assert!(
+            right <= width - 12.0,
+            "keys end at {right} of {width}: under the overlay bar"
+        );
+
+        scroller.set_overlay_scrolling(false);
+        wait_for_frames(&dialog, 3);
+        let bar = scroller
+            .vscrollbar()
+            .compute_bounds(&scroller)
+            .expect("the bar is laid out");
+        let right = right_edge_of_keys(&scroller);
+        assert!(
+            right <= bar.x(),
+            "keys end at {right}, the bar starts at {}",
+            bar.x()
+        );
+        dialog.finish();
+    }
+
+    /// Over the narrowest window (670 pixels, its minimum) with the largest
+    /// text, the shortcuts window is no wider than the window: long names
+    /// and keys wrap instead.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_shortcuts_window_fits_a_narrow_window() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        for _ in 0..10 {
+            test.activate("text-larger", None);
+        }
+        test.window.set_default_size(670, 720);
+        wait_until("the window to be narrow", || {
+            (test.window.width() - 670).abs() <= 8
+        });
+        let dialog = opened(&test);
+        assert!(
+            dialog.width() <= test.window.width(),
+            "{} pixels wide over a {}-pixel window",
+            dialog.width(),
+            test.window.width()
+        );
         dialog.finish();
     }
 
