@@ -365,3 +365,210 @@ fn a_recent_row_cannot_be_cut_renamed_or_deleted() {
     assert_eq!(test.window.shown_message_text(), "", "Ctrl+X says nothing");
     assert_eq!(copied_uris(&test), before, "nothing is cut");
 }
+
+/// A Recent files row as `GVfs` lists it: `recent:///<id>`, named `name`,
+/// of `content_type`, typed `file_type` (a file, or a shortcut for some
+/// remote items), standing for `target`.
+fn recent_row(
+    id: &str,
+    name: &str,
+    content_type: &str,
+    target: &str,
+    file_type: gtk::gio::FileType,
+) -> ox_core::entry::Entry {
+    let info = gtk::gio::FileInfo::new();
+    info.set_file_type(file_type);
+    info.set_display_name(name);
+    info.set_content_type(content_type);
+    info.set_attribute_string("standard::target-uri", target);
+    let row = gtk::gio::File::for_uri(&format!("recent:///{id}"));
+    ox_core::entry::entry_from_info(&row, &info)
+}
+
+/// Adds `rows` to the Recent files listing `test` shows, as `GVfs` would
+/// list them; rows for files on a share or typed as shortcuts cannot be
+/// made with the private session's own Recent backend.
+fn list_recent_rows(test: &TestWindow, rows: Vec<ox_core::entry::Entry>) {
+    let id = test.window.imp().session.borrow().active_id().expect("a tab");
+    let store = test.window.tab_store(id).expect("the tab's items");
+    let names: Vec<String> = rows.iter().map(|row| row.name.clone()).collect();
+    for row in rows {
+        store.append(&crate::folder_view::item::FileItem::new(row));
+    }
+    wait_until("the added rows", || {
+        names.iter().all(|name| test.names().contains(name))
+    });
+}
+
+/// Counts the window's mounts, each answered "not a folder", so nothing
+/// is ever reached; `example.invalid` reports itself not mounted.
+fn count_mounts(test: &TestWindow) -> std::rc::Rc<std::cell::Cell<u32>> {
+    let mounts = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = std::rc::Rc::clone(&mounts);
+    test.window.network().answer_mounts_with(move || {
+        counted.set(counted.get() + 1);
+        Err(ox_core::network::NetworkError::NotAFolder)
+    });
+    mounts
+}
+
+/// The file a share's Recent row stands for, on a share that is not mounted.
+const SHARE_FILE: &str = "smb://example.invalid/share/Plan.txt";
+
+/// A Recent row that `GVfs` types as a shortcut is copied as the file it
+/// stands for, as a file-typed one is: Copy is enabled and copies it.
+///
+/// parity: SIDE-026
+#[gtk::test]
+fn copy_on_a_shortcut_typed_recent_row_copies_the_file() {
+    use crate::window::window_action::WindowAction;
+
+    let (_fixture, test, file) = selected_recent_file();
+    let shortcut = recent_row(
+        "shortcutrow",
+        "Budget (shortcut).txt",
+        "text/plain",
+        &file,
+        gtk::gio::FileType::Shortcut,
+    );
+    list_recent_rows(&test, vec![shortcut]);
+    select_names(&test, &["Budget (shortcut).txt"]);
+
+    assert!(
+        test.window.is_action_enabled(WindowAction::Copy.name()),
+        "Copy is enabled"
+    );
+    test.activate("copy", None);
+    wait_until("the copied file", || {
+        copied_uris(&test).as_deref() == Some(file.as_str())
+    });
+}
+
+/// Open with, from the menu's application or Choose another app, on a
+/// Recent row whose file is on a share that is not mounted mounts the
+/// share first, as opening the row does.
+///
+/// parity: SIDE-026, NET-004
+#[gtk::test]
+fn open_with_on_a_recent_file_on_an_unmounted_share_mounts_it_first() {
+    let (_fixture, test, _) = selected_recent_file();
+    let row = recent_row(
+        "sharerow",
+        "Plan.txt",
+        "text/plain",
+        SHARE_FILE,
+        gtk::gio::FileType::Regular,
+    );
+    list_recent_rows(&test, vec![row]);
+    select_names(&test, &["Plan.txt"]);
+    let mounts = count_mounts(&test);
+    let _tool = TextTool::install();
+
+    test.activate("open-with-app", Some(TextTool::ID));
+    wait_until("the mount before Open with", || mounts.get() == 1);
+
+    test.activate("open-with", None);
+    wait_until("the mount before Choose another app", || mounts.get() == 2);
+}
+
+/// Properties of a Recent row whose file is on a share that is not
+/// mounted mounts the share first.
+///
+/// parity: SIDE-026, NET-004
+#[gtk::test]
+fn properties_of_a_recent_file_on_an_unmounted_share_mounts_it_first() {
+    let (_fixture, test, _) = selected_recent_file();
+    let row = recent_row(
+        "sharerow",
+        "Plan.txt",
+        "text/plain",
+        SHARE_FILE,
+        gtk::gio::FileType::Regular,
+    );
+    list_recent_rows(&test, vec![row]);
+    select_names(&test, &["Plan.txt"]);
+    let mounts = count_mounts(&test);
+
+    test.activate("properties", None);
+
+    wait_until("the mount before Properties", || mounts.get() == 1);
+}
+
+/// Opening several Recent rows opens each as the file it stands for: a
+/// desktop link to a folder opens that folder in a tab behind, as it does
+/// from its own folder, and a file on a share that is not mounted mounts
+/// the share first.
+///
+/// parity: SIDE-026, OPEN-009, NET-004
+#[gtk::test]
+fn opening_several_recent_rows_opens_each_as_its_file() {
+    let (fixture, test, _) = selected_recent_file();
+    let link = fixture.path("Projects link.desktop");
+    let folder = fixture.uri_of("Documents");
+    fs::write(
+        &link,
+        format!("[Desktop Entry]\nType=Link\nName=Projects\nURL={folder}\n"),
+    )
+    .expect("a link");
+    let rows = vec![
+        recent_row(
+            "linkrow",
+            "Projects link.desktop",
+            "application/x-desktop",
+            &fixture.uri_of("Projects link.desktop"),
+            gtk::gio::FileType::Regular,
+        ),
+        recent_row(
+            "sharerow",
+            "Plan.txt",
+            "text/plain",
+            SHARE_FILE,
+            gtk::gio::FileType::Regular,
+        ),
+    ];
+    list_recent_rows(&test, rows);
+    let mounts = count_mounts(&test);
+    select_names(&test, &["Projects link.desktop", "Plan.txt"]);
+
+    test.activate("open", None);
+
+    wait_until("the link's folder in a tab", || tab_uris(&test).contains(&folder));
+    wait_until("the mount before the share's file", || mounts.get() == 1);
+    assert!(
+        !test
+            .context
+            .recorded_launches()
+            .iter()
+            .any(|uri| uri.ends_with(".desktop")),
+        "the link is followed, not launched: {:?}",
+        test.context.recorded_launches()
+    );
+}
+
+/// Properties of several Recent rows describes the files they stand for:
+/// files in two folders are in "Multiple locations", not all in Recent.
+///
+/// parity: SIDE-026, PROP-002
+#[gtk::test]
+fn properties_of_several_recent_rows_are_those_of_their_files() {
+    use super::item_dialogs::value_after;
+
+    let (fixture, test, _) = selected_recent_file();
+    add_to_desktop_history(&fixture.uri_of("Notes 2.txt"), "text/plain");
+    test.window.refresh();
+    wait_until("both recent files", || {
+        test.names().contains(&"Notes 2.txt".to_owned())
+    });
+    select_names(&test, &["Budget.txt", "Notes 2.txt"]);
+
+    test.activate("properties", None);
+
+    wait_until("Properties", || !test.window.properties_windows().is_empty());
+    let window = test.window.properties_windows().remove(0);
+    wait_until("the General tab", || value_after(&window, "Location:").is_some());
+    assert_eq!(
+        value_after(&window, "Location:").as_deref(),
+        Some("Multiple locations")
+    );
+    window.close();
+}
