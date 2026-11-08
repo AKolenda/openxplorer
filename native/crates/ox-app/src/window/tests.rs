@@ -64,6 +64,7 @@ mod panes_layout;
 mod pointer_feedback;
 mod preview_pane;
 mod properties_width;
+mod recent_rows;
 mod recycle_bin;
 mod renaming;
 mod renaming_several;
