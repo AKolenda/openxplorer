@@ -322,7 +322,7 @@ fn open_with_on_a_recent_file_that_is_gone_says_item_not_found() {
 /// A row of Recent files may be copied, not cut, renamed or deleted:
 /// Cut, Rename and Delete are greyed out in the command bar and left out
 /// of the compact menu's strip, which keeps Copy, and Ctrl+X does nothing
-/// at all, with no message and nothing on the clipboard.
+/// at all: no message, and the clipboard keeps what it held.
 ///
 /// parity: SIDE-026
 #[gtk::test]
@@ -357,8 +357,11 @@ fn a_recent_row_cannot_be_cut_renamed_or_deleted() {
         assert!(!strip.contains(&left_out.to_owned()), "{left_out} in {strip:?}");
     }
 
+    // The display's clipboard is shared with earlier tests, so what it
+    // holds before must be what it holds after.
+    let before = copied_uris(&test);
     test.window.copy_selection(ClipboardMode::Cut);
     wait_for(std::time::Duration::from_millis(200));
     assert_eq!(test.window.shown_message_text(), "", "Ctrl+X says nothing");
-    assert_eq!(copied_uris(&test), None, "nothing is cut");
+    assert_eq!(copied_uris(&test), before, "nothing is cut");
 }
