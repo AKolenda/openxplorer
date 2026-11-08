@@ -314,6 +314,12 @@ impl TabStrip {
     }
 
     /// The widget of the tab in front.
+    /// Puts the keyboard on the tab in front (F6, ACC-015); false when no
+    /// tab is shown.
+    pub(super) fn focus_front_tab(&self) -> bool {
+        self.front_widget().is_some_and(|front| front.grab_focus())
+    }
+
     fn front_widget(&self) -> Option<gtk::Box> {
         let shown = self.imp().shown.borrow();
         shown
