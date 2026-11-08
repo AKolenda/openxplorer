@@ -7614,6 +7614,10 @@ msgstr ""
 msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
 msgstr ""
 
+#: crates/ox-core/src/clipboard.rs crates/ox-core/src/location/text.rs
+msgid "Encoded control characters are not allowed."
+msgstr ""
+
 #: crates/ox-core/src/clipboard.rs
 msgid "This file selection is too large to copy or cut."
 msgstr ""
@@ -8353,10 +8357,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/location/parts.rs
 msgid "The server name “{host}” in brackets is not an IPv6 address."
-msgstr ""
-
-#: crates/ox-core/src/location/text.rs
-msgid "Encoded control characters are not allowed."
 msgstr ""
 
 #: crates/ox-core/src/location/text.rs
