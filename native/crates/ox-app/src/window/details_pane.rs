@@ -229,6 +229,11 @@ mod imp {
             // window is laid out for a new width.
             pane.connect_visible_notify(|pane| {
                 if !pane.is_visible() {
+                    // Closed, or hidden by a narrow window: nothing goes on
+                    // reading for it (a PDF's next pages, say). What it
+                    // was asked to show stays wanted, and is read again
+                    // once it is shown.
+                    pane.forget_page();
                     return;
                 }
                 // The page it was given while hidden, at once: the window

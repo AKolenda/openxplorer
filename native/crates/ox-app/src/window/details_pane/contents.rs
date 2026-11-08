@@ -239,6 +239,16 @@ impl DetailsPane {
         }
     }
 
+    /// Stops the wait and the read for the page shown and drops what
+    /// arrives for it, keeping the page it was asked for
+    /// ([`super::imp::DetailsPane::wanted_page`]) to read again later.
+    pub(super) fn forget_page(&self) {
+        let imp = self.imp();
+        self.stop_reading();
+        imp.page_generation.set(imp.page_generation.get().wrapping_add(1));
+        imp.shown_page.replace(None);
+    }
+
     /// Whether `generation` is still the page shown.
     fn is_current(&self, generation: u64) -> bool {
         self.imp().page_generation.get() == generation
@@ -471,7 +481,7 @@ async fn pdf_pages(
 /// Whether the file at `path` may be read: with `local_only` (network
 /// previews off), only when the file system it is on, after its links,
 /// is no network one, as its thumbnail ([`crate::thumbnails`]). Blocks.
-fn allowed(path: &Path, local_only: bool) -> bool {
+pub(super) fn allowed(path: &Path, local_only: bool) -> bool {
     !local_only || !crate::thumbnails::is_on_network_filesystem(path)
 }
 
