@@ -416,6 +416,66 @@ mod tests {
         })
     }
 
+    fn content_with(selection: &[FileItem], folder_uri: &str, rules: PreviewRules) -> PaneContent {
+        let locations = context();
+        pane_content(&PaneFacts {
+            selection,
+            folder_uri,
+            folder_item_count: 7,
+            locations: &locations,
+            network: &[],
+            condensed_dates: false,
+            preview_rules: rules,
+        })
+    }
+
+    /// A recording is played from the file it stands for, under the same
+    /// network rule as the other previews: one on a share plays with
+    /// network previews on, a Recent files row plays its target, and
+    /// nothing remote plays with them off.
+    ///
+    /// parity: VIEW-070, PROP-011
+    #[test]
+    fn a_recording_follows_the_files_location_and_the_network_rule() {
+        let song = |uri: &str| {
+            let mut entry = file_entry("Song.mp3");
+            entry.uri = uri.to_owned();
+            entry.content_type = Some("audio/mpeg".to_owned());
+            entry
+        };
+        let on = PreviewRules {
+            remote: true,
+            remote_previews: true,
+        };
+        let off = PreviewRules {
+            remote: true,
+            remote_previews: false,
+        };
+        let share = "smb://studio-nas/projects/Song.mp3";
+        let content = content_with(&[FileItem::new(song(share))], "smb://studio-nas/projects", on);
+        let media = content.media.expect("a player for the share's song");
+        assert!(matches!(media, MediaPreview::Recording { .. }) && media.is_of(share));
+
+        let content = content_with(&[FileItem::new(song(share))], "smb://studio-nas/projects", off);
+        assert_eq!(content.media, None, "no player with network previews off");
+        let local = "file:///mnt/nas/Song.mp3";
+        let content = content_with(&[FileItem::new(song(local))], "file:///mnt/nas", off);
+        assert_eq!(content.media, None, "nor for a share's file mounted here");
+
+        let mut recent = song("recent:///5b2d");
+        recent.meta.recent_target = Some("file:///tmp/ox-test/Song.mp3".to_owned());
+        let content = content_with(
+            &[FileItem::new(recent)],
+            "recent:///",
+            PreviewRules {
+                remote: false,
+                remote_previews: false,
+            },
+        );
+        let media = content.media.expect("a player for the Recent row's song");
+        assert!(media.is_of("file:///tmp/ox-test/Song.mp3"), "{media:?}");
+    }
+
     fn property<'a>(content: &'a PaneContent, key: &str) -> Option<&'a str> {
         content
             .properties

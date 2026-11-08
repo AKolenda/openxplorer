@@ -529,6 +529,7 @@ fn decode_picture(path: &Path, edge: i32, cancellation: &gio::Cancellable) -> Op
 #[cfg(test)]
 mod tests {
     use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
 
     use super::super::content::{pane_content, PaneFacts};
     use super::super::preview_page::PreviewRules;
@@ -536,6 +537,58 @@ mod tests {
     use crate::folder_view::item::FileItem;
     use crate::test_support::harness::{wait_until, Fixture};
     use ox_core::location::LocationContext;
+
+    /// A Preview pane hidden while it reads (closed, or a narrow window)
+    /// stops reading, and reads again once it is shown.
+    ///
+    /// parity: VIEW-070
+    #[gtk::test]
+    fn a_pane_hidden_while_it_reads_stops_and_reads_again_when_shown() {
+        let fixture = Fixture::standard();
+        let (window, pane) = preview_pane_with(&fixture, "Notes 2.txt");
+        pane.set_visible(true);
+        assert!(pane.imp().page_timer.borrow().is_some(), "about to read");
+
+        pane.set_visible(false);
+
+        assert!(pane.imp().page_timer.borrow().is_none(), "the wait is stopped");
+        crate::test_support::harness::wait_for(std::time::Duration::from_millis(400));
+        assert_eq!(pane.preview_text(), None, "nothing was read for a hidden pane");
+        pane.set_visible(true);
+        wait_until("the text", || {
+            pane.preview_text().as_deref() == Some("Synthetic test data\n")
+        });
+        window.destroy();
+    }
+
+    /// A Preview pane, hidden, in a window of its own, given the content
+    /// of the fixture's file `name`.
+    fn preview_pane_with(fixture: &Fixture, name: &str) -> (gtk::Window, DetailsPane) {
+        let pane: DetailsPane = gtk::glib::Object::new();
+        let window = gtk::Window::builder().child(&pane).build();
+        window.present();
+        pane.set_mode(PaneMode::Preview);
+        pane.set_visible(false);
+        let mut entry = crate::test_support::file_entry(name);
+        entry.uri = fixture.uri_of(name);
+        entry.content_type = Some("text/plain".to_owned());
+        let selection = [FileItem::new(entry)];
+        let locations = LocationContext::default();
+        let content = pane_content(&PaneFacts {
+            selection: &selection,
+            folder_uri: &fixture.uri(),
+            folder_item_count: 1,
+            locations: &locations,
+            network: &[],
+            condensed_dates: false,
+            preview_rules: PreviewRules {
+                remote: false,
+                remote_previews: false,
+            },
+        });
+        pane.set_content(&content);
+        (window, pane)
+    }
 
     /// A Preview pane given its content while hidden reads it once it is
     /// shown, without waiting for the window to ask again.
