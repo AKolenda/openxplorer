@@ -155,6 +155,10 @@ impl BrowserWindow {
                 }
                 pane.view_has_focus()
             }
+            Region::Tabs => {
+                let strip = self.tab_strip();
+                strip.focus_front_tab() || strip.child_focus(gtk::DirectionType::TabForward)
+            }
             Region::Sidebar => {
                 let list = self.sidebar().list();
                 match list.selected_row() {

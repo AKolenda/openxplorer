@@ -39,6 +39,10 @@ const HOTSPOTS_VARIABLE: &str = "OPENXPLORER_HOTSPOTS";
 /// The variable naming the tab of the Properties window to save in the
 /// browser window's place.
 const PROPERTIES_VARIABLE: &str = "OPENXPLORER_PROPERTIES";
+/// Whether the window is a Save dialog (`1`).
+const SAVE_DIALOG_VARIABLE: &str = "OPENXPLORER_SAVE_DIALOG";
+/// Whether to save the dialog the scene opened last (`1`).
+const DIALOG_VARIABLE: &str = "OPENXPLORER_DIALOG";
 
 /// The size of a window's title bar and contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +90,14 @@ pub(crate) struct SnapshotRequest {
     /// place of the browser window (`general`, `customize`, ...), or
     /// `None` to save the browser window.
     pub properties: Option<String>,
+    /// Whether the window is another application's Save dialog, saving
+    /// `Untitled.txt` in the first tab's folder, as the desktop portal
+    /// asks for one (`OPENXPLORER_SAVE_DIALOG=1`).
+    pub save_dialog: bool,
+    /// Whether to save the dialog window the scene opened last, such as
+    /// the keyboard shortcuts window, in the browser window's place
+    /// (`OPENXPLORER_DIALOG=1`).
+    pub dialog: bool,
 }
 
 impl SnapshotRequest {
@@ -128,9 +140,24 @@ impl SnapshotRequest {
             "select=<name> or action=<name>[:<target>] steps separated by ;",
             SceneStep::parse_scene,
         )?;
+        let start = non_empty(&lookup, START_VARIABLE);
+        let save_dialog = parse_variable(&lookup, SAVE_DIALOG_VARIABLE, "1", |value| {
+            (value == "1").then_some(true)
+        })?
+        .unwrap_or(false);
+        if let Some(start) = start.as_deref().filter(|_| save_dialog) {
+            if save_dialog_folder(start).is_none() {
+                return Err(SnapshotError::InvalidValue {
+                    variable: START_VARIABLE,
+                    value: start.to_owned(),
+                    expected:
+                        "an absolute local folder, as a Save dialog (OPENXPLORER_SAVE_DIALOG=1) starts in one",
+                });
+            }
+        }
         Ok(Some(Self {
             png: PathBuf::from(png),
-            start: non_empty(&lookup, START_VARIABLE),
+            start,
             theme,
             view,
             size,
@@ -139,6 +166,11 @@ impl SnapshotRequest {
             search: non_empty(&lookup, SEARCH_VARIABLE),
             scene: scene.unwrap_or_default(),
             hotspots: non_empty(&lookup, HOTSPOTS_VARIABLE).map(PathBuf::from),
+            save_dialog,
+            dialog: parse_variable(&lookup, DIALOG_VARIABLE, "1", |value| {
+                (value == "1").then_some(true)
+            })?
+            .unwrap_or(false),
             properties: parse_variable(
                 &lookup,
                 PROPERTIES_VARIABLE,
@@ -149,6 +181,21 @@ impl SnapshotRequest {
             )?,
         }))
     }
+}
+
+/// The local folder a Save dialog for `start` opens in: an absolute path,
+/// or a `file://` URI's path, of a folder that exists; `None` for a share's
+/// address, a page such as `pc:`, a relative path, which the desktop portal
+/// cannot name, or a missing folder or a file, which the dialog would
+/// silently replace with another folder.
+pub(crate) fn save_dialog_folder(start: &str) -> Option<PathBuf> {
+    use gtk::gio::prelude::FileExt;
+    let path = if start.contains("://") {
+        gtk::gio::File::for_uri(start).path()?
+    } else {
+        PathBuf::from(start)
+    };
+    (path.is_absolute() && path.is_dir()).then_some(path)
 }
 
 /// The value of the variable `name`, or `None` when it is unset or empty.
@@ -226,6 +273,8 @@ mod tests {
             scene: Vec::new(),
             hotspots: None,
             properties: None,
+            save_dialog: false,
+            dialog: false,
         };
         assert_eq!(asked.expect("valid variables"), Some(expected));
     }
@@ -264,6 +313,51 @@ mod tests {
         assert_eq!(asked.hotspots, Some(PathBuf::from("/tmp/menu.json")));
         let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SCENE_VARIABLE, "rename=Notes.md")]);
         assert!(refused.is_err(), "rename is not a scene step");
+    }
+
+    /// A Save dialog starts in a local folder, as the desktop portal names
+    /// it by its path: a start with no local path, such as a share's
+    /// address, a relative path, a missing folder or a file is refused,
+    /// never replaced by another folder.
+    #[test]
+    fn a_save_dialog_needs_a_local_folder_to_start_in() {
+        let with_start = |start: &str| {
+            request(&[
+                (SNAPSHOT_VARIABLE, "a.png"),
+                (SAVE_DIALOG_VARIABLE, "1"),
+                (START_VARIABLE, start),
+            ])
+        };
+        let folder = std::env::temp_dir();
+        let file = folder.join(format!("ox-snapshot-start-{}.txt", std::process::id()));
+        std::fs::write(&file, b"").expect("a file in the temporary folder");
+        let missing = folder.join("ox-snapshot-no-such-folder");
+        let refused = [
+            "smb://studio-nas/projects".to_owned(),
+            "Documents".to_owned(),
+            "pc:".to_owned(),
+            file.to_string_lossy().into_owned(),
+            missing.to_string_lossy().into_owned(),
+        ];
+        for refused in &refused {
+            let message = with_start(refused).expect_err(refused).to_string();
+            assert!(message.starts_with("OPENXPLORER_START cannot be"), "{message}");
+        }
+        std::fs::remove_file(&file).expect("the file is removed");
+        let uri = gtk::gio::prelude::FileExt::uri(&gtk::gio::File::for_path(&folder)).to_string();
+        for accepted in [folder.to_string_lossy().into_owned(), uri] {
+            let asked = with_start(&accepted)
+                .expect(&accepted)
+                .expect("a snapshot is asked for");
+            assert!(asked.save_dialog);
+        }
+        let home = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SAVE_DIALOG_VARIABLE, "1")]);
+        assert!(home.is_ok(), "without a start, the home folder");
+        let shared = request(&[
+            (SNAPSHOT_VARIABLE, "a.png"),
+            (START_VARIABLE, "smb://studio-nas/projects"),
+        ]);
+        assert!(shared.is_ok(), "a browser window may start on a share");
     }
 
     #[test]

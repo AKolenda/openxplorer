@@ -32,3 +32,14 @@
   padding: 10px 12px;
 }
 .details .detail-hint image { color: @ox_muted; margin-top: 1px; }
+/* The Preview pane's file contents (VIEW-070; details_pane/contents.rs):
+   "No preview available." in the middle of the pane, and a PDF's pages on
+   white with a thin edge, following the theme. A text file's beginning is
+   black on white in a fixed-width font in both themes, as Windows 11's
+   text preview stays black on white when Explorer is dark, with the
+   system's blue selection; it keeps the window's text size. */
+.details .preview-message { color: @ox_text; }
+.details textview.preview-text,
+.details textview.preview-text text { background-color: @ox_text_preview_bg; color: @ox_text_preview_fg; font-family: monospace; }
+.details textview.preview-text text selection { background-color: @ox_text_preview_selection_bg; color: @ox_text_preview_selection_fg; }
+.details .preview-page { background-color: @ox_document_page; border: 1px solid @ox_border; }
