@@ -16,10 +16,10 @@ use crate::window::session::Direction;
 
 /// What a search for "notes" in the standard fixture finds, with one
 /// more match in Documents.
-const RESULTS: [&str; 3] = ["Notes 2.txt", "Notes 10.txt", "notes inside.txt"];
+pub(super) const RESULTS: [&str; 3] = ["Notes 2.txt", "Notes 10.txt", "notes inside.txt"];
 
 /// The fixture folder's name, as its tab is titled.
-fn root_title(fixture: &Fixture) -> String {
+pub(super) fn root_title(fixture: &Fixture) -> String {
     fixture
         .root()
         .file_name()
@@ -30,14 +30,14 @@ fn root_title(fixture: &Fixture) -> String {
 
 /// A window on the standard fixture, with a match for "notes" in
 /// Documents too.
-fn window_with_notes(fixture: &Fixture) -> TestWindow {
+pub(super) fn window_with_notes(fixture: &Fixture) -> TestWindow {
     fs::write(fixture.path("Documents/notes inside.txt"), b"x").expect("fixture file");
     TestWindow::open(&fixture.uri())
 }
 
 impl TestWindow {
     /// The active tab's title in the tab strip.
-    fn active_tab_title(&self) -> String {
+    pub(super) fn active_tab_title(&self) -> String {
         let active = self.window.imp().session.borrow().active_id();
         let active = active.expect("the window has a tab");
         let view = self.window.tab_strip().tab_view(active);
@@ -58,7 +58,7 @@ impl TestWindow {
     }
 
     /// The labels of the address bar's crumbs.
-    fn crumb_labels(&self) -> Vec<String> {
+    pub(super) fn crumb_labels(&self) -> Vec<String> {
         let buttons = self.window.address_bar().crumb_buttons();
         let labels = buttons.iter().filter_map(ButtonExt::label);
         labels.map(|label| label.to_string()).collect()
@@ -76,7 +76,7 @@ impl TestWindow {
     }
 
     /// The search box's text.
-    fn search_text(&self) -> String {
+    pub(super) fn search_text(&self) -> String {
         self.window.search_box().entry().text().to_string()
     }
 }

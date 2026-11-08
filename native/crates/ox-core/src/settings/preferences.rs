@@ -1548,6 +1548,34 @@ mod tests {
         assert!(stored.get("compactView").is_none(), "off again, not stored");
     }
 
+    /// The search filter bar is off by default, so a search shows Windows
+    /// 11's Search options and Close search in the command bar; turned on
+    /// it is saved as `showSearchFilterBar`, and turned off it leaves the
+    /// file again.
+    ///
+    /// parity: SRCH-046
+    #[test]
+    fn the_search_filter_bar_is_off_by_default_and_stored_only_when_on() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.show_search_filter_bar);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("showSearchFilterBar").is_none(), "not stored while off");
+
+        let on = PreferencesUpdate::from_json(&json!({ "showSearchFilterBar": true }))
+            .expect("a valid preference");
+        preferences.apply(&on);
+        assert!(preferences.show_search_filter_bar);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["showSearchFilterBar"], json!(true));
+
+        preferences.apply(&PreferencesUpdate {
+            show_search_filter_bar: Some(false),
+            ..PreferencesUpdate::default()
+        });
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("showSearchFilterBar").is_none(), "off again, not stored");
+    }
+
     /// File name extensions are hidden by default for known types, as in
     /// Windows, and not stored then; once shown they are saved as
     /// `showExtensions` and read back, and hiding them again takes the key
