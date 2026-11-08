@@ -718,3 +718,49 @@ fn a_directory_reload_updates_an_active_search_after_a_rename() {
         names == ["More notes.txt", "Notes 2.txt"]
     });
 }
+
+/// A search whose walk finds nothing past the folder's own matches keeps
+/// showing those rows as typing filtered them, rather than replacing them
+/// with a copy, which made the list build all its rows again a moment
+/// after every pause in typing.
+///
+/// parity: SRCH-045
+#[gtk::test]
+fn a_walk_that_finds_nothing_more_keeps_the_rows_typing_filtered() {
+    let fixture = Fixture::with_files(40);
+    let test = TestWindow::open(&fixture.uri());
+    let model = test.window.folder_pane().model();
+
+    test.search_for("file 001");
+
+    assert_eq!(test.names().len(), 11, "{:?}", test.names());
+    assert!(
+        test.window.imp().search.borrow().results().is_none(),
+        "the walk found nothing more, so the filtered listing stays"
+    );
+    let position = model.position_of_uri(&fixture.uri_of("file 0010.txt")).expect("listed");
+    let first = model.item(position).expect("a row");
+    // One more key, as typing adds it.
+    let entry = test.window.search_box().entry();
+    let mut end = -1;
+    entry.insert_text("0", &mut end);
+    wait_until("the narrower search", || test.names() == ["file 0010.txt"]);
+    assert_eq!(model.item(0), Some(first), "the same row object, not a copy");
+}
+
+/// A walk that does find more past the folder's own matches adds them
+/// to the rows as before.
+///
+/// parity: SRCH-045
+#[gtk::test]
+fn a_walk_that_finds_more_shows_them_with_the_folders_own_matches() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Notes 3.txt");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.search_for("notes");
+
+    wait_until("the subfolder's match", || test.names().len() == 3);
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 3.txt", "Notes 10.txt"]);
+    assert!(test.window.imp().search.borrow().results().is_some());
+}

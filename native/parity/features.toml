@@ -10647,6 +10647,20 @@ native = "done"
 native_note = "native/crates/ox-core/src/search/syntax.rs (typed_options_are_taken_out_of_the_words, unknown_options_stay_words); native/crates/ox-core/src/search/facets.rs (typed_and_chosen_options_narrow_together); native/crates/ox-app/src/window/tests/search_options.rs (typed_options_match_the_lists, a_typed_option_alone_lists_everything_of_it, a_typed_option_finds_items_in_a_big_folder). ox_core::search::TypedQuery reads the box; window/folder_search.rs searches its words and the folder model narrows by both sets of options. The live walk (SRCH-035) and the folder's own matches pass the typed options before the 500-result limit counts them, so an option alone in a big folder still finds its items; an option typed alone walks the folder even where it is cached, because the cache finds names by their words. Typing an option does not change the lists, and choosing from the lists does not write syntax into the box: Microsoft does not document either for Windows 11. Not read: the AQS date ranges and values outside these (this month, past month, explicit dates), byte units such as 100KB, and every other property."
 
 [[feature]]
+id = "SRCH-045"
+area = "SRCH"
+title = "Search results show as soon as typing stops"
+behaviour = "Typing in the search box never holds the window up: in a folder of 10,000 items a keystroke that narrows the list shows the narrower list without a noticeable pause, and the results show as soon as they are found. While a search of names finds nothing past the folder's own matches, the rows typing filtered stay on screen, the same rows rather than a copy, so the list neither flickers nor jumps when the search runs; the walk's further matches are added to them once it finds some."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["User report on the test package: results 'take a sec to load up all of them instead of just showing instantly'"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (a_walk_that_finds_nothing_more_keeps_the_rows_typing_filtered, a_walk_that_finds_more_shows_them_with_the_folders_own_matches). Stack samples of a 10,000-file folder showed the time going into making row cells: each new cell walked every registered cell (folder_view/cells/cell_owners.rs register_mapped, now pruned only when the list has doubled) and set its check box's tooltip, which asks the X server where the pointer is (folder_view/cells/item_check.rs, now a tooltip asked for when shown, with the same text as its accessible description). window/live_search.rs no longer swaps in a copy of the filtered listing before the walk finds anything more (FolderSearch::finish_on_listing). Measured with xdotool under Xvfb, release build: a narrowing keystroke 1,147 ms before, 161 ms after the cell changes; results fully shown 1,688 ms after the last key before. GTK still makes new rows when a search's results replace a big folder's."
+
+[[feature]]
 id = "NET-001"
 area = "NET"
 title = "Map network location dialog"

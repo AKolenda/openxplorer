@@ -2,7 +2,9 @@
 //! The live walk of a folder nobody indexed, with its subfolders
 //! (SRCH-035): the listing's matches are shown at once, and the walk's
 //! matches are added as they are found. The walk itself is
-//! [`ox_core::search::walk_search`].
+//! [`ox_core::search::walk_search`]. While a search of names finds
+//! nothing past the folder's own matches, the rows typing filtered stay
+//! on screen, so the list does not build them all again (SRCH-045).
 
 use gtk::gio;
 use gtk::glib;
@@ -79,8 +81,16 @@ impl BrowserWindow {
             rows.extend_from_slice(&listed.items);
         }
         self.imp().contents_checked.replace(checked);
-        self.imp().search.borrow_mut().show_found(&run, rows.clone());
-        self.show_searched_items();
+        // The listing, filtered as typed, already shows the folder's own
+        // matches; a copy of them replaces it only once the walk finds
+        // more. A search of contents keeps its rows from the start, since
+        // it finds the folder's own files by their text too, and so does
+        // one with more matches than are shown.
+        let mut shows_rows = run.search_in == SearchIn::NamesAndContents || is_truncated;
+        if shows_rows {
+            self.imp().search.borrow_mut().show_found(&run, rows.clone());
+            self.show_searched_items();
+        }
         let search = LiveSearch {
             folder: run.folder.clone(),
             pattern: NamePattern::new(&run.text),
@@ -107,10 +117,18 @@ impl BrowserWindow {
                 found.truncate(room);
                 let items: Vec<FileItem> = found.into_iter().map(FileItem::new).collect();
                 rows.extend_from_slice(&items);
+                if !shows_rows && !items.is_empty() {
+                    if let Some(window) = window.upgrade() {
+                        window.imp().search.borrow_mut().show_found(&run, rows.clone());
+                        window.show_searched_items();
+                    }
+                    shows_rows = true;
+                }
             }
             let outcome = walk.await.unwrap_or(Err(SearchError::Cancelled));
             if let Some(window) = window.upgrade() {
                 let outcome = outcome.map(|end| end.is_truncated || is_truncated);
+                let rows = (shows_rows || outcome.as_ref().is_ok_and(|truncated| *truncated)).then_some(rows);
                 window.finish_walk(&run, rows, outcome);
             }
         });
@@ -297,15 +315,20 @@ impl BrowserWindow {
 
     /// Shows the rows the walk of `run` found, or why it failed; a late
     /// answer never replaces a newer one (SAFE-013). `outcome` says
-    /// whether more matched than are shown.
-    fn finish_walk(&self, run: &SearchRun, rows: gio::ListStore, outcome: Result<bool, SearchError>) {
+    /// whether more matched than are shown. Without `rows` the walk found
+    /// nothing past the folder's own matches, which the filtered listing
+    /// keeps showing.
+    fn finish_walk(&self, run: &SearchRun, rows: Option<gio::ListStore>, outcome: Result<bool, SearchError>) {
         let is_current = self.imp().search.borrow().is_current(run);
         let is_same_folder = self.current_uri().as_deref() == Some(run.folder.as_str());
         if !is_current || !is_same_folder {
             return;
         }
         match outcome {
-            Ok(is_truncated) => self.imp().search.borrow_mut().finish(run, rows, is_truncated),
+            Ok(is_truncated) => match rows {
+                Some(rows) => self.imp().search.borrow_mut().finish(run, rows, is_truncated),
+                None => self.imp().search.borrow_mut().finish_on_listing(run),
+            },
             Err(SearchError::Cancelled) => return,
             Err(error) => self.imp().search.borrow_mut().fail(run, error.to_string()),
         }

@@ -311,6 +311,18 @@ impl FolderSearch {
         });
     }
 
+    /// Ends `run`, which found nothing past the folder's own matches: the
+    /// listing, filtered by the words, stays shown in place of results.
+    pub(crate) fn finish_on_listing(&mut self, run: &SearchRun) {
+        self.running = None;
+        self.results = None;
+        self.report = Some(SearchReport {
+            source: run.source,
+            coverage: run.coverage,
+            progress: SearchProgress::Shown { is_truncated: false },
+        });
+    }
+
     /// Reports that `run` failed with `message`, showing no rows.
     pub(crate) fn fail(&mut self, run: &SearchRun, message: String) {
         self.running = None;

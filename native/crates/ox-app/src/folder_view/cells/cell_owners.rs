@@ -27,6 +27,10 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::row_tooltip::RowTooltip;
+
+/// How many cells are registered before the ones that went are first
+/// forgotten.
+const MIN_OWNERS_BEFORE_PRUNING: usize = 256;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::shown_name::{shown_name, shows_whole, Extensions};
@@ -138,6 +142,9 @@ fn item_widget(cell: &gtk::Widget) -> Option<gtk::Widget> {
 #[derive(Debug, Default)]
 pub(crate) struct CellOwners {
     owners: RefCell<Vec<CellOwner>>,
+    /// How many owners were left after the cells that went were last
+    /// forgotten; see [`CellOwners::register_mapped`].
+    alive_after_pruning: Cell<usize>,
     /// The URIs of the items a cut put on the clipboard, whose cells are
     /// dimmed until they are pasted or the clipboard changes.
     cut_uris: RefCell<HashSet<String>>,
@@ -180,7 +187,14 @@ impl CellOwners {
         positions: Option<PositionMap>,
     ) {
         let mut owners = self.owners.borrow_mut();
-        owners.retain(CellOwner::is_alive);
+        // Forgetting the cells that went looks at every cell, so it waits
+        // until the list has doubled: a view that makes hundreds of cells
+        // at once, as a search's results replacing a big folder do, would
+        // otherwise look at every cell for each new one.
+        if owners.len() >= (2 * self.alive_after_pruning.get()).max(MIN_OWNERS_BEFORE_PRUNING) {
+            owners.retain(CellOwner::is_alive);
+            self.alive_after_pruning.set(owners.len());
+        }
         owners.push(CellOwner {
             cell: cell.as_ref().downgrade(),
             list_item: list_item.downgrade(),
