@@ -1,4 +1,4 @@
-# 2.0.15 — 2026-11-07
+# 2.0.15 — 2026-11-08
 
 OpenXplorer now looks and works much more like Windows 11's File Explorer, from the command bar, menus and status bar to Properties, This PC and the progress window. It also makes previews with the desktop's own thumbnailers in a sandbox, can paste a picture as a file, and offers to continue as administrator when a copy, move or delete is denied. Much of this release is the work of @addition-official and @clansty.
 
