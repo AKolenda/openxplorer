@@ -807,7 +807,13 @@ fn compress_to_tar_puts_the_selection_into_a_new_tar_beside_it() {
         test.wait_for_listing("the folder");
         super::file_ops_support::select_names(&test, selected);
         test.activate("compress-to-tar", None);
-        wait_until("the new TAR", || fixture.path(archive).exists());
+        // The TAR grows under its final name, as Explorer writes it, so
+        // it is read once its two end blocks are there.
+        wait_until("the finished TAR", || {
+            fs::read(fixture.path(archive)).is_ok_and(|bytes| {
+                bytes.len() >= 3 * 512 && bytes[bytes.len() - 1024..].iter().all(|&byte| byte == 0)
+            })
+        });
         super::file_ops_support::assert_ended_without_a_message(&test);
         let bytes = fs::read(fixture.path(archive)).expect("written");
         assert_eq!(bytes.get(257..262), Some(b"ustar".as_slice()), "{archive}");
