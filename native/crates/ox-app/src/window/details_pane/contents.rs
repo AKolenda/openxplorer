@@ -48,6 +48,10 @@ const PDF_BATCH: u32 = 4;
 /// The room around the contents, in pixels.
 const MARGIN: i32 = 12;
 
+/// The room between a text preview's edges and its text, in pixels, as
+/// Windows 11's text preview leaves it.
+const TEXT_PADDING: i32 = 6;
+
 /// The pages of the Preview pane's stack.
 const MESSAGE: &str = "message";
 const TEXT: &str = "text";
@@ -96,10 +100,10 @@ impl Contents {
             .cursor_visible(false)
             .monospace(true)
             .wrap_mode(gtk::WrapMode::WordChar)
-            .left_margin(MARGIN)
-            .right_margin(MARGIN)
-            .top_margin(MARGIN)
-            .bottom_margin(MARGIN)
+            .left_margin(TEXT_PADDING)
+            .right_margin(TEXT_PADDING)
+            .top_margin(TEXT_PADDING)
+            .bottom_margin(TEXT_PADDING)
             .css_classes(["preview-text"])
             .build();
         let text_scroller = gtk::ScrolledWindow::builder()
