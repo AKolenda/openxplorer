@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! "Install updates without asking for a password" on Settings › About:
-//! off by default, shown only where the package installed the update
-//! helper, and on only while the polkit rule is there.
+//! on by default (the package's postinst installs the rule), shown only
+//! where the package installed the update helper, and on only while the
+//! polkit rule is there.
 //!
 //! The setting runs on a fake system in a temporary folder, and a script
 //! stands in for `pkexec` and the helper, so nothing asks for a password
@@ -39,7 +40,9 @@ case "$2" in
         cp "$root/usr/share/openxplorer/install-update.rules" "$rule"
         echo on > "$record" ;;
     --disable-passwordless)
-        rm -f "$rule" "$record" ;;
+        mkdir -p "$(dirname "$record")"
+        rm -f "$rule"
+        echo off > "$record" ;;
     *) exit 2 ;;
 esac
 "#;
@@ -89,6 +92,15 @@ impl FakeSystem {
             .lines()
             .map(str::to_owned)
             .collect()
+    }
+
+    /// What the package's postinst does by default: the rule in place,
+    /// recorded on.
+    fn install_rule(&self) {
+        std::fs::copy(self.path("usr/share/openxplorer/install-update.rules"), self.rule()).unwrap();
+        let record = self.path("var/lib/openxplorer/install-updates-without-password");
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(record, "on\n").unwrap();
     }
 
     fn touch(&self, name: &str) {
@@ -168,16 +180,17 @@ fn the_setting_is_hidden_where_the_build_has_no_update_helper() {
         .all(|row| row.text().title != TITLE));
 }
 
-/// It sits with the other update settings, and is off on a fresh
-/// installation.
+/// It sits with the other update settings, and is on where the package's
+/// postinst installed the rule, as it does by default.
 /// parity: UPD-003
 #[gtk::test]
-fn the_setting_is_off_by_default_beside_the_update_settings() {
+fn the_setting_is_on_by_default_beside_the_update_settings() {
     let system = FakeSystem::new();
+    system.install_rule();
     let about = AboutTest::open(Some(system.setting()));
 
     let row = about.row().expect("the stable package shows the setting");
-    assert!(!about.switch().is_active());
+    assert!(about.switch().is_active());
     assert!(about.switch().is_sensitive());
     let titles: Vec<&str> = about
         .page
@@ -192,40 +205,42 @@ fn the_setting_is_off_by_default_beside_the_update_settings() {
     assert!(system.runs().is_empty(), "showing the setting runs nothing");
 }
 
-/// Turning it on runs the helper once and shows on once the rule is
-/// there; turning it off removes it.
+/// Turning it off runs the helper once and shows off once the rule is
+/// gone; turning it on again puts the rule back.
 /// parity: UPD-003
 #[gtk::test]
-fn the_switch_adds_and_removes_the_rule() {
+fn the_switch_removes_and_adds_the_rule() {
     let system = FakeSystem::new();
+    system.install_rule();
     let about = AboutTest::open(Some(system.setting()));
-
-    about.flip(true);
-
-    assert_eq!(std::fs::read_to_string(system.rule()).unwrap(), RULE);
-    assert!(about.switch().is_active());
-    assert_eq!(system.runs(), ["--enable-passwordless"]);
 
     about.flip(false);
 
     assert!(!system.rule().exists());
     assert!(!about.switch().is_active());
-    assert_eq!(system.runs(), ["--enable-passwordless", "--disable-passwordless"]);
+    assert_eq!(system.runs(), ["--disable-passwordless"]);
+
+    about.flip(true);
+
+    assert_eq!(std::fs::read_to_string(system.rule()).unwrap(), RULE);
+    assert!(about.switch().is_active());
+    assert_eq!(system.runs(), ["--disable-passwordless", "--enable-passwordless"]);
 }
 
-/// A cancelled prompt puts the switch back and writes nothing.
+/// A cancelled prompt puts the switch back and changes nothing.
 /// parity: UPD-003
 #[gtk::test]
 fn a_cancelled_prompt_puts_the_switch_back() {
     let system = FakeSystem::new();
+    system.install_rule();
     system.touch("cancel");
     let about = AboutTest::open(Some(system.setting()));
 
-    about.flip(true);
+    about.flip(false);
 
-    assert!(!about.switch().is_active());
-    assert!(!system.rule().exists());
-    assert_eq!(system.runs(), ["--enable-passwordless"]);
+    assert!(about.switch().is_active());
+    assert!(system.rule().exists());
+    assert_eq!(system.runs(), ["--disable-passwordless"]);
 }
 
 /// A helper that fails leaves the switch as the rule is, and says so.

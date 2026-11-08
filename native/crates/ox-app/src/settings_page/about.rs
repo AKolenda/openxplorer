@@ -8,8 +8,8 @@
 //! `win.check-updates`, the Software updates dialog, and its row says what
 //! the last check in any window found. "Check for updates automatically"
 //! turns the daily check at launch on or off. "Install updates without
-//! asking for a password", off by default and shown only in the stable
-//! Debian package, has the update helper add or remove the polkit rule
+//! asking for a password", on by default and shown only in the stable
+//! Debian package, has the update helper remove or add the polkit rule
 //! that lets an administrator at the machine update without a password;
 //! it asks for an administrator's password once, and shows whether the
 //! rule is there. "Read license & source

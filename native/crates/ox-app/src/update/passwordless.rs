@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "Install updates without asking for a password", the opt-in setting on
-//! Settings › About: whether this build has it, and turning it on or off
+//! "Install updates without asking for a password", the setting on
+//! Settings › About, on by default: whether this build has it, and turning it on or off
 //! through `pkexec` and the update helper
 //! ([`ox_core::update::PasswordlessUpdates`]). New in the native app.
 

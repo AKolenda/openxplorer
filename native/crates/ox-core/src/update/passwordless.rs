@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "Install updates without asking for a password": the opt-in setting
-//! that lets an administrator at the machine install `OpenXplorer` updates
-//! without typing a password. New in the native app.
+//! "Install updates without asking for a password": the setting that lets
+//! an administrator at the machine install `OpenXplorer` updates without
+//! typing a password. New in the native app.
 //!
-//! The setting is off by default. The stable Debian package installs the
+//! The setting is on by default. The stable Debian package installs the
 //! update helper and its polkit action, whose defaults ask for an
 //! administrator (`auth_admin_keep`), and the polkit rule that skips the
-//! password only as a template, [`RULE_TEMPLATE`], outside the folders
-//! polkit reads. Polkit rules cannot read the app's settings, so turning
-//! the setting on copies that template to [`PASSWORDLESS_RULE`] in
-//! `/etc/polkit-1/rules.d`, and turning it off deletes the copy. Both run
-//! as root in the update helper (`openxplorer-install-update
-//! --enable-passwordless` or `--disable-passwordless`), started through
+//! password as a template, [`RULE_TEMPLATE`], outside the folders polkit
+//! reads. Its `postinst` copies that template to [`PASSWORDLESS_RULE`] in
+//! `/etc/polkit-1/rules.d` and records the setting as on, on a fresh
+//! installation and on every upgrade, unless the record says the user
+//! turned it off (`native/packaging/debian/install-update-rule`). Polkit
+//! rules cannot read the app's settings, so turning the setting off
+//! deletes the copy, and turning it back on copies the template again.
+//! Both run as root in the update helper (`openxplorer-install-update
+//! --disable-passwordless` or `--enable-passwordless`), started through
 //! `pkexec`, so changing the setting asks for an administrator's password
-//! once. The package's `postrm` deletes the copy when the package is
-//! removed or purged; an upgrade keeps it.
+//! once. The package's `postrm` deletes the copy and the record when the
+//! package is removed or purged; an upgrade keeps them.
 //!
 //! The rule's text is always the installed template's, never the
 //! caller's: the helper takes no path and no text. It writes only into
@@ -22,13 +25,14 @@
 //! replaces the file atomically with mode 0644, owned by root.
 //!
 //! Ubuntu and Debian keep `/etc/polkit-1/rules.d` unreadable to users, so
-//! the helper also writes [`PASSWORDLESS_RECORD`], which anyone may read.
+//! the helper also writes [`PASSWORDLESS_RECORD`], which anyone may read:
+//! `on` or `off`. The record also keeps a user's `off` across upgrades.
 //! The app shows the setting on when the rule file is there; only when it
 //! cannot look into the rules folder does it go by the record. The helper
-//! writes the record before the rule and removes the rule before the
-//! record, so an interrupted change can never leave the rule active while
-//! the switch shows off; after any error it makes the record match the
-//! rule as it is. Every change holds the lock installations hold
+//! records `on` before writing the rule and removes the rule before
+//! recording `off`, so an interrupted change can never leave the rule
+//! active while the switch shows off; after any error it makes the record
+//! match the rule as it is. Every change holds the lock installations hold
 //! ([`super::STAGING_FOLDER`]), so changes never interleave.
 
 use std::ffi::OsString;
@@ -47,7 +51,7 @@ pub const RULE_TEMPLATE: &str = "/usr/share/openxplorer/install-update.rules";
 /// Where turning the setting on puts the rule, and where polkit reads it.
 pub const PASSWORDLESS_RULE: &str = "/etc/polkit-1/rules.d/60-io.winspace.Development.install-update.rules";
 
-/// The record that the setting is on, which any user may read.
+/// The record of whether the setting is on, which any user may read.
 pub const PASSWORDLESS_RECORD: &str = "/var/lib/openxplorer/install-updates-without-password";
 
 /// The helper's argument that turns the setting on.
@@ -68,9 +72,12 @@ const FOLDER_MODE: u32 = 0o755;
 /// The largest template the helper copies.
 const MAX_TEMPLATE_BYTES: u64 = 64 * 1024;
 
-/// What the record says.
-const RECORD_TEXT: &str = "OpenXplorer installs updates without asking an administrator at the machine for \
-                           a password.\n";
+/// What the record says while the setting is on.
+const RECORD_ON: &str = "on\n";
+
+/// What the record says once the user turned the setting off: the
+/// package's `postinst` then leaves it off on an upgrade.
+const RECORD_OFF: &str = "off\n";
 
 /// Why the setting could not be changed. `Display` is the helper's
 /// message on standard error.
@@ -168,6 +175,7 @@ impl RuleFiles {
             Ok(metadata) => metadata.is_file(),
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
                 std::fs::symlink_metadata(&self.record).is_ok_and(|metadata| metadata.is_file())
+                    && std::fs::read(&self.record).is_ok_and(|text| text == RECORD_ON.as_bytes())
             }
             Err(_) => false,
         }
@@ -235,8 +243,8 @@ impl PasswordlessUpdates {
     }
 }
 
-/// Turns the setting on: writes the record, then copies the template to
-/// the rule, holding the lock installations hold. Doing it again changes
+/// Turns the setting on: records `on`, then copies the template to the
+/// rule, holding the lock installations hold. Doing it again changes
 /// nothing.
 ///
 /// # Errors
@@ -254,7 +262,7 @@ pub fn enable_passwordless(files: &RuleFiles) -> Result<(), PasswordlessError> {
 /// wrong.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Step {
-    /// Turning it on wrote the record.
+    /// Turning it on recorded `on`.
     RecordWritten,
     /// Turning it on renamed the rule into place.
     RuleWritten,
@@ -293,30 +301,22 @@ fn lock(files: &RuleFiles) -> Result<std::fs::File, PasswordlessError> {
 }
 
 /// After a change failed part-way, makes the record match the rule as it
-/// is now: there whenever the rule is, so the switch never shows OFF while
-/// the rule is active, and gone when the rule is.
+/// is now: `on` whenever the rule is there, so the switch never shows OFF
+/// while the rule is active, and `off` when it is not.
 fn match_record_to_rule(files: &RuleFiles) {
     let Ok(rule_target) = Target::open(&files.rule, false) else {
         return;
     };
-    match rule_target.exists() {
-        Ok(true) => {
-            if let Ok(record_target) = Target::open(&files.record, true) {
-                if record_target.exists().is_ok() {
-                    let _ = record_target.replace(RECORD_TEXT.as_bytes(), files.owner);
-                }
-            }
-        }
-        Ok(false) => {
-            if let Ok(record_target) = Target::open(&files.record, false) {
-                if matches!(record_target.exists(), Ok(true)) {
-                    let _ = record_target.remove();
-                    record_target.remove_folder_if_empty();
-                }
-            }
-        }
+    let text = match rule_target.exists() {
+        Ok(true) => RECORD_ON,
+        Ok(false) => RECORD_OFF,
         // Something else is in the rule's place; it is not this setting's.
-        Err(_) => {}
+        Err(_) => return,
+    };
+    if let Ok(record_target) = Target::open(&files.record, true) {
+        if record_target.exists().is_ok() {
+            let _ = record_target.replace(text.as_bytes(), files.owner);
+        }
     }
 }
 
@@ -347,7 +347,7 @@ fn enable_steps(
     // The record first, synced, then the rule: an interruption between
     // them can only leave the switch showing ON with no rule, never an
     // active rule the app shows as OFF where it reads only the record.
-    record_target.replace(RECORD_TEXT.as_bytes(), files.owner)?;
+    record_target.replace(RECORD_ON.as_bytes(), files.owner)?;
     match checkpoint(Step::RecordWritten) {
         Fault::Stop => return Ok(()),
         Fault::Fail => return Err(simulated_failure(&files.record)),
@@ -364,9 +364,9 @@ fn enable_steps(
     written
 }
 
-/// Turns the setting off: deletes the rule, then the record and its
-/// folder, holding the lock installations hold. Doing it again changes
-/// nothing.
+/// Turns the setting off: deletes the rule, then records `off`, so an
+/// upgrade keeps it off, holding the lock installations hold. Doing it
+/// again changes nothing.
 ///
 /// # Errors
 ///
@@ -398,7 +398,7 @@ fn disable_steps(
     checkpoint: &mut dyn FnMut(Step) -> Fault,
 ) -> Result<(), PasswordlessError> {
     let rule_target = Target::open(&files.rule, false)?;
-    let record_target = Target::open(&files.record, false)?;
+    let record_target = Target::open(&files.record, true)?;
     for target in [&rule_target, &record_target] {
         target.refuse_anything_but_a_file()?;
     }
@@ -409,9 +409,7 @@ fn disable_steps(
         Fault::Fail => return Err(simulated_failure(&files.rule)),
         Fault::None => {}
     }
-    record_target.remove()?;
-    record_target.remove_folder_if_empty();
-    Ok(())
+    record_target.replace(RECORD_OFF.as_bytes(), files.owner)
 }
 
 /// Reads the template, which must be a regular file of `files.owner`
@@ -566,17 +564,6 @@ impl Target {
             Err(error) => Err(PasswordlessError::io(&self.path, error)),
         }
     }
-
-    /// Deletes the file's folder if it is empty now, as the record's
-    /// folder is once the record is gone.
-    fn remove_folder_if_empty(&self) {
-        let (Some(parent), Some(name)) = (self.folder_path.parent(), self.folder_path.file_name()) else {
-            return;
-        };
-        if let Ok(parent) = open_folder(parent) {
-            let _ = rustix::fs::unlinkat(&parent, name, AtFlags::REMOVEDIR);
-        }
-    }
 }
 
 /// Opens `path` as a folder, refusing a link.
@@ -589,7 +576,8 @@ fn open_folder(path: &Path) -> rustix::io::Result<OwnedFd> {
 }
 
 /// Makes the last part of `path` a folder with mode 0755 inside its
-/// existing parent, opened without following a link.
+/// existing parent, opened without following a link, and syncs the parent
+/// so the new folder outlasts a power loss along with what goes in it.
 fn make_folder(path: &Path) -> Result<(), PasswordlessError> {
     let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
         return Err(PasswordlessError::NotARegularFile {
@@ -598,7 +586,8 @@ fn make_folder(path: &Path) -> Result<(), PasswordlessError> {
     };
     let parent_folder = open_folder(parent).map_err(|error| PasswordlessError::io(parent, error))?;
     match rustix::fs::mkdirat(&parent_folder, name, Mode::from_raw_mode(FOLDER_MODE)) {
-        Ok(()) | Err(rustix::io::Errno::EXIST) => Ok(()),
+        Ok(()) => rustix::fs::fsync(&parent_folder).map_err(|error| PasswordlessError::io(parent, error)),
+        Err(rustix::io::Errno::EXIST) => Ok(()),
         Err(error) => Err(PasswordlessError::io(path, error)),
     }
 }
@@ -649,10 +638,14 @@ mod tests {
         std::fs::symlink_metadata(path).unwrap().permissions().mode() & 0o7777
     }
 
-    /// Off by default: a fresh installation has no rule and no record.
-    /// parity: UPD-003
+    fn record(files: &RuleFiles) -> String {
+        std::fs::read_to_string(&files.record).unwrap()
+    }
+
+    /// Without the rule the setting is off; the package's postinst is what
+    /// turns it on by default (tested in native/tools/test_build_deb.py).
     #[test]
-    fn the_setting_is_off_until_turned_on() {
+    fn without_the_rule_the_setting_is_off() {
         let system = FakeSystem::new();
 
         assert!(!system.files.is_on());
@@ -695,8 +688,9 @@ mod tests {
         assert!(system.files.is_on());
     }
 
-    /// Turning it off deletes the rule, the record and the record's
-    /// folder; turning it off again is fine.
+    /// Turning it off deletes the rule and records `off`, which the
+    /// package's postinst keeps on an upgrade; turning it off again is
+    /// fine.
     /// parity: UPD-003
     #[test]
     fn turning_it_off_removes_the_rule() {
@@ -707,17 +701,28 @@ mod tests {
         disable_passwordless(&system.files).unwrap();
 
         assert!(!system.files.rule.exists());
-        assert!(!system.files.record.exists());
-        assert!(!system.files.record.parent().unwrap().exists());
+        assert_eq!(record(&system.files), RECORD_OFF);
+        assert_eq!(mode(&system.files.record), 0o644);
         assert!(system.rules_folder().is_dir());
         assert!(!system.files.is_on());
     }
 
+    /// Turning it off on a system that never had a record records `off`
+    /// all the same.
+    #[test]
+    fn turning_it_off_without_a_record_records_off() {
+        let system = FakeSystem::new();
+
+        disable_passwordless(&system.files).unwrap();
+
+        assert_eq!(record(&system.files), RECORD_OFF);
+    }
+
     /// Whether the switch can show OFF while the rule is active: the rule
-    /// is there, and the app, which on Ubuntu reads only the record,
-    /// finds none.
+    /// is there, and the app, which on Ubuntu reads only the record, does
+    /// not find `on` in it.
     fn shows_off_while_active(files: &RuleFiles) -> bool {
-        files.rule.exists() && !files.record.exists()
+        files.rule.exists() && std::fs::read_to_string(&files.record).ok().as_deref() != Some(RECORD_ON)
     }
 
     /// A helper killed, or a computer that loses power, between the two
@@ -731,10 +736,11 @@ mod tests {
         enable_with_checkpoint(&system.files, &mut |_| Fault::Stop).unwrap();
 
         assert!(!shows_off_while_active(&system.files));
-        assert!(system.files.record.exists(), "the record is written first");
+        assert_eq!(record(&system.files), RECORD_ON, "the record is written first");
         assert!(!system.files.rule.exists());
         enable_passwordless(&system.files).unwrap();
-        assert!(system.files.rule.exists() && system.files.record.exists());
+        assert!(system.files.rule.exists());
+        assert_eq!(record(&system.files), RECORD_ON);
     }
 
     /// The same for turning it off: the rule goes first, so an
@@ -750,9 +756,10 @@ mod tests {
 
         assert!(!shows_off_while_active(&system.files));
         assert!(!system.files.rule.exists(), "the rule is removed first");
-        assert!(system.files.record.exists());
+        assert_eq!(record(&system.files), RECORD_ON);
         disable_passwordless(&system.files).unwrap();
-        assert!(!system.files.rule.exists() && !system.files.record.exists());
+        assert!(!system.files.rule.exists());
+        assert_eq!(record(&system.files), RECORD_OFF);
     }
 
     /// A rule whose rename went through although the step reported an
@@ -795,7 +802,8 @@ mod tests {
         let held = super::super::install_helper::lock_staging_folder(&system.files.lock).unwrap();
         let disabled = disable_passwordless(&system.files);
         assert!(matches!(disabled, Err(PasswordlessError::Busy)), "{disabled:?}");
-        assert!(system.files.rule.exists() && system.files.record.exists());
+        assert!(system.files.rule.exists());
+        assert_eq!(record(&system.files), RECORD_ON);
         drop(held);
         disable_passwordless(&system.files).unwrap();
         assert!(!system.files.rule.exists());
@@ -820,7 +828,7 @@ mod tests {
         assert!(!shows_off_while_active(&system.files));
     }
 
-    /// A rule that cannot be written takes the record back with it, so
+    /// A rule that cannot be written sets the record back to `off`, so
     /// the switch does not show ON for nothing.
     #[test]
     fn a_rule_that_cannot_be_written_removes_the_record_again() {
@@ -837,7 +845,7 @@ mod tests {
 
         assert!(enabled.is_err());
         assert!(!system.files.rule.exists());
-        assert!(!system.files.record.exists());
+        assert_eq!(record(&system.files), RECORD_OFF);
     }
 
     /// A link where the rule goes is never followed, and nothing changes.
@@ -944,11 +952,14 @@ mod tests {
         std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o000)).unwrap();
 
         let with_record = system.files.is_on();
+        std::fs::write(&system.files.record, RECORD_OFF).unwrap();
+        let recorded_off = system.files.is_on();
         std::fs::remove_file(&system.files.record).unwrap();
         let without_record = system.files.is_on();
         std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         assert!(with_record);
+        assert!(!recorded_off);
         assert!(!without_record);
     }
 

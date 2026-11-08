@@ -25,7 +25,7 @@ import tempfile
 import xml.etree.ElementTree as ElementTree
 
 from build_deb import (DEBIAN_DATA, GTK_PACKAGE, MAINTAINER_SCRIPTS_REFRESHING_CACHES,
-                       STABLE_POSTRM_PREFIX, maintainer_script_text,
+                       STABLE_SCRIPT_PREFIXES, maintainer_script_text,
                        PackageIdentity, build_architecture, cargo_version, package_identity)
 from package_data import Channel, Layout
 import updater_compatibility
@@ -140,19 +140,21 @@ def check_maintainer_scripts(report: Report, channel: Channel, control: Path) ->
     expected = sorted([*MAINTAINER_SCRIPTS_REFRESHING_CACHES,
                        *(['preinst'] if channel is Channel.STABLE else [])])
     report.check('Only the expected maintainer scripts are installed', scripts == expected)
-    refresh = (DEBIAN_DATA / 'refresh-caches').read_text(encoding='utf-8')
-    report.check('postinst only refreshes caches',
-                 (control / 'postinst').read_text(encoding='utf-8') == refresh)
-    postrm = (control / 'postrm').read_text(encoding='utf-8')
-    report.check("postrm refreshes caches and removes only the update setting's files",
-                 postrm == maintainer_script_text('postrm', channel))
-    # The stable postrm's one removal, of the opt-in update rule, is the
-    # fixed text just checked; the rest must change nothing else.
-    removal = (DEBIAN_DATA / STABLE_POSTRM_PREFIX).read_text(encoding='utf-8')
+    report.check("postinst and postrm refresh caches and change only the update setting's files",
+                 all((control / name).read_text(encoding='utf-8')
+                     == maintainer_script_text(name, channel)
+                     for name in MAINTAINER_SCRIPTS_REFRESHING_CACHES))
+    # The stable scripts' handling of the update rule is the fixed text just
+    # checked; the rest must change nothing else.
+    prefixes = [(DEBIAN_DATA / prefix).read_text(encoding='utf-8')
+                for prefix in STABLE_SCRIPT_PREFIXES.values()]
     for name in scripts:
         script = control / name
         subprocess.run(['sh', '-n', str(script)], check=True)
-        commands = script_commands(script.read_text(encoding='utf-8').replace(removal, ''))
+        text = script.read_text(encoding='utf-8')
+        for prefix in prefixes:
+            text = text.replace(prefix, '')
+        commands = script_commands(text)
         report.check(f'{name} changes no defaults, mounts or user data',
                      not any(forbidden in commands for forbidden in FORBIDDEN_SCRIPT_COMMANDS))
 

@@ -72,13 +72,15 @@ INSTALL_UPDATE_COMMAND = 'openxplorer-install-update'
 INSTALL_UPDATE_POLICY_TEMPLATE = PACKAGING_DATA / 'install-update.policy.in'
 INSTALL_UPDATE_RULES_TEMPLATE = PACKAGING_DATA / 'install-update.rules.in'
 INSTALL_UPDATE_ACTION_SUFFIX = 'install-update'
-# Updating without a password is opt-in: the package installs the filled-in
-# rule only as this data file, outside the folders polkit reads
-# (POLKIT_RULES_FOLDERS). The setting "Install updates without asking for a
-# password" has the helper copy it to PASSWORDLESS_RULE and write
+# The package installs the filled-in rule as this data file, outside the
+# folders polkit reads (POLKIT_RULES_FOLDERS), so that the setting "Install
+# updates without asking for a password", which is on by default, can turn
+# it off. The stable postinst copies it to PASSWORDLESS_RULE and writes
 # PASSWORDLESS_RECORD, which users can read where they cannot read
-# /etc/polkit-1/rules.d (crates/ox-core/src/update/passwordless.rs); the
-# stable postrm deletes both on remove and purge.
+# /etc/polkit-1/rules.d, unless the record says the user turned it off; the
+# helper deletes or copies it as the setting changes
+# (crates/ox-core/src/update/passwordless.rs); the stable postrm deletes
+# both on remove and purge.
 INSTALL_UPDATE_RULE_TEMPLATE_NAME = 'install-update.rules'
 POLKIT_RULES_FOLDERS = (PurePosixPath('/usr/share/polkit-1/rules.d'),
                         PurePosixPath('/etc/polkit-1/rules.d'))

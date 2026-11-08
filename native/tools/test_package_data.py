@@ -214,11 +214,11 @@ class InstallTests(StagingTestCase):
 
     # parity: UPD-003
     def test_no_package_installs_an_active_rule_that_skips_the_password(self) -> None:
-        """Updating without a password is opt-in: no package puts a rule
-        where polkit reads rules. The stable Debian package ships the rule
-        only as a template outside polkit's folders, which the setting
-        "Install updates without asking for a password" copies to
-        /etc/polkit-1/rules.d."""
+        """No package's payload puts a rule where polkit reads rules. The
+        stable Debian package ships the rule as a template outside polkit's
+        folders; its postinst copies it to /etc/polkit-1/rules.d, so that
+        the setting "Install updates without asking for a password", on by
+        default, can delete the copy."""
         for case in LAYOUT_CASES:
             with self.subTest(channel=case.channel.name, layout=case.layout.name):
                 tree = self.install(case.channel, case.layout)
@@ -259,7 +259,7 @@ class InstallTests(StagingTestCase):
                       'The update rule covers only the update action',
                       'The update rule needs a local, active session',
                       'The update rule lets only administrators through',
-                      'No polkit rule is active after installing',
+                      'The package ships no rule where polkit reads rules',
                       'Every promised file is installed'):
             self.assertIn(check, report.passed)
         policy = tree.path_of(tree.paths.install_update_policy).read_text(encoding='utf-8')

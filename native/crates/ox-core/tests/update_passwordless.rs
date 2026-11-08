@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "Install updates without asking for a password", which is off by
+//! "Install updates without asking for a password", which is on by
 //! default: the update helper turns it on and off only as root. New in the
 //! native app.
 //!

@@ -11,12 +11,13 @@
 // through. Anyone else, and any remote or inactive session, is asked for
 // an administrator's password by the action's own defaults.
 //
-// It is off by default. The package installs this rule only as a template,
-// /usr/share/openxplorer/install-update.rules, which polkit does not read.
-// Turning on "Install updates without asking for a password" in
-// OpenXplorer's Settings copies it to
-// /etc/polkit-1/rules.d/60-@ACTION_ID@.rules, after an administrator's
-// password; turning it off, or removing the package, deletes that copy.
+// It is on by default. The package installs this rule as a template,
+// /usr/share/openxplorer/install-update.rules, which polkit does not read,
+// and its postinst copies it to /etc/polkit-1/rules.d/60-@ACTION_ID@.rules.
+// Turning off "Install updates without asking for a password" in
+// OpenXplorer's Settings deletes that copy, after an administrator's
+// password, and an upgrade keeps it off; removing the package deletes it
+// too.
 polkit.addRule(function (action, subject) {
     if (action.id !== "@ACTION_ID@") {
         return polkit.Result.NOT_HANDLED;

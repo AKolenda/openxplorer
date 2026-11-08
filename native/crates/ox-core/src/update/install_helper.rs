@@ -13,16 +13,16 @@
 //! a polkit action of its own (`<id>.install-update`, with
 //! `org.freedesktop.policykit.exec.path` naming exactly this program),
 //! which asks for an administrator's password (`allow_active` is
-//! `auth_admin_keep`). Once the user turns on "Install updates without
-//! asking for a password", which is off by default, a polkit rule lets an
+//! `auth_admin_keep`). While "Install updates without asking for a
+//! password" is on, as it is by default, a polkit rule lets an
 //! administrator (a member of `sudo`, `admin` or `wheel`) in an active
 //! local session run it without authenticating, as Ubuntu's Software lets
 //! them install system updates. Anyone else is still asked for an
 //! administrator's password. The helper itself turns the setting on and
-//! off ([`super::passwordless`]): with `--enable-passwordless` it copies
-//! the rule the package installed as a template to
-//! `/etc/polkit-1/rules.d`, and with `--disable-passwordless` it deletes
-//! it.
+//! off ([`super::passwordless`]): with `--disable-passwordless` it
+//! deletes the rule from `/etc/polkit-1/rules.d`, and with
+//! `--enable-passwordless` it copies the rule the package installed as a
+//! template there again. The package's `postinst` installs that copy.
 //!
 //! # Threat model
 //!
@@ -179,7 +179,7 @@ apt-get starts when it reads a line 'cancel' on standard input.
 /usr/share/openxplorer to /etc/polkit-1/rules.d, so that an administrator
 at the machine installs updates without a password; --disable-passwordless
 deletes it. OpenXplorer runs them for its setting \"Install updates without
-asking for a password\", which is off by default.
+asking for a password\", which is on by default.
 ";
 
 /// What the program was asked to do.

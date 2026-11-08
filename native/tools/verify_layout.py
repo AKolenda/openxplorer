@@ -321,9 +321,9 @@ def check_install_update(report: Report, tree: InstalledTree) -> None:
     because it covers this one action, whose program is exactly the
     installed helper, and only in an active local session; anyone else
     falls back to the action's defaults, which ask for an administrator.
-    And it does so only once the user turns on "Install updates without
-    asking for a password": the package installs it as a template, never
-    in a folder polkit reads.
+    The package ships it as a template, never in a folder polkit reads:
+    the postinst installs the copy polkit reads, so that "Install updates
+    without asking for a password", on by default, can turn it off.
     """
     paths = tree.paths
     helper = paths.install_update
@@ -332,7 +332,7 @@ def check_install_update(report: Report, tree: InstalledTree) -> None:
         raise VerificationError('This package installs no update helper')
     active = [path for folder in package_data.POLKIT_RULES_FOLDERS
               for path in tree.path_of(folder).rglob('*')]
-    report.check('No polkit rule is active after installing',
+    report.check('The package ships no rule where polkit reads rules',
                  not active and not any(str(paths.install_update_rule_template).startswith(
                      str(folder) + '/') for folder in package_data.POLKIT_RULES_FOLDERS))
     installed = tree.path_of(helper)

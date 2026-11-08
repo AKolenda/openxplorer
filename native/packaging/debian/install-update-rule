@@ -1,0 +1,38 @@
+# The stable package's postinst only, ahead of the cache refreshes: turns
+# on "Install updates without asking for a password", which is on by
+# default, unless the user turned it off
+# (crates/ox-core/src/update/passwordless.rs). The record says "off" only
+# after the user turned the setting off, so an upgrade keeps that choice. A
+# fresh installation, and an upgrade from a version without the record,
+# turns the setting on. While it is on, every configure copies this
+# version's template to the rule again. The record says "on" before the
+# rule is written, so an interruption can never leave the rule active while
+# the switch shows off. Each file is written beside its target and renamed
+# over it, so a link in the way is replaced, never followed. polkit reads
+# only files ending in .rules, so it never reads a half-written one.
+case "$1" in
+    configure)
+        lock="$DPKG_ROOT/var/cache/openxplorer-update"
+        record="$DPKG_ROOT/var/lib/openxplorer/install-updates-without-password"
+        rule="$DPKG_ROOT/etc/polkit-1/rules.d/60-io.winspace.Development.install-update.rules"
+        # A helper changing the setting finishes first. An in-app update
+        # holds the same lock for as long as it runs this script, so the
+        # wait is short and then goes on without it.
+        if [ -d "$lock" ] && command -v flock >/dev/null 2>&1; then
+            exec 9<"$lock"
+            flock -w 2 9 || true
+        fi
+        if [ "$(cat "$record" 2>/dev/null || true)" != off ]; then
+            mkdir -p "${record%/*}"
+            printf 'on\n' > "$record.dpkg-new"
+            chmod 0644 "$record.dpkg-new"
+            mv -f "$record.dpkg-new" "$record"
+            if [ -d "${rule%/*}" ]; then
+                cp "$DPKG_ROOT/usr/share/openxplorer/install-update.rules" "$rule.dpkg-new"
+                chmod 0644 "$rule.dpkg-new"
+                mv -f "$rule.dpkg-new" "$rule"
+            fi
+        fi
+        ;;
+esac
+

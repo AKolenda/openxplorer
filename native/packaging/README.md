@@ -114,26 +114,30 @@ never takes over the Python app's name. Every package build sets it.
   (`crates/ox-core/src/update/install_helper.rs` documents the threat
   model). Its polkit action (`<id>.install-update`) asks for an
   administrator (`auth_admin_keep`).
-- **Install updates without asking for a password.** Off by default, so
-  installing the package changes nothing about who is asked for a
-  password. The package installs the polkit rule that lets a member of
-  `sudo`, `admin` or `wheel` in an active local session run the update
-  helper without a password only as a template,
-  `/usr/share/openxplorer/install-update.rules`, which polkit does not
-  read; no package installs anything in `/usr/share/polkit-1/rules.d` or
-  `/etc/polkit-1/rules.d`. Polkit rules cannot read the app's settings, so
-  the setting of that name on Settings › About runs
-  `pkexec openxplorer-install-update --enable-passwordless` (or
-  `--disable-passwordless`), which asks for an administrator's password
-  once. As root, the helper copies the template, never text from the
-  caller, to `/etc/polkit-1/rules.d/60-<id>.install-update.rules`
-  (0644, owned by root, written atomically and never through a link), or
-  deletes it (`crates/ox-core/src/update/passwordless.rs`). Because Ubuntu
-  and Debian keep `/etc/polkit-1/rules.d` unreadable to users, it also
-  writes `/var/lib/openxplorer/install-updates-without-password`, which
-  the switch reads only when it cannot read the rules folder; otherwise
-  the switch is on only while the rule file is there. The stable `postrm`
-  deletes both on `remove` and `purge`
+- **Install updates without asking for a password.** On by default, with
+  a switch on Settings › About to turn it off. The package installs the
+  polkit rule that lets a member of `sudo`, `admin` or `wheel` in an
+  active local session run the update helper without a password as a
+  template, `/usr/share/openxplorer/install-update.rules`, which polkit
+  does not read, and nothing in `/usr/share/polkit-1/rules.d`. The stable
+  `postinst` copies it to `/etc/polkit-1/rules.d/60-<id>.install-update.rules`
+  and records the setting as on
+  (`packaging/debian/install-update-rule`), on a fresh installation and on
+  every upgrade, so the rule is always the installed version's, unless the
+  user turned the setting off. Polkit rules cannot read the app's
+  settings, so the switch runs
+  `pkexec openxplorer-install-update --disable-passwordless` (or
+  `--enable-passwordless`), which asks for an administrator's password
+  once. As root, the helper deletes the rule, or copies the template,
+  never text from the caller, to it (0644, owned by root, written
+  atomically and never through a link;
+  `crates/ox-core/src/update/passwordless.rs`). Because Ubuntu and Debian
+  keep `/etc/polkit-1/rules.d` unreadable to users, the `postinst` and the
+  helper also write `/var/lib/openxplorer/install-updates-without-password`,
+  `on` or `off`, which the switch reads only when it cannot read the rules
+  folder; otherwise the switch is on only while the rule file is there.
+  The record's `off` is what keeps the setting off across upgrades. The
+  stable `postrm` deletes both on `remove` and `purge`
   (`packaging/debian/remove-update-rule`); an upgrade keeps them, and the
   user's choice. Only the stable Debian package shows the setting, because
   only it has the helper. Polkit older than 0.106 reads no rules files and
@@ -259,14 +263,16 @@ Build release packages on Ubuntu 24.04, the oldest supported base:
   names its real architecture.
 - **Maintainer scripts.** postinst and postrm
   ([`debian/refresh-caches`](debian/refresh-caches)) refresh the application,
-  icon and AppStream caches, as the Python package's do, and nothing else:
-  installing never changes defaults, user data, passwords, folder locations or
-  mounts. dpkg triggers do not refresh the AppStream cache for the swcatalog
-  catalog, which is why the scripts exist. The stable postrm first runs
+  icon and AppStream caches, as the Python package's do: installing never
+  changes defaults, user data, passwords, folder locations or mounts. dpkg
+  triggers do not refresh the AppStream cache for the swcatalog catalog,
+  which is why the scripts exist. The stable postinst first runs
+  [`debian/install-update-rule`](debian/install-update-rule), which installs
+  the rule of "Install updates without asking for a password" unless the
+  user turned it off, and the stable postrm first runs
   [`debian/remove-update-rule`](debian/remove-update-rule): on `remove` and
-  `purge` it deletes the rule and record of "Install updates without asking
-  for a password", so uninstalling never leaves updates without a password
-  behind.
+  `purge` it deletes that rule and its record, so uninstalling never leaves
+  updates without a password behind.
 - **Relations.** The stable package replaces, conflicts with and provides
   `winspace-explorer (<< 0.8.0)`, as the Python package does.
 - **Reproducible.** File times come from `SOURCE_DATE_EPOCH` or the last
