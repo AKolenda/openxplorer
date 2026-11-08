@@ -5363,6 +5363,10 @@ msgid "Drives, shares and virtual items cannot be changed here."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
+msgid "Items in Recent files can be opened and copied, not changed."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/availability.rs
 msgid "Items in a ZIP are read-only. Copy them out or use Extract all."
 msgstr ""
 

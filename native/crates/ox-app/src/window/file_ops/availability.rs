@@ -135,6 +135,9 @@ pub(crate) struct SelectionFacts {
     /// Some selected item is in a read-only previous version
     /// (`readonlyLocation`).
     pub(crate) has_read_only: bool,
+    /// Some selected item is a row of Recent files, which may be copied,
+    /// not cut, renamed or deleted.
+    pub(crate) has_recent: bool,
 }
 
 /// What the folder the tab shows is.
@@ -195,10 +198,11 @@ impl CommandFacts {
         match command {
             FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
             FileCommand::Copy => can_copy || (self.drive_selected && !self.is_busy),
-            FileCommand::Cut | FileCommand::Duplicate | FileCommand::Rename => {
-                can_copy && !selection.has_read_only
+            FileCommand::Duplicate => can_copy && !selection.has_read_only,
+            FileCommand::Cut | FileCommand::Rename => {
+                can_copy && !selection.has_read_only && !selection.has_recent
             }
-            FileCommand::Delete | FileCommand::DeletePermanently => can_change,
+            FileCommand::Delete | FileCommand::DeletePermanently => can_change && !selection.has_recent,
             FileCommand::Paste => {
                 self.clipboard.is_pasteable() && !folder.is_searching && !busy && folder.is_writable
             }
@@ -268,6 +272,11 @@ impl CommandFacts {
             _ if selection.has_inoperable => {
                 ox_core::i18n::gettext_static("Drives, shares and virtual items cannot be changed here.")
             }
+            FileCommand::Cut | FileCommand::Rename | FileCommand::Delete | FileCommand::DeletePermanently
+                if selection.has_recent =>
+            {
+                ox_core::i18n::gettext_static("Items in Recent files can be opened and copied, not changed.")
+            }
             FileCommand::Copy | FileCommand::Cut | FileCommand::Rename | FileCommand::Duplicate
                 if folder.is_recycle_bin =>
             {
@@ -312,10 +321,14 @@ pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -
         let uri = &item.entry().uri;
         locations.is_snapshot_location(uri) || is_archive_location(uri)
     });
+    let has_recent = items
+        .iter()
+        .any(|item| crate::window::context_menu::is_recent_row(item.entry()));
     SelectionFacts {
         count: items.len(),
         has_inoperable,
         has_read_only,
+        has_recent,
     }
 }
 

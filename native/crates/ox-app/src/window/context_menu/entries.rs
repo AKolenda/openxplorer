@@ -95,6 +95,9 @@ pub(crate) struct ItemFacts {
     pub(crate) send_to: SendToTargets,
     /// The desktop can share files, so the menus offer Share (CMD-037).
     pub(crate) can_share: bool,
+    /// It is a row of Recent files, which may be copied and shared, not
+    /// cut, renamed or deleted.
+    pub(crate) is_recent: bool,
 }
 
 /// A drive or network location Send to copies to, named as This PC
@@ -461,9 +464,15 @@ fn share_with_item(facts: &ItemFacts) -> Option<MenuEntry> {
 /// The compact menu's strip, as Windows 11 lays it out: Cut, Copy, Paste
 /// (into a folder, only while there is something to paste), Rename,
 /// Share (where offered, for files) and Delete, each with its label under
-/// its icon; their actions decide when they are enabled.
+/// its icon; their actions decide when they are enabled. A row of Recent
+/// files has only Copy and Share there.
 fn strip_items(facts: &ItemFacts) -> Vec<MenuItem> {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
+    if facts.is_recent {
+        let mut strip = vec![copy];
+        strip.extend(share_item(facts));
+        return strip;
+    }
     let mut strip = vec![cut, copy];
     if facts.shape == ItemShape::Folder && facts.is_single {
         strip.push(paste.shown_while_enabled());
@@ -1277,6 +1286,7 @@ mod tests {
             disk_tool: None,
             send_to: SendToTargets::default(),
             can_share: false,
+            is_recent: false,
         }
     }
 

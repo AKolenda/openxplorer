@@ -68,6 +68,11 @@ fn item_shape(entry: &Entry) -> ItemShape {
     }
 }
 
+/// Whether `entry` is a row of Recent files (the `recent:` items of `GVfs`).
+pub(super) fn is_recent_row(entry: &Entry) -> bool {
+    ox_core::location::scheme(&entry.uri).as_deref() == Some("recent")
+}
+
 /// Where the item at `uri` is, as its menu cares.
 fn item_location(uri: &str) -> ItemLocation {
     if is_smb_server(uri) {
@@ -327,6 +332,7 @@ impl BrowserWindow {
             disk_tool: disk_tool_of(entry),
             send_to: self.send_to_targets(),
             can_share: self.share_portal().is_some(),
+            is_recent: is_recent_row(entry),
         }
     }
 

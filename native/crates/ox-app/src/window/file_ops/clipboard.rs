@@ -341,6 +341,11 @@ impl BrowserWindow {
             return;
         }
         let facts = command_facts.selection;
+        // A row of Recent files is never cut, and Ctrl+X on one says
+        // nothing, as its Cut is greyed out.
+        if mode == ClipboardMode::Cut && facts.has_recent {
+            return;
+        }
         if facts.has_inoperable {
             self.show_message(ox_core::i18n::gettext_static(
                 "Open the share first, then select its files or folders.",
