@@ -38,8 +38,9 @@
 //!   in the dialog the scene opened last if there is one, such as the
 //!   keyboard shortcuts window's search.
 //! - `search=<text>`: types `<text>` into the search box, as a key
-//!   press there does, without waiting for the search, which pictures a
-//!   search while it runs;
+//!   press there does; the next step, or the picture, does not wait for
+//!   the search to finish, so a last `search=` pictures a search while it
+//!   runs;
 //! - `option=<name>`: opens the search strip's option list `<name>`
 //!   (`Kind`, `Date modified`, `Size`, `Search in`), as a click does;
 //! - `choose=<name>:<label>`: chooses `<label>` in that list.
