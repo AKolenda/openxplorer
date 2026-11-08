@@ -13,7 +13,7 @@
 mod update_support;
 
 use std::cell::RefCell;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ox_core::transfer::Cancellation;
 use ox_core::update::{
@@ -486,4 +486,44 @@ fn the_helper_reports_success_only_when_dpkg_confirms_it() {
         "{result:?}"
     );
     assert!(!reports.contains(&HelperReport::Installed(NEXT)));
+}
+
+/// A second helper started while one installs is refused at once, before
+/// it asks `dpkg-query` or GitHub anything, so repeated starts cannot pile
+/// up root processes or downloads.
+/// parity: UPD-003
+#[test]
+fn a_second_helper_is_refused_while_one_installs() {
+    let fixture = Arc::new(RootFixture::new());
+    let second = Arc::new(Mutex::new(None));
+    let (during, outcome) = (Arc::clone(&fixture), Arc::clone(&second));
+    fixture.packages().on_inspection(Arc::new(move || {
+        let (result, reports) = during.install(NEXT, &Cancellation::new());
+        *outcome.lock().unwrap() = Some((result, reports));
+    }));
+
+    let (result, _) = fixture.install(NEXT, &Cancellation::new());
+
+    result.unwrap();
+    let (second_result, second_reports) = second.lock().unwrap().take().expect("the second helper ran");
+    assert!(
+        matches!(second_result, Err(UpdateError::TaskRunning)),
+        "{second_result:?}"
+    );
+    assert!(second_reports.is_empty());
+    assert_eq!(
+        fixture.updates.server.opened(),
+        [LATEST_RELEASE_URL.to_owned(), next_installer_url()],
+        "the second helper fetched nothing"
+    );
+    assert_eq!(
+        fixture.packages().programs(),
+        [
+            "/usr/bin/dpkg-query",
+            "/usr/bin/dpkg-deb",
+            "/usr/bin/apt-get",
+            "/usr/bin/dpkg-query"
+        ],
+        "the second helper ran nothing"
+    );
 }

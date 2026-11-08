@@ -74,6 +74,8 @@ pub enum HelperFailure {
     Unreachable,
     /// [`UpdateError::Cancelled`].
     Cancelled,
+    /// [`UpdateError::TaskRunning`]: another helper is installing.
+    TaskRunning,
     /// [`UpdateError::NotChecked`]: the version asked for is not the latest
     /// release, or not newer than the installed one.
     NotChecked,
@@ -178,6 +180,7 @@ impl HelperFailure {
             UpdateError::DownloadRefused { status } => Self::DownloadRefused { status: *status },
             UpdateError::Unreachable => Self::Unreachable,
             UpdateError::Cancelled => Self::Cancelled,
+            UpdateError::TaskRunning => Self::TaskRunning,
             UpdateError::NotChecked => Self::NotChecked,
             UpdateError::InstallUnavailable { .. } => Self::NotInstalled,
             UpdateError::InstallerTooLarge => Self::InstallerTooLarge,
@@ -218,6 +221,7 @@ impl HelperFailure {
             Self::DownloadRefused { status } => UpdateError::DownloadRefused { status },
             Self::Unreachable => UpdateError::Unreachable,
             Self::Cancelled => UpdateError::Cancelled,
+            Self::TaskRunning => UpdateError::TaskRunning,
             Self::NotChecked => UpdateError::NotChecked,
             Self::NotInstalled => UpdateError::InstallUnavailable {
                 installation: super::Installation::DebianPackageWithoutTools,

@@ -41,6 +41,12 @@
 //! - installs only if that release is exactly the version asked for and
 //!   newer than the `openxplorer` package `dpkg-query` reports installed, so
 //!   it can never downgrade or reinstall;
+//! - runs one installation at a time: a second helper started while one
+//!   runs is refused at once, before it asks anything or downloads, so
+//!   repeated starts cannot pile up root processes or downloads;
+//! - never waits on its standard output or error, which belong to the
+//!   caller: a report the caller does not read is dropped, so a caller
+//!   that stops reading cannot hold a root process or its download;
 //! - downloads into a fresh 0700 folder in its own root-owned
 //!   [`STAGING_FOLDER`], which only root can write, and accepts the file
 //!   only with the release's exact size and SHA-256 digest
@@ -70,7 +76,10 @@
 //! | 2 | The request was refused before anything was fetched |
 
 use std::ffi::OsString;
+use std::fs::File;
 use std::io::{Read, Write};
+use std::os::fd::AsFd;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use super::download::download_installer;
@@ -84,6 +93,7 @@ use super::{
     parse_release, GitHubReleases, Installation, PackageCommand, PackageManager, ReleaseServer,
     ReleaseVersion, SystemPackageManager, UpdateError,
 };
+use crate::private_storage::private_directory;
 use crate::transfer::Cancellation;
 
 /// The helper program's file name.
@@ -177,6 +187,9 @@ pub fn install_update_command(arguments: impl IntoIterator<Item = OsString>) -> 
         }
         Request::Install(version) => version,
     };
+    // From here on, nothing waits for the caller to read.
+    never_block(std::io::stdout().as_fd());
+    never_block(std::io::stderr().as_fd());
     if let Err(reason) = prepare_process() {
         let _ = writeln!(std::io::stderr().lock(), "{INSTALL_HELPER_COMMAND}: {reason}");
         return REFUSED;
@@ -191,12 +204,7 @@ pub fn install_update_command(arguments: impl IntoIterator<Item = OsString>) -> 
         package_manager: &SystemPackageManager,
         staging_folder: Path::new(STAGING_FOLDER),
     };
-    let mut output = std::io::stdout().lock();
-    let mut report = |line: HelperReport| {
-        // The app may be gone; the installation goes on regardless.
-        let _ = writeln!(output, "{}", line.encode());
-        let _ = output.flush();
-    };
+    let mut report = |line: HelperReport| write_report(std::io::stdout().as_fd(), &line);
     match install_as_root(&parts, version, &mut report, &cancel) {
         Ok(()) => INSTALLED,
         Err(error) => {
@@ -222,6 +230,7 @@ pub fn install_as_root(
     report: &mut dyn FnMut(HelperReport),
     cancel: &Cancellation,
 ) -> Result<(), UpdateError> {
+    let _only_installation = lock_staging_folder(parts.staging_folder)?;
     let packages = parts.package_manager;
     let query = packages.run(&PackageCommand::QueryInstalled)?;
     let installed = installed_version(&query).ok_or(UpdateError::InstallUnavailable {
@@ -255,6 +264,45 @@ pub fn install_as_root(
     drop(staged);
     report(HelperReport::Installed(requested));
     Ok(())
+}
+
+/// Makes `staging_folder` the helper's private folder and takes its
+/// lock, which the returned file holds until it is dropped.
+///
+/// # Errors
+///
+/// [`UpdateError::TaskRunning`] while another helper holds it, and the
+/// private folder's refusals.
+fn lock_staging_folder(staging_folder: &Path) -> Result<File, UpdateError> {
+    use rustix::fs::{flock, FlockOperation, OFlags};
+    private_directory(staging_folder)?;
+    let folder = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags((OFlags::DIRECTORY | OFlags::NOFOLLOW).bits().cast_signed())
+        .open(staging_folder)
+        .map_err(|error| UpdateError::io(staging_folder, error))?;
+    match flock(&folder, FlockOperation::NonBlockingLockExclusive) {
+        Ok(()) => Ok(folder),
+        Err(rustix::io::Errno::WOULDBLOCK) => Err(UpdateError::TaskRunning),
+        Err(error) => Err(UpdateError::io(staging_folder, error.into())),
+    }
+}
+
+/// Makes writes to `output` fail rather than wait when the reader does
+/// not read.
+fn never_block(output: impl AsFd) {
+    use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
+    if let Ok(flags) = fcntl_getfl(&output) {
+        let _ = fcntl_setfl(&output, flags | OFlags::NONBLOCK);
+    }
+}
+
+/// Writes `report` as one line to `output` with a single write, and drops
+/// it if the reader is gone or not reading.
+fn write_report(output: impl AsFd, report: &HelperReport) {
+    let mut line = report.encode().into_bytes();
+    line.push(b'\n');
+    let _ = rustix::io::write(output, &line);
 }
 
 /// Reads the command line: one version, or `--help`.
@@ -476,6 +524,36 @@ mod tests {
         assert!(!watched(&long));
         long.extend_from_slice(b"cancel\n");
         assert!(watched(&long));
+    }
+
+    /// A caller that never reads the reports cannot hold the helper: once
+    /// the pipe is full, reports are dropped instead of waited on.
+    #[test]
+    fn reports_never_wait_for_a_reader() {
+        let (reader, writer) = std::io::pipe().unwrap();
+        never_block(&writer);
+
+        // Far more than a pipe holds; this returns only if no write waits.
+        for _ in 0..100_000 {
+            write_report(&writer, &HelperReport::Downloading);
+        }
+
+        drop(reader);
+        write_report(&writer, &HelperReport::Installing);
+    }
+
+    /// Only one installation runs at a time.
+    #[test]
+    fn a_second_installation_is_refused_while_one_holds_the_lock() {
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("staging");
+
+        let held = lock_staging_folder(&folder).unwrap();
+        let second = lock_staging_folder(&folder);
+
+        assert!(matches!(second, Err(UpdateError::TaskRunning)), "{second:?}");
+        drop(held);
+        assert!(lock_staging_folder(&folder).is_ok());
     }
 
     #[test]
