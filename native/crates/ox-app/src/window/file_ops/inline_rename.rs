@@ -254,11 +254,13 @@ impl BrowserWindow {
         if !editor.is_sensitive() || editor.parent().is_none() {
             return;
         }
-        // An empty name stays empty, to be refused, rather than becoming
-        // the extension alone.
+        // A name erased whole (or left as spaces) keeps the old name, as
+        // in Windows 11: no rename, no message, nothing to undo. It never
+        // becomes the extension alone.
         let typed = match &target.hidden_extension {
-            Some(extension) if !editor.text().trim().is_empty() => format!("{}{extension}", editor.text()),
-            _ => editor.text().to_string(),
+            _ if editor.text().trim().is_empty() => target.name.clone(),
+            Some(extension) => format!("{}{extension}", editor.text()),
+            None => editor.text().to_string(),
         };
         // A name the shell trims back to the old one ("Notes.txt." for
         // "Notes.txt") is no new name either.
