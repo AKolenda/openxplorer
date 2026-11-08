@@ -170,7 +170,7 @@ impl BrowserWindow {
     /// `id` on `folder`: no key, mouse button or wheel was used in the
     /// window, it is still the active window, no dialog is in front, and
     /// that tab is still in front on the same folder, without a search.
-    fn is_undisturbed_since(&self, generation: u64, id: TabId, folder: &str) -> bool {
+    pub(in crate::window) fn is_undisturbed_since(&self, generation: u64, id: TabId, folder: &str) -> bool {
         self.imp().input_generation.get() == generation
             && self.is_active()
             && !self.dialog_in_front()
@@ -285,7 +285,7 @@ impl BrowserWindow {
     /// Remembers the item New folder or a New menu file made for
     /// Undo, then lists the folder with it selected and renamed in place;
     /// a failure says why in the toast.
-    fn rename_created(&self, created: Result<CreatedItem, OpsError>) {
+    pub(in crate::window) fn rename_created(&self, created: Result<CreatedItem, OpsError>) {
         match created {
             Ok(created) => {
                 self.context().record_operation(created.undo_record());
