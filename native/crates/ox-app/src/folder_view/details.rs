@@ -936,7 +936,7 @@ mod tests {
             },
             ColumnWidth {
                 column: Column::Size,
-                pixels: 90.0,
+                pixels: 130.0,
             },
             ColumnWidth {
                 column: Column::Created,
