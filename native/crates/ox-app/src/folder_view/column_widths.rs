@@ -4,8 +4,8 @@
 //!
 //! Ports `columnDefaults` and `applyColumnLayout` in `v2.0.0:desktop/ui/app.js`:
 //! Name takes the remaining width until the user resizes it, the other
-//! columns default to 176 (Date modified), 330 (Folder path), 135 and 90
-//! pixels, and saved widths are clamped to the limits the Python app uses (ox-core's [`Column::width_range`]).
+//! columns default to 176 (Date modified), 330 (Folder path), 135 (Type),
+//! 130 (Size) and 90 (Extension) pixels, and saved widths are clamped to the limits the Python app uses (ox-core's [`Column::width_range`]).
 //! The details view applies these widths and saves them after a resize.
 
 use ox_core::settings::{Column, ColumnWidths};
@@ -51,14 +51,18 @@ const fn edge_gutter(column: SortColumn) -> u32 {
 /// Width of a column nobody resized (`columnDefaults` in app.js). Name has
 /// none: it takes the remaining space. Date modified shows the time too,
 /// so it starts wider than the web app's 152 pixels, enough for
-/// `12/31/2026 11:59 PM` at 125% text size.
+/// `12/31/2026 11:59 PM` at 125% text size. Size writes whole kilobytes,
+/// as Windows' Size column does, so it starts wider than the web app's 90
+/// pixels, enough for ten digits of them (`9,999,999,999 KB`, a 9 TB file)
+/// and so for a 6 GB file's `6,291,456 KB`.
 const fn default_width(column: SortColumn) -> Option<u32> {
     match column {
         SortColumn::Name => None,
         SortColumn::Modified | SortColumn::Created | SortColumn::Deleted => Some(176),
         SortColumn::FolderPath | SortColumn::OriginalLocation => Some(330),
         SortColumn::Type => Some(135),
-        SortColumn::Size | SortColumn::Extension => Some(90),
+        SortColumn::Size => Some(130),
+        SortColumn::Extension => Some(90),
         SortColumn::Owner | SortColumn::Permissions => Some(110),
     }
 }
@@ -147,7 +151,7 @@ mod tests {
         assert_eq!(start_width(SortColumn::Modified, None), Some(176));
         assert_eq!(start_width(SortColumn::FolderPath, None), Some(330));
         assert_eq!(start_width(SortColumn::Type, None), Some(135));
-        assert_eq!(start_width(SortColumn::Size, None), Some(90));
+        assert_eq!(start_width(SortColumn::Size, None), Some(130));
     }
 
     /// parity: VIEW-028
