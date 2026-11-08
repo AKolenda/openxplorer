@@ -138,6 +138,9 @@ mod imp {
         pub(super) folder_relocation: RefCell<Option<Arc<FolderRelocation>>>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
+        /// "Install updates without asking for a password", where this
+        /// build has it, found on first use.
+        pub(super) passwordless_updates: OnceCell<Option<ox_core::update::PasswordlessUpdates>>,
         /// The number of drives being formatted, which file writes wait
         /// for.
         pub(super) drives_formatting: Rc<Cell<u32>>,
@@ -328,6 +331,29 @@ impl AppContext {
             .updates
             .set(updates)
             .expect("the test sets the updates before using them");
+    }
+
+    /// "Install updates without asking for a password", if this build has
+    /// it: only the stable Debian package with the update helper does.
+    pub(crate) fn passwordless_updates(&self) -> Option<&ox_core::update::PasswordlessUpdates> {
+        self.imp()
+            .passwordless_updates
+            .get_or_init(crate::update::passwordless_for_this_build)
+            .as_ref()
+    }
+
+    /// Uses `setting` instead of this build's, for tests on a fake
+    /// system.
+    ///
+    /// # Panics
+    ///
+    /// When the setting was used already.
+    #[cfg(test)]
+    pub(crate) fn use_passwordless_updates(&self, setting: Option<ox_core::update::PasswordlessUpdates>) {
+        self.imp()
+            .passwordless_updates
+            .set(setting)
+            .expect("the test sets the setting before using it");
     }
 
     /// The desktop integration, shared by every window.

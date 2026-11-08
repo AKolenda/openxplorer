@@ -8,7 +8,9 @@
 //! the user has confirmed the update; it is not meant to be run by hand.
 //! It takes one version and nothing else, downloads and verifies that
 //! release itself, and installs it only if it is the latest release and
-//! newer than the installed package.
+//! newer than the installed package. With `--enable-passwordless` or
+//! `--disable-passwordless` instead, it turns the setting "Install
+//! updates without asking for a password" on or off.
 
 use std::process::ExitCode;
 

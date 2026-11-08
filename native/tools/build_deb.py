@@ -99,6 +99,12 @@ STABLE_RECOMMENDS = (
 )
 # The maintainer scripts that run native/packaging/debian/refresh-caches.
 MAINTAINER_SCRIPTS_REFRESHING_CACHES = ('postinst', 'postrm')
+# What the stable postinst and postrm run before the cache refreshes: the
+# postinst installs the polkit rule of "Install updates without asking for a
+# password", which is on by default, unless the user turned it off
+# (native/packaging/debian/install-update-rule); the postrm deletes it on
+# remove and purge (native/packaging/debian/remove-update-rule).
+STABLE_SCRIPT_PREFIXES = {'postinst': 'install-update-rule', 'postrm': 'remove-update-rule'}
 # The package name before 0.8.0, as v2.0.0:desktop/tools/build_deb.py declares.
 STABLE_RELATIONS = {
     'Replaces': 'winspace-explorer (<< 0.8.0)',
@@ -294,15 +300,35 @@ def install_debian_files(stage: Path, channel: Channel) -> None:
     target.chmod(package_data.DATA_MODE)
 
 
+def maintainer_script_text(name: str, channel: Channel) -> str:
+    """Return the postinst or postrm of channel.
+
+    Both refresh caches. In the stable package the postinst first installs
+    the rule of "Install updates without asking for a password", which is
+    on by default, unless the user turned it off, and the postrm first
+    deletes it when the package is removed or purged, so it never outlives
+    the package.
+    """
+    refresh = (DEBIAN_DATA / 'refresh-caches').read_text(encoding='utf-8')
+    if name not in STABLE_SCRIPT_PREFIXES or channel is not Channel.STABLE:
+        return refresh
+    prefix = (DEBIAN_DATA / STABLE_SCRIPT_PREFIXES[name]).read_text(encoding='utf-8')
+    head, marker, tail = refresh.partition('set -e\n')
+    if not marker:
+        raise BuildError('native/packaging/debian/refresh-caches must say set -e.')
+    return f'{head}{marker}\n{prefix}{tail.lstrip(chr(10))}'
+
+
 def write_maintainer_scripts(control: Path, channel: Channel, architecture: str) -> None:
     """Write postinst and postrm, which refresh caches, and the stable preinst.
 
-    The preinst refuses a processor the program was not built for; see
-    native/packaging/debian/preinst.in.
+    The stable postinst also installs the update rule, and the stable
+    postrm deletes it on remove and purge (maintainer_script_text). The preinst refuses a processor the
+    program was not built for; see native/packaging/debian/preinst.in.
     """
     for name in MAINTAINER_SCRIPTS_REFRESHING_CACHES:
         script = control / name
-        shutil.copyfile(DEBIAN_DATA / 'refresh-caches', script)
+        script.write_text(maintainer_script_text(name, channel), encoding='utf-8')
         script.chmod(package_data.PROGRAM_MODE)
     if channel is not Channel.STABLE:
         return

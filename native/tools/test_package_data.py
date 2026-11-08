@@ -205,12 +205,45 @@ class InstallTests(StagingTestCase):
 
                 if case.channel is Channel.STABLE and case.layout is Layout.DEBIAN:
                     self.assertEqual(sorted(installed), [
-                        '60-io.winspace.Development.install-update.rules',
+                        'install-update.rules',
                         'io.winspace.Development.install-update.policy',
                         'openxplorer-install-update'])
                 else:
                     self.assertEqual(installed, [])
-                    self.assertIsNone(tree.paths.install_update_rules)
+                    self.assertIsNone(tree.paths.install_update_rule_template)
+
+    # parity: UPD-003
+    def test_no_package_installs_an_active_rule_that_skips_the_password(self) -> None:
+        """No package's payload puts a rule where polkit reads rules. The
+        stable Debian package ships the rule as a template outside polkit's
+        folders; its postinst copies it to /etc/polkit-1/rules.d, so that
+        the setting "Install updates without asking for a password", on by
+        default, can delete the copy."""
+        for case in LAYOUT_CASES:
+            with self.subTest(channel=case.channel.name, layout=case.layout.name):
+                tree = self.install(case.channel, case.layout)
+                active = [path for folder in package_data.POLKIT_RULES_FOLDERS
+                          for path in (tree.root / folder.relative_to('/')).rglob('*')]
+
+                self.assertEqual(active, [])
+
+    # parity: UPD-003
+    def test_the_stable_debian_package_ships_the_rule_as_a_template(self) -> None:
+        tree = self.install(Channel.STABLE, Layout.DEBIAN)
+        paths = tree.paths
+
+        self.assertEqual(paths.install_update_rule_template,
+                         PurePosixPath('/usr/share/openxplorer/install-update.rules'))
+        template = tree.path_of(paths.install_update_rule_template)
+        action = package_data.install_update_action(Channel.STABLE)
+        self.assertEqual(template.read_text(encoding='utf-8'), package_data.build_rules_file(action))
+        self.assertNotIn('@ACTION_ID@', template.read_text(encoding='utf-8'))
+        self.assertEqual(template.stat().st_mode & 0o777, package_data.DATA_MODE)
+        for path in (paths.install_update, paths.install_update_policy):
+            self.assertTrue(tree.path_of(path).is_file(), path)
+        self.assertEqual(package_data.PASSWORDLESS_RULE,
+                         PurePosixPath('/etc/polkit-1/rules.d/'
+                                       '60-io.winspace.Development.install-update.rules'))
 
     # parity: UPD-003
     def test_the_update_helper_runs_under_its_own_action_and_rule(self) -> None:
@@ -226,13 +259,14 @@ class InstallTests(StagingTestCase):
                       'The update rule covers only the update action',
                       'The update rule needs a local, active session',
                       'The update rule lets only administrators through',
+                      'The package ships no rule where polkit reads rules',
                       'Every promised file is installed'):
             self.assertIn(check, report.passed)
         policy = tree.path_of(tree.paths.install_update_policy).read_text(encoding='utf-8')
         self.assertIn('/opt/openxplorer/libexec/openxplorer-install-update', policy)
         self.assertNotEqual(package_data.install_update_action(Channel.STABLE),
                             package_data.admin_delete_action(Channel.STABLE))
-        self.assertEqual(tree.path_of(tree.paths.install_update_rules).stat().st_mode & 0o777,
+        self.assertEqual(tree.path_of(tree.paths.install_update_rule_template).stat().st_mode & 0o777,
                          package_data.DATA_MODE)
 
     # parity: UPD-003
@@ -249,7 +283,7 @@ class InstallTests(StagingTestCase):
             ('    return polkit.Result.NOT_HANDLED;\n});', '    return polkit.Result.YES;\n});'),
         )
         tree = self.install(Channel.STABLE, Layout.DEBIAN)
-        rules = tree.path_of(tree.paths.install_update_rules)
+        rules = tree.path_of(tree.paths.install_update_rule_template)
         original = rules.read_text(encoding='utf-8')
         verify_layout.check_install_update(Report(), tree)
         for old, new in loosened:

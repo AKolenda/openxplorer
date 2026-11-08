@@ -6,7 +6,7 @@ The Debian package, the RPM, the Arch package and the Flatpak all install
 through this tool, so the program, the desktop entry, the AppStream
 metainfo, the icon, the D-Bus service file, the licences, the mount helper
 program, the permanent-delete helper with its polkit action and the update
-helper with its polkit action and rule land in the same places with the same modes whichever format builds them. It ports the file layout of v2.0.0:desktop/tools/build_deb.py;
+helper with its polkit action and rule template land in the same places with the same modes whichever format builds them. It ports the file layout of v2.0.0:desktop/tools/build_deb.py;
 native/packaging/README.md explains each decision.
 """
 from __future__ import annotations
@@ -72,6 +72,21 @@ INSTALL_UPDATE_COMMAND = 'openxplorer-install-update'
 INSTALL_UPDATE_POLICY_TEMPLATE = PACKAGING_DATA / 'install-update.policy.in'
 INSTALL_UPDATE_RULES_TEMPLATE = PACKAGING_DATA / 'install-update.rules.in'
 INSTALL_UPDATE_ACTION_SUFFIX = 'install-update'
+# The package installs the filled-in rule as this data file, outside the
+# folders polkit reads (POLKIT_RULES_FOLDERS), so that the setting "Install
+# updates without asking for a password", which is on by default, can turn
+# it off. The stable postinst copies it to PASSWORDLESS_RULE and writes
+# PASSWORDLESS_RECORD, which users can read where they cannot read
+# /etc/polkit-1/rules.d, unless the record says the user turned it off; the
+# helper deletes or copies it as the setting changes
+# (crates/ox-core/src/update/passwordless.rs); the stable postrm deletes
+# both on remove and purge.
+INSTALL_UPDATE_RULE_TEMPLATE_NAME = 'install-update.rules'
+POLKIT_RULES_FOLDERS = (PurePosixPath('/usr/share/polkit-1/rules.d'),
+                        PurePosixPath('/etc/polkit-1/rules.d'))
+PASSWORDLESS_RULE = PurePosixPath('/etc/polkit-1/rules.d',
+                                  '60-io.winspace.Development.install-update.rules')
+PASSWORDLESS_RECORD = PurePosixPath('/var/lib/openxplorer/install-updates-without-password')
 # The groups whose members are administrators: sudo on Debian and Ubuntu,
 # admin on older Ubuntu releases, wheel elsewhere.
 ADMINISTRATOR_GROUPS = ('sudo', 'admin', 'wheel')
@@ -165,12 +180,12 @@ class InstalledPaths:
     # says so instead (helper_path in admin_delete/elevation.rs).
     admin_delete: PurePosixPath | None
     admin_delete_policy: PurePosixPath | None
-    # The update helper, its polkit action file and its polkit rule, which
-    # only the stable Debian package installs: no other package updates
-    # itself.
+    # The update helper, its polkit action file and its polkit rule
+    # template, which only the stable Debian package installs: no other
+    # package updates itself. The template is not an active rule.
     install_update: PurePosixPath | None = None
     install_update_policy: PurePosixPath | None = None
-    install_update_rules: PurePosixPath | None = None
+    install_update_rule_template: PurePosixPath | None = None
 
 
 def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
@@ -205,8 +220,8 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
             install_update_policy=(
                 PurePosixPath('/usr/share/polkit-1/actions', f'{update_action}.policy')
                 if updates_itself else None),
-            install_update_rules=(
-                PurePosixPath('/usr/share/polkit-1/rules.d', f'60-{update_action}.rules')
+            install_update_rule_template=(
+                PurePosixPath('/usr/share', package, INSTALL_UPDATE_RULE_TEMPLATE_NAME)
                 if updates_itself else None))
     return InstalledPaths(
         program=PurePosixPath('/usr/bin', package),
@@ -347,13 +362,14 @@ def install_admin_delete(staging: Staging, request: InstallRequest,
 
 def install_update_helper(staging: Staging, request: InstallRequest,
                           paths: InstalledPaths) -> None:
-    """Install the update helper, its polkit action file and its polkit rule.
+    """Install the update helper, its polkit action file and its rule template.
 
     Like the permanent-delete helper it goes in libexec, with no link on
-    PATH: only the app starts it, and only through pkexec.
+    PATH: only the app starts it, and only through pkexec. The rule goes
+    only where polkit does not read it; the user's setting activates it.
     """
     if (paths.install_update is None or paths.install_update_policy is None
-            or paths.install_update_rules is None):
+            or paths.install_update_rule_template is None):
         return
     if request.install_update is None:
         raise RuntimeError(f'This package installs {INSTALL_UPDATE_COMMAND}; pass --install-update.')
@@ -361,7 +377,7 @@ def install_update_helper(staging: Staging, request: InstallRequest,
     staging.copy(request.install_update, paths.install_update, PROGRAM_MODE)
     policy = build_policy_file(action, paths.install_update, INSTALL_UPDATE_POLICY_TEMPLATE)
     staging.write(policy, paths.install_update_policy, DATA_MODE)
-    staging.write(build_rules_file(action), paths.install_update_rules, DATA_MODE)
+    staging.write(build_rules_file(action), paths.install_update_rule_template, DATA_MODE)
 
 
 def install_program(staging: Staging, program: Path, paths: InstalledPaths) -> None:
