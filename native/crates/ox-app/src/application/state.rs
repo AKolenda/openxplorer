@@ -334,13 +334,12 @@ fn snapshot_save_call(app: &gtk::Application, start: Option<&str>) -> ox_core::i
     use ox_core::integration::{
         options_from_entries, path_variant, ChooserCall, ChooserReply, ChooserRequest,
     };
-    let folder = start
-        .map(|start| match start.contains("://") {
-            true => gio::File::for_uri(start).path(),
-            false => Some(std::path::PathBuf::from(start)),
-        })
-        .unwrap_or_else(|| Some(glib::home_dir()))
-        .unwrap_or_else(glib::home_dir);
+    let folder = match start {
+        Some(uri) if uri.contains("://") => gio::File::for_uri(uri).path(),
+        Some(path) => Some(std::path::PathBuf::from(path)),
+        None => None,
+    }
+    .unwrap_or_else(glib::home_dir);
     let options = options_from_entries(&[
         ("current_folder", path_variant(&folder.to_string_lossy())),
         ("current_name", "Untitled.txt".to_variant()),

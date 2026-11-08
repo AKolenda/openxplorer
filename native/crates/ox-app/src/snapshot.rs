@@ -30,7 +30,10 @@
 //!   read its item;
 //! - `OPENXPLORER_SAVE_DIALOG=1`: the window is another application's
 //!   Save dialog for `Untitled.txt` in the first tab's folder, as the
-//!   desktop portal opens one; no application waits for its answer.
+//!   desktop portal opens one; no application waits for its answer;
+//! - `OPENXPLORER_DIALOG=1`: once the scene has run, saves the dialog
+//!   window it opened last (such as the keyboard shortcuts window) in
+//!   place of the browser window.
 //!
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it
@@ -186,6 +189,15 @@ pub(crate) fn save_when_listed(
                     reason,
                 }),
             }
+        } else if request.dialog {
+            eprintln!("{}", milestones.summary());
+            match last_dialog(window) {
+                Some(dialog) => save_window(&dialog, &request.png),
+                None => Err(SnapshotError::Scene {
+                    step: "OPENXPLORER_DIALOG=1".to_owned(),
+                    reason: "the scene opened no dialog".to_owned(),
+                }),
+            }
         } else {
             eprintln!("{}", milestones.summary());
             save_scene(window.upcast_ref(), &request)
@@ -232,6 +244,17 @@ fn properties_on_tab(
     } else {
         Err(format!("the Properties window has no tab “{tab}”"))
     }
+}
+
+/// The dialog window over `window` that opened last, if any.
+fn last_dialog(window: &BrowserWindow) -> Option<gtk::Window> {
+    let parent: &gtk::Window = window.upcast_ref();
+    gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|toplevel| toplevel.downcast::<crate::dialog::Dialog>().ok())
+        .filter(|dialog| dialog.is_visible() && dialog.transient_for().as_ref() == Some(parent))
+        .map(Cast::upcast)
+        .last()
 }
 
 /// Saves `window`, a window of its own such as Properties, with the menus

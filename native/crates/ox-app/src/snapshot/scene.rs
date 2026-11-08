@@ -32,7 +32,10 @@
 //!   controllers from the window down to the focused widget and back up,
 //!   as GTK hands a key event round (GTK cannot make a key event itself);
 //! - `zoom=<steps>`: the layout that many steps bigger, or smaller when
-//!   negative, as Ctrl+wheel notches over the file list give it.
+//!   negative, as Ctrl+wheel notches over the file list give it;
+//! - `type=<text>`: puts the text in the text field with keyboard focus,
+//!   in the dialog the scene opened last if there is one, such as the
+//!   keyboard shortcuts window's search.
 //!
 //! The steps drive the window through the same actions its buttons, menus
 //! and keys use, so the picture shows the app as a user would see it. They
@@ -77,6 +80,8 @@ pub(crate) enum SceneStep {
     Key(String),
     /// Zoom the layout this many Ctrl+wheel steps.
     Zoom(i32),
+    /// Put this text in the focused text field.
+    Type(String),
 }
 
 impl SceneStep {
@@ -117,6 +122,7 @@ impl SceneStep {
             // GTK reads the key when the step runs: it is not started yet.
             "key" => Some(Self::Key(argument.to_owned())),
             "zoom" => argument.parse().ok().map(Self::Zoom),
+            "type" => Some(Self::Type(argument.to_owned())),
             "wait" => {
                 let pause = Duration::from_millis(argument.parse().ok()?);
                 (pause <= LONGEST_WAIT).then_some(Self::Wait(pause))
@@ -184,6 +190,25 @@ impl SceneStep {
             }
             Self::Zoom(steps) => {
                 window.zoom_view(*steps);
+                Ok(Duration::ZERO)
+            }
+            Self::Type(text) => {
+                let parent: &gtk::Window = window.upcast_ref();
+                let dialog = gtk::Window::list_toplevels()
+                    .into_iter()
+                    .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+                    .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
+                    .last();
+                let field = GtkWindowExt::focus(dialog.as_ref().unwrap_or(parent))
+                    .and_then(|focus| {
+                        focus
+                            .ancestor(gtk::Entry::static_type())
+                            .and_downcast::<gtk::Editable>()
+                            .or_else(|| focus.downcast::<gtk::Editable>().ok())
+                    })
+                    .ok_or_else(|| "no text field has keyboard focus".to_owned())?;
+                field.set_text(text);
+                field.set_position(-1);
                 Ok(Duration::ZERO)
             }
         }
@@ -338,11 +363,12 @@ mod tests {
     #[test]
     fn a_scene_takes_keys_and_zoom_steps() {
         assert_eq!(
-            SceneStep::parse_scene("key=<Primary><Shift>e; key=KP_Multiply; zoom=-2"),
+            SceneStep::parse_scene("key=<Primary><Shift>e; key=KP_Multiply; zoom=-2; type=tab"),
             Some(vec![
                 SceneStep::Key("<Primary><Shift>e".to_owned()),
                 SceneStep::Key("KP_Multiply".to_owned()),
                 SceneStep::Zoom(-2),
+                SceneStep::Type("tab".to_owned()),
             ])
         );
     }
