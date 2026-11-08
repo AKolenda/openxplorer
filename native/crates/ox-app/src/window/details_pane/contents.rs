@@ -433,7 +433,8 @@ impl DetailsPane {
 /// Draws the PDF at `path` page by page for `pane`'s selection
 /// `generation`, `width` pixels wide, until it ends, [`PDF_PAGE_LIMIT`]
 /// pages or [`PDF_PIXEL_BUDGET`] pixels are shown, or the selection
-/// changes; with `local_only`, not on a network file system.
+/// changes; only a plain file, and with `local_only` not on a network
+/// file system.
 async fn pdf_pages(
     pane: glib::WeakRef<DetailsPane>,
     generation: u64,
@@ -448,7 +449,10 @@ async fn pdf_pages(
         let last = (first + PDF_BATCH - 1).min(PDF_PAGE_LIMIT);
         let (path, cancel) = (path.clone(), cancellation.clone());
         let drawn = gio::spawn_blocking(move || {
-            if first == 1 && !allowed(&path, local_only) {
+            // Only a plain file reaches pdftoppm, which would wait on a
+            // pipe until its time limit ([`open_plain_file`]).
+            let plain = || fs::metadata(&path).is_ok_and(|metadata| metadata.is_file());
+            if first == 1 && !(plain() && allowed(&path, local_only)) {
                 return None;
             }
             crate::thumbnails::pdf_pages(&path, first, last, width, &cancel)
