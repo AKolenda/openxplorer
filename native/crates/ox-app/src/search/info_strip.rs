@@ -474,6 +474,37 @@ impl SearchInfoStrip {
             .choose_labelled(kind.label());
     }
 
+    /// The search option list named `name` (`Search in`, `Kind`, `Date
+    /// modified` or `Size`).
+    fn named_option(&self, name: &str) -> Option<&ChoiceButton> {
+        let imp = self.imp();
+        let named = [
+            (&imp.search_in, "Search in"),
+            (&imp.kind, "Kind"),
+            (&imp.date, "Date modified"),
+            (&imp.size, "Size"),
+        ];
+        named
+            .into_iter()
+            .find(|(_, label)| ox_core::i18n::gettext_static(label) == name || *label == name)
+            .map(|(slot, _)| Self::option_list(slot))
+    }
+
+    /// Opens the search option list named `name`, as a click on it does;
+    /// false when the strip has no such list. For the snapshot hook.
+    pub(crate) fn open_option(&self, name: &str) -> bool {
+        let list = self.named_option(name);
+        list.inspect(|list| list.button.popup()).is_some()
+    }
+
+    /// Chooses `label` in the search option list named `name`, as a click
+    /// on its row does; false when there is no such list or option. For
+    /// the snapshot hook.
+    pub(crate) fn choose_option(&self, name: &str, label: &str) -> bool {
+        self.named_option(name)
+            .is_some_and(|list| list.choices.try_choose_labelled(label))
+    }
+
     /// Chooses a size as the user would, for tests.
     #[cfg(test)]
     pub(crate) fn choose_size(&self, size: SizeFacet) {

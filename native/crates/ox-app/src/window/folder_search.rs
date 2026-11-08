@@ -282,6 +282,18 @@ impl BrowserWindow {
         self.search_box().set_query(text);
     }
 
+    /// Opens the search strip's option list named `name`, as the snapshot
+    /// hook's scenes ask; false when the strip has none.
+    pub(crate) fn open_search_option(&self, name: &str) -> bool {
+        self.search_strip().is_visible() && self.search_strip().open_option(name)
+    }
+
+    /// Chooses `label` in the search strip's option list named `name`, as
+    /// the snapshot hook's scenes ask; false when there is no such option.
+    pub(crate) fn choose_search_option(&self, name: &str, label: &str) -> bool {
+        self.search_strip().is_visible() && self.search_strip().choose_option(name, label)
+    }
+
     /// Searches the cache for `run` off the main thread and shows what it
     /// found, unless a newer edit replaced the run.
     fn ask_search_cache(&self, run: SearchRun) {

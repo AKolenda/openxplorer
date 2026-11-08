@@ -37,6 +37,12 @@
 //! - `type=<text>`: puts the text in the text field with keyboard focus,
 //!   in the dialog the scene opened last if there is one, such as the
 //!   keyboard shortcuts window's search.
+//! - `search=<text>`: types `<text>` into the search box, as a key
+//!   press there does, without waiting for the search, which pictures a
+//!   search while it runs;
+//! - `option=<name>`: opens the search strip's option list `<name>`
+//!   (`Kind`, `Date modified`, `Size`, `Search in`), as a click does;
+//! - `choose=<name>:<label>`: chooses `<label>` in that list.
 //!
 //! The steps drive the window through the same actions its buttons, menus
 //! and keys use, so the picture shows the app as a user would see it. They
@@ -83,6 +89,17 @@ pub(crate) enum SceneStep {
     Zoom(i32),
     /// Put this text in the focused text field.
     Type(String),
+    /// Type this into the search box.
+    Search(String),
+    /// Open the search strip's option list with this name.
+    Option(String),
+    /// Choose an option, by its label, in the search strip's list.
+    Choose {
+        /// The list's name.
+        list: String,
+        /// The option's label.
+        label: String,
+    },
 }
 
 impl SceneStep {
@@ -110,6 +127,15 @@ impl SceneStep {
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
             "focus" => Some(Self::Focus(argument.to_owned())),
+            "search" => Some(Self::Search(argument.to_owned())),
+            "option" => Some(Self::Option(argument.to_owned())),
+            "choose" => {
+                let (list, label) = argument.split_once(':')?;
+                Some(Self::Choose {
+                    list: list.trim().to_owned(),
+                    label: label.trim().to_owned(),
+                })
+            }
             "action" => {
                 let (name, target) = match argument.split_once(':') {
                     Some((name, target)) => (name, Some(target.to_owned())),
@@ -212,6 +238,18 @@ impl SceneStep {
                 field.set_position(-1);
                 Ok(Duration::ZERO)
             }
+            Self::Search(text) => {
+                window.search_folder(text);
+                Ok(Duration::ZERO)
+            }
+            Self::Option(name) => window
+                .open_search_option(name)
+                .then_some(crate::window::MENU_OPENING_MOTION)
+                .ok_or_else(|| format!("the search strip has no list “{name}”")),
+            Self::Choose { list, label } => window
+                .choose_search_option(list, label)
+                .then_some(Duration::ZERO)
+                .ok_or_else(|| format!("the search list “{list}” has no option “{label}”")),
         }
     }
 }
@@ -342,6 +380,24 @@ mod tests {
                 SceneStep::Wait(Duration::from_millis(250)),
             ]
         );
+    }
+
+    #[test]
+    fn a_scene_can_type_a_search_and_open_or_choose_its_options() {
+        let scene =
+            SceneStep::parse_scene("search=notes;option=Size;choose=Kind:Documents").expect("a valid scene");
+        assert_eq!(
+            scene,
+            [
+                SceneStep::Search("notes".to_owned()),
+                SceneStep::Option("Size".to_owned()),
+                SceneStep::Choose {
+                    list: "Kind".to_owned(),
+                    label: "Documents".to_owned()
+                },
+            ]
+        );
+        assert_eq!(SceneStep::parse_scene("choose=Kind"), None);
     }
 
     #[test]
