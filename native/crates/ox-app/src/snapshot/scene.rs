@@ -27,7 +27,8 @@
 //! - `wait=<milliseconds>`: lets work the app does in the background, such
 //!   as building the search cache, finish first (at most ten seconds);
 //! - `key=<accelerator>`: presses the key, as GTK writes it (such as
-//!   `<Primary><Shift>e` or `KP_Multiply`), where keyboard focus is: the
+//!   `<Primary><Shift>e` or `KP_Multiply`), where keyboard focus is in the
+//!   browser window, never in a dialog the scene opened: the
 //!   application's accelerators first, then the key handlers and shortcut
 //!   controllers from the window down to the focused widget and back up,
 //!   as GTK hands a key event round (GTK cannot make a key event itself);

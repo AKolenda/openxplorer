@@ -193,6 +193,9 @@ impl Sidebar {
     /// highlighted for it, as Windows 11's navigation pane opens down to
     /// the folder shown; false when no row stands for it.
     pub(in crate::window) fn reveal_location(&self) -> bool {
+        // The arrow keys move the highlight without opening the place, so
+        // highlight the location's row again first.
+        self.highlight_location();
         let head = self.list().selected_row().and_then(|row| self.head_section(&row));
         if let Some(section) = head.filter(|section| self.is_collapsed(*section)) {
             self.collapse_section(section, false);

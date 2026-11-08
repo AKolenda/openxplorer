@@ -212,13 +212,20 @@ fn ctrl_shift_e_opens_the_navigation_pane_down_to_the_folder_shown() {
 }
 
 /// Without the folder tree, Ctrl+Shift+E opens the collapsed section that
-/// holds the location and puts keyboard focus on its row.
+/// holds the location and puts keyboard focus on its row, even after the
+/// arrow keys moved the highlight to another place without opening it.
 ///
 /// parity: CMD-039
 #[gtk::test]
 fn ctrl_shift_e_without_the_tree_focuses_the_places_row() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    let list = test.window.sidebar().list();
+    let location_row = list.selected_row().expect("a place holds the location").index();
+    let other = list
+        .row_at_index(i32::from(location_row == 0))
+        .expect("another place");
+    list.select_row(Some(&other));
     test.window.folder_pane().focus_view();
 
     assert!(press_shortcut_where_focused(
@@ -229,9 +236,18 @@ fn ctrl_shift_e_without_the_tree_focuses_the_places_row() {
 
     let focus = GtkWindowExt::focus(&test.window).expect("something has focus");
     assert!(
-        focus.is_ancestor(test.window.sidebar().list()),
+        focus.is_ancestor(list),
         "keyboard focus is in the navigation pane"
     );
+    let focused_row = list
+        .selected_row()
+        .expect("the location's place is highlighted again");
+    assert_eq!(
+        focused_row.index(),
+        location_row,
+        "the location's place, not the one arrowed to"
+    );
+    assert!(focused_row.has_focus(), "keyboard focus is on its row");
 }
 
 /// In the folder tree the keypad's minus closes the selected folder, its
