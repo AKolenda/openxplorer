@@ -731,15 +731,16 @@ fn a_copy_opened_from_a_zip_is_removed_later() {
 /// `readme.txt`, compressed as its ending says, with Python's `tarfile`
 /// (and Zstandard with ruzstd, which `tarfile` lacks before Python 3.14).
 pub(super) fn write_tar_named(fixture: &Fixture, name: &str) {
-    let mode = if name.ends_with(".tgz") || name.ends_with(".tar.gz") {
-        "w:gz"
-    } else if name.ends_with(".tar.bz2") {
-        "w:bz2"
-    } else if name.ends_with(".tar.xz") {
-        "w:xz"
-    } else {
-        "w"
-    };
+    let endings = [
+        (".tar.gz", "w:gz"),
+        (".tgz", "w:gz"),
+        (".tar.bz2", "w:bz2"),
+        (".tar.xz", "w:xz"),
+    ];
+    let mode = endings
+        .iter()
+        .find(|(ending, _)| name.ends_with(ending))
+        .map_or("w", |(_, mode)| *mode);
     let script = "import io, sys, tarfile\n\
                   with tarfile.open(sys.argv[1], sys.argv[2]) as archive:\n\
                   \x20   folder = tarfile.TarInfo('Docs'); folder.type = tarfile.DIRTYPE\n\
@@ -755,7 +756,7 @@ pub(super) fn write_tar_named(fixture: &Fixture, name: &str) {
         .status()
         .expect("Python 3 writes the fixture archive");
     assert!(status.success());
-    if name.ends_with(".tar.zst") {
+    if name.rsplit_once('.').is_some_and(|(_, ending)| ending == "zst") {
         let plain = fs::read(&path).expect("the plain TAR");
         let compressed =
             ruzstd::encoding::compress_to_vec(plain.as_slice(), ruzstd::encoding::CompressionLevel::Fastest);
