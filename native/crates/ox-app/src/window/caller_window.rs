@@ -41,10 +41,13 @@ pub(super) enum CallerWindow {
 
 impl CallerWindow {
     /// Reads the portal's `parent_window`: `wayland:<handle>`, `x11:<id in
-    /// hex>` or empty.
+    /// hex>` or empty. A handle is printable ASCII, spaces included:
+    /// Mutter draws each of its 32 characters from `' '` to `'~'`
+    /// (`meta_generate_random_id`), so more than one handle in four has a
+    /// space, and `KWin`'s are UUIDs.
     pub(super) fn parse(parent: &str) -> Self {
         if let Some(handle) = parent.strip_prefix("wayland:") {
-            let usable = !handle.is_empty() && handle.chars().all(|c| c.is_ascii_graphic());
+            let usable = !handle.is_empty() && handle.chars().all(|c| (' '..='~').contains(&c));
             return if usable {
                 Self::Wayland(handle.to_owned())
             } else {
@@ -121,7 +124,20 @@ mod tests {
             CallerWindow::parse("x11:0x4c0000a"),
             CallerWindow::X11(0x4c0_000a)
         );
-        for unusable in ["", "wayland:", "wayland:a b", "x11:", "x11:zz", "mir:1"] {
+        // Mutter's handles may hold spaces and any other printable ASCII.
+        assert_eq!(
+            CallerWindow::parse("wayland:7zNT Ij2Z|K; Pl\\z(4o"),
+            CallerWindow::Wayland("7zNT Ij2Z|K; Pl\\z(4o".to_owned())
+        );
+        for unusable in [
+            "",
+            "wayland:",
+            "wayland:a\tb",
+            "wayland:a\u{e9}",
+            "x11:",
+            "x11:zz",
+            "mir:1",
+        ] {
             assert_eq!(
                 CallerWindow::parse(unusable),
                 CallerWindow::Unknown,

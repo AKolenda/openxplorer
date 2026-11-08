@@ -1,6 +1,6 @@
 # Working on this repository
 
-The app is the Rust and GTK 4 program in `native/`. The retired 1.x Python app is not in the tree: its last release is tag `v1.1.4`, and `native/parity/` cites its final sources as `v2.0.0:desktop/<file>`. Check native changes with `python3 native/tools/check.py` and `python3 native/parity/check.py`, and never run GTK tests on the live desktop or against real user data (see CONTRIBUTING.md). Use pnpm for the website. Never replace the desktop with a web-only mock. Keep all native actions opt-in, especially file-manager defaults, browser profile writes, folder relocation and privileged mount setup.
+The app is the Rust and GTK 4 program in `native/`. The retired 1.x Python app is not in the tree: its last release is tag `v1.1.4`, and `native/parity/` cites its final sources as `v2.0.0:desktop/<file>`. Check native changes with `python3 native/tools/check.py` and `python3 native/parity/check.py`, and never run GTK tests on the live desktop or against real user data (see CONTRIBUTING.md). Use pnpm for the website. Never replace the desktop with a web-only mock.
 
 Do not bulk-rename persisted `winspace` paths, DBus application IDs, keyring schemas or MIME handlers. Those are compatibility contracts, not visible branding.
 
