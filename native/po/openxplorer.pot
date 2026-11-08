@@ -1928,7 +1928,7 @@ msgid "Used space"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
+#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs
 msgid "{bytes} bytes"
 msgstr ""
 
@@ -4599,10 +4599,6 @@ msgstr ""
 msgid "Extract all files from this archive"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs
-msgid "More options"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
@@ -4629,6 +4625,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Restore the selected items"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "See more"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -7773,6 +7773,13 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format/explorer_text.rs
+msgid "{bytes} byte"
+msgid_plural "{bytes} bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/format/explorer_text.rs
 msgid "{day}, {date}, {clock}"
 msgstr ""
 
@@ -7783,8 +7790,10 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format/explorer_text.rs
-msgid "{short} ({bytes} bytes)"
-msgstr ""
+msgid "{short} ({bytes} byte)"
+msgid_plural "{short} ({bytes} bytes)"
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
