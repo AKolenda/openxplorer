@@ -27,6 +27,12 @@ use crate::window::window_action::WindowAction;
 /// What the first key handler of `widget` does with `key`, no modifier
 /// held, as if it were pressed where the focus is.
 fn press_on(widget: &impl IsA<gtk::Widget>, key: gdk::Key) -> bool {
+    press_on_with(widget, key, gdk::ModifierType::empty())
+}
+
+/// What the first key handler of `widget` does with `key` in the
+/// modifier state `modifiers`.
+fn press_on_with(widget: &impl IsA<gtk::Widget>, key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
     let controller = widget
         .observe_controllers()
         .iter::<glib::Object>()
@@ -34,8 +40,14 @@ fn press_on(widget: &impl IsA<gtk::Widget>, key: gdk::Key) -> bool {
         .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
         .expect("the widget takes keys");
     let no_keycode = 0_u32;
-    let modifiers = gdk::ModifierType::empty();
     controller.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &no_keycode, &modifiers])
+}
+
+/// A key state with Caps Lock and Num Lock on: the lock bit and Mod2,
+/// Num Lock's bit, as the picker's Escape test sends them. A desktop may
+/// pass these along with a key; the picker's Escape once broke on them.
+fn locks_on() -> gdk::ModifierType {
+    gdk::ModifierType::LOCK_MASK | gdk::ModifierType::from_bits_truncate(1 << 4)
 }
 
 /// The folder tree's list of rows.
@@ -315,4 +327,65 @@ fn ctrl_shift_and_a_digit_key_switch_the_view_as_a_keyboard_sends_them() {
         settle();
         assert_eq!(test.window.folder_pane().view(), view, "{key:?}");
     }
+}
+
+/// With Num Lock (and Caps Lock) on, as a keypad is normally used, the
+/// keypad's plus, minus and asterisk still open and close folders in the
+/// folder tree, and Left and Right still step through it: lock bits in
+/// the key state are not modifiers.
+///
+/// parity: CMD-039
+#[gtk::test]
+fn the_folder_tree_keys_work_with_num_lock_on() {
+    let fixture = Fixture::standard();
+    let (test, _) = window_with_tree(&fixture);
+    let tree = test.window.folder_tree();
+    let view = tree_view(&test);
+    let shows = |name: &str| tree.outline().iter().any(|line| line.trim() == name);
+    assert!(shows("Reports") && !shows("2026"));
+
+    assert!(
+        press_on_with(&view, gdk::Key::KP_Add, locks_on()),
+        "Num + opens the folder"
+    );
+    wait_until("Reports to show 2026", || shows("2026"));
+    assert!(
+        press_on_with(&view, gdk::Key::KP_Subtract, locks_on()),
+        "Num - closes it"
+    );
+    assert!(!shows("2026"));
+    assert!(
+        press_on_with(&view, gdk::Key::Right, locks_on()),
+        "Right opens it"
+    );
+    wait_until("Reports to show 2026 again", || shows("2026"));
+    assert!(press_on_with(&view, gdk::Key::Left, locks_on()), "Left closes it");
+    assert!(!shows("2026"));
+    assert!(
+        press_on_with(&view, gdk::Key::KP_Multiply, locks_on()),
+        "Num * opens all"
+    );
+    wait_until("2026 to show under Reports", || shows("2026"));
+}
+
+/// With Num Lock (and Caps Lock) on, the keypad's minus and plus still
+/// collapse and expand This PC in the navigation pane, as do Left and
+/// Right.
+///
+/// parity: CMD-039
+#[gtk::test]
+fn the_navigation_pane_keys_work_with_num_lock_on() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    row_named(&test, "This PC").grab_focus();
+
+    assert!(press_on_with(sidebar.list(), gdk::Key::KP_Subtract, locks_on()));
+    assert!(sidebar.section_is_collapsed("thisPc"), "Num - collapses");
+    assert!(press_on_with(sidebar.list(), gdk::Key::KP_Add, locks_on()));
+    assert!(!sidebar.section_is_collapsed("thisPc"), "Num + expands");
+    assert!(press_on_with(sidebar.list(), gdk::Key::Left, locks_on()));
+    assert!(sidebar.section_is_collapsed("thisPc"), "Left collapses");
+    assert!(press_on_with(sidebar.list(), gdk::Key::KP_Multiply, locks_on()));
+    assert!(!sidebar.section_is_collapsed("thisPc"), "Num * expands");
 }
