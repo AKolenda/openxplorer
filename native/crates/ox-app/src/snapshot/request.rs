@@ -184,8 +184,10 @@ impl SnapshotRequest {
 }
 
 /// The local folder a Save dialog for `start` opens in: an absolute path,
-/// or a `file://` URI's path; `None` for a share's address, a page such as
-/// `pc:` or a relative path, which the desktop portal cannot name.
+/// or a `file://` URI's path, of a folder that exists; `None` for a share's
+/// address, a page such as `pc:`, a relative path, which the desktop portal
+/// cannot name, or a missing folder or a file, which the dialog would
+/// silently replace with another folder.
 pub(crate) fn save_dialog_folder(start: &str) -> Option<PathBuf> {
     use gtk::gio::prelude::FileExt;
     let path = if start.contains("://") {
@@ -193,7 +195,7 @@ pub(crate) fn save_dialog_folder(start: &str) -> Option<PathBuf> {
     } else {
         PathBuf::from(start)
     };
-    path.is_absolute().then_some(path)
+    (path.is_absolute() && path.is_dir()).then_some(path)
 }
 
 /// The value of the variable `name`, or `None` when it is unset or empty.
@@ -315,8 +317,8 @@ mod tests {
 
     /// A Save dialog starts in a local folder, as the desktop portal names
     /// it by its path: a start with no local path, such as a share's
-    /// address, or a relative path is refused, never replaced by the home
-    /// folder.
+    /// address, a relative path, a missing folder or a file is refused,
+    /// never replaced by another folder.
     #[test]
     fn a_save_dialog_needs_a_local_folder_to_start_in() {
         let with_start = |start: &str| {
@@ -326,13 +328,26 @@ mod tests {
                 (START_VARIABLE, start),
             ])
         };
-        for refused in ["smb://studio-nas/projects", "Documents", "pc:"] {
+        let folder = std::env::temp_dir();
+        let file = folder.join(format!("ox-snapshot-start-{}.txt", std::process::id()));
+        std::fs::write(&file, b"").expect("a file in the temporary folder");
+        let missing = folder.join("ox-snapshot-no-such-folder");
+        let refused = [
+            "smb://studio-nas/projects".to_owned(),
+            "Documents".to_owned(),
+            "pc:".to_owned(),
+            file.to_string_lossy().into_owned(),
+            missing.to_string_lossy().into_owned(),
+        ];
+        for refused in &refused {
             let message = with_start(refused).expect_err(refused).to_string();
             assert!(message.starts_with("OPENXPLORER_START cannot be"), "{message}");
         }
-        for accepted in ["/home/demo/Documents", "file:///home/demo/Documents"] {
-            let asked = with_start(accepted)
-                .expect(accepted)
+        std::fs::remove_file(&file).expect("the file is removed");
+        let uri = gtk::gio::File::for_path(&folder).uri();
+        for accepted in [folder.to_string_lossy().into_owned(), uri.to_string()] {
+            let asked = with_start(&accepted)
+                .expect(&accepted)
                 .expect("a snapshot is asked for");
             assert!(asked.save_dialog);
         }

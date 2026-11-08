@@ -43,7 +43,10 @@ fn digit_of(view: FolderView) -> Option<usize> {
 }
 
 /// The names of the keys `digit` gives with Shift held on `display`'s
-/// layout: the symbol of the key that types the digit, else the US one.
+/// layout: the symbol of the key that types the digit unshifted. Where the
+/// layout types the digit only with Shift, as AZERTY does, the
+/// accelerator matches as typed and there is none. Without a display, the
+/// US symbol.
 fn shifted_key_names(display: Option<&gdk::Display>, digit: usize) -> Vec<String> {
     let mut names = Vec::new();
     let digit_key = gdk::Key::from_name(digit.to_string());
@@ -61,7 +64,7 @@ fn shifted_key_names(display: Option<&gdk::Display>, digit: usize) -> Vec<String
             }
         }
     }
-    if names.is_empty() {
+    if display.is_none() {
         if let Some(name) = digit.checked_sub(1).and_then(|index| US_SHIFTED.get(index)) {
             names.push((*name).to_owned());
         }

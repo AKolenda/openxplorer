@@ -157,6 +157,13 @@ impl PropertiesWindow {
         }
     }
 
+    /// Whether keyboard focus is on one of the tabs.
+    fn tab_has_focus(&self) -> bool {
+        gtk::prelude::GtkWindowExt::focus(self).is_some_and(|focus: gtk::Widget| {
+            focus.is::<gtk::ToggleButton>() && focus.has_css_class("properties-tab")
+        })
+    }
+
     /// Left, Right, Home and End on the row of tabs.
     fn tab_strip_key(&self, key: gdk::Key, modifiers: gdk::ModifierType) -> glib::Propagation {
         // Caps Lock and Num Lock do not make it another key.
@@ -200,10 +207,7 @@ impl PropertiesWindow {
                 let Some(window) = window.upgrade() else {
                     return glib::Propagation::Proceed;
                 };
-                let had_tab_focus =
-                    gtk::prelude::GtkWindowExt::focus(&window).is_some_and(|focus: gtk::Widget| {
-                        focus.is::<gtk::ToggleButton>() && focus.has_css_class("properties-tab")
-                    });
+                let had_tab_focus = window.tab_has_focus();
                 window.step_tab(step, had_tab_focus);
                 glib::Propagation::Stop
             });
@@ -233,7 +237,9 @@ impl PropertiesWindow {
                 };
                 let count = i32::try_from(window.imp().tab_buttons.borrow().len()).unwrap_or(0);
                 if index < count {
-                    window.show_tab_at(index, false);
+                    // As Ctrl+Tab does, the new tab keeps the keyboard
+                    // when the old one had it.
+                    window.show_tab_at(index, window.tab_has_focus());
                 }
                 glib::Propagation::Stop
             });
