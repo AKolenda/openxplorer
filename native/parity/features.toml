@@ -1627,7 +1627,7 @@ python_tests = []
 bridge = ["operate", "transferConflicts", "fileDragLayout"]
 dolphin = "DolphinTabBar drag/drop + auto-activation timer (800 ms)"
 native = "done"
-native_note = "Items dropped on a tab go into its folder and an 800 ms hover shows the tab; folders dropped on the tab strip beside the tabs open as background tabs at the end, files among them are left alone (DropDestination::NewTabs, Dolphin's tabDropEvent) (native/crates/ox-app/src/window/file_drop.rs, file_drop/targets/spot.rs). Tests: native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab), window/tests/split_view.rs (folders_dropped_beside_the_tabs_open_as_new_tabs)."
+native_note = "Items dropped on a tab go into its folder and an 800 ms hover shows the tab; once the drag leaves or drops, no outline stays on the strip; folders dropped on the tab strip beside the tabs open as background tabs at the end, files among them are left alone (DropDestination::NewTabs, Dolphin's tabDropEvent) (native/crates/ox-app/src/window/file_drop.rs, file_drop/targets/spot.rs). Tests: native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab), window/tests/split_view.rs (folders_dropped_beside_the_tabs_open_as_new_tabs)."
 
 [[feature]]
 id = "TAB-019"
