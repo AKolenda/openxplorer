@@ -9,7 +9,8 @@
 //! The row is one stop of the Tab key, on the tab shown; Left and Right,
 //! Home and End move between tabs, and Ctrl+Tab, Ctrl+Shift+Tab,
 //! Ctrl+Page Down and Ctrl+Page Up anywhere in the window show the next or
-//! previous tab, as in Windows. Screen readers hear a tab list of tabs,
+//! previous tab, as in Windows, and Ctrl+1 to Ctrl+9 the tab of that
+//! number (CMD-039). Screen readers hear a tab list of tabs,
 //! the one shown selected, and each page is labelled by its tab.
 
 use gtk::prelude::*;
@@ -180,7 +181,8 @@ impl PropertiesWindow {
     }
 
     /// Ctrl+Tab and Ctrl+Page Down show the next tab, Ctrl+Shift+Tab and
-    /// Ctrl+Page Up the previous one, wherever the keyboard is.
+    /// Ctrl+Page Up the previous one, and Ctrl+1 to Ctrl+9 the tab of that
+    /// number, wherever the keyboard is.
     pub(super) fn tab_keys(&self) -> gtk::ShortcutController {
         let controller = gtk::ShortcutController::new();
         controller.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -207,6 +209,36 @@ impl PropertiesWindow {
             });
             controller.add_shortcut(gtk::Shortcut::new(
                 Some(gtk::KeyvalTrigger::new(key, modifiers)),
+                Some(action),
+            ));
+        }
+        // Ctrl+1 to Ctrl+9 show the tab of that number, as in Windows'
+        // dialogs (CMD-039); a number with no tab does nothing.
+        let digits = [
+            gdk::Key::_1,
+            gdk::Key::_2,
+            gdk::Key::_3,
+            gdk::Key::_4,
+            gdk::Key::_5,
+            gdk::Key::_6,
+            gdk::Key::_7,
+            gdk::Key::_8,
+            gdk::Key::_9,
+        ];
+        for (index, key) in (0..).zip(digits) {
+            let window = self.downgrade();
+            let action = gtk::CallbackAction::new(move |_, _| {
+                let Some(window) = window.upgrade() else {
+                    return glib::Propagation::Proceed;
+                };
+                let count = i32::try_from(window.imp().tab_buttons.borrow().len()).unwrap_or(0);
+                if index < count {
+                    window.show_tab_at(index, false);
+                }
+                glib::Propagation::Stop
+            });
+            controller.add_shortcut(gtk::Shortcut::new(
+                Some(gtk::KeyvalTrigger::new(key, control)),
                 Some(action),
             ));
         }
