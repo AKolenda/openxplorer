@@ -88,7 +88,10 @@ impl DetailsView {
                 if let (Some(saved), Some(title)) = (saved, title.upgrade()) {
                     title.update_property(&[gtk::accessible::Property::ValueNow(saved)]);
                 }
-                if width > 0 {
+                // -1 is no width of its own. GTK sets 0 when a title's end
+                // is dragged past the column's start, which the limits
+                // turn into the narrowest width, as for any other drag.
+                if width >= 0 {
                     // A column with a width of its own stops filling the
                     // space: after a resize, every width is exact.
                     view_column.set_expand(false);
@@ -473,6 +476,12 @@ mod tests {
             column_widths::clamped_fixed_width(SortColumn::Name, 40)
         );
         assert!(name.fixed_width() > 140, "Name keeps its 140-pixel minimum");
+        name.set_fixed_width(0);
+        assert_eq!(
+            name.fixed_width(),
+            column_widths::clamped_fixed_width(SortColumn::Name, 0),
+            "a drag past the column's start leaves the narrowest Name, not none"
+        );
         name.set_fixed_width(5_000);
         assert_eq!(
             name.fixed_width(),
