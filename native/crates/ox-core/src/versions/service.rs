@@ -120,7 +120,9 @@ impl PreviousVersions {
     /// [`VersionsError::Location`] for an address the location rules
     /// refuse.
     pub fn check_writable(&self, uri: &str) -> Result<(), VersionsError> {
-        let uri = normalise(uri)?;
+        // An item's URI, also one whose name another program gave a line
+        // break or bytes that are not UTF-8 (OPS-035).
+        let uri = crate::location::normalise_item(uri)?;
         // Safety rule PROP-024: snapshots and backups are never changed in
         // place; the user restores a copy elsewhere instead.
         if self.protected_locations().is_protected(&uri) {

@@ -67,7 +67,7 @@ pub use names::{
     MAX_LABEL_CHARS, WINDOWS_FORBIDDEN_CHARACTERS,
 };
 pub use normalise::{
-    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
+    file_uri, is_smb_server, normalise, normalise_item, normalise_location, require_item_uri, require_share,
     typed_local_path, without_user,
 };
 pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};

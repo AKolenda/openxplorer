@@ -142,7 +142,7 @@ pub fn require_share(address: &str) -> Result<String, LocationError> {
 /// the device storage first for a whole SMB server or share or a device
 /// root.
 pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
-    let uri = normalise(uri).or_else(|refusal| listed_item_uri(uri).ok_or(refusal))?;
+    let uri = normalise_item(uri)?;
     let parts = split_location(&uri)?;
     // Safety rule (`core.py::require_item_uri`): a whole server, share or
     // device is never renamed, moved, copied or trashed as if it were a
@@ -166,6 +166,18 @@ pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
         )));
     }
     Ok(uri)
+}
+
+/// [`normalise`] for the URI of an item that exists or is about to, as a
+/// listing or a copy names it, not as the user typed it: a name with a
+/// control character or bytes that are not UTF-8 keeps them
+/// ([`listed_item_uri`]). Every other address is normalised as typed.
+///
+/// # Errors
+///
+/// As [`normalise`].
+pub fn normalise_item(uri: &str) -> Result<String, LocationError> {
+    normalise(uri).or_else(|refusal| listed_item_uri(uri).ok_or(refusal))
 }
 
 /// The canonical URI of an item another program named with a control
