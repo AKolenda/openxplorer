@@ -3,7 +3,8 @@
 //! Compress to ZIP file.
 //!
 //! With `OX_NATIVE_CAPTURE_DIR` set, these also save
-//! `native-archive-browser.png` and `native-extract-dialog.png`.
+//! `native-archive-browser.png`, `native-extract-dialog.png` and
+//! `native-extract-conflict-{light,dark}.png`.
 
 use std::fs;
 use std::path::Path;
@@ -18,7 +19,8 @@ use ox_core::transfer::Cancellation;
 use super::item_dialogs::{press, texts};
 use crate::archive_view::ArchiveBrowserView;
 use crate::test_support::harness::{
-    capture, capture_popover, descendants, wait_for, wait_until, Fixture, TestWindow,
+    capture, capture_dialog, capture_popover, descendants, wait_for, wait_until, Fixture, TestWindow,
+    ThemeGuard,
 };
 
 /// A standard fixture with `Bundle.zip`, which holds `Docs/a.txt` and
@@ -744,6 +746,11 @@ fn extracting_onto_existing_files_names_the_archive() {
         !shown.iter().any(|text| text.contains(".openxplorer-extract-")),
         "{shown:?}"
     );
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        capture_dialog(&window, &format!("native-extract-conflict-{theme}.png"));
+    }
     super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
     wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
     super::file_ops_support::assert_ended_without_a_message(&test);
