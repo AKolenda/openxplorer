@@ -2072,7 +2072,7 @@ mod tests {
                 .expect("the submenu is listed")
         };
         assert_eq!(submenu("Share with"), ["Bluetooth device", "Mail recipient"]);
-        assert_eq!(submenu("Compress to"), ["ZIP File", "Additional options"]);
+        assert_eq!(submenu("Compress to"), ["ZIP File", "TAR File", "Additional options"]);
         let several = ItemFacts {
             is_single: false,
             ..facts.clone()

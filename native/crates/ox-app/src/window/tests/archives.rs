@@ -574,22 +574,28 @@ fn write_tar_gz(fixture: &Fixture) {
     assert!(status.success());
 }
 
-/// A .tar.gz opens in the archive browser and extracts like a ZIP, also
-/// now that ZIPs open like folders by default; with "Open archives as
-/// folders" off it opens in its default application,
-/// unless it was handed to the app.
+/// A .tar.gz opens in the archive browser window when archives open in
+/// a pop-up window, which calls it an archive, not a ZIP, and extracts
+/// like a ZIP; with "Open archives as folders" off it opens in its
+/// default application, unless it was handed to the app.
 ///
 /// parity: ARC-022, ARC-024
 #[gtk::test]
 fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
     let fixture = Fixture::standard();
     write_tar_gz(&fixture);
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.select_named("Site.tar.gz");
 
     test.activate("open", None);
     let browser = archive_browser(&test);
     wait_until("the listing", || browser.row_names() == ["Docs"]);
+    let shown = texts(&test.shown_dialog().expect("the browser"));
+    assert!(
+        shown.iter().any(|text| text.starts_with("Read-only archive.")),
+        "{shown:?}"
+    );
+    assert!(!shown.iter().any(|text| text.contains("ZIP")), "{shown:?}");
     test.shown_dialog().expect("the browser").close();
     test.activate("extract-here", None);
     // Its lone top-level folder is lifted out rather than nested (ARC-025).
@@ -700,4 +706,97 @@ fn open_in_archive_manager_hands_the_zip_to_the_desktop() {
     wait_until("the launch", || !test.context.recorded_launches().is_empty());
     assert_eq!(test.context.recorded_launches(), [fixture.uri_of("Bundle.zip")]);
     assert!(test.shown_dialog().is_none());
+}
+
+/// Extracting onto files that already exist asks Replace or Skip under a
+/// line that says what really happens: extracting from the archive into
+/// the chosen folder, never a move out of the private folder the
+/// extraction is built in.
+///
+/// parity: ARC-012, OPS-019
+#[gtk::test]
+fn extracting_onto_existing_files_names_the_archive() {
+    let fixture = fixture_with_zip();
+    fs::write(fixture.path("readme.txt"), b"mine").expect("a file the archive also has");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+    descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
+    press(&frame, "Extract");
+
+    let window = super::file_ops_support::asking_window(&test);
+    let shown = texts(&window);
+    let folder = fixture
+        .root()
+        .file_name()
+        .expect("a named folder")
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        shown.contains(&format!("Extracting 2 items from Bundle.zip to {folder}")),
+        "{shown:?}"
+    );
+    assert!(
+        !shown.iter().any(|text| text.contains(".openxplorer-extract-")),
+        "{shown:?}"
+    );
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
+    wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
+    super::file_ops_support::assert_ended_without_a_message(&test);
+}
+
+/// Compress to › TAR File puts one file, several files or a folder into a
+/// new plain .tar beside them, named after the first item, which then
+/// opens in the tab like any archive.
+///
+/// parity: ARC-023, ARC-026
+#[gtk::test]
+fn compress_to_tar_puts_the_selection_into_a_new_tar_beside_it() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Second.txt"), b"second").expect("a second file");
+    let test = TestWindow::open(&fixture.uri());
+    let choose = PreferencesUpdate {
+        zip_opening: Some(ZipOpening::Folder),
+        ..PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(choose, |result| result.expect("saved"));
+    let cases: [(&[&str], &str, &[&str]); 3] = [
+        (&["Notes 2.txt"], "Notes 2.tar", &["Notes 2.txt"]),
+        (
+            &["Notes 2.txt", "Second.txt"],
+            "Notes 2 (2).tar",
+            &["Notes 2.txt", "Second.txt"],
+        ),
+        (&["Documents"], "Documents.tar", &["Documents"]),
+    ];
+    for (selected, archive, inside) in cases {
+        test.wait_for_listing("the folder");
+        super::file_ops_support::select_names(&test, selected);
+        test.activate("compress-to-tar", None);
+        wait_until("the new TAR", || fixture.path(archive).exists());
+        super::file_ops_support::assert_ended_without_a_message(&test);
+        let bytes = fs::read(fixture.path(archive)).expect("written");
+        assert_eq!(bytes.get(257..262), Some(b"ustar".as_slice()), "{archive}");
+        wait_until("the TAR in the listing", || {
+            test.names().contains(&(*archive).to_owned())
+        });
+
+        let root = ox_core::location::ArchiveLocation::root(&fixture.uri_of(archive));
+        test.select_named(archive);
+        test.activate("open", None);
+        wait_until("the TAR in the tab", || {
+            test.window.current_uri() == Some(root.uri())
+        });
+        test.wait_for_listing("the TAR's listing");
+        assert_eq!(test.names(), inside, "{archive}");
+        test.activate("up", None);
+        wait_until("out of the TAR", || {
+            test.window.current_uri() == Some(fixture.uri())
+        });
+    }
 }
