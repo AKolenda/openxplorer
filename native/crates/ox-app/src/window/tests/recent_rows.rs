@@ -16,7 +16,7 @@ use ox_core::integration::FOLDER_CONTENT_TYPE;
 use ox_core::location::{RECENT_LOCATIONS_URI, RECENT_URI};
 
 use crate::app_context::add_to_desktop_history;
-use crate::test_support::harness::{wait_until, Fixture, OpenedWindows, TestWindow};
+use crate::test_support::harness::{wait_for, wait_until, Fixture, OpenedWindows, TestWindow};
 use crate::window::copy_path::CopiedPath;
 
 use super::file_ops_support::{open_dialog, require_private_trash, select_names};
@@ -317,4 +317,48 @@ fn open_with_on_a_recent_file_that_is_gone_says_item_not_found() {
         dialog.press("OK");
         super::file_ops_support::wait_for_no_dialog(&test);
     }
+}
+
+/// A row of Recent files may be copied, not cut, renamed or deleted:
+/// Cut, Rename and Delete are greyed out in the command bar and left out
+/// of the compact menu's strip, which keeps Copy, and Ctrl+X does nothing
+/// at all, with no message and nothing on the clipboard.
+///
+/// parity: SIDE-026
+#[gtk::test]
+fn a_recent_row_cannot_be_cut_renamed_or_deleted() {
+    use super::context_menus::choose_menu_style;
+    use crate::window::window_action::WindowAction;
+    use ox_core::clipboard::ClipboardMode;
+    use ox_core::settings::ContextMenu;
+
+    let (_fixture, test, _) = selected_recent_file();
+    choose_menu_style(&test, ContextMenu::Win11);
+    select_names(&test, &["Budget.txt"]);
+
+    for action in [WindowAction::Cut, WindowAction::Rename, WindowAction::Trash] {
+        assert!(
+            !test.window.is_action_enabled(action.name()),
+            "{} greyed out",
+            action.name()
+        );
+    }
+    assert!(
+        test.window.is_action_enabled(WindowAction::Copy.name()),
+        "Copy stays"
+    );
+
+    test.window.right_click(Some(test.position_of("Budget.txt")));
+    let menu = test.window.context_menu();
+    let strip = menu.strip_labels();
+    menu.popdown();
+    assert!(strip.contains(&"Copy".to_owned()), "{strip:?}");
+    for left_out in ["Cut", "Rename", "Delete"] {
+        assert!(!strip.contains(&left_out.to_owned()), "{left_out} in {strip:?}");
+    }
+
+    test.window.copy_selection(ClipboardMode::Cut);
+    wait_for(std::time::Duration::from_millis(200));
+    assert_eq!(test.window.shown_message_text(), "", "Ctrl+X says nothing");
+    assert_eq!(copied_uris(&test), None, "nothing is cut");
 }
