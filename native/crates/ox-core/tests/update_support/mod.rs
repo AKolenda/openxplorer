@@ -18,9 +18,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use ox_core::transfer::Cancellation;
 use ox_core::update::{
-    installer_name, CommandOutput, Confirmation, FetchError, InstallProgress, Installation, PackageCommand,
-    PackageManager, ReleaseServer, ReleaseVersion, TrustedUrl, UpdateError, Updater, UpdaterParts,
-    LATEST_RELEASE_URL, REPOSITORY,
+    installer_name, CommandOutput, Confirmation, FetchError, HelperReport, InstallProgress, Installation,
+    PackageCommand, PackageManager, ReleaseServer, ReleaseVersion, TrustedUrl, UpdateError, Updater,
+    UpdaterParts, LATEST_RELEASE_URL, REPOSITORY,
 };
 use serde_json::{json, Value};
 
@@ -30,6 +30,8 @@ pub const CURRENT: ReleaseVersion = ReleaseVersion::new(1, 0, 0);
 pub const NEXT: ReleaseVersion = ReleaseVersion::new(1, 0, 1);
 /// The fixture installer's bytes.
 pub const PACKAGE: &[u8] = b"Fictional package bytes. Never an executable Debian package.\n";
+/// Where the fixture package installed the update helper.
+pub const HELPER: &str = "/opt/openxplorer/libexec/openxplorer-install-update";
 
 /// Python's `release()`: GitHub's answer for a stable release of `version`
 /// in `repository`, with the fixture installer.
@@ -199,7 +201,11 @@ struct PackageState {
     commands: Vec<PackageCommand>,
     inspection: CommandOutput,
     installation: CommandOutput,
+    helper: CommandOutput,
     query: CommandOutput,
+    /// Answers to `dpkg-query` before [`PackageState::query`], first one
+    /// first: the helper asks what is installed before it installs.
+    earlier_queries: Vec<CommandOutput>,
     inspection_hook: Option<CommandHook>,
     install_hook: Option<CommandHook>,
 }
@@ -215,7 +221,9 @@ impl PackageFixture {
                 "Package: openxplorer\nVersion: {NEXT}\nArchitecture: all\n"
             )),
             installation: success(""),
+            helper: helper_success(NEXT),
             query: success(&format!("install ok installed\n{NEXT}")),
+            earlier_queries: Vec::new(),
             inspection_hook: None,
             install_hook: None,
         };
@@ -237,6 +245,17 @@ impl PackageFixture {
     /// Answers `dpkg-query` with `output` from now on.
     pub fn answer_query(&self, output: CommandOutput) {
         self.lock().query = output;
+    }
+
+    /// Answers the next `dpkg-query` with `output`, and the later ones as
+    /// before.
+    pub fn answer_next_query(&self, output: CommandOutput) {
+        self.lock().earlier_queries.push(output);
+    }
+
+    /// Answers `pkexec <helper> <version>` with `output` from now on.
+    pub fn answer_helper(&self, output: CommandOutput) {
+        self.lock().helper = output;
     }
 
     /// Runs `hook` whenever `dpkg-deb` inspects the installer.
@@ -262,8 +281,10 @@ impl PackageFixture {
     /// Every installer path a command named.
     pub fn installer_paths(&self) -> Vec<PathBuf> {
         let named = self.commands().into_iter().filter_map(|command| match command {
-            PackageCommand::InspectInstaller(path) | PackageCommand::Install(path) => Some(path),
-            PackageCommand::QueryInstalled => None,
+            PackageCommand::InspectInstaller(path)
+            | PackageCommand::Install(path)
+            | PackageCommand::InstallAsRoot(path) => Some(path),
+            PackageCommand::InstallRelease { .. } | PackageCommand::QueryInstalled => None,
         });
         named.collect()
     }
@@ -289,7 +310,7 @@ impl PackageManager for PackageFixture {
                 run_hook(hook);
                 Ok(answer)
             }
-            PackageCommand::Install(installer) => {
+            PackageCommand::Install(installer) | PackageCommand::InstallAsRoot(installer) => {
                 assert!(installer.is_file(), "the verified installer is still there");
                 assert_eq!(command.time_limit(), None, "APT is never interrupted");
                 let hook = state.install_hook.clone();
@@ -298,7 +319,22 @@ impl PackageManager for PackageFixture {
                 run_hook(hook);
                 Ok(answer)
             }
-            PackageCommand::QueryInstalled => Ok(state.query.clone()),
+            PackageCommand::InstallRelease { helper, .. } => {
+                assert_eq!(helper, Path::new(HELPER), "only the installed helper runs");
+                assert_eq!(command.time_limit(), None, "APT is never interrupted");
+                let hook = state.install_hook.clone();
+                let answer = state.helper.clone();
+                drop(state);
+                run_hook(hook);
+                Ok(answer)
+            }
+            PackageCommand::QueryInstalled => {
+                if state.earlier_queries.is_empty() {
+                    Ok(state.query.clone())
+                } else {
+                    Ok(state.earlier_queries.remove(0))
+                }
+            }
         }
     }
 }
@@ -329,6 +365,29 @@ pub fn success(stdout: &str) -> CommandOutput {
     CommandOutput {
         exit_status: 0,
         stdout: stdout.to_owned(),
+        stderr: String::new(),
+    }
+}
+
+/// The update helper's output for a confirmed installation of `version`.
+pub fn helper_success(version: ReleaseVersion) -> CommandOutput {
+    helper_output(
+        0,
+        &[
+            HelperReport::Downloading,
+            HelperReport::Installing,
+            HelperReport::Installed(version),
+        ],
+    )
+}
+
+/// The update helper's output: `reports`, one per line, and its exit
+/// status.
+pub fn helper_output(exit_status: i32, reports: &[HelperReport]) -> CommandOutput {
+    let lines: Vec<String> = reports.iter().map(HelperReport::encode).collect();
+    CommandOutput {
+        exit_status,
+        stdout: lines.join("\n"),
         stderr: String::new(),
     }
 }
@@ -397,13 +456,30 @@ impl UpdaterFixture {
 
     /// An updater of an `installation` build made of these doubles.
     pub fn updater(&self, installation: Installation) -> Updater {
+        self.updater_with_helper(installation, None)
+    }
+
+    /// An updater of an `installation` build whose package installed the
+    /// update helper at `helper`, or none.
+    pub fn updater_with_helper(&self, installation: Installation, helper: Option<&str>) -> Updater {
         Updater::new(UpdaterParts {
             current_version: CURRENT,
             installation,
             updates_folder: self.updates_folder.clone(),
             server: Box::new(self.server.clone()),
             package_manager: Box::new(self.packages.clone()),
+            install_helper: helper.map(PathBuf::from),
         })
+    }
+
+    /// A packaged updater with the update helper whose check found
+    /// [`NEXT`].
+    pub fn checked_helper_updater(&self) -> Updater {
+        let updater = self.updater_with_helper(Installation::DebianPackage, Some(HELPER));
+        updater
+            .check(&Cancellation::new())
+            .expect("the fixture release is valid");
+        updater
     }
 
     /// A packaged updater whose check found [`NEXT`].

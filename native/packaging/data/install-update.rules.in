@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Lets an administrator at the machine install an OpenXplorer update
+// without a password, as Ubuntu's Software lets them install system
+// updates. It covers one action only, @ACTION_ID@, whose program is the
+// update helper: the helper takes only a version and installs nothing but
+// the latest official release, verified, and only when it is newer than
+// the installed package (crates/ox-core/src/update/install_helper.rs).
+//
+// Only a member of sudo, admin or wheel in a local, active session gets
+// through. Anyone else, and any remote or inactive session, is asked for
+// an administrator's password by the action's own defaults. To require a
+// password from administrators too, add a rule that runs before this one,
+// for example /etc/polkit-1/rules.d/50-openxplorer-update.rules returning
+// polkit.Result.AUTH_ADMIN_KEEP for this action.
+polkit.addRule(function (action, subject) {
+    if (action.id !== "@ACTION_ID@") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (!subject.local || !subject.active) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (subject.isInGroup("sudo") || subject.isInGroup("admin") || subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

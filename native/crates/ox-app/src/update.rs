@@ -10,7 +10,9 @@
 //! installing are ox-core's port of `v2.0.0:desktop/updater.py`
 //! ([`ox_core::update`]): the same GitHub endpoints (the original
 //! repository and the openxplorer organisation), the same installer name,
-//! size and SHA-256 checks and the same `pkexec apt-get` installation.
+//! size and SHA-256 checks and the same `pkexec apt-get` installation, or,
+//! where the package installed it, the update helper that does the same as
+//! root without asking an administrator at the machine for a password.
 //! This module adds only what the interface needs, so there is one update
 //! mechanism.
 //!
