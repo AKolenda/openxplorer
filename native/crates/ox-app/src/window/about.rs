@@ -161,6 +161,11 @@ mod tests {
         assert!(text.contains(channel), "{text}");
         assert!(text.contains("Desktop: Rust + GTK 4 + GIO/GVfs."), "{text}");
         assert!(
+            text.contains("An independent Windows 11–inspired file manager for Linux."),
+            "it runs on any Linux desktop: {text}"
+        );
+        assert!(!text.contains("Zorin"), "{text}");
+        assert!(
             text.contains("Images and supported media show previews."),
             "{text}"
         );
