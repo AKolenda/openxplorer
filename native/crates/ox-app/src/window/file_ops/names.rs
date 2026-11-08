@@ -74,6 +74,24 @@ mod tests {
         assert_eq!(name_warning("Notes", false), None);
     }
 
+    /// A typed name loses the periods and spaces at its end, as the
+    /// Windows shell trims them; one that is nothing else ("...") keeps
+    /// them, as the Python app took it, and a space or period inside the
+    /// name stays ("Notes .txt").
+    ///
+    /// parity: OPS-010
+    #[test]
+    fn periods_and_spaces_at_the_end_of_a_typed_name_are_trimmed() {
+        assert_eq!(check_typed_name("Archive."), Ok("Archive"));
+        assert_eq!(check_typed_name("Archive. "), Ok("Archive"));
+        assert_eq!(check_typed_name("Archive . ."), Ok("Archive"));
+        assert_eq!(check_typed_name("Notes .txt"), Ok("Notes .txt"));
+        assert_eq!(check_typed_name(" Notes"), Ok(" Notes"));
+        assert_eq!(check_typed_name(".config."), Ok(".config"));
+        assert_eq!(check_typed_name("..."), Ok("..."));
+        assert_eq!(check_typed_name(". ."), Ok(". ."));
+    }
+
     /// Ported from the name rules of `v2.0.0:desktop/tests/test_core.py::CoreTests::test_names`,
     /// as `validateName` applies them before the backend.
     ///

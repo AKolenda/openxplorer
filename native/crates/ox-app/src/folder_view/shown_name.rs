@@ -87,4 +87,27 @@ mod tests {
         );
         assert_eq!(hidden_extension("Notes 2.txt", false, Extensions::Shown), None);
     }
+
+    /// Every file of a type the desktop knows hides its extension, also
+    /// a type GIO is unsure of because more than one type uses the
+    /// extension (`.png`, `.json`, `.html`, `.py`), as Windows hides the
+    /// extension of every registered type. Only the last extension goes,
+    /// and an extension of digits alone is a version, not a type.
+    ///
+    /// parity: VIEW-069
+    #[test]
+    fn every_known_type_hides_its_extension_also_one_gio_is_unsure_of() {
+        fn hidden(name: &str) -> &str {
+            shown_name(name, false, Extensions::Hidden)
+        }
+        assert_eq!(hidden("sunset.png"), "sunset");
+        assert_eq!(hidden("data.json"), "data");
+        assert_eq!(hidden("page.html"), "page");
+        assert_eq!(hidden("script.py"), "script");
+        assert_eq!(hidden("plan.pdf"), "plan");
+        assert_eq!(hidden("Budget 2026.txt"), "Budget 2026");
+        assert_eq!(hidden("Bundle.tar.gz"), "Bundle.tar");
+        assert_eq!(hidden("Notes v2.1"), "Notes v2.1", "a version number");
+        assert_eq!(hidden("Report.txt - Shortcut"), "Report.txt - Shortcut");
+    }
 }

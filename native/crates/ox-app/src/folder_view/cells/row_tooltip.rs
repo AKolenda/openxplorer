@@ -157,6 +157,23 @@ mod tests {
     use super::*;
     use crate::test_support::{file_entry, folder_entry};
 
+    /// The infotip writes a size as the status bar and the details pane
+    /// do, "4.38 KB" for 4,486 bytes, and one byte in the singular.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn the_infotip_size_reads_as_the_status_bar_writes_it() {
+        let size_line = |bytes| {
+            let mut entry = file_entry("Notes 2.txt");
+            entry.size = Some(bytes);
+            let tooltip = RowTooltip::default().text(&FileItem::new(entry)).unwrap_or_default();
+            tooltip.lines().find(|line| line.starts_with("Size:")).map(str::to_owned)
+        };
+        assert_eq!(size_line(4_486).as_deref(), Some("Size: 4.38 KB"));
+        assert_eq!(size_line(1).as_deref(), Some("Size: 1 byte"));
+        assert_eq!(size_line(912).as_deref(), Some("Size: 912 bytes"));
+    }
+
     /// An item's tooltip is Explorer's infotip, with only what is known,
     /// or its full path while searching.
     ///

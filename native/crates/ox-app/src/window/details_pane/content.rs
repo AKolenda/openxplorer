@@ -417,6 +417,26 @@ mod tests {
             .collect()
     }
 
+    /// A file's size reads as the status bar and the tooltip write it,
+    /// with one formatter: 4,486 bytes are "4.38 KB" in all three, and the
+    /// total of several files too.
+    ///
+    /// parity: PROP-009
+    #[test]
+    fn the_size_reads_as_the_status_bar_and_the_tooltip_write_it() {
+        let mut entry = file_entry("Notes.txt");
+        entry.size = Some(4_486);
+        let one = content_for(&[FileItem::new(entry.clone())], "file:///tmp/ox-test");
+        assert_eq!(property(&one, keys::SIZE), Some("4.38 KB"));
+        let mut other = file_entry("Plan.txt");
+        other.size = Some(4_486);
+        let both = content_for(
+            &[FileItem::new(entry), FileItem::new(other)],
+            "file:///tmp/ox-test",
+        );
+        assert_eq!(property(&both, keys::SIZE), Some("8.76 KB"));
+    }
+
     /// One file shows Windows 11's rows, in its order and wording.
     ///
     /// parity: PROP-009

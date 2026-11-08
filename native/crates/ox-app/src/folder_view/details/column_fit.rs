@@ -519,6 +519,42 @@ mod tests {
         );
     }
 
+    /// Size starts wide enough for a size of ten digits of kilobytes, as
+    /// the Size column writes a 9 TB file ("9,999,999,999 KB"), and so for
+    /// a 6 GB one ("6,291,456 KB"), in the window's font stack at its 13
+    /// pixels, when one of its fonts is installed.
+    ///
+    /// parity: VIEW-028
+    #[gtk::test]
+    fn the_default_size_width_fits_ten_digits_of_kilobytes() {
+        let (view, _model) = view_of(&["a.txt"]);
+        if let Err(fallback) = window_font(view.column_view()) {
+            eprintln!(
+                "none of the window's fonts is installed ({fallback} draws instead); nothing to measure"
+            );
+            return;
+        }
+        let column = view.column(SortColumn::Size).expect("a Size column");
+        for text in [
+            ox_core::format::column_size_text(Some(9_999_999_999 * 1024)),
+            ox_core::format::column_size_text(Some(6 << 30)),
+        ] {
+            let layout = view.column_view().create_pango_layout(Some(&text));
+            let mut font = gtk::pango::FontDescription::from_string(WINDOW_FONT_STACK);
+            font.set_absolute_size(13.0 * f64::from(gtk::pango::SCALE));
+            layout.set_font_description(Some(&font));
+            let width = layout.pixel_size().0;
+            // The last cell's padding (folder-views.css): 12 pixels at the
+            // start, 26 at the end, the list's own 14 among them.
+            let cell_padding = 12 + 26;
+            assert!(
+                width + cell_padding <= column.fixed_width(),
+                "{text}: {width} pixels of text in a {}-pixel column",
+                column.fixed_width()
+            );
+        }
+    }
+
     /// Name fills the spare width until it is resized; then its width is
     /// exact.
     ///

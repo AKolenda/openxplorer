@@ -148,6 +148,17 @@ mod tests {
         assert_eq!(exact_size_text(1_024_000), "0.97 MB (1,024,000 bytes)");
     }
 
+    /// One byte is written in the singular, as every other count is.
+    ///
+    /// parity: PROP-003
+    #[test]
+    fn one_byte_is_one_byte() {
+        assert_eq!(short_size(1), "1 byte");
+        assert_eq!(short_size(0), "0 bytes");
+        assert_eq!(short_size(2), "2 bytes");
+        assert_eq!(exact_size_text(1), "1 byte (1 byte)");
+    }
+
     /// Numbers take the language's separators: a German translation's
     /// `,` and `.` give `15,4 MB (16.154.811 bytes)`.
     ///

@@ -756,4 +756,35 @@ mod tests {
             assert!(canonical(bad).is_err(), "{bad}");
         }
     }
+
+    /// An item already listed keeps a name with a line break or bytes
+    /// that are not UTF-8, as another program made it: only a typed
+    /// address is refused for them. Its URI stays exactly as GIO wrote it,
+    /// a whole share is still no item, and a typed address with an escaped
+    /// control character is still refused.
+    ///
+    /// parity: OPS-035
+    #[test]
+    fn a_listed_item_keeps_a_name_with_a_line_break_or_bytes_that_are_not_utf8() {
+        for uri in [
+            "file:///tmp/ox-test/Line%0Abreak.txt",
+            "file:///tmp/ox-test/Caf%E9%20menu.txt",
+            "file:///tmp/ox-test/Tab%09folder/inner.txt",
+            "smb://nas/projects/Line%0Abreak.txt",
+            "sftp://build/srv/Caf%E9.txt",
+            "mtp://[usb:001,002]/Internal/Line%0Abreak.txt",
+        ] {
+            assert_eq!(require_item_uri(uri).as_deref(), Ok(uri), "{uri}");
+        }
+        assert_eq!(
+            require_item_uri("file:///tmp/ox-test/a%0ab").as_deref(),
+            Ok("file:///tmp/ox-test/a%0Ab"),
+            "escaped as Python escapes"
+        );
+        assert!(require_item_uri("smb://nas/a%0Ab").is_err(), "a whole share");
+        assert!(require_item_uri("file:///tmp/../a%0Ab").is_err(), "not a listed item's URI");
+        assert!(require_item_uri("file:///tmp/a%0Ab?x").is_err());
+        assert!(canonical("smb://nas/a%00b").is_err(), "a typed address");
+        assert!(canonical("file:///tmp/a%0Ab").is_err(), "a typed address");
+    }
 }

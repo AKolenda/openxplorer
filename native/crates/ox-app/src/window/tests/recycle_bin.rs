@@ -130,7 +130,7 @@ fn the_command_bar_restores_all_items_or_the_selected_ones_in_the_recycle_bin() 
     );
     assert_eq!(
         after_view(&test)[..4],
-        ["|", "Empty Recycle Bin", "Restore all items", "More options"]
+        ["|", "Empty Recycle Bin", "Restore all items", "See more"]
     );
     select_names(&test, &["Restore me first.txt"]);
     wait_until("the selected items' Restore", || {
