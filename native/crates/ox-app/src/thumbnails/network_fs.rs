@@ -41,7 +41,7 @@ const NETWORK_FUSE_TYPES: [&str; 6] = [
 /// Whether the file at `path` is on a network file system. A path that
 /// cannot be asked about counts as one: its icon is shown rather than
 /// anything read from it. Blocks.
-pub(super) fn is_on_network_filesystem(path: &Path) -> bool {
+pub(crate) fn is_on_network_filesystem(path: &Path) -> bool {
     let Ok(stat) = rustix::fs::statfs(path) else {
         return true;
     };

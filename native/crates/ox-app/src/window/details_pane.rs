@@ -19,9 +19,11 @@
 //! and Alt+Shift+P show and hide it.
 
 mod content;
+mod contents;
 mod media;
 mod metadata;
 mod options_menu;
+mod preview_page;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -36,6 +38,7 @@ use super::window_action::WindowAction;
 
 pub(super) use content::{pane_content, PaneFacts};
 use content::{PaneContent, Preview};
+pub(super) use preview_page::PreviewRules;
 
 /// What the pane at the right shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -91,10 +94,29 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/details-pane.ui")]
     pub(crate) struct DetailsPane {
-        /// The pane's one child, around everything else. Bound so that
-        /// `dispose_template` unparents it with the pane.
+        /// The pane's one child: the Details column, or the Preview
+        /// pane's contents. Bound so that `dispose_template` unparents it
+        /// with the pane.
+        #[template_child]
+        pub(super) pages: TemplateChild<gtk::Stack>,
+        /// The Details column, which scrolls.
         #[template_child]
         pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
+        /// The Preview pane's contents (`contents.rs`).
+        pub(super) contents: std::cell::OnceCell<super::contents::Contents>,
+        /// What the Preview pane shows, which a redraw for the same item
+        /// keeps; `None` shows the Details column.
+        pub(super) shown_page: RefCell<Option<super::preview_page::PreviewPage>>,
+        /// What the Preview pane was last asked to show, also while it was
+        /// hidden, which it reads as soon as it is shown again.
+        pub(super) wanted_page: RefCell<Option<super::preview_page::PreviewPage>>,
+        /// Counts the pages shown, so a read for an earlier selection is
+        /// dropped.
+        pub(super) page_generation: Cell<u64>,
+        /// Cancels the read of the page shown.
+        pub(super) page_cancellation: RefCell<Option<gtk::gio::Cancellable>>,
+        /// The wait before the page shown is read.
+        pub(super) page_timer: RefCell<Option<glib::SourceId>>,
         /// The art or glyph at the top.
         #[template_child]
         pub(super) preview: TemplateChild<ArtImage>,
@@ -195,6 +217,7 @@ mod imp {
             crate::i18n::translate_template(&*self.obj(), "details-pane.ui");
             let pane = self.obj();
             pane.set_width(super::PANE_WIDTH);
+            pane.build_contents();
             pane.show_glyphs();
             pane.bind_actions();
             pane.show_placeholder();
@@ -206,8 +229,18 @@ mod imp {
             // window is laid out for a new width.
             pane.connect_visible_notify(|pane| {
                 if !pane.is_visible() {
+                    // Closed, or hidden by a narrow window: nothing goes on
+                    // reading for it (a PDF's next pages, say). What it
+                    // was asked to show stays wanted, and is read again
+                    // once it is shown.
+                    pane.forget_page();
                     return;
                 }
+                // The page it was given while hidden, at once: the window
+                // may have asked before the pane was shown (Alt+P with no
+                // pane open), or while a narrow window hid it.
+                let wanted = pane.imp().wanted_page.borrow().clone();
+                pane.show_page(wanted.as_ref());
                 let pane = pane.downgrade();
                 glib::idle_add_local_once(move || {
                     let window = pane.upgrade().and_then(|pane| pane.root());
@@ -219,6 +252,7 @@ mod imp {
         }
 
         fn dispose(&self) {
+            self.obj().stop_reading();
             self.dispose_template();
         }
     }
@@ -316,6 +350,9 @@ impl DetailsPane {
         };
         self.update_property(&[gtk::accessible::Property::Label(&title)]);
         imp.title.replace(title);
+        if mode == PaneMode::Details {
+            self.show_page(None);
+        }
         self.show_mode();
     }
 
@@ -387,10 +424,16 @@ impl DetailsPane {
         self.follow_metadata(content.metadata.as_ref());
         self.redraw_properties();
         let preview_only = imp.mode.get() == PaneMode::Preview;
+        // The Preview pane shows the file's contents, as Windows' does,
+        // unless "Show preview handlers in preview pane" is off; a
+        // recording keeps the player of the column.
+        let page = (preview_only && !imp.hides_media.get()).then_some(&content.page);
+        let in_column = page.is_none_or(|page| *page == preview_page::PreviewPage::Media);
+        self.show_page(page);
         let media = content
             .media
             .as_ref()
-            .filter(|_| !(preview_only && imp.hides_media.get()));
+            .filter(|_| !(preview_only && imp.hides_media.get()) && in_column);
         self.show_media(media);
         // After the media, which puts the art back when it has none.
         match &content.preview {
