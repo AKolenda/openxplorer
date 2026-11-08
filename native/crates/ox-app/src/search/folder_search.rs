@@ -12,7 +12,7 @@
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::search::{walks_subfolders, IndexRoot, SearchFacets, SearchIn};
+use ox_core::search::{walks_subfolders, IndexRoot, SearchFacets, SearchIn, TypedQuery};
 
 use super::report::{SearchProgress, SearchReport};
 use super::source::{SearchScope, SearchSource};
@@ -24,8 +24,11 @@ pub(crate) struct SearchRun {
     generation: u64,
     /// The folder searched.
     pub folder: String,
-    /// The words searched for, without surrounding blanks.
+    /// The words searched for, without surrounding blanks or the options
+    /// typed with them.
     pub text: String,
+    /// The options typed into the box (SRCH-044).
+    pub typed: SearchFacets,
     /// The folder's scope, or every cached folder.
     pub scope: SearchScope,
     /// Where it looks.
@@ -60,6 +63,8 @@ pub(crate) enum Rerun {
 pub(crate) struct FolderSearch {
     /// The search box's text.
     query: String,
+    /// `query` read as words and typed options (SRCH-044).
+    typed: TypedQuery,
     /// The scope the strip shows.
     scope: SearchScope,
     /// Whether names or names and contents are searched (SRCH-036); kept
@@ -86,6 +91,7 @@ impl FolderSearch {
         self.cancel();
         self.results = None;
         text.clone_into(&mut self.query);
+        self.typed = TypedQuery::parse(text);
         if !self.is_active() {
             // Clearing the box ends the search: its kind and date go.
             self.facets = SearchFacets::default();
@@ -108,6 +114,7 @@ impl FolderSearch {
         self.cancel();
         self.results = None;
         self.query.clear();
+        self.typed = TypedQuery::default();
         self.scope = SearchScope::default();
         self.facets = SearchFacets::default();
         self.report = None;
@@ -118,7 +125,11 @@ impl FolderSearch {
     /// network is only filtered.
     fn source(&self, roots: &[IndexRoot], folder: &str) -> SearchSource {
         let reads_contents = self.search_in == SearchIn::NamesAndContents;
-        let source = if reads_contents && self.scope == SearchScope::ThisFolder {
+        // The cache finds names by their words: options typed alone, as
+        // `kind:folder`, are looked for by walking the folder.
+        let options_only = self.typed.words.is_empty();
+        let walks = reads_contents || options_only;
+        let source = if walks && self.scope == SearchScope::ThisFolder {
             SearchSource::CurrentFolder
         } else {
             SearchSource::choose(roots, folder, self.scope)
@@ -160,6 +171,16 @@ impl FolderSearch {
     /// The search box's text.
     pub(crate) fn query(&self) -> &str {
         &self.query
+    }
+
+    /// The words searched for, without the options typed with them.
+    pub(crate) fn words(&self) -> &str {
+        &self.typed.words
+    }
+
+    /// The options typed into the box (SRCH-044).
+    pub(crate) fn typed_facets(&self) -> SearchFacets {
+        self.typed.facets
     }
 
     /// The scope the strip shows.
@@ -255,7 +276,8 @@ impl FolderSearch {
         SearchRun {
             generation: self.generation,
             folder: folder.to_owned(),
-            text: self.query.trim().to_owned(),
+            text: self.typed.words.clone(),
+            typed: self.typed.facets,
             scope: self.scope,
             source,
             coverage,

@@ -26,6 +26,7 @@ use gio::prelude::*;
 
 use super::contents::{lowercase_text, SearchIn};
 use super::error::{check_cancelled, SearchError};
+use super::facets::FacetMatcher;
 use super::mounts::read_mounts;
 use super::pattern::NamePattern;
 use super::policy::{IndexScope, RootStorage};
@@ -53,6 +54,9 @@ pub struct LiveSearch {
     pub limit: usize,
     /// Whether the text of files is searched too.
     pub search_in: SearchIn,
+    /// The search options a match must pass too, such as those typed
+    /// into the box (SRCH-044), so the limit counts only items shown.
+    pub filter: FacetMatcher,
 }
 
 /// Whether `entry` matches `pattern` by its name and its text together,
@@ -188,6 +192,9 @@ impl Walk<'_> {
     /// its name and its text together. Only local files are read.
     fn matches(&self, entry: &Entry) -> bool {
         let search = self.search;
+        if !search.filter.matches(entry) {
+            return false;
+        }
         let name = entry.name.to_lowercase();
         if search.pattern.matches_lowercase(&name, "") {
             return true;
@@ -237,6 +244,7 @@ mod tests {
             hidden_items: HiddenItems::Skip,
             limit,
             search_in: SearchIn::Names,
+            filter: FacetMatcher::default(),
         }
     }
 

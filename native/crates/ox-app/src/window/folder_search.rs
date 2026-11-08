@@ -385,12 +385,12 @@ impl BrowserWindow {
         let words = if results.is_some() {
             String::new()
         } else {
-            search.query().to_owned()
+            search.words().to_owned()
         };
-        let facets = if search.is_active() {
-            search.facets()
+        let (facets, typed) = if search.is_active() {
+            (search.facets(), search.typed_facets())
         } else {
-            SearchFacets::default()
+            (SearchFacets::default(), SearchFacets::default())
         };
         drop(search);
         let active = self.imp().session.borrow().active_id();
@@ -398,7 +398,7 @@ impl BrowserWindow {
         let model = self.folder_pane().model();
         self.change_model(|| {
             model.set_query(&words);
-            model.set_facets(facets);
+            model.set_facets(facets, typed);
             model.set_store(rows.as_ref());
         });
     }

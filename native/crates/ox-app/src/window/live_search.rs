@@ -17,9 +17,17 @@ use ox_core::search::{
 
 use crate::folder_view::filter::Visibility;
 use crate::folder_view::item::FileItem;
-use crate::search::{listed_name_matches, Listing, SearchRun, RESULT_LIMIT};
+use crate::search::{listed_matches_passing, Listing, SearchRun, RESULT_LIMIT};
 
 use super::BrowserWindow;
+
+/// The local time now, which date options count from; the epoch should
+/// the clock be unreadable.
+fn local_now() -> glib::DateTime {
+    glib::DateTime::now_local()
+        .or_else(|_| glib::DateTime::from_unix_utc(0))
+        .expect("the Unix epoch is a valid time")
+}
 
 /// A file's size and modification time, which tell whether it changed
 /// since a search of its contents read it.
@@ -45,6 +53,7 @@ impl BrowserWindow {
     /// adding the matches to the rows as they are found, after the
     /// listing's own (SRCH-035). A newer edit cancels the walk.
     pub(super) fn walk_folder(&self, run: SearchRun) {
+        let filter = run.typed.matcher(&local_now());
         let rows = gio::ListStore::new::<FileItem>();
         let mut shown = HashSet::new();
         let mut is_truncated = false;
@@ -64,7 +73,7 @@ impl BrowserWindow {
                 folder: &run.folder,
                 shows_hidden,
             };
-            let listed = listed_name_matches(listing, &run.text);
+            let listed = listed_matches_passing(listing, &run.text, &filter);
             is_truncated = listed.is_truncated;
             shown.extend(listed.items.iter().map(|item| item.entry().uri.clone()));
             rows.extend_from_slice(&listed.items);
@@ -78,6 +87,7 @@ impl BrowserWindow {
             hidden_items: self.hidden_items(),
             limit: RESULT_LIMIT,
             search_in: run.search_in,
+            filter,
         };
         let (sender, batches) = async_channel::unbounded::<Vec<Entry>>();
         let cancellable = run.cancellable.clone();
@@ -118,7 +128,10 @@ impl BrowserWindow {
         let Some(rows) = self.imp().search.borrow().results().cloned() else {
             return;
         };
-        let text = self.imp().search.borrow().query().trim().to_owned();
+        let search = self.imp().search.borrow();
+        let text = search.words().to_owned();
+        let filter = search.typed_facets().matcher(&local_now());
+        drop(search);
         let Some(folder) = self.current_uri() else {
             return;
         };
@@ -132,7 +145,7 @@ impl BrowserWindow {
             folder: &folder,
             shows_hidden,
         };
-        let listed = listed_name_matches(listing, &text).items;
+        let listed = listed_matches_passing(listing, &text, &filter).items;
         let listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
         // A search of contents: the folder's files as listed now, for the
         // ones it found by their text.

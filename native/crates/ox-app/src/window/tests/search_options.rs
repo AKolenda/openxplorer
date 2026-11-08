@@ -196,7 +196,10 @@ fn the_size_option_narrows_the_results() {
     strip.choose_size(SizeFacet::Empty);
     assert_eq!(test.names(), ["plan empty.txt"]);
     strip.choose_size(SizeFacet::Tiny);
-    assert_eq!(test.names(), ["plan old tiny.txt", "plan photo.png", "plan tiny.txt"]);
+    assert_eq!(
+        test.names(),
+        ["plan old tiny.txt", "plan photo.png", "plan tiny.txt"]
+    );
     strip.choose_size(SizeFacet::Small);
     assert_eq!(test.names(), ["plan small.txt"]);
     strip.choose_size(SizeFacet::Medium);
