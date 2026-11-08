@@ -20,6 +20,7 @@ mod closing;
 mod column_fitting;
 mod command_bar;
 mod compact_density;
+mod compact_spacing;
 mod context_menus;
 mod details_pane;
 mod details_preview;

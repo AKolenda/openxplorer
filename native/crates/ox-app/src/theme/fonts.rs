@@ -397,29 +397,73 @@ mod tests {
         css_for_text_size(TextSize::from_percent(percent))
     }
 
-    /// Compact view's rows are 24 pixels in Details and the sidebar at
-    /// 100%, and still grow with larger text, staying closer than the
-    /// usual rows.
+    /// Compact view spaces Details rows 21 pixels apart at 100% (19 and
+    /// the margins), a heading's box as tall with 5 pixels above and 6
+    /// below, the column titles 26 tall and the sidebar's rows 24 apart
+    /// (23 and the gap), as Windows 11's Compact view; Tiles' rows 57
+    /// apart and their headings and Content's closer too. Everything still
+    /// grows with larger text.
     ///
     /// parity: VIEW-067
     #[test]
-    fn compact_view_rows_are_closer_and_grow_with_the_text() {
+    fn compact_view_spaces_rows_as_windows_and_grows_with_the_text() {
         let css = css_at(100);
-        assert!(
-            css.contains("window.compact-density columnview.files > listview > row { min-height: 24px; }")
-        );
-        assert!(css.contains("window.compact-density .sidebar list.places > row { min-height: 24px; }"));
+        for rule in [
+            "window.compact-density columnview.files > listview > row { min-height: 19px; }",
+            "window.compact-density columnview.files > listview > row > cell > .group-slot, \
+             window.compact-density columnview.files > listview > row > cell > .group-rule \
+             { min-height: 19px; margin-top: 5px; padding-bottom: 6px; }",
+            "window.compact-density columnview.files > header > button { min-height: 26px; }",
+            "window.compact-density .sidebar list.places > row { min-height: 23px; }",
+            "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) \
+             { min-height: 48px; padding-top: 4px; padding-bottom: 4px; margin: 0 4px 1px 4px; }",
+            "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
+             { min-height: 17px; margin: 1px 0 4px 0; padding: 2px 0; }",
+            "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
+             { min-height: 17px; margin: 3px 0 2px 0; padding: 5px 0; }",
+        ] {
+            assert!(css.contains(rule), "{rule}");
+        }
         let larger = css_at(150);
-        assert!(
-            larger.contains("window.compact-density columnview.files > listview > row { min-height: 36px; }")
-        );
-        assert!(larger.contains("window.compact-density .sidebar list.places > row { min-height: 34px; }"));
-        assert!(larger.contains(".sidebar list.places > row { min-height: 41px; }"));
-        assert!(larger.contains("columnview.files > listview > row { min-height: 42px; }"));
+        for rule in [
+            "window.compact-density columnview.files > listview > row { min-height: 31px; }",
+            "window.compact-density columnview.files > header > button { min-height: 38px; }",
+            "window.compact-density .sidebar list.places > row { min-height: 33px; }",
+            ".sidebar list.places > row { min-height: 41px; }",
+            "columnview.files > listview > row { min-height: 42px; }",
+        ] {
+            assert!(larger.contains(rule), "{rule}");
+        }
+        assert!(larger.contains(
+            "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 72px;"
+        ));
+    }
+
+    /// The usual view's spacing does not change with Compact view: its
+    /// rows, headings, column titles, sidebar rows, tiles and Content rows
+    /// keep their heights.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn the_usual_view_keeps_its_heights() {
+        let css = css_at(100);
+        for rule in [
+            "columnview.files > listview > row { min-height: 30px; }",
+            "columnview.files > listview > row > cell > .group-slot, \
+             columnview.files > listview > row > cell > .group-rule { min-height: 30px; }",
+            "columnview.files > header > button { min-height: 31px; }",
+            ".sidebar list.places > row { min-height: 31px; }",
+            ".sidebar .pill { margin-top: 8px; }",
+            "gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 53px; }",
+            "gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }",
+            "gridview.files > child > .item-cell.group-slot.heading-row { min-height: 17px; }",
+        ] {
+            assert!(css.contains(rule), "{rule}");
+        }
     }
 
     /// The selected sidebar row's 16-pixel accent bar stays centred on the
-    /// row, 8 pixels down a 31-pixel row, 4 down Compact view's 24-pixel
+    /// row, 8 pixels down a 31-pixel row, 4 down Compact view's 23-pixel
     /// one, and further down the taller rows of larger text.
     ///
     /// parity: LOOK-014, VIEW-067
