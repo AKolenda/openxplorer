@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use super::error::OpsError;
 use crate::transfer::{
-    check_write_tree, Cancellation, FailedItem, FailureAnswer, MoveByCopyingItem, Node, SourceChange,
-    TransferEngine, TransferError, UnstorableAnswer, UnstorableItem, WriteGuard,
+    check_write_tree, check_write_tree_reading, Cancellation, FailedItem, FailureAnswer, MoveByCopyingItem, Node, SourceChange,
+    TransferEngine, TransferError, Unreadable, UnstorableAnswer, UnstorableItem, WriteGuard,
 };
 
 /// Locations that must never change, such as previous versions
@@ -78,6 +78,34 @@ impl WriteProtection {
             Some(destination),
             cancel,
             source_change,
+        )?;
+        Ok(())
+    }
+
+    /// [`check_tree`](Self::check_tree) for a selected item of a paste,
+    /// before any item runs: what cannot be read is left to the transfer
+    /// engine, which asks about that item alone while the others go on
+    /// (OPS-047), and checks it again before changing it.
+    ///
+    /// # Errors
+    ///
+    /// The refusal for the first protected location, the nesting limit or
+    /// cancellation.
+    pub(crate) fn check_selected_tree(
+        &self,
+        source: &dyn Node,
+        destination: &dyn Node,
+        cancel: &Cancellation,
+        source_change: SourceChange,
+    ) -> Result<(), OpsError> {
+        check_write_tree_reading(
+            self.guard.as_deref(),
+            source,
+            None,
+            Some(destination),
+            cancel,
+            source_change,
+            Unreadable::NotWalked,
         )?;
         Ok(())
     }

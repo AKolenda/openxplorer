@@ -203,7 +203,9 @@ pub async fn run_answered_items(
 /// of its name it merges into, is one tree to the write protection, which
 /// refuses the transfer before anything changes. The steps then run per
 /// folder, which alone would let a free file move before a protected
-/// folder merged elsewhere in the same selected tree is refused.
+/// folder merged elsewhere in the same selected tree is refused. An item
+/// that is gone or cannot be read does not stop the others: the engine
+/// asks about it when its turn comes (OPS-047).
 fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsError> {
     let source_change = if scan.mode == TransferMode::Move {
         SourceChange::Changed
@@ -216,7 +218,7 @@ fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsE
         let target = destination.child(&source.name());
         context
             .protection
-            .check_tree(&source, target.as_ref(), &context.cancel, source_change)?;
+            .check_selected_tree(&source, target.as_ref(), &context.cancel, source_change)?;
     }
     Ok(())
 }

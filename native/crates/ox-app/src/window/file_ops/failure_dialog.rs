@@ -11,6 +11,7 @@
 //! | The destination folder may not be written | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder | Continue (shield) · Skip · Cancel |
 //! | Another program holds it | File In Use (Folder …) | The action can't be completed because the file is open in another program · Close the file and try again. | Try Again · Skip · Cancel |
 //! | It is gone | Item Not Found | Could not find this item · This is no longer located in <folder>. Verify the item's location and try again. | Try Again · Skip · Cancel |
+//! | A folder would go into a folder inside it | Interrupted Action | You can't copy (move) a folder into a folder inside it | Skip · Cancel |
 //! | Anything else | Interrupted Action | An unexpected error is keeping you from copying the file. … · the system's error | Try Again · Skip · Cancel |
 //! | Something to sort out by hand, such as a kept backup | Interrupted Action | An unexpected error is keeping you from copying the file. … · what happened and where | OK, shown after Cancel too |
 //!
@@ -85,6 +86,10 @@ enum Question {
     InUse,
     /// "Item Not Found".
     NotFound,
+    /// "Interrupted Action": a folder pasted into a folder inside it,
+    /// refused before anything changed (XFER-016). Trying again cannot
+    /// help, so it offers Skip and Cancel only.
+    InsideSource,
     /// "Interrupted Action": an unexpected error.
     Unexpected,
 }
@@ -154,6 +159,15 @@ fn wording(question: Question, item: &FailedItem, is_folder: bool, folder: &str)
                 "This is no longer located in {folder}. Verify the item's location and try again.",
                 &[("folder", folder)],
             ),
+        ),
+        Question::InsideSource => (
+            gettext("Interrupted Action"),
+            if item.mode == TransferMode::Move {
+                gettext("You can't move a folder into a folder inside it.")
+            } else {
+                gettext("You can't copy a folder into a folder inside it.")
+            },
+            String::new(),
         ),
         Question::Unexpected => (
             gettext("Interrupted Action"),
@@ -418,11 +432,15 @@ impl BrowserWindow {
         let card = || item_card(&name, icon_of(entry.as_ref(), &name), &lines).upcast::<gtk::Widget>();
         let panel = self.panel_for_operation(cancel);
         let administrator = matches!(question, Question::DestinationDenied | Question::AdminDelete);
+        // A refusal cannot be tried again: Skip comes first, then Cancel.
+        let refused = question == Question::InsideSource;
         loop {
             // Windows' Continue asks for administrator permission; the
             // other questions keep Try Again.
             let first = if administrator {
                 FirstButton::Administrator(gettext("Continue"))
+            } else if refused {
+                FirstButton::Plain(gettext("Skip"))
             } else {
                 FirstButton::Plain(gettext("Try Again"))
             };
@@ -433,12 +451,14 @@ impl BrowserWindow {
                 details: self.failure_details(item),
                 for_all: item.more_items,
                 first,
-                second: Some(gettext("Skip")),
+                second: (!refused).then(|| gettext("Skip")),
                 cancel: true,
                 after_cancel: false,
             };
             let (choice, for_all) = panel.ask_about_failure(view).await;
             return match choice {
+                FailureChoice::First if refused && for_all => FailureAnswer::SkipAll,
+                FailureChoice::First if refused => FailureAnswer::Skip,
                 FailureChoice::First if administrator => {
                     // The Recycle Bin has no administrator path: the item
                     // is deleted permanently, once the user agrees.
@@ -605,6 +625,7 @@ impl BrowserWindow {
             }
             FailureCause::InUse => (Question::InUse, item.uri.clone()),
             FailureCause::NotFound => (Question::NotFound, item.uri.clone()),
+            FailureCause::InsideSource => (Question::InsideSource, item.uri.clone()),
             FailureCause::NoSpace | FailureCause::Other | FailureCause::NeedsAttention => {
                 (Question::Unexpected, item.uri.clone())
             }
@@ -735,6 +756,22 @@ mod tests {
             .heading
             .starts_with("An unexpected error is keeping you from copying the file."));
         assert_eq!(unexpected.message, "Input/output error");
+        for (mode, heading) in [
+            (TransferMode::Copy, "You can't copy a folder into a folder inside it."),
+            (TransferMode::Move, "You can't move a folder into a folder inside it."),
+        ] {
+            let inside = wording(
+                Question::InsideSource,
+                &item(mode, FailureCause::InsideSource),
+                true,
+                "",
+            );
+            assert_eq!(
+                (inside.caption.as_str(), inside.heading.as_str(), inside.message.as_str()),
+                ("Interrupted Action", heading, ""),
+                "no unexpected error, no system error"
+            );
+        }
     }
 
     /// A full drive says how much the item needs and what to do, as
