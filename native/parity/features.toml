@@ -1517,7 +1517,7 @@ python_tests = [
 bridge = ["detachTab", "windows"]
 dolphin = "Dolphin tab menu (DolphinTabBar::contextMenuEvent): New Tab, Detach Tab, Close Other Tabs, Close Tab."
 native = "done"
-native_note = "The tab menu (native/crates/ox-app/src/window/tab_menu.rs) offers Move tab to new window, Move tab to window…, Duplicate tab, Open windows…, a separator and Close tab; all work. Tests: tab_menu.rs (a_tab_menu_offers_the_python_items_in_order), native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder)."
+native_note = "The tab menu (native/crates/ox-app/src/window/tab_menu.rs) offers Move tab to new window, Move tab to window…, Duplicate tab, Open windows…, a separator and Close tab; all work. The Menu key and Shift+F10 on the focused tab open the same menu under it with the keyboard on its first item, as Shift+F10 opens the selected item's menu in Windows 11 (support.microsoft.com, Keyboard shortcuts in Windows). Tests: tab_menu.rs (a_tab_menu_offers_the_python_items_in_order), native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder, the_menu_key_and_shift_f10_open_the_focused_tabs_menu)."
 
 [[feature]]
 id = "TAB-013"

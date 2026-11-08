@@ -9,8 +9,8 @@
 //! app.js: it is one widget announced as a tab of the "Folder tabs" list
 //! with its selected state; a press or Enter shows it, a double-click
 //! opens a copy of it and a middle-click closes it; a right-click opens
-//! the tab's menu ([`super::tab_menu`]). The close button inside claims
-//! its own clicks. Only the tab in front takes keyboard focus (a roving
+//! the tab's menu ([`super::tab_menu`]), as do the Menu key and Shift+F10
+//! on the focused tab. The close button inside claims its own clicks. Only the tab in front takes keyboard focus (a roving
 //! tab stop, ACC-008), and the arrow keys, Home and End show another tab
 //! and move focus with it, as GTK's own tab bars do.
 //!
@@ -480,7 +480,33 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
         run_on(gesture.widget(), WindowAction::CloseTabById, &id);
     }));
     widget.add_controller(menu_on_right_click(tab.id, tab.uri.clone()));
+    widget.add_controller(menu_on_keys(tab.id, &tab.uri));
     widget
+}
+
+/// The Menu key and Shift+F10 on the focused tab `id`, which shows `uri`,
+/// open its menu under it with the keyboard on its first item, as
+/// Shift+F10 opens the selected item's menu in Windows 11
+/// (support.microsoft.com, "Keyboard shortcuts in Windows").
+fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
+    let shortcuts = gtk::ShortcutController::new();
+    for key in [
+        super::context_menu::MENU_KEY,
+        super::context_menu::CLASSIC_MENU_KEY,
+    ] {
+        let uri = uri.to_owned();
+        let action = gtk::CallbackAction::new(move |tab, _| {
+            let Some(strip) = tab.ancestor(TabStrip::static_type()).and_downcast::<TabStrip>() else {
+                return glib::Propagation::Proceed;
+            };
+            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            strip.show_menu_under_tab(id, tab_menu(id, &uri, is_only_tab));
+            glib::Propagation::Stop
+        });
+        let trigger = gtk::ShortcutTrigger::parse_string(key);
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
+    }
+    shortcuts
 }
 
 /// A right-click on the tab `id`, which shows `uri`, opens its menu
