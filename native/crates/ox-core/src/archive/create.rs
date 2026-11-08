@@ -57,8 +57,11 @@ use tar_writer::TarWriter;
 use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
 
 /// The endings that ask for a TAR instead of a ZIP: compressed with XZ,
-/// or plain, as Compress to › TAR File writes it.
+/// gzip or bzip2 (the Create archive dialog's methods), or plain, as
+/// Compress to › TAR File writes it.
 const TAR_XZ_ENDING: &str = ".tar.xz";
+const TAR_GZ_ENDINGS: [&str; 2] = [".tar.gz", ".tgz"];
+const TAR_BZ2_ENDINGS: [&str; 2] = [".tar.bz2", ".tbz2"];
 const TAR_ENDING: &str = ".tar";
 
 /// Staging files are `.openxplorer-compress-<32 hex digits>.part`.
@@ -137,6 +140,9 @@ pub struct ZipCompressor {
     /// Receives progress on the worker thread.
     emit: Box<dyn FnMut(Progress) + Send>,
     write_guard: Option<Box<WriteGuard>>,
+    /// The compression level, 1 (faster) to 9 (smaller); each format's
+    /// default without one.
+    level: Option<u32>,
 }
 
 impl fmt::Debug for ZipCompressor {
@@ -160,7 +166,17 @@ impl ZipCompressor {
         Self {
             emit: Box::new(|_| {}),
             write_guard: None,
+            level: None,
         }
+    }
+
+    /// Compresses at `level`, 1 (faster) to 9 (smaller), as the Create
+    /// archive dialog's Compression level slider asks; a plain TAR is not
+    /// compressed at all.
+    #[must_use]
+    pub fn with_level(mut self, level: u32) -> Self {
+        self.level = Some(level.clamp(1, 9));
+        self
     }
 
     /// Receives progress; it is called on the thread the compression runs
@@ -337,9 +353,17 @@ impl ZipCompressor {
     ) -> Result<(), ArchiveError> {
         let stream = output.clone().upcast::<gio::OutputStream>().into_write();
         let mut writer = match format {
-            ArchiveFormat::TarXz => EntryWriter::Tar(Box::new(TarWriter::xz(stream)?)),
+            ArchiveFormat::TarXz => EntryWriter::Tar(Box::new(TarWriter::xz(stream, self.level)?)),
+            ArchiveFormat::TarGz => EntryWriter::Tar(Box::new(TarWriter::gzip(stream, self.level))),
+            ArchiveFormat::TarBz2 => EntryWriter::Tar(Box::new(TarWriter::bzip2(stream, self.level))),
             ArchiveFormat::Tar => EntryWriter::Tar(Box::new(TarWriter::plain(stream))),
-            ArchiveFormat::Zip => EntryWriter::Zip(ZipWriter::new(stream)),
+            ArchiveFormat::Zip => {
+                let writer = ZipWriter::new(stream);
+                EntryWriter::Zip(match self.level {
+                    Some(level) => writer.with_level(level),
+                    None => writer,
+                })
+            }
         };
         let mut job = JobProgress {
             bytes_total: plan.total_bytes,
@@ -601,12 +625,14 @@ impl<W: std::io::Write> EntryWriter<W> {
 enum ArchiveFormat {
     Zip,
     Tar,
+    TarGz,
+    TarBz2,
     TarXz,
 }
 
 impl ArchiveFormat {
-    /// `.tar.xz` and `.tar` (in any case) ask for a TAR; anything else is
-    /// a ZIP.
+    /// `.tar.xz`, `.tar.gz` or `.tgz`, `.tar.bz2` or `.tbz2`, and `.tar`
+    /// (in any case) ask for a TAR; anything else is a ZIP.
     fn for_name(name: &str) -> Self {
         let ends_with = |ending: &str| {
             name.len() >= ending.len()
@@ -616,6 +642,10 @@ impl ArchiveFormat {
         };
         if ends_with(TAR_XZ_ENDING) {
             Self::TarXz
+        } else if TAR_GZ_ENDINGS.iter().any(|ending| ends_with(ending)) {
+            Self::TarGz
+        } else if TAR_BZ2_ENDINGS.iter().any(|ending| ends_with(ending)) {
+            Self::TarBz2
         } else if ends_with(TAR_ENDING) {
             Self::Tar
         } else {

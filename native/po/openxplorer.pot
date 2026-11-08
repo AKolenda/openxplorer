@@ -422,7 +422,7 @@ msgstr ""
 msgid "{error}\n\nNo existing file was replaced."
 msgstr ""
 
-#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/place_editor.rs
+#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/place_editor.rs
 msgid "Browse…"
 msgstr ""
 
@@ -463,7 +463,7 @@ msgstr ""
 msgid "More about extracting"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/extract_dialog.rs
+#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/compress_dialog.rs
 msgid "Select a destination"
 msgstr ""
 
@@ -555,7 +555,7 @@ msgstr ""
 msgid "File system"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/window/compress_dialog.rs
+#: crates/ox-app/src/dialogs/format_drive.rs
 msgid "Format"
 msgstr ""
 
@@ -2261,7 +2261,7 @@ msgstr ""
 msgid "Modify"
 msgstr ""
 
-#: crates/ox-app/src/properties/security_model.rs
+#: crates/ox-app/src/properties/security_model.rs crates/ox-app/src/window/compress_dialog.rs
 msgid "None"
 msgstr ""
 
@@ -4801,11 +4801,51 @@ msgid "Use system appearance"
 msgstr ""
 
 #: crates/ox-app/src/window/compress_dialog.rs
-msgid "Archive name"
+msgid "Archive format:"
 msgstr ""
 
 #: crates/ox-app/src/window/compress_dialog.rs
-msgid "Compress"
+msgid "Compression level:"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Compression method:"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/file_ops/links.rs
+msgid "Create"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Create archive"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Enter where to create the archive."
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Faster"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Files will be added to this archive:"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Retain hard links"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Retain symbolic links"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Select a destination and create archive"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Smaller"
 msgstr ""
 
 #: crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -5652,10 +5692,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs
 msgid "A link opens the file or folder it points to. Leave the name empty to use the name of that item."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/links.rs
-msgid "Create"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs

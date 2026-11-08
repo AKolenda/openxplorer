@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Writing a `.tar` or a `.tar.xz` (ARC-023): POSIX ustar headers, a GNU
 //! long-name entry for paths over 100 bytes, sizes over 8 GiB in GNU's
-//! base-256 form, stored plain as `tar -c` writes it or compressed with XZ
-//! as `tar -cJ` does. Files are stored with mode 0644 and folders 0755,
+//! base-256 form, stored plain as `tar -c` writes it or compressed with
+//! gzip, bzip2 or XZ as `tar -cz`, `-cj` and `-cJ` do. Files are stored with mode 0644 and folders 0755,
 //! like the ZIP writer's fixed attributes; links and special files never
 //! reach it.
 
@@ -22,9 +22,11 @@ const XZ_PRESET: u32 = 6;
 /// The size of the blocks file data is copied in.
 const COPY_BYTES: usize = 64 * 1024;
 
-/// Where the TAR stream goes: the file itself, or an XZ encoder.
+/// Where the TAR stream goes: the file itself, or an encoder.
 enum TarOutput<W: Write> {
     Plain(W),
+    Gzip(flate2::write::GzEncoder<W>),
+    Bzip2(bzip2::write::BzEncoder<W>),
     Xz(Box<XzWriter<W>>),
 }
 
@@ -32,6 +34,8 @@ impl<W: Write> Write for TarOutput<W> {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
         match self {
             Self::Plain(output) => output.write(buffer),
+            Self::Gzip(output) => output.write(buffer),
+            Self::Bzip2(output) => output.write(buffer),
             Self::Xz(output) => output.write(buffer),
         }
     }
@@ -39,6 +43,8 @@ impl<W: Write> Write for TarOutput<W> {
     fn flush(&mut self) -> io::Result<()> {
         match self {
             Self::Plain(output) => output.flush(),
+            Self::Gzip(output) => output.flush(),
+            Self::Bzip2(output) => output.flush(),
             Self::Xz(output) => output.flush(),
         }
     }
@@ -57,13 +63,37 @@ impl<W: Write> TarWriter<W> {
         }
     }
 
-    /// A writer compressing into `output` with XZ.
+    /// A writer compressing into `output` with gzip at `level`, 1
+    /// (faster) to 9 (smaller), or gzip's default.
+    pub(super) fn gzip(output: W, level: Option<u32>) -> Self {
+        let level = level.map_or_else(flate2::Compression::default, |level| {
+            flate2::Compression::new(level.clamp(1, 9))
+        });
+        Self {
+            output: TarOutput::Gzip(flate2::write::GzEncoder::new(output, level)),
+        }
+    }
+
+    /// A writer compressing into `output` with bzip2 at `level`, 1
+    /// (faster) to 9 (smaller), or bzip2's default.
+    pub(super) fn bzip2(output: W, level: Option<u32>) -> Self {
+        let level = level.map_or_else(bzip2::Compression::default, |level| {
+            bzip2::Compression::new(level.clamp(1, 9))
+        });
+        Self {
+            output: TarOutput::Bzip2(bzip2::write::BzEncoder::new(output, level)),
+        }
+    }
+
+    /// A writer compressing into `output` with XZ at the preset `level`,
+    /// 1 (faster) to 9 (smaller), or `xz`'s default.
     ///
     /// # Errors
     ///
     /// The XZ encoder's error.
-    pub(super) fn xz(output: W) -> Result<Self, ArchiveError> {
-        let output = XzWriter::new(output, XzOptions::with_preset(XZ_PRESET))?;
+    pub(super) fn xz(output: W, level: Option<u32>) -> Result<Self, ArchiveError> {
+        let preset = level.map_or(XZ_PRESET, |level| level.clamp(1, 9));
+        let output = XzWriter::new(output, XzOptions::with_preset(preset))?;
         Ok(Self {
             output: TarOutput::Xz(Box::new(output)),
         })
@@ -131,6 +161,8 @@ impl<W: Write> TarWriter<W> {
                 output.flush()?;
                 Ok(output)
             }
+            TarOutput::Gzip(output) => Ok(output.finish()?),
+            TarOutput::Bzip2(output) => Ok(output.finish()?),
             TarOutput::Xz(output) => Ok(output.finish()?),
         }
     }
