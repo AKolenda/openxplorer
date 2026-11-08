@@ -69,6 +69,10 @@ const FONT_SIZES: &[FontSize] = &[
     font("columnview.files", 12.0),
     font("columnview.files > header > button", 12.0),
     font("gridview.files", 12.0),
+    // A group's title, as Windows 11 draws it: a quarter larger than the
+    // items' names (VIEW-022).
+    font("columnview.files .group-slot .group-title", 15.0),
+    font("gridview.files .group-slot .group-title", 15.0),
     font(".details .detail-name", 14.0),
     font(".details button.detail-button", 12.0),
     font(".details .detail-section", 13.0),
@@ -300,9 +304,9 @@ fn details_row_rule(detail_row: i32) -> String {
 /// Compact view (`window.compact-density`, set by
 /// `window/compact_density.rs`, VIEW-067), spaced as Windows 11's Compact
 /// view at 100%: Details rows 21 pixels apart (19 less the 1-pixel margin
-/// above and below each), a group heading's box as tall as a row with 5
-/// pixels above it and 6 below, so its title stands 26 pixels under the
-/// row before and 27 over the row after; the column header 26 tall with
+/// above and below each), a group heading's box as tall as a row with 6
+/// pixels above it and 5 below, so its larger title's capitals stand 26
+/// pixels under the row before and 27 over the row after; the column header 26 tall with
 /// its line, the first heading's title 14 under it; the sidebar's rows 24
 /// apart; rows of Tiles 57 apart, a heading 26 tall; Content's items as
 /// usual (Windows 11 spaces them 48 apart in both views) under a heading
@@ -319,7 +323,7 @@ fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
         format!(
             "window.compact-density columnview.files > listview > row > cell > .group-slot, \
              window.compact-density columnview.files > listview > row > cell > .group-rule \
-             {{ min-height: {row}px; margin-top: 5px; padding-bottom: 6px; }}"
+             {{ min-height: {row}px; margin-top: 6px; padding-bottom: 5px; }}"
         ),
         COMPACT_COLUMN_TITLES.rule(scale),
         // The first heading's title 14 pixels under the header, as in
@@ -333,7 +337,7 @@ fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
         "window.compact-density gridview.files.tiles > child .item-lines { border-spacing: 2px; }".to_owned(),
         format!(
             "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
-             {{ min-height: {tiles_heading}px; margin: 1px 0 4px 0; padding: 2px 0; }}"
+             {{ min-height: {tiles_heading}px; margin: 2px 0 3px 0; padding: 2px 0; }}"
         ),
         // Content's lines 18 pixels apart, the name's and the date's and
         // size's, as in Windows 11's Compact view.
@@ -342,7 +346,7 @@ fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
             .to_owned(),
         format!(
             "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
-             {{ min-height: {content_heading}px; margin: 1px 0 4px 0; padding: 5px 0; }}"
+             {{ min-height: {content_heading}px; margin: 2px 0 3px 0; padding: 5px 0; }}"
         ),
     ]
 }
@@ -442,7 +446,7 @@ mod tests {
     }
 
     /// Compact view spaces Details rows 21 pixels apart at 100% (19 and
-    /// the margins), a heading's box as tall with 5 pixels above and 6
+    /// the margins), a heading's box as tall with 6 pixels above and 5
     /// below, the column titles 25 tall (26 with the header's line) and
     /// the sidebar's rows 24 apart
     /// (23 and the gap), as Windows 11's Compact view; Tiles' rows 57
@@ -457,16 +461,16 @@ mod tests {
             "window.compact-density columnview.files > listview > row { min-height: 19px; }",
             "window.compact-density columnview.files > listview > row > cell > .group-slot, \
              window.compact-density columnview.files > listview > row > cell > .group-rule \
-             { min-height: 19px; margin-top: 5px; padding-bottom: 6px; }",
+             { min-height: 19px; margin-top: 6px; padding-bottom: 5px; }",
             "window.compact-density columnview.files > header > button { min-height: 25px; }",
             "window.compact-density columnview.files.grouped > listview { padding-top: 4px; }",
             "window.compact-density .sidebar list.places > row { min-height: 23px; }",
             "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) \
              { min-height: 48px; padding-top: 4px; padding-bottom: 4px; margin: 0 4px 1px 4px; }",
             "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
-             { min-height: 17px; margin: 1px 0 4px 0; padding: 2px 0; }",
+             { min-height: 17px; margin: 2px 0 3px 0; padding: 2px 0; }",
             "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
-             { min-height: 17px; margin: 1px 0 4px 0; padding: 5px 0; }",
+             { min-height: 17px; margin: 2px 0 3px 0; padding: 5px 0; }",
         ] {
             assert!(css.contains(rule), "{rule}");
         }

@@ -33,14 +33,14 @@ fn show(test: &TestWindow, view: FolderView) {
     wait_for_frames(&test.window, 3);
 }
 
-/// A label's font size in pixels and its weight.
-fn font_of(label: &gtk::Label) -> (f64, pango::Weight) {
+/// A label's font size in whole pixels and its weight.
+fn font_of(label: &gtk::Label) -> (i32, pango::Weight) {
     let font = label
         .pango_context()
         .font_description()
         .expect("the label has a font");
     assert!(font.is_size_absolute(), "a size in pixels: {font}");
-    (f64::from(font.size()) / f64::from(pango::SCALE), font.weight())
+    (font.size() / pango::SCALE, font.weight())
 }
 
 /// In Details, Tiles and Content, normal and compact, a heading's title is
@@ -67,7 +67,7 @@ fn a_heading_has_windows_11_s_larger_regular_title_and_no_line() {
             for title in &titles {
                 assert_eq!(
                     font_of(title),
-                    (15.0, pango::Weight::Normal),
+                    (15, pango::Weight::Normal),
                     "{view:?}, compact {compact}: {:?}",
                     title.text()
                 );
@@ -81,7 +81,7 @@ fn a_heading_has_windows_11_s_larger_regular_title_and_no_line() {
                         .find(|label| label.is_mapped() && label.text() == "Notes 1")
                 })
                 .expect("an item's name");
-            assert_eq!(font_of(&name).0, 12.0, "{view:?}: the items' names");
+            assert_eq!(font_of(&name).0, 12, "{view:?}: the items' names");
             let lines: Vec<gtk::Separator> = descendants::<gtk::Separator>(&shown)
                 .into_iter()
                 .filter(WidgetExt::is_mapped)

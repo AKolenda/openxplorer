@@ -12,8 +12,13 @@
 //! to 32 above its first item and 48 to 49 below the last item before it.
 //! The distances are logical pixels, so they hold at every display scale
 //! (`GDK_SCALE=2` doubles the device pixels alike). Text-to-text distances
-//! are measured between the middles of labels of one font size, which are
-//! as far apart as their lines of text whatever the labels' line heights.
+//! are measured between the middles of labels, which for labels of one
+//! font size are as far apart as their lines of text whatever the labels'
+//! line heights. A heading's title is a quarter larger than the items'
+//! names (VIEW-022), so its capitals' tops stand a pixel further above its
+//! middle than a name's do: a heading 26 below a row and 27 above the
+//! next by the capitals, as Windows was measured, is 27 and 26 by the
+//! middles.
 
 use gtk::prelude::*;
 
@@ -261,9 +266,10 @@ fn show(test: &TestWindow, view: FolderView) {
 fn compact_view_spaces_details_and_the_navigation_pane_as_windows() {
     let fixture = fixture();
     let test = grouped_window(&fixture, true);
+    // By the middles: Windows' 26 and 27 by the capitals' tops.
     assert_eq!(
         details_spacing(&test),
-        (21, 26, 27, 26),
+        (21, 27, 26, 26),
         "(row, above heading, below heading, header)"
     );
     assert_eq!(
@@ -298,12 +304,13 @@ fn compact_view_spaces_tiles_and_content_as_windows() {
         48,
         "items"
     );
-    // Half a pixel off Windows' whole numbers either way, so 31 or 32,
-    // and 48 or 49, as the display scale rounds them.
+    // By the middles, a pixel off Windows' 31 to 32 and 48 to 49 by the
+    // capitals' tops, and half a pixel either way as the display scale
+    // rounds them.
     let below = text_distance(&test, Line::Heading("Text Document"), Line::Name("Notes 1"));
-    assert!((31..=32).contains(&below), "heading to first item: {below}");
+    assert!((30..=31).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
-    assert!((48..=49).contains(&above), "last item to heading: {above}");
+    assert!((49..=50).contains(&above), "last item to heading: {above}");
     // 17.5 to 18 pixels as the display scale rounds the labels.
     let second = second_line_distance(&test, "Notes 1", "Text Document");
     assert!((17..=18).contains(&second), "a name to its type: {second}");

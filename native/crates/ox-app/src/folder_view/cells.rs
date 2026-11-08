@@ -537,7 +537,7 @@ impl FileCell {
     }
 
     /// The heading row of a slot, made the first time a slot shows: the
-    /// chevron, the title and the line. The window handles clicks on it
+    /// chevron, the title and the rest of the row. The window handles clicks on it
     /// (`window/group_headings.rs`).
     fn slot_row(&self) -> gtk::Box {
         let imp = self.imp();
@@ -552,9 +552,12 @@ impl FileCell {
             .single_line_mode(true)
             .css_classes(["group-title"])
             .build();
-        let line = gtk::Separator::builder()
+        // The rest of the row after the title: Windows 11 draws no line
+        // there, so it is an empty filler that only takes the room, and
+        // the slots after it in a grid's row carry it on.
+        let line = gtk::Box::builder()
             .hexpand(true)
-            .valign(gtk::Align::Center)
+            .css_classes(["group-rest"])
             .build();
         let row = gtk::Box::builder()
             .spacing(10)

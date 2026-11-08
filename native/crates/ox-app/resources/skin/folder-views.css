@@ -165,7 +165,7 @@ columnview.files .row-icon { margin-top: 1px; }
 
 /* A group's heading in the details view (VIEW-022), a row of its own:
    Windows 11's chevron (down while the group is expanded, right while it
-   is collapsed), the semibold title, then a line to the right edge. The
+   is collapsed) and the title, with no line after it. The
    Name cell holds the heading and lays it out across the whole row, over
    the other columns, whatever Name's width (FileCell's
    span_heading_across_row in src/folder_view/cells.rs); the other
@@ -214,8 +214,13 @@ columnview.files > listview > row.heading-row.row-filled:hover > cell > .group-s
 columnview.files > listview > row.heading-row:focus-within > cell > .group-slot .group-header {
   box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
 }
-columnview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
-columnview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
+/* The title as Windows 11 draws it: regular weight, a quarter larger
+   than the items' names (src/theme/fonts.rs), and no line after it. Its
+   taller line overhangs 2px above and below, so a heading's row keeps
+   the height the items' text sets, with the title centred on it, in
+   every view and in Compact view. */
+columnview.files .group-slot .group-title,
+gridview.files .group-slot .group-title { font-weight: normal; color: @ox_text; margin: -2px 0; }
 /* Another column's cell in a heading's row: the gap and the height alone,
    as the Name cell's heading is drawn over it. */
 columnview.files .group-rule {
@@ -415,8 +420,8 @@ gridview.files > child .item-lines { border-spacing: 1px; }
 gridview.files > child .item-properties { border-spacing: 1px; margin: 0 8px 0 24px; }
 gridview.files > child .item-properties > box { border-spacing: 4px; }
 /* A group's heading, as the details view draws it (VIEW-022): the
-   semibold title and count over the items' left edge, then a line across
-   the row, which the heading row's other slots carry on. */
+   title over the items' left edge, with no line after it; the heading
+   row's other slots carry the row on. */
 gridview.files .group-slot { padding: 0; }
 /* A heading's row in Tiles and Content: one line of title tall, its
    hover box that size, after an 8px gap before every heading, the first
@@ -459,8 +464,6 @@ gridview.files .item-cell.heading-row.row-focus.row-start.row-end,
 gridview.files.content > child:focus-within > .item-cell.heading-row {
   box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
 }
-gridview.files .group-slot .group-title { font-weight: 600; color: @ox_text; }
-gridview.files .group-slot separator { background-color: @ox_border; min-height: 1px; }
 
 /* The type-to-select hint is accent-coloured, and muted when no name
    matches (`.type-select-status[data-miss=true]`). */
