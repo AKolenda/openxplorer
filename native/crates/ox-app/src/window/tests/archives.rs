@@ -648,32 +648,137 @@ fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
     super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
-/// Compress to… asks for the name and format, writes a .tar.xz, and
-/// keeps the dialog open with the reason when the name is taken.
+/// The labels of the drop-down `dropdown` offers.
+fn dropdown_labels(dropdown: &gtk::DropDown) -> Vec<String> {
+    let model = dropdown.model().expect("a list");
+    (0..model.n_items())
+        .filter_map(|index| model.item(index).and_downcast::<gtk::StringObject>())
+        .map(|item| item.string().to_string())
+        .collect()
+}
+
+/// Opens Compress to › Additional options for `name` and returns the
+/// dialog with its path field and its format and method drop-downs.
+fn create_archive_dialog(
+    test: &TestWindow,
+    name: &str,
+) -> (
+    crate::dialog::DialogFrame,
+    gtk::Entry,
+    gtk::DropDown,
+    gtk::DropDown,
+) {
+    test.wait_for_listing("the folder");
+    test.select_named(name);
+    test.activate("compress-to", None);
+    let frame = test.wait_for_dialog("the Create archive dialog");
+    let field = descendants::<gtk::Entry>(&frame).remove(0);
+    let mut dropdowns = descendants::<gtk::DropDown>(&frame);
+    assert_eq!(dropdowns.len(), 2, "Archive format and Compression method");
+    let method = dropdowns.remove(1);
+    let format = dropdowns.remove(0);
+    (frame, field, format, method)
+}
+
+/// Compress to › Additional options is laid out as Windows 11's: the
+/// heading, the archive's whole path with Browse…, the archive format,
+/// the compression method and level, the link check boxes (greyed: links
+/// are never kept), and Create and Cancel. Choosing the format or the
+/// method changes the path's ending.
 ///
 /// parity: ARC-023
 #[gtk::test]
-fn compress_to_asks_for_a_name_and_a_format() {
+fn additional_options_lay_out_the_create_archive_dialog() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let compress = |name: &str| {
-        test.select_named("Notes 2.txt");
-        test.activate("compress-to", None);
-        let frame = test.wait_for_dialog("the Compress dialog");
-        assert_eq!(descendants::<gtk::Entry>(&frame)[0].text(), "Notes 2");
-        descendants::<gtk::Entry>(&frame)[0].set_text(name);
-        descendants::<gtk::DropDown>(&frame)[0].set_selected(1);
-        press(&frame, "Compress");
-        frame
-    };
+    let (frame, field, format, method) = create_archive_dialog(&test, "Notes 2.txt");
 
-    compress("Backup");
-    let archive = fixture.path("Backup.tar.xz");
-    wait_until("the new archive", || archive.exists());
-    super::file_ops_support::assert_ended_without_a_message(&test);
-    let frame = compress("Backup");
+    assert_eq!(frame.title(), "Select a destination and create archive");
+    let shown = texts(&frame);
+    for text in [
+        "Files will be added to this archive:",
+        "Archive format:",
+        "Compression method:",
+        "Compression level:",
+        "Faster",
+        "Smaller",
+    ] {
+        assert!(shown.contains(&text.to_owned()), "{text}: {shown:?}");
+    }
+    assert!(descendants::<gtk::Button>(&frame)
+        .iter()
+        .any(|button| button.label().as_deref() == Some("Browse…")));
+    let checks = descendants::<gtk::CheckButton>(&frame);
+    let labels: Vec<String> = checks
+        .iter()
+        .filter_map(|check| check.label().map(|label| label.to_string()))
+        .collect();
+    assert_eq!(labels, ["Retain symbolic links", "Retain hard links"]);
+    assert!(checks.iter().all(|check| !check.is_sensitive()));
+    assert_eq!(frame.button_labels(), ["Create", "Cancel"]);
+    let notes = fixture.root().join("Notes 2");
+    assert_eq!(field.text(), format!("{}.zip", notes.display()));
+    assert_eq!(dropdown_labels(&format), ["zip", "tar"]);
+    assert_eq!(dropdown_labels(&method), ["Deflate"]);
+    assert_eq!(descendants::<gtk::Scale>(&frame).len(), 1);
+
+    format.set_selected(1);
+    assert_eq!(dropdown_labels(&method), ["None", "GZip", "BZip2", "XZ"]);
+    assert_eq!(field.text(), format!("{}.tar", notes.display()));
+    let endings = [(1, ".tar.gz"), (2, ".tar.bz2"), (3, ".tar.xz"), (0, ".tar")];
+    for (index, ending) in endings {
+        method.set_selected(index);
+        assert_eq!(field.text(), format!("{}{ending}", notes.display()));
+    }
+    let level = descendants::<gtk::Scale>(&frame).remove(0);
+    assert!(!level.is_sensitive(), "a plain TAR is not compressed");
+    method.set_selected(3);
+    assert!(level.is_sensitive());
+    format.set_selected(0);
+    assert_eq!(field.text(), format!("{}.zip", notes.display()));
+    press(&frame, "Cancel");
+    wait_until("the dialog to close", || test.shown_dialog().is_none());
+    assert!(!fixture.path("Notes 2.zip").exists(), "Cancel writes nothing");
+}
+
+/// Create writes the format and method chosen under the path in the
+/// field, keeps the dialog open with the reason when the name is taken,
+/// and Undo takes the new archive away again.
+///
+/// parity: ARC-023, OPS-029
+#[gtk::test]
+fn create_writes_the_chosen_format_and_undo_takes_it_away() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let cases = [
+        (0, 0, "Notes 2.zip", b"PK".as_slice()),
+        (1, 1, "Notes 2.tar.gz", &[0x1f, 0x8b]),
+        (1, 2, "Notes 2.tar.bz2", b"BZh"),
+        (1, 3, "Notes 2.tar.xz", &[0xfd, b'7']),
+        (1, 0, "Notes 2.tar", b"Note"),
+    ];
+    for (format_index, method_index, archive, magic) in cases {
+        let (frame, _field, format, method) = create_archive_dialog(&test, "Notes 2.txt");
+        format.set_selected(format_index);
+        method.set_selected(method_index);
+        press(&frame, "Create");
+        wait_until("the dialog to close", || test.shown_dialog().is_none());
+        super::file_ops_support::assert_ended_without_a_message(&test);
+        let bytes = fs::read(fixture.path(archive)).expect("written");
+        assert!(bytes.starts_with(magic), "{archive}");
+    }
+
+    let (frame, _field, _format, _method) = create_archive_dialog(&test, "Notes 2.txt");
+    press(&frame, "Create");
     wait_until("the refusal", || !frame.error_text().is_empty());
-    assert_eq!(test.shown_dialog(), Some(frame));
+    assert_eq!(test.shown_dialog(), Some(frame.clone()));
+    press(&frame, "Cancel");
+    wait_until("the dialog to close", || test.shown_dialog().is_none());
+
+    test.activate("undo", None);
+    wait_until("the last archive to go", || !fixture.path("Notes 2.tar").exists());
+    assert!(fixture.path("Notes 2.tar.xz").exists(), "only the last one");
 }
 
 /// parity: ARC-009, ARC-023, ARC-025

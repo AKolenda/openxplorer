@@ -213,3 +213,52 @@ fn a_tar_file_is_written_plain_and_reads_back() {
     let names: Vec<&str> = listing.entries.iter().map(|entry| entry.name.as_str()).collect();
     assert_eq!(names, ["Docs", "notes.txt"]);
 }
+
+/// The Create archive dialog's formats: a TAR compressed with gzip or
+/// bzip2 by its ending, read back by the archive browser, and the
+/// compression level, which makes a smaller archive at the Smaller end.
+///
+/// parity: ARC-023
+#[test]
+fn tar_gz_and_tar_bz2_are_written_and_the_level_changes_the_size() {
+    let temporary = tempfile::tempdir().expect("a temporary folder");
+    let sources = temporary.path().join("sources");
+    fs::create_dir_all(&sources).expect("a folder");
+    let text: String = (0..20_000)
+        .map(|n| format!("line {} of the report\n", n % 997))
+        .collect();
+    fs::write(sources.join("report.txt"), &text).expect("a file");
+    let output = temporary.path().join("out");
+    fs::create_dir(&output).expect("a folder");
+    let compress = |name: &str, level: Option<u32>| {
+        let request = CompressionRequest {
+            uris: vec![file_uri(&sources.join("report.txt"))],
+            destination_uri: file_uri(&output),
+            archive_name: name.to_owned(),
+        };
+        let mut compressor = ZipCompressor::new();
+        if let Some(level) = level {
+            compressor = compressor.with_level(level);
+        }
+        compressor
+            .compress(&request, &Cancellation::new())
+            .expect("the archive is written");
+        fs::read(output.join(name)).expect("written")
+    };
+
+    let gzip = compress("report.tar.gz", None);
+    let bzip2 = compress("report.tar.bz2", None);
+    assert_eq!(&gzip[..2], &[0x1f, 0x8b], "gzip");
+    assert_eq!(&bzip2[..3], b"BZh", "bzip2");
+    let browser = ArchiveBrowser::new(opener(), temporary.path().join("previews"));
+    for name in ["report.tar.gz", "report.tar.bz2"] {
+        let listing = browser
+            .list(&file_uri(&output.join(name)), "", &Cancellation::new())
+            .expect("browsed");
+        let names: Vec<&str> = listing.entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(names, ["report.txt"], "{name}");
+    }
+    let faster = compress("faster.zip", Some(1)).len();
+    let smaller = compress("smaller.zip", Some(9)).len();
+    assert!(smaller < faster, "{smaller} < {faster}");
+}
