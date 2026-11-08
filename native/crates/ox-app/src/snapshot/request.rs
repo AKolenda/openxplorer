@@ -344,8 +344,8 @@ mod tests {
             assert!(message.starts_with("OPENXPLORER_START cannot be"), "{message}");
         }
         std::fs::remove_file(&file).expect("the file is removed");
-        let uri = gtk::gio::File::for_path(&folder).uri();
-        for accepted in [folder.to_string_lossy().into_owned(), uri.to_string()] {
+        let uri = gtk::gio::prelude::FileExt::uri(&gtk::gio::File::for_path(&folder)).to_string();
+        for accepted in [folder.to_string_lossy().into_owned(), uri] {
             let asked = with_start(&accepted)
                 .expect(&accepted)
                 .expect("a snapshot is asked for");
