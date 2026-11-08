@@ -365,7 +365,7 @@ mod tests {
     }
 
     /// A file browsed on an SMB share is previewed with network previews
-    /// on, its local path (a CIFS mount or GVfs's FUSE export) found off
+    /// on, its local path (a CIFS mount or `GVfs`'s FUSE export) found off
     /// the main thread when it is read, and never with them off.
     ///
     /// parity: VIEW-070
