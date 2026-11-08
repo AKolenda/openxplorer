@@ -27,7 +27,9 @@
 //! cannot look into the rules folder does it go by the record. The helper
 //! writes the record before the rule and removes the rule before the
 //! record, so an interrupted change can never leave the rule active while
-//! the switch shows off.
+//! the switch shows off; after any error it makes the record match the
+//! rule as it is. Every change holds the lock installations hold
+//! ([`super::STAGING_FOLDER`]), so changes never interleave.
 
 use std::ffi::OsString;
 use std::io;
@@ -96,6 +98,20 @@ pub enum PasswordlessError {
         /// The rule or the record.
         path: PathBuf,
     },
+    /// Another update helper is installing an update or changing the
+    /// setting; nothing was changed.
+    #[error(
+        "Another OpenXplorer update helper is running. Nothing was changed; try again when it has finished."
+    )]
+    Busy,
+    /// The lock could not be taken.
+    #[error("{}: {reason}", path.display())]
+    Lock {
+        /// The lock's folder.
+        path: PathBuf,
+        /// Why.
+        reason: String,
+    },
 }
 
 impl PasswordlessError {
@@ -116,6 +132,10 @@ pub struct RuleFiles {
     pub rule: PathBuf,
     /// The record, [`PASSWORDLESS_RECORD`].
     pub record: PathBuf,
+    /// The folder whose lock every change of the setting and every
+    /// installation holds, [`super::STAGING_FOLDER`], so they run one at a
+    /// time.
+    pub lock: PathBuf,
     /// The user and group that must own the template, and that own what
     /// the helper writes: root's, except in tests.
     pub owner: (u32, u32),
@@ -135,6 +155,7 @@ impl RuleFiles {
             template: inside(RULE_TEMPLATE),
             rule: inside(PASSWORDLESS_RULE),
             record: inside(PASSWORDLESS_RECORD),
+            lock: inside(super::STAGING_FOLDER),
             owner,
         }
     }
@@ -215,24 +236,108 @@ impl PasswordlessUpdates {
 }
 
 /// Turns the setting on: writes the record, then copies the template to
-/// the rule. Doing it again changes nothing.
+/// the rule, holding the lock installations hold. Doing it again changes
+/// nothing.
 ///
 /// # Errors
 ///
 /// [`PasswordlessError::UntrustedTemplate`] for a template that is not
 /// root's, [`PasswordlessError::NotARegularFile`] where a link or anything
 /// else but a file is in the way, and the file system's errors. Nothing is
-/// left half-done: a record whose rule could not be written is removed.
+/// left half-done: after any error the record is made to match the rule
+/// as it is, and [`PasswordlessError::Busy`] while another helper runs.
 pub fn enable_passwordless(files: &RuleFiles) -> Result<(), PasswordlessError> {
-    enable_with_checkpoint(files, &mut || false)
+    enable_with_checkpoint(files, &mut |_| Fault::None)
 }
 
-/// [`enable_passwordless`], which asks `stopped` between its two writes
-/// whether the helper was stopped there, as a test simulates a helper
-/// that is killed or a computer that loses power.
+/// A point in a change of the setting where a test can make something go
+/// wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    /// Turning it on wrote the record.
+    RecordWritten,
+    /// Turning it on renamed the rule into place.
+    RuleWritten,
+    /// Turning it off removed the rule.
+    RuleRemoved,
+}
+
+/// What goes wrong at a [`Step`], in a test.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(test), expect(dead_code, reason = "only tests make something go wrong"))]
+enum Fault {
+    /// Nothing.
+    None,
+    /// The helper stops there, as when it is killed or the computer loses
+    /// power: nothing after it runs.
+    Stop,
+    /// The step reports an error although its change was made, as when
+    /// syncing the folder fails after a rename.
+    Fail,
+}
+
+/// The error a [`Fault::Fail`] at `step` reports for `path`.
+fn simulated_failure(path: &Path) -> PasswordlessError {
+    PasswordlessError::io(path, io::Error::other("simulated failure"))
+}
+
+/// Takes the lock installations hold too, without waiting.
+fn lock(files: &RuleFiles) -> Result<std::fs::File, PasswordlessError> {
+    super::install_helper::lock_staging_folder(&files.lock).map_err(|error| match error {
+        super::UpdateError::TaskRunning => PasswordlessError::Busy,
+        error => PasswordlessError::Lock {
+            path: files.lock.clone(),
+            reason: error.to_string(),
+        },
+    })
+}
+
+/// After a change failed part-way, makes the record match the rule as it
+/// is now: there whenever the rule is, so the switch never shows OFF while
+/// the rule is active, and gone when the rule is.
+fn match_record_to_rule(files: &RuleFiles) {
+    let Ok(rule_target) = Target::open(&files.rule, false) else {
+        return;
+    };
+    match rule_target.exists() {
+        Ok(true) => {
+            if let Ok(record_target) = Target::open(&files.record, true) {
+                if record_target.exists().is_ok() {
+                    let _ = record_target.replace(RECORD_TEXT.as_bytes(), files.owner);
+                }
+            }
+        }
+        Ok(false) => {
+            if let Ok(record_target) = Target::open(&files.record, false) {
+                if matches!(record_target.exists(), Ok(true)) {
+                    let _ = record_target.remove();
+                    record_target.remove_folder_if_empty();
+                }
+            }
+        }
+        // Something else is in the rule's place; it is not this setting's.
+        Err(_) => {}
+    }
+}
+
+/// [`enable_passwordless`], which asks `checkpoint` after each step
+/// whether something goes wrong there, as a test simulates.
 fn enable_with_checkpoint(
     files: &RuleFiles,
-    stopped: &mut dyn FnMut() -> bool,
+    checkpoint: &mut dyn FnMut(Step) -> Fault,
+) -> Result<(), PasswordlessError> {
+    let _only_change = lock(files)?;
+    let changed = enable_steps(files, checkpoint);
+    if changed.is_err() {
+        match_record_to_rule(files);
+    }
+    changed
+}
+
+/// The steps of [`enable_with_checkpoint`], under its lock.
+fn enable_steps(
+    files: &RuleFiles,
+    checkpoint: &mut dyn FnMut(Step) -> Fault,
 ) -> Result<(), PasswordlessError> {
     let rule = read_template(files)?;
     let rule_target = Target::open(&files.rule, true)?;
@@ -243,33 +348,54 @@ fn enable_with_checkpoint(
     // them can only leave the switch showing ON with no rule, never an
     // active rule the app shows as OFF where it reads only the record.
     record_target.replace(RECORD_TEXT.as_bytes(), files.owner)?;
-    if stopped() {
-        return Ok(());
+    match checkpoint(Step::RecordWritten) {
+        Fault::Stop => return Ok(()),
+        Fault::Fail => return Err(simulated_failure(&files.record)),
+        Fault::None => {}
     }
-    if let Err(error) = rule_target.replace(rule.as_bytes(), files.owner) {
-        let _ = record_target.remove();
-        record_target.remove_folder_if_empty();
-        return Err(error);
-    }
-    Ok(())
+    let written = rule_target.replace(rule.as_bytes(), files.owner).and_then(|()| {
+        match checkpoint(Step::RuleWritten) {
+            Fault::Fail => Err(simulated_failure(&files.rule)),
+            Fault::Stop | Fault::None => Ok(()),
+        }
+    });
+    // On an error the caller makes the record match the rule as it is: a
+    // rename can have gone through although the step failed.
+    written
 }
 
 /// Turns the setting off: deletes the rule, then the record and its
-/// folder. Doing it again changes nothing.
+/// folder, holding the lock installations hold. Doing it again changes
+/// nothing.
 ///
 /// # Errors
 ///
 /// [`PasswordlessError::NotARegularFile`] where a link or anything else
-/// but a file is in the way, and the file system's errors.
+/// but a file is in the way, [`PasswordlessError::Busy`] while another
+/// helper runs, and the file system's errors; after any error the record
+/// is made to match the rule as it is.
 pub fn disable_passwordless(files: &RuleFiles) -> Result<(), PasswordlessError> {
-    disable_with_checkpoint(files, &mut || false)
+    disable_with_checkpoint(files, &mut |_| Fault::None)
 }
 
-/// [`disable_passwordless`], which asks `stopped` between its two
-/// deletions whether the helper was stopped there.
+/// [`disable_passwordless`], which asks `checkpoint` after each step
+/// whether something goes wrong there, as a test simulates.
 fn disable_with_checkpoint(
     files: &RuleFiles,
-    stopped: &mut dyn FnMut() -> bool,
+    checkpoint: &mut dyn FnMut(Step) -> Fault,
+) -> Result<(), PasswordlessError> {
+    let _only_change = lock(files)?;
+    let changed = disable_steps(files, checkpoint);
+    if changed.is_err() {
+        match_record_to_rule(files);
+    }
+    changed
+}
+
+/// The steps of [`disable_with_checkpoint`], under its lock.
+fn disable_steps(
+    files: &RuleFiles,
+    checkpoint: &mut dyn FnMut(Step) -> Fault,
 ) -> Result<(), PasswordlessError> {
     let rule_target = Target::open(&files.rule, false)?;
     let record_target = Target::open(&files.record, false)?;
@@ -278,8 +404,10 @@ fn disable_with_checkpoint(
     }
     // The rule first, then the record, for the same reason.
     rule_target.remove()?;
-    if stopped() {
-        return Ok(());
+    match checkpoint(Step::RuleRemoved) {
+        Fault::Stop => return Ok(()),
+        Fault::Fail => return Err(simulated_failure(&files.rule)),
+        Fault::None => {}
     }
     record_target.remove()?;
     record_target.remove_folder_if_empty();
@@ -499,7 +627,12 @@ mod tests {
                 rustix::process::getegid().as_raw(),
             );
             let files = RuleFiles::under(root.path(), owner);
-            for folder in ["usr/share/openxplorer", "etc/polkit-1/rules.d", "var/lib"] {
+            for folder in [
+                "usr/share/openxplorer",
+                "etc/polkit-1/rules.d",
+                "var/lib",
+                "var/cache",
+            ] {
                 std::fs::create_dir_all(root.path().join(folder)).unwrap();
             }
             std::fs::write(&files.template, RULE).unwrap();
@@ -595,7 +728,7 @@ mod tests {
     fn an_interrupted_enable_never_hides_an_active_rule() {
         let system = FakeSystem::new();
 
-        enable_with_checkpoint(&system.files, &mut || true).unwrap();
+        enable_with_checkpoint(&system.files, &mut |_| Fault::Stop).unwrap();
 
         assert!(!shows_off_while_active(&system.files));
         assert!(system.files.record.exists(), "the record is written first");
@@ -613,13 +746,78 @@ mod tests {
         let system = FakeSystem::new();
         enable_passwordless(&system.files).unwrap();
 
-        disable_with_checkpoint(&system.files, &mut || true).unwrap();
+        disable_with_checkpoint(&system.files, &mut |_| Fault::Stop).unwrap();
 
         assert!(!shows_off_while_active(&system.files));
         assert!(!system.files.rule.exists(), "the rule is removed first");
         assert!(system.files.record.exists());
         disable_passwordless(&system.files).unwrap();
         assert!(!system.files.rule.exists() && !system.files.record.exists());
+    }
+
+    /// A rule whose rename went through although the step reported an
+    /// error, as when syncing the folder fails afterwards, is live: its
+    /// record stays, so the switch does not show OFF.
+    /// parity: UPD-003
+    #[test]
+    fn a_rule_whose_rename_committed_keeps_its_record() {
+        let system = FakeSystem::new();
+
+        let enabled = enable_with_checkpoint(&system.files, &mut |step| {
+            if step == Step::RuleWritten {
+                Fault::Fail
+            } else {
+                Fault::None
+            }
+        });
+
+        assert!(enabled.is_err());
+        assert!(system.files.rule.exists(), "the rename went through");
+        assert!(!shows_off_while_active(&system.files));
+    }
+
+    /// Changes run one at a time, and never beside an installation: while
+    /// another helper holds the lock, turning the setting on or off is
+    /// refused before anything is written, so two administrators changing
+    /// it at once cannot interleave their steps.
+    /// parity: UPD-003
+    #[test]
+    fn a_change_is_refused_while_another_helper_holds_the_lock() {
+        let system = FakeSystem::new();
+        let held = super::super::install_helper::lock_staging_folder(&system.files.lock).unwrap();
+
+        let enabled = enable_passwordless(&system.files);
+        assert!(matches!(enabled, Err(PasswordlessError::Busy)), "{enabled:?}");
+        assert!(!system.files.rule.exists() && !system.files.record.exists());
+
+        drop(held);
+        enable_passwordless(&system.files).unwrap();
+        let held = super::super::install_helper::lock_staging_folder(&system.files.lock).unwrap();
+        let disabled = disable_passwordless(&system.files);
+        assert!(matches!(disabled, Err(PasswordlessError::Busy)), "{disabled:?}");
+        assert!(system.files.rule.exists() && system.files.record.exists());
+        drop(held);
+        disable_passwordless(&system.files).unwrap();
+        assert!(!system.files.rule.exists());
+    }
+
+    /// A rule that cannot be removed keeps its record.
+    #[test]
+    fn a_failed_disable_keeps_the_record_while_the_rule_remains() {
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
+        let system = FakeSystem::new();
+        enable_passwordless(&system.files).unwrap();
+        let folder = system.rules_folder();
+        std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let disabled = disable_passwordless(&system.files);
+        std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(disabled.is_err());
+        assert!(system.files.rule.exists());
+        assert!(!shows_off_while_active(&system.files));
     }
 
     /// A rule that cannot be written takes the record back with it, so
@@ -829,6 +1027,7 @@ mod tests {
             files.record,
             Path::new("/var/lib/openxplorer/install-updates-without-password")
         );
+        assert_eq!(files.lock, Path::new("/var/cache/openxplorer-update"));
         assert_eq!(files.owner, (0, 0));
     }
 }

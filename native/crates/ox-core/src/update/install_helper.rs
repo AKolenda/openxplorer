@@ -35,7 +35,9 @@
 //! - takes one argument, a `MAJOR.MINOR.PATCH` version
 //!   ([`ReleaseVersion`]), and no path, address, digest or option other
 //!   than `--enable-passwordless` and `--disable-passwordless`, which take
-//!   nothing and write only the package's fixed rule;
+//!   nothing and write only the package's fixed rule, under the same
+//!   lock as an installation, so changes and installations never
+//!   interleave;
 //! - runs only as root, real and effective, so a helper that was somehow
 //!   made set-user-ID is refused rather than run without polkit;
 //! - throws its environment away before anything reads it and sets a
@@ -327,7 +329,7 @@ pub fn install_as_root(
 ///
 /// [`UpdateError::TaskRunning`] while another helper holds it, and the
 /// private folder's refusals.
-fn lock_staging_folder(staging_folder: &Path) -> Result<File, UpdateError> {
+pub(super) fn lock_staging_folder(staging_folder: &Path) -> Result<File, UpdateError> {
     use rustix::fs::{flock, FlockOperation, OFlags};
     private_directory(staging_folder)?;
     let folder = std::fs::OpenOptions::new()
