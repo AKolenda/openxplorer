@@ -148,6 +148,7 @@ const MOVED_ROWS: [(&str, &str); 72] = [
     ),
     ("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ("Cache this folder for search", "Cache this folder for search"),
+    ("Show the search filter bar", "Show the search filter bar"),
     ("Keyboard shortcuts", "Keyboard shortcuts"),
     ("Help", "Help"),
 ];
@@ -183,7 +184,7 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// The pages are the mockup's, and every setting row of the earlier
 /// layout is on one of them, found by its earlier name too: none was
 /// left out, and the only rows added are those of the commands that left
-/// the "…" menu.
+/// the "…" menu, and Search's "Show the search filter bar" (SRCH-046).
 ///
 /// parity: SET-019
 #[gtk::test]

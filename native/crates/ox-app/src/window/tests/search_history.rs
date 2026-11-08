@@ -93,13 +93,15 @@ fn back_and_forward_walk_between_a_folder_its_results_and_a_folder_opened_from_t
     let test = window_with_notes(&fixture);
     let root = root_title(&fixture);
     let results = format!("Search Results in {root}");
+    // The tab and the window name the query first (SRCH-046).
+    let tab = format!("notes - {results}");
 
     test.search_for("notes");
 
     assert_eq!(test.names(), RESULTS);
-    assert_eq!(test.active_tab_title(), results);
+    assert_eq!(test.active_tab_title(), tab);
     let title = test.window.title().map(|title| title.to_string());
-    assert_eq!(title, Some(format!("{results} — OpenXplorer")));
+    assert_eq!(title, Some(format!("{tab} — OpenXplorer")));
     let crumbs = test.crumb_labels();
     assert_eq!(crumbs[crumbs.len() - 2..], [root.clone(), results.clone()]);
     wait_until("the results' crumb to scroll into view", || {
@@ -119,7 +121,7 @@ fn back_and_forward_walk_between_a_folder_its_results_and_a_folder_opened_from_t
 
     wait_until("the results again", || test.names() == RESULTS);
     assert_eq!(test.search_text(), "notes");
-    assert_eq!(test.active_tab_title(), results);
+    assert_eq!(test.active_tab_title(), tab);
 
     // As activating a folder result does.
     test.window
@@ -141,7 +143,7 @@ fn back_and_forward_walk_between_a_folder_its_results_and_a_folder_opened_from_t
 
     wait_until("the results once more", || test.names() == RESULTS);
     assert_eq!(test.search_text(), "notes");
-    assert_eq!(test.active_tab_title(), results);
+    assert_eq!(test.active_tab_title(), tab);
 }
 
 /// Emptying the box on results goes back to the folder, as Back does, and
@@ -249,7 +251,9 @@ fn a_middle_click_on_back_to_results_opens_the_results_in_a_tab() {
     menu.middle_click_row(&results);
     menu.popdown();
 
-    assert_eq!(test.tab_titles(), ["Documents", &results, &results]);
+    // The tab names the query first (SRCH-046); the menu, the step.
+    let tab = format!("notes - {results}");
+    assert_eq!(test.tab_titles(), ["Documents", &tab, &tab]);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     test.activate("next-tab", None);
     wait_until("the results in the new tab", || test.names() == RESULTS);

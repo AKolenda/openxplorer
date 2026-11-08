@@ -131,10 +131,7 @@ fn the_kind_option_narrows_the_results_until_the_search_ends() {
     test.wait_for_listing("the other folder");
     test.search_for("report");
 
-    assert!(
-        test.window.search_strip().is_visible(),
-        "the window searches again"
-    );
+    assert!(test.window.is_searching(), "the window searches again");
 }
 
 /// The kind option also narrows the cache's results, whose type is

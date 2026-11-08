@@ -21,6 +21,23 @@ use crate::window::activation::{activation_for, Activation};
 use crate::window::folder_pane::PanePage;
 
 impl TestWindow {
+    /// Turns Settings > Search > "Show the search filter bar" on or off,
+    /// as Settings or another window would (SRCH-046): the tests of the
+    /// filter bar itself turn it on.
+    pub(super) fn show_search_filter_bar(&self, on: bool) {
+        let update = ox_core::settings::PreferencesUpdate {
+            show_search_filter_bar: Some(on),
+            ..ox_core::settings::PreferencesUpdate::default()
+        };
+        ox_core::settings::Settings::open(self.settings_directory())
+            .update_preferences(&update)
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("the window to follow the setting", || {
+            self.context.settings_data().preferences.show_search_filter_bar == on
+        });
+    }
+
     /// Types `text` into the search box and waits until its search has
     /// run.
     pub(super) fn search_for(&self, text: &str) {
@@ -49,6 +66,7 @@ impl TestWindow {
 fn typing_filters_a_folder_nobody_indexed_and_says_so() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.show_search_filter_bar(true);
     test.start_search_cache();
 
     test.search_for("notes");
@@ -97,6 +115,7 @@ fn a_live_search_caps_the_initial_listing_and_reports_truncation() {
         fs::write(fixture.path(&format!("match {number}.txt")), b"x").expect("fixture file");
     }
     let test = TestWindow::open(&fixture.uri());
+    test.show_search_filter_bar(true);
 
     test.search_for("match");
 
@@ -204,6 +223,7 @@ fn an_indexed_folder_is_searched_in_the_cache_with_its_subfolders() {
     fs::create_dir(fixture.path("Documents/Deep")).expect("fixture subfolder");
     fs::write(fixture.path("Documents/Deep/notes archive.txt"), b"x").expect("fixture file");
     let test = TestWindow::open(&fixture.uri());
+    test.show_search_filter_bar(true);
     test.start_search_cache();
     test.index_folder(&fixture.uri());
 
@@ -233,6 +253,7 @@ fn a_folder_with_an_indexed_subfolder_shows_both() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Documents/notes inside.txt"), b"x").expect("fixture file");
     let test = TestWindow::open(&fixture.uri());
+    test.show_search_filter_bar(true);
     test.start_search_cache();
     test.index_folder(&fixture.uri_of("Documents"));
 
@@ -552,7 +573,7 @@ fn refresh_while_searching_runs_the_search_again() {
     test.activate("refresh", None);
 
     assert_eq!(test.window.search_box().entry().text().as_str(), "notes");
-    assert!(test.window.search_strip().is_visible(), "the search stays");
+    assert!(test.window.is_searching(), "the search stays");
 }
 
 /// parity: SRCH-040

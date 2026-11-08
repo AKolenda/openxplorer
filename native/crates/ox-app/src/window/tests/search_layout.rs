@@ -12,7 +12,6 @@ use std::fs;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::search::SearchIn;
-use ox_core::settings::{PreferencesUpdate, Settings};
 
 use super::command_bar::{command_bar_names, menu_of};
 use super::search_history::{root_title, window_with_notes, RESULTS};
@@ -32,20 +31,9 @@ const SEARCH_OPTIONS: [&str; 8] = [
     "File contents",
 ];
 
-/// Turns Settings > Search > "Show the search filter bar" on or off, as
-/// Settings or another window would.
+/// Turns Settings > Search > "Show the search filter bar" on or off.
 fn show_filter_bar(test: &TestWindow, on: bool) {
-    let update = PreferencesUpdate {
-        show_search_filter_bar: Some(on),
-        ..PreferencesUpdate::default()
-    };
-    Settings::open(test.settings_directory())
-        .update_preferences(&update)
-        .expect("the settings file takes the change");
-    test.context.reload_settings();
-    wait_until("the window to follow the setting", || {
-        test.context.settings_data().preferences.show_search_filter_bar == on
-    });
+    test.show_search_filter_bar(on);
 }
 
 /// Whether the command bar shows a control named `name`.
