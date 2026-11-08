@@ -168,3 +168,19 @@ fn about_describes_a_file_manager_for_linux() {
     );
     assert!(!texts.iter().any(|text| text.contains("Zorin")), "{texts:?}");
 }
+
+/// Settings > About spells license as its License & source heading does,
+/// its lead line included.
+///
+/// parity: SET-009
+#[gtk::test]
+fn about_spells_license_one_way() {
+    let settings = SettingsTest::open();
+    let lead = ox_core::i18n::gettext(Category::About.lead());
+    assert_eq!(lead, "What this build is, how it is updated and its license.");
+    let texts = about_texts(&settings);
+    assert!(
+        !texts.iter().any(|text| text.to_lowercase().contains("licence")),
+        "{texts:?}"
+    );
+}
