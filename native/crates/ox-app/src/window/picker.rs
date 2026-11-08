@@ -55,10 +55,6 @@ use probe::{all_writable, probe, test_folder, test_replace, test_write, Probe, W
 mod local_paths;
 mod probe;
 
-/// The size a picker window opens at; it never saves its size over the
-/// explorer's.
-const DEFAULT_SIZE: (i32, i32) = (980, 640);
-
 /// The window commands that make no sense while choosing a file: more tabs,
 /// windows or panes, Settings, Format…, as a dialog closes on its own
 /// once answered, leaving no window to report the format in, Full
@@ -486,13 +482,16 @@ impl BrowserWindow {
             self.set_action_enabled(action, false);
         }
         self.update_share_command();
-        self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
+        // Resizable like any window, from 670 × 470 up (`window.ui`), at
+        // the size the last dialog was left at (window_size.rs).
+        self.open_dialog_at_saved_size();
         self.apply_chooser_listing();
         self.open_start_folder(start_folders);
         self.listen_for_escape();
         self.cancel_on_quit_key();
         self.keep_one_selected();
         self.present();
+        self.remember_dialog_size();
         match &picker.name {
             Some(name) => {
                 // A new window gives its file list the keyboard once the
@@ -3799,6 +3798,60 @@ mod tests {
             assert_eq!(name.selection_bounds(), Some((0, 4)), "at {width} pixels");
         }
         assert_eq!(bands.len(), 5, "the dialog went through every width: {bands:?}");
+    }
+
+    /// The dialog is resized like any window, down to the explorer's
+    /// 670 × 470 minimum, and the next dialog opens at the size this one
+    /// was left at, as Windows' common file dialog keeps its size; the
+    /// explorer windows keep theirs.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_dialog_is_resizable_and_the_next_one_opens_at_its_size() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let window = &portal.test.window;
+        let context = &portal.test.context;
+        wait_until("the folder's listing", || window.is_listed());
+        assert!(window.is_resizable(), "the dialog can be resized");
+        assert_eq!(window.default_size(), (980, 640), "a first dialog's size");
+        assert_eq!(window.size_request(), (670, 470), "the explorer's minimum");
+
+        // Made smaller than its minimum, it stops there. The surface is
+        // the whole window, its frame included.
+        let size = || {
+            window
+                .surface()
+                .map(|surface| (surface.width(), surface.height()))
+        };
+        window.set_default_size(400, 300);
+        wait_until("the dialog at its minimum", || size() == Some((670, 470)));
+        window.set_default_size(1150, 720);
+        wait_until("the dialog resized", || size() == Some((1150, 720)));
+        window.close();
+        wait_until("the dialog's size to be saved", || {
+            context
+                .settings_data()
+                .preferences
+                .dialog_size
+                .is_some_and(|size| (size.width, size.height, size.maximized) == (1150, 720, false))
+        });
+        assert_eq!(
+            context.settings_data().preferences.window_size,
+            None,
+            "the explorer windows keep their own size"
+        );
+
+        let next = super::BrowserWindow::new(&crate::test_support::harness::application(), context);
+        next.open_dialog_at_saved_size();
+        assert_eq!(next.default_size(), (1150, 720), "the next dialog's size");
+        next.destroy();
     }
 
     /// A file another application creates in the folder lists it, as
