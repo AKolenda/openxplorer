@@ -10,9 +10,19 @@
 //! last had focus in the file list; elsewhere on the region's first
 //! control. The selection never changes. The keys work from text fields
 //! too, but not while a dialog is open.
+//!
+//! Alt pressed and released with no other key or click between moves the
+//! keyboard to the command bar's first button, with its focus ring, as
+//! Microsoft says of File Explorer: "Alt moves focus to the app bar" ("Use
+//! a screen reader to explore and navigate File Explorer in Windows").
+//! Escape there gives the keyboard back to the control it left. Alt with
+//! another key is only that shortcut.
 
-use gtk::glib;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
 use super::BrowserWindow;
 
@@ -94,6 +104,80 @@ impl BrowserWindow {
             shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
         }
         self.add_controller(shortcuts);
+        self.install_alt_alone();
+    }
+
+    /// Alt alone moves the keyboard to the command bar, Escape there
+    /// gives it back (see the module's text).
+    fn install_alt_alone(&self) {
+        // Whether the Alt held now has had no other key or click with it.
+        let alone = Rc::new(Cell::new(false));
+        // The control Alt took the keyboard from, while it is in the
+        // command bar because of Alt.
+        let left: Rc<RefCell<glib::WeakRef<gtk::Widget>>> = Rc::default();
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(glib::clone!(
+            #[strong]
+            alone,
+            #[strong]
+            left,
+            move |keys, key, _, modifiers| {
+                let is_alt = matches!(key, gdk::Key::Alt_L | gdk::Key::Alt_R);
+                let others = gdk::ModifierType::SHIFT_MASK
+                    | gdk::ModifierType::CONTROL_MASK
+                    | gdk::ModifierType::SUPER_MASK
+                    | gdk::ModifierType::META_MASK;
+                alone.set(is_alt && !modifiers.intersects(others));
+                if key != gdk::Key::Escape || !modifiers.is_empty() {
+                    return glib::Propagation::Proceed;
+                }
+                let Some(window) = keys.widget().and_downcast::<BrowserWindow>() else {
+                    return glib::Propagation::Proceed;
+                };
+                let back = left.replace(glib::WeakRef::new()).upgrade();
+                match back {
+                    Some(widget) if window.focused_region() == Some(Region::Commands) && widget.is_mapped() => {
+                        widget.grab_focus();
+                        glib::Propagation::Stop
+                    }
+                    _ => glib::Propagation::Proceed,
+                }
+            }
+        ));
+        keys.connect_key_released(glib::clone!(
+            #[strong]
+            alone,
+            #[strong]
+            left,
+            move |keys, key, _, _| {
+                let was_alone = alone.replace(false);
+                if !was_alone || !matches!(key, gdk::Key::Alt_L | gdk::Key::Alt_R) {
+                    return;
+                }
+                let Some(window) = keys.widget().and_downcast::<BrowserWindow>() else {
+                    return;
+                };
+                if window.dialog_layer().shown().is_some()
+                    || window.focused_region() == Some(Region::Commands)
+                    || !window.region_is_reachable(Region::Commands)
+                {
+                    return;
+                }
+                let before = gtk::prelude::GtkWindowExt::focus(&window);
+                if window.focus_region(Region::Commands) {
+                    window.set_focus_visible(true);
+                    left.replace(before.map(|widget| widget.downgrade()).unwrap_or_default());
+                }
+            }
+        ));
+        self.add_controller(keys);
+        // A click with Alt held makes it no Alt alone, as in Windows.
+        let clicks = gtk::GestureClick::new();
+        clicks.set_button(0);
+        clicks.set_propagation_phase(gtk::PropagationPhase::Capture);
+        clicks.connect_pressed(move |_, _, _, _| alone.set(false));
+        self.add_controller(clicks);
     }
 
     /// Moves keyboard focus to the next region that can take it, or the
