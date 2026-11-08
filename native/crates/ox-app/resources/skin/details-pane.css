@@ -40,6 +40,6 @@
    system's blue selection; it keeps the window's text size. */
 .details .preview-message { color: @ox_text; }
 .details textview.preview-text,
-.details textview.preview-text text { background-color: #ffffff; color: #000000; font-family: monospace; }
-.details textview.preview-text text selection { background-color: #0078d4; color: #ffffff; }
-.details .preview-page { background-color: #ffffff; border: 1px solid @ox_border; }
+.details textview.preview-text text { background-color: @ox_text_preview_bg; color: @ox_text_preview_fg; font-family: monospace; }
+.details textview.preview-text text selection { background-color: @ox_text_preview_selection_bg; color: @ox_text_preview_selection_fg; }
+.details .preview-page { background-color: @ox_document_page; border: 1px solid @ox_border; }
