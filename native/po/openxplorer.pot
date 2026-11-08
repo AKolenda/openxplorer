@@ -826,7 +826,7 @@ msgstr ""
 msgid "Earlier this year"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Empty (0 KB)"
 msgstr ""
 
@@ -834,7 +834,7 @@ msgstr ""
 msgid "Folders"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Gigantic (> 4 GB)"
 msgstr ""
 
@@ -854,7 +854,7 @@ msgstr ""
 msgid "Last month"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/properties/version_row.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/properties/version_row.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Last week"
 msgstr ""
 
@@ -958,7 +958,7 @@ msgstr ""
 msgid "Original location"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Size"
 msgstr ""
 
@@ -9153,7 +9153,27 @@ msgid "Any kind"
 msgstr ""
 
 #: crates/ox-core/src/search/facets.rs
+msgid "Any size"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
 msgid "Audio files"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Huge (1 - 4 GB)"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Large (128 MB - 1 GB)"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Medium (1 - 128 MB)"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Small (16 KB - 1 MB)"
 msgstr ""
 
 #: crates/ox-core/src/search/facets.rs
@@ -9166,6 +9186,10 @@ msgstr ""
 
 #: crates/ox-core/src/search/facets.rs
 msgid "This year"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Tiny (0 - 16 KB)"
 msgstr ""
 
 #: crates/ox-core/src/search/root.rs
