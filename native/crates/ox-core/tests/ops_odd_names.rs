@@ -18,8 +18,10 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
-use ox_core::ops::{rename_item, run_transfer, OperationContext, TransferRequest};
-use ox_core::transfer::{ConflictPolicy, TransferMode};
+use ox_core::ops::{
+    rename_item, run_resolved_transfer, run_transfer, scan_name_conflicts, OperationContext, TransferRequest,
+};
+use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
 use ops_support::{block_on, file_uri};
 use private_trash::require_private_trash;
@@ -90,6 +92,53 @@ fn an_item_with_an_odd_name_is_copied() {
         assert_eq!(fs::read(destination.path().join(name)).unwrap(), name.as_bytes());
         assert!(source.path().join(name).exists(), "the original stays");
     }
+}
+
+/// A paste first looks for name conflicts in the destination, then copies
+/// what it found; a listed item with an odd name is checked and copied
+/// like any other, and one already there is found.
+///
+/// parity: OPS-035
+#[test]
+fn an_item_with_an_odd_name_is_checked_for_name_conflicts() {
+    let source = tempfile::tempdir().unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    let names = odd_names();
+    let uris: Vec<String> = names
+        .iter()
+        .map(|name| file_uri(&odd_file(source.path(), name)))
+        .collect();
+    let folder = file_uri(destination.path());
+
+    let empty = block_on(scan_name_conflicts(
+        TransferMode::Copy,
+        &uris,
+        &folder,
+        &Cancellation::new(),
+    ));
+    let empty = empty.unwrap_or_else(|error| panic!("the check was refused: {error}"));
+    assert!(empty.conflicts.is_empty(), "{:?}", empty.conflicts);
+    let copied = block_on(run_resolved_transfer(
+        &empty,
+        &[],
+        &OperationContext::default(),
+        |_| {},
+    ))
+    .unwrap_or_else(|error| panic!("the copy was refused: {error}"));
+    assert!(copied.result.errors.is_empty(), "{:?}", copied.result);
+    for name in names {
+        fs::remove_file(destination.path().join(name)).expect("a copy");
+    }
+
+    odd_file(destination.path(), names[1]);
+    let taken = block_on(scan_name_conflicts(
+        TransferMode::Copy,
+        &uris,
+        &folder,
+        &Cancellation::new(),
+    ))
+    .unwrap_or_else(|error| panic!("the check was refused: {error}"));
+    assert_eq!(taken.conflicts.len(), 1, "{:?}", taken.conflicts);
 }
 
 /// Lets one test at a time use the shared Recycle Bin.
