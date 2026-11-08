@@ -107,6 +107,9 @@ mod imp {
         /// What the Preview pane shows, which a redraw for the same item
         /// keeps; `None` shows the Details column.
         pub(super) shown_page: RefCell<Option<super::preview_page::PreviewPage>>,
+        /// What the Preview pane was last asked to show, also while it was
+        /// hidden, which it reads as soon as it is shown again.
+        pub(super) wanted_page: RefCell<Option<super::preview_page::PreviewPage>>,
         /// Counts the pages shown, so a read for an earlier selection is
         /// dropped.
         pub(super) page_generation: Cell<u64>,
@@ -228,6 +231,11 @@ mod imp {
                 if !pane.is_visible() {
                     return;
                 }
+                // The page it was given while hidden, at once: the window
+                // may have asked before the pane was shown (Alt+P with no
+                // pane open), or while a narrow window hid it.
+                let wanted = pane.imp().wanted_page.borrow().clone();
+                pane.show_page(wanted.as_ref());
                 let pane = pane.downgrade();
                 glib::idle_add_local_once(move || {
                     let window = pane.upgrade().and_then(|pane| pane.root());

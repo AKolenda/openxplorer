@@ -216,9 +216,15 @@ impl BrowserWindow {
                 // A recent item or a search result is judged by its own
                 // location too, as its thumbnail is.
                 remote: self.is_remote_folder(&folder_uri)
-                    || selection
-                        .iter()
-                        .any(|item| self.is_remote_folder(&item.entry().uri)),
+                    || selection.iter().any(|item| {
+                        let entry = item.entry();
+                        self.is_remote_folder(&entry.uri)
+                            || entry
+                                .meta
+                                .recent_target
+                                .as_deref()
+                                .is_some_and(|target| self.is_remote_folder(target))
+                    }),
                 remote_previews: self
                     .context()
                     .settings_data()

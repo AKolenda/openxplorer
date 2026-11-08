@@ -190,9 +190,10 @@ impl DetailsPane {
     /// and for [`PreviewPage::Media`], whose player the column holds. The
     /// same page as before stays as it is; another one cancels whatever
     /// is being read for the one before. Nothing is read while the pane
-    /// is hidden.
+    /// is hidden; it is read as soon as the pane is shown again.
     pub(super) fn show_page(&self, page: Option<&PreviewPage>) {
         let imp = self.imp();
+        imp.wanted_page.replace(page.cloned());
         let page = page.filter(|_| self.is_visible());
         let uses_contents = page.is_some_and(|page| *page != PreviewPage::Media);
         imp.pages
@@ -251,15 +252,25 @@ impl DetailsPane {
             PreviewPage::Message(_) | PreviewPage::Media => return,
         };
         let local_only = file.local_only;
-        let Some(path) = gio::File::for_uri(&file.uri).path() else {
-            self.contents().show_message(NO_PREVIEW);
-            return;
-        };
+        let uri = file.uri.clone();
         let pane = self.downgrade();
         let scale = self.scale_factor().max(1);
         let (width, height) = self.contents_size();
         let page = page.clone();
         glib::spawn_future_local(async move {
+            // The file's path: its own, or for an SMB file the path of a
+            // kernel mount or GVfs's FUSE export, which reading the mount
+            // table and the export can take a while to find.
+            let path = gio::spawn_blocking(move || ox_core::network::local_path(&uri))
+                .await
+                .ok()
+                .flatten();
+            let Some(path) = path else {
+                if let Some(pane) = pane.upgrade().filter(|pane| pane.is_current(generation)) {
+                    pane.contents().show_message(NO_PREVIEW);
+                }
+                return;
+            };
             match page {
                 PreviewPage::Text(_) => {
                     let read = gio::spawn_blocking(move || {

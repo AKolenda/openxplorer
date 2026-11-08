@@ -16,6 +16,8 @@
 use gtk::gio;
 use gtk::prelude::FileExt;
 
+use ox_core::location::is_smb_location;
+
 use crate::folder_view::item::FileItem;
 use crate::i18n::message_id;
 
@@ -117,17 +119,23 @@ pub(in crate::window) fn preview_page(selection: &[FileItem], rules: PreviewRule
     if entry.is_dir || entry.is_virtual || (rules.remote && !rules.remote_previews) {
         return PreviewPage::Message(NO_PREVIEW);
     }
-    // A file on a share is read through its local path, which GIO's FUSE
-    // folder gives; an archive's member or a phone's file without one is
-    // not read.
-    let file = gio::File::for_uri(&entry.uri);
-    if file.path().is_none() {
+    // A Recent files row stands for a file elsewhere, which is the one
+    // read, judged by its own location too.
+    let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);
+    if is_smb_location(uri) && !rules.remote_previews {
+        return PreviewPage::Message(NO_PREVIEW);
+    }
+    // A file of this computer is read through its path; one on an SMB
+    // share through the path of a kernel mount or GVfs's FUSE export,
+    // found off the main thread when it is read. An archive's member or
+    // a phone's file has none and is not read.
+    if gio::File::for_uri(uri).path().is_none() && !is_smb_location(uri) {
         return PreviewPage::Message(NO_PREVIEW);
     }
     let content_type = entry.content_type.as_deref().unwrap_or_default();
     let kind = content_type.split('/').next().unwrap_or_default();
     let file = PreviewFile {
-        uri: entry.uri.clone(),
+        uri: uri.to_owned(),
         modified: entry.modified,
         local_only: !rules.remote_previews,
     };
