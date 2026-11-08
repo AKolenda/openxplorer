@@ -433,6 +433,9 @@ pub(crate) enum WindowAction {
     ExtractHere,
     /// Compress to ZIP file: the selection into a new ZIP beside it.
     CompressToZip,
+    /// Compress to › TAR File: the selection into a new plain TAR beside
+    /// it, as Windows 11 creates TAR archives besides ZIP (ARC-023).
+    CompressToTar,
     /// Compress to…: asks for the new archive's name and format first
     /// (ARC-023).
     CompressTo,
@@ -664,6 +667,7 @@ impl WindowAction {
             WindowAction::ExtractAll => "extract-all",
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
+            WindowAction::CompressToTar => "compress-to-tar",
             WindowAction::CompressTo => "compress-to",
             WindowAction::SendTo => "send-to",
             WindowAction::SendToDesktop => "send-to-desktop",

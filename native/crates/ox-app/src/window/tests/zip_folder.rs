@@ -353,7 +353,7 @@ fn a_drop_in_the_app_copies_out_of_a_zip_and_never_links() {
     assert!(!linked);
     assert_eq!(
         test.window.shown_message(),
-        "Items from a ZIP cannot be linked. Copy or move them instead."
+        "Items from an archive cannot be linked. Copy or move them instead."
     );
     assert!(test
         .window

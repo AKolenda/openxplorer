@@ -11,8 +11,11 @@
 //!   file and a folder or spelled differently in case or Unicode
 //!   normalisation, so a case-insensitive share ends up with exactly the
 //!   archive's contents.
-//! - ARC-016: links, special files, encrypted members, exotic compression
-//!   and folders carrying data are refused.
+//! - ARC-016: special files, encrypted members, exotic compression and
+//!   folders carrying data are refused, and so are links, except a TAR's
+//!   symbolic link whose target is relative and stays inside the
+//!   extracted folder ([`check_link_target`]). A link is a leaf of the
+//!   archive's paths, so no member is ever written through one.
 //! - ARC-017: the [`ExtractionLimits`] against ZIP bombs.
 //!
 //! Copying items out of a ZIP (ARC-026) checks only the members it
@@ -59,6 +62,8 @@ pub(super) enum PathKind {
     File,
     /// A folder: a folder entry, or a folder a member path implies.
     Folder,
+    /// A TAR's symbolic link to a place inside the extracted folder.
+    Link,
 }
 
 impl PathKind {
@@ -79,8 +84,10 @@ pub(super) struct PlannedMember {
     pub(super) index: usize,
     /// Its path segments; each is a safe name (ARC-014).
     pub(super) segments: Vec<String>,
-    /// A folder entry or a file.
+    /// A folder entry, a file or a link.
     pub(super) kind: PathKind,
+    /// A link's checked, relative target.
+    pub(super) link_target: Option<String>,
 }
 
 /// An archive that may be extracted: its members in archive order and its
@@ -92,6 +99,8 @@ pub(super) struct ExtractionPlan {
 }
 
 /// Checks every member of an archive and summarises it (`plan`).
+/// `links` holds the targets of a TAR's symbolic links by member index;
+/// any other link or special file is refused.
 ///
 /// # Errors
 ///
@@ -99,6 +108,7 @@ pub(super) struct ExtractionPlan {
 /// [`ArchiveError::Cancelled`].
 pub(super) fn plan(
     members: &[ZipMember],
+    links: Option<&HashMap<usize, String>>,
     limits: &ExtractionLimits,
     cancel: &Cancellation,
 ) -> Result<ExtractionPlan, ArchiveError> {
@@ -113,19 +123,23 @@ pub(super) fn plan(
     };
     for (index, member) in members.iter().enumerate() {
         cancel.check()?;
-        let segments = member_segments(member, limits)?;
-        let kind = PathKind::of(member);
+        let link_target = links.and_then(|links| links.get(&index));
+        let (segments, kind) = match link_target {
+            Some(target) => (link_segments(member, target, limits)?, PathKind::Link),
+            None => (member_segments(member, limits)?, PathKind::of(member)),
+        };
         paths.add(&segments, kind)?;
         if paths.count() > limits.max_paths {
             return Err(ArchiveError::TooManyPaths);
         }
-        if kind == PathKind::File {
+        if kind != PathKind::Folder {
             count_file(&mut summary, member.size, limits)?;
         }
         planned.push(PlannedMember {
             index,
             segments,
             kind,
+            link_target: link_target.cloned(),
         });
     }
     summary.folder_count = paths.folder_count();
@@ -180,6 +194,7 @@ pub(super) fn plan_selected(
             index,
             segments,
             kind,
+            link_target: None,
         });
     }
     summary.entry_count = planned.len();
@@ -241,6 +256,67 @@ pub(super) fn member_segments(
     check_type(member)?;
     check_size(member, limits)?;
     Ok(segments)
+}
+
+/// The path segments of the TAR symbolic link `member` to `target`,
+/// after checking its name as [`member_segments`] does and its target
+/// with [`check_link_target`]. Its type is not refused: it is a link.
+///
+/// # Errors
+///
+/// The refusal of the first rule `member` breaks.
+fn link_segments(
+    member: &ZipMember,
+    target: &str,
+    limits: &ExtractionLimits,
+) -> Result<Vec<String>, ArchiveError> {
+    check_name(member)?;
+    let segments: Vec<String> = member.name.split('/').map(str::to_owned).collect();
+    if segments.len() > limits.max_depth {
+        return Err(ArchiveError::NestingTooDeep);
+    }
+    for segment in &segments {
+        check_segment(segment)?;
+    }
+    check_link_target(&member.name, &segments, target)?;
+    check_size(member, limits)?;
+    Ok(segments)
+}
+
+/// ARC-016: a link at path `segments` may point to `target` only when the
+/// target stays inside the extracted folder however the links in it
+/// resolve. It must be relative plain text; `..` may only come first and
+/// may climb no higher than the extracted folder, through the real
+/// folders that hold the link; then come plain names only, so no `..`
+/// follows a name that could itself be a link. Each link therefore leads
+/// to a place inside the folder, and so does any path through it.
+///
+/// # Errors
+///
+/// [`ArchiveError::UnsafeLink`] naming the link otherwise.
+pub(super) fn check_link_target(name: &str, segments: &[String], target: &str) -> Result<(), ArchiveError> {
+    let refuse = || ArchiveError::UnsafeLink(name.trim_end_matches('/').to_owned());
+    let is_plain_text = !target.is_empty()
+        && target.chars().count() <= MAX_NAME_CHARS
+        && !target.contains('\\')
+        && !target.chars().any(char::is_control);
+    if !is_plain_text || target.starts_with('/') {
+        return Err(refuse());
+    }
+    let parent_depth = segments.len().saturating_sub(1);
+    let mut climbs = 0usize;
+    let mut has_descended = false;
+    for component in target.split('/') {
+        match component {
+            ".." if !has_descended => climbs += 1,
+            "" | "." | ".." => return Err(refuse()),
+            _ => has_descended = true,
+        }
+    }
+    if climbs > parent_depth {
+        return Err(refuse());
+    }
+    Ok(())
 }
 
 /// ARC-014: the member name as a whole.

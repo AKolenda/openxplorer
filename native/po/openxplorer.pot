@@ -362,7 +362,7 @@ msgid "Open in archive manager"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "Opened a temporary copy. Changes are not saved back to the ZIP."
+msgid "Opened a temporary copy. Changes are not saved back to the archive."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
@@ -370,11 +370,11 @@ msgid "Opening a read-only temporary copy…"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "Read-only ZIP. Double-click a folder to browse it. Opening a supported file creates only that file’s temporary copy; it does not update the ZIP."
+msgid "Read-only archive. Double-click a folder to browse it. Opening a supported file creates only that file’s temporary copy; it does not update the archive."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "Reading ZIP directory…"
+msgid "Reading the archive…"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
@@ -4480,7 +4480,7 @@ msgstr ""
 msgid "Preparing compression…"
 msgstr ""
 
-#: crates/ox-app/src/window/archive_actions.rs crates/ox-app/src/window/extract_into.rs
+#: crates/ox-app/src/window/archive_actions.rs crates/ox-app/src/window/extract_into.rs crates/ox-app/src/window/file_ops/transfer.rs
 msgid "Preparing extraction…"
 msgstr ""
 
@@ -5025,6 +5025,10 @@ msgid "Sort by"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "TAR File"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "ZIP File"
 msgstr ""
 
@@ -5231,7 +5235,7 @@ msgid "Move to {place}"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs
-msgid "Extract ZIP contents before dragging them."
+msgid "Extract the archive before dragging items out of it."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs crates/ox-app/src/window/file_drop.rs crates/ox-core/src/clipboard.rs crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
@@ -5275,7 +5279,7 @@ msgid "Finish the current operation before dropping files."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
-msgid "Items from a ZIP cannot be linked. Copy or move them instead."
+msgid "Items from an archive cannot be linked. Copy or move them instead."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
@@ -5334,11 +5338,11 @@ msgid "“{name}” is on a network share, a removable drive or a drive where ev
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A ZIP is read-only. Extract it to add items."
+msgid "A previous version is read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A previous version is read-only."
+msgid "An archive is read-only. Extract it to add items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -5350,7 +5354,7 @@ msgid "Drives, shares and virtual items cannot be changed here."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "Items in a ZIP are read-only. Copy them out or use Extract all."
+msgid "Items in an archive are read-only. Copy them out or use Extract all."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -6899,6 +6903,13 @@ msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Extracting {count} item from {source} to {destination}"
+msgid_plural "Extracting {count} items from {source} to {destination}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
 msgid "Extracting {source}"
 msgstr ""
 
@@ -7141,7 +7152,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: crates/ox-app/src/window/zip_copies.rs
-msgid "Copy items from one ZIP at a time."
+msgid "Copy items from one archive at a time."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7150,7 +7161,7 @@ msgid "Could not prepare the copies: {error}"
 msgstr ""
 
 #: crates/ox-app/src/window/zip_copies.rs
-msgid "Items in a ZIP are read-only. Use Copy, then Paste where you want them."
+msgid "Items in an archive are read-only. Use Copy, then Paste where you want them."
 msgstr ""
 
 #: crates/ox-app/src/window/zip_copies.rs crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs
@@ -7170,11 +7181,11 @@ msgid "The window closed."
 msgstr ""
 
 #: crates/ox-app/src/window/zip_folder.rs
-msgid "Files inside a ZIP cannot be chosen here. Extract the ZIP first."
+msgid "Files inside an archive cannot be chosen here. Extract the archive first."
 msgstr ""
 
 #: crates/ox-app/src/window/zip_folder.rs
-msgid "This file cannot be opened from the ZIP. Copy it out or use Extract all."
+msgid "This file cannot be opened from the archive. Copy it out or use Extract all."
 msgstr ""
 
 #: crates/ox-app/src/write_inhibitor.rs
@@ -7492,6 +7503,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/archive/error.rs
 msgid "{cause}\nThe incomplete archive remains at {staging_uri}. Inspect it before removing it. {cleanup}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/archive/error.rs
+msgid "“{name}” is a link to a place outside the extracted folder. Nothing was extracted."
 msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs

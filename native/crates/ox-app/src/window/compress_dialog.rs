@@ -10,7 +10,7 @@ use ox_core::archive::{ArchiveError, CompressionRequest, ZipCompressor};
 use ox_core::location::validate_name;
 use ox_core::transfer::Cancellation;
 
-use crate::archive_view::{compressed_file_name, compression_success_text};
+use crate::archive_view::{compressed_file_name, compression_success_text, ZIP_ENDING};
 use crate::dialog::{labelled_entry, DialogFrame, DialogWidth};
 
 use super::transfer_panel::TransferKind;
@@ -33,10 +33,10 @@ impl BrowserWindow {
     /// Asks for the name and format of a new archive of `uris` in
     /// `folder`, suggesting one after `first_name`.
     pub(super) fn ask_compress(&self, uris: Vec<String>, folder: String, first_name: &str) {
-        let suggested = compressed_file_name(first_name)
+        let suggested = compressed_file_name(first_name, ZIP_ENDING)
             .next()
             .unwrap_or_default()
-            .trim_end_matches(".zip")
+            .trim_end_matches(ZIP_ENDING)
             .to_owned();
         let frame = DialogFrame::new(&ox_core::i18n::gettext("Compress"), DialogWidth::Standard);
         let name = labelled_entry(&frame.body(), &ox_core::i18n::gettext("Archive name"), &suggested);

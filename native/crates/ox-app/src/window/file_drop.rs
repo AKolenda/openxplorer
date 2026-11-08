@@ -184,7 +184,7 @@ pub(crate) enum DropRefusal {
     /// a day (ARC-026).
     #[error(
         "{}",
-        ox_core::i18n::gettext("Items from a ZIP cannot be linked. Copy or move them instead.")
+        ox_core::i18n::gettext("Items from an archive cannot be linked. Copy or move them instead.")
     )]
     LinkToZipCopy,
     /// The copies of items dragged out of a ZIP could not be made: the

@@ -108,7 +108,7 @@ fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
     assert!(opened.contains("winspace-archive-previews"), "{opened}");
     assert_eq!(
         browser.status_text(),
-        "Opened a temporary copy. Changes are not saved back to the ZIP."
+        "Opened a temporary copy. Changes are not saved back to the archive."
     );
     assert!(!fixture.path("readme.txt").exists(), "browsing extracts nothing");
 }

@@ -32,7 +32,7 @@ use crate::archive_view::{
     archive_browser, archive_dialog, compressed_file_name, compression_failure_text,
     compression_success_text, extract_dialog, extraction_failure_text, extraction_success_text,
     unique_folder_names, ArchiveDialogActions, ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED,
-    EXTRACTION_STOPPED,
+    EXTRACTION_STOPPED, TAR_ENDING, ZIP_ENDING,
 };
 use crate::locations::Page;
 
@@ -59,7 +59,12 @@ impl BrowserWindow {
                 }
             }),
             plain_action(WindowAction::ExtractHere, BrowserWindow::extract_here),
-            plain_action(WindowAction::CompressToZip, BrowserWindow::compress_selection),
+            plain_action(WindowAction::CompressToZip, |window| {
+                window.compress_selection(ZIP_ENDING);
+            }),
+            plain_action(WindowAction::CompressToTar, |window| {
+                window.compress_selection(TAR_ENDING);
+            }),
             plain_action(WindowAction::CompressTo, BrowserWindow::ask_compress_to),
         ]);
     }
@@ -90,7 +95,7 @@ impl BrowserWindow {
     /// Each archive command with why it is disabled, `None` when it is
     /// enabled: the one rule both the enabled state and the explanation
     /// come from.
-    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 4] {
+    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 5] {
         let busy = self
             .is_writing_files()
             .then_some("Wait for the running file operation to finish.");
@@ -109,6 +114,10 @@ impl BrowserWindow {
             (WindowAction::ExtractHere, busy.or(no_archive).or(read_only)),
             (
                 WindowAction::CompressToZip,
+                busy.or(nothing_selected).or(read_only),
+            ),
+            (
+                WindowAction::CompressToTar,
                 busy.or(nothing_selected).or(read_only),
             ),
             (WindowAction::CompressTo, busy.or(nothing_selected).or(read_only)),
@@ -348,19 +357,26 @@ impl BrowserWindow {
 
     /// Compress to ZIP file: the selection into a new ZIP in the folder,
     /// named after the first item (ARC-023).
-    fn compress_selection(&self) {
+    fn compress_selection(&self, ending: &'static str) {
         let selected = self.folder_pane().model().selected_items();
         let (Some(first), Some(folder)) = (selected.first(), self.current_uri()) else {
             return;
         };
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
         let first_name = first.entry().name.clone();
-        self.compress_items(uris, folder, first_name);
+        self.compress_items(uris, folder, first_name, ending);
     }
 
-    /// Compresses `uris` into a new ZIP in `folder`, named after
-    /// `first_name`, the first item's name.
-    pub(super) fn compress_items(&self, uris: Vec<String>, folder: String, first_name: String) {
+    /// Compresses `uris` into a new archive in `folder`, named after
+    /// `first_name`, the first item's name, with `ending`: a ZIP for
+    /// `.zip`, a plain TAR for `.tar`.
+    pub(super) fn compress_items(
+        &self,
+        uris: Vec<String>,
+        folder: String,
+        first_name: String,
+        ending: &'static str,
+    ) {
         if !self.may_start_archive_operation() {
             return;
         }
@@ -375,7 +391,7 @@ impl BrowserWindow {
             self,
             async move {
                 let created = window
-                    .compress_into_free_name(uris, &folder, &first_name, &cancel)
+                    .compress_into_free_name(uris, &folder, (&first_name, ending), &cancel)
                     .await;
                 window.finish_archive_operation();
                 if created.as_ref().is_err_and(ArchiveError::is_cancelled) {
@@ -391,16 +407,17 @@ impl BrowserWindow {
         ));
     }
 
-    /// Compresses `uris` into `folder` under the first free ZIP name for
-    /// `first_name`; the compressor refuses a taken name without writing.
+    /// Compresses `uris` into `folder` under the first free archive name
+    /// for `first_name` with `ending`; the compressor refuses a taken name
+    /// without writing.
     async fn compress_into_free_name(
         &self,
         uris: Vec<String>,
         folder: &str,
-        first_name: &str,
+        (first_name, ending): (&str, &str),
         cancel: &Cancellation,
     ) -> Result<String, ArchiveError> {
-        for archive_name in compressed_file_name(first_name) {
+        for archive_name in compressed_file_name(first_name, ending) {
             let request = CompressionRequest {
                 uris: uris.clone(),
                 destination_uri: folder.to_owned(),

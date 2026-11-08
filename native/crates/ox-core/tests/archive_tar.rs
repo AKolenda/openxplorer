@@ -64,7 +64,11 @@ fn a_tar_with_a_link_extracts_nothing() {
 
     let refused = fixture.extract("Unpacked");
 
-    assert_eq!(refused.unwrap_err(), ArchiveError::LinkOrSpecialFile);
+    // An absolute link is refused by name (ARC-016).
+    assert_eq!(
+        refused.unwrap_err(),
+        ArchiveError::UnsafeLink("Docs/escape".to_owned())
+    );
     assert!(!fixture.destination.join("Unpacked").exists());
 }
 

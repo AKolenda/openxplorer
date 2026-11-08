@@ -12,6 +12,11 @@
 //! whose contents are shown, and Copy and dragging hand out real copies of
 //! the selected items (see `zip_copies.rs`). The other choice, "In a
 //! pop-up window", keeps the "Compressed folder" window.
+//!
+//! TAR archives (.tar, .tar.gz/.tgz, .tar.bz2, .tar.xz, .tar.zst, which
+//! Windows 11 also reads itself) open the same way: the archive reader
+//! lists them into the same member records as a ZIP, under the same
+//! rules.
 
 use ox_core::entry::Entry;
 use ox_core::location::ArchiveLocation;
@@ -22,21 +27,21 @@ use gtk::glib;
 use gtk::subclass::prelude::*;
 
 use crate::archive_view::{archive_browser, ArchiveTarget};
-use crate::icons;
 
 use super::BrowserWindow;
 
 /// Shown for a file inside a ZIP that is not opened from it.
 const NOT_OPENABLE: &str =
-    crate::i18n::message_id("This file cannot be opened from the ZIP. Copy it out or use Extract all.");
+    crate::i18n::message_id("This file cannot be opened from the archive. Copy it out or use Extract all.");
 
 /// Shown when a file dialog meets an item inside a ZIP.
 const NOT_IN_DIALOGS: &str =
-    crate::i18n::message_id("Files inside a ZIP cannot be chosen here. Extract the ZIP first.");
+    crate::i18n::message_id("Files inside an archive cannot be chosen here. Extract the archive first.");
 
-/// Whether `entry` is a ZIP, by name or type.
+/// Whether `entry` is an archive the app browses itself, a ZIP or a TAR
+/// plain or compressed, by name or type.
 fn is_zip(entry: &Entry) -> bool {
-    icons::is_zip(&entry.name, entry.content_type.as_deref())
+    ox_core::archive::is_supported_archive(&entry.name, entry.content_type.as_deref())
 }
 
 impl BrowserWindow {
@@ -46,9 +51,8 @@ impl BrowserWindow {
         self.context().settings_data().preferences.browse_archives && self.browses_zips_as_folders()
     }
 
-    /// Whether opening `entry` shows it in the tab like a folder: a ZIP
-    /// (by name or type, the one archive type that opens like a folder;
-    /// TAR archives keep the window), with [`Self::opens_zips_as_folders`].
+    /// Whether opening `entry` shows it in the tab like a folder: a ZIP or
+    /// a TAR (by name or type), with [`Self::opens_zips_as_folders`].
     pub(super) fn opens_zip_as_folder(&self, entry: &Entry) -> bool {
         self.opens_zips_as_folders() && is_zip(entry)
     }

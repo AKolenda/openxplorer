@@ -69,7 +69,12 @@ impl BrowserWindow {
             }),
             text_action(WindowAction::CompressToZipOf, |window, uri| {
                 if let Some((folder, name)) = parent_and_name(uri) {
-                    window.compress_items(vec![uri.to_owned()], folder, name);
+                    window.compress_items(
+                        vec![uri.to_owned()],
+                        folder,
+                        name,
+                        crate::archive_view::ZIP_ENDING,
+                    );
                 }
             }),
             text_action(WindowAction::CompressToOf, |window, uri| {

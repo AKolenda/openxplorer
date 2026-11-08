@@ -38,7 +38,7 @@ use super::BrowserWindow;
 
 /// Cut inside a ZIP.
 pub(super) const NO_CUT: &str =
-    crate::i18n::message_id("Items in a ZIP are read-only. Use Copy, then Paste where you want them.");
+    crate::i18n::message_id("Items in an archive are read-only. Use Copy, then Paste where you want them.");
 
 /// Extracts the copies of a drag when the drop asks for them.
 type Materialise = Rc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Vec<String>, CopiesFailure>>>>>;
@@ -76,7 +76,7 @@ impl BrowserWindow {
             .iter()
             .any(|location| location.archive_uri != first.archive_uri)
         {
-            return Err(ox_core::i18n::gettext_static("Copy items from one ZIP at a time.").to_owned());
+            return Err(ox_core::i18n::gettext_static("Copy items from one archive at a time.").to_owned());
         }
         if let Some(refusal) = self.archive_operation_refusal() {
             return Err(refusal);

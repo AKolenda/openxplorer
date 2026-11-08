@@ -163,6 +163,16 @@ pub enum ArchiveError {
     /// ARC-016: a member is a symbolic link, FIFO, device or socket.
     #[error("{}", crate::i18n::gettext("The archive contains a symbolic link or special file. Nothing was extracted. Use an archive manager."))]
     LinkOrSpecialFile,
+    /// ARC-016: a TAR's symbolic link, named here, is absolute or leads
+    /// out of the folder the archive is extracted into.
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "“{name}” is a link to a place outside the extracted folder. Nothing was extracted.",
+            &[("name", .0)]
+        )
+    )]
+    UnsafeLink(String),
     /// ARC-016: a member is encrypted.
     #[error(
         "{}",

@@ -28,11 +28,11 @@ use crate::window::ButtonStyle;
 const BROWSE_MESSAGE: &str = crate::i18n::message_id("Browse without extracting the entire archive.");
 /// Above the list: what browsing does and does not do.
 const READ_ONLY_HELP: &str = crate::i18n::message_id(
-    "Read-only ZIP. Double-click a folder to browse it. Opening a supported file \
-                              creates only that file’s temporary copy; it does not update the ZIP.",
+    "Read-only archive. Double-click a folder to browse it. Opening a supported file \
+                              creates only that file’s temporary copy; it does not update the archive.",
 );
 /// Shown while a folder of the archive is read.
-const READING: &str = crate::i18n::message_id("Reading ZIP directory…");
+const READING: &str = crate::i18n::message_id("Reading the archive…");
 /// Shown for a folder without members.
 const EMPTY_FOLDER: &str = crate::i18n::message_id("This archive folder is empty.");
 /// Shown for a member that cannot be opened as a copy.
@@ -42,7 +42,7 @@ const NOT_OPENABLE: &str =
 const OPENING: &str = crate::i18n::message_id("Opening a read-only temporary copy…");
 /// Shown once the copy opened.
 const OPENED: &str =
-    crate::i18n::message_id("Opened a temporary copy. Changes are not saved back to the ZIP.");
+    crate::i18n::message_id("Opened a temporary copy. Changes are not saved back to the archive.");
 /// The size of a row's picture (`fileIcon(item, 25)`).
 const ROW_ART_SIZE: i32 = 25;
 

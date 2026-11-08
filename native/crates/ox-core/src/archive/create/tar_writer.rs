@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Writing a `.tar.xz` (ARC-023): POSIX ustar headers, a GNU long-name
-//! entry for paths over 100 bytes, sizes over 8 GiB in GNU's base-256
-//! form, compressed with XZ as `tar -cJ` does. Files are stored with mode
-//! 0644 and folders 0755, like the ZIP writer's fixed attributes; links
-//! and special files never reach it.
+//! Writing a `.tar` or a `.tar.xz` (ARC-023): POSIX ustar headers, a GNU
+//! long-name entry for paths over 100 bytes, sizes over 8 GiB in GNU's
+//! base-256 form, stored plain as `tar -c` writes it or compressed with XZ
+//! as `tar -cJ` does. Files are stored with mode 0644 and folders 0755,
+//! like the ZIP writer's fixed attributes; links and special files never
+//! reach it.
 
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 
 use lzma_rust2::{XzOptions, XzWriter};
 
@@ -21,20 +22,51 @@ const XZ_PRESET: u32 = 6;
 /// The size of the blocks file data is copied in.
 const COPY_BYTES: usize = 64 * 1024;
 
-/// Writes TAR entries into an XZ stream.
-pub(super) struct TarXzWriter<W: Write> {
-    output: XzWriter<W>,
+/// Where the TAR stream goes: the file itself, or an XZ encoder.
+enum TarOutput<W: Write> {
+    Plain(W),
+    Xz(Box<XzWriter<W>>),
 }
 
-impl<W: Write> TarXzWriter<W> {
-    /// A writer compressing into `output`.
+impl<W: Write> Write for TarOutput<W> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(output) => output.write(buffer),
+            Self::Xz(output) => output.write(buffer),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Plain(output) => output.flush(),
+            Self::Xz(output) => output.flush(),
+        }
+    }
+}
+
+/// Writes TAR entries, plain or into an XZ stream.
+pub(super) struct TarWriter<W: Write> {
+    output: TarOutput<W>,
+}
+
+impl<W: Write> TarWriter<W> {
+    /// A writer storing the TAR uncompressed into `output`.
+    pub(super) fn plain(output: W) -> Self {
+        Self {
+            output: TarOutput::Plain(output),
+        }
+    }
+
+    /// A writer compressing into `output` with XZ.
     ///
     /// # Errors
     ///
     /// The XZ encoder's error.
-    pub(super) fn new(output: W) -> Result<Self, ArchiveError> {
+    pub(super) fn xz(output: W) -> Result<Self, ArchiveError> {
         let output = XzWriter::new(output, XzOptions::with_preset(XZ_PRESET))?;
-        Ok(Self { output })
+        Ok(Self {
+            output: TarOutput::Xz(Box::new(output)),
+        })
     }
 
     /// Adds the folder `name` (ending with `/`) with the `rwx` bits
@@ -87,14 +119,20 @@ impl<W: Write> TarXzWriter<W> {
     }
 
     /// Writes the two empty blocks that end a TAR and finishes the XZ
-    /// stream.
+    /// stream, if any.
     ///
     /// # Errors
     ///
     /// The output's error.
     pub(super) fn finish(mut self) -> Result<W, ArchiveError> {
         self.output.write_all(&[0u8; 2 * BLOCK])?;
-        Ok(self.output.finish()?)
+        match self.output {
+            TarOutput::Plain(mut output) => {
+                output.flush()?;
+                Ok(output)
+            }
+            TarOutput::Xz(output) => Ok(output.finish()?),
+        }
     }
 
     /// Writes the header of `name`, preceded by a GNU long-name entry when

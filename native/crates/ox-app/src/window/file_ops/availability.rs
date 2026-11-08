@@ -255,7 +255,7 @@ impl CommandFacts {
                 ox_core::i18n::gettext_static("Clear the search to add items to this folder.")
             }
             FileCommand::New | FileCommand::Paste if folder.is_zip => {
-                ox_core::i18n::gettext_static("A ZIP is read-only. Extract it to add items.")
+                ox_core::i18n::gettext_static("An archive is read-only. Extract it to add items.")
             }
             FileCommand::New => ox_core::i18n::gettext_static("This folder is read-only."),
             FileCommand::Paste if !selection.has_inoperable => {
@@ -274,7 +274,7 @@ impl CommandFacts {
                 ox_core::i18n::gettext_static("Items in the Recycle Bin can only be restored or deleted.")
             }
             _ if selection.has_read_only && folder.is_zip => ox_core::i18n::gettext_static(
-                "Items in a ZIP are read-only. Copy them out or use Extract all.",
+                "Items in an archive are read-only. Copy them out or use Extract all.",
             ),
             _ if selection.has_read_only => ox_core::i18n::gettext_static("A previous version is read-only."),
             _ => ox_core::i18n::gettext_static("Rename one item at a time."),

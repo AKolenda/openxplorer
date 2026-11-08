@@ -68,6 +68,18 @@ impl Action {
         })
     }
 
+    /// The move of `uris`, the items an extraction built in its private
+    /// folder, into `destination`, described as extracting them from
+    /// `archive`: "Extracting 2 items from Bundle.zip to Backup".
+    pub(crate) fn extracted_items(archive: &str, uris: &[String], destination: &str) -> Self {
+        Self {
+            verb: Verb::Extracting,
+            count: Some(u64::try_from(uris.len()).unwrap_or(u64::MAX)),
+            source: archive.to_owned(),
+            destination: Some(destination.to_owned()),
+        }
+    }
+
     /// The text, with each location a link to it, as Pango markup.
     pub(crate) fn markup(&self) -> String {
         let link = |uri: &str| {
@@ -129,6 +141,14 @@ impl Action {
             (Verb::Compressing, Some(count)) => ngettext(
                 "Compressing {count} item from {source}",
                 "Compressing {count} items from {source}",
+                count,
+            ),
+            // The items of an extraction into an existing folder, moved
+            // in from its private folder: named as extracted from the
+            // archive, which is what the user asked for.
+            (Verb::Extracting, Some(count)) if goes => ngettext(
+                "Extracting {count} item from {source} to {destination}",
+                "Extracting {count} items from {source} to {destination}",
                 count,
             ),
             (Verb::Extracting, _) if goes => gettext("Extracting {source} to {destination}"),
@@ -255,6 +275,15 @@ mod tests {
             "Extracting Holiday photos.zip to Pictures"
         );
         assert_eq!(text(&compress.markup()), "Compressing 3 items from Downloads");
+        let moved_in = Action::extracted_items(
+            &format!("{downloads}/Holiday photos.zip"),
+            &uris(downloads, 2),
+            "file:///home/sample/Pictures",
+        );
+        assert_eq!(
+            text(&moved_in.markup()),
+            "Extracting 2 items from Holiday photos.zip to Pictures"
+        );
         assert!(copy
             .markup()
             .contains(&format!("<a href=\"{downloads}\">Downloads</a>")));

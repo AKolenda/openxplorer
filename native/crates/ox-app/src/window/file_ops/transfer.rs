@@ -172,7 +172,7 @@ impl BrowserWindow {
     /// outcome of a run that finished; `None` when another operation runs,
     /// the check failed or the user cancelled.
     pub(crate) async fn transfer_with_conflicts(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, true, None).await
+        self.transfer_checked(incoming, true, None, None).await
     }
 
     /// [`Self::transfer_with_conflicts`] for Send to (CMD-038): the copies
@@ -183,15 +183,22 @@ impl BrowserWindow {
         incoming: IncomingItems,
         selected: Vec<String>,
     ) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, true, Some(selected)).await
+        self.transfer_checked(incoming, true, Some(selected), None).await
     }
 
     /// [`Self::transfer_with_conflicts`] for a move that is one step of a
     /// larger operation, which Undo cannot reverse on its own: the items
     /// of an extraction into an existing folder come from a private folder
-    /// that is removed afterwards, so the journal does not record it.
-    pub(crate) async fn transfer_without_undo(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, false, None).await
+    /// that is removed afterwards, so the journal does not record it. The
+    /// progress window and its Replace or Skip question say the items are
+    /// extracted from `archive` ("Extracting 2 items from Bundle.zip to
+    /// Backup"), never moved out of the private folder.
+    pub(crate) async fn move_extracted_items(
+        &self,
+        incoming: IncomingItems,
+        archive: &str,
+    ) -> Option<TransferOutcome> {
+        self.transfer_checked(incoming, false, None, Some(archive)).await
     }
 
     /// Checks, asks, runs and reports `incoming`; the journal records it
@@ -207,17 +214,22 @@ impl BrowserWindow {
         incoming: IncomingItems,
         undoable: bool,
         kept: Option<Vec<String>>,
+        extracted_from: Option<&str>,
     ) -> Option<TransferOutcome> {
         let incoming = incoming.without_items_already_there()?;
         let origin = self.current_uri();
         let mode = incoming.mode;
         let destination = incoming.destination_folder.clone();
-        let context = self.begin_transfer(starting_label(mode), &incoming.uris, Some(&destination))?;
-        let verb = Verb::of_mode(mode);
-        self.describe_operation(
-            &context.cancel,
-            Action::of(verb, &incoming.uris, Some(&destination)),
-        );
+        let label = match extracted_from {
+            Some(_) => ox_core::i18n::gettext_static("Preparing extraction…"),
+            None => starting_label(mode),
+        };
+        let context = self.begin_transfer(label, &incoming.uris, Some(&destination))?;
+        let action = match extracted_from {
+            Some(archive) => Some(Action::extracted_items(archive, &incoming.uris, &destination)),
+            None => Action::of(Verb::of_mode(mode), &incoming.uris, Some(&destination)),
+        };
+        self.describe_operation(&context.cancel, action);
         let Some(scan) = self.check(&incoming, &context.cancel).await else {
             self.end_transfer(&context.cancel);
             return None;

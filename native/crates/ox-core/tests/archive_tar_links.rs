@@ -94,7 +94,10 @@ fn links_that_stay_inside_through_parent_folders_extract() {
 
     let root = fixture.destination.join("Unpacked");
     assert_eq!(fs::read(root.join("bin/tool")).expect("followed"), b"library");
-    assert_eq!(fs::read_link(root.join("docs")).expect("a link"), Path::new("lib"));
+    assert_eq!(
+        fs::read_link(root.join("docs")).expect("a link"),
+        Path::new("lib")
+    );
     assert_eq!(fs::read(root.join("lib/far")).expect("followed"), b"far");
 }
 
@@ -137,9 +140,18 @@ fn special_files_and_paths_through_a_link_are_still_refused() {
     let hard = fixture_with(&["f:a.txt:a", "h:b.txt:a.txt"]);
     let through = fixture_with(&["d:real", "l:alias:real", "f:alias/evil.txt:x"]);
 
-    assert_eq!(fifo.extract("Unpacked").unwrap_err(), ArchiveError::LinkOrSpecialFile);
-    assert_eq!(hard.extract("Unpacked").unwrap_err(), ArchiveError::LinkOrSpecialFile);
-    assert_eq!(through.extract("Unpacked").unwrap_err(), ArchiveError::AmbiguousPaths);
+    assert_eq!(
+        fifo.extract("Unpacked").unwrap_err(),
+        ArchiveError::LinkOrSpecialFile
+    );
+    assert_eq!(
+        hard.extract("Unpacked").unwrap_err(),
+        ArchiveError::LinkOrSpecialFile
+    );
+    assert_eq!(
+        through.extract("Unpacked").unwrap_err(),
+        ArchiveError::AmbiguousPaths
+    );
     for fixture in [fifo, hard, through] {
         fixture.assert_no_output();
     }
@@ -179,7 +191,10 @@ fn a_tar_file_is_written_plain_and_reads_back() {
     let output = temporary.path().join("out");
     fs::create_dir(&output).expect("a folder");
     let request = CompressionRequest {
-        uris: vec![file_uri(&sources.join("Docs")), file_uri(&sources.join("notes.txt"))],
+        uris: vec![
+            file_uri(&sources.join("Docs")),
+            file_uri(&sources.join("notes.txt")),
+        ],
         destination_uri: file_uri(&output),
         archive_name: "Docs.tar".to_owned(),
     };
