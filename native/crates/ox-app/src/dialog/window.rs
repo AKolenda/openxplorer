@@ -50,6 +50,10 @@ pub(crate) struct DialogButton(usize);
 /// Properties window's.
 const CLOSE_GLYPH: i32 = 12;
 
+/// How wide the widest scroll bar of a dialog's body is, under the pointer
+/// or always shown (base.css §4.12).
+const SCROLL_BAR_ROOM: i32 = 12;
+
 /// The answer a button, Escape or closing the window gives.
 type Answer = Option<DialogButton>;
 
@@ -312,6 +316,14 @@ impl Dialog {
             .min_content_height(height)
             .build();
         self.append_field(&scrolled);
+    }
+
+    /// Keeps the body's contents clear of its scroll bar: a gap at the end
+    /// as wide as an overlay scroll bar under the pointer (an 8-pixel
+    /// slider and its 2-pixel margins, base.css §4.12), which is also the
+    /// trough of an always-shown one, so no field or text lies under it.
+    pub(crate) fn keep_clear_of_scroll_bar(&self) {
+        self.imp().frame.body().set_margin_end(SCROLL_BAR_ROOM);
     }
 
     /// Shows or hides `field`, added with [`Self::add_labelled`] or

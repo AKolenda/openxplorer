@@ -60,6 +60,33 @@ pub(crate) fn check_write_tree(
     cancel: &Cancellation,
     source_change: SourceChange,
 ) -> Result<(), TransferError> {
+    check_write_tree_reading(
+        guard,
+        source,
+        source_kind,
+        destination,
+        cancel,
+        source_change,
+        Unreadable::Fails,
+    )
+}
+
+/// [`check_write_tree`], leaving a part of the source it cannot inspect or
+/// list unwalked when `unreadable` is [`Unreadable::NotWalked`].
+///
+/// # Errors
+///
+/// As [`check_write_tree`], without the failures to read that are left
+/// unwalked.
+pub(crate) fn check_write_tree_reading(
+    guard: Option<&WriteGuard>,
+    source: &dyn Node,
+    source_kind: Option<NodeKind>,
+    destination: Option<&dyn Node>,
+    cancel: &Cancellation,
+    source_change: SourceChange,
+    unreadable: Unreadable,
+) -> Result<(), TransferError> {
     let Some(guard) = guard else {
         return Ok(());
     };
@@ -67,8 +94,25 @@ pub(crate) fn check_write_tree(
         guard,
         cancel,
         source_change,
+        unreadable,
     };
     preflight.check_tree(source, source_kind, destination, 0)
+}
+
+/// What a walk does with a part of the source it cannot inspect or list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Unreadable {
+    /// Leaves it unwalked, where nothing is changed without reading it
+    /// again: a copy writes nothing from a folder it cannot list and asks
+    /// about that folder by itself, as Windows Explorer asks about an
+    /// unreadable folder and copies the rest; and a paste's check of
+    /// every selected item before any runs leaves an unreadable or
+    /// missing item to the engine, which asks about it alone and checks
+    /// it again before changing it (OPS-047).
+    NotWalked,
+    /// Fails with the backend's error: what is moved, renamed or deleted
+    /// as a whole is never changed unchecked.
+    Fails,
 }
 
 /// One preflight walk.
@@ -76,6 +120,7 @@ struct WritePreflight<'a> {
     guard: &'a WriteGuard,
     cancel: &'a Cancellation,
     source_change: SourceChange,
+    unreadable: Unreadable,
 }
 
 impl WritePreflight<'_> {
@@ -103,12 +148,18 @@ impl WritePreflight<'_> {
         // checked as the link itself, and its target is never walked.
         let kind = match source_kind {
             Some(kind) => kind,
-            None => source.info(Some(self.cancel))?.kind,
+            None => match self.readable(source.info(Some(self.cancel)))? {
+                Some(info) => info.kind,
+                None => return Ok(()),
+            },
         };
         if kind != NodeKind::Directory {
             return Ok(());
         }
-        for child in source.children(Some(self.cancel))? {
+        let Some(children) = self.readable(source.children(Some(self.cancel)))? else {
+            return Ok(());
+        };
+        for child in children {
             let child_destination = match destination {
                 Some(folder) => Some(child_node(folder, child.name())?),
                 None => None,
@@ -116,6 +167,17 @@ impl WritePreflight<'_> {
             self.check_tree(child.as_ref(), None, child_destination.as_deref(), depth + 1)?;
         }
         Ok(())
+    }
+
+    /// What a query of the source read, or `None` for a failure this walk
+    /// leaves unwalked; a cancellation always stops it.
+    fn readable<T>(&self, read: Result<T, TransferError>) -> Result<Option<T>, TransferError> {
+        match read {
+            Ok(value) => Ok(Some(value)),
+            Err(_) if self.cancel.is_cancelled() => Err(TransferError::Cancelled),
+            Err(error) if self.unreadable == Unreadable::NotWalked && !error.is_cancelled() => Ok(None),
+            Err(error) => Err(error),
+        }
     }
 }
 

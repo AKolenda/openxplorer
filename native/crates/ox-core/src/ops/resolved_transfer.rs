@@ -54,11 +54,11 @@ use super::run_transfer::{
 use super::undo::{MovedItem, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::location::{kept_both_name, ItemKind};
-use crate::transfer::SourceChange;
 use crate::transfer::{
     ConflictPolicy, Landed, Node, Operation, Progress, ProgressScope, TransferEngine, TransferMode,
     TransferResult, MAX_ITEMS,
 };
+use crate::transfer::{SourceChange, Unreadable};
 
 /// The most numbers tried for a kept-both name.
 pub(super) const MAX_KEPT_NUMBER: u32 = 10_000;
@@ -203,7 +203,13 @@ pub async fn run_answered_items(
 /// of its name it merges into, is one tree to the write protection, which
 /// refuses the transfer before anything changes. The steps then run per
 /// folder, which alone would let a free file move before a protected
-/// folder merged elsewhere in the same selected tree is refused.
+/// folder merged elsewhere in the same selected tree is refused. An item
+/// that is gone or cannot be read does not stop the others: the engine
+/// asks about it when its turn comes, as one item, and checks it whole
+/// before changing it (OPS-047). A selected folder merged into a folder of
+/// its name is no such item: the scan has already turned it into steps
+/// for its entries, so it must be read whole here, and a part of it that
+/// cannot be read stops the paste before anything changes.
 fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsError> {
     let source_change = if scan.mode == TransferMode::Move {
         SourceChange::Changed
@@ -214,9 +220,19 @@ fn preflight(scan: &ConflictScan, context: &OperationContext) -> Result<(), OpsE
     for uri in &scan.selection {
         let source = GioNode::new(uri);
         let target = destination.child(&source.name());
-        context
-            .protection
-            .check_tree(&source, target.as_ref(), &context.cancel, source_change)?;
+        let merged = scan.merged_folders.iter().any(|folder| folder == uri);
+        let unreadable = if merged {
+            Unreadable::Fails
+        } else {
+            Unreadable::NotWalked
+        };
+        context.protection.check_selected_tree(
+            &source,
+            target.as_ref(),
+            &context.cancel,
+            source_change,
+            unreadable,
+        )?;
     }
     Ok(())
 }
@@ -506,11 +522,13 @@ impl<'a> Run<'a> {
         let cancel = &self.context.cancel;
         let existing = GioNode::new(&conflict.existing_uri);
         let path = existing.path();
+        // Both are asked again: an incoming item missing during the scan
+        // has unknown facts, and may be back as a folder (XFER-009).
+        let is_file = |node: &GioNode| node.is_directory(Some(cancel)).is_ok_and(|is_folder| !is_folder);
         let both_files = !conflict.incoming.is_folder
             && !conflict.existing.is_folder
-            && existing
-                .is_directory(Some(cancel))
-                .is_ok_and(|is_folder| !is_folder);
+            && is_file(&existing)
+            && is_file(&GioNode::new(&item.uri));
         let recycles = self.context.replaced_files == ReplacedFiles::RecycleBin;
         let keepable =
             recycles && both_files && path.is_some() && existing.can_trash(Some(cancel)).unwrap_or(false);

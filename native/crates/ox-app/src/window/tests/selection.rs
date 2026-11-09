@@ -676,8 +676,8 @@ fn press_on(test: &TestWindow, widget: &gtk::Widget, presses: i32) {
     }
 }
 
-/// The chevron, the title and the line of the shown heading of the
-/// group at `index`.
+/// The chevron, the title and the rest of the row after the title of the
+/// shown heading of the group at `index`.
 fn heading_parts(test: &TestWindow, index: usize) -> (gtk::Widget, gtk::Widget, gtk::Widget) {
     use crate::folder_view::cells::FileCell;
     use crate::folder_view::grid::SlotKind;
@@ -698,17 +698,17 @@ fn heading_parts(test: &TestWindow, index: usize) -> (gtk::Widget, gtk::Widget, 
         .into_iter()
         .find(|label| label.has_css_class("group-title"))
         .expect("a title");
-    let line = descendants::<gtk::Separator>(&cell)
+    let rest = descendants::<gtk::Box>(&cell)
         .into_iter()
-        .next()
-        .expect("a line");
-    (chevron.upcast(), title.upcast(), line.upcast())
+        .find(|rest| rest.has_css_class("group-rest"))
+        .expect("the rest of the heading's row");
+    (chevron.upcast(), title.upcast(), rest.upcast())
 }
 
-/// Clicks on a heading act as Windows 11's: the title or the line selects
-/// every item of the group and gives the heading the keyboard, a
-/// double-click collapses or expands the group, and the chevron collapses
-/// or expands it without selecting.
+/// Clicks on a heading act as Windows 11's: the title or the rest of the
+/// row after it selects every item of the group and gives the heading the
+/// keyboard, a double-click collapses or expands the group, and the
+/// chevron collapses or expands it without selecting.
 ///
 /// parity: VIEW-022, VIEW-071
 #[gtk::test]
@@ -728,9 +728,13 @@ fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
             .grouped()
             .and_then(|grouped| grouped.heading(2))
             .expect("a third group");
-        let (_, title, line) = heading_parts(&test, 2);
-        press_on(&test, &line, 1);
-        assert_eq!(selected(&test), group, "{view}: the line selects the group");
+        let (_, title, rest) = heading_parts(&test, 2);
+        press_on(&test, &rest, 1);
+        assert_eq!(
+            selected(&test),
+            group,
+            "{view}: the rest of the row selects the group"
+        );
         test.window.folder_pane().model().select_only(0);
         press_on(&test, &title, 1);
         assert_eq!(selected(&test), group, "{view}: the title selects the group");

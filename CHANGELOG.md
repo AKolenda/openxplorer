@@ -1,3 +1,33 @@
+# 2.0.16 — 2026-11-09
+
+Updates install without a password for administrators at the computer, the Preview pane shows what's in a file, and more of Windows 11's File Explorer keyboard shortcuts work. The Open and Save dialog keeps its size, and a tab's menu opens from the keyboard. Much of this release is the work of @addition-official.
+
+## Security
+* In the Debian package, **Check for updates** now installs through a small helper of its own instead of a general administrator command, so an administrator (a member of `sudo`, `admin` or `wheel`) in an active session at the computer installs updates without typing a password. Anyone else, and any remote or inactive session, is still asked for an administrator's password. The helper takes only a version number: it installs only GitHub's current latest official release, only when that is newer than the installed version, and only after checking the download's size, checksum and package details. It never downgrades or reinstalls, runs with a cleared environment, and reads no settings or files the user can change. Trust in the release is the same as before: GitHub's connection and its checksum, not an independent signature.
+* It is on by default. **Settings › About › Install updates without asking for a password** turns it off, and turning it back on asks for an administrator's password. Updating to 2.0.16 itself still asks once, since the helper arrives with it. The RPM, Arch, Flatpak and preview packages never update themselves, so they are unchanged.
+
+## What's Changed
+* **Preview pane:** View › Preview pane (Alt+P) shows the selected file's contents, as in Windows 11: text and source files as plain wrapped text (the first 1 MB), pictures as large as the pane allows, PDF pages one under another, and audio and video in the pane's player. A folder, several items or a file with no preview says "No preview available.". PDF pages are drawn by `pdftoppm` in the same sandbox and limits as the thumbnailers, and nothing is read for a network file while network previews are off.
+* **Keyboard shortcuts:** more of Windows 11's File Explorer keys work: Ctrl+1 to Ctrl+9 show that tab (and that tab of a Properties window), Ctrl+Shift+E opens the navigation pane down to the current folder, the keypad's plus, minus and asterisk open and close folders in the navigation pane, Ctrl+F5 refreshes, and Ctrl+Insert and Shift+Insert copy and paste files. Ctrl+Shift+1 to Ctrl+Shift+8 now work when typed, on any keyboard layout.
+* **Tabs:** Shift+F10 or the Menu key on a focused tab opens its menu, and Escape gives the keyboard back to the tab. F6 reaches the tab in front, and no outline is left on the tab strip after files are dropped on a tab.
+* **Open and Save dialogs:** the dialog opens at the size it was last left at, and on GNOME a dialog whose app's window handle has a space in it now stays attached to that app instead of falling behind it.
+* **Details:** dragging a column's edge past its start stops the column at its narrowest width instead of folding it to nothing.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.16_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.16-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.16-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.16-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.16-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.15...v2.0.16
+
 # 2.0.15 — 2026-11-08
 
 OpenXplorer now looks and works much more like Windows 11's File Explorer, from the command bar, menus and status bar to Properties, This PC and the progress window. It also makes previews with the desktop's own thumbnailers in a sandbox, can paste a picture as a file, and offers to continue as administrator when a copy, move or delete is denied. Much of this release is the work of @addition-official and @clansty.
