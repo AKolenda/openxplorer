@@ -212,6 +212,19 @@ impl BrowserWindow {
         popover
     }
 
+    /// Opens the titles' menu on the title of the column whose key is
+    /// `key`, for the snapshot hook's `titles-menu=` step; false when the
+    /// details view does not show it.
+    pub(crate) fn open_titles_menu_on(&self, key: &str) -> bool {
+        let details = self.folder_pane().details();
+        let at = SortColumn::from_key(key).and_then(|column| details.title_middle(column));
+        let (Some(x), Some(header)) = (at, details.header()) else {
+            return false;
+        };
+        self.show_column_menu(&header, x, f64::from(header.height()));
+        true
+    }
+
     /// Shows or hides `column` and saves the choice.
     fn toggle_details_column(&self, column: SortColumn) {
         let details = self.folder_pane().details();

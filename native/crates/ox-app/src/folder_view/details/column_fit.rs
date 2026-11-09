@@ -286,6 +286,18 @@ impl DetailsView {
         needed + padding
     }
 
+    /// The middle of `column`'s shown title, a position in the titles'
+    /// row.
+    pub(crate) fn title_middle(&self, column: SortColumn) -> Option<f64> {
+        let header = self.header()?;
+        let titles = self.titles(&header);
+        let (_, title) = titles
+            .into_iter()
+            .find(|(shown, title)| *shown == column && title.is_visible())?;
+        let bounds = title.compute_bounds(&header)?;
+        Some(f64::from(bounds.x() + bounds.width() / 2.0))
+    }
+
     /// The shown column whose title is under `x`, a position in the
     /// titles' row, as the titles' menu fits the column it was opened on.
     pub(crate) fn column_at(&self, x: f64) -> Option<SortColumn> {

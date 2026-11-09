@@ -210,7 +210,10 @@ pub(crate) struct ChooseDetails {
     /// Applies the choice.
     pub(crate) ok: gtk::Button,
     /// Discards it.
-    #[cfg_attr(not(test), expect(dead_code, reason = "tests press it; the dialog answers it"))]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "tests press it; the dialog answers it")
+    )]
     pub(crate) cancel: gtk::Button,
 }
 
