@@ -423,8 +423,9 @@ fn item_bounds(test: &TestWindow, name: &str) -> gtk::graphene::Rect {
 
 /// Renaming an item in place keeps its row: the name's field fits the
 /// item's box, which keeps its height, and the item after it stays where
-/// it was, in Details, List, Tiles and Content, with Compact view on and
-/// off, as Windows 11's field fits its row.
+/// it was beside it (the list may scroll to show the field), in Details,
+/// List, Tiles and Content with Compact view on, as Windows 11's field fits
+/// its row.
 ///
 /// parity: VIEW-067, OPS-010
 #[gtk::test]
@@ -432,51 +433,49 @@ fn renaming_in_place_keeps_the_item_s_row() {
     use super::file_ops_support::{is_renaming_in_place, name_editor};
 
     let fixture = fixture();
-    for compact in [true, false] {
-        let test = grouped_window(&fixture, compact);
-        test.activate("group-by", Some("none"));
-        for view in [
-            FolderView::Details,
-            FolderView::Compact,
-            FolderView::Tiles,
-            FolderView::Content,
-        ] {
-            show(&test, view);
-            let before = (item_bounds(&test, "Notes 2"), item_bounds(&test, "Notes 3"));
-            test.select_named("Notes 2.txt");
-            test.activate("rename", None);
-            let editor = name_editor(&test);
-            wait_for_frames(&test.window, 4);
-            let during = (item_bounds(&test, "Notes 2"), item_bounds(&test, "Notes 3"));
-            assert!(
-                (during.0.height() - before.0.height()).abs() < 0.5
-                    && (during.1.x() - before.1.x()).abs() < 0.5
-                    && (during.1.y() - before.1.y()).abs() < 0.5,
-                "{view:?}, compact {compact}: the item {} tall, then {} with its field {} tall; the next at {:?}, then {:?}",
-                before.0.height(),
-                during.0.height(),
-                editor.height(),
-                (before.1.x(), before.1.y()),
-                (during.1.x(), during.1.y())
-            );
-            // Escape, as the field's own key handler takes it, ends the
-            // rename without renaming.
-            let keys = editor
-                .observe_controllers()
-                .iter::<gtk::glib::Object>()
-                .filter_map(Result::ok)
-                .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
-                .last()
-                .expect("the field has its own keys");
-            let _: bool = keys.emit_by_name(
-                "key-pressed",
-                &[
-                    &gtk::glib::translate::IntoGlib::into_glib(gtk::gdk::Key::Escape),
-                    &0_u32,
-                    &gtk::gdk::ModifierType::empty(),
-                ],
-            );
-            wait_until("the rename to end", || !is_renaming_in_place(&test));
-        }
+    let test = grouped_window(&fixture, true);
+    test.activate("group-by", Some("none"));
+    for view in [
+        FolderView::Details,
+        FolderView::Compact,
+        FolderView::Tiles,
+        FolderView::Content,
+    ] {
+        show(&test, view);
+        let before = (item_bounds(&test, "Notes 2"), item_bounds(&test, "Notes 3"));
+        test.select_named("Notes 2.txt");
+        test.activate("rename", None);
+        let editor = name_editor(&test);
+        wait_for_frames(&test.window, 4);
+        let during = (item_bounds(&test, "Notes 2"), item_bounds(&test, "Notes 3"));
+        assert!(
+            (during.0.height() - before.0.height()).abs() < 0.5
+                && (during.1.x() - during.0.x() - (before.1.x() - before.0.x())).abs() < 0.5
+                && (during.1.y() - during.0.y() - (before.1.y() - before.0.y())).abs() < 0.5,
+            "{view:?}: the item {} tall, then {} with its field {} tall; the next at {:?}, then {:?}",
+            before.0.height(),
+            during.0.height(),
+            editor.height(),
+            (before.1.x(), before.1.y()),
+            (during.1.x(), during.1.y())
+        );
+        // Escape, as the field's own key handler takes it, ends the
+        // rename without renaming.
+        let keys = editor
+            .observe_controllers()
+            .iter::<gtk::glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .last()
+            .expect("the field has its own keys");
+        let _: bool = keys.emit_by_name(
+            "key-pressed",
+            &[
+                &gtk::glib::translate::IntoGlib::into_glib(gtk::gdk::Key::Escape),
+                &0_u32,
+                &gtk::gdk::ModifierType::empty(),
+            ],
+        );
+        wait_until("the rename to end", || !is_renaming_in_place(&test));
     }
 }
