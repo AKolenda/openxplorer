@@ -24,6 +24,10 @@ use crate::window::ButtonStyle;
 /// The size of the error sign beside a message, Windows' 32 pixels.
 const ERROR_SIGN_SIZE: i32 = 32;
 
+/// The narrowest the message beside the error sign may wrap, in
+/// characters.
+const MESSAGE_BESIDE_SIGN_CHARS: i32 = 40;
+
 /// Emitted once when the dialog is dismissed for good.
 const CLOSED: &str = "closed";
 
@@ -229,6 +233,9 @@ impl DialogFrame {
         crate::icons::set_icon(&sign, crate::icons::Icon::DismissCircleFilled, ERROR_SIGN_SIZE);
         row.attach(&sign, 0, 0, 1, 1);
         label.set_hexpand(true);
+        // Beside the sign, the message would otherwise be measured at its
+        // narrowest, one word a line, and the window made that tall.
+        label.set_width_chars(MESSAGE_BESIDE_SIGN_CHARS);
         row.attach(&label, 1, 0, 1, 1);
     }
 
