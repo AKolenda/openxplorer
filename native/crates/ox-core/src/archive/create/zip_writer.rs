@@ -105,6 +105,8 @@ struct CentralRecord {
 pub(super) struct ZipWriter<W: Write> {
     output: CountingWriter<W>,
     central: Vec<CentralRecord>,
+    /// The deflate level, 1 (faster) to 9 (smaller).
+    level: Compression,
 }
 
 impl<W: Write> ZipWriter<W> {
@@ -116,7 +118,14 @@ impl<W: Write> ZipWriter<W> {
                 written: 0,
             },
             central: Vec::new(),
+            level: Compression::default(),
         }
+    }
+
+    /// The same writer deflating at `level`, 1 (faster) to 9 (smaller).
+    pub(super) fn with_level(mut self, level: u32) -> Self {
+        self.level = Compression::new(level.clamp(1, 9));
+        self
     }
 
     /// Adds the empty folder `name`, which ends with `/`.
@@ -222,7 +231,7 @@ impl<W: Write> ZipWriter<W> {
         cancel: &Cancellation,
         progress: &mut dyn FnMut(u64),
     ) -> Result<Deflated, ArchiveError> {
-        let mut encoder = DeflateEncoder::new(&mut self.output, Compression::default());
+        let mut encoder = DeflateEncoder::new(&mut self.output, self.level);
         let mut hasher = crc32fast::Hasher::new();
         let mut buffer = vec![0u8; CHUNK_BYTES];
         let mut size = 0u64;

@@ -68,6 +68,11 @@ fn item_shape(entry: &Entry) -> ItemShape {
     }
 }
 
+/// Whether `entry` is a row of Recent files (the `recent:` items of `GVfs`).
+pub(super) fn is_recent_row(entry: &Entry) -> bool {
+    ox_core::location::scheme(&entry.uri).as_deref() == Some("recent")
+}
+
 /// Where the item at `uri` is, as its menu cares.
 fn item_location(uri: &str) -> ItemLocation {
     if is_smb_server(uri) {
@@ -289,18 +294,23 @@ impl BrowserWindow {
     }
 
     /// The facts the menu of `entry` reads; `is_single` when it is the
-    /// only item selected.
+    /// only item selected. A row of Recent files is the file it stands
+    /// for, as its commands act on that file.
     fn item_facts(&self, entry: &Entry, is_single: bool) -> ItemFacts {
         let caching = if entry.is_dir {
-            self.caching_of(entry.navigation_uri())
+            self.caching_of(entry.opened_uri())
         } else {
             None
         };
         ItemFacts {
-            navigation_uri: entry.navigation_uri().to_owned(),
+            navigation_uri: entry.opened_uri().to_owned(),
             shape: item_shape(entry),
-            location: item_location(&entry.uri),
-            is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
+            location: item_location(entry.item_uri()),
+            is_read_only: self
+                .imp()
+                .locations
+                .borrow()
+                .is_snapshot_location(entry.item_uri()),
             is_single,
             has_file_location: self.located_file(entry).is_some(),
             is_symlink: entry.is_symlink,
@@ -308,7 +318,12 @@ impl BrowserWindow {
             editors: self.context().desktop_integration().known_editor_shortcuts(),
             applications: if is_single {
                 let content_type = entry.content_type.as_deref();
-                integration::menu_applications(&entry.uri, content_type, entry.is_dir, MENU_APPLICATIONS)
+                integration::menu_applications(
+                    entry.item_uri(),
+                    content_type,
+                    entry.is_dir,
+                    MENU_APPLICATIONS,
+                )
             } else {
                 Vec::new()
             },
@@ -318,6 +333,7 @@ impl BrowserWindow {
             send_to: self.send_to_targets(),
             can_share: self.share_portal().is_some(),
             favorite: self.favorite_fact(entry, is_single),
+            is_recent: is_recent_row(entry),
         }
     }
 

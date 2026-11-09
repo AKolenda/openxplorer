@@ -350,7 +350,7 @@ impl Sidebar {
 
     /// A pinned folder's compact menu, in Windows 11's order: Open in new
     /// tab, Open in new window, Unpin from Quick access, Compress to (ZIP
-    /// File, Additional options), Copy as path, New (the command bar's New
+    /// File, TAR File, Additional options), Copy as path, New (the command bar's New
     /// menu, run in the folder), Properties, then Open in Terminal. Pin to
     /// Start is Windows' own. "Show more options" follows
     /// ([`finish_menu`]).
@@ -372,6 +372,7 @@ impl Sidebar {
             WindowAction::CompressToOf,
             vec![
                 target("ZIP File", Icon::FolderZip, WindowAction::CompressToZipOf).into(),
+                target("TAR File", Icon::FolderZip, WindowAction::CompressToTarOf).into(),
                 target("Additional options", Icon::FolderZip, WindowAction::CompressToOf).into(),
             ],
         );

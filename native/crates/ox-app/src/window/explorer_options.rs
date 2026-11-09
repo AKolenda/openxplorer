@@ -30,6 +30,7 @@ impl BrowserWindow {
             self.update_details_pane();
         }
         self.follow_search_contents(preferences.search_contents);
+        self.follow_search_filter_bar(preferences.show_search_filter_bar);
     }
 
     /// Shows the status bar while files are browsed, unless Folder

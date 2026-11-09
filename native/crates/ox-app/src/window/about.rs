@@ -24,7 +24,7 @@ use crate::dialog::{Dialog, DialogButton};
 /// What About this build says above the channel: the description and the
 /// platform line, as the Python box had them.
 const ABOUT_INTRODUCTION: &str = crate::i18n::message_id(
-    "An independent Windows 11–inspired file manager for Zorin.\n\n\
+    "An independent Windows 11–inspired file manager for Linux.\n\n\
 Desktop: Rust + GTK 4 + GIO/GVfs.",
 );
 
@@ -160,6 +160,11 @@ mod tests {
         };
         assert!(text.contains(channel), "{text}");
         assert!(text.contains("Desktop: Rust + GTK 4 + GIO/GVfs."), "{text}");
+        assert!(
+            text.contains("An independent Windows 11–inspired file manager for Linux."),
+            "it runs on any Linux desktop: {text}"
+        );
+        assert!(!text.contains("Zorin"), "{text}");
         assert!(
             text.contains("Images and supported media show previews."),
             "{text}"

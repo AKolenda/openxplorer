@@ -49,7 +49,9 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 - Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.
 - Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
-- A search is a step of the tab's history, as in Windows: the tab and the address bar read Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box goes back to the folder too.
+- A search is a step of the tab's history, as in Windows: the tab reads notes - Search Results in Documents and the address bar Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box, Escape or Close search goes back to the folder too.
+- While a search shows, the words you searched for are marked in the names, and the command bar shows Search options and Close search, as in Windows 11. Search options chooses All subfolders or Current folder, a Date modified, Kind or Size, and File contents to look inside files too. On the results, ... > Pin to Quick access saves the search to the navigation pane. You can also type kind:, datemodified: or size: with your words, such as kind:picture or size:large.
+- Settings > Search > Show the search filter bar shows the earlier filter bar above the results instead of Search options.
 
 ## Network locations
 
@@ -91,7 +93,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 ## Settings and privacy
 
 - … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.
-- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.
+- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the license and About this build.
 - OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.
 - When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.
 - Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files.

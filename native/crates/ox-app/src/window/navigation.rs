@@ -664,7 +664,7 @@ fn child_toward(ancestor: &str, descendant: &str) -> Option<String> {
 }
 
 /// The location inside a ZIP that the local path `uri` runs through: the
-/// first ancestor that is a ZIP file, then the folders after it. `None`
+/// first ancestor that is a ZIP or TAR file, then the folders after it. `None`
 /// when no ancestor is a ZIP, or for anything but a local path (a share
 /// would answer slowly here, on the main thread).
 fn path_through_zip(uri: &str) -> Option<String> {
@@ -678,7 +678,7 @@ fn path_through_zip(uri: &str) -> Option<String> {
         let is_zip_name = ancestor
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.to_lowercase().ends_with(".zip"));
+            .is_some_and(|name| ox_core::archive::is_supported_archive(name, None));
         is_zip_name && ancestor.is_file()
     })?;
     let rest = path.strip_prefix(zip).ok()?;

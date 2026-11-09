@@ -45,6 +45,9 @@ pub enum FailureCause {
     InUse,
     /// The item is gone from its folder: "Could not find this item".
     NotFound,
+    /// A folder would go into itself or a folder inside it (XFER-016):
+    /// refused, so the question offers only Skip and Cancel.
+    InsideSource,
     /// Anything else; the question shows the system's error.
     Other,
     /// Something the user must sort out by hand, such as a backup kept
@@ -61,6 +64,7 @@ impl FailureCause {
             TransferError::NoSpace(_) => Self::NoSpace,
             TransferError::Busy(_) => Self::InUse,
             TransferError::NotFound(_) => Self::NotFound,
+            TransferError::InsideSource(_) => Self::InsideSource,
             TransferError::RecoveryRequired(_) => Self::NeedsAttention,
             _ => Self::Other,
         }
@@ -240,6 +244,7 @@ impl ItemFailures {
                 | TransferError::RecoveryRequired(_)
                 | TransferError::NotSupported(_)
                 | TransferError::ReplaceUnsupported(_)
+                | TransferError::InsideSource(_)
                 // The share or device is gone: every later entry would
                 // fail too.
                 | TransferError::NotMounted(_)

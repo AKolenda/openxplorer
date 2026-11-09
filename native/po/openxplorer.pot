@@ -18,7 +18,7 @@ msgid "- Choose Open as administrator on a local folder’s menu, confirm, then 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected.\n- A search is a step of the tab's history, as in Windows: the tab and the address bar read Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box goes back to the folder too."
+msgid "- Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected.\n- A search is a step of the tab's history, as in Windows: the tab reads notes - Search Results in Documents and the address bar Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box, Escape or Close search goes back to the folder too.\n- While a search shows, the words you searched for are marked in the names, and the command bar shows Search options and Close search, as in Windows 11. Search options chooses All subfolders or Current folder, a Date modified, Kind or Size, and File contents to look inside files too. On the results, ... > Pin to Quick access saves the search to the navigation pane. You can also type kind:, datemodified: or size: with your words, such as kind:picture or size:large.\n- Settings > Search > Show the search filter bar shows the earlier filter bar above the results instead of Search options."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -54,7 +54,7 @@ msgid "- View switches between Details, Compact list and icon sizes; its slider 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the license and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -353,7 +353,7 @@ msgstr ""
 msgid "Extract all…"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/conflict_window.rs
+#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/conflict_window.rs crates/ox-core/src/search/facets.rs
 msgid "Folder"
 msgstr ""
 
@@ -362,7 +362,7 @@ msgid "Open in archive manager"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "Opened a temporary copy. Changes are not saved back to the ZIP."
+msgid "Opened a temporary copy. Changes are not saved back to the archive."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
@@ -370,11 +370,11 @@ msgid "Opening a read-only temporary copy…"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "Read-only ZIP. Double-click a folder to browse it. Opening a supported file creates only that file’s temporary copy; it does not update the ZIP."
+msgid "Read-only archive. Double-click a folder to browse it. Opening a supported file creates only that file’s temporary copy; it does not update the archive."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "Reading ZIP directory…"
+msgid "Reading the archive…"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
@@ -422,7 +422,7 @@ msgstr ""
 msgid "{error}\n\nNo existing file was replaced."
 msgstr ""
 
-#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/place_editor.rs
+#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/place_editor.rs
 msgid "Browse…"
 msgstr ""
 
@@ -463,7 +463,7 @@ msgstr ""
 msgid "More about extracting"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/extract_dialog.rs
+#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/compress_dialog.rs
 msgid "Select a destination"
 msgstr ""
 
@@ -472,11 +472,11 @@ msgid "Show extracted files when finished"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Still checking the ZIP. Try again in a moment."
+msgid "Still checking the archive. Try again in a moment."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "The ZIP is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
+msgid "The archive is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
@@ -499,7 +499,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/extraction.rs
-msgid "{error}\n\nThe ZIP is unchanged. Existing files were not overwritten."
+msgid "{error}\n\nThe archive is unchanged. Existing files were not overwritten."
 msgstr ""
 
 #: crates/ox-app/src/devices.rs
@@ -555,7 +555,7 @@ msgstr ""
 msgid "File system"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/window/compress_dialog.rs
+#: crates/ox-app/src/dialogs/format_drive.rs
 msgid "Format"
 msgstr ""
 
@@ -826,19 +826,19 @@ msgstr ""
 msgid "Earlier this year"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Empty (0 KB)"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/settings_page/default_apps.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/settings_page/default_apps.rs
 msgid "Folders"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Gigantic (> 4 GB)"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Huge (1 – 4 GB)"
 msgstr ""
 
@@ -846,19 +846,19 @@ msgstr ""
 msgid "In the future"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Large (128 MB – 1 GB)"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/properties/version_row.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/properties/version_row.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Last month"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/properties/version_row.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-app/src/properties/version_row.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Last week"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Medium (1 – 128 MB)"
 msgstr ""
 
@@ -870,11 +870,11 @@ msgstr ""
 msgid "Not a link"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Small (16 KB – 1 MB)"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
 msgid "Tiny (0 – 16 KB)"
 msgstr ""
 
@@ -942,7 +942,7 @@ msgstr ""
 msgid "Date deleted"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
 msgid "Date modified"
 msgstr ""
 
@@ -958,7 +958,7 @@ msgstr ""
 msgid "Original location"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Size"
 msgstr ""
 
@@ -1368,7 +1368,7 @@ msgstr ""
 msgid "Change Icon for {folder} Folder"
 msgstr ""
 
-#: crates/ox-app/src/properties/change_icon.rs crates/ox-app/src/properties/custom_icon.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/properties/change_icon.rs crates/ox-app/src/properties/custom_icon.rs
 msgid "Images"
 msgstr ""
 
@@ -1412,7 +1412,7 @@ msgstr ""
 msgid "Also apply this template to all subfolders"
 msgstr ""
 
-#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/places/known_folders.rs
 msgid "Documents"
 msgstr ""
 
@@ -1420,7 +1420,7 @@ msgstr ""
 msgid "General items"
 msgstr ""
 
-#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-core/src/places/known_folders.rs
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
 msgid "Music"
 msgstr ""
 
@@ -1436,7 +1436,7 @@ msgstr ""
 msgid "The folder's window has closed."
 msgstr ""
 
-#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/properties/custom_icon/folder_type.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs
 msgid "Videos"
 msgstr ""
 
@@ -1790,7 +1790,7 @@ msgstr ""
 msgid "Vertical resolution"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/search/facets.rs
 msgid "Video"
 msgstr ""
 
@@ -1928,7 +1928,7 @@ msgid "Used space"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
+#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs
 msgid "{bytes} bytes"
 msgstr ""
 
@@ -2261,7 +2261,7 @@ msgstr ""
 msgid "Modify"
 msgstr ""
 
-#: crates/ox-app/src/properties/security_model.rs
+#: crates/ox-app/src/properties/security_model.rs crates/ox-app/src/window/compress_dialog.rs
 msgid "None"
 msgstr ""
 
@@ -2671,7 +2671,7 @@ msgstr ""
 msgid "File names"
 msgstr ""
 
-#: crates/ox-app/src/search/info_strip.rs
+#: crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/command_bar/menus.rs
 msgid "Kind"
 msgstr ""
 
@@ -2761,7 +2761,7 @@ msgid "Administrators at this computer install OpenXplorer updates without typin
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs."
+msgid "An independent Windows 11–inspired file manager for Linux. Desktop: GTK 4 + GIO/GVfs."
 msgstr ""
 
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/status_bar.rs
@@ -2845,7 +2845,7 @@ msgid "keys keyboard shortcuts hotkeys accelerators bindings list ctrl+? cheat s
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgid "license licence agpl source code copyright mit notice. Original component notices are preserved."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -4006,11 +4006,23 @@ msgid "Search file names in the folders you choose, even while a share is offlin
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
+msgid "Search results"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Show the search filter bar"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
 msgid "Watch enabled local folders for changes while OpenXplorer is open."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "Watch folders for changes"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "While searching, show the scope, kind, date and size lists above the results instead of Search options in the command bar."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -4027,6 +4039,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "quick access pin search cache"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "search filter bar strip options scope kind date size cache save search windows layout"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -4109,7 +4125,7 @@ msgid "What OpenXplorer asks before it deletes, runs or closes."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs
-msgid "What this build is, how it is updated and its licence."
+msgid "What this build is, how it is updated and its license."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs
@@ -4365,7 +4381,7 @@ msgid "Update installation did not complete. {reason}{recovery}"
 msgstr ""
 
 #: crates/ox-app/src/window/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
+msgid "An independent Windows 11–inspired file manager for Linux.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4403,6 +4419,10 @@ msgstr ""
 msgid "This item is not a regular file or a readable folder."
 msgstr ""
 
+#: crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Could not find this item"
+msgstr ""
+
 #: crates/ox-app/src/window/activation/outcome.rs
 msgid "Could not open the item"
 msgstr ""
@@ -4410,6 +4430,15 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/activation/outcome.rs
 msgid "Could not open {name}: {reason}"
+msgstr ""
+
+#: crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Item Not Found"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "This is no longer located in {folder}. Verify the item's location and try again."
 msgstr ""
 
 #: crates/ox-app/src/window/address_bar.rs
@@ -4508,7 +4537,7 @@ msgstr ""
 msgid "Preparing compression…"
 msgstr ""
 
-#: crates/ox-app/src/window/archive_actions.rs crates/ox-app/src/window/extract_into.rs
+#: crates/ox-app/src/window/archive_actions.rs crates/ox-app/src/window/extract_into.rs crates/ox-app/src/window/file_ops/transfer.rs
 msgid "Preparing extraction…"
 msgstr ""
 
@@ -4591,6 +4620,10 @@ msgstr ""
 msgid "{len} windows have {tabs} tabs open. Close them all and quit?"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Close search"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Copy"
 msgstr ""
@@ -4627,10 +4660,6 @@ msgstr ""
 msgid "Extract all files from this archive"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs
-msgid "More options"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
@@ -4659,6 +4688,14 @@ msgstr ""
 msgid "Restore the selected items"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_search.rs
+msgid "Search options"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "See more"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Settings (Ctrl+,)"
 msgstr ""
@@ -4681,6 +4718,10 @@ msgid "{label} (Delete)"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "All subfolders"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Ascending"
 msgstr ""
 
@@ -4690,6 +4731,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
 msgid "Compressed (zipped) Folder"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Current folder"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4706,6 +4751,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Disconnect network drive"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "File contents"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4829,11 +4878,51 @@ msgid "Use system appearance"
 msgstr ""
 
 #: crates/ox-app/src/window/compress_dialog.rs
-msgid "Archive name"
+msgid "Archive format:"
 msgstr ""
 
 #: crates/ox-app/src/window/compress_dialog.rs
-msgid "Compress"
+msgid "Compression level:"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Compression method:"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/file_ops/links.rs
+msgid "Create"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Create archive"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Enter where to create the archive."
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Faster"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Files will be added to this archive:"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Retain hard links"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Retain symbolic links"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Select a destination and create archive"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Smaller"
 msgstr ""
 
 #: crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -5053,6 +5142,10 @@ msgid "Sort by"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "TAR File"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "ZIP File"
 msgstr ""
 
@@ -5267,7 +5360,7 @@ msgid "Move to {place}"
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs
-msgid "Extract ZIP contents before dragging them."
+msgid "Extract the archive before dragging items out of it."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag/payload.rs crates/ox-app/src/window/file_drop.rs crates/ox-core/src/clipboard.rs crates/ox-core/src/ops/conflicts.rs crates/ox-core/src/ops/duplicate.rs crates/ox-core/src/ops/links.rs crates/ox-core/src/ops/shortcuts.rs crates/ox-core/src/transfer/request.rs
@@ -5311,7 +5404,7 @@ msgid "Finish the current operation before dropping files."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
-msgid "Items from a ZIP cannot be linked. Copy or move them instead."
+msgid "Items from an archive cannot be linked. Copy or move them instead."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
@@ -5370,11 +5463,11 @@ msgid "“{name}” is on a network share, a removable drive or a drive where ev
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A ZIP is read-only. Extract it to add items."
+msgid "A previous version is read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A previous version is read-only."
+msgid "An archive is read-only. Extract it to add items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -5386,7 +5479,11 @@ msgid "Drives, shares and virtual items cannot be changed here."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "Items in a ZIP are read-only. Copy them out or use Extract all."
+msgid "Items in Recent files can be opened and copied, not changed."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/availability.rs
+msgid "Items in an archive are read-only. Copy them out or use Extract all."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -5523,10 +5620,6 @@ msgid "Close the folder or file and try again."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Could not find this item"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Delete or move files so you have enough space."
 msgstr ""
 
@@ -5558,10 +5651,6 @@ msgstr ""
 msgid "Interrupted Action"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Item Not Found"
-msgstr ""
-
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "Skip"
 msgstr ""
@@ -5583,6 +5672,10 @@ msgstr ""
 msgid "The action can't be completed because the folder or a file in it is open in another program"
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "The destination folder is a subfolder of the source folder."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "There is not enough space on {drive}."
@@ -5594,11 +5687,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "This folder can't be moved to the Recycle Bin. Do you want to permanently delete it?"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "This is no longer located in {folder}. Verify the item's location and try again."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5684,10 +5772,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs
 msgid "A link opens the file or folder it points to. Leave the name empty to use the name of that item."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/links.rs
-msgid "Create"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs
@@ -6205,6 +6289,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/location_view.rs
 msgid "{place} — OpenXplorer"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/location_view.rs
+msgid "{query} - {results}"
 msgstr ""
 
 #: crates/ox-app/src/window/menu_popover.rs
@@ -6985,6 +7074,13 @@ msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/transfer_panel/action.rs
+msgid "Extracting {count} item from {source} to {destination}"
+msgid_plural "Extracting {count} items from {source} to {destination}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/transfer_panel/action.rs
 msgid "Extracting {source}"
 msgstr ""
 
@@ -7227,7 +7323,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: crates/ox-app/src/window/zip_copies.rs
-msgid "Copy items from one ZIP at a time."
+msgid "Copy items from one archive at a time."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7236,7 +7332,7 @@ msgid "Could not prepare the copies: {error}"
 msgstr ""
 
 #: crates/ox-app/src/window/zip_copies.rs
-msgid "Items in a ZIP are read-only. Use Copy, then Paste where you want them."
+msgid "Items in an archive are read-only. Use Copy, then Paste where you want them."
 msgstr ""
 
 #: crates/ox-app/src/window/zip_copies.rs crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs
@@ -7256,11 +7352,11 @@ msgid "The window closed."
 msgstr ""
 
 #: crates/ox-app/src/window/zip_folder.rs
-msgid "Files inside a ZIP cannot be chosen here. Extract the ZIP first."
+msgid "Files inside an archive cannot be chosen here. Extract the archive first."
 msgstr ""
 
 #: crates/ox-app/src/window/zip_folder.rs
-msgid "This file cannot be opened from the ZIP. Copy it out or use Extract all."
+msgid "This file cannot be opened from the archive. Copy it out or use Extract all."
 msgstr ""
 
 #: crates/ox-app/src/write_inhibitor.rs
@@ -7580,6 +7676,16 @@ msgstr ""
 msgid "{cause}\nThe incomplete archive remains at {staging_uri}. Inspect it before removing it. {cleanup}"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/archive/error.rs
+msgid "“{name}” is a link to a place outside the extracted folder. Nothing was extracted."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/archive/error.rs
+msgid "“{name}” is a link, and links are only extracted into a new folder. Nothing was extracted."
+msgstr ""
+
 #: crates/ox-core/src/archive/zip/error.rs
 msgid "A file name in this ZIP is marked as UTF-8 but is not valid UTF-8."
 msgstr ""
@@ -7698,6 +7804,10 @@ msgstr ""
 
 #: crates/ox-core/src/checksums.rs
 msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
+msgstr ""
+
+#: crates/ox-core/src/clipboard.rs crates/ox-core/src/location/text.rs
+msgid "Encoded control characters are not allowed."
 msgstr ""
 
 #: crates/ox-core/src/clipboard.rs
@@ -7859,6 +7969,13 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format/explorer_text.rs
+msgid "{bytes} byte"
+msgid_plural "{bytes} bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/format/explorer_text.rs
 msgid "{day}, {date}, {clock}"
 msgstr ""
 
@@ -7869,8 +7986,10 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format/explorer_text.rs
-msgid "{short} ({bytes} bytes)"
-msgstr ""
+msgid "{short} ({bytes} byte)"
+msgid_plural "{short} ({bytes} bytes)"
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
@@ -8430,10 +8549,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/location/parts.rs
 msgid "The server name “{host}” in brackets is not an IPv6 address."
-msgstr ""
-
-#: crates/ox-core/src/location/text.rs
-msgid "Encoded control characters are not allowed."
 msgstr ""
 
 #: crates/ox-core/src/location/text.rs
@@ -9190,7 +9305,19 @@ msgid "Any kind"
 msgstr ""
 
 #: crates/ox-core/src/search/facets.rs
-msgid "Audio files"
+msgid "Any size"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Document"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Last year"
+msgstr ""
+
+#: crates/ox-core/src/search/facets.rs
+msgid "Picture"
 msgstr ""
 
 #: crates/ox-core/src/search/facets.rs
@@ -9858,6 +9985,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Folder Options replaces Adjust view display style, with Windows' General and View tabs, and Windows Explorer's Ctrl+E, Ctrl+D, F11 and Alt+P work. The Share button emails the selected files through the desktop's email app. Delete moves items to the Recycle Bin wherever it works and asks only about items that cannot go there. As in Windows Explorer, a file operation that succeeds or is cancelled says nothing and sends no desktop notification, while failures, and failures not yet shown when you cancel, are still reported; read-only drives are not singled out, and New and Paste stay on in folders you cannot write to; Undo stays on Ctrl+Z and the folder menu. Keys meant for an open dialog no longer reach the files behind it, menus show in full when they fit on the monitor, submenus open in the same popup, a cut item pasted into its own folder stays put, and a failed copy names the real file."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "In the Debian package, administrators at the computer install updates without typing a password, through a small helper that only installs a verified, newer official release; Settings › About can turn this off. The Preview pane shows the selected file's contents: text, pictures, PDF pages drawn in a sandbox, and audio and video. Search looks and works like Windows 11's, with Search options and Close search in the command bar, Kind, Date modified and Size options, and the searched words highlighted; Settings › Search can bring back the filter bar. A paste keeps going past an unreadable or missing item and asks about it in the progress window, Compact view and group headings match Windows 11, known extensions are hidden as Windows hides them, and Recent files open as the real file. More of Windows 11's File Explorer keyboard shortcuts work, a tab's menu opens from the keyboard, the Open and Save dialog keeps its size and stays attached to the app that opened it, and a Details column dragged past its start stops at its narrowest width."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

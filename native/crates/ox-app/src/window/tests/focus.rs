@@ -919,6 +919,9 @@ fn every_control_the_window_shows_is_a_tab_stop_that_draws_its_focus() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.start_search_cache();
+    // The search filter bar's controls are stops too while it shows
+    // (SRCH-046); Windows 11's Search options are command bar buttons.
+    test.show_search_filter_bar(true);
     test.search_for("notes");
     wait_until("the search strip", || test.window.search_strip().is_mapped());
     // Network's info bar shows while Network found no computers.

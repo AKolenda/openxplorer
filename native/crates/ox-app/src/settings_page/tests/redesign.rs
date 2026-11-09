@@ -20,7 +20,7 @@ use crate::test_support::harness::{descendants, wait_until};
 /// then, and the row that offers it now, then the rows added since and the
 /// rows of the commands that came from the command bar's "…" menu
 /// (CMD-007), by their menu labels.
-const MOVED_ROWS: [(&str, &str); 72] = [
+const MOVED_ROWS: [(&str, &str); 73] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -148,6 +148,7 @@ const MOVED_ROWS: [(&str, &str); 72] = [
     ),
     ("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ("Cache this folder for search", "Cache this folder for search"),
+    ("Show the search filter bar", "Show the search filter bar"),
     ("Keyboard shortcuts", "Keyboard shortcuts"),
     ("Help", "Help"),
 ];
@@ -183,7 +184,8 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// The pages are the mockup's, and every setting row of the earlier
 /// layout is on one of them, found by its earlier name too: none was
 /// left out, and the only rows added are those of the commands that left
-/// the "…" menu, and since then Home's layout (HOME-012).
+/// the "…" menu, Search's "Show the search filter bar" (SRCH-046), and
+/// since then Home's "Open the home folder on Home" (HOME-012).
 ///
 /// parity: SET-019
 #[gtk::test]

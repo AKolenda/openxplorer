@@ -16,6 +16,7 @@ mod expander;
 mod folder_picture;
 mod heading_span;
 mod item_check;
+mod marks;
 pub(crate) use item_check::own_clicks;
 mod row_tooltip;
 
@@ -36,6 +37,7 @@ use crate::folder_view::item::FileItem;
 use crate::icons::{self, Art, Icon};
 use crate::window::widget_tree::toggle_class;
 use heading_span::HeadingSpan;
+use marks::marked_words;
 
 /// Gap between a row's icon and its name (`.name-cell{gap:11px}`).
 const ROW_ICON_GAP: i32 = 11;
@@ -537,8 +539,8 @@ impl FileCell {
     }
 
     /// The heading row of a slot, made the first time a slot shows: the
-    /// chevron, the title and the line. The window handles clicks on it
-    /// (`window/group_headings.rs`).
+    /// chevron, the title and the rest of the row. The window handles
+    /// clicks on it (`window/group_headings.rs`).
     fn slot_row(&self) -> gtk::Box {
         let imp = self.imp();
         if let Some(row) = imp.slot_row.borrow().as_ref() {
@@ -552,16 +554,19 @@ impl FileCell {
             .single_line_mode(true)
             .css_classes(["group-title"])
             .build();
-        let line = gtk::Separator::builder()
+        // The rest of the row after the title: Windows 11 draws no line
+        // there, so it is an empty filler that only takes the room, and
+        // the slots after it in a grid's row carry it on.
+        let rest = gtk::Box::builder()
             .hexpand(true)
-            .valign(gtk::Align::Center)
+            .css_classes(["group-rest"])
             .build();
         let row = gtk::Box::builder()
             .spacing(10)
             .hexpand(true)
             .css_classes(["group-header"])
             .build();
-        // The chevron and the title, which the line follows.
+        // The chevron and the title, which the rest of the row follows.
         let hit = gtk::Box::builder()
             .spacing(8)
             .css_classes(["group-heading-hit"])
@@ -569,9 +574,9 @@ impl FileCell {
         hit.append(&chevron);
         hit.append(&title);
         row.append(&hit);
-        row.append(&line);
+        row.append(&rest);
         // The pointer anywhere over a heading's row, its heading or a slot
-        // carrying its line, lights the whole row, as in Windows 11. Only
+        // carrying the row on, lights the whole row, as in Windows 11. Only
         // a change of state restyles anything.
         let motion = gtk::EventControllerMotion::new();
         let hover = glib::clone!(
@@ -792,9 +797,26 @@ impl FileCell {
     }
 
     /// Shows `name` as the item's name: its own, or without a known type's
-    /// extension (VIEW-069).
-    pub(crate) fn show_name(&self, name: &str) {
-        self.imp().label.set_text(name);
+    /// extension (VIEW-069), with `words`, which a search looks for, marked
+    /// in it as Windows 11 marks them in its results (SRCH-046).
+    pub(crate) fn show_name(&self, name: &str, words: &[String]) {
+        let label = &self.imp().label;
+        label.set_text(name);
+        label.set_attributes(marked_words(name, words).as_ref());
+    }
+
+    /// The byte ranges of the name marked as found, for tests.
+    #[cfg(test)]
+    pub(crate) fn marked_ranges(&self) -> Vec<(u32, u32)> {
+        let Some(attributes) = self.imp().label.attributes() else {
+            return Vec::new();
+        };
+        attributes
+            .attributes()
+            .iter()
+            .filter(|attribute| attribute.type_() == gtk::pango::AttrType::Background)
+            .map(|attribute| (attribute.start_index(), attribute.end_index()))
+            .collect()
     }
 
     /// The box that holds the name: the cell itself, or the lines beside
@@ -934,7 +956,7 @@ pub(crate) fn connect_mapped_file_cells(
             let name = bind_owners.shown_name(&item);
             list_item.set_accessible_label(&name);
             cell.bind(&item);
-            cell.show_name(&name);
+            cell.show_name(&name, &bind_owners.marked_words());
             cell.show_item_check(bind_owners.shows_item_checks());
             // A cell bound while it showed a group's heading, or while no
             // item, missed the last change of whether check boxes take

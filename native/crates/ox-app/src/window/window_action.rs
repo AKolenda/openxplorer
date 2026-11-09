@@ -284,6 +284,9 @@ pub(crate) enum WindowAction {
     CopyPathOf,
     /// Compresses the folder at the location given into a ZIP beside it.
     CompressToZipOf,
+    /// Compresses the folder at the location given into a plain TAR
+    /// beside it.
+    CompressToTarOf,
     /// Asks for the name and format of an archive of the folder at the
     /// location given.
     CompressToOf,
@@ -361,6 +364,23 @@ pub(crate) enum WindowAction {
     /// Caches the current folder for search, or stops caching it (a
     /// check item).
     CacheFolder,
+    /// Search options > All subfolders or Current folder: whether a search
+    /// looks in the folder's subfolders too, in the string target `all`
+    /// or `current` (SRCH-046).
+    SearchDepth,
+    /// Search options > Date modified: the date option's position in the
+    /// list, in the string target.
+    SearchDate,
+    /// Search options > Kind: the kind option's position, in the string
+    /// target.
+    SearchKind,
+    /// Search options > Size: the size option's position, in the string
+    /// target.
+    SearchSize,
+    /// Search options > File contents: names and contents are searched.
+    SearchContents,
+    /// Close search: ends the search and shows the folder again.
+    CloseSearch,
     /// Caches the folder whose URI is the string target for search, or
     /// stops caching it (the menus of a pin and of a folder).
     CacheFolderOf,
@@ -444,6 +464,9 @@ pub(crate) enum WindowAction {
     ExtractHere,
     /// Compress to ZIP file: the selection into a new ZIP beside it.
     CompressToZip,
+    /// Compress to › TAR File: the selection into a new plain TAR beside
+    /// it, as Windows 11 creates TAR archives besides ZIP (ARC-023).
+    CompressToTar,
     /// Compress to…: asks for the new archive's name and format first
     /// (ARC-023).
     CompressTo,
@@ -617,6 +640,7 @@ impl WindowAction {
             WindowAction::ClearRecentLocations => "clear-recent-locations",
             WindowAction::CopyPathOf => "copy-path-of",
             WindowAction::CompressToZipOf => "compress-to-zip-of",
+            WindowAction::CompressToTarOf => "compress-to-tar-of",
             WindowAction::CompressToOf => "compress-to-of",
             WindowAction::NewIn => "new-in",
             WindowAction::ShowNewMenu => "show-new-menu",
@@ -646,6 +670,12 @@ impl WindowAction {
             WindowAction::MountDiskImage => "mount-disk-image",
             WindowAction::AnalyseDiskUsage => "analyse-disk-usage",
             WindowAction::CacheFolder => "cache-folder",
+            WindowAction::SearchDepth => "search-depth",
+            WindowAction::SearchDate => "search-date",
+            WindowAction::SearchKind => "search-kind",
+            WindowAction::SearchSize => "search-size",
+            WindowAction::SearchContents => "search-contents",
+            WindowAction::CloseSearch => "close-search",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
             WindowAction::ShowTarget => "show-target",
@@ -679,6 +709,7 @@ impl WindowAction {
             WindowAction::ExtractAll => "extract-all",
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
+            WindowAction::CompressToTar => "compress-to-tar",
             WindowAction::CompressTo => "compress-to",
             WindowAction::SendTo => "send-to",
             WindowAction::SendToDesktop => "send-to-desktop",

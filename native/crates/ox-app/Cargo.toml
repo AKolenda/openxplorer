@@ -34,6 +34,8 @@ workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# Writes the .tar.zst fixtures of the archive tests.
+ruzstd.workspace = true
 
 [build-dependencies]
 glib-build-tools.workspace = true

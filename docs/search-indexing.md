@@ -14,7 +14,7 @@ Local selected directories use filesystem watches while the app is open. Network
 
 ## Results open their real locations
 
-A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. As in Windows 11, a search is a step of the tab’s history: the tab and address bar read Search Results in Documents, Back returns to the folder, Forward to the results, and Back from a folder opened from them shows them again. Emptying the search box also goes back to the folder. Stale results can remain when a server is offline.
+A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. As in Windows 11, a search is a step of the tab’s history: the tab and address bar read Search Results in Documents, Back returns to the folder, Forward to the results, and Back from a folder opened from them shows them again. Emptying the search box, Escape or Close search also goes back to the folder. As in Windows 11, while a search shows the tab reads notes - Search Results in Documents, the words you searched for are marked in the names, and the command bar shows Search options and Close search. Search options chooses All subfolders or Current folder, a Date modified, Kind or Size, and File contents to look inside files too. Settings → Search → Show the search filter bar shows the earlier filter bar above the results instead, with its scope, Kind, Date modified and Size lists, Cache this folder and Save search. The date, kind and size choices narrow the results together: Kind names Windows’ kinds (Document, Folder, Music, Picture, Video), Size uses Windows’ groups, from Empty (0 KB) and Tiny (0 – 16 KB) up to Gigantic (> 4 GB), and Date modified runs from Today to Last year, as in Windows. On the results, … → Pin to Quick access saves the search to the navigation pane, as Windows 11 pins a search. You can also type the options with the words, as in Windows: kind:picture, kind:folder, datemodified:today or datemodified:last month, size:tiny or size:>500 (bytes); typed alone, such as kind:folder, they list every such item of the folder and its subfolders. Stale results can remain when a server is offline.
 
 ![A cached search for “budget” in the native app, showing the folder of the result](../apps/web/public/assets/screenshots/cached-search.png)
 
@@ -34,4 +34,4 @@ Click the current file list and type SC to select a loaded filename beginning wi
 
 ---
 
-OpenXplorer 2.0.15. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.16. Project-authored documentation: AGPL-3.0-only.

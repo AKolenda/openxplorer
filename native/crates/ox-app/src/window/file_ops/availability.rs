@@ -135,6 +135,9 @@ pub(crate) struct SelectionFacts {
     /// Some selected item is in a read-only previous version
     /// (`readonlyLocation`).
     pub(crate) has_read_only: bool,
+    /// Some selected item is a row of Recent files, which may be copied,
+    /// not cut, duplicated, renamed or deleted.
+    pub(crate) has_recent: bool,
 }
 
 /// What the folder the tab shows is.
@@ -196,9 +199,9 @@ impl CommandFacts {
             FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
             FileCommand::Copy => can_copy || (self.drive_selected && !self.is_busy),
             FileCommand::Cut | FileCommand::Duplicate | FileCommand::Rename => {
-                can_copy && !selection.has_read_only
+                can_copy && !selection.has_read_only && !selection.has_recent
             }
-            FileCommand::Delete | FileCommand::DeletePermanently => can_change,
+            FileCommand::Delete | FileCommand::DeletePermanently => can_change && !selection.has_recent,
             FileCommand::Paste => {
                 self.clipboard.is_pasteable() && !folder.is_searching && !busy && folder.is_writable
             }
@@ -255,7 +258,7 @@ impl CommandFacts {
                 ox_core::i18n::gettext_static("Clear the search to add items to this folder.")
             }
             FileCommand::New | FileCommand::Paste if folder.is_zip => {
-                ox_core::i18n::gettext_static("A ZIP is read-only. Extract it to add items.")
+                ox_core::i18n::gettext_static("An archive is read-only. Extract it to add items.")
             }
             FileCommand::New => ox_core::i18n::gettext_static("This folder is read-only."),
             FileCommand::Paste if !selection.has_inoperable => {
@@ -268,13 +271,22 @@ impl CommandFacts {
             _ if selection.has_inoperable => {
                 ox_core::i18n::gettext_static("Drives, shares and virtual items cannot be changed here.")
             }
+            FileCommand::Cut
+            | FileCommand::Duplicate
+            | FileCommand::Rename
+            | FileCommand::Delete
+            | FileCommand::DeletePermanently
+                if selection.has_recent =>
+            {
+                ox_core::i18n::gettext_static("Items in Recent files can be opened and copied, not changed.")
+            }
             FileCommand::Copy | FileCommand::Cut | FileCommand::Rename | FileCommand::Duplicate
                 if folder.is_recycle_bin =>
             {
                 ox_core::i18n::gettext_static("Items in the Recycle Bin can only be restored or deleted.")
             }
             _ if selection.has_read_only && folder.is_zip => ox_core::i18n::gettext_static(
-                "Items in a ZIP are read-only. Copy them out or use Extract all.",
+                "Items in an archive are read-only. Copy them out or use Extract all.",
             ),
             _ if selection.has_read_only => ox_core::i18n::gettext_static("A previous version is read-only."),
             _ => ox_core::i18n::gettext_static("Rename one item at a time."),
@@ -304,18 +316,26 @@ fn waits_for_running_jobs(command: FileCommand, clipboard: ClipboardKind, jobs: 
 /// The facts about `items`, the selected items (`canOperate` and
 /// `readonlyLocation` in app.js).
 pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -> SelectionFacts {
+    // A row of Recent files that names its file is copied as that file,
+    // whether `GVfs` types it as a file or as a shortcut; its Cut,
+    // Duplicate, Rename and Delete are refused as `has_recent`.
     let has_inoperable = items.iter().any(|item| {
         let entry = item.entry();
-        !entry.can_operate || entry.is_virtual || is_smb_share_root(&entry.uri)
+        let stands_for_a_file = entry.meta.recent_target.is_some();
+        !stands_for_a_file && (!entry.can_operate || entry.is_virtual || is_smb_share_root(&entry.uri))
     });
     let has_read_only = items.iter().any(|item| {
         let uri = &item.entry().uri;
         locations.is_snapshot_location(uri) || is_archive_location(uri)
     });
+    let has_recent = items
+        .iter()
+        .any(|item| crate::window::context_menu::is_recent_row(item.entry()));
     SelectionFacts {
         count: items.len(),
         has_inoperable,
         has_read_only,
+        has_recent,
     }
 }
 

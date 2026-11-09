@@ -21,7 +21,7 @@ const MAX_NAME_TRIES: u32 = 100;
 /// and existing files were not touched.
 pub(crate) fn extraction_failure_text(error: &ArchiveError) -> String {
     ox_core::i18n::format_message(
-        "{error}\n\nThe ZIP is unchanged. Existing files were not overwritten.",
+        "{error}\n\nThe archive is unchanged. Existing files were not overwritten.",
         &[("error", &error.to_string())],
     )
 }
@@ -62,7 +62,7 @@ mod tests {
         let text = extraction_failure_text(&ArchiveError::DestinationExists);
 
         assert!(
-            text.ends_with("\n\nThe ZIP is unchanged. Existing files were not overwritten."),
+            text.ends_with("\n\nThe archive is unchanged. Existing files were not overwritten."),
             "{text}"
         );
     }

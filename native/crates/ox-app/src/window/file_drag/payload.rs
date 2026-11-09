@@ -52,7 +52,10 @@ pub(crate) enum DragRefusal {
     ItemCount,
     /// An item that may not leave: a ZIP member, a share listing, a
     /// server, a special file.
-    #[error("{}", ox_core::i18n::gettext("Extract ZIP contents before dragging them."))]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Extract the archive before dragging items out of it.")
+    )]
     NotDraggable,
     /// The addresses and paths are over [`MAX_PAYLOAD_BYTES`].
     #[error("{}", ox_core::i18n::gettext("This file selection is too large to drag."))]
@@ -87,20 +90,27 @@ pub(crate) fn is_draggable_location(uri: &str) -> bool {
 /// local or SMB file, folder or link, not a share listing or a shortcut,
 /// whose address passes the location rules, which refuse a password or a
 /// control character (`file_uri`); or an item directly in the Recycle
-/// Bin, which a drop into a folder moves there (OPS-046).
+/// Bin, which a drop into a folder moves there (OPS-046). A row of Recent
+/// files leaves as the file it stands for, whether `GVfs` types the row as
+/// a file or as a shortcut.
 pub(super) fn is_draggable(entry: &Entry) -> bool {
     let is_plain_item = matches!(
         entry.kind,
         EntryKind::File | EntryKind::Directory | EntryKind::Symlink
-    );
-    let is_valid_address = normalise(&entry.uri).is_ok();
-    let may_leave =
-        (is_valid_address && is_draggable_location(&entry.uri)) || is_recycle_bin_item(&entry.uri);
-    is_plain_item && !entry.is_virtual && may_leave
+    ) && !entry.is_virtual;
+    let is_recent_file = entry.meta.recent_target.is_some()
+        && matches!(
+            entry.kind,
+            EntryKind::File | EntryKind::Shortcut | EntryKind::Symlink
+        );
+    let uri = entry.item_uri();
+    let is_valid_address = normalise(uri).is_ok();
+    let may_leave = (is_valid_address && is_draggable_location(uri)) || is_recycle_bin_item(uri);
+    (is_plain_item || is_recent_file) && may_leave
 }
 
 /// The URIs a drag of `entries` carries: every one, in order, without
-/// duplicates.
+/// duplicates; a row of Recent files carries the file it stands for.
 ///
 /// # Errors
 ///
@@ -117,8 +127,9 @@ pub(super) fn dragged_uris(entries: &[&Entry]) -> Result<Vec<String>, DragRefusa
     let mut seen: HashSet<&str> = HashSet::with_capacity(entries.len());
     let uris = entries
         .iter()
-        .filter(|entry| seen.insert(entry.uri.as_str()))
-        .map(|entry| entry.uri.clone())
+        .map(|entry| entry.item_uri())
+        .filter(|uri| seen.insert(uri))
+        .map(str::to_owned)
         .collect();
     Ok(uris)
 }
@@ -249,7 +260,7 @@ mod tests {
         );
         assert_eq!(
             DragRefusal::NotDraggable.to_string(),
-            "Extract ZIP contents before dragging them."
+            "Extract the archive before dragging items out of it."
         );
         assert_eq!(
             DragRefusal::ItemCount.to_string(),

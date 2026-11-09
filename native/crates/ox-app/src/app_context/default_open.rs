@@ -36,7 +36,7 @@ impl AppContext {
     /// snapshot, is no longer a regular file, has no application or needs
     /// a local path, or the application did not start.
     pub(crate) async fn open_file(&self, entry: &Entry, window: &gtk::Window) -> Result<(), String> {
-        let uri = entry.navigation_uri().to_owned();
+        let uri = entry.opened_uri().to_owned();
         let Some(prepared) = self.launch_in_application(uri, window).await? else {
             return Ok(());
         };

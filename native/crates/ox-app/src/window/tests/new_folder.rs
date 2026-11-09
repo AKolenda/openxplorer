@@ -14,7 +14,7 @@ use crate::test_support::harness::{settle, wait_until, Fixture, TestWindow};
 
 /// Presses `key` in the in-place name field `editor`, as far as its own
 /// key handler goes.
-fn press_in(editor: &gtk::Entry, key: gdk::Key) {
+pub(super) fn press_in(editor: &gtk::Entry, key: gdk::Key) {
     let keys = editor
         .observe_controllers()
         .iter::<glib::Object>()
@@ -62,6 +62,27 @@ fn new_folder_makes_the_folder_at_once_and_renames_it_in_place() {
     wait_until("the renamed folder to be selected", || {
         test.selected_names() == ["Projects"]
     });
+}
+
+/// A name typed with a period or a space at its end loses them, as the
+/// Windows shell trims them ("Do not end a file or directory name with a
+/// space or a period", Microsoft's Naming Files, Paths, and Namespaces):
+/// "Archive. " names the new folder "Archive".
+///
+/// parity: OPS-001, OPS-010
+#[gtk::test]
+fn a_period_or_space_at_the_end_of_a_new_folders_name_is_trimmed() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    let field = make_new_folder(&test);
+    field.set_text("Archive. ");
+    field.emit_activate();
+
+    wait_until("the rename", || !fixture.path("New folder").exists());
+    assert!(fixture.path("Archive").is_dir());
+    assert!(!fixture.path("Archive. ").exists());
+    assert!(!fixture.path("Archive.").exists());
 }
 
 /// A taken "New folder" is never overwritten: the next one is

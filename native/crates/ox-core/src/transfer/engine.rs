@@ -17,7 +17,7 @@ use super::commit::commit_replace;
 use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
-use super::guard::{check_write_tree, SourceChange};
+use super::guard::{check_write_tree, check_write_tree_reading, SourceChange, Unreadable};
 use super::item_failure::{FailedItem, FailureAnswer, FailureCause, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
 use super::limits::{FreeSpace, Incoming, StorageRules, TreeTotals};
@@ -902,27 +902,35 @@ impl TransferEngine {
         let destination = destination.as_ref();
         // XFER-020: check every affected path before changing this
         // top-level item, because a writable parent can contain protected
-        // backup descendants.
+        // backup descendants. A copy writes nothing from a folder it
+        // cannot list, and asks about that folder by itself while the
+        // rest is copied (OPS-047); a move is never made unchecked.
         let source_change = batch.source_change();
-        check_write_tree(
+        let unreadable = match placement.mode {
+            TransferMode::Copy => Unreadable::NotWalked,
+            _ => Unreadable::Fails,
+        };
+        check_write_tree_reading(
             self.guard(),
             source,
             None,
             Some(destination),
             batch.cancel,
             source_change,
+            unreadable,
         )?;
         // Written as administrator, the same tree is checked again where
         // the user sees it: snapshot roots are known by their `file:` URIs.
         if placement.requested_folder.uri() != placement.destination_folder.uri() {
             let requested = child_node(placement.requested_folder, destination.name())?;
-            check_write_tree(
+            check_write_tree_reading(
                 self.guard(),
                 source,
                 None,
                 Some(requested.as_ref()),
                 batch.cancel,
                 SourceChange::Kept,
+                unreadable,
             )?;
         }
         if placement.mode == TransferMode::Move {

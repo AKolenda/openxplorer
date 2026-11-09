@@ -99,6 +99,9 @@ pub(crate) struct ItemFacts {
     /// adds or removes and whether it is a favorite already; `None`
     /// offers neither.
     pub(crate) favorite: Option<(String, bool)>,
+    /// It is a row of Recent files, which may be copied and shared, not
+    /// cut, renamed or deleted.
+    pub(crate) is_recent: bool,
 }
 
 /// A drive or network location Send to copies to, named as This PC
@@ -481,9 +484,15 @@ fn share_with_item(facts: &ItemFacts) -> Option<MenuEntry> {
 /// The compact menu's strip, as Windows 11 lays it out: Cut, Copy, Paste
 /// (into a folder, only while there is something to paste), Rename,
 /// Share (where offered, for files) and Delete, each with its label under
-/// its icon; their actions decide when they are enabled.
+/// its icon; their actions decide when they are enabled. A row of Recent
+/// files has only Copy and Share there.
 fn strip_items(facts: &ItemFacts) -> Vec<MenuItem> {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
+    if facts.is_recent {
+        let mut strip = vec![copy];
+        strip.extend(share_item(facts));
+        return strip;
+    }
     let mut strip = vec![cut, copy];
     if facts.shape == ItemShape::Folder && facts.is_single {
         strip.push(paste.shown_while_enabled());
@@ -561,14 +570,21 @@ fn compress_to_dialog_item(label: &str) -> MenuEntry {
     item(label, Icon::FolderZip, WindowAction::CompressTo).into()
 }
 
-/// "Compress to", Windows 11's submenu: ZIP File, and Additional options,
-/// the app's Compress dialog, which also writes TAR.XZ.
+/// "Compress to", Windows 11's submenu: ZIP File, TAR File (a plain
+/// TAR, as Windows 11 creates TAR archives besides ZIP), and Additional
+/// options, the app's Compress dialog, which also writes TAR.XZ.
 fn compress_submenu() -> MenuEntry {
     let entries = vec![
         item(
             ox_core::i18n::gettext_static("ZIP File"),
             Icon::FolderZip,
             WindowAction::CompressToZip,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("TAR File"),
+            Icon::FolderZip,
+            WindowAction::CompressToTar,
         )
         .into(),
         compress_to_dialog_item(ox_core::i18n::gettext_static("Additional options")),
@@ -1300,6 +1316,7 @@ mod tests {
             send_to: SendToTargets::default(),
             can_share: false,
             favorite: None,
+            is_recent: false,
         }
     }
 
@@ -2095,7 +2112,10 @@ mod tests {
                 .expect("the submenu is listed")
         };
         assert_eq!(submenu("Share with"), ["Bluetooth device", "Mail recipient"]);
-        assert_eq!(submenu("Compress to"), ["ZIP File", "Additional options"]);
+        assert_eq!(
+            submenu("Compress to"),
+            ["ZIP File", "TAR File", "Additional options"]
+        );
         let several = ItemFacts {
             is_single: false,
             ..facts.clone()

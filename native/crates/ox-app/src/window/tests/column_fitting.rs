@@ -44,17 +44,23 @@ fn shown_widths(details: &DetailsView) -> Vec<(SortColumn, i32)> {
 }
 
 /// The width `column` takes when fitted: its widest text, or its title
-/// when that is wider, within its limits.
+/// when that is wider, within its limits, and Size never narrower than a
+/// 9.5 GB size in the list's font.
 fn fitted(details: &DetailsView, column: SortColumn) -> i32 {
     let mut widest = details.widest_text(column);
     if column == SortColumn::Name {
         widest += details.name_check_room();
     }
     let text = column_widths::fixed_width(column, Some(column_widths::fitted_width(column, widest)));
-    text.max(column_widths::clamped_fixed_width(
+    let fitted = text.max(column_widths::clamped_fixed_width(
         column,
         details.title_width(column),
-    ))
+    ));
+    if column == SortColumn::Size {
+        fitted.max(column_widths::fixed_width(column, Some(details.size_minimum())))
+    } else {
+        fitted
+    }
 }
 
 /// Checks that every shown column of `details` is fitted.
@@ -339,6 +345,30 @@ fn the_real_ctrl_keypad_plus_fits_and_the_main_ctrl_plus_resizes_text() {
     pointer.tap_key(gdk::Key::equal);
     pointer.let_go_key(gdk::Key::Control_L);
     wait_until("the text to grow", || test.window.skin().text_size() != text_size);
-    assert_eq!(shown_widths(&details), fitted_widths, "Ctrl+= fits nothing");
+    // Ctrl+= fits nothing; only Size may widen, so its text still fits
+    // the larger font.
+    let without_size = |widths: Vec<(SortColumn, i32)>| -> Vec<(SortColumn, i32)> {
+        widths
+            .into_iter()
+            .filter(|(column, _)| *column != SortColumn::Size)
+            .collect()
+    };
+    assert_eq!(
+        without_size(shown_widths(&details)),
+        without_size(fitted_widths.clone()),
+        "Ctrl+= fits nothing"
+    );
+    let size_before = fitted_widths
+        .iter()
+        .find(|(column, _)| *column == SortColumn::Size)
+        .map(|(_, width)| *width);
+    let size_after = shown_widths(&details)
+        .into_iter()
+        .find(|(column, _)| *column == SortColumn::Size)
+        .map(|(_, width)| width);
+    assert!(
+        size_after >= size_before,
+        "Size never narrows: {size_before:?} -> {size_after:?}"
+    );
     test.activate("text-reset", None);
 }

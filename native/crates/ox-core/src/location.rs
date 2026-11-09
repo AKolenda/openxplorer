@@ -54,7 +54,9 @@ mod parts;
 mod text;
 mod virtual_place;
 
-pub(crate) use text::{decode_uri_component, python_strip, quote_component, unquote_lossy};
+pub(crate) use text::{
+    decode_uri_component, has_control_character, python_strip, quote_component, unquote_lossy,
+};
 
 pub use archive_location::{is_archive_location, ArchiveLocation, ARCHIVE_SCHEME};
 pub use classify::{is_network_filesystem, is_smb_share_root};
@@ -65,7 +67,7 @@ pub use names::{
     MAX_LABEL_CHARS, WINDOWS_FORBIDDEN_CHARACTERS,
 };
 pub use normalise::{
-    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
+    file_uri, is_smb_server, normalise, normalise_item, normalise_location, require_item_uri, require_share,
     typed_local_path, without_user,
 };
 pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};

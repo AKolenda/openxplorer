@@ -80,8 +80,13 @@ pub fn private_extraction_name() -> std::io::Result<String> {
 /// Makes the lone folder inside `extracted` the output, beside the
 /// archive under the first free name based on its own. Returns the
 /// output as it ends up: lifted, or `extracted` unchanged when there is
-/// nothing to lift or a rename fails. Blocking.
+/// nothing to lift, the archive had a link or a rename fails. Blocking.
 pub fn lift_single_folder(extracted: ExtractedFolder) -> ExtractedFolder {
+    // ARC-016: a link was checked against the new folder; lifting the
+    // folder inside it out could lead the link beside the output.
+    if extracted.summary.link_count > 0 {
+        return extracted;
+    }
     let outer = gio::File::for_uri(&extracted.uri);
     let destination = gio::File::for_uri(&extracted.destination_uri);
     let Some(inner_name) = lone_folder(&outer) else {

@@ -18,25 +18,26 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::archive::{
-    lift_single_folder, ArchiveError, CompressionRequest, ExtractionRequest, GioArchiveOpener,
-    GioExtractionOutput, ZipCompressor, ZipExtractor,
+    lift_single_folder, ArchiveError, CompressionRequest, CreatedArchive, ExtractionRequest,
+    GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
 use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
-use ox_core::location::{is_archive_location, is_smb_server, parent_location};
+use ox_core::location::{is_archive_location, is_smb_server, parent_location, ItemKind};
+use ox_core::ops::CreatedItem;
 use ox_core::transfer::{Cancellation, Node, NodeFactory};
 use ox_core::versions::snapshot_location;
 
 use crate::archive_view::{
-    archive_browser, archive_dialog, compressed_file_name, compression_failure_text,
-    compression_success_text, extract_dialog, extraction_failure_text, extraction_success_text,
-    unique_folder_names, ArchiveDialogActions, ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED,
-    EXTRACTION_STOPPED,
+    archive_browser, archive_dialog, compressed_file_name, compression_failure_text, extract_dialog,
+    extraction_failure_text, extraction_success_text, unique_folder_names, ArchiveDialogActions,
+    ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED, EXTRACTION_STOPPED, TAR_ENDING, ZIP_ENDING,
 };
 use crate::locations::Page;
 
 use super::actions::plain_action;
+use super::session::TabId;
 use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -59,7 +60,12 @@ impl BrowserWindow {
                 }
             }),
             plain_action(WindowAction::ExtractHere, BrowserWindow::extract_here),
-            plain_action(WindowAction::CompressToZip, BrowserWindow::compress_selection),
+            plain_action(WindowAction::CompressToZip, |window| {
+                window.compress_selection(ZIP_ENDING);
+            }),
+            plain_action(WindowAction::CompressToTar, |window| {
+                window.compress_selection(TAR_ENDING);
+            }),
             plain_action(WindowAction::CompressTo, BrowserWindow::ask_compress_to),
         ]);
     }
@@ -90,7 +96,7 @@ impl BrowserWindow {
     /// Each archive command with why it is disabled, `None` when it is
     /// enabled: the one rule both the enabled state and the explanation
     /// come from.
-    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 4] {
+    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 5] {
         let busy = self
             .is_writing_files()
             .then_some("Wait for the running file operation to finish.");
@@ -109,6 +115,10 @@ impl BrowserWindow {
             (WindowAction::ExtractHere, busy.or(no_archive).or(read_only)),
             (
                 WindowAction::CompressToZip,
+                busy.or(nothing_selected).or(read_only),
+            ),
+            (
+                WindowAction::CompressToTar,
                 busy.or(nothing_selected).or(read_only),
             ),
             (WindowAction::CompressTo, busy.or(nothing_selected).or(read_only)),
@@ -348,19 +358,26 @@ impl BrowserWindow {
 
     /// Compress to ZIP file: the selection into a new ZIP in the folder,
     /// named after the first item (ARC-023).
-    fn compress_selection(&self) {
+    fn compress_selection(&self, ending: &'static str) {
         let selected = self.folder_pane().model().selected_items();
         let (Some(first), Some(folder)) = (selected.first(), self.current_uri()) else {
             return;
         };
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
         let first_name = first.entry().name.clone();
-        self.compress_items(uris, folder, first_name);
+        self.compress_items(uris, folder, first_name, ending);
     }
 
-    /// Compresses `uris` into a new ZIP in `folder`, named after
-    /// `first_name`, the first item's name.
-    pub(super) fn compress_items(&self, uris: Vec<String>, folder: String, first_name: String) {
+    /// Compresses `uris` into a new archive in `folder`, named after
+    /// `first_name`, the first item's name, with `ending`: a ZIP for
+    /// `.zip`, a plain TAR for `.tar`.
+    pub(super) fn compress_items(
+        &self,
+        uris: Vec<String>,
+        folder: String,
+        first_name: String,
+        ending: &'static str,
+    ) {
         if !self.may_start_archive_operation() {
             return;
         }
@@ -370,37 +387,65 @@ impl BrowserWindow {
             return;
         }
         self.update_archive_actions();
+        let origin = self.imp().session.borrow().active_id();
+        let generation = self.imp().input_generation.get();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
                 let created = window
-                    .compress_into_free_name(uris, &folder, &first_name, &cancel)
+                    .compress_into_free_name(uris, &folder, (&first_name, ending), &cancel)
                     .await;
                 window.finish_archive_operation();
-                if created.as_ref().is_err_and(ArchiveError::is_cancelled) {
-                    return;
+                match created {
+                    Err(error) if error.is_cancelled() => {}
+                    Err(error) => window.report_in_folder(
+                        &folder,
+                        Err(compression_failure_text(&error)),
+                        ox_core::i18n::gettext_static(COMPRESSION_STOPPED),
+                    ),
+                    Ok(created) => window.conclude_compression(&created, &folder, (origin, generation)),
                 }
-                let outcome = created.map_err(|error| compression_failure_text(&error));
-                window.report_in_folder(
-                    &folder,
-                    outcome,
-                    ox_core::i18n::gettext_static(COMPRESSION_STOPPED),
-                );
             }
         ));
     }
 
-    /// Compresses `uris` into `folder` under the first free ZIP name for
-    /// `first_name`; the compressor refuses a taken name without writing.
+    /// After Compress to › ZIP File or TAR File, as in Windows 11: Undo
+    /// can take the new archive away again (to the Recycle Bin), and,
+    /// when nothing the user did since would be disturbed, it is selected
+    /// and renamed in place, as a new folder is; otherwise the folder is
+    /// only listed again. `(origin, generation)` are the tab and the
+    /// input count when the command was chosen.
+    fn conclude_compression(
+        &self,
+        created: &CreatedArchive,
+        folder: &str,
+        (origin, generation): (Option<TabId>, u64),
+    ) {
+        let item = CreatedItem {
+            uri: created.uri.clone(),
+            kind: ItemKind::File,
+        };
+        let undisturbed = origin.is_some_and(|tab| self.is_undisturbed_since(generation, tab, folder));
+        if undisturbed {
+            self.rename_created(Ok(item));
+        } else {
+            self.context().record_operation(item.undo_record());
+            self.reload_tabs_showing(folder);
+        }
+    }
+
+    /// Compresses `uris` into `folder` under the first free archive name
+    /// for `first_name` with `ending`; the compressor refuses a taken name
+    /// without writing.
     async fn compress_into_free_name(
         &self,
         uris: Vec<String>,
         folder: &str,
-        first_name: &str,
+        (first_name, ending): (&str, &str),
         cancel: &Cancellation,
-    ) -> Result<String, ArchiveError> {
-        for archive_name in compressed_file_name(first_name) {
+    ) -> Result<CreatedArchive, ArchiveError> {
+        for archive_name in compressed_file_name(first_name, ending) {
             let request = CompressionRequest {
                 uris: uris.clone(),
                 destination_uri: folder.to_owned(),
@@ -412,7 +457,7 @@ impl BrowserWindow {
             self.describe_compression(cancel, &request);
             match compressor.compress_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::ArchiveExists) => {}
-                Ok(created) => return Ok(compression_success_text(&created)),
+                Ok(created) => return Ok(created),
                 Err(error) => return Err(error),
             }
         }

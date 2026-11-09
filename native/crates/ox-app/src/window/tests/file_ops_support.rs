@@ -87,7 +87,7 @@ pub(super) fn text_field(dialog: &Dialog) -> gtk::Entry {
 }
 
 /// The field that edits a name in place in `test`'s view, once it shows.
-pub(super) fn name_editor(test: &TestWindow) -> gtk::Entry {
+pub(in crate::window) fn name_editor(test: &TestWindow) -> gtk::Entry {
     let find = || {
         descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
             .into_iter()
@@ -98,14 +98,14 @@ pub(super) fn name_editor(test: &TestWindow) -> gtk::Entry {
 }
 
 /// Whether `test`'s view edits a name in place.
-pub(super) fn is_renaming_in_place(test: &TestWindow) -> bool {
+pub(in crate::window) fn is_renaming_in_place(test: &TestWindow) -> bool {
     descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
         .iter()
         .any(|field| field.has_css_class("rename-field"))
 }
 
 /// Selects the items called `names` in `test`'s folder view.
-pub(super) fn select_names(test: &TestWindow, names: &[&str]) {
+pub(in crate::window) fn select_names(test: &TestWindow, names: &[&str]) {
     let model = test.window.folder_model();
     model.select_none();
     for position in 0..model.n_items() {
@@ -249,7 +249,7 @@ pub(in crate::window) enum ConflictAnswer {
 
 /// The progress window of `test`'s application, once an action asks
 /// "Replace or Skip Files".
-fn asking_window(test: &TestWindow) -> crate::window::progress_window::ProgressWindow {
+pub(in crate::window) fn asking_window(test: &TestWindow) -> crate::window::progress_window::ProgressWindow {
     wait_until("the Replace or Skip Files question", || {
         test.context.progress_window().is_some_and(|window| {
             window.is_visible()

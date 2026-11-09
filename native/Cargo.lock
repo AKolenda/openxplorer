@@ -1405,7 +1405,7 @@ dependencies = [
 
 [[package]]
 name = "ox-app"
-version = "2.0.15"
+version = "2.0.16"
 dependencies = [
  "async-channel",
  "gdk4-wayland",
@@ -1418,6 +1418,7 @@ dependencies = [
  "kamadak-exif",
  "ox-core",
  "rustix",
+ "ruzstd",
  "serde",
  "serde_json",
  "tempfile",
@@ -1426,7 +1427,7 @@ dependencies = [
 
 [[package]]
 name = "ox-core"
-version = "2.0.15"
+version = "2.0.16"
 dependencies = [
  "bzip2",
  "crc32fast",

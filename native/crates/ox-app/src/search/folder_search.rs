@@ -12,7 +12,7 @@
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::search::{walks_subfolders, IndexRoot, SearchFacets, SearchIn};
+use ox_core::search::{walks_subfolders, IndexRoot, SearchFacets, SearchIn, TypedQuery};
 
 use super::report::{SearchProgress, SearchReport};
 use super::source::{SearchScope, SearchSource};
@@ -24,8 +24,11 @@ pub(crate) struct SearchRun {
     generation: u64,
     /// The folder searched.
     pub folder: String,
-    /// The words searched for, without surrounding blanks.
+    /// The words searched for, without surrounding blanks or the options
+    /// typed with them.
     pub text: String,
+    /// The options typed into the box (SRCH-044).
+    pub typed: SearchFacets,
     /// The folder's scope, or every cached folder.
     pub scope: SearchScope,
     /// Where it looks.
@@ -35,6 +38,9 @@ pub(crate) struct SearchRun {
     pub coverage: SearchSource,
     /// Whether the text of files is searched too (SRCH-036).
     pub search_in: SearchIn,
+    /// Whether a walk of the folder enters its subfolders; not for
+    /// Search options > Current folder (SRCH-046).
+    pub subfolders: bool,
     /// Whether the run only brings the shown rows up to date after the
     /// cache or the listing changed, so it keeps them, their selection and
     /// the strip as they are rather than starting over.
@@ -60,8 +66,13 @@ pub(crate) enum Rerun {
 pub(crate) struct FolderSearch {
     /// The search box's text.
     query: String,
+    /// `query` read as words and typed options (SRCH-044).
+    typed: TypedQuery,
     /// The scope the strip shows.
     scope: SearchScope,
+    /// Only the folder itself is searched, not its subfolders (Search
+    /// options > Current folder, SRCH-046).
+    current_folder_only: bool,
     /// Whether names or names and contents are searched (SRCH-036); kept
     /// when the search ends, as Dolphin remembers it.
     search_in: SearchIn,
@@ -86,6 +97,7 @@ impl FolderSearch {
         self.cancel();
         self.results = None;
         text.clone_into(&mut self.query);
+        self.typed = TypedQuery::parse(text);
         if !self.is_active() {
             // Clearing the box ends the search: its kind and date go.
             self.facets = SearchFacets::default();
@@ -108,7 +120,9 @@ impl FolderSearch {
         self.cancel();
         self.results = None;
         self.query.clear();
+        self.typed = TypedQuery::default();
         self.scope = SearchScope::default();
+        self.current_folder_only = false;
         self.facets = SearchFacets::default();
         self.report = None;
     }
@@ -118,11 +132,24 @@ impl FolderSearch {
     /// network is only filtered.
     fn source(&self, roots: &[IndexRoot], folder: &str) -> SearchSource {
         let reads_contents = self.search_in == SearchIn::NamesAndContents;
-        let source = if reads_contents && self.scope == SearchScope::ThisFolder {
+        // The cache finds names by their words: options typed alone, as
+        // `kind:folder`, are looked for by walking the folder.
+        let options_only = self.typed.words.is_empty();
+        let walks = reads_contents || options_only;
+        let source = if walks && self.scope == SearchScope::ThisFolder {
             SearchSource::CurrentFolder
         } else {
             SearchSource::choose(roots, folder, self.scope)
         };
+        if self.current_folder_only && self.scope == SearchScope::ThisFolder {
+            // Names are found in the listing; the files' text only by
+            // reading them, which a walk of the folder alone does.
+            return if reads_contents && walks_subfolders(folder) {
+                SearchSource::CurrentFolder
+            } else {
+                SearchSource::CurrentFolderOnly
+            };
+        }
         if source == SearchSource::CurrentFolder && !walks_subfolders(folder) {
             SearchSource::CurrentFolderOnly
         } else {
@@ -162,6 +189,16 @@ impl FolderSearch {
         &self.query
     }
 
+    /// The words searched for, without the options typed with them.
+    pub(crate) fn words(&self) -> &str {
+        &self.typed.words
+    }
+
+    /// The options typed into the box (SRCH-044).
+    pub(crate) fn typed_facets(&self) -> SearchFacets {
+        self.typed.facets
+    }
+
     /// The scope the strip shows.
     pub(crate) fn scope(&self) -> SearchScope {
         self.scope
@@ -170,6 +207,17 @@ impl FolderSearch {
     /// Chooses the scope; the caller runs the search again.
     pub(crate) fn set_scope(&mut self, scope: SearchScope) {
         self.scope = scope;
+    }
+
+    /// Whether only the folder itself is searched, not its subfolders.
+    pub(crate) fn is_current_folder_only(&self) -> bool {
+        self.current_folder_only
+    }
+
+    /// Searches the folder alone, or with its subfolders; the caller runs
+    /// the search again.
+    pub(crate) fn set_current_folder_only(&mut self, only: bool) {
+        self.current_folder_only = only;
     }
 
     /// Whether names or names and contents are searched.
@@ -255,11 +303,13 @@ impl FolderSearch {
         SearchRun {
             generation: self.generation,
             folder: folder.to_owned(),
-            text: self.query.trim().to_owned(),
+            text: self.typed.words.clone(),
+            typed: self.typed.facets,
             scope: self.scope,
             source,
             coverage,
             search_in: self.search_in,
+            subfolders: !self.current_folder_only,
             refreshes,
             cancellable,
         }
@@ -286,6 +336,18 @@ impl FolderSearch {
             source: run.source,
             coverage: run.coverage,
             progress: SearchProgress::Shown { is_truncated },
+        });
+    }
+
+    /// Ends `run`, which found nothing past the folder's own matches: the
+    /// listing, filtered by the words, stays shown in place of results.
+    pub(crate) fn finish_on_listing(&mut self, run: &SearchRun) {
+        self.running = None;
+        self.results = None;
+        self.report = Some(SearchReport {
+            source: run.source,
+            coverage: run.coverage,
+            progress: SearchProgress::Shown { is_truncated: false },
         });
     }
 

@@ -21,6 +21,20 @@ pub trait ExtractionOutput: Send + Sync {
     /// The backend's error; [`TransferError::Exists`] when the name is
     /// taken.
     fn create(&self, file: &dyn Node, cancel: &Cancellation) -> Result<Box<dyn OutputFile>, TransferError>;
+
+    /// Creates `link` as a new symbolic link to `target`, a relative path
+    /// the extraction checked (ARC-016). It never replaces an existing
+    /// item.
+    ///
+    /// # Errors
+    ///
+    /// The backend's error, for example where links cannot be stored;
+    /// [`TransferError::Exists`] when the name is taken.
+    fn create_link(&self, link: &dyn Node, target: &str, cancel: &Cancellation) -> Result<(), TransferError> {
+        // `symlink(2)` through GIO, which fails on an existing name.
+        gio::File::for_uri(&link.uri()).make_symbolic_link(target, Some(cancel.cancellable()))?;
+        Ok(())
+    }
 }
 
 /// A file an extraction is writing.

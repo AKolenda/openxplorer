@@ -142,7 +142,7 @@ pub fn require_share(address: &str) -> Result<String, LocationError> {
 /// the device storage first for a whole SMB server or share or a device
 /// root.
 pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
-    let uri = normalise(uri)?;
+    let uri = normalise_item(uri)?;
     let parts = split_location(&uri)?;
     // Safety rule (`core.py::require_item_uri`): a whole server, share or
     // device is never renamed, moved, copied or trashed as if it were a
@@ -166,6 +166,56 @@ pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
         )));
     }
     Ok(uri)
+}
+
+/// [`normalise`] for the URI of an item that exists or is about to, as a
+/// listing or a copy names it, not as the user typed it: a name with a
+/// control character or bytes that are not UTF-8 keeps them
+/// ([`listed_item_uri`]). Every other address is normalised as typed.
+///
+/// # Errors
+///
+/// As [`normalise`].
+pub fn normalise_item(uri: &str) -> Result<String, LocationError> {
+    normalise(uri).or_else(|refusal| listed_item_uri(uri).ok_or(refusal))
+}
+
+/// The canonical URI of an item another program named with a control
+/// character (a line break) or with bytes that are not UTF-8, which Linux
+/// allows in any name but `/` and NUL; `None` for any other URI.
+///
+/// [`normalise`] refuses such a name, as it must for an address the user
+/// types (`core.py`: `CONTROL.search(decoded)`), but an item already listed
+/// is no typed address: its URI comes from GIO, and Windows Explorer
+/// renames, copies and deletes every item it lists. The server, share or
+/// device part still goes through [`normalise`], and the path must be the
+/// absolute, already normal path GIO lists an item with (no `.` or `..`,
+/// no empty segment, no query or fragment), so nothing here can reach
+/// outside the item. No name holds a NUL or a slash, so an escaped one
+/// (`%00`, `%2F`) is refused too. The name keeps its exact bytes, escaped
+/// as [`normalise`] escapes every path.
+fn listed_item_uri(uri: &str) -> Option<String> {
+    let (scheme, rest) = uri.split_once("://")?;
+    let (authority, escaped_path) = rest.split_at(rest.find('/')?);
+    if escaped_path.contains(['?', '#']) || escaped_path.to_ascii_lowercase().contains("%2f") {
+        return None;
+    }
+    let path: Vec<u8> = percent_encoding::percent_decode_str(escaped_path).collect();
+    if path.contains(&0) {
+        return None;
+    }
+    let typed_would_be_refused = std::str::from_utf8(&path).map_or(true, has_control_character);
+    let segments = path[1..].split(|byte| *byte == b'/');
+    let is_listed_path = segments
+        .into_iter()
+        .all(|segment| !matches!(segment, b"" | b"." | b".."))
+        && !(scheme.eq_ignore_ascii_case("smb") && path.contains(&b'\\'));
+    if !typed_would_be_refused || !is_listed_path {
+        return None;
+    }
+    let root = normalise(&format!("{scheme}://{authority}/")).ok()?;
+    let root = root.strip_suffix('/')?;
+    Some(format!("{root}{}", percent_encode(&path, PYTHON_PATH_SAFE)))
 }
 
 /// True for an SMB server listing (`smb://host/`): it holds shares, not
@@ -755,5 +805,47 @@ mod tests {
         ] {
             assert!(canonical(bad).is_err(), "{bad}");
         }
+    }
+
+    /// An item already listed keeps a name with a line break or bytes
+    /// that are not UTF-8, as another program made it: only a typed
+    /// address is refused for them. Its URI stays exactly as GIO wrote it,
+    /// a whole share is still no item, and a typed address with an escaped
+    /// control character is still refused.
+    ///
+    /// parity: OPS-035
+    #[test]
+    fn a_listed_item_keeps_a_name_with_a_line_break_or_bytes_that_are_not_utf8() {
+        for uri in [
+            "file:///tmp/ox-test/Line%0Abreak.txt",
+            "file:///tmp/ox-test/Caf%E9%20menu.txt",
+            "file:///tmp/ox-test/Tab%09folder/inner.txt",
+            "smb://nas/projects/Line%0Abreak.txt",
+            "sftp://build/srv/Caf%E9.txt",
+            "mtp://[usb:001,002]/Internal/Line%0Abreak.txt",
+        ] {
+            assert_eq!(require_item_uri(uri).as_deref(), Ok(uri), "{uri}");
+        }
+        assert_eq!(
+            require_item_uri("file:///tmp/ox-test/a%0ab").as_deref(),
+            Ok("file:///tmp/ox-test/a%0Ab"),
+            "escaped as Python escapes"
+        );
+        assert!(require_item_uri("smb://nas/a%0Ab").is_err(), "a whole share");
+        assert!(
+            require_item_uri("file:///tmp/../a%0Ab").is_err(),
+            "not a listed item's URI"
+        );
+        assert!(require_item_uri("file:///tmp/a%0Ab?x").is_err());
+        assert!(
+            require_item_uri("file:///tmp/ox-test/a%00b").is_err(),
+            "no name holds a NUL"
+        );
+        assert!(
+            require_item_uri("file:///tmp/ox-test/a%2F..%2Fb%0A").is_err(),
+            "no name holds a slash"
+        );
+        assert!(canonical("smb://nas/a%00b").is_err(), "a typed address");
+        assert!(canonical("file:///tmp/a%0Ab").is_err(), "a typed address");
     }
 }

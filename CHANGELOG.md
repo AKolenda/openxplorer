@@ -1,3 +1,38 @@
+# 2.0.16 — 2026-11-09
+
+Updates install without a password for administrators at the computer, search looks and works like Windows 11's, the Preview pane shows what's in a file, and more of Windows 11's File Explorer keyboard shortcuts work. A paste keeps going past an unreadable or missing item, Compact view and group headings match Windows 11, Recent files open as the real file, the Open and Save dialog keeps its size, and a tab's menu opens from the keyboard. Much of this release is the work of @addition-official.
+
+## Security
+* In the Debian package, **Check for updates** now installs through a small helper of its own instead of a general administrator command, so an administrator (a member of `sudo`, `admin` or `wheel`) in an active session at the computer installs updates without typing a password. Anyone else, and any remote or inactive session, is still asked for an administrator's password. The helper takes only a version number: it installs only GitHub's current latest official release, only when that is newer than the installed version, and only after checking the download's size, checksum and package details. It never downgrades or reinstalls, runs with a cleared environment, and reads no settings or files the user can change. Trust in the release is the same as before: GitHub's connection and its checksum, not an independent signature.
+* It is on by default. **Settings › About › Install updates without asking for a password** turns it off, and turning it back on asks for an administrator's password. Updating to 2.0.16 itself still asks once, since the helper arrives with it. The RPM, Arch, Flatpak and preview packages never update themselves, so they are unchanged.
+
+## What's Changed
+* **Preview pane:** View › Preview pane (Alt+P) shows the selected file's contents, as in Windows 11: text and source files as plain wrapped text (the first 1 MB), pictures as large as the pane allows, PDF pages one under another, and audio and video in the pane's player. A folder, several items or a file with no preview says "No preview available.". PDF pages are drawn by `pdftoppm` in the same sandbox and limits as the thumbnailers, and nothing is read for a network file while network previews are off.
+* **Search:** searching looks like Windows 11's by default. There is no filter bar above the results: the command bar shows **Search options** (All subfolders or Current folder, Date modified, Kind, Size and File contents) and **Close search**, the tab reads "notes - Search Results in Documents", and the words searched for are highlighted in the names. Size has Windows' groups from Empty to Gigantic, Date modified runs to Last year, and `kind:`, `datemodified:` and `size:` typed in the search box work as in Windows (`kind:picture`, `size:tiny`). "…" › Pin to Quick access saves a search, and results show sooner in a big folder. Settings › Search › Show the search filter bar brings back the filter bar.
+* **Keyboard shortcuts:** more of Windows 11's File Explorer keys work: Ctrl+1 to Ctrl+9 show that tab (and that tab of a Properties window), Ctrl+Shift+E opens the navigation pane down to the current folder, the keypad's plus, minus and asterisk open and close folders in the navigation pane, Ctrl+F5 refreshes, and Ctrl+Insert and Shift+Insert copy and paste files. Ctrl+Shift+1 to Ctrl+Shift+8 now work when typed, on any keyboard layout. Alt pressed alone moves the keyboard to the command bar, and Escape gives it back; the command bar's "…" is named See more. The Keyboard shortcuts window finds a shortcut by its keys however they are typed ("ctrl shift e"), and its scroll bar no longer covers the keys.
+* **Tabs:** Shift+F10 or the Menu key on a focused tab opens its menu, and Escape gives the keyboard back to the tab. F6 reaches the tab in front, and no outline is left on the tab strip after files are dropped on a tab.
+* **Views:** Compact view spaces Details, Tiles, Content and the navigation pane as Windows 11's Compact view does. Group headings are drawn as Windows 11 draws them: the title in regular weight, a quarter larger than the names, with no line after it.
+* **Names and sizes:** with Hide extensions for known file types on, every type the desktop knows hides its extension, `sunset.png` and `data.json` included. The Details pane and tooltips write sizes as the status bar does, and the Size column is always wide enough for "9,999,999 KB". Renaming and new items drop periods and spaces at the end of a name, erasing the whole name in place keeps the old one, and names with a line break or that aren't valid UTF-8 can be renamed, copied and recycled.
+* **Copying and moving:** a paste no longer stops at the first unreadable folder or missing item: everything else is pasted, and that item is asked about in the progress window (Folder Access Denied, Item Not Found). A folder pasted or dropped into its own subfolder is refused with Windows 11's "Interrupted Action", "The destination folder is a subfolder of the source folder.". Undo after a partial copy or move reverses only what was done.
+* **Recent files:** a Recent files row opens, copies, drags and shows Properties as the file it stands for, and says Item Not Found when that file is gone. As in Windows 11's Recent list, it can be copied but not cut, renamed or deleted.
+* **Open and Save dialogs:** the dialog opens at the size it was last left at, and on GNOME a dialog whose app's window handle has a space in it now stays attached to that app instead of falling behind it.
+* **Details:** dragging a column's edge past its start stops the column at its narrowest width instead of folding it to nothing.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.16_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.16-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.16-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.16-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.16-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.15...v2.0.16
+
 # 2.0.15 — 2026-11-08
 
 OpenXplorer now looks and works much more like Windows 11's File Explorer, from the command bar, menus and status bar to Properties, This PC and the progress window. It also makes previews with the desktop's own thumbnailers in a sandbox, can paste a picture as a file, and offers to continue as administrator when a copy, move or delete is denied. Much of this release is the work of @addition-official and @clansty.

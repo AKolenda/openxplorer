@@ -110,7 +110,7 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "|",
             "Sort",
             "View",
-            "More options",
+            "See more",
             "Settings (Ctrl+,)",
             "Details",
         ]
@@ -329,7 +329,7 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     let test = laid_out(&fixture.uri());
     assert_eq!(menu_of(&test, "New").row_labels(), NEW_MENU);
     assert_eq!(menu_of(&test, "Sort").row_labels(), SORT_MENU);
-    assert_eq!(menu_of(&test, "More options").row_labels(), MORE_MENU);
+    assert_eq!(menu_of(&test, "See more").row_labels(), MORE_MENU);
 }
 
 /// The "…" menu in This PC where the desktop has no system information
@@ -366,14 +366,14 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
     );
     for page in [Page::ThisPc, Page::Network] {
         test.window.navigate(page.uri()).expect("a page");
-        let labels = menu_of(&test, "More options").row_labels();
+        let labels = menu_of(&test, "See more").row_labels();
         let expected: &[&str] = if page == Page::ThisPc {
             &MORE_MENU_IN_THIS_PC_WITHOUT_SYSTEM_INFORMATION
         } else {
             &MORE_MENU_ON_A_NETWORK_PAGE
         };
         assert_eq!(labels, expected, "{page:?}");
-        let more = menu_of(&test, "More options");
+        let more = menu_of(&test, "See more");
         more.popup();
         wait_for_frames(&test.window, 2);
         assert!(more.row("Map network drive").is_sensitive(), "{page:?}");
@@ -395,7 +395,7 @@ fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
         more.popdown();
     }
     test.window.navigate(&fixture.uri()).expect("the folder");
-    let labels = menu_of(&test, "More options").row_labels();
+    let labels = menu_of(&test, "See more").row_labels();
     assert_eq!(labels, MORE_MENU);
     for moved in MOVED_FROM_MORE_MENU {
         assert!(!labels.iter().any(|label| label == moved), "{moved} moved");
@@ -441,7 +441,7 @@ fn disconnect_network_drive_lists_each_mount_once_by_its_root() {
         "the saved share inside the mount counts as connected"
     );
     test.window.navigate(Page::ThisPc.uri()).expect("This PC");
-    let more = menu_of(&test, "More options");
+    let more = menu_of(&test, "See more");
     let disconnect = more
         .items()
         .into_iter()
@@ -479,7 +479,7 @@ fn this_pc_properties_opens_the_system_information_app() {
     let info_center = super::support::install_test_application("org.kde.kinfocenter.desktop");
     test.window.navigate(Page::ThisPc.uri()).expect("This PC");
     wait_until("… to offer Properties", || {
-        menu_of(&test, "More options")
+        menu_of(&test, "See more")
             .row_labels()
             .contains(&"Properties".to_owned())
     });
@@ -488,7 +488,7 @@ fn this_pc_properties_opens_the_system_information_app() {
         item.action,
         crate::window::menu_popover::MenuAction::Window(WindowAction::SystemProperties)
     );
-    let more = menu_of(&test, "More options");
+    let more = menu_of(&test, "See more");
     more.popup();
     wait_for_frames(&test.window, 2);
     assert!(more.row("Properties").is_sensitive());
@@ -523,7 +523,7 @@ fn row_glyph(row: &gtk::ListBoxRow) -> Option<String> {
 fn the_more_menu_shows_undo_and_redo_only_while_they_can_run() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let more = || menu_of(&test, "More options");
+    let more = || menu_of(&test, "See more");
     let undo_redo = || {
         let labels = more().row_labels();
         labels
@@ -605,7 +605,7 @@ fn the_more_view_and_show_menus_show_no_shortcut_text_as_in_windows() {
         !super::file_ops_support::is_renaming_in_place(&test)
     });
     wait_until("… to offer Undo", || {
-        menu_of(&test, "More options")
+        menu_of(&test, "See more")
             .row_labels()
             .contains(&"Undo".to_owned())
     });
@@ -613,7 +613,7 @@ fn the_more_view_and_show_menus_show_no_shortcut_text_as_in_windows() {
         if let Some(page) = page {
             test.window.navigate(page.uri()).expect("a page");
         }
-        let more = menu_of(&test, "More options");
+        let more = menu_of(&test, "See more");
         assert_eq!(shortcut_texts(&more), Vec::<String>::new(), "{page:?}");
     }
     let view = menu_of(&test, "View");
@@ -653,7 +653,7 @@ fn properties_in_the_more_menu_describes_the_selection_or_the_folder() {
 
 /// The "…" item labelled `label`.
 fn more_item(test: &TestWindow, label: &str) -> crate::window::menu_popover::MenuItem {
-    menu_of(test, "More options")
+    menu_of(test, "See more")
         .items()
         .into_iter()
         .find(|item| item.label == label)
@@ -680,11 +680,11 @@ fn the_more_menu_pins_or_unpins_the_folder_shown() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let folder = fixture.uri();
-    let more = || menu_of(&test, "More options");
+    let more = || menu_of(&test, "See more");
     let offers = |label: &str| more().row_labels().iter().any(|row| row == label);
     assert!(offers(PIN) && !offers(UNPIN), "{:?}", more().row_labels());
 
-    let button = menu_button(&test, "More options");
+    let button = menu_button(&test, "See more");
     button.popup();
     wait_until("the menu", || more().is_visible());
     more().click_row(PIN);
@@ -758,7 +758,7 @@ fn menu_button(test: &TestWindow, name: &str) -> gtk::MenuButton {
 fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    for name in ["New", "Sort", "View", "More options"] {
+    for name in ["New", "Sort", "View", "See more"] {
         let popover = menu_button(&test, name).popover().expect("a menu");
         assert_eq!(popover.position(), gtk::PositionType::Bottom, "{name}");
     }
@@ -1050,7 +1050,7 @@ fn the_more_and_view_menus_show_windows_glyphs() {
             .find(|item| item.label == label)
             .map_or_else(|| panic!("the menu has {label}"), |item| item.glyph)
     };
-    let more = menu_of(&test, "More options");
+    let more = menu_of(&test, "See more");
     for (label, glyph) in [
         ("Pin to Quick access", Icon::Pin),
         ("Select all", Icon::SelectAll24),
@@ -1079,7 +1079,7 @@ fn the_more_and_view_menus_show_windows_glyphs() {
     assert!(blue, "Pin's glyph is drawn in Windows' blue");
     more.popdown();
     test.window.navigate(Page::ThisPc.uri()).expect("This PC");
-    let this_pc = menu_of(&test, "More options");
+    let this_pc = menu_of(&test, "See more");
     assert!(
         accented(&this_pc).is_empty(),
         "This PC's network icons carry their own blue; none is tinted"
@@ -1252,7 +1252,7 @@ fn the_view_menu_and_ctrl_shift_f4_open_the_terminal_here() {
 fn more_options_needs_a_folder_for_pin() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let more = menu_of(&test, "More options");
+    let more = menu_of(&test, "See more");
     more.popup();
     wait_for_frames(&test.window, 2);
     assert!(more.row("Pin to Quick access").is_sensitive());
@@ -1294,7 +1294,7 @@ fn the_appearances_are_chosen_in_settings_not_in_more_options() {
             .any(|name| name == "Light" || name == "Dark"),
         "no appearance button in the bar"
     );
-    let labels = menu_of(&test, "More options").row_labels();
+    let labels = menu_of(&test, "See more").row_labels();
     for appearance in ["Light appearance", "Dark appearance", "Use system appearance"] {
         assert!(!labels.iter().any(|label| label == appearance), "{labels:?}");
     }
