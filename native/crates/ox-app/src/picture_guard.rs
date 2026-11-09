@@ -161,6 +161,34 @@ pub(crate) fn decode_to_fit(
 ) -> Result<Decoded, Refusal> {
     let started = Instant::now();
     let stream = file.read(cancellable).map_err(|_| refusal_for(cancellable))?;
+    let read = |buffer: &mut [u8]| stream.read(buffer, cancellable).map_err(|_| ());
+    decode_read_to_fit(read, started, width, height, limits, cancellable)
+}
+
+/// The picture `reader` reads, decoded as [`decode_to_fit`] decodes a
+/// file's: for a file the caller opened itself, and checked is a plain
+/// file, so no link or pipe is opened after the check. Blocks.
+pub(crate) fn decode_reader_to_fit(
+    reader: &mut impl std::io::Read,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<Decoded, Refusal> {
+    let read = |buffer: &mut [u8]| reader.read(buffer).map_err(|_| ());
+    decode_read_to_fit(read, Instant::now(), width, height, limits, cancellable)
+}
+
+/// The picture `next_chunk` hands over a chunk at a time, decoded within
+/// `limits` from `started`.
+fn decode_read_to_fit(
+    mut next_chunk: impl FnMut(&mut [u8]) -> Result<usize, ()>,
+    started: Instant,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<Decoded, Refusal> {
     let loader = PixbufLoader::new();
     let header = Rc::new(Header::default());
     watch_header(&loader, &header, (width.max(1), height.max(1)), limits);
@@ -177,7 +205,7 @@ pub(crate) fn decode_to_fit(
         if started.elapsed() >= limits.time {
             break Err(Refusal::TimedOut);
         }
-        let Ok(read) = stream.read(&mut buffer, cancellable) else {
+        let Ok(read) = next_chunk(&mut buffer) else {
             break Err(refusal_for(cancellable));
         };
         let held;

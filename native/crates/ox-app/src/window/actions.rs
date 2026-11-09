@@ -130,6 +130,7 @@ impl BrowserWindow {
         self.install_tab_commands();
         self.install_closing_actions();
         self.install_window_keys();
+        self.install_view_keys();
         self.install_tab_move_actions();
         self.install_navigation_actions();
         self.install_address_actions();
@@ -427,7 +428,8 @@ impl BrowserWindow {
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
 const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
-    (WindowAction::Refresh, &["F5", "<Primary>r"]),
+    // Ctrl+F5 is Windows' other Refresh key (CMD-039).
+    (WindowAction::Refresh, &["F5", "<Primary>r", "<Primary>F5"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
     // Ctrl+E and F3 are Explorer's other search keys (CMD-036).

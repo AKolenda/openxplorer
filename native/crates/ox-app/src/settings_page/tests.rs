@@ -27,6 +27,7 @@ use crate::window::WindowAction;
 
 mod indexing;
 mod moved_from_more;
+mod passwordless;
 mod redesign;
 
 /// A window on the standard fixture with Settings open in front.
