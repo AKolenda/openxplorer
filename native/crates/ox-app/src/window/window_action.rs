@@ -284,6 +284,9 @@ pub(crate) enum WindowAction {
     CopyPathOf,
     /// Compresses the folder at the location given into a ZIP beside it.
     CompressToZipOf,
+    /// Compresses the folder at the location given into a plain TAR
+    /// beside it.
+    CompressToTarOf,
     /// Asks for the name and format of an archive of the folder at the
     /// location given.
     CompressToOf,
@@ -609,6 +612,7 @@ impl WindowAction {
             WindowAction::ClearRecentLocations => "clear-recent-locations",
             WindowAction::CopyPathOf => "copy-path-of",
             WindowAction::CompressToZipOf => "compress-to-zip-of",
+            WindowAction::CompressToTarOf => "compress-to-tar-of",
             WindowAction::CompressToOf => "compress-to-of",
             WindowAction::NewIn => "new-in",
             WindowAction::ShowNewMenu => "show-new-menu",
