@@ -7591,6 +7591,11 @@ msgstr ""
 msgid "“{name}” is a link to a place outside the extracted folder. Nothing was extracted."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/archive/error.rs
+msgid "“{name}” is a link, and links are only extracted into a new folder. Nothing was extracted."
+msgstr ""
+
 #: crates/ox-core/src/archive/zip/error.rs
 msgid "A file name in this ZIP is marked as UTF-8 but is not valid UTF-8."
 msgstr ""

@@ -173,6 +173,18 @@ pub enum ArchiveError {
         )
     )]
     UnsafeLink(String),
+    /// ARC-012, ARC-016: a TAR's symbolic link, named here, in an archive
+    /// extracted into a folder that already exists, whose items could
+    /// change where the link leads; links are only extracted into a new
+    /// folder.
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "“{name}” is a link, and links are only extracted into a new folder. Nothing was extracted.",
+            &[("name", .0)]
+        )
+    )]
+    LinkIntoExistingFolder(String),
     /// ARC-016: a member is encrypted.
     #[error(
         "{}",

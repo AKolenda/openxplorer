@@ -53,7 +53,7 @@ use crate::location::{is_smb_server, normalise, validate_name};
 use crate::transfer::{
     Cancellation, Node, NodeFactory, NodeKind, Progress, ProgressScope, TransferError, WriteGuard,
 };
-use plan::{plan, plan_selected, ExtractionPlan};
+use plan::{plan, plan_selected, ExtractionPlan, PathKind};
 pub(super) use staging::is_staging_name;
 use staging::{ExtractionStaging, Output};
 use unpack::Unpacking;
@@ -269,6 +269,16 @@ impl ZipExtractor {
             Some(selected) => plan_selected(archive.members(), selected, &self.limits, cancel)?,
             None => plan(archive.members(), archive.link_targets(), &self.limits, cancel)?,
         };
+        // ARC-012, ARC-016: a link is checked against the folder the
+        // archive is unpacked in. Into an existing folder that is a private
+        // folder whose items are then moved in beside what the folder
+        // already holds, through which a link could lead anywhere, so an
+        // archive with a link is refused there before anything is written.
+        if self.into_existing {
+            if let Some(link) = plan.members.iter().find(|member| member.kind == PathKind::Link) {
+                return Err(ArchiveError::LinkIntoExistingFolder(link.segments.join("/")));
+            }
+        }
         self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         cancel.check()?;
