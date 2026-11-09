@@ -2020,8 +2020,8 @@ msgid "About this build"
 msgstr "关于此版本"
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs."
-msgstr "一个面向 Zorin 的独立文件管理器，灵感来自 Windows 11。桌面端：GTK 4 + GIO/GVfs。"
+msgid "An independent Windows 11–inspired file manager for Linux. Desktop: GTK 4 + GIO/GVfs."
+msgstr "一个面向 Linux 的独立文件管理器，灵感来自 Windows 11。桌面端：GTK 4 + GIO/GVfs。"
 
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/status_bar.rs
 msgid "Check for updates"
@@ -2052,7 +2052,7 @@ msgid "Updates"
 msgstr "更新"
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgid "license licence agpl source code copyright mit notice. Original component notices are preserved."
 msgstr "许可证 agpl 源代码 版权 mit 声明。原始组件的声明均已保留。"
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -3230,7 +3230,7 @@ msgid "What OpenXplorer asks before it deletes, runs or closes."
 msgstr "OpenXplorer 在删除、运行或关闭前会询问什么。"
 
 #: crates/ox-app/src/settings_page/pages.rs
-msgid "What this build is, how it is updated and its licence."
+msgid "What this build is, how it is updated and its license."
 msgstr "此构建是什么、如何更新及其许可证。"
 
 #: crates/ox-app/src/settings_page/pages.rs
@@ -3423,8 +3423,8 @@ msgid "Update installation did not complete. {reason}{recovery}"
 msgstr "更新安装未完成。{reason}{recovery}"
 
 #: crates/ox-app/src/window/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
-msgstr "一款面向 Zorin 的独立文件管理器，灵感来自 Windows 11。\n\n桌面版：Rust + GTK 4 + GIO/GVfs。"
+msgid "An independent Windows 11–inspired file manager for Linux.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
+msgstr "一款面向 Linux 的独立文件管理器，灵感来自 Windows 11。\n\n桌面版：Rust + GTK 4 + GIO/GVfs。"
 
 #: crates/ox-app/src/window/about.rs
 msgid "Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\nComplete corresponding source and build tools: {REPOSITORY}, tag v{version}, and the source archive published with each release at {REPOSITORY}/releases."
@@ -3671,8 +3671,8 @@ msgid "Extract all files from this archive"
 msgstr "从此压缩包中解压所有文件"
 
 #: crates/ox-app/src/window/command_bar.rs
-msgid "More options"
-msgstr "更多选项"
+msgid "See more"
+msgstr "查看更多"
 
 #: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
@@ -6078,6 +6078,11 @@ msgstr "TB"
 #: crates/ox-core/src/format.rs
 msgid "{bytes} bytes"
 msgstr "{bytes} 字节"
+
+#: crates/ox-core/src/format/explorer_text.rs
+msgid "{bytes} byte"
+msgid_plural "{bytes} bytes"
+msgstr[0] "{bytes} 字节"
 
 #: crates/ox-core/src/format.rs
 msgid "{value} {unit}"

@@ -54,7 +54,7 @@ msgid "- View switches between Details, Compact list and icon sizes; its slider 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the license and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -1928,7 +1928,7 @@ msgid "Used space"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
+#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs
 msgid "{bytes} bytes"
 msgstr ""
 
@@ -2761,7 +2761,7 @@ msgid "Administrators at this computer install OpenXplorer updates without typin
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs."
+msgid "An independent Windows 11–inspired file manager for Linux. Desktop: GTK 4 + GIO/GVfs."
 msgstr ""
 
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/status_bar.rs
@@ -2845,7 +2845,7 @@ msgid "keys keyboard shortcuts hotkeys accelerators bindings list ctrl+? cheat s
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgid "license licence agpl source code copyright mit notice. Original component notices are preserved."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -4125,7 +4125,7 @@ msgid "What OpenXplorer asks before it deletes, runs or closes."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs
-msgid "What this build is, how it is updated and its licence."
+msgid "What this build is, how it is updated and its license."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs
@@ -4369,7 +4369,7 @@ msgid "Update installation did not complete. {reason}{recovery}"
 msgstr ""
 
 #: crates/ox-app/src/window/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
+msgid "An independent Windows 11–inspired file manager for Linux.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4635,10 +4635,6 @@ msgstr ""
 msgid "Extract all files from this archive"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs
-msgid "More options"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
@@ -4669,6 +4665,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_search.rs
 msgid "Search options"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "See more"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -7704,6 +7704,10 @@ msgstr ""
 msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
 msgstr ""
 
+#: crates/ox-core/src/clipboard.rs crates/ox-core/src/location/text.rs
+msgid "Encoded control characters are not allowed."
+msgstr ""
+
 #: crates/ox-core/src/clipboard.rs
 msgid "This file selection is too large to copy or cut."
 msgstr ""
@@ -7863,6 +7867,13 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format/explorer_text.rs
+msgid "{bytes} byte"
+msgid_plural "{bytes} bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/format/explorer_text.rs
 msgid "{day}, {date}, {clock}"
 msgstr ""
 
@@ -7873,8 +7884,10 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format/explorer_text.rs
-msgid "{short} ({bytes} bytes)"
-msgstr ""
+msgid "{short} ({bytes} byte)"
+msgid_plural "{short} ({bytes} bytes)"
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
@@ -8434,10 +8447,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/location/parts.rs
 msgid "The server name “{host}” in brackets is not an IPv6 address."
-msgstr ""
-
-#: crates/ox-core/src/location/text.rs
-msgid "Encoded control characters are not allowed."
 msgstr ""
 
 #: crates/ox-core/src/location/text.rs

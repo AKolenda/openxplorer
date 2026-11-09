@@ -313,6 +313,9 @@ mod imp {
         /// Set while the view puts its own columns in order, which is not
         /// the user reordering them.
         pub(super) arranging: Cell<bool>,
+        /// Size's narrowest width when the view was last laid out, so a
+        /// new font or text size is noticed ([`super::DetailsView::fit_size_to_its_font`]).
+        pub(super) size_minimum: Cell<u32>,
         /// What the cells share, set by [`super::DetailsView::new`].
         pub(super) cells: OnceCell<super::CellContext>,
         /// The folder's selection model, while the view shows it.
@@ -343,12 +346,6 @@ mod imp {
         const NAME: &'static str = "OxDetailsView";
         type Type = super::DetailsView;
         type ParentType = gtk::Widget;
-
-        fn class_init(klass: &mut Self::Class) {
-            // `GtkColumnView` cannot be subclassed, so the view wraps its
-            // scroller and gives it all of its own size.
-            klass.set_layout_manager_type::<gtk::BinLayout>();
-        }
     }
 
     impl ObjectImpl for DetailsView {
@@ -389,7 +386,30 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for DetailsView {}
+    // `GtkColumnView` cannot be subclassed, so the view wraps its scroller
+    // and gives it all of its own size, as a `GtkBinLayout` would; the
+    // view lays it out itself to see each new layout.
+    impl WidgetImpl for DetailsView {
+        fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
+            self.scroller.measure(orientation, for_size)
+        }
+
+        /// A new font or text size lays the view out again, with its
+        /// styles applied: once Size's text has a new width, Size is fitted
+        /// to it after this layout.
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.scroller.allocate(width, height, baseline, None);
+            let minimum = self.obj().size_minimum();
+            if self.size_minimum.replace(minimum) != minimum {
+                let view = self.obj().downgrade();
+                glib::idle_add_local_once(move || {
+                    if let Some(view) = view.upgrade() {
+                        view.fit_size_to_its_font();
+                    }
+                });
+            }
+        }
+    }
 }
 
 glib::wrapper! {
@@ -660,14 +680,42 @@ impl DetailsView {
     /// Applies saved column widths. Name keeps expanding until the user
     /// saved a width for it, as in `applyColumnLayout`.
     pub(crate) fn apply_column_widths(&self, saved: Option<&ColumnWidths>) {
+        let size_minimum = self.size_minimum();
         for (column, view_column) in self.view_columns() {
-            let width = column_widths::start_width(column, saved);
+            let mut width = column_widths::start_width(column, saved);
+            // Size starts wide enough for its text in the list's font, also
+            // from a saved width narrower than that.
+            if column == SortColumn::Size {
+                width = width.map(|width| width.max(size_minimum));
+            }
             view_column.set_expand(width.is_none());
             view_column.set_fixed_width(column_widths::fixed_width(column, width));
         }
         // Applying widths is not a resize by the user: reporting it would
         // save widths the user never set.
         self.cancel_resize_report();
+    }
+
+    /// The narrowest width Size may have, in the pixels settings save:
+    /// room for [`column_widths::SIZE_THAT_FITS`] as the Size column writes
+    /// it, measured in the list's own font, which follows the desktop's
+    /// font and the text size ([`column_widths::size_minimum`]).
+    pub(crate) fn size_minimum(&self) -> u32 {
+        let text = ox_core::format::column_size_text(Some(column_widths::SIZE_THAT_FITS));
+        let width = self.column_view().create_pango_layout(Some(&text)).pixel_size().0;
+        column_widths::size_minimum(width)
+    }
+
+    /// Widens Size to [`Self::size_minimum`] when the list's font has grown
+    /// past it; a wider width stays as it is.
+    pub(crate) fn fit_size_to_its_font(&self) {
+        let Some(size) = self.column(SortColumn::Size) else {
+            return;
+        };
+        let narrowest = column_widths::fixed_width(SortColumn::Size, Some(self.size_minimum()));
+        if size.fixed_width() >= 0 && size.fixed_width() < narrowest {
+            size.set_fixed_width(narrowest);
+        }
     }
 
     /// The widths the user set, in the form settings save them. Name
@@ -936,7 +984,7 @@ mod tests {
             },
             ColumnWidth {
                 column: Column::Size,
-                pixels: 90.0,
+                pixels: f64::from(view.size_minimum()),
             },
             ColumnWidth {
                 column: Column::Created,

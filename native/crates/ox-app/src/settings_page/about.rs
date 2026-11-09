@@ -85,7 +85,7 @@ const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
     text: RowText {
         title: "OpenXplorer · License & source",
         description: "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty.",
-        keywords: "licence agpl source code copyright mit notice. Original component notices are \
+        keywords: "license licence agpl source code copyright mit notice. Original component notices are \
                    preserved.",
     },
     button: crate::i18n::message_id("Read license & source information"),
@@ -153,7 +153,7 @@ fn build_card() -> StatusCard {
     let about_build = parts::button(&ox_core::i18n::gettext("About this build"), ButtonStyle::Bordered);
     WindowAction::About.assign_to(&about_build);
     let text = ox_core::i18n::gettext(
-        "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs.",
+        "An independent Windows 11–inspired file manager for Linux. Desktop: GTK 4 + GIO/GVfs.",
     );
     let status = StatusText {
         glyph: Icon::Info,

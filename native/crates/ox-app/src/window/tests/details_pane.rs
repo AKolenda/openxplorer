@@ -133,7 +133,7 @@ fn several_items_show_their_count_and_total_size() {
     assert_eq!(pane.shown_name(), "2 items selected");
     assert_eq!(
         value(&pane.shown_properties(), "Size"),
-        Some(ox_core::format::pretty_bytes(2000).as_str())
+        Some(ox_core::format::short_size(2000).as_str())
     );
     model.select_positions(&[]);
     assert!(pane.shown_name().ends_with(" items)"));

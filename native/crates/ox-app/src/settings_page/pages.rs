@@ -108,7 +108,7 @@ impl Category {
                 "Choose what opens when you open a folder, a network link or a ZIP file.",
             ),
             Category::About => {
-                crate::i18n::message_id("What this build is, how it is updated and its licence.")
+                crate::i18n::message_id("What this build is, how it is updated and its license.")
             }
         }
     }

@@ -142,3 +142,45 @@ fn about_offers_the_shortcuts_the_manual_the_licence_and_the_build() {
         assert!(!settings.shown_rows().is_empty(), "{query}");
     }
 }
+
+/// The labels of Settings > About's page.
+fn about_texts(settings: &SettingsTest) -> Vec<String> {
+    let section = settings.page.category_section(Category::About);
+    descendants::<gtk::Label>(&section)
+        .iter()
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// Settings > About describes the app as a file manager for Linux,
+/// which it is on whatever desktop it runs.
+///
+/// parity: SET-009
+#[gtk::test]
+fn about_describes_a_file_manager_for_linux() {
+    let settings = SettingsTest::open();
+    let texts = about_texts(&settings);
+    assert!(
+        texts
+            .iter()
+            .any(|text| text.starts_with("An independent Windows 11–inspired file manager for Linux.")),
+        "{texts:?}"
+    );
+    assert!(!texts.iter().any(|text| text.contains("Zorin")), "{texts:?}");
+}
+
+/// Settings > About spells license as its License & source heading does,
+/// its lead line included.
+///
+/// parity: SET-009
+#[gtk::test]
+fn about_spells_license_one_way() {
+    let settings = SettingsTest::open();
+    let lead = ox_core::i18n::gettext(Category::About.lead());
+    assert_eq!(lead, "What this build is, how it is updated and its license.");
+    let texts = about_texts(&settings);
+    assert!(
+        !texts.iter().any(|text| text.to_lowercase().contains("licence")),
+        "{texts:?}"
+    );
+}
