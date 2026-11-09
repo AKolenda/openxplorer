@@ -155,7 +155,7 @@ fn refusal_over(window: &PropertiesWindow) -> Dialog {
             .find(|dialog| {
                 dialog.is_visible()
                     && dialog.transient_for().as_ref() == Some(window.upcast_ref())
-                    && !super::file_ops_support::is_extension_question(&dialog)
+                    && !super::file_ops_support::is_extension_question(dialog)
             })
     };
     wait_until("a message over Properties", || find().is_some());
@@ -1087,7 +1087,7 @@ fn extension_questions(window: &PropertiesWindow) -> usize {
         .filter(|dialog| {
             dialog.is_visible()
                 && dialog.transient_for().as_ref() == Some(window.upcast_ref())
-                && super::file_ops_support::is_extension_question(&dialog)
+                && super::file_ops_support::is_extension_question(dialog)
         })
         .count()
 }
@@ -1110,7 +1110,7 @@ fn ok_twice_in_properties_asks_about_the_extension_once() {
     wait_until("the question", || extension_questions(&window) > 0);
     wait_for_frames(&test.window, 3);
     assert_eq!(extension_questions(&window), 1, "one question");
-    message_over(&window).press("Cancel");
+    message_over(&window).press("No");
     wait_until("no question", || extension_questions(&window) == 0);
     refusal_over(&window).press("OK");
     assert!(fixture.path("Notes 2.txt").is_file());

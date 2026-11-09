@@ -24,6 +24,19 @@ use crate::window::ButtonStyle;
 /// Emitted once when the dialog is dismissed for good.
 const CLOSED: &str = "closed";
 
+/// The edge of a message box's icon, as Windows draws it.
+const MESSAGE_ICON: i32 = 32;
+
+/// The close glyph of a message box's caption, as in a dialog window's
+/// title bar.
+const CLOSE_GLYPH: i32 = 12;
+
+/// The characters a message box's line holds before it wraps: Windows'
+/// Rename question keeps "If you change a file name extension, the file
+/// might become unusable." on one line, and a longer line, such as a long
+/// file name, wraps.
+const MESSAGE_BOX_LINE: i32 = 62;
+
 /// How wide a dialog is, as the width classes of `style.css` set it
 /// (ui-spec.md §4.11: 510 by default, the archive browser 720).
 /// Properties are windows of their own ([`crate::properties::PropertiesWindow`]).
@@ -33,20 +46,26 @@ pub(crate) enum DialogWidth {
     Standard,
     /// The archive browser.
     Archive,
+    /// A Windows message box ([`DialogFrame::make_message_box`]): as wide
+    /// as its words, its caption and its buttons need, never wider than
+    /// its message wraps at.
+    MessageBox,
 }
 
 impl DialogWidth {
-    /// The width in pixels, before the window's own width limits it.
-    pub(crate) const fn pixels(self) -> i32 {
+    /// The width in pixels, before the window's own width limits it;
+    /// `None` for a message box, which is as wide as its content.
+    pub(crate) const fn pixels(self) -> Option<i32> {
         match self {
-            DialogWidth::Standard => 510,
-            DialogWidth::Archive => 720,
+            DialogWidth::Standard => Some(510),
+            DialogWidth::Archive => Some(720),
+            DialogWidth::MessageBox => None,
         }
     }
 }
 
 mod imp {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
     use std::sync::OnceLock;
 
     use gtk::glib;
@@ -69,6 +88,9 @@ mod imp {
         /// The sentence under the heading, when there is one.
         #[template_child]
         pub(super) message_label: TemplateChild<gtk::Label>,
+        /// The icon left of the message, shown only in a message box.
+        #[template_child]
+        pub(super) message_icon: TemplateChild<gtk::Image>,
         /// Scrolls the body when the dialog would be taller than its room.
         #[template_child]
         pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
@@ -85,6 +107,10 @@ mod imp {
         pub(super) width: Cell<DialogWidth>,
         /// Set once `closed` was emitted, so it is emitted only once.
         pub(super) is_closed: Cell<bool>,
+        /// A message box's caption, with its title and close button.
+        pub(super) caption: RefCell<Option<gtk::Label>>,
+        /// A message box's Alt+letter keys, one for each button.
+        pub(super) mnemonics: RefCell<Option<gtk::ShortcutController>>,
     }
 
     impl Default for DialogFrame {
@@ -93,12 +119,15 @@ mod imp {
                 column: TemplateChild::default(),
                 title_label: TemplateChild::default(),
                 message_label: TemplateChild::default(),
+                message_icon: TemplateChild::default(),
                 scroller: TemplateChild::default(),
                 body: TemplateChild::default(),
                 error_label: TemplateChild::default(),
                 actions: TemplateChild::default(),
                 width: Cell::new(DialogWidth::Standard),
                 is_closed: Cell::new(false),
+                caption: RefCell::default(),
+                mnemonics: RefCell::default(),
             }
         }
     }
@@ -156,9 +185,126 @@ impl DialogFrame {
         frame
     }
 
-    /// Shows `title` as the heading.
+    /// Shows `title` as the heading, or in a message box's caption.
     pub(crate) fn set_title(&self, title: &str) {
         self.imp().title_label.set_text(title);
+        if let Some(caption) = self.imp().caption.borrow().as_ref() {
+            caption.set_text(title);
+        }
+    }
+
+    /// Lays the dialog out as a Windows message box, as Windows 11 asks
+    /// "Rename" before an extension changes and "Confirm Save As" before
+    /// a file is replaced: a caption with the title and a close button,
+    /// `icon` left of the message in the text colour, no heading or body,
+    /// and the buttons on the footer; the box is as wide as that needs,
+    /// so a long message wraps rather than widening it, and no empty room
+    /// is left. Alt with a button's first letter presses it (Alt+Y for
+    /// Yes, Alt+N for No). Its close button, like Escape, dismisses it.
+    /// Call it before adding the buttons.
+    pub(crate) fn make_message_box(&self, icon: crate::icons::Icon) {
+        let imp = self.imp();
+        if imp.caption.borrow().is_some() {
+            return;
+        }
+        self.add_css_class("message-box");
+        self.set_width(DialogWidth::MessageBox);
+        imp.title_label.set_visible(false);
+        imp.scroller.set_visible(false);
+        crate::icons::set_icon(&imp.message_icon, icon, MESSAGE_ICON);
+        imp.message_icon.set_visible(true);
+        imp.message_label.set_max_width_chars(MESSAGE_BOX_LINE);
+        let (caption, label) = self.message_box_caption();
+        imp.column.prepend(&caption);
+        imp.caption.replace(Some(label));
+        let mnemonics = gtk::ShortcutController::new();
+        self.add_controller(mnemonics.clone());
+        imp.mnemonics.replace(Some(mnemonics));
+    }
+
+    /// A message box's caption: the title, small, and a close button the
+    /// height of the caption, as a Windows message box's title bar. The
+    /// close button is not a keyboard stop, as in Windows.
+    fn message_box_caption(&self) -> (gtk::Box, gtk::Label) {
+        let caption = gtk::Box::builder()
+            .css_classes(["ox-titlebar", "dialog-titlebar", "message-box-caption"])
+            .build();
+        let label = gtk::Label::builder()
+            .label(self.imp().title_label.text())
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(1)
+            .css_classes(["dialog-window-title"])
+            .build();
+        caption.append(&label);
+        let close_text = ox_core::i18n::gettext("Close");
+        let close = gtk::Button::builder()
+            .child(&crate::icons::image(crate::icons::Icon::Dismiss, CLOSE_GLYPH))
+            .css_classes(["caption", "close"])
+            .focus_on_click(false)
+            .focusable(false)
+            .tooltip_text(close_text.as_str())
+            .build();
+        close.update_property(&[gtk::accessible::Property::Label(&close_text)]);
+        close.connect_clicked(glib::clone!(
+            #[weak(rename_to = frame)]
+            self,
+            move |_| frame.dismiss()
+        ));
+        caption.append(&close);
+        (caption, label)
+    }
+
+    /// Dismisses the dialog as Escape does: a dialog window closes, which
+    /// answers "cancelled", and a dialog on a layer closes.
+    fn dismiss(&self) {
+        let in_layer = self.ancestor(super::DialogLayer::static_type()).is_some();
+        match self.root().and_downcast::<gtk::Window>() {
+            Some(window) if !in_layer => window.close(),
+            _ => self.close(),
+        }
+    }
+
+    /// Lets Alt with the first letter of `button`'s label press it, in a
+    /// message box.
+    fn add_mnemonic(&self, button: &gtk::Button) {
+        let Some(mnemonics) = self.imp().mnemonics.borrow().clone() else {
+            return;
+        };
+        let Some(letter) = button
+            .label()
+            .and_then(|label| label.chars().next())
+            .filter(char::is_ascii_alphanumeric)
+        else {
+            return;
+        };
+        let Some(key) = gtk::gdk::Key::from_name(letter.to_ascii_lowercase().to_string()) else {
+            return;
+        };
+        let trigger = gtk::KeyvalTrigger::new(key, gtk::gdk::ModifierType::ALT_MASK);
+        let action = gtk::CallbackAction::new(glib::clone!(
+            #[weak]
+            button,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _| {
+                if !button.is_sensitive() || !button.is_visible() {
+                    return glib::Propagation::Proceed;
+                }
+                button.emit_clicked();
+                glib::Propagation::Stop
+            }
+        ));
+        mnemonics.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(action)));
+    }
+
+    /// The width the dialog wants: its width class, or for a message box
+    /// the natural width of its content.
+    pub(crate) fn wanted_width(&self) -> i32 {
+        self.width()
+            .pixels()
+            .unwrap_or_else(|| self.measure(gtk::Orientation::Horizontal, -1).1)
     }
 
     /// The heading, which names the window of a dialog window.
@@ -212,6 +358,7 @@ impl DialogFrame {
         let button = gtk::Button::with_label(label);
         button.add_css_class(style.css_class());
         self.imp().actions.append(&button);
+        self.add_mnemonic(&button);
         button
     }
 

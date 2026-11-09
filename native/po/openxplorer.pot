@@ -345,7 +345,7 @@ msgstr ""
 msgid "Browse without extracting the entire archive."
 msgstr ""
 
-#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/dialog/window.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/help.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/type_applications.rs
+#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/dialog/frame.rs crates/ox-app/src/dialog/window.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/help.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/type_applications.rs
 msgid "Close"
 msgstr ""
 
@@ -426,7 +426,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/transfer_panel/failure.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
 msgid "Cancel"
 msgstr ""
 
@@ -4660,7 +4660,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -5555,24 +5555,16 @@ msgstr ""
 msgid "The desktop clipboard could not be claimed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/picker.rs
 msgid "No"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/picker.rs
 msgid "Yes"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/extension_confirm.rs
-msgid "Change extension"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/extension_confirm.rs
-msgid "Change the extension?"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/extension_confirm.rs
-msgid "If you change a file name extension, the file might become unusable. Are you sure you want to change it?"
+msgid "If you change a file name extension, the file might become unusable.\nAre you sure you want to change it?"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -6328,6 +6320,18 @@ msgstr ""
 msgid "Choose one file."
 msgstr ""
 
+#: crates/ox-app/src/window/picker.rs
+msgid "Confirm Save"
+msgstr ""
+
+#: crates/ox-app/src/window/picker.rs
+msgid "Confirm Save As"
+msgstr ""
+
+#: crates/ox-app/src/window/picker.rs
+msgid "Replace"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "The folder “{folder}” does not exist."
@@ -6340,6 +6344,16 @@ msgstr ""
 
 #: crates/ox-app/src/window/picker.rs
 msgid "You don't have permission to save in this location. Contact the administrator to obtain permission."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "{count} files already exist in this folder. Replace them?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "{name} already exists.\nDo you want to replace it?"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

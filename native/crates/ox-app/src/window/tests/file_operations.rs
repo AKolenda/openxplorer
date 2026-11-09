@@ -398,7 +398,7 @@ fn a_batch_error_goes_once_a_name_is_accepted() {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<Dialog>().ok())
-            .find(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(&shown))
+            .find(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(shown))
     };
     wait_until("the extension question", || question().is_some());
     question().expect("it shows").press("No");
@@ -430,7 +430,7 @@ fn a_batch_name_that_adds_an_extension_asks_first() {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<Dialog>().ok())
-            .find(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(&shown))
+            .find(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(shown))
     };
     wait_until("the extension question", || question().is_some());
     question().expect("it shows").press("No");

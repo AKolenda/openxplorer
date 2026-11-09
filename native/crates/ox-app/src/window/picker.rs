@@ -160,6 +160,10 @@ pub(crate) struct Picker {
     /// The calling application, whose last folder the dialog remembers;
     /// `None` when it could not be named, and nothing is remembered.
     caller: Option<String>,
+    /// While a Save dialog's File name shows a name without the extension
+    /// it hides, as the window hides known types' extensions: the text
+    /// shown and that extension, with its dot (`extra_2`, ".txt").
+    hidden_extension: RefCell<Option<(String, String)>>,
 }
 
 impl Picker {
@@ -201,6 +205,16 @@ impl Picker {
     /// The `(id, value)` pairs of the extra choices.
     fn choice_values(&self) -> Vec<(String, String)> {
         self.choices.iter().map(ChoiceControl::value).collect()
+    }
+
+    /// The name File name stands for when it holds `text`: the text, with
+    /// the extension it hides given back while the text is still the name
+    /// shown without it.
+    fn named(&self, text: &str) -> String {
+        match self.hidden_extension.borrow().as_ref() {
+            Some((shown, extension)) if shown == text => format!("{text}{extension}"),
+            _ => text.to_owned(),
+        }
     }
 }
 
@@ -494,12 +508,15 @@ impl BrowserWindow {
         self.remember_dialog_size();
         match &picker.name {
             Some(name) => {
+                if let ChooserMode::Save { name: suggested } = &picker.request.mode {
+                    self.show_in_name_box(&picker, name, suggested);
+                }
                 // A new window gives its file list the keyboard once the
                 // first folder is listed, which ends after this: the name
                 // box keeps it instead, so typing replaces the name.
                 self.imp().file_list_awaits_focus.set(false);
                 name.grab_focus();
-                select_stem(name);
+                select_name(&picker, name);
             }
             None => self.focus_new_file_list(),
         }
@@ -599,7 +616,7 @@ impl BrowserWindow {
             let opens = matches!(picker.request.mode, ChooserMode::Open { .. });
             if !self.imp().changing_model.get() {
                 match (selected.as_slice(), files.as_slice()) {
-                    ([entry], [_]) => name.set_text(&entry.name),
+                    ([entry], [_]) => self.show_in_name_box(&picker, name, &entry.name),
                     // Several files: every one, in quotes, as Windows'
                     // dialog lists them, so the box never holds only the
                     // first and wins over the others.
@@ -693,10 +710,31 @@ impl BrowserWindow {
         let (Some(from), Some(to)) = (filters.get(previous), filters.get(chosen)) else {
             return;
         };
-        if let Some(renamed) = renamed_for_type(&name.text(), from, to) {
-            name.set_text(&renamed);
-            select_stem(name);
+        if let Some(renamed) = renamed_for_type(&picker.named(&name.text()), from, to) {
+            self.show_in_name_box(&picker, name, &renamed);
+            select_name(&picker, name);
         }
+    }
+
+    /// Puts the file name `name` into a Save dialog's File name as the
+    /// window shows names, as Windows 11's dialog does: while extensions
+    /// of known types are hidden, without its extension (`extra_2` for
+    /// `extra_2.txt`), which is remembered and saved with the name unless
+    /// another is typed; while they are shown, whole. An Open dialog shows
+    /// the name whole.
+    fn show_in_name_box(&self, picker: &Picker, name_box: &gtk::Entry, name: &str) {
+        let hidden = match picker.request.mode {
+            ChooserMode::Save { .. } => {
+                crate::folder_view::shown_name::hidden_extension(name, false, self.file_name_extensions())
+            }
+            ChooserMode::Open { .. } | ChooserMode::SaveFiles { .. } => None,
+        };
+        let shown = &name[..name.len() - hidden.map_or(0, str::len)];
+        // Remembered first: the text changing is a change of the name.
+        picker
+            .hidden_extension
+            .replace(hidden.map(|extension| (shown.to_owned(), extension.to_owned())));
+        name_box.set_text(shown);
     }
 
     /// The entries selected in the folder.
@@ -864,7 +902,7 @@ impl BrowserWindow {
             ChooserMode::Save { .. } => {
                 let path = self.local_path_now(&entry.uri).await.ok_or_else(not_local)?;
                 if let Some(name) = &picker.name {
-                    name.set_text(&entry.name);
+                    self.show_in_name_box(picker, name, &entry.name);
                 }
                 // The file's real name, bytes and all; the name shown
                 // (Entry::name, a display name) is only for what the
@@ -1014,7 +1052,8 @@ impl BrowserWindow {
         let Some(name_box) = &picker.name else {
             return Ok(Vec::new());
         };
-        let typed = name_box.text();
+        // The name with the extension File name hides, while it hides one.
+        let typed = picker.named(&name_box.text());
         // Enter with no name does what the Save button, off then, does.
         if typed.trim().is_empty() {
             return Ok(Vec::new());
@@ -1116,28 +1155,52 @@ impl BrowserWindow {
     /// key from the dialog, so when it opened behind the dialog or on
     /// another screen, Save, Cancel, Escape and the close button all did
     /// nothing, and the dialog could only be ended by stopping `OpenXplorer`.
+    ///
+    /// It is a compact message box, as Windows 11 asks: "Confirm Save As",
+    /// the warning icon, "`extra_2.txt` already exists." and "Do you want to
+    /// replace it?" on the next line, and Yes and No, with No focused, so
+    /// Enter replaces nothing. No, Escape and the close button go back to
+    /// the dialog with its name kept.
     fn confirm_replace(&self, picker: &Rc<Picker>, locations: Vec<PathBuf>, names: &[String]) {
         picker.asking.set(true);
         self.update_picker();
-        let (title, question) = match names {
+        // Windows' Confirm Save As focuses No; the question for several
+        // files keeps Replace first and focused, as before.
+        let (title, question, labels, keep_focused) = match names {
             [name] => (
-                "Confirm Save As",
-                format!("“{name}” already exists. Do you want to replace it?"),
+                ox_core::i18n::gettext("Confirm Save As"),
+                ox_core::i18n::format_message(
+                    "{name} already exists.\nDo you want to replace it?",
+                    &[("name", name)],
+                ),
+                (ox_core::i18n::gettext("Yes"), ox_core::i18n::gettext("No")),
+                true,
             ),
             _ => (
-                "Confirm Save",
-                format!(
-                    "{} files already exist in this folder. Replace them?",
-                    names.len()
+                ox_core::i18n::gettext("Confirm Save"),
+                ox_core::i18n::format_message(
+                    "{count} files already exist in this folder. Replace them?",
+                    &[("count", &names.len().to_string())],
                 ),
+                (
+                    ox_core::i18n::gettext("Replace"),
+                    ox_core::i18n::gettext("Cancel"),
+                ),
+                false,
             ),
         };
-        let frame = DialogFrame::new(title, DialogWidth::Standard);
+        let frame = DialogFrame::new(&title, DialogWidth::MessageBox);
+        frame.make_message_box(crate::icons::Icon::WarningColor32);
         frame.set_message(&question);
         let locations = Rc::new(locations);
+        let (replace_style, keep_style) = if keep_focused {
+            (ButtonStyle::Bordered, ButtonStyle::Accent)
+        } else {
+            (ButtonStyle::Accent, ButtonStyle::Bordered)
+        };
         let replace = frame.add_closing_button(
-            "Replace",
-            ButtonStyle::Accent,
+            &labels.0,
+            replace_style,
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
@@ -1146,7 +1209,7 @@ impl BrowserWindow {
                 move || window.finish_picking(&picker, locations.as_ref().clone())
             ),
         );
-        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        let keep = frame.add_closing_button(&labels.1, keep_style, || {});
         // However the question ends: a button, Escape, or the dialog
         // closing under it.
         frame.connect_closed(glib::clone!(
@@ -1160,7 +1223,11 @@ impl BrowserWindow {
             }
         ));
         self.present_window_dialog(&frame);
-        replace.grab_focus();
+        if keep_focused {
+            keep.grab_focus();
+        } else {
+            replace.grab_focus();
+        }
     }
 
     /// What the File name box of an Open dialog chooses, when it names
@@ -1476,6 +1543,7 @@ impl BrowserWindow {
             single: RefCell::new(None),
             attached_to_caller: Rc::default(),
             caller: None,
+            hidden_extension: RefCell::new(None),
         }
     }
 
@@ -1661,6 +1729,16 @@ fn parse_quoted_names(text: &str) -> Option<Vec<String>> {
         rest = inside[end + 1..].trim_start();
     }
     (!names.is_empty()).then_some(names)
+}
+
+/// Selects the name in File name as Windows does: all of it while it
+/// hides an extension, else the name without its extension.
+fn select_name(picker: &Picker, entry: &gtk::Entry) {
+    if picker.hidden_extension.borrow().is_some() {
+        entry.select_region(0, -1);
+    } else {
+        select_stem(entry);
+    }
 }
 
 /// Selects the name without its extension, as Windows does, so typing
@@ -3248,7 +3326,7 @@ mod tests {
 
     /// The Save dialog's File name box shows a name as the window shows
     /// names, as in Windows 11: with extensions hidden (the default),
-    /// "extra_2.txt" reads "extra_2", for the caller's name, a file
+    /// `extra_2.txt` reads `extra_2`, for the caller's name, a file
     /// selected and a file double-clicked; Save still writes the name with
     /// its extension, also after another type is chosen.
     ///
@@ -3329,7 +3407,7 @@ mod tests {
     }
 
     /// With extensions shown, File name holds the whole name, as Windows
-    /// shows it then ("extra_2.txt").
+    /// shows it then (`extra_2.txt`).
     ///
     /// parity: INT-032, VIEW-069
     #[gtk::test]
@@ -3374,7 +3452,7 @@ mod tests {
     }
 
     /// Saving over a file asks as Windows 11 does: a compact message box
-    /// titled "Confirm Save As" with the warning icon, "extra_2.txt
+    /// titled "Confirm Save As" with the warning icon, "`extra_2.txt`
     /// already exists." and "Do you want to replace it?" on the next line,
     /// and Yes and No, with No focused so Enter replaces nothing. No goes
     /// back to the dialog with the name kept; Yes replaces the file.

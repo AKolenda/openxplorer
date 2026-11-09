@@ -378,7 +378,7 @@ fn a_hiding_name_in_the_rename_dialog_asks_first() {
     field.set_text(".Plan.txt");
     dialog.press("Save");
     wait_until("the hide question", || question().is_some());
-    question().expect("it shows").press("No");
+    question().expect("it shows").press("Cancel");
     wait_until("the question to close", || question().is_none());
     settle();
 

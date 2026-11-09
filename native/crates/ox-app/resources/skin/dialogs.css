@@ -94,6 +94,47 @@ window.ox.ox-dialog button.dialog-button {
   min-width: 90px;
   padding: 0 17px;
 }
+/* A Windows message box (DialogFrame::make_message_box), in a window of
+   its own (the Rename question about an extension) or on a dialog layer
+   (Confirm Save As): a caption with the title and a close button, the
+   warning icon beside the words in the text colour, and a footer sized to
+   its buttons. The box is as large as its content: no heading, no body
+   and no empty room. One style for both hosts, so these rules start at
+   the frame. */
+window.ox ox-dialog-frame.message-box .message-box-caption {
+  min-height: 32px;
+  padding-left: 12px;
+  background-color: @ox_bg;
+  border-radius: 8px 8px 0 0;
+}
+window.ox ox-dialog-frame.message-box .message-box-caption .dialog-window-title { font-size: 12px; }
+window.ox ox-dialog-frame.message-box .message-box-caption button.caption {
+  min-width: 46px;
+  min-height: 32px;
+  border-radius: 0 8px 0 0;
+}
+window.ox.solid-csd ox-dialog-frame.message-box .message-box-caption,
+window.ox.solid-csd ox-dialog-frame.message-box .message-box-caption button.caption { border-radius: 0; }
+window.ox ox-dialog-frame.message-box .dialog-content { padding: 8px 24px 20px 16px; }
+/* The words start right of the 32-pixel icon, 12 pixels from it, and are
+   never shorter than it. */
+window.ox ox-dialog-frame.message-box .dialog-message {
+  color: @ox_text;
+  margin: 0 0 0 44px;
+  min-height: 32px;
+}
+window.ox ox-dialog-frame.message-box .dialog-actions {
+  padding: 12px 12px;
+  border-spacing: 8px;
+}
+/* Buttons 88 wide with their padding and border, as a message box's,
+   narrower than a dialog's (the frame's ox-dialog class outranks the
+   layer's button rule). */
+window.ox ox-dialog-frame.message-box.ox-dialog .dialog-actions button {
+  min-width: 64px;
+  min-height: 28px;
+  padding: 0 11px;
+}
 /* The red button of a destructive question. */
 window.ox button.danger {
   background-color: @ox_critical_fill;
