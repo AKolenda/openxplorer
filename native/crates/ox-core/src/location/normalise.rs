@@ -837,7 +837,10 @@ mod tests {
             "not a listed item's URI"
         );
         assert!(require_item_uri("file:///tmp/a%0Ab?x").is_err());
-        assert!(require_item_uri("file:///tmp/ox-test/a%00b").is_err(), "no name holds a NUL");
+        assert!(
+            require_item_uri("file:///tmp/ox-test/a%00b").is_err(),
+            "no name holds a NUL"
+        );
         assert!(
             require_item_uri("file:///tmp/ox-test/a%2F..%2Fb%0A").is_err(),
             "no name holds a slash"
