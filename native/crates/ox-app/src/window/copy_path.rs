@@ -78,10 +78,16 @@ fn quotable_address(uri: &str, locations: &LocationContext) -> String {
 }
 
 impl BrowserWindow {
-    /// What Copy path would copy now: the selected items, else the folder
-    /// the tab shows.
+    /// What Copy path would copy now: the selected items, a row of Recent
+    /// files as the file it stands for, else the folder the tab shows.
     pub(super) fn path_to_copy(&self) -> CopiedPath {
-        let selected = self.folder_pane().model().selected_uris();
+        let selected: Vec<String> = self
+            .folder_pane()
+            .model()
+            .selected_items()
+            .iter()
+            .map(|item| item.entry().item_uri().to_owned())
+            .collect();
         let folder_uri = self.current_uri();
         let locations = self.imp().locations.borrow();
         copied_path(&selected, folder_uri.as_deref(), &locations)

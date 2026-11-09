@@ -4407,6 +4407,10 @@ msgstr ""
 msgid "This item is not a regular file or a readable folder."
 msgstr ""
 
+#: crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Could not find this item"
+msgstr ""
+
 #: crates/ox-app/src/window/activation/outcome.rs
 msgid "Could not open the item"
 msgstr ""
@@ -4414,6 +4418,15 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/activation/outcome.rs
 msgid "Could not open {name}: {reason}"
+msgstr ""
+
+#: crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Item Not Found"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "This is no longer located in {folder}. Verify the item's location and try again."
 msgstr ""
 
 #: crates/ox-app/src/window/address_bar.rs
@@ -5410,6 +5423,10 @@ msgid "Drives, shares and virtual items cannot be changed here."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
+msgid "Items in Recent files can be opened and copied, not changed."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/availability.rs
 msgid "Items in a ZIP are read-only. Copy them out or use Extract all."
 msgstr ""
 
@@ -5547,10 +5564,6 @@ msgid "Close the folder or file and try again."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Could not find this item"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Delete or move files so you have enough space."
 msgstr ""
 
@@ -5580,10 +5593,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Interrupted Action"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "Item Not Found"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs
@@ -5622,11 +5631,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "This folder can't be moved to the Recycle Bin. Do you want to permanently delete it?"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/failure_dialog.rs
-msgid "This is no longer located in {folder}. Verify the item's location and try again."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

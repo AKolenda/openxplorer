@@ -59,6 +59,9 @@ struct CommandSubject {
     name: String,
     /// It opens as a folder.
     is_folder: bool,
+    /// It is the file a row of Recent files stands for, which may have
+    /// gone since the row was listed.
+    is_recent_file: bool,
 }
 
 impl BrowserWindow {
@@ -110,7 +113,8 @@ impl BrowserWindow {
     }
 
     /// The one selected item, or the folder shown when nothing is
-    /// selected; `None` for several items or a landing page.
+    /// selected; `None` for several items or a landing page. A row of
+    /// Recent files is the file it stands for.
     fn command_subject(&self) -> Option<CommandSubject> {
         let items = self.folder_pane().model().selected_items();
         match items.as_slice() {
@@ -118,9 +122,10 @@ impl BrowserWindow {
             [item] => {
                 let entry = item.entry();
                 Some(CommandSubject {
-                    uri: entry.navigation_uri().to_owned(),
+                    uri: entry.opened_uri().to_owned(),
                     name: entry.name.clone(),
                     is_folder: entry.is_dir,
+                    is_recent_file: entry.meta.recent_target.is_some(),
                 })
             }
             _ => None,
@@ -138,20 +143,53 @@ impl BrowserWindow {
             uri,
             name,
             is_folder: true,
+            is_recent_file: false,
         })
     }
 
-    /// Open with…: the Open with dialog for the item.
+    /// Open with…: the Open with dialog for the item. The file a Recent
+    /// row stands for is looked up first: when it is gone, "Item Not
+    /// Found" says so, as opening the row does.
     fn open_with(&self) {
         let Some(subject) = self.command_subject() else {
             return;
         };
+        let is_recent_file = subject.is_recent_file;
         let subject = OpenWithSubject {
             uri: subject.uri,
             name: subject.name,
             is_folder: subject.is_folder,
         };
-        self.present_open_with(subject);
+        if !is_recent_file {
+            self.present_open_with(subject);
+            return;
+        }
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                if window.recent_file_is_there(&subject.uri).await {
+                    window.present_open_with(subject);
+                }
+            }
+        ));
+    }
+
+    /// Whether the file at `uri` that a Recent row stands for can be read
+    /// now, its share mounted first when it has to be, as opening the row
+    /// does; says "Item Not Found" when it is gone, and why otherwise.
+    async fn recent_file_is_there(&self, uri: &str) -> bool {
+        match self.read_again(uri).await {
+            Ok(_) => true,
+            Err(super::activation::ReadAgain::Gone(_)) => {
+                self.report_item_not_found(uri);
+                false
+            }
+            Err(failure) => {
+                self.show_message(&failure.to_string());
+                false
+            }
+        }
     }
 
     /// Open folder with…: the Open with dialog for the folder at `uri`,
@@ -332,9 +370,9 @@ impl BrowserWindow {
         for item in items {
             let entry = item.entry();
             let folder = if entry.is_dir {
-                Some(entry.navigation_uri().to_owned())
+                Some(entry.opened_uri().to_owned())
             } else {
-                parent_location(&entry.uri)
+                parent_location(entry.item_uri())
             };
             if let Some(folder) = folder.filter(|folder| !folders.contains(folder)) {
                 folders.push(folder);
@@ -417,7 +455,10 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let prepared = integration::prepare_launch(subject.uri, app_id.clone()).await;
+                if subject.is_recent_file && !window.recent_file_is_there(&subject.uri).await {
+                    return;
+                }
+                let prepared = integration::prepare_launch(subject.uri.clone(), app_id.clone()).await;
                 let launched = prepared
                     .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {

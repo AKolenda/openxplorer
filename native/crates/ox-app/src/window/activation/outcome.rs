@@ -7,6 +7,7 @@
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
+use ox_core::location::parent_location;
 
 use super::Resolved;
 use crate::dialog::Dialog;
@@ -16,6 +17,18 @@ use crate::window::{BrowserWindow, ButtonStyle};
 
 /// The title of the dialog that says why an item did not open.
 const OPEN_FAILED: &str = crate::i18n::message_id("Could not open the item");
+
+/// The title of the dialog that says the item is gone, in the words the
+/// progress window asks about one (`file_ops/failure_dialog.rs`).
+const ITEM_NOT_FOUND: &str = crate::i18n::message_id("Item Not Found");
+
+/// Its heading.
+const NOT_FOUND: &str = crate::i18n::message_id("Could not find this item");
+
+/// What it says of where the item was.
+const NO_LONGER_LOCATED: &str = crate::i18n::message_id(
+    "This is no longer located in {folder}. Verify the item's location and try again.",
+);
 
 /// Where an activation started: its tab, and how often that tab had moved
 /// to another location by then.
@@ -72,6 +85,14 @@ impl BrowserWindow {
             Ok(Resolved::Folder(uri)) => self.navigate_background_tab(origin.tab, &uri),
             Ok(Resolved::Archive(archive)) if is_active => self.open_archive_or_file(&archive),
             Ok(Resolved::Archive(_) | Resolved::Opened) => {}
+            Ok(Resolved::Gone) if is_active => self.report_item_not_found(entry.item_uri()),
+            Ok(Resolved::Gone) => self.show_message(&ox_core::i18n::format_message(
+                "Could not open {name}: {reason}",
+                &[
+                    ("name", &entry.name),
+                    ("reason", ox_core::i18n::gettext_static(NOT_FOUND)),
+                ],
+            )),
             Err(reason) if is_active => self.report_open_failure(&reason, entry),
             Err(reason) => self.show_message(&ox_core::i18n::format_message(
                 "Could not open {name}: {reason}",
@@ -101,6 +122,31 @@ impl BrowserWindow {
         if self.imp().session.borrow().beside_active() == Some(id) {
             self.show_beside_pane();
         }
+    }
+
+    /// Says in "Item Not Found", as the progress window does, that the item
+    /// at `uri` is no longer in its folder: the file a Recent row stood for.
+    pub(in crate::window) fn report_item_not_found(&self, uri: &str) {
+        let folder = parent_location(uri)
+            .map(|folder| self.imp().locations.borrow().display_location(&folder))
+            .unwrap_or_default();
+        let message = format!(
+            "{}\n\n{}",
+            ox_core::i18n::gettext_static(NOT_FOUND),
+            ox_core::i18n::format_message(NO_LONGER_LOCATED, &[("folder", &folder)]),
+        );
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let title = ox_core::i18n::gettext_static(ITEM_NOT_FOUND);
+                let dialog = Dialog::new(&window, title, &message);
+                dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
+                dialog.open();
+                dialog.next_response().await;
+                dialog.finish();
+            }
+        ));
     }
 
     /// Says why `entry` could not be opened in a dialog, as
