@@ -205,10 +205,12 @@ jobs:
           node-version: '22'
       - name: Install the package validators
         # verify_layout.py runs desktop-file-validate and appstreamcli on the
-        # staged Debian package; dpkg-deb is already on the image.
+        # staged Debian package; dpkg-deb is already on the image. It also
+        # starts the update helper (openxplorer-install-update --help), which
+        # links libsoup-3.0, so the runner needs that library too.
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
+          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream libsoup-3.0-0
       - name: Verify release source and public-data policies
         run: |
           /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'

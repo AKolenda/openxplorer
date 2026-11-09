@@ -143,10 +143,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 
 %changelog
 * Mon Nov 09 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.16-1
-- OpenXplorer 2.0.16: file contents in the Preview pane, more of Windows
-  11's keyboard shortcuts, a tab menu from the keyboard, and an Open and
-  Save dialog that keeps its size. (The password-free update helper is
-  only in the Debian package.)
+- OpenXplorer 2.0.16: Windows 11's search layout, file contents in the
+  Preview pane, pastes that keep going past an unreadable item, Windows
+  11's Compact view and group headings, more of its keyboard shortcuts,
+  a tab menu from the keyboard, and an Open and Save dialog that keeps
+  its size. (The password-free update helper is only in the Debian
+  package.)
 
 * Sun Nov 08 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.15-1
 - OpenXplorer 2.0.15: Windows 11's layout for the command bar, right-click
