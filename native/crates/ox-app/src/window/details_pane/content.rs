@@ -186,7 +186,7 @@ impl MetadataRequest {
             .as_deref()
             .and_then(MediaKind::for_content_type)?;
         Some(Self {
-            uri: entry.uri.clone(),
+            uri: entry.item_uri().to_owned(),
             kind,
             size: entry.size,
             modified: entry.modified,
@@ -307,7 +307,7 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
         Property::new(
             keys::LOCATION,
             message_id("File location"),
-            container_text(&entry.uri, facts.locations),
+            container_text(entry.item_uri(), facts.locations),
         ),
         Property::new(keys::MODIFIED, message_id("Date modified"), dates(entry.modified)),
         Property::new(keys::CREATED, message_id("Date created"), created),

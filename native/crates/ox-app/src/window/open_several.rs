@@ -77,8 +77,9 @@ impl BrowserWindow {
         }
         // Rows of Recent files open as the files they stand for, each
         // read again, its share mounted first when it has to be, as
-        // opening one alone does. The items open one after another, so a
-        // slow one keeps the view's order rather than opening last.
+        // opening one alone does. They are read one after another, so a
+        // slow folder's tab keeps the view's order rather than opening
+        // last; files start in their applications as from a folder.
         let entries = entries.to_vec();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

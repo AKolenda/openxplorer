@@ -659,3 +659,25 @@ fn several_recent_folders_open_in_view_order_when_the_first_is_slow() {
     let place = |uri: &String| tabs.iter().position(|tab| tab == uri);
     assert!(place(&alpha) < place(&beta), "view order: {tabs:?}");
 }
+
+/// The Details pane describes the file a Recent row stands for: its File
+/// location is that file's folder, not Recent files.
+///
+/// parity: SIDE-026, PROP-009
+#[gtk::test]
+fn the_details_pane_shows_a_recent_file_location() {
+    let (fixture, test, _) = selected_recent_file();
+    if !test.window.details_pane().is_visible() {
+        test.activate("details-pane", None);
+    }
+    let pane = test.window.details_pane();
+    select_names(&test, &["Budget.txt"]);
+    let documents = fixture.path("Documents");
+    let folder = documents.to_str().expect("a UTF-8 fixture path");
+
+    wait_until("the file's folder in the pane", || {
+        pane.shown_properties()
+            .iter()
+            .any(|row| row.name == "File location" && row.value == folder)
+    });
+}
