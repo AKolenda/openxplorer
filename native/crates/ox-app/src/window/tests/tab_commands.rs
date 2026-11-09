@@ -125,7 +125,11 @@ fn close_tabs_to_the_right_keeps_the_chosen_tab_and_those_before_it() {
     };
 
     activate_with(&test, "close-tabs-to-the-right", &last.to_variant());
-    assert_eq!(tab_ids(&test), [first, middle, last], "nothing is right of the last tab");
+    assert_eq!(
+        tab_ids(&test),
+        [first, middle, last],
+        "nothing is right of the last tab"
+    );
     activate_with(&test, "close-tabs-to-the-right", &first.to_variant());
 
     assert_eq!(tab_ids(&test), [first]);

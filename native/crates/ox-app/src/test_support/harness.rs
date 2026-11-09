@@ -414,7 +414,11 @@ impl TestWindow {
             .expect("the settings file takes the change");
         self.context.reload_settings();
         wait_until("the navigation pane to follow the setting", || {
-            self.context.settings_data().preferences.more_navigation_pane_items == on
+            self.context
+                .settings_data()
+                .preferences
+                .more_navigation_pane_items
+                == on
         });
         settle();
     }

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A tab's context menu.
 //!
-//! Ports the `contextmenu` handler of `setupTabDrag` in
-//! `v2.0.0:desktop/ui/app.js`: Move tab to new window, Move tab to window…,
-//! Duplicate tab, Open windows… and Close tab, and Dolphin's Close other
-//! tabs (TAB-015). The two moves are [`super::tab_moves`]'s.
+//! Windows 11 File Explorer's, in its order: Close tab (with its X and
+//! Ctrl+W), Close other tabs (TAB-015), Close tabs to the right (TAB-059)
+//! and Duplicate tab. "Show more items in the tab menu" adds the items the
+//! app had before (TAB-060), the port of the `contextmenu` handler of
+//! `setupTabDrag` in `v2.0.0:desktop/ui/app.js`: Move tab to new window,
+//! Move tab to window… and Open windows…. The two moves are
+//! [`super::tab_moves`]'s.
 
 use gtk::subclass::prelude::*;
 
@@ -15,24 +18,47 @@ use super::session::TabId;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// The menu of the tab `id`, which shows `uri`; Close other tabs is
-/// disabled when it is the only tab.
-pub(super) fn tab_menu(id: TabId, uri: &str, is_only_tab: bool) -> Vec<MenuEntry> {
+/// What the menu of a tab depends on besides the tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct TabMenuFacts {
+    /// It is the window's only tab: there are no others to close.
+    pub is_only_tab: bool,
+    /// It is the last tab of the strip: none is to its right.
+    pub is_last_tab: bool,
+    /// Settings' "Show more items in the tab menu" is on.
+    pub extra_items: bool,
+}
+
+/// The menu of the tab `id`, which shows `uri`. Close other tabs is
+/// disabled on the only tab and Close tabs to the right on the last one.
+pub(super) fn tab_menu(id: TabId, uri: &str, facts: TabMenuFacts) -> Vec<MenuEntry> {
     let tab = id.to_variant();
-    vec![
+    let mut entries = vec![
         MenuItem::with_target(
-            &ox_core::i18n::gettext("Move tab to new window"),
-            Icon::Share,
-            WindowAction::MoveTabToNewWindow,
+            &ox_core::i18n::gettext("Close tab"),
+            Icon::Dismiss,
+            WindowAction::CloseTabById,
             tab.clone(),
         )
+        .with_shortcut("Ctrl+W")
         .into(),
         MenuItem::with_target(
-            &ox_core::i18n::gettext("Move tab to window…"),
-            Icon::Desktop,
-            WindowAction::MoveTabToWindow,
+            &ox_core::i18n::gettext("Close other tabs"),
+            Icon::Dismiss,
+            WindowAction::CloseOtherTabs,
             tab.clone(),
         )
+        .without_glyph()
+        .disabled_when(facts.is_only_tab)
+        .into(),
+        MenuItem::with_target(
+            &ox_core::i18n::gettext("Close tabs to the right"),
+            Icon::Dismiss,
+            WindowAction::CloseTabsToTheRight,
+            tab.clone(),
+        )
+        .without_glyph()
+        .disabled_when(facts.is_last_tab)
         .into(),
         MenuItem::with_text_target(
             &ox_core::i18n::gettext("Duplicate tab"),
@@ -41,32 +67,45 @@ pub(super) fn tab_menu(id: TabId, uri: &str, is_only_tab: bool) -> Vec<MenuEntry
             uri,
         )
         .into(),
-        MenuItem::new(
-            &ox_core::i18n::gettext("Open windows…"),
-            Icon::Desktop,
-            WindowAction::OpenWindows,
-        )
-        .into(),
-        MenuEntry::Divider,
-        MenuItem::with_target(
-            &ox_core::i18n::gettext("Close tab"),
-            Icon::Dismiss,
-            WindowAction::CloseTabById,
-            tab.clone(),
-        )
-        .into(),
-        MenuItem::with_target(
-            &ox_core::i18n::gettext("Close other tabs"),
-            Icon::Dismiss,
-            WindowAction::CloseOtherTabs,
-            tab,
-        )
-        .disabled_when(is_only_tab)
-        .into(),
-    ]
+    ];
+    if facts.extra_items {
+        entries.extend([
+            MenuEntry::Divider,
+            MenuItem::with_target(
+                &ox_core::i18n::gettext("Move tab to new window"),
+                Icon::Share,
+                WindowAction::MoveTabToNewWindow,
+                tab.clone(),
+            )
+            .into(),
+            MenuItem::with_target(
+                &ox_core::i18n::gettext("Move tab to window…"),
+                Icon::Desktop,
+                WindowAction::MoveTabToWindow,
+                tab,
+            )
+            .into(),
+            MenuItem::new(
+                &ox_core::i18n::gettext("Open windows…"),
+                Icon::Desktop,
+                WindowAction::OpenWindows,
+            )
+            .into(),
+        ]);
+    }
+    entries
 }
 
 impl BrowserWindow {
+    /// Opens the menu of the tab at `number`, counted from 1, under it, as
+    /// the Menu key on that tab does, for the snapshot hook's `tab-menu=`
+    /// step; false when there is no such tab.
+    pub(crate) fn open_tab_menu(&self, number: usize) -> bool {
+        number
+            .checked_sub(1)
+            .is_some_and(|index| self.imp().tab_strip.open_menu_of_tab(index))
+    }
+
     /// "Open windows…": opens the list of open windows (`windowsMenu`)
     /// below the tab in front, for the tab menu, `--windows` and the
     /// launcher's "Open windows…" (TAB-044). Windows 11's title bar has

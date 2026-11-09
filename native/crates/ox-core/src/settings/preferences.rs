@@ -379,6 +379,17 @@ pub struct Preferences {
     /// default, so they always show; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_expand_arrows: bool,
+    /// The navigation pane adds the app's own rows to Windows 11's: a
+    /// capacity bar under each drive (SIDE-018), Recent files, Recent
+    /// locations and the Recycle Bin (SIDE-025, SIDE-026). Off by default,
+    /// so the pane is Windows'; stored only when on (SIDE-034).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub more_navigation_pane_items: bool,
+    /// A tab's menu adds the app's own items after Windows 11's: Move tab
+    /// to new window, Move tab to window… and Open windows…. Off by
+    /// default, so the menu is Windows'; stored only when on (TAB-060).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub more_tab_menu_items: bool,
     /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
     /// automatic size (Dolphin's Places panel Icon Size). Stored only when
     /// chosen.
@@ -603,6 +614,8 @@ impl Default for Preferences {
             desktop_font: false,
             hide_sidebar: false,
             hide_expand_arrows: false,
+            more_navigation_pane_items: false,
+            more_tab_menu_items: false,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
@@ -772,6 +785,11 @@ impl Preferences {
         replace_if_some(&mut self.progress_details, update.progress_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
+        replace_if_some(
+            &mut self.more_navigation_pane_items,
+            update.more_navigation_pane_items,
+        );
+        replace_if_some(&mut self.more_tab_menu_items, update.more_tab_menu_items);
         let icon_size = update
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
@@ -973,6 +991,10 @@ pub struct PreferencesUpdate {
     /// Hide the navigation pane's expand arrows until it is pointed at, or
     /// always show them.
     pub hide_expand_arrows: Option<bool>,
+    /// Add the app's own rows to the navigation pane, or show Windows'.
+    pub more_navigation_pane_items: Option<bool>,
+    /// Add the app's own items to a tab's menu, or show Windows'.
+    pub more_tab_menu_items: Option<bool>,
     /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
     pub sidebar_icon_size: Option<u32>,
     /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
@@ -1097,6 +1119,8 @@ impl PreferencesUpdate {
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
             hide_expand_arrows: flag("hideExpandArrows"),
+            more_navigation_pane_items: flag("moreNavigationPaneItems"),
+            more_tab_menu_items: flag("moreTabMenuItems"),
             sidebar_icon_size: values
                 .get("sidebarIconSize")
                 .and_then(Value::as_u64)
@@ -1714,7 +1738,10 @@ mod tests {
         assert!(!preferences.more_navigation_pane_items);
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         assert!(stored.get("moreTabMenuItems").is_none(), "not stored while off");
-        assert!(stored.get("moreNavigationPaneItems").is_none(), "not stored while off");
+        assert!(
+            stored.get("moreNavigationPaneItems").is_none(),
+            "not stored while off"
+        );
 
         let on = PreferencesUpdate::from_json(&json!({
             "moreTabMenuItems": true,

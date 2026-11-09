@@ -804,7 +804,10 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
         ]
     );
     assert!(!menu.row("Close other tabs").is_sensitive(), "the only tab");
-    assert!(!menu.row("Close tabs to the right").is_sensitive(), "the last tab");
+    assert!(
+        !menu.row("Close tabs to the right").is_sensitive(),
+        "the last tab"
+    );
     menu.popdown();
     test.set_more_tab_menu_items(true);
     right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);

@@ -180,21 +180,32 @@ impl BrowserWindow {
         let places = self.places();
         let searches = self.context().saved_searches();
         let mut entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
-        // Recent files hides while the desktop remembers no history
-        // (SAFE-022), as in Nautilus.
-        let remembers = self.context().recent_policy().remember;
-        let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
-        entries.extend(fixed.into_iter().filter(|entry| {
-            remembers
-                || !matches!(
-                    entry.menu,
-                    Some(
-                        super::place_menus::PlaceMenu::RecentFiles
-                            | super::place_menus::PlaceMenu::RecentLocations
+        // Windows 11's navigation pane has neither capacity bars nor
+        // Recent files, Recent locations and the Recycle Bin; Settings'
+        // "Show more items in the navigation pane" adds them (SIDE-034).
+        let more_items = self
+            .context()
+            .settings_data()
+            .preferences
+            .more_navigation_pane_items;
+        if more_items {
+            // Recent files hides while the desktop remembers no history
+            // (SAFE-022), as in Nautilus.
+            let remembers = self.context().recent_policy().remember;
+            let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
+            entries.extend(fixed.into_iter().filter(|entry| {
+                remembers
+                    || !matches!(
+                        entry.menu,
+                        Some(
+                            super::place_menus::PlaceMenu::RecentFiles
+                                | super::place_menus::PlaceMenu::RecentLocations
+                        )
                     )
-                )
-        }));
+            }));
+        }
         let (rows, anything_hidden) = self.shown_sidebar_rows(entries);
+        self.sidebar().set_capacity_bars(more_items);
         self.sidebar().set_rows(rows, anything_hidden);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);

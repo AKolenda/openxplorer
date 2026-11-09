@@ -148,12 +148,12 @@ pub(super) fn general_tab(
     let dates = Rows::new();
     dates.add(
         &ox_core::i18n::gettext("Created"),
-        &format::long_date_time_text(properties.created),
+        &format::weekday_date_time_text(properties.created),
     );
     if !is_folder {
         dates.add(
             &ox_core::i18n::gettext("Modified"),
-            &format::long_date_time_text(entry.modified),
+            &format::weekday_date_time_text(entry.modified),
         );
         dates.add(
             &ox_core::i18n::gettext("Accessed"),

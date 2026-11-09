@@ -38,7 +38,7 @@ use crate::icons::{self, Art, ArtImage, Icon};
 use super::gestures;
 use super::menu_popover::MenuEntry;
 use super::session::TabId;
-use super::tab_menu::tab_menu;
+use super::tab_menu::{tab_menu, TabMenuFacts};
 use super::window_action::WindowAction;
 
 pub(in crate::window) use carried_tab::MARGIN as CARRIED_MARGIN;
@@ -527,16 +527,52 @@ fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
             let Some(strip) = tab.ancestor(TabStrip::static_type()).and_downcast::<TabStrip>() else {
                 return glib::Propagation::Proceed;
             };
-            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let facts = menu_facts(&strip, id);
             let focus = tab.root().and_then(|root| root.focus());
             strip.imp().menu_opener.set(focus.as_ref());
-            strip.show_menu_under_tab(id, tab_menu(id, &uri, is_only_tab));
+            strip.show_menu_under_tab(id, tab_menu(id, &uri, facts));
             glib::Propagation::Stop
         });
         let trigger = gtk::ShortcutTrigger::parse_string(key);
         shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
     }
     shortcuts
+}
+
+impl TabStrip {
+    /// Opens the menu of the tab at `index`, counted from 0, under it;
+    /// false when there is no such tab.
+    pub(in crate::window) fn open_menu_of_tab(&self, index: usize) -> bool {
+        let tab = self
+            .imp()
+            .shown
+            .borrow()
+            .get(index)
+            .map(|(view, _)| (view.id, view.uri.clone()));
+        let Some((id, uri)) = tab else {
+            return false;
+        };
+        let facts = menu_facts(self, id);
+        self.imp().menu_opener.set(None);
+        self.show_menu_under_tab(id, tab_menu(id, &uri, facts));
+        true
+    }
+}
+
+/// What the menu of tab `id` in `strip` depends on: whether it is the
+/// only tab or the last one, and whether Settings adds the app's own
+/// items (TAB-060).
+fn menu_facts(strip: &TabStrip, id: TabId) -> TabMenuFacts {
+    let shown = strip.imp().shown.borrow();
+    let extra_items = strip
+        .root()
+        .and_downcast::<super::BrowserWindow>()
+        .is_some_and(|window| window.context().settings_data().preferences.more_tab_menu_items);
+    TabMenuFacts {
+        is_only_tab: shown.len() <= 1,
+        is_last_tab: shown.last().is_none_or(|(view, _)| view.id == id),
+        extra_items,
+    }
 }
 
 /// A right-click on the tab `id`, which shows `uri`, opens its menu
@@ -555,9 +591,9 @@ fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let in_tab = graphene::Point::new(x as f32, y as f32);
         if let Some(point) = tab.compute_point(&strip, &in_tab) {
-            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let facts = menu_facts(&strip, id);
             strip.imp().menu_opener.set(None);
-            strip.show_menu(tab_menu(id, &uri, is_only_tab), point);
+            strip.show_menu(tab_menu(id, &uri, facts), point);
         }
     });
     click
