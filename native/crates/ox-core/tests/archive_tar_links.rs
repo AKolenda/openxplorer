@@ -12,7 +12,10 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use ox_core::archive::{ArchiveBrowser, ArchiveError, CompressionRequest, ZipCompressor};
+use ox_core::archive::{
+    private_extraction_name, ArchiveBrowser, ArchiveError, CompressionRequest, ExtractionRequest,
+    ZipCompressor,
+};
 use ox_core::transfer::Cancellation;
 
 use archive_support::{file_uri, opener, ExtractionFixture};
@@ -264,4 +267,49 @@ fn tar_gz_and_tar_bz2_are_written_and_the_level_changes_the_size() {
     let faster = compress("faster.zip", Some(1)).len();
     let smaller = compress("smaller.zip", Some(9)).len();
     assert!(smaller < faster, "{smaller} < {faster}");
+}
+
+/// Extracting into a folder that already exists goes through a private
+/// folder inside it whose items are then moved in, where a link checked
+/// against the private folder could resolve through what the existing
+/// folder already holds: `leak -> existing/secret`, with `existing`
+/// already a link elsewhere. An archive with any link is therefore
+/// refused there, by name, before anything is written; into a new
+/// folder the same archive extracts.
+///
+/// parity: ARC-012, ARC-016
+#[test]
+fn a_link_is_refused_when_extracting_into_an_existing_folder() {
+    let fixture = fixture_with(&["f:a.txt:a", "l:leak:existing/secret"]);
+    let outside = tempfile::tempdir().expect("a folder outside");
+    std::os::unix::fs::symlink(outside.path(), fixture.destination.join("existing"))
+        .expect("a link already in the destination");
+    let request = ExtractionRequest {
+        archive_uri: fixture.archive_uri(),
+        destination_uri: fixture.destination_uri(),
+        folder_name: private_extraction_name().expect("random"),
+    };
+
+    let refused = fixture
+        .extractor()
+        .into_existing_folder()
+        .extract(&request, &Cancellation::new())
+        .unwrap_err();
+
+    assert_eq!(refused, ArchiveError::LinkIntoExistingFolder("leak".to_owned()));
+    assert!(refused.to_string().contains("leak"), "{refused}");
+    let names: Vec<String> = fs::read_dir(&fixture.destination)
+        .expect("listed")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    assert_eq!(names, ["existing"], "nothing was written");
+    fixture
+        .extract("Unpacked")
+        .expect("into a new folder it extracts");
 }
