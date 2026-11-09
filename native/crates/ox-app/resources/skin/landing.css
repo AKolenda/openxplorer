@@ -77,25 +77,38 @@ flowbox.drive-tiles > flowboxchild:focus-visible {
 .landing .page.home-page { padding: 4px 12px 8px 8px; }
 .landing .home-switcher { margin: 10px 0 2px 0; }
 window.ox .landing .home-switcher button.group-header { padding: 4px 6px; margin: 0; }
+/* The switcher's pills, as Windows 11's Home draws them: a glyph and the
+   title on a rounded fill, the shown one in the accent colour. */
 window.ox .landing button.home-tab {
-  padding: 3px 12px;
+  padding: 4px 14px;
   min-height: 0;
   border: none;
-  border-radius: 4px;
-  background: none;
+  border-radius: 999px;
+  background-color: @ox_hover;
   box-shadow: none;
   color: @ox_text;
 }
 window.ox .landing button.home-tab:hover { background-color: @ox_item_hover; }
-window.ox .landing button.home-tab:checked { background-color: @ox_item_selected; font-weight: 600; }
+window.ox .landing button.home-tab:checked { background-color: @ox_accent; color: @ox_on_accent; }
+window.ox .landing button.home-tab:checked image { color: @ox_on_accent; }
 window.ox .landing button.home-tab:focus-visible {
   outline: 2px solid @ox_item_focus_outer;
-  outline-offset: -2px;
+  outline-offset: 1px;
 }
-/* A row of Recent and Favorites: a Details row's 32 px pitch. */
-flowbox.home-rows > flowboxchild { padding: 7px 8px; }
+/* Quick access: Windows 11's heading (bold, about 14 px) and its tiles
+   about 284 px apart across and 60 down: a 48 px folder and three lines. */
+.landing .home-quick-fold .group-title { font-size: 14px; }
+flowbox.home-tiles > flowboxchild { padding: 4px 8px; margin: 0; }
+.landing .home-tiles .home-tile-location { color: @ox_muted; }
+.landing .home-tiles .home-pin { color: @ox_muted; }
+/* The list's column headers, as the Details view's. */
+.landing .home-list-header { padding: 6px 8px 4px 8px; }
+.landing .home-list-header .home-column { color: @ox_muted; }
+.landing .home-rows .home-row-detail { color: @ox_muted; }
+/* A row of Recent and Favorites: Windows 11's Home puts them 36 px apart. */
+flowbox.home-rows > flowboxchild { padding: 10px 8px; margin: 0; }
 .landing .home-rows .home-row-name { color: @ox_text; }
 .landing .home-empty { padding: 8px 12px; }
 /* Compact view draws the rows and tiles closer, as it does in folders. */
-window.ox.compact-density flowbox.home-rows > flowboxchild { padding: 3px 8px; }
-window.ox.compact-density flowbox.home-tiles > flowboxchild { padding: 4px 8px; }
+window.ox.compact-density flowbox.home-rows > flowboxchild { padding: 5px 8px; }
+window.ox.compact-density flowbox.home-tiles > flowboxchild { padding: 0 8px; }

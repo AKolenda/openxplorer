@@ -37,15 +37,13 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry};
-use ox_core::location::{same_location, RECENT_URI};
+use ox_core::location::{same_location, LocationContext, RECENT_URI};
 use ox_core::places::Place;
 use ox_core::settings::{Preferences, PreferencesUpdate, SettingsError};
 
-use crate::folder_view::icon_size::{tiles_cell, CellSize, TILES_ICON};
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
 use crate::settings_store::Change;
-use crate::text_size::TextSize;
 
 use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
 use super::gestures;
@@ -68,6 +66,15 @@ const FAVORITES_SHOWN_CLASS: &str = "home-favorites-shown";
 const CHEVRON: i32 = 16;
 /// Pixels of a row's icon in the Recent and Favorites lists.
 const ROW_ICON: i32 = 16;
+/// Pixels of a Quick access tile's folder, as Windows 11's Home draws it.
+const TILE_ICON: i32 = 48;
+/// Pixels of the glyph a standard folder shows on its folder.
+const TILE_EMBLEM: i32 = 20;
+/// A Quick access tile's room inside its padding: Windows 11's Home puts
+/// tiles about 284 pixels apart across and 60 down.
+const TILE_CONTENT: (i32, i32) = (268, 52);
+/// Pixels of the pin glyph under a pinned folder's location.
+const PIN_GLYPH: i32 = 12;
 /// Most tiles a row of Quick access holds; the pane's width decides.
 const MOST_TILES_PER_ROW: u32 = 32;
 /// The most recent files the list shows.
@@ -135,6 +142,15 @@ impl Tab {
         match self {
             Tab::Recent => ox_core::i18n::gettext_static("Recent"),
             Tab::Favorites => ox_core::i18n::gettext_static("Favorites"),
+        }
+    }
+
+    /// The glyph before the title: a clock for Recent, a star for
+    /// Favorites, as on Windows 11's pills.
+    const fn icon(self) -> Icon {
+        match self {
+            Tab::Recent => Icon::History,
+            Tab::Favorites => Icon::Star,
         }
     }
 
@@ -257,16 +273,64 @@ fn label(text: &str, class: &str) -> gtk::Label {
         .build()
 }
 
-/// A Quick access tile: the folder's art left of its name, at the Tiles
-/// view's size, as This PC's drive tiles.
-fn folder_tile(place: &Place, window: Option<&BrowserWindow>, cell: CellSize) -> Item {
-    let storage = if place.is_shared {
-        Storage::Network
+/// Where a Quick access folder is, for its tile's second line: "Home"
+/// for a folder in the home folder, else the name of the folder it is
+/// in. Windows shows its cloud status there, which has no meaning here.
+fn folder_location(uri: &str, locations: &LocationContext) -> String {
+    match ox_core::location::parent_location(uri) {
+        Some(parent) => locations.title_for(&parent),
+        None => String::new(),
+    }
+}
+
+/// A Quick access tile as Windows 11's Home draws it: a 48-pixel folder
+/// (a standard folder's glyph on it), then three lines: the name, where
+/// the folder is, and the pin glyph.
+fn folder_tile(place: &Place, window: Option<&BrowserWindow>, locations: &LocationContext) -> Item {
+    let art = if place.is_shared {
+        ArtImage::new(
+            Art::for_quick_access(place.known_folder, Storage::Network),
+            TILE_ICON,
+        )
     } else {
-        Storage::Local
+        ArtImage::new(Art::Folder, TILE_ICON)
     };
-    let art = ArtImage::new(Art::for_quick_access(place.known_folder, storage), TILES_ICON);
-    let (child, _) = super::landing::tile_frame(&art, &place.label, &place.uri, cell);
+    let icon = gtk::Overlay::builder()
+        .child(&art)
+        .valign(gtk::Align::Center)
+        .build();
+    if let Some(folder) = place.known_folder.filter(|_| !place.is_shared) {
+        let emblem = ArtImage::new(Art::for_known_folder(folder), TILE_EMBLEM);
+        emblem.set_halign(gtk::Align::Center);
+        emblem.set_valign(gtk::Align::End);
+        emblem.set_margin_bottom(6);
+        emblem.add_css_class("home-emblem");
+        icon.add_overlay(&emblem);
+    }
+    let lines = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    lines.set_valign(gtk::Align::Center);
+    lines.set_hexpand(true);
+    lines.append(&label(&place.label, "tile-name"));
+    lines.append(&label(
+        &folder_location(&place.uri, locations),
+        "home-tile-location",
+    ));
+    let pin = icons::image(Icon::Pin, PIN_GLYPH);
+    pin.set_halign(gtk::Align::Start);
+    pin.add_css_class("home-pin");
+    pin.update_property(&[gtk::accessible::Property::Label(ox_core::i18n::gettext_static(
+        "Pinned",
+    ))]);
+    lines.append(&pin);
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    content.append(&icon);
+    content.append(&lines);
+    content.set_size_request(TILE_CONTENT.0, TILE_CONTENT.1);
+    let child = gtk::FlowBoxChild::builder()
+        .child(&content)
+        .name(&place.uri)
+        .build();
+    child.update_property(&[gtk::accessible::Property::Label(&place.label)]);
     gestures::open_folder_on_middle_click(&child, &place.uri);
     let caching = window.and_then(|window| window.caching_of(&place.uri));
     Item {
@@ -277,12 +341,92 @@ fn folder_tile(place: &Place, window: Option<&BrowserWindow>, cell: CellSize) ->
     }
 }
 
+/// A file's File location, as Windows 11's Home lists it: the folder it
+/// is in, from the home folder down with "/" between folders, "Home" for
+/// the home folder itself, and the whole path of a folder elsewhere.
+pub(super) fn file_location(uri: &str, home: &std::path::Path) -> String {
+    let file = gio::File::for_uri(uri);
+    let Some(parent) = file.parent() else {
+        return String::new();
+    };
+    if let Some(path) = parent.path() {
+        if path == home {
+            return ox_core::i18n::gettext("Home");
+        }
+        if let Ok(inside) = path.strip_prefix(home) {
+            return inside.to_string_lossy().into_owned();
+        }
+        return path.to_string_lossy().into_owned();
+    }
+    parent.parse_name().to_string()
+}
+
+/// The columns of the Recent and Favorites list: the date and location
+/// cells of every row and of the header share their widths.
+#[derive(Clone)]
+struct Columns {
+    date: gtk::SizeGroup,
+    location: gtk::SizeGroup,
+    home: std::path::PathBuf,
+}
+
+impl Columns {
+    fn new(home: std::path::PathBuf) -> Self {
+        Self {
+            date: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
+            location: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
+            home,
+        }
+    }
+
+    /// The date and location cells of a row or of the header.
+    fn cells(&self, date: &str, location: &str, class: &str) -> (gtk::Label, gtk::Label) {
+        let date = label(date, class);
+        date.set_width_chars(18);
+        let location = label(location, class);
+        location.set_width_chars(22);
+        location.set_max_width_chars(40);
+        self.date.add_widget(&date);
+        self.location.add_widget(&location);
+        (date, location)
+    }
+
+    /// The header: Name, Date accessed, File location.
+    fn header(&self) -> gtk::Box {
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        row.add_css_class("home-list-header");
+        let name = label(ox_core::i18n::gettext_static("Name"), "home-column");
+        name.set_hexpand(true);
+        name.set_margin_start(ROW_ICON + 8);
+        let (date, location) = self.cells(
+            ox_core::i18n::gettext_static("Date accessed"),
+            ox_core::i18n::gettext_static("File location"),
+            "home-column",
+        );
+        row.append(&name);
+        row.append(&date);
+        row.append(&location);
+        row
+    }
+}
+
 /// A row of the Recent or Favorites list for the file named `name` at
-/// `uri`.
-fn file_row(name: &str, uri: &str, favorites: &[String]) -> Item {
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    row.append(&ArtImage::new(Art::for_file_name(name), ROW_ICON));
-    row.append(&label(name, "home-row-name"));
+/// `uri`, last used at `accessed`: its icon and name, Date accessed and
+/// File location, as Windows 11's Home lists them.
+fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], columns: &Columns) -> Item {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let named = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    named.set_hexpand(true);
+    named.append(&ArtImage::new(Art::for_file_name(name), ROW_ICON));
+    named.append(&label(name, "home-row-name"));
+    let (date, location) = columns.cells(
+        &ox_core::format::date_short_time_text(accessed),
+        &file_location(uri, &columns.home),
+        "home-row-detail",
+    );
+    row.append(&named);
+    row.append(&date);
+    row.append(&location);
     let child = gtk::FlowBoxChild::builder().child(&row).name(uri).build();
     child.update_property(&[gtk::accessible::Property::Label(name)]);
     let is_favorite = favorites.iter().any(|favorite| same_location(favorite, uri));
@@ -643,6 +787,29 @@ fn connect_item_keys(flow: &gtk::FlowBox, items: &Rc<Vec<Item>>) {
     flow.add_controller(shortcuts);
 }
 
+/// Pixels from one Quick access tile to the next across, as Windows 11's
+/// Home places them: the tile's room and its padding.
+const TILE_PITCH: i32 = TILE_CONTENT.0 + 16;
+/// The tile box's own padding across (`flowbox.drive-tiles`).
+const TILE_BOX_PADDING: i32 = 8;
+
+/// Keeps Quick access's tiles a tile's width apart, as Windows 11 does,
+/// rather than spread over the whole width: the box holds as many tiles
+/// per row as fit and stays at the start of the row.
+fn keep_tiles_apart(flow: &gtk::FlowBox) {
+    flow.set_halign(gtk::Align::Start);
+    flow.add_tick_callback(|flow, _| {
+        if let Some(parent) = flow.parent() {
+            let fit = (parent.width() - TILE_BOX_PADDING) / TILE_PITCH;
+            let per_row = u32::try_from(fit.max(1)).unwrap_or(1).min(MOST_TILES_PER_ROW);
+            if flow.max_children_per_line() != per_row {
+                flow.set_max_children_per_line(per_row);
+            }
+        }
+        glib::ControlFlow::Continue
+    });
+}
+
 /// A box of `items`: tiles for Quick access, one row each for the lists.
 /// Double-click and Enter open an item; a right-click (which selects it),
 /// the Menu key or Shift+F10 opens its menu, and Alt+Enter its
@@ -665,6 +832,9 @@ fn item_box(page: &gtk::Box, items: Vec<Item>, section: Section, rows: bool) -> 
         .build();
     for item in &items {
         flow.append(&item.child);
+    }
+    if !rows {
+        keep_tiles_apart(&flow);
     }
     let items = Rc::new(items);
     flow.connect_child_activated(glib::clone!(
@@ -735,13 +905,19 @@ fn empty_label(text: &str) -> gtk::Label {
 }
 
 /// Fills `list` with `items`, or with what it says while empty.
-fn fill_list(page: &gtk::Box, list: &gtk::Box, items: Vec<Item>, tab: Tab) {
+fn fill_list(page: &gtk::Box, list: &gtk::Box, items: Vec<Item>, tab: Tab, columns: &Columns) {
     remove_children(list);
     if items.is_empty() {
         list.append(&empty_label(tab.empty_text()));
     } else {
+        list.append(&columns.header());
         list.append(&item_box(page, items, Section::Files, true));
     }
+    // The column groups live as long as the list.
+    let kept = columns.clone();
+    list.connect_destroy(move |_| {
+        let _ = &kept;
+    });
 }
 
 /// The heading of Quick access: a chevron, the title and a line to the
@@ -802,10 +978,14 @@ fn switcher(page: &gtk::Box, folded: bool) -> gtk::Box {
     row.append(&fold);
     let mut first: Option<gtk::ToggleButton> = None;
     for tab in Tab::ALL {
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        content.append(&icons::image(tab.icon(), 16));
+        content.append(&gtk::Label::new(Some(tab.title())));
         let button = gtk::ToggleButton::builder()
-            .label(tab.title())
+            .child(&content)
             .css_classes(["home-tab", tab.class()])
             .build();
+        button.update_property(&[gtk::accessible::Property::Label(tab.title())]);
         if let Some(first) = &first {
             button.set_group(Some(first));
         }
@@ -890,7 +1070,12 @@ impl KeptFocus {
 /// Draws Home into `page`, replacing what it showed: Quick access from
 /// `places`, Favorites from `preferences`, and Recent once `GVfs` has
 /// listed it.
-pub(super) fn render(page: &gtk::Box, places: &Places, preferences: &Preferences, text_size: TextSize) {
+pub(super) fn render(
+    page: &gtk::Box,
+    places: &Places,
+    preferences: &Preferences,
+    locations: &LocationContext,
+) {
     let kept = KeptFocus::read(page);
     remove_children(page);
     page.add_css_class(HOME_CLASS);
@@ -909,11 +1094,10 @@ pub(super) fn render(page: &gtk::Box, places: &Places, preferences: &Preferences
     page.append(&quick_access_heading(page, quick_folded));
     let quick_body = gtk::Box::new(gtk::Orientation::Vertical, 0);
     quick_body.add_css_class(Section::QuickAccess.body_class());
-    let cell = tiles_cell(text_size);
     let tiles: Vec<Item> = places
         .quick_access
         .iter()
-        .map(|place| folder_tile(place, window.as_ref(), cell))
+        .map(|place| folder_tile(place, window.as_ref(), locations))
         .collect();
     if tiles.is_empty() {
         quick_body.append(&empty_label(ox_core::i18n::gettext_static(
@@ -934,12 +1118,7 @@ pub(super) fn render(page: &gtk::Box, places: &Places, preferences: &Preferences
     files_body.append(&recent);
     files_body.append(&favorites);
     page.append(&files_body);
-    let favorite_rows = preferences
-        .favorites
-        .iter()
-        .map(|uri| file_row(&favorite_name(uri), uri, &preferences.favorites))
-        .collect();
-    fill_list(page, &favorites, favorite_rows, Tab::Favorites);
+    list_favorites(page, &favorites, preferences.favorites.clone());
     list_recent(page, &recent, preferences.favorites.clone());
     watch_recent_files(page);
 
@@ -960,7 +1139,7 @@ pub(super) fn leave(page: &gtk::Box) {
 
 /// The recently used files `GVfs` lists, newest first, each with the file
 /// it stands for; folders and rows without a file are left out.
-async fn recent_files() -> Vec<(Entry, String)> {
+async fn recent_files() -> Vec<(Entry, String, Option<u64>)> {
     let folder = gio::File::for_uri(RECENT_URI);
     let attributes = format!("{},{RECENT_ATTRIBUTES}", entry::ATTRIBUTES);
     let Ok(enumerator) = folder
@@ -998,7 +1177,7 @@ async fn recent_files() -> Vec<(Entry, String)> {
     found.truncate(MOST_RECENT);
     found
         .into_iter()
-        .map(|(_, entry, target)| (entry, target))
+        .map(|(used, entry, target)| (entry, target, u64::try_from(used).ok().filter(|used| *used > 0)))
         .collect()
 }
 
@@ -1056,6 +1235,55 @@ fn watch_recent_files(page: &gtk::Box) {
     handler.set(Some(id));
 }
 
+/// When each of `favorites` was last opened (`time::access`), read off
+/// the main thread; `None` for a file that cannot be read now.
+async fn favorite_times(favorites: &[String]) -> Vec<Option<u64>> {
+    let mut times = Vec::with_capacity(favorites.len());
+    for uri in favorites {
+        let info = gio::File::for_uri(uri)
+            .query_info_future(
+                "time::access",
+                gio::FileQueryInfoFlags::NONE,
+                glib::Priority::DEFAULT,
+            )
+            .await;
+        let accessed = info.ok().and_then(|info| {
+            info.has_attribute("time::access")
+                .then(|| info.attribute_uint64("time::access"))
+        });
+        times.push(accessed);
+    }
+    times
+}
+
+/// Lists `favorites` into `list` once their dates are read, if `page`
+/// still shows this drawing of Home then.
+fn list_favorites(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
+    let page = page.downgrade();
+    let list = list.downgrade();
+    glib::spawn_future_local(async move {
+        let times = favorite_times(&favorites).await;
+        let (Some(page), Some(list)) = (page.upgrade(), list.upgrade()) else {
+            return;
+        };
+        if list.parent().is_none() || !page.has_css_class(HOME_CLASS) {
+            return;
+        }
+        let kept = KeptFocus::read(&page);
+        let columns = Columns::new(glib::home_dir());
+        let rows = favorites
+            .iter()
+            .zip(times)
+            .map(|(uri, accessed)| file_row(&favorite_name(uri), uri, accessed, &favorites, &columns))
+            .collect();
+        fill_list(&page, &list, rows, Tab::Favorites, &columns);
+        list.set_visible(shown_tab(&page) == Tab::Favorites);
+        if let Some(kept) = kept {
+            kept.restore(&page);
+        }
+    });
+}
+
 /// Lists the recent files into `list` once `GVfs` has read them, if `page`
 /// still shows this drawing of Home then.
 fn list_recent(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
@@ -1070,11 +1298,12 @@ fn list_recent(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
             return;
         }
         let kept = KeptFocus::read(&page);
+        let columns = Columns::new(glib::home_dir());
         let rows = files
             .iter()
-            .map(|(entry, target)| file_row(&entry.name, target, &favorites))
+            .map(|(entry, target, used)| file_row(&entry.name, target, *used, &favorites, &columns))
             .collect();
-        fill_list(&page, &list, rows, Tab::Recent);
+        fill_list(&page, &list, rows, Tab::Recent, &columns);
         list.set_visible(shown_tab(&page) == Tab::Recent);
         if let Some(kept) = kept {
             kept.restore(&page);
@@ -1217,9 +1446,10 @@ pub(crate) fn section_titles(page: &gtk::Box) -> Vec<String> {
         .map(|label| label.text().to_string())
         .collect();
     titles.extend(Tab::ALL.into_iter().filter_map(|tab| {
-        tab_button(page, tab)
-            .and_then(|button| button.label())
-            .map(|text| text.to_string())
+        let button = tab_button(page, tab)?;
+        descendants_of_type::<gtk::Label>(&button)
+            .first()
+            .map(|label| label.text().to_string())
     }));
     titles
 }
@@ -1368,6 +1598,83 @@ pub(crate) fn is_folded(page: &gtk::Box, index: usize) -> bool {
     is_section_folded(page, section) && hidden
 }
 
+/// The tile named `name` in Quick access, for tests.
+#[cfg(test)]
+fn tile_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
+    descendants_with_class(page, "home-tiles")
+        .iter()
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
+        .find(|child| item_name(child).as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("Quick access has a tile named {name}"))
+}
+
+/// The lines of text the tile named `name` shows, for tests.
+#[cfg(test)]
+pub(crate) fn tile_lines(page: &gtk::Box, name: &str) -> Vec<String> {
+    descendants_of_type::<gtk::Label>(&tile_named(page, name))
+        .iter()
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// Whether the tile named `name` shows the pin glyph, for tests.
+#[cfg(test)]
+pub(crate) fn tile_has_pin(page: &gtk::Box, name: &str) -> bool {
+    !descendants_with_class(&tile_named(page, name), "home-pin").is_empty()
+}
+
+/// The pixel size of the folder of the tile named `name`, for tests.
+#[cfg(test)]
+pub(crate) fn tile_icon_size(page: &gtk::Box, name: &str) -> i32 {
+    let tile = tile_named(page, name);
+    let overlay = descendants_of_type::<gtk::Overlay>(&tile)
+        .into_iter()
+        .next()
+        .expect("the tile's folder");
+    overlay
+        .child()
+        .expect("the folder's art")
+        .measure(gtk::Orientation::Horizontal, -1)
+        .1
+}
+
+/// Whether the tab titled `title` shows a glyph, for tests.
+#[cfg(test)]
+pub(crate) fn tab_has_icon(page: &gtk::Box, title: &str) -> bool {
+    Tab::ALL
+        .into_iter()
+        .find(|tab| tab.title() == title)
+        .and_then(|tab| tab_button(page, tab))
+        .is_some_and(|button| !descendants_of_type::<gtk::Image>(&button).is_empty())
+}
+
+/// The column headers of the list shown, for tests.
+#[cfg(test)]
+pub(crate) fn list_headers(page: &gtk::Box) -> Vec<String> {
+    let tab = shown_tab(page);
+    descendants_with_class(page, tab.list_class())
+        .iter()
+        .flat_map(|list| descendants_with_class(list, "home-column"))
+        .filter_map(|label| label.downcast::<gtk::Label>().ok())
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// The texts of the row named `name` in the list shown, for tests.
+#[cfg(test)]
+pub(crate) fn row_cells(page: &gtk::Box, name: &str) -> Vec<String> {
+    let tab = shown_tab(page);
+    let row = descendants_with_class(page, tab.list_class())
+        .iter()
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
+        .find(|child| item_name(child).as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("the list has a row named {name}"));
+    descendants_of_type::<gtk::Label>(&row)
+        .iter()
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
 #[cfg(test)]
 mod layout_tests {
     use super::file_location;
@@ -1378,8 +1685,14 @@ mod layout_tests {
     #[test]
     fn the_file_location_is_the_folder_from_home_down() {
         let home = std::path::Path::new("/home/demo");
-        assert_eq!(file_location("file:///home/demo/Downloads/Setup%20guide.pdf", home), "Downloads");
-        assert_eq!(file_location("file:///home/demo/Downloads/sub/a.txt", home), "Downloads/sub");
+        assert_eq!(
+            file_location("file:///home/demo/Downloads/Setup%20guide.pdf", home),
+            "Downloads"
+        );
+        assert_eq!(
+            file_location("file:///home/demo/Downloads/sub/a.txt", home),
+            "Downloads/sub"
+        );
         assert_eq!(file_location("file:///home/demo/a.txt", home), "Home");
         assert_eq!(file_location("file:///srv/shared/a.txt", home), "/srv/shared");
     }

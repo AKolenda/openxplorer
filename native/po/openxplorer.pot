@@ -910,7 +910,7 @@ msgstr ""
 msgid "Small icons"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/window/home_page.rs
 msgid "Date accessed"
 msgstr ""
 
@@ -950,7 +950,7 @@ msgstr ""
 msgid "Folder path"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-app/src/window/home_page.rs crates/ox-core/src/grouping.rs
 msgid "Name"
 msgstr ""
 
@@ -3834,7 +3834,7 @@ msgstr ""
 msgid "Network drive"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/indexed_folders/candidates.rs crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+#: crates/ox-app/src/settings_page/indexed_folders/candidates.rs crates/ox-app/src/settings_page/indexed_folders/root_row.rs crates/ox-app/src/window/home_page.rs
 msgid "Pinned"
 msgstr ""
 
@@ -4127,7 +4127,7 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
@@ -5080,7 +5080,7 @@ msgstr ""
 msgid "This link points to an address OpenXplorer cannot open."
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs
+#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-app/src/window/home_page.rs
 msgid "File location"
 msgstr ""
 

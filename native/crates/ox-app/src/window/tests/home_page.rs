@@ -312,7 +312,10 @@ fn a_quick_access_tile_shows_its_name_its_location_and_a_pin() {
         home_page::tile_lines(body(&test), "Projects"),
         ["Projects", "Example projects"]
     );
-    assert!(home_page::tile_has_pin(body(&test), "Projects"), "a pinned folder shows the pin");
+    assert!(
+        home_page::tile_has_pin(body(&test), "Projects"),
+        "a pinned folder shows the pin"
+    );
     assert_eq!(home_page::tile_icon_size(body(&test), "Projects"), 48);
 }
 

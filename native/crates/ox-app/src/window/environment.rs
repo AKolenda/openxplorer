@@ -238,7 +238,8 @@ impl BrowserWindow {
         if page == Page::Home {
             body.remove_css_class("this-pc");
             let preferences = self.context().settings_data().preferences;
-            super::home_page::render(body, places, &preferences, self.skin().drawn_text_size());
+            let locations = self.imp().locations.borrow();
+            super::home_page::render(body, places, &preferences, &locations);
             return;
         }
         super::home_page::leave(body);
