@@ -36,6 +36,9 @@ impl BrowserWindow {
     /// Selects only the item called `name` in the active tab, as the
     /// snapshot hook's scene asks; `false` when no such item is listed.
     pub(crate) fn select_named(&self, name: &str) -> bool {
+        if super::home_page::select_named(self.folder_pane().landing(), name) {
+            return true;
+        }
         let model = self.folder_pane().model();
         let position =
             (0..model.n_items()).find(|position| model.name_at(*position).as_deref() == Some(name));

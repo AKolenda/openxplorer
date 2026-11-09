@@ -284,8 +284,6 @@ fn file_row(name: &str, uri: &str, favorites: &[String]) -> Item {
     row.append(&ArtImage::new(Art::for_file_name(name), ROW_ICON));
     row.append(&label(name, "home-row-name"));
     let child = gtk::FlowBoxChild::builder().child(&row).name(uri).build();
-    let path = gio::File::for_uri(uri).parse_name().to_string();
-    child.set_tooltip_text(Some(&path));
     child.update_property(&[gtk::accessible::Property::Label(name)]);
     let is_favorite = favorites.iter().any(|favorite| same_location(favorite, uri));
     Item {
@@ -398,6 +396,7 @@ fn connect_fold_keys(fold: &gtk::Button, page: &gtk::Box, section: Section) {
                 return glib::Propagation::Proceed;
             }
             let folded = is_section_folded(&page, section);
+            show_focus(&page);
             match key {
                 gtk::gdk::Key::Left if !folded => set_folded(&page, section, true, true),
                 gtk::gdk::Key::Right if folded => set_folded(&page, section, false, true),
@@ -410,6 +409,14 @@ fn connect_fold_keys(fold: &gtk::Button, page: &gtk::Box, section: Section) {
         }
     ));
     fold.add_controller(keys);
+}
+
+/// Shows where the keyboard is, as GTK does once a key moves it: these
+/// keys are handled here, before the window sees them.
+fn show_focus(page: &gtk::Box) {
+    if let Some(window) = page.root().and_downcast::<gtk::Window>() {
+        window.set_focus_visible(true);
+    }
 }
 
 /// The item box `section` shows now, if it shows one.
@@ -512,6 +519,7 @@ fn connect_tab_keys(button: &gtk::ToggleButton, page: &gtk::Box, tab: Tab) {
             if !modifiers.is_empty() {
                 return glib::Propagation::Proceed;
             }
+            show_focus(&page);
             let other = match tab {
                 Tab::Recent => Tab::Favorites,
                 Tab::Favorites => Tab::Recent,
@@ -690,6 +698,22 @@ fn item_box(page: &gtk::Box, items: Vec<Item>, section: Section, rows: bool) -> 
     }
     flow.add_controller(shortcuts);
     connect_edge_keys(&flow, page, section);
+    // One selection on the page at a time, as in one item view: selecting
+    // in one section clears the other.
+    flow.connect_selected_children_changed(glib::clone!(
+        #[weak]
+        page,
+        move |flow| {
+            if flow.selected_children().is_empty() {
+                return;
+            }
+            for other in descendants_of_type::<gtk::FlowBox>(&page) {
+                if other != *flow {
+                    other.unselect_all();
+                }
+            }
+        }
+    ));
     flow
 }
 
@@ -1129,6 +1153,54 @@ impl BrowserWindow {
             }
         ));
     }
+}
+
+/// Gives the keyboard to Home's first heading, as a page opens with
+/// nothing selected; whether `page` shows Home.
+pub(super) fn focus_first(page: &gtk::Box) -> bool {
+    if !page.has_css_class(HOME_CLASS) {
+        return false;
+    }
+    if let Some(fold) = fold_button(page, Section::QuickAccess) {
+        fold.grab_focus();
+    }
+    true
+}
+
+/// Puts the keyboard on what `page`, showing Home, calls `name`: a tab of
+/// the switcher, which it shows, Quick access's heading, or a tile or row,
+/// which it selects (the snapshot hook's `select=`). Whether it found one.
+pub(super) fn select_named(page: &gtk::Box, name: &str) -> bool {
+    if !page.has_css_class(HOME_CLASS) || !page.is_drawable() {
+        return false;
+    }
+    if let Some(tab) = Tab::ALL.into_iter().find(|tab| tab.title() == name) {
+        show_tab(page, tab);
+        focus_switcher(page);
+        return true;
+    }
+    if name == ox_core::i18n::gettext_static("Quick access") {
+        return fold_button(page, Section::QuickAccess).is_some_and(|fold| fold.grab_focus());
+    }
+    let shown = |child: &gtk::FlowBoxChild| {
+        child
+            .ancestor(gtk::Box::static_type())
+            .is_some_and(|list| list.is_drawable())
+            && descendants_of_type::<gtk::Label>(child)
+                .first()
+                .is_some_and(|label| label.text() == name)
+    };
+    let Some(child) = descendants_of_type::<gtk::FlowBoxChild>(page)
+        .into_iter()
+        .find(shown)
+    else {
+        return false;
+    };
+    if let Some(flow) = child.parent().and_downcast::<gtk::FlowBox>() {
+        flow.select_child(&child);
+    }
+    focus_item(&child);
+    true
 }
 
 /// The section titles and switcher tabs `page` shows, for tests.
