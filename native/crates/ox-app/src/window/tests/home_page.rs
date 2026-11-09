@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Home laid out as Windows 11 File Explorer's Home, behind the option
-//! "Show Quick access, Recent and Favorites on Home" (off by default, so
-//! Home still opens the home folder, NAV-038): Quick access holds the
+//! Home laid out as Windows 11 File Explorer's Home, by default; the
+//! setting "Open the home folder on Home" (off by default) brings back
+//! the home folder on Home (NAV-038). Quick access holds the
 //! navigation pane's pinned folders as tiles, and a Recent / Favorites
 //! switcher lists the desktop's recently used files (`GVfs` `recent:///`)
 //! and the files added to Favorites. Every name below is fictional.
@@ -20,25 +20,25 @@ use crate::window::home_page;
 /// The Home page's address.
 const HOME_PAGE: &str = "ox:home";
 
-/// Turns the Home page on for `test`'s settings.
-fn turn_on_home_sections(test: &TestWindow) {
+/// Sets "Open the home folder on Home" for `test`'s settings.
+fn open_the_home_folder_on_home(test: &TestWindow, on: bool) {
     let update = PreferencesUpdate {
-        home_sections: Some(true),
+        home_opens_folder: Some(on),
         ..PreferencesUpdate::default()
     };
     Settings::open(test.settings_directory())
         .update_preferences(&update)
         .expect("the settings file takes the choice");
     test.context.reload_settings();
-    wait_until("the option to be read", || {
-        test.context.settings_data().preferences.home_sections
+    wait_until("the setting to be read", || {
+        test.context.settings_data().preferences.home_opens_folder == on
     });
 }
 
-/// A window on the fixture with the Home page turned on, showing it.
+/// A window on the fixture showing the Home page, as Home opens by
+/// default.
 fn home_window(fixture: &Fixture) -> TestWindow {
     let test = TestWindow::open(&fixture.uri());
-    turn_on_home_sections(&test);
     test.activate("home", None);
     wait_until("the Home page", || {
         test.window.current_uri().as_deref() == Some(HOME_PAGE)
@@ -66,22 +66,16 @@ fn press_key(widget: &impl IsA<gtk::Widget>, key: gtk::gdk::Key) -> bool {
     )
 }
 
-/// Without the option Home is still the home folder (the owner's
-/// NAV-038); with it, the navigation pane's Home row, Alt+Home and a new
-/// tab open the Home page, titled Home, with Quick access and the Recent
-/// and Favorites switcher.
+/// By default the navigation pane's Home row, Alt+Home and a new tab
+/// open the Home page, titled Home, with Quick access and the Recent and
+/// Favorites switcher; "Open the home folder on Home" brings back the
+/// home folder there (the owner's NAV-038).
 ///
 /// parity: NAV-038, HOME-012
 #[gtk::test]
-fn the_option_turns_home_into_quick_access_recent_and_favorites() {
+fn home_is_windows_home_by_default_and_the_setting_opens_the_home_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.activate("home", None);
-    test.wait_for_listing("the home folder");
-    let home_folder = test.window.current_uri().expect("a location");
-    assert!(home_folder.starts_with("file:///"), "{home_folder}");
-
-    turn_on_home_sections(&test);
     let home_row = test
         .window
         .sidebar()
@@ -103,6 +97,13 @@ fn the_option_turns_home_into_quick_access_recent_and_favorites() {
     wait_until("a new tab on Home", || {
         test.window.tab_count() == 2 && test.window.current_uri().as_deref() == Some(HOME_PAGE)
     });
+
+    open_the_home_folder_on_home(&test, true);
+    test.activate("home", None);
+    test.wait_for_listing("the home folder");
+    let home_folder = test.window.current_uri().expect("a location");
+    assert!(home_folder.starts_with("file:///"), "{home_folder}");
+    assert_eq!(test.window.title().as_deref(), Some("Home — OpenXplorer"));
 }
 
 /// Quick access on Home is the navigation pane's list: a folder pinned
@@ -185,12 +186,13 @@ fn a_favorite_file_is_listed_opened_and_removed() {
     assert!(test.context.settings_data().preferences.favorites.is_empty());
 }
 
-/// A file's right-click menu offers Add to Favorites only with the
-/// option on, and Remove from Favorites once it is one.
+/// A file's right-click menu offers Add to Favorites while Home shows
+/// Favorites, not with "Open the home folder on Home", and Remove from
+/// Favorites once it is one.
 ///
 /// parity: HOME-014
 #[gtk::test]
-fn a_files_menu_adds_it_to_favorites_only_with_the_option() {
+fn a_files_menu_adds_it_to_favorites_while_home_shows_them() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let labels = |test: &TestWindow| {
@@ -200,10 +202,10 @@ fn a_files_menu_adds_it_to_favorites_only_with_the_option() {
         menu.popdown();
         labels
     };
-    assert!(!labels(&test).contains(&"Add to Favorites".to_owned()));
-
-    turn_on_home_sections(&test);
     assert!(labels(&test).contains(&"Add to Favorites".to_owned()));
+    open_the_home_folder_on_home(&test, true);
+    assert!(!labels(&test).contains(&"Add to Favorites".to_owned()));
+    open_the_home_folder_on_home(&test, false);
     test.activate("add-to-favorites", Some(&fixture.uri_of("Notes 2.txt")));
     wait_until("the favorite", || {
         !test.context.settings_data().preferences.favorites.is_empty()
