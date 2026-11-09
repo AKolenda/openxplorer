@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 
 use ox_core::ops::{
     reverse, run_resolved_transfer, scan_name_conflicts, FailureAsker, OperationContext, OpsError,
-    TransferOutcome, UndoRecord,
+    ReplacedFiles, Resolution, TransferOutcome, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, FailedItem, FailureAnswer, FailureCause, TransferMode};
 
@@ -458,8 +458,9 @@ fn a_folder_named_with_a_hash_or_question_mark_copies_under_the_protection() {
 }
 
 /// An item deleted before Paste whose name the destination already has
-/// does not stop the check for name conflicts: the others are pasted and
-/// the missing one is asked about.
+/// does not stop the check for name conflicts. Its name is still a
+/// conflict, answered like any other; the others are pasted, and the
+/// missing one is asked about when its turn comes.
 ///
 /// parity: OPS-047, OPS-026
 #[test]
@@ -468,15 +469,16 @@ fn an_item_missing_before_the_check_does_not_stop_the_paste() {
     let (src, dst) = (folders.source(), folders.destination());
     write(&src.join("A.txt"), b"a");
     write(&dst.join("B.txt"), b"existing");
+    let scan = scan_of(TransferMode::Copy, &src, &["A.txt", "B.txt"], &dst);
     let questions = Questions::default();
 
-    let outcome = paste(
-        TransferMode::Copy,
-        &src,
-        &["A.txt", "B.txt"],
-        &dst,
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::KeepBoth],
         &questions.context(FailureAnswer::Skip),
-    );
+        |_| {},
+    ))
+    .expect("the paste runs");
 
     assert_eq!(fs::read(dst.join("A.txt")).unwrap(), b"a");
     assert_eq!(fs::read(dst.join("B.txt")).unwrap(), b"existing");
@@ -487,4 +489,48 @@ fn an_item_missing_before_the_check_does_not_stop_the_paste() {
             copies: vec![file_uri(&dst.join("A.txt"))]
         })
     );
+}
+
+/// An item missing when the check ran but back before its turn is still
+/// the conflict it was: the user's answer about its taken name applies,
+/// rather than the item being left out without a word.
+///
+/// parity: OPS-026, OPS-047
+#[test]
+fn an_item_back_before_its_turn_keeps_its_conflict() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&dst.join("B.txt"), b"existing");
+    let scan = scan_of(TransferMode::Copy, &src, &["B.txt"], &dst);
+    assert_eq!(scan.conflicts.len(), 1, "{scan:?}");
+    // The user puts it back before the paste reaches it.
+    write(&src.join("B.txt"), b"restored");
+    let questions = Questions::default();
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..questions.context(FailureAnswer::Skip)
+    };
+
+    block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &context,
+        |_| {},
+    ))
+    .expect("the paste runs");
+
+    assert_eq!(fs::read(dst.join("B.txt")).unwrap(), b"restored");
+    assert_eq!(questions.asked(), []);
+}
+
+/// The plan of pasting `names` of `from` into `into` as `mode`.
+fn scan_of(mode: TransferMode, from: &Path, names: &[&str], into: &Path) -> ox_core::ops::ConflictScan {
+    let uris: Vec<String> = names.iter().map(|name| file_uri(&from.join(name))).collect();
+    block_on(scan_name_conflicts(
+        mode,
+        &uris,
+        &file_uri(into),
+        &Cancellation::new(),
+    ))
+    .expect("a scan")
 }

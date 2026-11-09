@@ -261,15 +261,17 @@ impl Scanner<'_> {
             self.free(source, folder);
             return Ok(());
         }
-        // An incoming item that is gone or cannot be read is no conflict
-        // to ask about: it goes in as a free item, and the copy or move
-        // asks about it alone when its turn comes (OPS-047), while the
-        // other items are pasted. Under its free name's Skip policy it
-        // never replaces the item of its name.
+        // An incoming item that is gone or cannot be read does not stop
+        // the check: its name is still taken, so it stays a conflict,
+        // with its own facts unknown and never merged, and is answered
+        // like any other. Should it be back by its turn, the answer
+        // applies; otherwise the copy or move asks about it alone
+        // (OPS-047), while the other items are pasted.
         let incoming = match facts(source, cancel) {
             Ok(incoming) => incoming,
             Err(OpsError::NotFound(_) | OpsError::PermissionDenied(_)) => {
-                self.free(source, folder);
+                let present = facts(&existing, cancel)?;
+                self.conflict(source, folder, &existing, ItemFacts::default(), present);
                 return Ok(());
             }
             Err(error) => return Err(error),
@@ -291,6 +293,20 @@ impl Scanner<'_> {
             self.free(source, folder);
             return Ok(());
         }
+        self.conflict(source, folder, &existing, incoming, present);
+        Ok(())
+    }
+
+    /// Plans `source` going into `folder` as a conflict with `existing`,
+    /// the item of its name there, with each side's facts.
+    fn conflict(
+        &mut self,
+        source: &GioNode,
+        folder: &GioNode,
+        existing: &GioNode,
+        incoming: ItemFacts,
+        present: ItemFacts,
+    ) {
         let index = self.scan.conflicts.len();
         self.scan.conflicts.push(NameConflict {
             incoming_uri: source.uri(),
@@ -303,7 +319,6 @@ impl Scanner<'_> {
             destination_folder: folder.uri(),
             kind: PlannedKind::Conflict(index),
         });
-        Ok(())
     }
 
     /// Plans `source` going into `folder` under its free name.
