@@ -12,6 +12,7 @@ use super::menu::toggled;
 use super::FolderTree;
 use crate::locations::Page;
 use crate::window::actions::{text_action, toggle_action};
+use crate::window::file_ops::FileCommand;
 use crate::window::preferences::Preference;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
@@ -42,6 +43,24 @@ impl BrowserWindow {
         self.apply_folder_tree(options);
     }
 
+    /// Ctrl+Shift+E (CMD-039): opens the navigation pane down to the
+    /// folder shown and puts keyboard focus on it there: in the folder
+    /// tree when it is shown, else on the place's row, its collapsed
+    /// section expanded. The pane stays as it is when it is hidden.
+    pub(in crate::window) fn reveal_in_navigation_pane(&self) {
+        let sidebar = self.sidebar();
+        if !sidebar.is_mapped() {
+            return;
+        }
+        let in_folder = self
+            .current_uri()
+            .is_some_and(|uri| Page::from_uri(&uri).is_none());
+        if in_folder && self.folder_tree().reveal_shown() {
+            return;
+        }
+        sidebar.reveal_location();
+    }
+
     /// Applies and saves the tree's `options`.
     fn change_folder_tree(&self, options: FolderTreeOptions) {
         self.apply_folder_tree(options);
@@ -64,10 +83,15 @@ impl BrowserWindow {
         });
     }
 
-    /// Whether the clipboard's files can be pasted into the folder `uri`
-    /// now.
+    /// Whether what the clipboard holds can be pasted into the folder `uri`
+    /// now: its files, or the picture a paste writes as a new file
+    /// (CLIP-015).
     pub(in crate::window) fn can_paste_into(&self, uri: &str) -> bool {
-        let facts = self.command_facts();
-        facts.has_file_clipboard && !facts.is_busy && self.imp().locations.borrow().is_writable_location(uri)
+        // The running copy and move jobs count as for Paste into folder:
+        // a picture's write waits for them, a file list queues behind them.
+        let facts = self.facts_for_command(FileCommand::PasteInto);
+        facts.clipboard.is_pasteable()
+            && !facts.is_busy
+            && self.imp().locations.borrow().is_writable_location(uri)
     }
 }

@@ -17,32 +17,39 @@ columnview.files > header { border-bottom: 1px solid @ox_border; padding: 0; }
 columnview.files > header > button {
   background: none;
   border-style: none;
-  border-right: 1px solid @ox_border;
+  /* The dividers between titles show only while the pointer is over the
+     titles, as in Windows 11 File Explorer. */
+  border-right: 1px solid transparent;
   border-radius: 0;
   color: @ox_muted;
   font-weight: normal;
   padding: 0 12px;
-  min-height: 37px;
+  /* 31px plus the header's line, as Windows 11's column header (owner
+     decision 2026-11-06); theme/fonts.rs grows it with the text. */
+  min-height: 31px;
   box-shadow: none;
 }
+columnview.files > header:hover > button { border-right-color: @ox_border; }
 columnview.files > header > button:hover { background-color: @ox_hover; }
 /* Name never gets narrower than 260px (`minmax(260px,1fr)`, the Name
    default in app.js) plus the 14px end: a narrow window scrolls the list
    sideways instead. A width the user sets overrides it. */
 columnview.files > header > button:first-child { padding-left: 26px; min-width: 235px; }
+/* Every title is left-aligned, Size's too, as in Windows 11; the sizes
+   under it stay right-aligned. Size's padding holds the 14px end. */
+columnview.files > header > button:last-child { border-right: none; padding-right: 26px; }
 /* Size's divider stands 14px before the column's end, where the web
    header's padding starts, drawn as a 1px band of the background. */
-columnview.files > header > button:last-child {
-  border-right: none;
-  padding-right: 32px;
+columnview.files > header:hover > button:last-child {
   background-image: linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
 }
 columnview.files > header > button:last-child:hover { background-color: @ox_hover; }
-/* Only the sorted column shows an arrow: the app's 10px chevron, turned
-   up while ascending (src/folder_view/column_titles.rs). GTK's own filled
-   triangle takes no room, so the right-aligned Size title ends where its
-   values end. The arrow is centred on a half pixel, which Chromium draws
-   one pixel down. */
+/* Only the sorted column shows an arrow: as in Windows 11 File Explorer, a
+   small chevron centred on the top edge of its title, up while ascending
+   and down while descending (src/folder_view/column_titles.rs). It is the
+   title's background, centred on the content box, whose padding is even
+   once the 14px ends are left out, so it stands over the column's middle.
+   GTK's own filled triangle is hidden and takes no room. */
 columnview.files > header > button sort-indicator {
   -gtk-icon-source: none;
   -gtk-icon-size: 0;
@@ -50,8 +57,32 @@ columnview.files > header > button sort-indicator {
   min-height: 0;
   margin: 0;
 }
-columnview.files > header > button .sort-caret { margin: 1px 0 0 6px; color: @ox_muted; }
-columnview.files > header > button .sort-caret.ascending { transform: rotate(180deg); }
+columnview.files > header > button.sort-ascending,
+columnview.files > header > button.sort-descending {
+  background-repeat: no-repeat;
+  background-origin: content-box;
+  background-position: center -2px;
+  background-size: 10px 10px;
+}
+columnview.files > header > button.sort-ascending { background-image: -gtk-icontheme("ox-chevron-up-16-symbolic"); }
+columnview.files > header > button.sort-descending { background-image: -gtk-icontheme("ox-chevron-down-16-symbolic"); }
+/* A sorted Size title under the pointer draws both its chevron and its
+   divider. */
+columnview.files > header:hover > button:last-child.sort-ascending,
+columnview.files > header:hover > button:last-child.sort-descending {
+  background-repeat: no-repeat, no-repeat;
+  background-origin: content-box, padding-box;
+  background-position: center -2px, left top;
+  background-size: 10px 10px, auto;
+}
+columnview.files > header:hover > button:last-child.sort-ascending {
+  background-image: -gtk-icontheme("ox-chevron-up-16-symbolic"),
+    linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
+}
+columnview.files > header:hover > button:last-child.sort-descending {
+  background-image: -gtk-icontheme("ox-chevron-down-16-symbolic"),
+    linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
+}
 
 /* ---- Details view: rows ---- */
 /* Rows are inset 12px as in the web list. GTK places each cell at its
@@ -68,15 +99,31 @@ columnview.files > listview > row {
   outline: none;
   transition: background-color 83ms linear;
 }
-columnview.files > listview > row:hover { background-color: @ox_hover; }
-columnview.files > listview > row:active { background-color: @ox_pressed; }
+/* Windows 11 File Explorer's item colours: a pale tint under the pointer,
+   a stronger filled highlight for the selection, which a press shows at
+   once, whether the list has the keyboard or not. While the list has the
+   keyboard (.keyboard-in, window/input.rs), its focused item, selected or
+   not, draws a 1px outline in the ring's outer colour (dark in light,
+   white in dark), as Windows draws it after a click or Ctrl+click; an
+   item under the pointer alone draws none, and a folder a drag would drop
+   into keeps the drop outline (below). Keyboard navigation draws Windows'
+   two-tone ring instead, 2px dark outside 1px light (ui-spec.md §4.5,
+   §4.13). The dark ring is an outline, as GTK 4 paints a later
+   inset shadow over an earlier one rather than under it, which would
+   hide it under the light one. */
+columnview.files > listview > row:hover { background-color: @ox_item_hover; }
+columnview.files > listview > row:active { background-color: @ox_item_selected; }
 columnview.files > listview > row:selected {
-  background-color: @ox_selected;
+  background-color: @ox_item_selected;
   color: @ox_text;
-  box-shadow: inset 0 0 0 1px @ox_selected_edge;
 }
-columnview.files > listview > row:selected:hover { background-color: @ox_selected_hover; }
-columnview.files > listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+columnview.files > listview > row:selected:hover { background-color: @ox_item_selected_hover; }
+columnview.files.keyboard-in > listview > row:focus:not(:focus-visible):not(.file-drop-active) { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
+columnview.files > listview > row:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 columnview.files > listview > row > cell {
   padding: 0 12px;
   margin: 0 12px 0 -12px;
@@ -116,12 +163,72 @@ columnview.files .row-icon { margin-top: 1px; }
   border-radius: 0;
 }
 
-/* A group's header in the details view (VIEW-022): Explorer's semibold
-   title and count, then a line to the right edge. */
-columnview.files > listview > header { padding: 0; background: none; }
-columnview.files .group-header { padding: 12px 26px 4px 26px; }
-columnview.files .group-title { font-weight: 600; color: @ox_text; }
-columnview.files .group-header separator { background-color: @ox_border; min-height: 1px; }
+/* A group's heading in the details view (VIEW-022), a row of its own:
+   Windows 11's chevron (down while the group is expanded, right while it
+   is collapsed) and the title, with no line after it. The
+   Name cell holds the heading and lays it out across the whole row, over
+   the other columns, whatever Name's width (FileCell's
+   span_heading_across_row in src/folder_view/cells.rs); the other
+   columns' cells in the row draw nothing. The chevron changes at once,
+   with no animation, so reduced motion has nothing to stop. */
+columnview.files .group-slot .group-header {
+  padding: 0 0 0 14px;
+  margin: 0;
+  border-spacing: 8px;
+  border-radius: 4px;
+}
+/* A heading's row: an 8px gap before every heading, the first one
+   included, then a box as tall as an item's row (src/theme/fonts.rs sets
+   its height). The gap is the top margin of the heading's cells, so the
+   row has its whole height when GTK binds it, and the hover, the
+   selection and the keyboard's outline are drawn on the heading's box
+   alone, across the row. The grouped list adds no padding of its own
+   above the first heading. */
+columnview.files.grouped > listview { padding-top: 1px; }
+columnview.files > listview > row > cell > .group-slot {
+  margin: 8px 0 0 0;
+  padding: 0;
+}
+columnview.files > listview > row.heading-row,
+columnview.files > listview > row.heading-row:hover,
+columnview.files > listview > row.heading-row:selected,
+columnview.files > listview > row.heading-row:focus-visible,
+columnview.files > listview > row.heading-row:focus-within {
+  background: none;
+  outline: none;
+  box-shadow: none;
+}
+/* The focused row's 1px outline while the list has the keyboard
+   (.keyboard-in) would go round the heading's gap too: the heading draws
+   its own, round its box. */
+columnview.files.keyboard-in > listview > row.heading-row:focus:not(:focus-visible):not(.file-drop-active) {
+  outline: none;
+}
+columnview.files > listview > row.heading-row:hover > cell > .group-slot .group-header { background-color: @ox_item_hover; }
+columnview.files > listview > row.heading-row:selected > cell > .group-slot .group-header,
+columnview.files > listview > row.heading-row.row-filled > cell > .group-slot .group-header { background-color: @ox_item_selected; }
+columnview.files > listview > row.heading-row:selected:hover > cell > .group-slot .group-header,
+columnview.files > listview > row.heading-row.row-filled:hover > cell > .group-slot .group-header {
+  background-color: @ox_item_selected_hover;
+}
+columnview.files > listview > row.heading-row:focus-within > cell > .group-slot .group-header {
+  box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
+}
+/* The title as Windows 11 draws it: regular weight, a quarter larger
+   than the items' names, and no line after it. src/theme/fonts.rs sets
+   its size and its line's height, which overhangs its allocation above
+   and below, so a heading's row keeps the height the items' text sets,
+   with the title centred on it, in every view and in Compact view. */
+columnview.files .group-slot .group-title,
+gridview.files .group-slot .group-title { font-weight: normal; color: @ox_text; }
+/* Another column's cell in a heading's row: the gap and the height alone,
+   as the Name cell's heading is drawn over it. */
+columnview.files .group-rule {
+  padding: 0;
+  margin: 8px 0 0 0;
+  background: none;
+}
+.files .group-chevron { color: @ox_muted; }
 
 /* The arrow before a folder that expands in place (VIEW-035). */
 columnview.files .folder-expander {
@@ -221,15 +328,20 @@ gridview.files > child > box { margin: 0; border-spacing: 0; }
    multiplies the font's own line height, 17px for Noto Sans at 12px,
    not the font size (T15). */
 gridview.files > child label { line-height: 0.95; }
-gridview.files > child:hover { background-color: @ox_hover; }
-gridview.files > child:active { background-color: @ox_pressed; }
+/* Tiles take the rows' colours, focus outline and focus ring. */
+gridview.files > child:hover { background-color: @ox_item_hover; }
+gridview.files > child:active { background-color: @ox_item_selected; }
 gridview.files > child:selected {
-  background-color: @ox_selected;
+  background-color: @ox_item_selected;
   color: @ox_text;
-  box-shadow: inset 0 0 0 1px @ox_tile_selected_edge;
 }
-gridview.files > child:selected:hover { background-color: @ox_selected_hover; }
-gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+gridview.files > child:selected:hover { background-color: @ox_item_selected_hover; }
+gridview.files.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }
+gridview.files > child:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 
 /* ---- Compact view (Explorer's List layout, VIEW-008) ---- */
 /* Small icons with one-line names in columns: rows as tight as Explorer's
@@ -238,6 +350,124 @@ gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_out
 gridview.files.compact { padding: 4px 8px 8px 12px; }
 gridview.files.compact > child { padding: 0 8px 0 6px; margin: 0 2px 0 0; border-radius: 4px; }
 gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
+
+/* ---- Tiles and Content (Explorer's, VIEW-071) ---- */
+/* Both draw an item's padding, hover, selection and focus ring on its
+   cell, not on the grid's slot: a grouped folder's heading rows are slots
+   of the grid too, and show none (src/folder_view/grid/grouped.rs).
+   Tiles: the icon left of its name, type and size, 8px apart across and
+   6px down, as Windows 11 spaces them. Content: one row per item across
+   the width, 16px in from each side, with a thin line under each. Their
+   heights follow the text size (src/theme/fonts.rs). */
+gridview.files.tiles > child, gridview.files.content > child {
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+}
+gridview.files.tiles > child, gridview.files.tiles > child:hover,
+gridview.files.tiles > child:active, gridview.files.tiles > child:selected,
+gridview.files.tiles > child:selected:hover, gridview.files.tiles > child:focus-visible,
+gridview.files.content > child, gridview.files.content > child:hover,
+gridview.files.content > child:active, gridview.files.content > child:selected,
+gridview.files.content > child:selected:hover, gridview.files.content > child:focus-visible {
+  background: none;
+  outline: none;
+  box-shadow: none;
+}
+gridview.files.tiles > child > .item-cell:not(.group-slot) {
+  padding: 8px 12px 8px 8px;
+  margin: 3px 4px;
+  border-radius: 4px;
+  transition: background-color 83ms linear;
+}
+gridview.files.content > child > .item-cell:not(.group-slot) {
+  padding: 6px 16px;
+  border-bottom: 1px solid @ox_border;
+  transition: background-color 83ms linear;
+}
+gridview.files.tiles > child:hover > .item-cell:not(.group-slot),
+gridview.files.content > child:hover > .item-cell:not(.group-slot) { background-color: @ox_item_hover; }
+gridview.files.tiles > child:active > .item-cell:not(.group-slot),
+gridview.files.content > child:active > .item-cell:not(.group-slot),
+gridview.files.tiles > child:selected > .item-cell:not(.group-slot),
+gridview.files.content > child:selected > .item-cell:not(.group-slot) {
+  background-color: @ox_item_selected;
+  color: @ox_text;
+}
+gridview.files.tiles > child:selected:hover > .item-cell:not(.group-slot),
+gridview.files.content > child:selected:hover > .item-cell:not(.group-slot) {
+  background-color: @ox_item_selected_hover;
+}
+gridview.files.tiles > child:focus-visible > .item-cell:not(.group-slot),
+gridview.files.content > child:focus-visible > .item-cell:not(.group-slot) {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
+/* The focused item's 1px outline while the list has the keyboard, on
+   the cell too. */
+gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active),
+gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: none; }
+gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot),
+gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot) {
+  outline: 1px solid @ox_item_focus_outer;
+  outline-offset: -1px;
+}
+/* GTK's theme gives every box in a tile a 12px margin; the lines beside
+   the icon have none. */
+gridview.files.tiles > child box, gridview.files.content > child box { margin: 0; }
+gridview.files > child .item-lines { border-spacing: 1px; }
+gridview.files > child .item-properties { border-spacing: 1px; margin: 0 8px 0 24px; }
+gridview.files > child .item-properties > box { border-spacing: 4px; }
+/* A group's heading, as the details view draws it (VIEW-022): the
+   title over the items' left edge, with no line after it; the heading
+   row's other slots carry the row on. */
+gridview.files .group-slot { padding: 0; }
+/* A heading's row in Tiles and Content: one line of title tall, its
+   hover box that size, after an 8px gap before every heading, the first
+   one included, which is a margin outside the box. */
+gridview.files .group-slot.heading-row { padding: 5px 0; margin-top: 8px; }
+gridview.files.tiles.grouped { padding-top: 3px; }
+gridview.files.content.grouped { padding-top: 0; }
+/* A heading's box in Tiles starts and ends 4px in from the row's edges,
+   as the tiles' boxes do, and its chevron and title stay where they were. */
+gridview.files.tiles .item-cell.heading-row.row-start { margin-left: 4px; }
+gridview.files.tiles .item-cell.heading-row.row-end { margin-right: 4px; }
+gridview.files.tiles .group-slot .group-header.group-heading { margin-left: 8px; }
+gridview.files.content .group-slot .group-header.group-heading { margin-left: 16px; }
+gridview.files .group-slot .group-header { border-spacing: 8px; }
+/* A heading's row acts as one, as Windows 11's does (VIEW-022): the
+   pointer anywhere over it lights the whole row in the items' hover
+   colour, the row is filled as selected while its group is
+   collapsed with every item selected, and the keyboard on the heading
+   draws a 1px outline round the whole row, after a click too. The heading and
+   the slots carrying its line each draw their part (row-start, row-end),
+   following the row's state (src/folder_view/cells.rs). Details draws
+   these on its rows. */
+gridview.files .item-cell.heading-row { transition: background-color 83ms linear; }
+gridview.files .item-cell.heading-row.row-start { border-radius: 4px 0 0 4px; }
+gridview.files .item-cell.heading-row.row-end { border-radius: 0 4px 4px 0; }
+gridview.files .item-cell.heading-row.row-start.row-end { border-radius: 4px; }
+gridview.files .item-cell.heading-row.row-hover { background-color: @ox_item_hover; }
+gridview.files > child:selected > .item-cell.heading-row,
+gridview.files .item-cell.heading-row.row-filled { background-color: @ox_item_selected; }
+gridview.files > child:selected > .item-cell.heading-row.row-hover,
+gridview.files .item-cell.heading-row.row-filled.row-hover { background-color: @ox_item_selected_hover; }
+gridview.files .item-cell.heading-row.row-focus {
+  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer;
+}
+gridview.files .item-cell.heading-row.row-focus.row-start {
+  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer,
+    inset 1px 0 @ox_item_focus_outer;
+}
+gridview.files .item-cell.heading-row.row-focus.row-end {
+  box-shadow: inset 0 1px @ox_item_focus_outer, inset 0 -1px @ox_item_focus_outer,
+    inset -1px 0 @ox_item_focus_outer;
+}
+gridview.files .item-cell.heading-row.row-focus.row-start.row-end,
+gridview.files.content > child:focus-within > .item-cell.heading-row {
+  box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
+}
 
 /* The type-to-select hint is accent-coloured, and muted when no name
    matches (`.type-select-status[data-miss=true]`). */
@@ -252,6 +482,16 @@ gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
 /* An empty folder keeps its list and says so near its top, under the
    column titles, in small grey text as Windows Explorer does. */
 .empty-folder-note { color: @ox_muted; }
+/* An empty list that has the keyboard has no item to ring, so the note
+   takes the items' ring (ACC-016): no Tab stop is invisible. */
+.folder-pane-overlay.keyboard-on-empty-list > label.empty-folder-note {
+  padding: 4px 10px;
+  margin: -4px -10px;
+  border-radius: 4px;
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 
 /* ---- Drag and drop (DND-007, DND-011, DND-026; style.css
    .file-dragging .drag-source, .file-drop-active, .tab-drag-hint) ---- */
@@ -282,7 +522,18 @@ gridview.files > child.file-drop-active { background-color: @ox_selected; }
   box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
 }
 /* The picture that follows the pointer: the first item's art and, for
-   several items, their number on an accent badge. */
+   several items, their number on an accent badge; under them, over this
+   app's drop targets, Windows 11's label that says what a release would
+   do ("→ Move to Documents"): a small light box with a thin border, the
+   glyph in the accent colour (DND-028). */
+.drag-icon .drag-label {
+  padding: 3px 8px;
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  background-color: @ox_chrome;
+  color: @ox_text;
+}
+.drag-icon .drag-label image { color: @ox_accent; }
 .drag-icon .drag-count {
   min-width: 20px;
   min-height: 20px;
@@ -304,6 +555,33 @@ window.ox .files entry.rename-field {
   border-bottom-color: @ox_accent;
   box-shadow: inset 0 -1px @ox_accent;
 }
+/* In Compact view (VIEW-067) the field fits the closer rows, as Windows
+   11's does: no taller than its line of text and its border, overhanging
+   2px above and below, so the item keeps its height and nothing below it
+   moves. */
+window.ox.compact-density .files entry.rename-field {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: -2px;
+  margin-bottom: -2px;
+}
+
+/* Windows' balloon under that field when a typed or pasted character is
+   refused (OPS-010): the tooltip's look, with a tail pointing at the field. */
+popover.name-balloon > contents {
+  padding: 6px 9px 8px 9px;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 4px;
+  background-color: @ox_tooltip;
+  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+}
+popover.name-balloon > arrow {
+  background-color: @ox_tooltip;
+  border: 1px solid @ox_flyout_stroke;
+}
+popover.name-balloon label { color: @ox_text; }
+popover.name-balloon .name-balloon-characters { margin-left: 16px; }
 
 
 /* ---- Split view (VIEW-059) ---- */
@@ -329,3 +607,18 @@ paned.pane-split > separator {
   background-image: none;
 }
 paned.pane-split > separator:hover { background-color: @ox_accent; }
+
+/* Windows' info bar above the items, as Network shows it while discovery
+   cannot run (window/network_info_bar.rs): the caution tokens of C35,
+   the whole width of the folder panes, the text at the start. */
+window.ox button.info-bar {
+  min-height: 0;
+  padding: 7px 14px;
+  border: none;
+  border-bottom: 1px solid @ox_caution_border;
+  border-radius: 0;
+  background-color: @ox_caution_bg;
+  color: @ox_caution_text;
+  box-shadow: none;
+}
+window.ox button.info-bar:hover { background-color: mix(@ox_caution_bg, @ox_caution_border, .35); }

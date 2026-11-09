@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Cut, Copy and Paste through the display's clipboard, and the
-//! name-conflict dialog, against `copySelection`, `paste` and
+//! Cut, Copy and Paste through the display's clipboard, against `copySelection`, `paste` and
 //! `transferWithConflicts` of `v2.0.0:desktop/ui/app.js`: the refusals, the
 //! dimming of cut items and what a clipboard manager may keep. What other
-//! applications put on the clipboard is in `clipboard_interop`.
+//! applications put on the clipboard is in `clipboard_interop`; the
+//! name-conflict questions are in `name_conflicts`.
 
 use std::fs;
 use std::os::unix::net::UnixListener;
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, URI_LIST};
+use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, TEXT, URI_LIST};
 use ox_core::settings::ContextMenu;
 
 use super::context_menus::choose_menu_style;
-use super::file_ops_support::{is_enabled, open_dialog, press_shortcut, select_names, wait_for_no_dialog};
-use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use super::file_ops_support::{answer_conflicts, is_enabled, press_shortcut, select_names, ConflictAnswer};
+use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 
 /// The modifier of Ctrl+C, Ctrl+X and Ctrl+V.
 const CONTROL: gdk::ModifierType = gdk::ModifierType::CONTROL_MASK;
@@ -46,25 +46,6 @@ fn clipboard_then_documents(fixture: &Fixture, command: &str, names: &[&str]) ->
     select_names(&test, names);
     test.activate(command, None);
     show_documents(&test, fixture);
-    test
-}
-
-/// Copies the files `names` of the folder Documents, other files with the
-/// names of files in the fixture's folder, and shows that folder again: a
-/// paste there meets other items of those names, which it asks about. (A
-/// copy pasted into its own folder meets only itself and asks nothing.)
-fn copy_namesakes_from_documents(fixture: &Fixture, names: &[&str]) -> TestWindow {
-    for name in names {
-        fs::write(fixture.path(&format!("Documents/{name}")), b"Another file\n")
-            .expect("the namesake is written");
-    }
-    let test = TestWindow::open(&fixture.uri_of("Documents"));
-    select_names(&test, names);
-    test.activate("copy", None);
-    test.activate("go-to", Some(&fixture.uri()));
-    wait_until("the fixture's folder", || {
-        !test.window.is_loading() && test.names().iter().any(|name| name == "Documents")
-    });
     test
 }
 
@@ -110,7 +91,8 @@ fn paste_into_folder_pastes_into_the_selected_folder() {
         .right_click(Some(super::context_menus::position_of(&test, "Documents")));
     let menu = test.window.context_menu();
 
-    menu.row("Paste into folder").emit_activate();
+    // Windows names the folder's row Paste; it pastes into that folder.
+    menu.row("Paste").emit_activate();
 
     wait_until("the copy in Documents", || {
         fixture.path("Documents/Notes 2.txt").is_file()
@@ -272,13 +254,14 @@ fn a_move_into_the_folder_an_item_is_in_moves_only_the_others() {
 }
 
 /// One drop brings a file into its own folder and another file of the
-/// same name. The first becomes "Notes 2 - Copy.txt" without asking, so
-/// the Rename suggestion for the second skips that name, and accepting it
-/// copies both.
+/// same name. The first becomes "Notes 2 - Copy.txt" without asking, as
+/// Windows names a copy in its own folder; the second is asked about, and
+/// keeping both numbers it "Notes 2 (2).txt", as Windows' File Conflict
+/// window does.
 ///
-/// parity: OPS-026, OPS-028
+/// parity: OPS-026, OPS-028, XFER-008
 #[gtk::test]
-fn the_rename_suggestion_skips_the_name_an_automatic_copy_takes() {
+fn an_automatic_copy_and_a_kept_both_copy_take_their_own_names() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Documents/Notes 2.txt"), b"Another file\n").expect("the namesake is written");
     let test = TestWindow::open(&fixture.uri());
@@ -292,213 +275,22 @@ fn the_rename_suggestion_skips_the_name_an_automatic_copy_takes() {
         crate::window::file_drop::DropAction::Copy,
     );
     assert!(taken);
-    let dialog = open_dialog(&test);
-    let new_name = descendants::<gtk::Entry>(&dialog)
-        .into_iter()
-        .next()
-        .expect("the dialog has a New name field");
-    assert_ne!(
-        new_name.text(),
-        "Notes 2 - Copy.txt",
-        "that name is the automatic copy's"
-    );
-    dialog.press("Rename");
+    answer_conflicts(&test, ConflictAnswer::KeepBoth);
 
     wait_until("both copies", || {
-        fixture.path("Notes 2 - Copy.txt").is_file() && fixture.path("Notes 2 - Copy (2).txt").is_file()
+        fixture.path("Notes 2 - Copy.txt").is_file() && fixture.path("Notes 2 (2).txt").is_file()
     });
     assert_eq!(
         fs::read(fixture.path("Notes 2 - Copy.txt")).expect("the automatic copy"),
         b"Synthetic test data\n"
     );
     assert_eq!(
-        fs::read(fixture.path("Notes 2 - Copy (2).txt")).expect("the renamed copy"),
+        fs::read(fixture.path("Notes 2 (2).txt")).expect("the kept copy"),
         b"Another file\n"
     );
-}
-
-/// parity: OPS-026, OPS-028, XFER-008
-#[gtk::test]
-fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
-    let fixture = Fixture::standard();
-    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt"]);
-    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
-
-    test.activate("paste", None);
-    let dialog = open_dialog(&test);
-
-    assert_eq!(dialog.title_text(), "Items already exist");
-    let expected_start = format!("1 matching name(s) in {}\n\n", fixture.root().display());
-    assert!(
-        dialog.message_text().starts_with(&expected_start),
-        "{}",
-        dialog.message_text()
-    );
-    // Another file of that name may be replaced.
     assert_eq!(
-        dialog.button_labels(),
-        [
-            "Cancel",
-            "Skip duplicates",
-            "Keep both",
-            "Rename",
-            "Replace older",
-            "Replace existing"
-        ]
-    );
-    assert!(
-        descendants::<gtk::CheckButton>(&dialog).is_empty(),
-        "one conflict needs no Apply to all"
-    );
-    dialog.press("Keep both");
-    wait_until("the second copy to be selected", || {
-        test.selected_names()
-            .first()
-            .is_some_and(|name| name.starts_with("Notes 2 - Copy"))
-    });
-    assert!(fixture.path("Notes 2.txt").is_file());
-}
-
-/// parity: OPS-026
-#[gtk::test]
-fn cancelling_the_conflict_dialog_changes_nothing() {
-    let fixture = Fixture::standard();
-    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt"]);
-    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
-    let names_before = test.names();
-
-    test.activate("paste", None);
-    open_dialog(&test).press("Cancel");
-    wait_for_no_dialog(&test);
-
-    test.window.refresh();
-    test.wait_for_listing("the folder again");
-    assert_eq!(test.names(), names_before);
-}
-
-/// parity: OPS-028
-#[gtk::test]
-fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
-    let fixture = Fixture::standard();
-    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt", "Notes 10.txt"]);
-    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
-
-    test.activate("paste", None);
-    let first = open_dialog(&test);
-    let apply_to_all = descendants::<gtk::CheckButton>(&first)
-        .into_iter()
-        .next()
-        .expect("several conflicts offer Apply to all");
-    assert_eq!(apply_to_all.label().as_deref(), Some("Apply to all 2 items"));
-    assert!(apply_to_all.is_active());
-    apply_to_all.set_active(false);
-    first.press("Skip duplicates");
-    wait_until("the second question", || {
-        super::file_ops_support::dialog_over(&test)
-            .is_some_and(|dialog| dialog != first && dialog.message_text().starts_with("1 matching"))
-    });
-    open_dialog(&test).press("Keep both");
-
-    wait_until("the answered copy to be selected", || {
-        test.selected_names()
-            .first()
-            .is_some_and(|name| name.starts_with("Notes 10 - Copy"))
-    });
-    let copies: Vec<String> = test
-        .names()
-        .into_iter()
-        .filter(|name| name.contains(" - Copy"))
-        .collect();
-    assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
-    let report = open_dialog(&test);
-    assert_eq!(
-        report.title_text(),
-        "Operation result",
-        "the skipped item is reported"
-    );
-    report.press("OK");
-}
-
-/// parity: OPS-028
-#[gtk::test]
-fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
-    let fixture = Fixture::standard();
-    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt"]);
-    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
-
-    test.activate("paste", None);
-    let dialog = open_dialog(&test);
-    let new_name = descendants::<gtk::Entry>(&dialog)
-        .into_iter()
-        .next()
-        .expect("the dialog has a New name field");
-    assert_eq!(new_name.text(), "Notes 2 - Copy.txt", "a free name is suggested");
-    new_name.set_text("Notes 10.txt");
-    dialog.press("Rename");
-    wait_until("the taken name to be refused", || dialog.error_text().is_some());
-    new_name.set_text("Renamed notes.txt");
-    dialog.press("Rename");
-
-    wait_until("the renamed copy to be selected", || {
-        test.selected_names() == ["Renamed notes.txt"]
-    });
-    assert_eq!(
-        fs::read(fixture.path("Renamed notes.txt")).expect("the copy exists"),
-        fs::read(fixture.path("Documents/Notes 2.txt")).expect("the original stays")
-    );
-    assert_eq!(
-        fs::read(fixture.path("Notes 2.txt")).expect("the other file stays"),
+        fs::read(fixture.path("Notes 2.txt")).expect("the existing file stays"),
         b"Synthetic test data\n"
-    );
-}
-
-/// Marks the file at `path` as last modified an hour ago.
-fn make_an_hour_old(path: &std::path::Path) {
-    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
-    let file = fs::File::options()
-        .write(true)
-        .open(path)
-        .expect("the fixture is ours");
-    file.set_modified(an_hour_ago).expect("the fixture is ours");
-}
-
-/// "Replace older" replaces only the files whose existing copy is older;
-/// Cancel has the focus, so a reflexive Enter changes nothing.
-///
-/// parity: OPS-028
-#[gtk::test]
-fn replace_older_replaces_only_the_older_existing_files() {
-    let fixture = Fixture::standard();
-    for name in ["Documents/Notes 2.txt", "Documents/Notes 10.txt"] {
-        fs::write(fixture.path(name), b"existing").expect("the fixture is ours");
-    }
-    make_an_hour_old(&fixture.path("Documents/Notes 2.txt"));
-    make_an_hour_old(&fixture.path("Notes 10.txt"));
-    let test = clipboard_then_documents(&fixture, "copy", &["Notes 2.txt", "Notes 10.txt"]);
-
-    test.activate("paste", None);
-    let dialog = open_dialog(&test);
-    let focused = GtkWindowExt::focus(&dialog).and_downcast::<gtk::Button>();
-    assert_eq!(
-        focused.and_then(|button| button.label()).as_deref(),
-        Some("Cancel")
-    );
-    dialog.press("Replace older");
-    wait_until("the report of one copied and one skipped", || {
-        super::file_ops_support::dialog_over(&test).is_some_and(|report| {
-            report != dialog && report.message_text().starts_with("1 completed.\n1 skipped")
-        })
-    });
-    let report = super::file_ops_support::dialog_over(&test).expect("the report");
-    report.press("OK");
-
-    assert_eq!(
-        fs::read(fixture.path("Documents/Notes 2.txt")).expect("the older copy was replaced"),
-        b"Synthetic test data\n"
-    );
-    assert_eq!(
-        fs::read(fixture.path("Documents/Notes 10.txt")).expect("the newer copy stays"),
-        b"existing"
     );
 }
 
@@ -532,6 +324,7 @@ fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
         "application/x-winspace-files",
         "x-special/gnome-copied-files",
         "text/uri-list",
+        "text/plain;charset=utf-8",
         "application/x-kde-cutselection",
     ] {
         assert!(formats.contain_mime_type(mime_type), "{mime_type}");
@@ -540,6 +333,32 @@ fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
     assert_eq!(clipboard_bytes(&test, KDE_CUT), b"1");
     let gnome = String::from_utf8(clipboard_bytes(&test, "x-special/gnome-copied-files")).expect("UTF-8");
     assert_eq!(gnome, format!("cut\n{}", fixture.uri_of("Notes 2.txt")));
+    // The text is the item's path unquoted, as Nautilus publishes it, so a
+    // terminal pastes a path a shell reads as one argument.
+    let text = String::from_utf8(clipboard_bytes(&test, TEXT)).expect("UTF-8");
+    let path = fixture.path("Notes 2.txt").to_string_lossy().into_owned();
+    assert_eq!(text, path);
+}
+
+/// Several items are one path per line in the text format, without quotes
+/// and without a trailing newline.
+///
+/// parity: CLIP-004
+#[gtk::test]
+fn a_copy_of_several_items_publishes_their_paths_one_per_line() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let names = ["Notes 2.txt", "Résumé.txt"];
+    select_names(&test, &names);
+
+    test.activate("copy", None);
+
+    let text = String::from_utf8(clipboard_bytes(&test, TEXT)).expect("UTF-8");
+    let paths: Vec<String> = names
+        .iter()
+        .map(|name| fixture.path(name).to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(text, paths.join("\n"));
 }
 
 /// parity: CLIP-005, CLIP-006, CLIP-007
@@ -686,17 +505,20 @@ fn every_published_format_is_offered_for_a_clipboard_manager_to_keep() {
     assert!(clipboard.is_local(), "the window owns the clipboard");
     let content = clipboard.content().expect("a local clipboard has content");
     let storable = content.storable_formats();
-    for mime_type in [CUSTOM, GNOME, URI_LIST, KDE_CUT] {
+    for mime_type in [CUSTOM, GNOME, URI_LIST, TEXT, KDE_CUT] {
         assert!(storable.contain_mime_type(mime_type), "{mime_type}");
     }
 }
 
 /// Copies `Alpha.txt` and `Beta.txt` of the fixture's folder, the file
 /// called `unreadable` without read permission, and starts pasting them
-/// into Documents: the copy stops at that file with the failed-item
-/// dialog, which this returns. Tests run as a normal user: root reads the
-/// file anyway.
-fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWindow, crate::dialog::Dialog) {
+/// into Documents: the copy stops at that file and asks about it in the
+/// progress window, in place of the action's progress; this returns that
+/// action. Tests run as a normal user: root reads the file anyway.
+fn paste_with_an_unreadable_file(
+    fixture: &Fixture,
+    unreadable: &str,
+) -> (TestWindow, crate::window::transfer_panel::TransferPanel) {
     use std::os::unix::fs::PermissionsExt;
 
     fixture.write("Alpha.txt");
@@ -705,10 +527,18 @@ fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWi
         .expect("take read permission away");
     let test = clipboard_then_documents(fixture, "copy", &["Alpha.txt", "Beta.txt"]);
     test.activate("paste", None);
-    let failed = open_dialog(&test);
+    let window = crate::window::progress_window::ProgressWindow::of(&test.context);
+    let asking = || {
+        window
+            .actions()
+            .into_iter()
+            .find(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+    };
+    wait_until("the action to ask", || asking().is_some());
+    let failed = asking().expect("the asking action");
     assert!(
-        failed.button_labels().contains(&"Retry".to_owned()),
-        "the failed-item dialog"
+        failed.failure_button_labels().contains(&"Try Again".to_owned()),
+        "the failed-item question"
     );
     (test, failed)
 }
@@ -724,7 +554,7 @@ fn cancel_in_the_failed_item_dialog_just_stops_and_undo_takes_back_what_was_copi
     let fixture = Fixture::standard();
     let (test, failed) = paste_with_an_unreadable_file(&fixture, "Beta.txt");
 
-    failed.press("Cancel");
+    failed.press_failure("Cancel");
     wait_until("the finished copy to be selected", || {
         test.selected_names() == ["Alpha.txt"]
     });
@@ -741,8 +571,8 @@ fn cancel_in_the_failed_item_dialog_just_stops_and_undo_takes_back_what_was_copi
     assert!(fixture.path("Alpha.txt").is_file(), "the original stays");
 }
 
-/// The progress panel's Cancel stops a copy without a report, also after
-/// an item was skipped.
+/// Cancelling the operation while its action asks about a failed item
+/// answers the question and stops the copy without a report.
 ///
 /// parity: OPS-019, OPS-023
 #[gtk::test]
@@ -751,8 +581,7 @@ fn the_panels_cancel_stops_a_copy_without_a_report() {
     let (test, failed) = paste_with_an_unreadable_file(&fixture, "Alpha.txt");
 
     test.activate("cancel-operation", None);
-    failed.press("Skip");
-    wait_for_no_dialog(&test);
+    wait_until("the question to close", || !failed.asks_about_failure());
     wait_until("the copy to end", || !test.window.is_writing_files());
     crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
 
@@ -761,4 +590,33 @@ fn the_panels_cancel_stops_a_copy_without_a_report() {
         "nothing is reported after Cancel"
     );
     assert!(!fixture.path("Documents/Beta.txt").exists(), "the copy stopped");
+}
+
+/// A file another program named with bytes that are not UTF-8 is copied
+/// and pasted under its exact name, with no message.
+///
+/// parity: CLIP-001, OPS-035
+#[gtk::test]
+fn a_name_that_is_not_utf8_is_copied_and_pasted() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let fixture = Fixture::standard();
+    let name = OsStr::from_bytes(b"Caf\xe9 menu.txt");
+    fs::write(fixture.root().join(name), b"menu").expect("a Latin-1 name");
+    let test = TestWindow::open(&fixture.uri());
+    let shown = test
+        .names()
+        .into_iter()
+        .find(|shown| shown.starts_with("Caf"))
+        .expect("the file is listed");
+    select_names(&test, &[shown.as_str()]);
+
+    test.activate("copy", None);
+    show_documents(&test, &fixture);
+    test.activate("paste", None);
+
+    wait_until("the copy", || {
+        fixture.root().join("Documents").join(name).is_file()
+    });
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }

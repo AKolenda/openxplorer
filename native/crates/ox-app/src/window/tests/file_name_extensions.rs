@@ -15,7 +15,7 @@ use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fix
 use crate::window::menu_popover::MenuPopover;
 
 /// The names the file list shows now.
-fn shown_names(test: &TestWindow) -> Vec<String> {
+pub(super) fn shown_names(test: &TestWindow) -> Vec<String> {
     wait_for_frames(&test.window, 2);
     let cells = descendants::<FileCell>(&test.window);
     let mut names: Vec<String> = cells
@@ -53,15 +53,15 @@ fn show_menu_checks_extensions(test: &TestWindow) -> bool {
         .expect("View's menu");
     menu.popup();
     wait_until("the View menu", || menu.is_visible());
-    menu.click_row("Show");
-    let labels = menu.row_labels();
+    let show = menu.open_submenu_of("Show");
+    let labels = show.row_labels();
     let at = labels.iter().position(|label| label == "File name extensions");
     assert_eq!(
         labels[at.expect("Show has File name extensions") - 1..][..3],
         ["Item check boxes", "File name extensions", "Hidden items"],
         "{labels:?}"
     );
-    let checked = menu.checked_labels().contains(&"File name extensions".to_owned());
+    let checked = show.checked_labels().contains(&"File name extensions".to_owned());
     menu.popdown();
     wait_until("the View menu to close", || !menu.is_visible());
     checked

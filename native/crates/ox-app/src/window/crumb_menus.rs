@@ -1,30 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The breadcrumbs' subfolder menus and wheel, which app.js lacked, as
-//! Dolphin's location bar and Explorer's crumb chevrons have them.
+//! The breadcrumbs' menus, which app.js lacked, as Dolphin's location bar
+//! and Windows 11 File Explorer's crumb chevrons have them.
 //!
 //! - A click on the divider after a crumb, or Down on a focused crumb,
 //!   opens a menu of that folder's subfolders. The folder the address
-//!   goes on to is bold, hidden folders show only while hidden files do,
-//!   and past 30 folders a "More" item lists the next ones (NAV-020).
-//! - The wheel over a crumb replaces it with the previous or next folder
-//!   beside it and goes there, while the crumbs fit the bar; when they
-//!   overflow, the wheel scrolls them as before (NAV-022).
+//!   goes on to is bold and hidden folders show only while hidden files
+//!   do. As in Windows, the menu lists every subfolder, scrolling when it
+//!   is taller than the screen (NAV-020).
+//! - The chevron after the location icon lists the top-level places, the
+//!   one the crumbs start at in bold; the « that takes its place on a
+//!   long path lists the crumbs it hides, the nearest last, then those
+//!   places (NAV-017, NAV-023).
+//!
+//! As in Windows Explorer, the wheel over a crumb never switches folders.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{enumerate_folder, EntryKind};
-use ox_core::location::{parent_location, same_location, ArchiveLocation};
+use ox_core::location::{same_location, ArchiveLocation, NETWORK_URI, PC_URI, TRASH_URI};
 
 use crate::folder_view::sorting::SortKey;
 use crate::icons::Icon;
+use crate::locations::Page;
 
-use super::address_bar::AddressBar;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
-
-/// The most subfolders one menu lists before "More" (Dolphin's limit).
-const MENU_PAGE: usize = 30;
 
 /// A folder inside the folder of a crumb.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,48 +96,57 @@ fn sorted_naturally(folders: Vec<Subfolder>) -> Vec<Subfolder> {
     keyed.into_iter().map(|(_, folder)| folder).collect()
 }
 
-/// The menu of `folders` from `first` on: up to [`MENU_PAGE`] folders,
-/// the one at `shown` in bold, then "More" for the rest of `parent`'s.
-pub(super) fn subfolder_menu(
-    folders: &[Subfolder],
-    parent: &str,
-    shown: &str,
-    first: usize,
-) -> Vec<MenuEntry> {
-    let page = folders.iter().skip(first).take(MENU_PAGE);
-    let mut entries: Vec<MenuEntry> = page
+/// The menu of `folders`, the one at `shown` in bold.
+pub(super) fn subfolder_menu(folders: &[Subfolder], shown: &str) -> Vec<MenuEntry> {
+    folders
+        .iter()
         .map(|folder| {
             let item =
                 MenuItem::with_text_target(&folder.name, Icon::Folder, WindowAction::GoTo, &folder.uri);
             let emphasised = same_location(&folder.uri, shown);
             MenuItem { emphasised, ..item }.into()
         })
-        .collect();
-    let next = first + MENU_PAGE;
-    if folders.len() > next {
-        let next = u32::try_from(next).unwrap_or(u32::MAX);
-        let target = (parent, shown, next).to_variant();
-        entries.push(MenuEntry::Divider);
-        entries.push(
-            MenuItem::with_target(
-                &ox_core::i18n::gettext("More"),
-                Icon::MoreHorizontal,
-                WindowAction::CrumbSubfolders,
-                target,
-            )
-            .into(),
-        );
-    }
-    entries
+        .collect()
 }
 
-/// The folder `step` places from `current` among `folders`, if any.
-fn sibling<'a>(folders: &'a [Subfolder], current: &str, step: i32) -> Option<&'a Subfolder> {
-    let position = folders
+/// The top-level places, as the chevron after the location icon lists
+/// them: Home (at `home_uri`), This PC, Network and the Recycle Bin, the
+/// place the crumbs start at (`first_crumb`) in bold. Windows lists its
+/// own top-level places there; these are the app's, as its navigation
+/// pane shows them.
+pub(super) fn places_menu(home_uri: &str, first_crumb: Option<&str>) -> Vec<MenuEntry> {
+    let places = [
+        (ox_core::i18n::gettext("Home"), Icon::Home, home_uri),
+        (ox_core::i18n::gettext("This PC"), Page::ThisPc.icon(), PC_URI),
+        (
+            ox_core::i18n::gettext("Network"),
+            Page::Network.icon(),
+            NETWORK_URI,
+        ),
+        (ox_core::i18n::gettext("Recycle Bin"), Icon::Delete, TRASH_URI),
+    ];
+    places
+        .into_iter()
+        .map(|(label, glyph, uri)| {
+            let item = MenuItem::with_text_target(&label, glyph, WindowAction::GoTo, uri);
+            let emphasised = first_crumb.is_some_and(|first| same_location(first, uri));
+            MenuItem { emphasised, ..item }.into()
+        })
+        .collect()
+}
+
+/// The menu of the « button: the `hidden` crumbs (label and location),
+/// first to last so the nearest is last, then the top-level `places`.
+pub(super) fn hidden_crumbs_menu(hidden: &[(String, String)], places: Vec<MenuEntry>) -> Vec<MenuEntry> {
+    let mut entries: Vec<MenuEntry> = hidden
         .iter()
-        .position(|folder| same_location(&folder.uri, current))?;
-    let target = position.checked_add_signed(isize::try_from(step).ok()?)?;
-    folders.get(target)
+        .map(|(label, uri)| MenuItem::with_text_target(label, Icon::Folder, WindowAction::GoTo, uri).into())
+        .collect();
+    if !entries.is_empty() {
+        entries.push(MenuEntry::Divider);
+    }
+    entries.extend(places);
+    entries
 }
 
 /// Opens the subfolder menu of `folder`, with `shown` in bold, on a click
@@ -143,7 +154,7 @@ fn sibling<'a>(folders: &'a [Subfolder], current: &str, step: i32) -> Option<&'a
 pub(super) fn open_subfolders_on_click(label: &gtk::Label, folder: &str, shown: &str) {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
-    let target = (folder, shown, 0_u32).to_variant();
+    let target = (folder, shown).to_variant();
     click.connect_released(move |gesture, _, _, _| {
         gesture.set_state(gtk::EventSequenceState::Claimed);
         if let Some(label) = gesture.widget() {
@@ -155,77 +166,36 @@ pub(super) fn open_subfolders_on_click(label: &gtk::Label, folder: &str, shown: 
     label.set_tooltip_text(Some(&ox_core::i18n::gettext("Show subfolders")));
 }
 
-impl AddressBar {
-    /// Gives the crumb `button` of `folder` its subfolder menu on Down,
-    /// with `next` in bold, and its sibling switching on the wheel.
-    pub(super) fn add_crumb_menu_and_wheel(&self, button: &gtk::Button, folder: &str, next: Option<&str>) {
-        let keys = gtk::EventControllerKey::new();
-        let menu_target = (folder, next.unwrap_or_default(), 0_u32).to_variant();
-        keys.connect_key_pressed(move |keys, key, _, modifiers| {
-            let down = matches!(key, gdk::Key::Down | gdk::Key::KP_Down);
-            if !down || !modifiers.is_empty() {
-                return glib::Propagation::Proceed;
-            }
-            if let Some(button) = keys.widget() {
-                WindowAction::CrumbSubfolders.activate_from(&button, Some(&menu_target));
-            }
-            glib::Propagation::Stop
-        });
-        button.add_controller(keys);
-        // Discrete, so GTK adds up a high-resolution wheel's fractions to
-        // whole notches; a touchpad's pixel deltas are ignored, as Dolphin
-        // counts only whole wheel notches, so one swipe cannot skip
-        // through several folders.
-        let wheel = gtk::EventControllerScroll::new(
-            gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
-        );
-        let folder = folder.to_owned();
-        wheel.connect_scroll(glib::clone!(
-            #[weak(rename_to = bar)]
-            self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |wheel, _, dy| {
-                let notches = dy.trunc();
-                let touchpad = wheel.unit() == gdk::ScrollUnit::Surface;
-                if bar.crumbs_overflow() || touchpad || notches == 0.0 {
-                    return glib::Propagation::Proceed;
-                }
-                let step: i32 = if notches > 0.0 { 1 } else { -1 };
-                if let Some(button) = wheel.widget() {
-                    WindowAction::CrumbSibling.activate_from(&button, Some(&(&folder, step).to_variant()));
-                }
-                glib::Propagation::Stop
-            }
-        ));
-        button.add_controller(wheel);
-    }
+/// Gives the crumb `button` of `folder` its subfolder menu on Down, with
+/// `next` in bold.
+pub(super) fn open_subfolders_on_down(button: &gtk::Button, folder: &str, next: Option<&str>) {
+    let keys = gtk::EventControllerKey::new();
+    let menu_target = (folder, next.unwrap_or_default()).to_variant();
+    keys.connect_key_pressed(move |keys, key, _, modifiers| {
+        let down = matches!(key, gdk::Key::Down | gdk::Key::KP_Down);
+        if !down || !modifiers.is_empty() {
+            return glib::Propagation::Proceed;
+        }
+        if let Some(button) = keys.widget() {
+            WindowAction::CrumbSubfolders.activate_from(&button, Some(&menu_target));
+        }
+        glib::Propagation::Stop
+    });
+    button.add_controller(keys);
 }
 
 impl BrowserWindow {
-    /// Adds the actions the crumbs' menus and wheel run.
+    /// Adds the action the crumbs' menus run.
     pub(super) fn install_crumb_actions(&self) {
-        self.add_action_entries([
-            gio::ActionEntry::builder(WindowAction::CrumbSubfolders.name())
-                .parameter_type(Some(glib::VariantTy::new("(ssu)").expect("a valid type")))
-                .activate(|window: &BrowserWindow, _, target| {
-                    let Some((folder, shown, first)) =
-                        target.and_then(glib::Variant::get::<(String, String, u32)>)
-                    else {
-                        return;
-                    };
-                    window.show_subfolder_menu(folder, shown, first);
-                })
-                .build(),
-            gio::ActionEntry::builder(WindowAction::CrumbSibling.name())
-                .parameter_type(Some(glib::VariantTy::new("(si)").expect("a valid type")))
-                .activate(|window: &BrowserWindow, _, target| {
-                    if let Some((folder, step)) = target.and_then(glib::Variant::get::<(String, i32)>) {
-                        window.go_to_sibling(folder, step);
-                    }
-                })
-                .build(),
-        ]);
+        self.add_action_entries([gio::ActionEntry::builder(WindowAction::CrumbSubfolders.name())
+            .parameter_type(Some(glib::VariantTy::new("(ss)").expect("a valid type")))
+            .activate(|window: &BrowserWindow, _, target| {
+                let Some((folder, shown)) = target.and_then(glib::Variant::get::<(String, String)>) else {
+                    return;
+                };
+                window.show_subfolder_menu(folder, shown);
+            })
+            .build()]);
     }
 
     /// Whether hidden files are shown, so the menus list hidden folders.
@@ -235,18 +205,47 @@ impl BrowserWindow {
     }
 
     /// Lists `folder`'s subfolders and opens their menu under its crumb.
-    fn show_subfolder_menu(&self, folder: String, shown: String, first: u32) {
+    fn show_subfolder_menu(&self, folder: String, shown: String) {
         let show_hidden = self.shows_hidden_files();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
                 let folders = list_subfolders(&folder, show_hidden).await;
-                let first = usize::try_from(first).unwrap_or(usize::MAX);
-                let entries = subfolder_menu(&folders, &folder, &shown, first);
+                let entries = subfolder_menu(&folders, &shown);
                 window.popup_crumb_menu(&folder, entries, true);
             }
         ));
+    }
+
+    /// The places the chevron after the location icon lists, the one the
+    /// crumbs start at in bold.
+    fn top_level_places(&self) -> Vec<MenuEntry> {
+        let first = self.address_bar().crumb_buttons().into_iter().next();
+        let first_uri = first
+            .and_then(|crumb| crumb.action_target_value())
+            .and_then(|target| target.get::<String>());
+        let home = self.imp().locations.borrow().home_uri();
+        places_menu(&home, first_uri.as_deref())
+    }
+
+    /// Opens the top-level places under the chevron `anchor`.
+    pub(super) fn show_places_menu(&self, anchor: &gtk::Widget) {
+        self.popup_address_menu(anchor, self.top_level_places(), true);
+    }
+
+    /// Opens the menu of the « button `anchor`: the `hidden` crumbs, then
+    /// the top-level places.
+    pub(super) fn show_hidden_crumbs_menu(&self, anchor: &gtk::Widget, hidden: &[gtk::Button]) {
+        let hidden: Vec<(String, String)> = hidden
+            .iter()
+            .filter_map(|crumb| {
+                let uri = crumb.action_target_value()?.get::<String>()?;
+                Some((crumb.label()?.to_string(), uri))
+            })
+            .collect();
+        let entries = hidden_crumbs_menu(&hidden, self.top_level_places());
+        self.popup_address_menu(anchor, entries, true);
     }
 
     /// Opens `entries` under the crumb of `folder`, closing on a click
@@ -258,17 +257,29 @@ impl BrowserWindow {
         entries: Vec<MenuEntry>,
         autohide: bool,
     ) -> Option<MenuPopover> {
-        if entries.is_empty() {
-            return None;
-        }
         let crumb = self.address_bar().crumb_buttons().into_iter().find(|crumb| {
             let target = crumb.action_target_value();
             target.as_ref().and_then(glib::Variant::str) == Some(folder)
         })?;
+        self.popup_address_menu(crumb.upcast_ref(), entries, autohide)
+    }
+
+    /// Opens `entries` under `anchor` in the address bar, closing on a
+    /// click elsewhere when `autohide`; nothing when there are none or
+    /// `anchor` is not shown.
+    fn popup_address_menu(
+        &self,
+        anchor: &gtk::Widget,
+        entries: Vec<MenuEntry>,
+        autohide: bool,
+    ) -> Option<MenuPopover> {
+        if entries.is_empty() {
+            return None;
+        }
         // Parented to the bar, not the crumb: choosing a row navigates,
         // which rebuilds the crumbs while the menu is still attached.
         let bar = self.address_bar();
-        let bounds = crumb.compute_bounds(bar)?;
+        let bounds = anchor.compute_bounds(bar)?;
         let popover = MenuPopover::new(entries);
         popover.set_autohide(autohide);
         popover.set_parent(bar);
@@ -286,25 +297,6 @@ impl BrowserWindow {
         });
         popover.popup();
         Some(popover)
-    }
-
-    /// Goes to the folder `step` places from `folder` among its parent's
-    /// subfolders.
-    pub(super) fn go_to_sibling(&self, folder: String, step: i32) {
-        let Some(parent) = parent_location(&folder) else {
-            return;
-        };
-        let show_hidden = self.shows_hidden_files();
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move {
-                let folders = list_subfolders(&parent, show_hidden).await;
-                if let Some(next) = sibling(&folders, &folder, step) {
-                    window.navigate_or_report(&next.uri);
-                }
-            }
-        ));
     }
 }
 
@@ -333,39 +325,57 @@ mod tests {
 
     /// parity: NAV-020
     #[test]
-    fn a_crumb_menu_lists_thirty_subfolders_with_the_shown_one_bold_then_more() {
-        let many = folders(45);
+    fn a_crumb_menu_lists_every_subfolder_with_the_shown_one_bold() {
+        let many = folders(450);
 
-        let first_page = subfolder_menu(&many, "file:///demo", "file:///demo/Folder%203", 0);
-        let second_page = subfolder_menu(&many, "file:///demo", "file:///demo/Folder%203", 30);
+        let entries = subfolder_menu(&many, "file:///demo/Folder%20300");
 
-        let first = items(&first_page);
-        assert_eq!(first.len(), 31);
-        let bold: Vec<&str> = first
+        let listed = items(&entries);
+        assert_eq!(listed.len(), 450, "no page and no More, as in Windows");
+        let bold: Vec<&str> = listed
             .iter()
             .filter(|item| item.emphasised)
             .map(|item| item.label.as_str())
             .collect();
-        assert_eq!(bold, ["Folder 3"]);
-        assert_eq!(first[0].target, Some("file:///demo/Folder%200".to_variant()));
-        let more = first[30];
-        assert_eq!(more.label, "More");
-        assert_eq!(
-            more.target,
-            Some(("file:///demo", "file:///demo/Folder%203", 30_u32).to_variant())
-        );
-        assert_eq!(items(&second_page).len(), 15);
-        assert!(subfolder_menu(&[], "file:///demo", "", 0).is_empty());
+        assert_eq!(bold, ["Folder 300"]);
+        assert_eq!(listed[0].target, Some("file:///demo/Folder%200".to_variant()));
+        assert_eq!(listed[449].target, Some("file:///demo/Folder%20449".to_variant()));
+        assert!(subfolder_menu(&[], "").is_empty());
     }
 
-    /// parity: NAV-022
+    /// parity: NAV-017, NAV-023
     #[test]
-    fn the_wheel_steps_to_the_folder_beside_and_stops_at_either_end() {
-        let three = folders(3);
+    fn the_first_chevron_lists_the_places_and_the_overflow_the_hidden_crumbs_first() {
+        let home = "file:///home/demo";
+        let places = places_menu(home, Some(home));
+        let labels: Vec<&str> = items(&places).iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(labels, ["Home", "This PC", "Network", "Recycle Bin"]);
+        let bold: Vec<&str> = items(&places)
+            .iter()
+            .filter(|item| item.emphasised)
+            .map(|item| item.label.as_str())
+            .collect();
+        assert_eq!(bold, ["Home"]);
+        assert!(items(&places_menu(home, Some("file:///")))
+            .iter()
+            .all(|item| !item.emphasised));
 
-        assert_eq!(sibling(&three, "file:///demo/Folder%201", 1), Some(&three[2]));
-        assert_eq!(sibling(&three, "file:///demo/Folder%201", -1), Some(&three[0]));
-        assert_eq!(sibling(&three, "file:///demo/Folder%202", 1), None);
-        assert_eq!(sibling(&three, "file:///demo/Folder%200", -1), None);
+        let hidden = [
+            ("Home".to_owned(), home.to_owned()),
+            ("Projects".to_owned(), format!("{home}/Projects")),
+        ];
+        let entries = hidden_crumbs_menu(&hidden, places_menu(home, None));
+
+        let labels: Vec<&str> = items(&entries).iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            ["Home", "Projects", "Home", "This PC", "Network", "Recycle Bin"],
+            "the nearest hidden crumb last, then the places"
+        );
+        assert_eq!(entries[2], MenuEntry::Divider);
+        assert_eq!(
+            items(&entries)[1].target,
+            Some(format!("{home}/Projects").to_variant())
+        );
     }
 }

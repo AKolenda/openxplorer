@@ -13,12 +13,13 @@ use ox_core::settings::ContextMenu;
 
 use super::context_menus::{choose_menu_style, position_of};
 use super::file_ops_support::open_dialog;
-use super::geometry::{bounds, laid_out, Bounds};
-use super::icons::{assert_same_colour, css_colour, painted, painted_colour, TRANSITION_TIME};
+use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
+use super::icons::{assert_same_colour, css_colour, painted, painted_colour, pixel_rows, TRANSITION_TIME};
 use crate::test_support::harness::{
     descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::test_support::window_font;
+use crate::window::input::KEYBOARD_IN_CLASS;
 use crate::window::BrowserWindow;
 
 /// Switches `test`'s window to `theme` and waits out the colour
@@ -50,14 +51,14 @@ struct Surfaces {
 const SURFACES: [Surfaces; 2] = [
     Surfaces {
         theme: "light",
-        title: "#eff1f4",
+        title: "#f3f3f3",
         chrome: "#f9f9f9",
         sidebar: "#fafafa",
         content: "#ffffff",
     },
     Surfaces {
         theme: "dark",
-        title: "#191919",
+        title: "#202020",
         chrome: "#282828",
         sidebar: "#252525",
         content: "#202020",
@@ -97,15 +98,16 @@ fn assert_surfaces(window: &BrowserWindow, expected: &Surfaces) {
     );
 }
 
-/// From top to bottom: the 42-pixel tab strip, the navigation row, the
-/// command bar, the sidebar, file list and details pane side by side, and
-/// the 30-pixel status bar, all in the app's font stack at 13 pixels.
+/// From top to bottom: the 42-pixel tab strip, the 48-pixel navigation
+/// row and command bar, as Windows 11's (owner decision 2026-11-06), the
+/// sidebar, file list and details pane side by side, and the 30-pixel
+/// status bar, all in the app's font stack at 13 pixels.
 ///
 /// parity: LOOK-001
 #[gtk::test]
 fn the_bars_and_panes_stack_as_in_explorer_in_the_apps_font() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     let window = &test.window;
     let title = bounds(&test, &window.titlebar().expect("the tab strip is the title bar"));
     let navigation = bounds(&test, &*window.imp().navigation_row);
@@ -115,10 +117,10 @@ fn the_bars_and_panes_stack_as_in_explorer_in_the_apps_font() {
     let details = bounds(&test, window.details_pane());
     let status = bounds(&test, window.status_bar());
     assert_eq!((title.y, title.height), (0, 42), "the title bar");
-    assert_eq!((navigation.y, navigation.height), (42, 62), "the navigation row");
-    assert_eq!((commands.y, commands.height), (104, 55), "the command bar");
+    assert_eq!((navigation.y, navigation.height), (42, 48), "the navigation row");
+    assert_eq!((commands.y, commands.height), (90, 48), "the command bar");
     for pane in [sidebar, files, details] {
-        assert_eq!((pane.y, pane.y + pane.height), (159, status.y), "{pane:?}");
+        assert_eq!((pane.y, pane.y + pane.height), (138, status.y), "{pane:?}");
     }
     assert_eq!((sidebar.x, sidebar.width), (0, 210), "the sidebar");
     assert!(sidebar.right() < files.x, "the resizer sits between");
@@ -171,7 +173,13 @@ fn a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance() {
     let fixture = Fixture::standard();
     let first = laid_out(&fixture.uri());
     show_theme(&first, "dark");
-    let test = TestWindow::open(&fixture.uri());
+    // With the details pane, closed in a new window as in Windows 11,
+    // switched on, so it is part of the layout.
+    first.open_details_pane();
+    wait_until("the open pane to be saved", || {
+        first.context.settings_data().preferences.show_details_pane
+    });
+    let test = first.open_beside(&fixture.uri());
     wait_for_frames(&test.window, 1);
     let window = &test.window;
     let parts: [&gtk::Widget; 6] = [
@@ -265,7 +273,7 @@ fn the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line() {
     }
 }
 
-/// The command bar is 55 pixels with its bottom line; Appearance,
+/// The command bar is 48 pixels with its bottom line; Appearance,
 /// Settings and Details sit at its right end, the file commands scroll
 /// sideways instead of clipping, and the switched-on Details toggle shows
 /// the selected colour.
@@ -275,11 +283,11 @@ fn the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line() {
 fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = laid_out_with_details_pane(&fixture.uri());
     show_theme(&test, "light");
     let bar = test.window.command_bar();
     let place = bounds(&test, bar);
-    assert_eq!(place.height, 55);
+    assert_eq!(place.height, 48);
     let details = descendants::<gtk::ToggleButton>(bar)
         .into_iter()
         .find(|button| button.has_css_class("details-toggle"))
@@ -299,8 +307,8 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
     assert_same_colour(colour, css_colour("#e8f1fb"), "the selected colour");
 }
 
-/// Classic menus are 264 pixels with 33-pixel rows at 100% text; the
-/// compact menu is 276 pixels with the 34-pixel icon strip.
+/// Classic menus are 264 pixels with Windows 11's 32-pixel rows at 100%
+/// text; the compact menu is 276 pixels with the 50-pixel labeled strip.
 ///
 /// parity: LOOK-019
 #[gtk::test]
@@ -317,7 +325,7 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     // The contents box, inside 3 pixels of padding and a 1-pixel border.
     assert_eq!(contents.width() + 2 * (3 + 1), 264, "the classic width");
     let row = menu.rows().into_iter().next().expect("a row");
-    assert_eq!(row.height(), 33, "the classic row");
+    assert_eq!(row.height(), 32, "the classic row");
     menu.popdown();
 
     choose_menu_style(&test, ContextMenu::Win11);
@@ -332,7 +340,9 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
         .iter()
         .find(|button| button.tooltip_text().as_deref() == Some("Cut"))
         .expect("the strip has Cut");
-    assert_eq!(bounds_in(cut, cut).height, 34, "the strip");
+    // Windows 11's labeled strip: a 44-high button, its icon over its
+    // label, inside 3 pixels of padding above and below.
+    assert_eq!(bounds_in(cut, cut).height, 50, "the strip");
     menu.popdown();
 }
 
@@ -358,6 +368,8 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
         test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
         let menu = test.window.context_menu();
         wait_until("the menu to be drawn", || menu.is_mapped() && menu.width() > 0);
+        // Once it has faded in.
+        wait_for(crate::window::MENU_OPENING_MOTION);
         wait_for_frames(&test.window, 2);
         let contents = menu.child().expect("the menu has contents");
         let place = bounds_in(&contents, &menu);
@@ -451,5 +463,246 @@ fn the_toast_is_an_inverted_status_78_pixels_above_the_bottom() {
         assert!((centre - test.window.width() / 2).abs() <= 1, "{place:?}");
         let background = painted_colour(&surface, 4, place.height / 2);
         assert_same_colour(background, css_colour(inverted), &format!("{theme} toast"));
+    }
+}
+
+/// The row of the file list that shows the item at `position` in
+/// `test`'s window.
+fn row_at(test: &TestWindow, position: u32) -> gtk::Widget {
+    let content = test
+        .window
+        .folder_pane()
+        .owners()
+        .widget_at(position)
+        .expect("the row is shown");
+    std::iter::successors(Some(content), WidgetExt::parent)
+        .find(|widget| widget.css_name() == "row")
+        .expect("the item is in a row")
+}
+
+/// How opaque `widget` paints the pixel at (`x`, `y`), 0 to 255.
+fn painted_alpha(widget: &impl IsA<gtk::Widget>, x: i32, y: i32) -> u8 {
+    let rows = pixel_rows(&painted(widget));
+    let row = usize::try_from(y).expect("a point inside the widget");
+    let column = usize::try_from(x).expect("a point inside the widget");
+    rows[row][column][3]
+}
+
+/// Puts the keyboard in the address bar, out of the file list.
+fn focus_out_of_the_list(test: &TestWindow) {
+    test.activate("location", None);
+    wait_until("the keyboard to leave the list", || {
+        !test.window.folder_pane().view_has_focus()
+    });
+}
+
+/// Gives `row` the keyboard as a click or Ctrl+click does, without
+/// keyboard navigation's ring, or with it while `ring`.
+fn focus_row(test: &TestWindow, row: &gtk::Widget, ring: bool) {
+    row.grab_focus();
+    test.window.set_focus_visible(ring);
+    wait_until("the row to have the keyboard", || row.has_focus());
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
+}
+
+/// Shows `row` under the pointer, or not.
+fn hover(test: &TestWindow, row: &gtk::Widget, hovered: bool) {
+    if hovered {
+        row.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    } else {
+        row.unset_state_flags(gtk::StateFlags::PRELIGHT);
+    }
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
+}
+
+/// Asserts that `row` paints `expected` at each x, half way down.
+fn assert_row_paints(row: &gtk::Widget, expected: &[(i32, &str)], what: &str) {
+    let middle = row.height() / 2;
+    for (x, colour) in expected {
+        assert_same_colour(
+            painted_colour(row, *x, middle),
+            css_colour(colour),
+            &format!("{what} at {x}"),
+        );
+    }
+}
+
+/// The file list's items take Windows 11 File Explorer's colours in each
+/// state (ui-spec.md §3.1 C17, C19, C29, C30; §4.13): a light blue fill
+/// in light and a neutral grey one in dark for the selection, with no
+/// edge while the list does not have the keyboard; a 1 pixel outline,
+/// dark in light and white in dark, around the item that has it after a
+/// click, selected or not, and hovered too; a fainter fill without an
+/// outline under the pointer alone; the drop outline, not the focus
+/// outline, on a folder a drag would drop into; and keyboard navigation's
+/// two-tone ring, 2 pixels dark outside 1 pixel light.
+///
+/// parity: ACC-009
+#[gtk::test]
+fn items_take_windows_11s_fill_outline_and_ring_in_each_state() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    // alpha(black, .89) over #cce8ff in light, white in dark; the ring's
+    // inner alpha(white, .7) over #cce8ff in light, alpha(black, .7) over
+    // #3d3d3d in dark.
+    for (theme, fill, hovered, outline, outline_alone, outline_alpha, inner, accent) in [
+        (
+            "light", "#cce8ff", "#e5f3ff", "#1a1b1c", "#000000", 227, "#f0f8ff", "#0067c0",
+        ),
+        (
+            "dark", "#3d3d3d", "#2d2d2d", "#ffffff", "#ffffff", 255, "#121212", "#74beff",
+        ),
+    ] {
+        show_theme(&test, theme);
+        test.window.folder_model().select_only(1);
+        let selected = row_at(&test, 1);
+        let pointed = row_at(&test, 3);
+
+        focus_out_of_the_list(&test);
+        wait_for_frames(&test.window, 2);
+        assert_row_paints(
+            &selected,
+            &[(0, fill), (2, fill), (6, fill)],
+            &format!("{theme} selection in a list without the keyboard, without an edge"),
+        );
+
+        focus_row(&test, &selected, false);
+        assert_row_paints(
+            &selected,
+            &[(0, outline), (1, fill), (6, fill)],
+            &format!("{theme} selection with the keyboard: fill and outline"),
+        );
+
+        hover(&test, &selected, true);
+        assert_row_paints(
+            &selected,
+            &[(0, outline), (1, fill), (6, fill)],
+            &format!("{theme} hovered selection with the keyboard: fill and outline"),
+        );
+        hover(&test, &selected, false);
+
+        // A drag over the item that has the keyboard: the drop outline wins.
+        selected.add_css_class("file-drop-active");
+        wait_for_frames(&test.window, 2);
+        assert_row_paints(
+            &selected,
+            &[(0, accent), (1, accent)],
+            &format!("{theme} focused drop target: the 2 pixel drop outline"),
+        );
+        selected.remove_css_class("file-drop-active");
+        wait_for_frames(&test.window, 2);
+
+        // Ctrl+click on the selected item: it keeps the keyboard, unselected.
+        test.window.folder_model().select_none();
+        focus_row(&test, &selected, false);
+        let middle = selected.height() / 2;
+        assert_row_paints(
+            &selected,
+            &[(0, outline_alone)],
+            &format!("{theme} unselected item with the keyboard: outline"),
+        );
+        assert!(
+            painted_alpha(&selected, 0, middle) >= outline_alpha - 2,
+            "{theme} outline is opaque enough"
+        );
+        assert_eq!(
+            painted_alpha(&selected, 6, middle),
+            0,
+            "{theme} unselected item with the keyboard: no fill"
+        );
+
+        hover(&test, &pointed, true);
+        assert_row_paints(
+            &pointed,
+            &[(0, hovered), (1, hovered), (6, hovered)],
+            &format!("{theme} item under the pointer: fainter fill, no outline"),
+        );
+        hover(&test, &pointed, false);
+
+        test.window.folder_model().select_only(1);
+        focus_row(&test, &selected, true);
+        assert_row_paints(
+            &selected,
+            &[(0, outline), (1, outline), (2, inner), (6, fill)],
+            &format!("{theme} keyboard navigation's two-tone ring"),
+        );
+        test.window.set_focus_visible(false);
+    }
+}
+
+/// After Up opens the parent, the folder left is selected (NAV-011). As in
+/// Windows 11 File Explorer, its row always draws the selection's fill,
+/// and draws the 1 pixel outline only while the list has the keyboard: not
+/// once the keyboard moves to the navigation pane or the address bar,
+/// whatever state GTK leaves on the row it last focused.
+///
+/// parity: ACC-009, NAV-011
+#[gtk::test]
+fn a_selected_row_keeps_its_fill_and_outlines_only_while_the_list_has_the_keyboard() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Documents/Letters")).expect("fixture subfolder");
+    let test = laid_out(&fixture.uri_of("Documents/Letters"));
+    for (theme, fill, outline) in [("light", "#cce8ff", "#1a1b1c"), ("dark", "#3d3d3d", "#ffffff")] {
+        show_theme(&test, theme);
+        test.window
+            .navigate(&fixture.uri_of("Documents/Letters"))
+            .expect("valid folder");
+        test.wait_for_listing("Letters");
+        test.activate("up", None);
+        test.wait_for_listing("Documents");
+        assert_eq!(
+            test.selected_names(),
+            ["Letters"],
+            "{theme}: the folder left is selected"
+        );
+        let position = test.position_of("Letters");
+        let view = test.window.folder_pane().view_widget();
+
+        let row = row_at(&test, position);
+        focus_row(&test, &row, false);
+        assert!(
+            view.has_css_class(KEYBOARD_IN_CLASS),
+            "{theme}: the list has the keyboard"
+        );
+        assert_row_paints(
+            &row,
+            &[(0, outline), (1, fill), (6, fill)],
+            &format!("{theme} selected row in the list with the keyboard"),
+        );
+
+        let sidebar_row = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
+            .into_iter()
+            .find(|row| row.is_visible() && row.is_focusable())
+            .expect("a navigation pane row");
+        sidebar_row.grab_focus();
+        wait_until("the keyboard to move to the navigation pane", || {
+            sidebar_row.has_focus()
+        });
+        wait_for_frames(&test.window, 2);
+        assert!(
+            !view.has_css_class(KEYBOARD_IN_CLASS),
+            "{theme}: the list lost the keyboard"
+        );
+        assert_row_paints(
+            &row_at(&test, position),
+            &[(0, fill), (1, fill), (6, fill)],
+            &format!("{theme} selected row while the navigation pane has the keyboard: fill, no outline"),
+        );
+
+        focus_out_of_the_list(&test);
+        wait_for_frames(&test.window, 2);
+        assert!(
+            !view.has_css_class(KEYBOARD_IN_CLASS),
+            "{theme}: the address bar has the keyboard"
+        );
+        assert_row_paints(
+            &row_at(&test, position),
+            &[(0, fill), (1, fill), (6, fill)],
+            &format!("{theme} selected row while the address bar has the keyboard: fill, no outline"),
+        );
     }
 }

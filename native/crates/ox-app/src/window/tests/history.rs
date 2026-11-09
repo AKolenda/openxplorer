@@ -33,8 +33,26 @@ fn window_one_step_in(fixture: &Fixture) -> TestWindow {
     test
 }
 
+/// The fixture folder's name, as its tab and the navigation buttons name it.
+fn root_title(fixture: &Fixture) -> String {
+    fixture
+        .root()
+        .file_name()
+        .expect("the fixture folder has a name")
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// The tooltip text of `button`.
+fn tooltip(button: &gtk::Button) -> String {
+    button
+        .tooltip_text()
+        .map(|text| text.to_string())
+        .unwrap_or_default()
+}
+
 /// The button before the address bar that runs `action` (`win.` omitted).
-fn navigation_button(test: &TestWindow, action: &str) -> gtk::Button {
+pub(super) fn navigation_button(test: &TestWindow, action: &str) -> gtk::Button {
     let detailed = format!("win.{action}");
     descendants::<gtk::Button>(&test.window)
         .into_iter()
@@ -46,15 +64,20 @@ fn navigation_button(test: &TestWindow, action: &str) -> gtk::Button {
 
 const ALT: gdk::ModifierType = gdk::ModifierType::ALT_MASK;
 
+/// Back and Forward name where they lead, as Windows 11 Explorer's do,
+/// without a keyboard shortcut, and only their name where they lead
+/// nowhere.
+///
 /// parity: NAV-001
 #[gtk::test]
-fn back_and_forward_say_their_keys_and_follow_each_tabs_own_history() {
+fn back_and_forward_name_where_they_lead_and_follow_each_tabs_own_history() {
     let fixture = Fixture::standard();
     let test = window_one_step_in(&fixture);
     let back = navigation_button(&test, "back");
     let forward = navigation_button(&test, "forward");
-    assert_eq!(back.tooltip_text().as_deref(), Some("Back (Alt+Left)"));
-    assert_eq!(forward.tooltip_text().as_deref(), Some("Forward (Alt+Right)"));
+    let root = root_title(&fixture);
+    assert_eq!(tooltip(&back), format!("Back to {root}"));
+    assert_eq!(tooltip(&forward), "Forward");
     assert!(back.is_sensitive() && !forward.is_sensitive());
 
     test.window.add_tab(&fixture.uri()).expect("valid folder");
@@ -67,6 +90,8 @@ fn back_and_forward_say_their_keys_and_follow_each_tabs_own_history() {
     test.wait_for_listing("the folder before");
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
     assert!(!back.is_sensitive() && forward.is_sensitive());
+    assert_eq!(tooltip(&back), "Back");
+    assert_eq!(tooltip(&forward), "Forward to Documents");
 }
 
 /// parity: NAV-002
@@ -107,7 +132,7 @@ fn the_history_keys_leave_text_fields_and_dialogs_alone() {
         "so does the address"
     );
     test.window.folder_pane().focus_view();
-    test.window.show_result_dialog("Operation result", "Done.");
+    test.window.show_result_dialog("Operation stopped", "Done.");
     wait_until("the dialog", || test.window.dialog_layer().shown().is_some());
 
     let in_dialog = press_shortcut_where_focused(&test, gdk::Key::Left, ALT);
@@ -136,7 +161,7 @@ fn the_mouse_side_buttons_step_through_history_unless_a_dialog_is_open() {
         });
     assert!(listens_first, "the window hears every mouse button first");
     test.window.folder_pane().focus_view();
-    test.window.show_result_dialog("Operation result", "Done.");
+    test.window.show_result_dialog("Operation stopped", "Done.");
     wait_until("the dialog", || test.window.dialog_layer().shown().is_some());
 
     test.window.go_history_from_mouse(Direction::Backward);
@@ -158,7 +183,8 @@ fn up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots() {
     let fixture = Fixture::standard();
     let test = window_one_step_in(&fixture);
     let up = navigation_button(&test, "up");
-    assert_eq!(up.tooltip_text().as_deref(), Some("Up (Alt+Up)"));
+    let root = root_title(&fixture);
+    assert_eq!(tooltip(&up), format!("Up to \"{root}\""));
     test.window.folder_pane().focus_view();
 
     assert!(press_shortcut_where_focused(&test, gdk::Key::Up, ALT));
@@ -173,6 +199,7 @@ fn up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots() {
     test.window.navigate("file:///").expect("the root folder");
     test.wait_for_listing("the root folder");
     assert!(!up.is_sensitive(), "/ has no parent");
+    assert_eq!(tooltip(&up), "Up");
 }
 
 /// parity: NAV-011
@@ -236,11 +263,8 @@ fn the_back_menu_lists_the_history_and_jumps_straight_to_an_entry() {
         .popup_history_menu(back.upcast_ref(), Direction::Backward)
         .expect("Back has a menu");
 
-    let nearest_first = [fixture.path("Documents"), fixture.root().to_path_buf()];
-    assert_eq!(
-        menu.row_labels(),
-        nearest_first.map(|path| path.display().to_string())
-    );
+    // Each folder by its name, as its tab is titled, not by its path.
+    assert_eq!(menu.row_labels(), ["Documents".to_owned(), root_title(&fixture)]);
     menu.popdown();
     assert!(test
         .window
@@ -274,7 +298,7 @@ fn a_middle_click_on_back_or_up_opens_its_target_in_a_background_tab() {
     wait_until("the menu to show", || {
         menu.rows().iter().all(|row| row.height() > 0)
     });
-    menu.middle_click_row(&fixture.root().display().to_string());
+    menu.middle_click_row(&root_title(&fixture));
 
     assert_eq!(test.window.tab_count(), 4);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
@@ -289,17 +313,19 @@ fn a_middle_click_on_back_or_up_opens_its_target_in_a_background_tab() {
 
 /// parity: NAV-013
 #[gtk::test]
-fn refresh_says_f5_and_f5_and_ctrl_r_work_even_from_text_fields() {
+fn refresh_names_its_folder_and_f5_and_ctrl_r_work_even_from_text_fields() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let refresh = navigation_button(&test, "refresh");
-    assert_eq!(refresh.tooltip_text().as_deref(), Some("Refresh (F5)"));
+    let root = root_title(&fixture);
+    assert_eq!(tooltip(&refresh), format!("Refresh \"{root}\""));
 
     let keys = application().accels_for_action("win.refresh");
 
     // Application accelerators run before the focused widget, so a text
     // field never keeps them (`onKey` handles F5 before its input check).
-    assert_eq!(keys, ["F5", "<Control>r"]);
+    // Ctrl+F5 is Windows' other Refresh key (CMD-039).
+    assert_eq!(keys, ["F5", "<Control>r", "<Control>F5"]);
 }
 
 /// parity: NAV-015

@@ -5,17 +5,21 @@
 use std::fs;
 use std::path::PathBuf;
 
-use gtk::glib;
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, glib};
 
 use ox_core::settings::{PreferencesUpdate, Settings};
 
 use crate::locations::location_context;
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
 use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 use crate::window::address_bar::AddressMode;
+use crate::window::menu_popover::MenuPopover;
+
+use super::address_input::press_key;
+use super::narrow_windows::resize;
 
 /// The window's minimum width.
 fn minimum_width(test: &TestWindow) -> i32 {
@@ -78,20 +82,153 @@ fn a_deep_path_and_many_tabs_do_not_widen_the_window() {
     assert!(minimum_width(&test) <= narrowest + 1, "many tabs scroll instead");
 }
 
+/// The address bar's menu, once it shows.
+fn open_menu(test: &TestWindow) -> MenuPopover {
+    let address = test.window.address_bar();
+    let menu = || {
+        descendants::<MenuPopover>(address)
+            .into_iter()
+            .find(WidgetExt::is_visible)
+    };
+    wait_until("the menu", || menu().is_some());
+    menu().expect("the menu")
+}
+
+/// As in Windows 11 File Explorer: the crumbs that do not fit collapse,
+/// from the first on, into a « button in place of the first chevron,
+/// recomputed as the window's width changes, and the current folder's
+/// crumb always shows in full. The « lists them, the nearest last, then
+/// the top-level places.
+///
+/// parity: NAV-017, NAV-023
+#[gtk::test]
+fn a_long_path_collapses_its_first_crumbs_into_a_button_as_the_width_allows() {
+    let fixture = Fixture::standard();
+    let deep = deep_folder(&fixture);
+    let test = TestWindow::open(&ox_core::location::file_uri(&deep));
+    let address = test.window.address_bar();
+    let (chevron, overflow) = address.strip_buttons();
+    resize(&test, 1320);
+    wait_until("the first crumbs to collapse", || {
+        !address.hidden_crumbs().is_empty() && overflow.is_child_visible() && !chevron.is_child_visible()
+    });
+    let crumbs = address.crumb_buttons();
+    let hidden = address.hidden_crumbs();
+    assert_eq!(hidden, crumbs[..hidden.len()], "the leading crumbs");
+    let last = crumbs.last().expect("the current folder's crumb");
+    assert!(last.is_child_visible());
+    let bounds = last.compute_bounds(address).expect("a shown crumb");
+    let overflow_end = overflow.compute_bounds(address).expect("a shown «");
+    assert!(
+        bounds.x() >= overflow_end.x() + overflow_end.width(),
+        "after the «"
+    );
+    let end = f64::from(bounds.x() + bounds.width());
+    assert!(end <= f64::from(address.width()), "in full");
+    // The suggestion list's flyout scrolls; the crumbs never do.
+    assert!(
+        descendants::<gtk::ScrolledWindow>(address)
+            .iter()
+            .all(|scroller| scroller.ancestor(gtk::Popover::static_type()).is_some()),
+        "nothing scrolls"
+    );
+
+    resize(&test, 800);
+    wait_until("more crumbs to collapse", || {
+        address.hidden_crumbs().len() > hidden.len()
+    });
+    resize(&test, 1320);
+    wait_until("them to come back", || address.hidden_crumbs() == hidden);
+
+    overflow.emit_clicked();
+    let menu = open_menu(&test);
+    let mut expected: Vec<String> = hidden
+        .iter()
+        .map(|crumb| crumb.label().expect("a named crumb").to_string())
+        .collect();
+    let nearest = expected.last().expect("a hidden crumb").clone();
+    expected.extend(["-", "Home", "This PC", "Network", "Recycle Bin"].map(String::from));
+    assert_eq!(menu.row_labels(), expected);
+    let nearest_uri = hidden
+        .last()
+        .and_then(ActionableExt::action_target_value)
+        .and_then(|target| target.get::<String>());
+    menu.row(&nearest).activate();
+    wait_until("the nearest hidden folder", || {
+        test.window.current_uri() == nearest_uri
+    });
+}
+
+/// The « takes the keyboard as a crumb does: Shift+Tab and Left reach
+/// it from the first crumb shown, and Down opens its menu, so the
+/// collapsed crumbs stay a few keys away. Hidden, the chevron is no stop.
+///
+/// parity: NAV-018, NAV-023
+#[gtk::test]
+fn the_keyboard_reaches_the_collapsed_crumbs_through_the_overflow_button() {
+    let fixture = Fixture::standard();
+    let deep = deep_folder(&fixture);
+    let test = TestWindow::open(&ox_core::location::file_uri(&deep));
+    let address = test.window.address_bar();
+    let (chevron, overflow) = address.strip_buttons();
+    resize(&test, 1320);
+    wait_until("the first crumbs to collapse", || {
+        overflow.is_child_visible() && overflow.is_mapped() && !address.hidden_crumbs().is_empty()
+    });
+    assert!(!chevron.can_focus(), "the hidden chevron is no stop");
+    let hidden = address.hidden_crumbs();
+    let first_shown = address.crumb_buttons()[hidden.len()].clone();
+    let strip = first_shown.parent().expect("crumbs sit in their strip");
+
+    first_shown.grab_focus();
+    test.window.emit_move_focus(gtk::DirectionType::TabBackward);
+    assert!(overflow.has_focus(), "Shift+Tab reaches the «");
+
+    first_shown.grab_focus();
+    assert!(press_key(&strip, gdk::Key::Left));
+    assert!(overflow.has_focus(), "Left reaches the «");
+    assert!(press_key(&strip, gdk::Key::Left));
+    assert!(overflow.has_focus(), "and stops there");
+    press_key(&strip, gdk::Key::Right);
+    assert!(first_shown.has_focus());
+
+    overflow.grab_focus();
+    assert!(press_key(&overflow, gdk::Key::Down), "Down opens the « menu");
+    let menu = open_menu(&test);
+    let first_hidden = hidden[0].label().expect("a named crumb").to_string();
+    assert_eq!(menu.row_labels().first(), Some(&first_hidden));
+    menu.popdown();
+}
+
+/// As in Windows 11 File Explorer, a chevron follows the location icon,
+/// before the first crumb, and lists the top-level places.
+///
 /// parity: NAV-017
 #[gtk::test]
-fn the_crumbs_stay_scrolled_to_the_current_folder() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    let deep = deep_folder(&fixture);
-    test.window
-        .navigate(deep.to_str().expect("fixture paths are UTF-8"))
-        .expect("valid folder");
-    test.wait_for_listing("the deep folder");
-    let adjustment = test.window.address_bar().crumb_adjustment();
-    wait_until("the crumbs to overflow and scroll to the end", || {
-        let end = adjustment.upper() - adjustment.page_size();
-        end > 0.0 && (adjustment.value() - end).abs() < 1.0
+fn the_chevron_after_the_icon_lists_the_top_level_places() {
+    let _fixture = Fixture::standard();
+    let test = TestWindow::open(ox_core::location::PC_URI);
+    let address = test.window.address_bar();
+    let (chevron, overflow) = address.strip_buttons();
+    wait_until("the chevron before This PC", || {
+        chevron.is_child_visible() && !overflow.is_child_visible() && chevron.width() > 0
+    });
+    let first = &address.crumb_buttons()[0];
+    let chevron_bounds = chevron.compute_bounds(address).expect("a shown chevron");
+    let first_bounds = first.compute_bounds(address).expect("a shown crumb");
+    assert!(chevron_bounds.x() + chevron_bounds.width() <= first_bounds.x());
+    assert!(gtk::test_accessible_has_property(
+        &chevron,
+        gtk::AccessibleProperty::Label
+    ));
+
+    chevron.emit_clicked();
+    let menu = open_menu(&test);
+    assert_eq!(menu.row_labels(), ["Home", "This PC", "Network", "Recycle Bin"]);
+    menu.row("Home").activate();
+    let home = test.window.imp().locations.borrow().home_uri();
+    wait_until("the home folder", || {
+        test.window.current_uri() == Some(home.clone())
     });
 }
 

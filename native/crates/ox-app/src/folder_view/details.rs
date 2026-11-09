@@ -6,7 +6,7 @@
 //! Matches the `.column-head` / `.file-row` grid in `v2.0.0:desktop/ui/style.css`
 //! and `renderRows` / `applyColumnLayout` in `v2.0.0:desktop/ui/app.js`. Columns
 //! start at the widths [`column_widths`] works out and sort by clicking
-//! their headers; sizes and the Size title are right-aligned.
+//! their headers; sizes are right-aligned under a left-aligned Size title.
 //! [`DetailsView`] is the widget; it keeps its titles' sort arrows in step
 //! with the sort order and reports the column widths once a resize
 //! settles. [`column_fit`] fits and nudges columns from their titles;
@@ -18,7 +18,26 @@ pub(crate) mod column_text;
 mod group_headers;
 mod select_all;
 
-pub(crate) use group_headers::GroupTitle;
+pub(crate) use group_headers::{GroupTitle, GROUPED_CLASS};
+
+/// The rows' grouped model, if any, shared with the cells' position map.
+type SharedGrouping = Rc<std::cell::RefCell<Option<GroupedSelection>>>;
+
+/// The heading rows of the details view whose accessible name is bound to
+/// their heading's title.
+type HeadingTitles = Rc<std::cell::RefCell<Vec<(glib::WeakRef<gtk::ColumnViewRow>, glib::Binding)>>>;
+
+/// Unbinds `row`'s name from a heading's title, and drops the bindings of
+/// rows that are gone.
+fn forget_heading_title(titles: &HeadingTitles, row: &gtk::ColumnViewRow) {
+    titles.borrow_mut().retain(|(weak, binding)| {
+        let keep = weak.upgrade().is_some_and(|bound| bound != *row);
+        if !keep {
+            binding.unbind();
+        }
+        keep
+    });
+}
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -33,17 +52,20 @@ use ox_core::settings::{ColumnWidth, ColumnWidths};
 pub(crate) use column_choice::chosen_from_keys;
 pub(crate) use column_text::shown_cell_text;
 
-use crate::folder_view::cells::{self, CellLayout, CellOwners};
+use crate::folder_view::cells::{self, CellLayout, CellOwners, PositionMap};
 use crate::folder_view::column_keys;
 use crate::folder_view::column_titles;
 use crate::folder_view::column_widths;
+use crate::folder_view::grid::{CollapsedGroups, GroupSlot, GroupedSelection};
 use crate::folder_view::item::FileItem;
 use crate::folder_view::model::{self, FolderModel};
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::folder_view::tree::FolderTree;
+use crate::window::widget_tree::toggle_class;
 
-/// Icon edge in details rows (`.name-cell svg{height:21px}`).
-const ROW_ICON_SIZE: i32 = 21;
+/// Icon edge in details rows: 16 pixels, as Windows 11 File Explorer's
+/// (owner decision 2026-11-06; the web's `.name-cell svg` was 21).
+const ROW_ICON_SIZE: i32 = 16;
 
 /// How long column widths must stay unchanged before they are saved, so a
 /// drag saves once instead of on every pixel.
@@ -58,13 +80,22 @@ const COLUMNS_RESIZED: &str = "columns-resized";
 const COLUMNS_CHOSEN: &str = "columns-chosen";
 
 /// The Name column's cells: the item's icon beside its name, after the
-/// arrow of a folder that expands in `tree`.
-fn name_factory(owners: &Rc<CellOwners>, tree: &FolderTree) -> gtk::SignalListItemFactory {
+/// arrow of a folder that expands in `tree`, or a group's heading.
+fn name_factory(
+    owners: &Rc<CellOwners>,
+    tree: &FolderTree,
+    positions: &PositionMap,
+) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, owners);
+    let positions = Some(Rc::clone(positions));
+    cells::connect_mapped_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, owners, positions);
     cells::connect_expanders(&factory, tree);
     factory
 }
+
+/// The CSS class of a column's cell in a group's heading row, which
+/// carries the heading's line on across the column.
+const HEADING_RULE_CLASS: &str = "group-rule";
 
 /// The cells of the Date modified, Folder path, Type or Size column: one
 /// dim label, registered in `owners`, which dims the cells of cut items.
@@ -73,9 +104,11 @@ fn text_factory(
     column: SortColumn,
     owners: &Rc<CellOwners>,
     dates: &Rc<Cell<DateStyle>>,
+    positions: &PositionMap,
 ) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let setup_owners = Rc::clone(owners);
+    let positions = Rc::clone(positions);
     factory.connect_setup(move |_, object| {
         let label = cells::dim_cell_label();
         if column == SortColumn::Size {
@@ -84,7 +117,7 @@ fn text_factory(
         }
         let list_item = cells::as_list_item(object);
         list_item.set_child(Some(&label));
-        setup_owners.register(&label, list_item);
+        setup_owners.register_mapped(&label, list_item, Some(Rc::clone(&positions)));
         cells::show_row_tooltip(
             &label,
             &setup_owners,
@@ -97,6 +130,21 @@ fn text_factory(
     factory.connect_bind(move |_, object| {
         let list_item = cells::as_list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
+        let is_heading = list_item.item().is_some_and(|item| item.is::<GroupSlot>());
+        if let Some(label) = label.as_ref() {
+            label.set_visible(true);
+            if is_heading {
+                // A heading's row: the line goes on across the column.
+                label.set_text("");
+                CellOwners::unstyle_cell(label);
+                list_item.set_selectable(false);
+                list_item.set_activatable(false);
+            } else {
+                list_item.set_selectable(true);
+                list_item.set_activatable(true);
+            }
+            toggle_class(label, HEADING_RULE_CLASS, is_heading);
+        }
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
             label.set_text(&shown_cell_text(
                 column,
@@ -114,20 +162,30 @@ fn text_factory(
 }
 
 /// What the columns' cells share: the registry they are kept in, how dates
-/// are written, and the folders that expand.
-#[derive(Debug)]
+/// are written, the folders that expand, and the map from the rows to the
+/// listing, which lists group headings among the items while grouped.
 struct CellContext {
     owners: Rc<CellOwners>,
     dates: Rc<Cell<DateStyle>>,
     tree: FolderTree,
+    positions: PositionMap,
+}
+
+impl std::fmt::Debug for CellContext {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CellContext")
+            .field("dates", &self.dates)
+            .finish_non_exhaustive()
+    }
 }
 
 impl CellContext {
     /// The factory of `column`'s cells.
     fn factory(&self, column: SortColumn) -> gtk::SignalListItemFactory {
         match column {
-            SortColumn::Name => name_factory(&self.owners, &self.tree),
-            _ => text_factory(column, &self.owners, &self.dates),
+            SortColumn::Name => name_factory(&self.owners, &self.tree, &self.positions),
+            _ => text_factory(column, &self.owners, &self.dates, &self.positions),
         }
     }
 }
@@ -228,7 +286,7 @@ mod imp {
     use crate::folder_view::sorting::SortColumn;
 
     /// Private state of [`super::DetailsView`].
-    #[derive(Debug, Default)]
+    #[derive(Default)]
     pub(crate) struct DetailsView {
         /// Scrolls the column view; the view's only child. The column view
         /// must be the scroller's direct child: GTK then builds rows only
@@ -242,7 +300,7 @@ mod imp {
         pub(super) resize_timer: RefCell<Option<glib::SourceId>>,
         /// The column titles' sort arrows, in column order; set by
         /// [`super::DetailsView::new`].
-        pub(super) carets: OnceCell<Vec<gtk::Image>>,
+        pub(super) carets: OnceCell<Vec<gtk::Widget>>,
         /// The check box before the Name title that selects every item
         /// or none (SEL-014).
         pub(super) select_all: OnceCell<gtk::CheckButton>,
@@ -255,14 +313,32 @@ mod imp {
         /// Set while the view puts its own columns in order, which is not
         /// the user reordering them.
         pub(super) arranging: Cell<bool>,
+        /// Size's narrowest width when the view was last laid out, so a
+        /// new font or text size is noticed ([`super::DetailsView::fit_size_to_its_font`]).
+        pub(super) size_minimum: Cell<u32>,
         /// What the cells share, set by [`super::DetailsView::new`].
         pub(super) cells: OnceCell<super::CellContext>,
-        /// The group headers on screen, whose counts follow the model.
-        pub(super) headers: RefCell<Vec<glib::WeakRef<gtk::ListHeader>>>,
-        /// Set while a recount of the headers waits for the main loop.
-        pub(super) recount_pending: Cell<bool>,
-        /// Names the group of an item while the groups are headed.
-        pub(super) header_title: RefCell<super::group_headers::HeaderTitle>,
+        /// The folder's selection model, while the view shows it.
+        pub(super) items: RefCell<Option<gtk::MultiSelection>>,
+        /// Names each item's group while the folder is grouped.
+        pub(super) group_title: RefCell<Option<super::GroupTitle>>,
+        /// The rows' model while the folder is grouped, shared with the
+        /// cells' position map.
+        pub(super) grouping: super::SharedGrouping,
+        /// The groups collapsed under their headings, which the folder
+        /// model shares.
+        pub(super) collapsed: RefCell<super::CollapsedGroups>,
+    }
+
+    impl std::fmt::Debug for DetailsView {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("DetailsView")
+                .field("columns", &self.columns)
+                .field("listing", &self.listing)
+                .field("grouped", &self.group_title.borrow().is_some())
+                .finish_non_exhaustive()
+        }
     }
 
     #[glib::object_subclass]
@@ -270,12 +346,6 @@ mod imp {
         const NAME: &'static str = "OxDetailsView";
         type Type = super::DetailsView;
         type ParentType = gtk::Widget;
-
-        fn class_init(klass: &mut Self::Class) {
-            // `GtkColumnView` cannot be subclassed, so the view wraps its
-            // scroller and gives it all of its own size.
-            klass.set_layout_manager_type::<gtk::BinLayout>();
-        }
     }
 
     impl ObjectImpl for DetailsView {
@@ -316,7 +386,30 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for DetailsView {}
+    // `GtkColumnView` cannot be subclassed, so the view wraps its scroller
+    // and gives it all of its own size, as a `GtkBinLayout` would; the
+    // view lays it out itself to see each new layout.
+    impl WidgetImpl for DetailsView {
+        fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
+            self.scroller.measure(orientation, for_size)
+        }
+
+        /// A new font or text size lays the view out again, with its
+        /// styles applied: once Size's text has a new width, Size is fitted
+        /// to it after this layout.
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.scroller.allocate(width, height, baseline, None);
+            let minimum = self.obj().size_minimum();
+            if self.size_minimum.replace(minimum) != minimum {
+                let view = self.obj().downgrade();
+                glib::idle_add_local_once(move || {
+                    if let Some(view) = view.upgrade() {
+                        view.fit_size_to_its_font();
+                    }
+                });
+            }
+        }
+    }
 }
 
 glib::wrapper! {
@@ -334,11 +427,17 @@ impl DetailsView {
     /// view.
     pub(crate) fn new(model: &FolderModel, owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
+        view.imp().collapsed.replace(Rc::clone(model.collapsed_groups()));
         let column_view = view.column_view();
+        let grouping = Rc::clone(&view.imp().grouping);
         let cells = CellContext {
             owners: Rc::clone(owners),
             dates: Rc::default(),
             tree: model.tree().clone(),
+            positions: Rc::new(move |row| match grouping.borrow().as_ref() {
+                Some(grouped) => grouped.item_at(row),
+                None => Some(row),
+            }),
         };
         for column in SortColumn::ALL {
             column_view.append_column(&new_view_column(column, &cells));
@@ -361,7 +460,6 @@ impl DetailsView {
         view.follow_column_drags();
         column_keys::make_titles_keyboard_operable(&view);
         view.describe_rows(model);
-        view.follow_group_counts(model);
         view.sort_by(SortOrder::DEFAULT);
         view
     }
@@ -373,11 +471,35 @@ impl DetailsView {
         let column_view = self.column_view();
         cells::label_view(column_view.upcast_ref());
         let rows = gtk::SignalListItemFactory::new();
-        rows.connect_bind(|_, object| {
+        // A heading row's name follows its heading's title: the grouped
+        // model retitles a heading in place when the groups change, and GTK
+        // does not bind the row again for the same object.
+        let titles: HeadingTitles = Rc::default();
+        let unbind_titles = Rc::clone(&titles);
+        rows.connect_bind(move |_, object| {
             if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
-                if let Some(item) = row.item().and_downcast::<FileItem>() {
+                forget_heading_title(&titles, row);
+                let item = row.item();
+                if let Some(item) = item.and_downcast_ref::<FileItem>() {
                     row.set_accessible_label(&item.entry().name);
+                    row.set_selectable(true);
+                    row.set_activatable(true);
+                } else if let Some(heading) = item.and_downcast_ref::<GroupSlot>() {
+                    // A heading takes the keyboard, but is neither
+                    // selected nor opened.
+                    let title = heading
+                        .bind_property("text", row, "accessible-label")
+                        .sync_create()
+                        .build();
+                    titles.borrow_mut().push((row.downgrade(), title));
+                    row.set_selectable(false);
+                    row.set_activatable(false);
                 }
+            }
+        });
+        rows.connect_unbind(move |_, object| {
+            if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
+                forget_heading_title(&unbind_titles, row);
             }
         });
         column_view.set_row_factory(Some(&rows));
@@ -550,27 +672,50 @@ impl DetailsView {
             })
             .filter(|(view_column, shown)| view_column.is_visible() != *shown)
             .collect();
-        if changes.is_empty() {
-            return;
+        for (view_column, shown) in changes {
+            view_column.set_visible(shown);
         }
-        self.change_columns_without_headers(|| {
-            for (view_column, shown) in changes {
-                view_column.set_visible(shown);
-            }
-        });
     }
 
     /// Applies saved column widths. Name keeps expanding until the user
     /// saved a width for it, as in `applyColumnLayout`.
     pub(crate) fn apply_column_widths(&self, saved: Option<&ColumnWidths>) {
+        let size_minimum = self.size_minimum();
         for (column, view_column) in self.view_columns() {
-            let width = column_widths::start_width(column, saved);
+            let mut width = column_widths::start_width(column, saved);
+            // Size starts wide enough for its text in the list's font, also
+            // from a saved width narrower than that.
+            if column == SortColumn::Size {
+                width = width.map(|width| width.max(size_minimum));
+            }
             view_column.set_expand(width.is_none());
             view_column.set_fixed_width(column_widths::fixed_width(column, width));
         }
         // Applying widths is not a resize by the user: reporting it would
         // save widths the user never set.
         self.cancel_resize_report();
+    }
+
+    /// The narrowest width Size may have, in the pixels settings save:
+    /// room for [`column_widths::SIZE_THAT_FITS`] as the Size column writes
+    /// it, measured in the list's own font, which follows the desktop's
+    /// font and the text size ([`column_widths::size_minimum`]).
+    pub(crate) fn size_minimum(&self) -> u32 {
+        let text = ox_core::format::column_size_text(Some(column_widths::SIZE_THAT_FITS));
+        let width = self.column_view().create_pango_layout(Some(&text)).pixel_size().0;
+        column_widths::size_minimum(width)
+    }
+
+    /// Widens Size to [`Self::size_minimum`] when the list's font has grown
+    /// past it; a wider width stays as it is.
+    pub(crate) fn fit_size_to_its_font(&self) {
+        let Some(size) = self.column(SortColumn::Size) else {
+            return;
+        };
+        let narrowest = column_widths::fixed_width(SortColumn::Size, Some(self.size_minimum()));
+        if size.fixed_width() >= 0 && size.fixed_width() < narrowest {
+            size.set_fixed_width(narrowest);
+        }
     }
 
     /// The widths the user set, in the form settings save them. Name
@@ -608,7 +753,32 @@ impl DetailsView {
             view_column.connect_fixed_width_notify(glib::clone!(
                 #[weak(rename_to = view)]
                 self,
-                move |_| view.restart_resize_timer()
+                move |_| {
+                    view.restart_resize_timer();
+                    view.respan_headings();
+                }
+            ));
+            view_column.connect_visible_notify(glib::clone!(
+                #[weak(rename_to = view)]
+                self,
+                move |_| view.respan_headings()
+            ));
+        }
+    }
+
+    /// Lays each group heading out across its row again: another column's
+    /// width can change the row's while Name's stays.
+    fn respan_headings(&self) {
+        let column_view = self.column_view();
+        let mut pending = vec![column_view.clone().upcast::<gtk::Widget>()];
+        while let Some(widget) = pending.pop() {
+            if let Some(cell) = widget.downcast_ref::<cells::FileCell>() {
+                cell.respan_heading();
+                continue;
+            }
+            pending.extend(std::iter::successors(
+                widget.first_child(),
+                WidgetExt::next_sibling,
             ));
         }
     }
@@ -671,8 +841,8 @@ impl DetailsView {
         Some(SortOrder { column, direction })
     }
 
-    /// Gives the titles the current app's sort arrows, which follow the
-    /// view's sorter from now on.
+    /// Gives the titles Windows' sort chevrons, which follow the view's
+    /// sorter from now on.
     fn add_sort_carets(&self) {
         let carets = column_titles::style_titles(self.column_view());
         self.imp()
@@ -690,8 +860,8 @@ impl DetailsView {
         ));
     }
 
-    /// Shows the sorted column's arrow, pointing its way, and hides the
-    /// others.
+    /// Shows the sorted column's chevron, pointing its way, and clears
+    /// the others.
     fn show_sort_caret(&self) {
         if let Some(carets) = self.imp().carets.get() {
             column_titles::show_sort_caret(carets, self.primary_sort());
@@ -814,7 +984,7 @@ mod tests {
             },
             ColumnWidth {
                 column: Column::Size,
-                pixels: 90.0,
+                pixels: f64::from(view.size_minimum()),
             },
             ColumnWidth {
                 column: Column::Created,

@@ -21,12 +21,12 @@ use super::context::{on_worker, OperationContext};
 use super::create::name_taken_or;
 use super::error::OpsError;
 use super::rename::rename_item_blocking;
-use super::results::record_failure;
+use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
 use super::undo::{RenamedPair, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::location::validate_name;
-use crate::transfer::Node;
+use crate::transfer::{Node, TransferMode};
 
 /// How many taken numbers are skipped for one item before it is reported
 /// instead: a folder full of "Holiday (n)" items must not keep the rename
@@ -152,13 +152,22 @@ fn rename_numbered_blocking(
     let mut outcome = TransferOutcome::default();
     let mut renamed = Vec::new();
     let mut number = 1;
-    for item in &batch.items {
+    let mut questions = ItemQuestions::new(context, TransferMode::Move);
+    let count = batch.items.len();
+    for (index, item) in batch.items.iter().enumerate() {
         if context.cancel.is_cancelled() {
             outcome.result.cancelled = true;
             break;
         }
-        match rename_numbered(item, &base, &mut number, context) {
-            Ok(done) => {
+        let asked = AskedItem {
+            name: &item.name,
+            uri: &item.uri,
+            more_items: index + 1 < count,
+        };
+        // A failure is asked about in the progress window (OPS-047).
+        let attempt = || rename_numbered(item, &base, &mut number, context);
+        match questions.run(&mut outcome.result, asked, attempt) {
+            Some(done) => {
                 outcome.result.done.push(item.uri.clone());
                 outcome.created.push(done.uri.clone());
                 if !done.is_unchanged() {
@@ -168,7 +177,8 @@ fn rename_numbered_blocking(
                     });
                 }
             }
-            Err(error) => record_failure(&mut outcome.result, &item.name, &error),
+            None if outcome.result.cancelled => break,
+            None => {}
         }
     }
     if !renamed.is_empty() {

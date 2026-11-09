@@ -1,12 +1,11 @@
 name: Native Rust checks
-# Pull requests are checked here on hosted runners. checks.yml runs only on
-# pushes to main, so anything this workflow skips is
-# first checked after it has merged.
+# Pull requests do not start it, so CI minutes are spent only when the owner
+# asks: run it on a branch with "Run workflow" (workflow_dispatch). It also
+# runs after a merge to main, like checks.yml.
 on:
-  pull_request:
-    # One list for both triggers, shared through a YAML anchor so the two
-    # cannot drift apart.
-    paths: &checked-paths
+  push:
+    branches: [main]
+    paths:
       # Native sources. The retired Python app whose behaviour and settings
       # they must match is read from tag v2.0.0 (native/tools/python_app.py).
       - 'native/**'
@@ -19,9 +18,6 @@ on:
       # Read by native/tools/test_release_publication.py.
       - '.github/workflows/checks.yml'
       - '.github/workflows/native-checks.yml'
-  push:
-    branches: [main]
-    paths: *checked-paths
   workflow_dispatch:
 # The jobs only read the repository.
 permissions:
@@ -29,7 +25,7 @@ permissions:
 jobs:
   native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CARGO_TERM_COLOR: always
     steps:

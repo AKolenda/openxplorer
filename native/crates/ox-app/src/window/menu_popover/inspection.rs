@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the tests read of a [`MenuPopover`]: its rows, their labels and
-//! check marks, the compact style's strip and the style.
+//! check marks, why a row is disabled, the compact style's strip and the
+//! style.
 
 use gtk::glib;
 use gtk::glib::translate::IntoGlib;
@@ -10,9 +11,50 @@ use gtk::subclass::prelude::*;
 use super::{MenuPopover, MenuStyle};
 
 impl MenuPopover {
+    /// Clicks the row labelled `label`, which opens its submenu beside
+    /// the menu, and returns that submenu, for tests.
+    pub(crate) fn open_submenu_of(&self, label: &str) -> MenuPopover {
+        self.row(label).emit_activate();
+        let submenu = self
+            .open_submenu_menu()
+            .unwrap_or_else(|| panic!("{label} opens a submenu"));
+        crate::test_support::harness::wait_until("the submenu", || submenu.is_mapped());
+        submenu
+    }
+
+    /// Rests the pointer on the row labelled `label`, or on no row with
+    /// `None`, as moving the pointer there does, for tests.
+    pub(crate) fn hover_row(&self, label: Option<&str>) {
+        let index = label.map(|label| usize::try_from(self.row(label).index()).expect("a row"));
+        self.rest_on(index);
+    }
+
+    /// The pointer reaches this submenu from the menu it opens from, for
+    /// tests.
+    pub(crate) fn pointer_enters(&self) {
+        if let Some(parent) = self.parent_menu() {
+            parent.keep_submenu_open();
+        }
+    }
+
+    /// Whether this menu is a submenu, and the menu it opens from, for
+    /// tests.
+    pub(crate) fn opens_from(&self) -> Option<MenuPopover> {
+        self.parent_menu()
+    }
+
     /// The labels of the menu's items, drawn or not, for tests.
     pub(crate) fn items_labels(&self) -> Vec<String> {
         self.items().into_iter().map(|item| item.label).collect()
+    }
+
+    /// The labels of the items shown in bold, for tests.
+    pub(crate) fn emphasised_labels(&self) -> Vec<String> {
+        self.items()
+            .into_iter()
+            .filter(|item| item.emphasised)
+            .map(|item| item.label)
+            .collect()
     }
 
     /// Presses `key` in the rows' list, as the keyboard does, for tests.
@@ -54,6 +96,21 @@ impl MenuPopover {
             .into_iter()
             .find(|row| row_label(row).as_deref() == Some(label))
             .unwrap_or_else(|| panic!("the menu has a {label} row"))
+    }
+
+    /// Why the row labelled `label` is disabled, which its accessible
+    /// description tells screen readers, for tests. GTK cannot read an
+    /// accessible description back, so this asks the menu for the reason
+    /// it gave the row, after checking that the row has a description.
+    pub(crate) fn disabled_reason_of(&self, label: &str) -> Option<String> {
+        let row = self.row(label);
+        if row.is_sensitive()
+            || !gtk::test_accessible_has_property(&row, gtk::AccessibleProperty::Description)
+        {
+            return None;
+        }
+        let item = self.items().into_iter().find(|item| item.label == label)?;
+        super::disabled_reason(self, &item)
     }
 
     /// Middle-clicks the row labelled `label`, for tests.
@@ -116,19 +173,35 @@ impl MenuPopover {
             .collect()
     }
 
+    /// The text drawn under each strip button's icon, for tests.
+    pub(crate) fn strip_texts(&self) -> Vec<String> {
+        crate::window::widget_tree::children(self.strip())
+            .filter_map(|button| button.downcast::<gtk::Button>().ok())
+            .filter_map(|button| button.child())
+            .filter_map(|face| face.last_child().and_downcast::<gtk::Label>())
+            .map(|label| label.text().to_string())
+            .collect()
+    }
+
+    /// The strip's buttons while it shows, each with whether it can be
+    /// pressed, for tests.
+    pub(crate) fn strip_states(&self) -> Vec<(String, bool)> {
+        if !self.strip().is_visible() {
+            return Vec::new();
+        }
+        crate::window::widget_tree::children(self.strip())
+            .filter_map(|child| {
+                let tooltip = child.tooltip_text()?;
+                let label = tooltip.lines().next()?.to_owned();
+                Some((label, child.is_sensitive()))
+            })
+            .collect()
+    }
+
     /// The classic or compact look, for tests.
     pub(in crate::window) fn style(&self) -> MenuStyle {
         self.imp().style.get()
     }
-}
-
-/// The tooltip `row` shows when the pointer rests on it, for tests.
-/// That is its own tooltip text (a disabled row's reason), else its whole
-/// label while the menu cuts it short.
-pub(crate) fn row_tooltip(row: &gtk::ListBoxRow) -> Option<String> {
-    row.tooltip_text()
-        .map(|text| text.to_string())
-        .or_else(|| super::cut_short_label(row))
 }
 
 /// The label of `row`, for tests: the first label after its mark and

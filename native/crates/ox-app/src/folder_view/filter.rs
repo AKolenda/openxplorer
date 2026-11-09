@@ -59,6 +59,8 @@ pub(crate) struct FilterState {
     show_hidden: bool,
     /// The search options as chosen.
     facets: SearchFacets,
+    /// The search options typed into the box (SRCH-044).
+    typed: SearchFacets,
     /// `facets` with their date range worked out when they were chosen.
     facet_matcher: FacetMatcher,
     /// The file dialog's narrowing, in a window choosing files.
@@ -86,12 +88,14 @@ impl FilterState {
         changed
     }
 
-    /// Sets the search options; returns true when they changed. Date
-    /// ranges are counted from the local time now.
-    pub(crate) fn set_facets(&mut self, facets: SearchFacets) -> bool {
-        let changed = facets != self.facets;
+    /// Sets the search options chosen and typed, which narrow together;
+    /// returns true when they changed. Date ranges are counted from the
+    /// local time now.
+    pub(crate) fn set_facets(&mut self, facets: SearchFacets, typed: SearchFacets) -> bool {
+        let changed = (facets, typed) != (self.facets, self.typed);
         self.facets = facets;
-        self.facet_matcher = facets.matcher(&now());
+        self.typed = typed;
+        self.facet_matcher = facets.matcher_with(&typed, &now());
         changed
     }
 

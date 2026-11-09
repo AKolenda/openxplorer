@@ -3,67 +3,48 @@
 //!
 //! app.js had neither; this brings Dolphin's and Explorer's: a right-click
 //! or a long press on Back or Forward lists up to twelve locations of the
-//! tab's history, nearest first, named relative to the home folder
-//! ("Home/Documents"), and choosing one jumps straight there (NAV-006). A
+//! tab's history, nearest first, each named as its tab would be
+//! ("Documents"), and choosing one jumps straight there (NAV-006). A
 //! middle-click on Back, Forward or Up, or on an entry of their menus,
 //! opens where it leads in a new tab and leaves the current tab alone
-//! (NAV-007).
+//! (NAV-007), showing the search there when it leads to search results.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{parent_location, LocationContext};
+use ox_core::location::parent_location;
 
-use crate::history::History;
-use crate::locations::Page;
+use crate::history::{History, SearchStep};
 
 use super::gestures;
-use super::location_view::address_icon;
+use super::location_view::{step_icon, step_title};
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
-use super::session::Direction;
+use super::session::{Direction, TabPlacement};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// The most locations a Back or Forward menu lists (Dolphin's limit).
 const MENU_LENGTH: usize = 12;
 
-/// A location as a history menu names it: a page by its title, a place
-/// under the home folder relative to it ("Home/Documents"), anything
-/// else as the address bar shows it.
-fn history_label(locations: &LocationContext, uri: &str) -> String {
-    if let Some(page) = Page::from_uri(uri) {
-        return page.title().to_owned();
-    }
-    let path = uri
-        .starts_with("file:")
-        .then(|| gtk::gio::File::for_uri(uri).path())
-        .flatten();
-    if let Some(relative) = path
-        .as_deref()
-        .and_then(|path| path.strip_prefix(locations.home_path()).ok())
-    {
-        if relative.as_os_str().is_empty() {
-            return ox_core::i18n::gettext("Home");
-        }
-        return format!("Home/{}", relative.display());
-    }
-    locations.display_location(uri)
-}
+/// Where a step of the history leads: its location, and the search it
+/// shows there, if any.
+type StepTarget = (String, Option<SearchStep>);
 
 /// The steps a history menu offers from `history`'s current location in
-/// `direction`, nearest first, each with the location it leads to.
-fn history_steps(history: &History, direction: Direction) -> Vec<(i32, String)> {
+/// `direction`, nearest first, each with the location it leads to and
+/// the search it shows there.
+fn history_steps(history: &History, direction: Direction) -> Vec<(i32, StepTarget)> {
     let position = history.position();
-    let entries = history.entries();
     let indices: Vec<usize> = match direction {
         Direction::Backward => (0..position).rev().take(MENU_LENGTH).collect(),
-        Direction::Forward => (position + 1..entries.len()).take(MENU_LENGTH).collect(),
+        Direction::Forward => (position + 1..history.len()).take(MENU_LENGTH).collect(),
     };
     indices
         .into_iter()
         .filter_map(|index| {
             let steps = i32::try_from(index).ok()? - i32::try_from(position).ok()?;
-            Some((steps, entries[index].clone()))
+            let (uri, _) = history.step(index)?;
+            Some((steps, (uri.to_owned(), history.search_at(index).cloned())))
         })
         .collect()
 }
@@ -76,8 +57,8 @@ impl BrowserWindow {
         self.history_menu(direction).0
     }
 
-    /// The Back or Forward menu's entries, and the location of each.
-    fn history_menu(&self, direction: Direction) -> (Vec<MenuEntry>, Vec<String>) {
+    /// The Back or Forward menu's entries, and where each leads.
+    fn history_menu(&self, direction: Direction) -> (Vec<MenuEntry>, Vec<StepTarget>) {
         let steps = {
             let session = self.imp().session.borrow();
             let Some(tab) = session.active() else {
@@ -89,26 +70,77 @@ impl BrowserWindow {
         let home = locations.home_uri();
         steps
             .into_iter()
-            .map(|(steps, uri)| {
-                let label = history_label(&locations, &uri);
-                let glyph = address_icon(&uri, &home);
+            .map(|(steps, target)| {
+                // As Windows Explorer's menus do, and as the tab is titled:
+                // "Documents", or "Search Results in Documents".
+                let (uri, search) = &target;
+                let label = step_title(&locations, uri, search.is_some());
+                let glyph = step_icon(uri, &home, search.is_some());
                 let item = MenuItem::with_target(&label, glyph, WindowAction::GoHistory, steps.to_variant());
-                (item.into(), uri)
+                (item.into(), target)
             })
             .unzip()
     }
 
-    /// Where Back, Forward or Up leads from the active tab, for a
-    /// middle-click; `None` where it leads nowhere.
-    fn navigation_target(&self, action: WindowAction) -> Option<String> {
+    /// The name of where Back, Forward, Up or Refresh leads from the
+    /// active tab, as its tab would be titled, for the tooltips; `None`
+    /// where it leads nowhere.
+    pub(super) fn navigation_title(&self, action: WindowAction) -> Option<String> {
+        let (uri, is_search) = {
+            let session = self.imp().session.borrow();
+            let history = &session.active()?.history;
+            let position = history.position();
+            let (uri, is_search) = match action {
+                WindowAction::Back => history.step(position.checked_sub(1)?)?,
+                WindowAction::Forward => history.step(position + 1)?,
+                WindowAction::Refresh => history.step(position)?,
+                WindowAction::Up => (history.current(), false),
+                _ => return None,
+            };
+            (uri.to_owned(), is_search)
+        };
+        let uri = match action {
+            WindowAction::Up => parent_location(&uri)?,
+            _ => uri,
+        };
+        Some(step_title(&self.imp().locations.borrow(), &uri, is_search))
+    }
+
+    /// Where Back, Forward, Up or Refresh leads from the active tab, for
+    /// a middle-click, with the search shown there; `None` where it leads
+    /// nowhere.
+    pub(super) fn navigation_target(&self, action: WindowAction) -> Option<StepTarget> {
         let session = self.imp().session.borrow();
         let history = &session.active()?.history;
         let position = history.position();
-        match action {
-            WindowAction::Back => history.entries().get(position.checked_sub(1)?).cloned(),
-            WindowAction::Forward => history.entries().get(position + 1).cloned(),
-            WindowAction::Up => parent_location(history.current()),
-            _ => None,
+        let index = match action {
+            WindowAction::Back => position.checked_sub(1)?,
+            WindowAction::Forward => position + 1,
+            WindowAction::Up => return Some((parent_location(history.current())?, None)),
+            WindowAction::Refresh => position,
+            _ => return None,
+        };
+        let (uri, _) = history.step(index)?;
+        Some((uri.to_owned(), history.search_at(index).cloned()))
+    }
+
+    /// Opens `target` in a new tab, in front with Shift held, else behind
+    /// (NAV-007). A step on search results opens them, "Search Results in
+    /// Documents" after its folder, not the folder alone.
+    fn open_target_in_tab(&self, target: &StepTarget, modifiers: gdk::ModifierType) {
+        let open = gestures::open_action(modifiers);
+        let (uri, search) = target;
+        let Some(search) = search else {
+            open.activate_from(self, Some(&uri.to_variant()));
+            return;
+        };
+        let placement = if open == WindowAction::OpenTab {
+            TabPlacement::Foreground
+        } else {
+            TabPlacement::Background
+        };
+        if let Err(error) = self.open_search_tab(uri, placement, search.clone()) {
+            self.show_message(&error.to_string());
         }
     }
 
@@ -122,8 +154,7 @@ impl BrowserWindow {
                 let Some(target) = window.navigation_target(action) else {
                     return;
                 };
-                let open = gestures::open_action(gesture.current_event_state());
-                open.activate_from(&window, Some(&target.to_variant()));
+                window.open_target_in_tab(&target, gesture.current_event_state());
             }
         )));
         let direction = match action {
@@ -174,8 +205,8 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |index, modifiers| {
-                if let Some(uri) = targets.get(index) {
-                    gestures::open_action(modifiers).activate_from(&window, Some(&uri.to_variant()));
+                if let Some(target) = targets.get(index) {
+                    window.open_target_in_tab(target, modifiers);
                 }
             }
         ));
@@ -191,8 +222,6 @@ impl BrowserWindow {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
 
     fn history(entries: &[&str], position: usize) -> History {
@@ -216,32 +245,13 @@ mod tests {
         let forward = history_steps(&middle, Direction::Forward);
 
         assert_eq!(back.len(), 12);
-        assert_eq!(back[0], (-1, "file:///tmp/14".to_owned()));
-        assert_eq!(back[11], (-12, "file:///tmp/3".to_owned()));
+        assert_eq!(back[0], (-1, ("file:///tmp/14".to_owned(), None)));
+        assert_eq!(back[11], (-12, ("file:///tmp/3".to_owned(), None)));
         assert_eq!(
             forward,
             (16..20)
-                .map(|number| (number - 15, format!("file:///tmp/{number}")))
+                .map(|number| (number - 15, (format!("file:///tmp/{number}"), None)))
                 .collect::<Vec<_>>()
         );
-    }
-
-    /// parity: NAV-006
-    #[test]
-    fn history_menus_name_places_relative_to_home() {
-        let locations = LocationContext {
-            home: Some(PathBuf::from("/home/demo")),
-            ..LocationContext::default()
-        };
-
-        let label = |uri: &str| history_label(&locations, uri);
-
-        assert_eq!(label("file:///home/demo"), "Home");
-        assert_eq!(
-            label("file:///home/demo/Documents/Work%201"),
-            "Home/Documents/Work 1"
-        );
-        assert_eq!(label("file:///srv/media"), "/srv/media");
-        assert_eq!(label(Page::ThisPc.uri()), "This PC");
     }
 }

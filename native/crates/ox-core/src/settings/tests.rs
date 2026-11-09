@@ -191,10 +191,11 @@ fn two_windows_preserve_each_others_preferences() {
     let mut first = Settings::open(root.path());
     let mut second = Settings::open(root.path());
     save_preferences(&mut first, &json!({"theme": "dark"}));
-    save_preferences(&mut second, &json!({"details": false}));
+    // The Python test saves `false`, the default here, so this saves `true`.
+    save_preferences(&mut second, &json!({"details": true}));
     let merged = first.snapshot().preferences;
     assert_eq!(merged.theme, Theme::Dark);
-    assert!(!merged.show_details_pane);
+    assert!(merged.show_details_pane);
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_pins_not_lost`

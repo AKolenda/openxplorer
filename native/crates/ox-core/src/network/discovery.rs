@@ -70,7 +70,8 @@ struct AdvertisedEntry {
 /// # Errors
 ///
 /// [`NetworkError::Cancelled`] when the deadline passes, or GIO's error
-/// when the network browser cannot be mounted.
+/// when the network browser cannot be mounted or nothing of it can be
+/// read.
 pub async fn discover_servers() -> Result<Discovery, NetworkError> {
     let discovery = glib::future_with_timeout(DISCOVERY_DEADLINE, discover()).await;
     discovery.unwrap_or(Err(NetworkError::Cancelled))
@@ -88,10 +89,14 @@ async fn discover() -> Result<Discovery, NetworkError> {
         }
     }
     let (entries, failure) = read_entries(&root).await;
-    let warnings = failure
-        .map(|error| error.message().to_owned())
-        .into_iter()
-        .collect();
+    let warnings = match failure {
+        // Nothing could be read: the browser cannot be used at all.
+        Some(error) if entries.is_empty() => return Err(error.into()),
+        failure => failure
+            .map(|error| error.message().to_owned())
+            .into_iter()
+            .collect(),
+    };
     Ok(Discovery {
         servers: servers_among(entries),
         warnings,

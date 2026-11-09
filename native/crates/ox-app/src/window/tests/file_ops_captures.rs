@@ -3,7 +3,8 @@
 //!
 //! With `OX_NATIVE_CAPTURE_DIR` set (passed through the isolated check
 //! environment), these save `native-dialog-delete-*.png`,
-//! `native-dialog-conflict-*.png`, `native-transfer-*.png`,
+//! `native-conflict-question-*.png`, `native-file-conflict-*.png`,
+//! `native-transfer-*.png`,
 //! `native-rename-in-place-*.png`, `native-menu-compact-*.png` and
 //! `native-cut-details-*.png` / `native-cut-icons-*.png` there. Without
 //! it, they only prove the surfaces open in both themes.
@@ -17,7 +18,7 @@ use ox_core::transfer::{Progress, ProgressScope};
 use super::file_ops_support::{is_enabled, open_dialog, select_names, wait_for_no_dialog};
 use crate::dialog::Dialog;
 use crate::test_support::harness::{
-    capture, capture_popover, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+    capture, capture_popover, descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 
 /// The theme keys, as `win.theme` takes them.
@@ -43,20 +44,10 @@ fn capture_dialog(test: &TestWindow, dialog: &Dialog, filename: &str) {
 }
 
 #[gtk::test]
-fn the_delete_and_conflict_dialogs_are_captured_light_and_dark() {
+fn the_delete_dialog_is_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
-    // Other files with the names of two in the folder: pasting them there
-    // asks. (A copy pasted into its own folder asks nothing.)
-    fixture.write("Documents/Notes 2.txt");
-    fixture.write("Documents/Notes 10.txt");
-    let test = TestWindow::open(&fixture.uri_of("Documents"));
-    select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
-    test.activate("copy", None);
-    test.activate("go-to", Some(&fixture.uri()));
-    wait_until("the fixture's folder", || {
-        !test.window.is_loading() && test.names().iter().any(|name| name == "Documents")
-    });
+    let test = TestWindow::open(&fixture.uri());
     for theme in THEMES {
         test.activate("theme", Some(theme));
         select_names(&test, &["Notes 2.txt"]);
@@ -65,12 +56,97 @@ fn the_delete_and_conflict_dialogs_are_captured_light_and_dark() {
         capture_dialog(&test, &delete, &format!("native-dialog-delete-{theme}.png"));
         delete.press("No");
         wait_for_no_dialog(&test);
-        wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    }
+}
+
+/// A page-like picture, taller than wide, as a scanned document is: the
+/// File Conflict window shows its thumbnail.
+fn write_page_picture(path: &std::path::Path) {
+    let page = gtk::gdk_pixbuf::Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 600, 1100)
+        .expect("a picture");
+    page.fill(0xf4_f4_f4_ff);
+    for line in 0..18 {
+        let stripe = page.new_subpixbuf(60, 80 + line * 52, if line % 3 == 2 { 300 } else { 480 }, 14);
+        stripe.fill(0x9a_a4_b0_ff);
+    }
+    page.savev(path, "png", &[]).expect("the fixture is ours");
+}
+
+/// "Replace or Skip Files" and the File Conflict window in the situation
+/// of the Windows screenshots they are compared with: one picture,
+/// `report.png`, copied from Downloads to Desktop, which already has one
+/// of the same date and size. Saves `native-conflict-question-*.png` and
+/// `native-file-conflict-*.png`.
+#[gtk::test]
+fn the_conflict_questions_are_captured_light_and_dark() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::empty();
+    for folder in ["Downloads", "Desktop"] {
+        std::fs::create_dir(fixture.path(folder)).expect("the fixture is ours");
+    }
+    write_page_picture(&fixture.path("Downloads/report.png"));
+    std::fs::copy(
+        fixture.path("Downloads/report.png"),
+        fixture.path("Desktop/report.png"),
+    )
+    .expect("the fixture is ours");
+    let time = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_793_459_580);
+    for name in ["Downloads/report.png", "Desktop/report.png"] {
+        std::fs::File::options()
+            .write(true)
+            .open(fixture.path(name))
+            .and_then(|file| file.set_modified(time))
+            .expect("the fixture is ours");
+    }
+    let test = TestWindow::open(&fixture.uri_of("Downloads"));
+    select_names(&test, &["report.png"]);
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Desktop")));
+    wait_until("Paste to be enabled", || {
+        !test.window.is_loading() && is_enabled(&test, "paste")
+    });
+    for theme in THEMES {
+        test.activate("theme", Some(theme));
         test.activate("paste", None);
-        let conflict = open_dialog(&test);
-        capture_dialog(&test, &conflict, &format!("native-dialog-conflict-{theme}.png"));
-        conflict.press("Cancel");
-        wait_for_no_dialog(&test);
+        wait_until("the Replace or Skip Files question", || {
+            test.context.progress_window().is_some_and(|window| {
+                window.is_visible()
+                    && window
+                        .actions()
+                        .iter()
+                        .any(crate::window::transfer_panel::TransferPanel::is_asking)
+            })
+        });
+        let progress = test.context.progress_window().expect("it asks");
+        crate::test_support::harness::capture_dialog(
+            &progress,
+            &format!("native-conflict-question-{theme}.png"),
+        );
+        let compare = descendants::<gtk::Button>(&progress)
+            .into_iter()
+            .find(|button| {
+                descendants::<gtk::Label>(button)
+                    .iter()
+                    .any(|label| label.text() == "Compare info for both files")
+            })
+            .expect("the row");
+        compare.emit_clicked();
+        wait_until("the File Conflict window", || {
+            progress.conflict_window().is_some()
+        });
+        let conflicts = progress.conflict_window().expect("it shows");
+        crate::test_support::harness::wait_for(std::time::Duration::from_millis(1500));
+        crate::test_support::harness::capture_dialog(
+            &conflicts,
+            &format!("native-file-conflict-{theme}.png"),
+        );
+        // Closing it goes back to the question, as in Windows 11.
+        conflicts.close();
+        wait_until("the question again", || {
+            progress.conflict_window().is_none() && progress.actions()[0].waits_for_a_row()
+        });
+        super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
+        wait_until("the action to end", || test.context.progress_window().is_none());
     }
 }
 

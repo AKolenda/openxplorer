@@ -55,10 +55,6 @@ use probe::{all_writable, probe, test_folder, test_replace, test_write, Probe, W
 mod local_paths;
 mod probe;
 
-/// The size a picker window opens at; it never saves its size over the
-/// explorer's.
-const DEFAULT_SIZE: (i32, i32) = (980, 640);
-
 /// The window commands that make no sense while choosing a file: more tabs,
 /// windows or panes, Settings, Format…, as a dialog closes on its own
 /// once answered, leaving no window to report the format in, Full
@@ -83,6 +79,10 @@ const DISABLED_ACTIONS: [WindowAction; 17] = [
     WindowAction::FullScreen,
     WindowAction::Share,
 ];
+
+/// The width, in characters, of an Open dialog's type list, about the
+/// width of Windows' type box beside File name.
+const OPEN_TYPE_LIST_CHARS: i32 = 24;
 
 /// Shown when the File name box names nothing that exists.
 const NOT_FOUND: &str = crate::i18n::message_id("“{name}” was not found. Check the file name and try again.");
@@ -150,8 +150,10 @@ pub(crate) struct Picker {
     /// main thread.
     checking: Cell<bool>,
     /// The one item selected, in a dialog that chooses one, so a second
-    /// item clicked with Ctrl or Shift takes its place.
-    single: Cell<Option<u32>>,
+    /// item clicked with Ctrl or Shift takes its place. The item itself,
+    /// not its position: files another application creates or removes
+    /// move it in the list.
+    single: RefCell<Option<glib::Object>>,
     /// Set once the dialog is a modal child of the caller's window
     /// ([`super::caller_window`]).
     attached_to_caller: Rc<Cell<bool>>,
@@ -476,18 +478,20 @@ impl BrowserWindow {
         }
         imp.tab_strip.set_visible(false);
         imp.new_tab_button.set_visible(false);
-        imp.open_windows_button.set_visible(false);
         for action in DISABLED_ACTIONS {
             self.set_action_enabled(action, false);
         }
         self.update_share_command();
-        self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
+        // Resizable like any window, from 670 × 470 up (`window.ui`), at
+        // the size the last dialog was left at (window_size.rs).
+        self.open_dialog_at_saved_size();
         self.apply_chooser_listing();
         self.open_start_folder(start_folders);
         self.listen_for_escape();
         self.cancel_on_quit_key();
         self.keep_one_selected();
         self.present();
+        self.remember_dialog_size();
         match &picker.name {
             Some(name) => {
                 // A new window gives its file list the keyboard once the
@@ -658,6 +662,12 @@ impl BrowserWindow {
             picker.asking.set(false);
             self.update_picker();
         }
+    }
+
+    /// Whether this window is a file dialog for another application
+    /// (INT-032).
+    pub(super) fn is_file_dialog(&self) -> bool {
+        self.picker().is_some()
     }
 
     /// The window's picker, if it is one.
@@ -950,7 +960,12 @@ impl BrowserWindow {
         }
         let mut paths = Vec::with_capacity(files.len());
         for entry in files {
-            paths.push(self.local_path_now(&entry.uri).await.ok_or_else(not_local)?);
+            // A row of Recent files is chosen as the file it stands for.
+            paths.push(
+                self.local_path_now(entry.opened_uri())
+                    .await
+                    .ok_or_else(not_local)?,
+            );
         }
         Ok(paths)
     }
@@ -1213,15 +1228,21 @@ impl BrowserWindow {
                 }
                 let selected = selection.selection();
                 if selected.size() <= 1 {
-                    picker
-                        .single
-                        .set((selected.size() == 1).then(|| selected.minimum()));
+                    let only = (selected.size() == 1)
+                        .then(|| selection.item(selected.minimum()))
+                        .flatten();
+                    picker.single.replace(only);
                     return;
                 }
                 // The item just selected: the end of the changed range away
                 // from the one kept so far, as Shift+click selects up or
                 // down to the item clicked.
-                let kept = picker.single.get();
+                let kept = picker.single.borrow().as_ref().and_then(|kept| {
+                    let (rest, first) = gtk::BitsetIter::init_first(&selected)?;
+                    std::iter::once(first)
+                        .chain(rest)
+                        .find(|position| selection.item(*position).as_ref() == Some(kept))
+                });
                 let last = position + count.saturating_sub(1);
                 let newest = if kept.is_some_and(|kept| kept >= last) {
                     position
@@ -1230,7 +1251,7 @@ impl BrowserWindow {
                 };
                 let item = Some(newest).filter(|item| selected.contains(*item)).or(kept);
                 if let Some(item) = item {
-                    picker.single.set(Some(item));
+                    picker.single.replace(selection.item(item));
                     selection.select_item(item, true);
                 }
             }
@@ -1387,6 +1408,10 @@ impl BrowserWindow {
             row += 1;
             entry
         });
+        // Windows' Open dialog has no caption for its type list: the list
+        // sits right of File name, above Open and Cancel. "Save as type:"
+        // is the Save dialog's own row.
+        let opens_files = matches!(request.mode, ChooserMode::Open { directory: false, .. });
         let types = (!request.filters.is_empty()).then(|| {
             let labels: Vec<&str> = request
                 .filters
@@ -1395,13 +1420,17 @@ impl BrowserWindow {
                 .collect();
             let list = gtk::DropDown::from_strings(&labels);
             list.set_selected(u32::try_from(request.current_filter.unwrap_or(0)).unwrap_or(0));
-            let caption = if name.is_some() {
-                "Save as type:"
+            if opens_files {
+                place_open_type_list(&fields, &list);
             } else {
-                "File type:"
-            };
-            attach_field(&fields, row, caption, &list);
-            row += 1;
+                let caption = if name.is_some() {
+                    "Save as type:"
+                } else {
+                    "File type:"
+                };
+                attach_field(&fields, row, caption, &list);
+                row += 1;
+            }
             list
         });
         let choices = choice_controls(&fields, &mut row, &request);
@@ -1419,6 +1448,11 @@ impl BrowserWindow {
         buttons.append(&accept);
         buttons.append(&cancel);
         if row > 0 {
+            // The buttons are on a row of their own under the fields, at
+            // the right, as in Windows' Open and Save dialogs.
+            bar.set_orientation(gtk::Orientation::Vertical);
+            bar.set_spacing(12);
+            buttons.set_halign(gtk::Align::End);
             bar.append(&fields);
         } else {
             let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -1439,7 +1473,7 @@ impl BrowserWindow {
             asking: Cell::new(false),
             pending: RefCell::new(None),
             checking: Cell::new(false),
-            single: Cell::new(None),
+            single: RefCell::new(None),
             attached_to_caller: Rc::default(),
             caller: None,
         }
@@ -1531,6 +1565,53 @@ fn attach_field(
     control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
     fields.attach(&label, 0, row, 1, 1);
     fields.attach(control, 1, row, 1, 1);
+}
+
+/// Puts an Open dialog's type list right of File name, on row 0 of
+/// `fields`, without a caption, as Windows' Open dialog has it. A long
+/// type name is shortened in the closed list and shown whole in its
+/// popup, so the list keeps the width of Windows' type box.
+fn place_open_type_list(fields: &gtk::Grid, list: &gtk::DropDown) {
+    list.set_factory(Some(&type_name_factory(true)));
+    list.set_list_factory(Some(&type_name_factory(false)));
+    list.set_hexpand(false);
+    list.add_css_class("picker-type-list");
+    // Unlabeled on screen, still named for screen readers.
+    list.update_property(&[gtk::accessible::Property::Label("File type")]);
+    fields.attach(list, 2, 0, 1, 1);
+}
+
+/// Rows that show a type's name: `shortened` to the type list's width,
+/// with the whole name as a tooltip, or whole.
+fn type_name_factory(shortened: bool) -> gtk::SignalListItemFactory {
+    let factory = gtk::SignalListItemFactory::new();
+    factory.connect_setup(move |_, item| {
+        let label = gtk::Label::builder().xalign(0.0).build();
+        if shortened {
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            label.set_width_chars(OPEN_TYPE_LIST_CHARS);
+            label.set_max_width_chars(OPEN_TYPE_LIST_CHARS);
+        }
+        if let Some(item) = item.downcast_ref::<gtk::ListItem>() {
+            item.set_child(Some(&label));
+        }
+    });
+    factory.connect_bind(move |_, item| {
+        let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
+            return;
+        };
+        let name = item
+            .item()
+            .and_downcast::<gtk::StringObject>()
+            .map(|name| name.string());
+        if let (Some(label), Some(name)) = (item.child().and_downcast::<gtk::Label>(), name) {
+            label.set_label(&name);
+            if shortened {
+                label.set_tooltip_text(Some(&name));
+            }
+        }
+    });
+    factory
 }
 
 /// The files of a quoted list typed in an Open dialog's File name, each
@@ -1626,7 +1707,10 @@ mod tests {
         FILE_CHOOSER_INTERFACE, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_SUCCESS,
     };
 
-    use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
+    use crate::test_support::harness::{
+        capture, settle, wait_for as wait_a_while, wait_until, Fixture, TestWindow,
+    };
+    use crate::test_support::pointer::{screen_point, Button, Pointer};
     use crate::window::tests::file_ops_support::{is_triggered_by, window_shortcuts};
 
     /// A `dbus-daemon` of the test's own, stopped when dropped.
@@ -1902,6 +1986,40 @@ mod tests {
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("summary.txt")]);
         wait_until("the picker to close", || !window.is_visible());
+    }
+
+    /// In a Save dialog, a name erased whole while renaming an item in
+    /// place keeps the old name, as in the main window and in Windows 11:
+    /// the field closes, nothing is renamed and no message shows.
+    ///
+    /// parity: INT-032, OPS-010
+    #[gtk::test]
+    fn an_erased_name_in_a_save_dialog_keeps_the_old_name() {
+        use crate::window::tests::file_ops_support::{is_renaming_in_place, name_editor, select_names};
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        let test = &portal.test;
+        select_names(test, &["notes.txt"]);
+        test.activate("rename", None);
+        let editor = name_editor(test);
+        editor.set_text("");
+        editor.emit_activate();
+
+        wait_until("the rename to end", || !is_renaming_in_place(test));
+        assert!(fixture.path("notes.txt").is_file());
+        assert_eq!(test.window.shown_message(), "", "no message");
+        assert!(test.window.is_visible(), "the dialog stays open");
     }
 
     /// A caller's folder on a share that stopped answering does not
@@ -2768,7 +2886,7 @@ mod tests {
                     .collect();
                 (lists, details.vadjustment())
             }
-            FolderView::Compact | FolderView::Icons(_) => {
+            FolderView::Compact | FolderView::Icons(_) | FolderView::Tiles | FolderView::Content => {
                 let icons = pane.icon_view();
                 (vec![icons.grid().clone().upcast()], icons.scroll_adjustment())
             }
@@ -3554,6 +3672,670 @@ mod tests {
         );
     }
 
+    /// The Save dialog's File name box.
+    fn name_box(window: &crate::window::BrowserWindow) -> gtk::Entry {
+        window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box")
+    }
+
+    /// Clicks the item called `name` in the dialog's list, as GTK's click
+    /// on it ends, with Ctrl (`toggle`) and Shift (`range`), and gives the
+    /// list the keyboard as the click does.
+    fn click_item(test: &TestWindow, name: &str, toggle: bool, range: bool) {
+        let position = test.position_of(name);
+        let pane = test.window.folder_pane();
+        pane.focus_view();
+        // The list binds its rows on a layout frame, which settle() does
+        // not wait for.
+        wait_until("the item on screen", || {
+            pane.owners().widget_at(position).is_some()
+        });
+        let cell = pane.owners().widget_at(position).expect("the item is on screen");
+        cell.activate_action("list.select-item", Some(&(position, toggle, range).to_variant()))
+            .expect("an item can be selected");
+        settle();
+    }
+
+    /// Creates `name` in the fixture as another application would, and
+    /// waits until the dialog's list shows it and has settled.
+    fn create_elsewhere(test: &TestWindow, fixture: &Fixture, name: &str) {
+        fixture.write(name);
+        wait_until("the new file in the list", || {
+            test.names().iter().any(|listed| listed == name) && test.window.is_listed()
+        });
+        // Longer than the watch's 350 ms quiet time, so a second refresh
+        // the change may cause has run too.
+        wait_a_while(std::time::Duration::from_millis(800));
+    }
+
+    /// How many pixels of `entry`, as it paints itself, are the blue of
+    /// selected text.
+    fn selection_blue(entry: &gtk::Entry) -> usize {
+        crate::test_support::harness::wait_for_frames(&entry.root().expect("on a window"), 3);
+        let paintable = gtk::WidgetPaintable::new(Some(entry));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(&snapshot, f64::from(entry.width()), f64::from(entry.height()));
+        let Some(node) = snapshot.to_node() else {
+            return 0;
+        };
+        let renderer = entry
+            .native()
+            .and_then(|native| native.renderer())
+            .expect("a drawn window");
+        let texture = renderer.render_texture(&node, None::<&gtk::graphene::Rect>);
+        let mut downloader = gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gdk::MemoryFormat::R8g8b8a8);
+        let (bytes, _) = downloader.download_bytes();
+        // C31's #0078d4.
+        bytes
+            .chunks_exact(4)
+            .filter(|pixel| {
+                pixel[3] > 200
+                    && pixel[0] < 30
+                    && (100..=140).contains(&pixel[1])
+                    && (190..=230).contains(&pixel[2])
+            })
+            .count()
+    }
+
+    /// As in Windows' Save dialog, the selected name is drawn selected
+    /// only while File name has the keyboard: with the keyboard in the
+    /// file list, the box shows no blue selection a key would not
+    /// replace, and the selection comes back with the keyboard.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_name_is_drawn_selected_only_while_the_name_box_has_the_keyboard() {
+        let fixture = Fixture::empty();
+        fixture.write("alpha.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "scan of the week.pdf".to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        assert!(window.focus_is_in_picker_name());
+        let focused = selection_blue(&name);
+        assert!(
+            focused > 100,
+            "the selected name is drawn selected ({focused} blue pixels)"
+        );
+
+        window.folder_pane().focus_view();
+        settle();
+        assert!(!window.focus_is_in_picker_name());
+        assert_eq!(
+            selection_blue(&name),
+            0,
+            "no selection is drawn without the keyboard"
+        );
+
+        name.grab_focus();
+        settle();
+        assert!(
+            selection_blue(&name) > 100,
+            "the selection shows again with the keyboard"
+        );
+        // The blue is the selection's, not the focused box's underline.
+        name.select_region(0, 0);
+        settle();
+        let underline = selection_blue(&name);
+        assert!(
+            focused > underline + 100,
+            "the selection draws more than the underline ({focused} against {underline})"
+        );
+    }
+
+    /// Resizing the dialog across every layout width, as a window manager
+    /// does when it places the dialog, leaves the keyboard in File name
+    /// and the name selected, with files appearing meanwhile.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn resizing_the_save_dialog_leaves_the_keyboard_in_the_name_box() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        let mut bands = Vec::new();
+        for (step, width) in [1300, 1100, 1000, 900, 640, 1300, 980].into_iter().enumerate() {
+            window.set_default_size(width, 640);
+            wait_a_while(std::time::Duration::from_millis(200));
+            let band = window.window_width();
+            if !bands.contains(&band) {
+                bands.push(band);
+            }
+            if step == 3 {
+                create_elsewhere(test, &fixture, "gamma.txt");
+            }
+            assert!(
+                window.focus_is_in_picker_name(),
+                "the keyboard stays in File name at {width} pixels, not on {:?}",
+                GtkWindowExt::focus(window).map(|focus| focus.type_())
+            );
+            assert_eq!(name.selection_bounds(), Some((0, 4)), "at {width} pixels");
+        }
+        assert_eq!(bands.len(), 5, "the dialog went through every width: {bands:?}");
+    }
+
+    /// The dialog is resized like any window, down to the explorer's
+    /// 670 × 470 minimum, and the next dialog opens at the size this one
+    /// was left at, as Windows' common file dialog keeps its size; the
+    /// explorer windows keep theirs.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_dialog_is_resizable_and_the_next_one_opens_at_its_size() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let window = &portal.test.window;
+        let context = &portal.test.context;
+        wait_until("the folder's listing", || window.is_listed());
+        assert!(window.is_resizable(), "the dialog can be resized");
+        assert_eq!(window.default_size(), (980, 640), "a first dialog's size");
+        assert_eq!(window.size_request(), (670, 470), "the explorer's minimum");
+
+        // Made smaller than its minimum, it stops there. The surface is
+        // the whole window, its frame included.
+        let size = || {
+            window
+                .surface()
+                .map(|surface| (surface.width(), surface.height()))
+        };
+        window.set_default_size(400, 300);
+        wait_until("the dialog at its minimum", || size() == Some((670, 470)));
+        window.set_default_size(1150, 720);
+        wait_until("the dialog resized", || size() == Some((1150, 720)));
+        window.close();
+        wait_until("the dialog's size to be saved", || {
+            context
+                .settings_data()
+                .preferences
+                .dialog_size
+                .is_some_and(|size| (size.width, size.height, size.maximized) == (1150, 720, false))
+        });
+        assert_eq!(
+            context.settings_data().preferences.window_size,
+            None,
+            "the explorer windows keep their own size"
+        );
+
+        let next = super::BrowserWindow::new(&crate::test_support::harness::application(), context);
+        next.open_dialog_at_saved_size();
+        assert_eq!(next.default_size(), (1150, 720), "the next dialog's size");
+        next.destroy();
+    }
+
+    /// A file another application creates in the folder lists it, as
+    /// Windows' dialog does, without taking the keyboard out of File name
+    /// or changing what was typed and selected there, and without
+    /// selecting anything in the list.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_file_created_elsewhere_leaves_the_keyboard_in_the_name_box() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt", "report.md"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        name.set_text("receipt 4.pdf");
+        name.select_region(0, 9);
+
+        for created in ["0 first.pdf", "scan 2.pdf", "zz last.pdf"] {
+            create_elsewhere(test, &fixture, created);
+            assert!(
+                window.focus_is_in_picker_name(),
+                "the keyboard stays in File name after {created} appears, not on {:?}",
+                GtkWindowExt::focus(window).map(|focus| focus.type_())
+            );
+            assert_eq!(name.text(), "receipt 4.pdf", "what was typed stays");
+            assert_eq!(name.selection_bounds(), Some((0, 9)), "and so does its selection");
+            assert!(
+                test.selected_names().is_empty(),
+                "nothing is selected in the list"
+            );
+        }
+        fs::remove_file(fixture.path("beta.txt")).expect("remove a file");
+        wait_until("the removed file to leave the list", || {
+            !test.names().iter().any(|listed| listed == "beta.txt")
+        });
+        wait_a_while(std::time::Duration::from_millis(800));
+        assert!(window.focus_is_in_picker_name(), "also after a file is removed");
+        assert_eq!(name.selection_bounds(), Some((0, 9)));
+    }
+
+    /// A file clicked in the list stays the one selected, and its name the
+    /// one in File name, while other applications create, rename and
+    /// remove files around it; the keyboard stays in the list.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_file_clicked_in_a_save_dialog_stays_selected_while_files_change() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt", "report.md", "zeta.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        click_item(test, "report.md", false, false);
+        let name = name_box(window);
+        assert_eq!(
+            name.text(),
+            "report.md",
+            "the clicked file's name is in File name"
+        );
+        assert_eq!(test.selected_names(), ["report.md"]);
+
+        create_elsewhere(test, &fixture, "0 first.pdf");
+        fs::rename(fixture.path("zeta.txt"), fixture.path("omega.txt")).expect("rename a file");
+        wait_until("the renamed file", || {
+            test.names().iter().any(|listed| listed == "omega.txt")
+        });
+        fs::remove_file(fixture.path("alpha.txt")).expect("remove a file");
+        wait_until("the removed file to leave the list", || {
+            !test.names().iter().any(|listed| listed == "alpha.txt")
+        });
+        wait_a_while(std::time::Duration::from_millis(800));
+        assert_eq!(
+            test.selected_names(),
+            ["report.md"],
+            "the clicked file stays selected"
+        );
+        assert_eq!(name.text(), "report.md");
+        assert!(
+            window.folder_pane().view_has_focus(),
+            "the keyboard stays in the list, not on {:?}",
+            GtkWindowExt::focus(window).map(|focus| focus.type_())
+        );
+    }
+
+    /// After files appear above the file kept selected, Shift+click in a
+    /// dialog for one file still keeps the item clicked: the item kept is
+    /// followed, not the place in the list it had.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn shift_click_keeps_the_item_clicked_after_files_appear() {
+        let fixture = Fixture::empty();
+        for name in ["b.txt", "c.txt", "d.txt", "e.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        wait_until("the folder's listing", || test.window.is_listed());
+        settle();
+        click_item(test, "e.txt", false, false);
+        create_elsewhere(test, &fixture, "a.txt");
+        create_elsewhere(test, &fixture, "a2.txt");
+        assert_eq!(test.selected_names(), ["e.txt"]);
+        click_item(test, "b.txt", false, true);
+        assert_eq!(
+            test.selected_names(),
+            ["b.txt"],
+            "the item clicked, above the one kept"
+        );
+    }
+
+    /// Clicks at (`x`, `y`) in `widget` with the private display's real
+    /// pointer, as a hand clicks.
+    fn click_at(pointer: &mut Pointer, widget: &impl IsA<gtk::Widget>, (x, y): (f64, f64)) {
+        let point = screen_point(pointer, widget, (x, y), (720, 500));
+        pointer.move_to(point.0, point.1);
+        pointer.press(Button::Primary);
+        pointer.release(Button::Primary);
+        wait_a_while(std::time::Duration::from_millis(300));
+    }
+
+    /// Types `text`, made of letters and spaces, on the private display's
+    /// real keyboard.
+    fn type_keys(pointer: &mut Pointer, text: &str) {
+        for character in text.chars() {
+            let key = if character == ' ' {
+                gdk::Key::space
+            } else {
+                gdk::Key::from_name(character.to_string()).expect("a letter key")
+            };
+            pointer.tap_key(key);
+        }
+        wait_a_while(std::time::Duration::from_millis(300));
+    }
+
+    /// The user's case, with the real keyboard and pointer: typing as the
+    /// dialog opens replaces the name without its extension, also after
+    /// other applications created files in the folder; a file clicked in
+    /// the list puts its name in File name; a click on the list's empty
+    /// space leaves the name in the box without drawing it selected, and
+    /// typing then goes to the list (type-to-select), never into a box
+    /// that looked as if it would take it.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn typing_in_a_save_dialog_replaces_the_name_while_files_appear() {
+        let mut pointer = Pointer::connect();
+        let fixture = Fixture::empty();
+        for name in ["invoice.pdf", "notes.txt", "scan 01.pdf"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "Scan.pdf".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        let name = name_box(window);
+        // The pointer rests over the folder, as it would after a click in
+        // the calling application, and does not click.
+        let over = screen_point(
+            &mut pointer,
+            &window.folder_pane().input_widget(),
+            (40.0, 40.0),
+            (720, 500),
+        );
+        pointer.move_to(over.0, over.1);
+        create_elsewhere(test, &fixture, "scan 02.pdf");
+        create_elsewhere(test, &fixture, "0 cover.pdf");
+        type_keys(&mut pointer, "receipt");
+        assert_eq!(name.text(), "receipt.pdf", "typing replaced the selected name");
+        assert!(test.selected_names().is_empty());
+
+        let row = window
+            .folder_pane()
+            .owners()
+            .widget_at(test.position_of("notes.txt"))
+            .expect("the row is on screen");
+        click_at(&mut pointer, &row, (8.0, f64::from(row.height()) / 2.0));
+        assert_eq!(test.selected_names(), ["notes.txt"]);
+        assert_eq!(
+            name.text(),
+            "notes.txt",
+            "a clicked file's name goes into File name"
+        );
+        create_elsewhere(test, &fixture, "scan 03.pdf");
+        assert_eq!(
+            test.selected_names(),
+            ["notes.txt"],
+            "the clicked file stays selected"
+        );
+        assert_eq!(name.text(), "notes.txt");
+
+        name.set_text("receipt.pdf");
+        name.grab_focus();
+        super::select_stem(&name);
+        let list = window.folder_pane().input_widget();
+        click_at(&mut pointer, &list, (40.0, f64::from(list.height()) - 20.0));
+        assert!(!window.focus_is_in_picker_name(), "the keyboard went to the list");
+        assert_eq!(
+            selection_blue(&name),
+            0,
+            "the box draws no selection it would not replace"
+        );
+        type_keys(&mut pointer, "inv");
+        assert_eq!(name.text(), "invoice.pdf", "typing selected a file in the list");
+        assert_eq!(test.selected_names(), ["invoice.pdf"]);
+        // Back to the screen's middle, where the display starts it, so the
+        // next tests' windows and menus do not open under a pointer this
+        // test left there: GTK 4.14 crashes in gdk_surface_request_motion
+        // when address_bar's « menu closes over it.
+        pointer.move_to(720, 500);
+    }
+
+    /// The Save dialog as it opens, with the keyboard in the file list
+    /// (as after a click on its empty space, which
+    /// [`typing_in_a_save_dialog_replaces_the_name_while_files_appear`]
+    /// makes with the real pointer) and after another application created
+    /// a file in the folder, light and dark, for review with
+    /// `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`, where the test
+    /// pointer's screen positions would not hold).
+    #[gtk::test]
+    fn the_save_dialog_name_box_is_captured_light_and_dark() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            let fixture = Fixture::empty();
+            for name in [
+                "Invoice 1031.pdf",
+                "Meeting notes.txt",
+                "Scan 01.pdf",
+                "Scan 02.pdf",
+            ] {
+                fixture.write(name);
+            }
+            let portal = Portal::new();
+            let _answer = dialog_on(
+                &portal,
+                &fixture,
+                "SaveFile",
+                vec![("current_name", "Scan 03.pdf".to_variant())],
+            );
+            let test = &portal.test;
+            let window = &test.window;
+            test.activate("theme", Some(theme));
+            wait_until("the folder's listing", || window.is_listed());
+            settle();
+            let name = name_box(window);
+            assert!(window.focus_is_in_picker_name());
+            capture(window, &format!("picker-save-name-opened-{theme}.png"));
+
+            window.folder_pane().focus_view();
+            settle();
+            assert!(!window.focus_is_in_picker_name());
+            assert_eq!(name.text(), "Scan 03.pdf");
+            capture(window, &format!("picker-save-name-list-clicked-{theme}.png"));
+
+            name.grab_focus();
+            super::select_stem(&name);
+            create_elsewhere(test, &fixture, "Scan 02 (back).pdf");
+            assert!(
+                window.focus_is_in_picker_name(),
+                "the keyboard is still in File name"
+            );
+            assert_eq!(name.selection_bounds(), Some((0, 7)));
+            capture(window, &format!("picker-save-name-file-appeared-{theme}.png"));
+        }
+    }
+
+    /// Two types, as an image viewer's Open and Save dialogs offer them.
+    fn image_types() -> glib::Variant {
+        let types = [
+            (
+                "Images (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.tiff)".to_owned(),
+                vec![(0_u32, "*.png".to_owned()), (0_u32, "*.jpg".to_owned())],
+            )
+                .to_variant(),
+            ("All files".to_owned(), vec![(0_u32, "*".to_owned())]).to_variant(),
+        ];
+        glib::Variant::array_from_iter_with_type(types[0].type_(), types.clone())
+    }
+
+    /// The captions of the dialog's bar.
+    fn bar_captions(window: &crate::window::BrowserWindow) -> Vec<String> {
+        crate::test_support::harness::descendants::<gtk::Label>(&*window.imp().picker_bar)
+            .iter()
+            .filter(|label| label.has_css_class("picker-label"))
+            .map(|label| label.label().to_string())
+            .collect()
+    }
+
+    /// Where `widget` is in `window`: its left, top, right and bottom.
+    fn bounds_in(
+        widget: &impl IsA<gtk::Widget>,
+        window: &crate::window::BrowserWindow,
+    ) -> (f32, f32, f32, f32) {
+        let bounds = widget.compute_bounds(window).expect("laid out in the window");
+        (
+            bounds.x(),
+            bounds.y(),
+            bounds.x() + bounds.width(),
+            bounds.y() + bounds.height(),
+        )
+    }
+
+    /// Windows' Open dialog (Properties > Customize > Choose File..., an
+    /// image viewer's Open): the type list sits right of File name without
+    /// a caption, "Save as type:" nowhere, and Open and Cancel on a row
+    /// below them at the right. A long type name keeps the list to the
+    /// width of Windows' type box.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn an_open_dialog_has_its_type_list_beside_file_name_and_no_caption() {
+        let fixture = Fixture::empty();
+        fixture.write("photo.png");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", vec![("filters", image_types())]);
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(
+            bar_captions(window),
+            ["File name:"],
+            "the type list has no caption"
+        );
+
+        let (name_left, name_top, name_right, name_bottom) = bounds_in(&name, window);
+        let (types_left, types_top, types_right, types_bottom) = bounds_in(&types, window);
+        let (accept_left, accept_top, _, _) = bounds_in(&picker.accept, window);
+        assert!(types_left > name_right, "the type list is right of File name");
+        let middle = |top: f32, bottom: f32| f32::midpoint(top, bottom);
+        assert!(
+            (middle(types_top, types_bottom) - middle(name_top, name_bottom)).abs() < 3.0,
+            "on File name's row"
+        );
+        assert!(
+            accept_top >= name_bottom.max(types_bottom),
+            "Open is on a row below"
+        );
+        assert!(
+            accept_left > name_left + (name_right - name_left) / 2.0,
+            "at the right"
+        );
+        assert!(
+            types_right - types_left < (name_right - name_left),
+            "a long type name does not widen the list past File name"
+        );
+    }
+
+    /// A Save dialog keeps "Save as type:" on its own row under File name,
+    /// with Save and Cancel on a row below them at the right, as Windows'
+    /// Save dialog does.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_save_dialog_keeps_save_as_type_under_file_name() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "photo.png".to_variant()),
+                ("filters", image_types()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(bar_captions(window), ["File name:", "Save as type:"]);
+        let (name_left, _, name_right, name_bottom) = bounds_in(&name, window);
+        let (types_left, types_top, types_right, types_bottom) = bounds_in(&types, window);
+        let (accept_left, accept_top, _, _) = bounds_in(&picker.accept, window);
+        assert!(types_top >= name_bottom, "Save as type is under File name");
+        assert!((types_left - name_left).abs() < 1.0 && (types_right - name_right).abs() < 1.0);
+        assert!(accept_top >= types_bottom, "Save is on a row below the fields");
+        assert!(
+            accept_left > name_left + (name_right - name_left) / 2.0,
+            "at the right"
+        );
+    }
+
+    /// Open and Save dialogs with a type list, light and dark, for review
+    /// with `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`).
+    #[gtk::test]
+    fn open_and_save_type_lists_are_captured_light_and_dark() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            for (method, extra) in [
+                ("OpenFile", None),
+                ("SaveFile", Some(("current_name", "Scan 03.png".to_variant()))),
+            ] {
+                let fixture = Fixture::empty();
+                for name in ["Beach.jpg", "Garden.png", "Scan 01.png", "Scan 02.png"] {
+                    fixture.write(name);
+                }
+                let portal = Portal::new();
+                let mut entries = vec![("filters", image_types())];
+                entries.extend(extra);
+                let _answer = dialog_on(&portal, &fixture, method, entries);
+                let test = &portal.test;
+                test.activate("theme", Some(theme));
+                wait_until("the folder's listing", || test.window.is_listed());
+                settle();
+                let mode = if method == "OpenFile" { "open" } else { "save" };
+                capture(&test.window, &format!("picker-type-list-{mode}-{theme}.png"));
+            }
+        }
+    }
+
     /// Chromium's Save page as: choosing "Webpage, Single File" turns
     /// "Title.html" into "Title.mhtml", so Chromium does not write MHTML
     /// into a .html file, and the name stays selected without its
@@ -3999,6 +4781,187 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// The Properties window of the item called `name`, opened from the
+    /// dialog `test` shows, as its Details pane's Properties button and
+    /// its context menu open it.
+    fn properties_from_dialog(test: &TestWindow, name: &str) -> crate::properties::PropertiesWindow {
+        let selection = test.window.folder_model().selection().clone();
+        selection.select_item(test.position_of(name), true);
+        settle();
+        test.activate("properties", None);
+        let title = format!("{name} Properties");
+        let find = || {
+            test.window
+                .properties_windows()
+                .into_iter()
+                .find(|window| window.title_text() == title)
+        };
+        wait_until(&title, || find().is_some_and(|window| window.is_mapped()));
+        find().expect("the Properties window is open")
+    }
+
+    /// The progress of a copy started in a file dialog belongs to the
+    /// dialog while it runs, as its Properties do; it is modeless, so it
+    /// holds back no drag or drop in the dialog. A browsing window's
+    /// progress stays a window of its own (OPS-019), also once the
+    /// dialog's copy ends beside it.
+    ///
+    /// parity: INT-032, OPS-019
+    #[gtk::test]
+    fn the_progress_of_a_copy_in_a_dialog_belongs_to_the_dialog() {
+        use crate::window::progress_window::ProgressWindow;
+        use crate::window::transfer_panel::{TransferKind, TransferPanel};
+        use crate::window::BrowserWindow;
+
+        let fixture = Fixture::standard();
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let app = window.application().expect("the dialog's application");
+        let browsing = BrowserWindow::new(&app, &portal.test.context);
+        browsing.add_tab(&fixture.uri()).expect("a tab");
+        let progress = ProgressWindow::of(&portal.test.context);
+        progress.set_show_delay(std::time::Duration::ZERO);
+        let start = |owner: &BrowserWindow| {
+            let action = TransferPanel::for_window(owner);
+            action.start(
+                TransferKind::Files,
+                "Preparing copy…",
+                ox_core::transfer::Cancellation::new(),
+            );
+            action
+        };
+
+        let elsewhere = start(&browsing);
+        wait_until("the progress window", || progress.is_visible());
+        assert_eq!(
+            progress.transient_for(),
+            None,
+            "a browsing window's progress stands alone"
+        );
+
+        let action = start(window);
+        assert_eq!(
+            progress.transient_for().as_ref(),
+            Some(window.upcast_ref::<gtk::Window>()),
+            "the dialog's progress is the dialog's child"
+        );
+        assert!(!progress.is_modal());
+        assert!(!window.has_open_dialog(), "no dialog over the dialog");
+        assert_eq!(
+            progress.group(),
+            progress.group_for_questions(),
+            "its File Conflict window still blocks it"
+        );
+
+        action.finish();
+        settle();
+        assert_eq!(
+            progress.transient_for(),
+            None,
+            "the browsing window's progress stands alone again"
+        );
+        assert_eq!(progress.group(), progress.group_for_questions());
+        elsewhere.finish();
+        wait_until("the progress window to close", || !progress.is_visible());
+        browsing.destroy();
+    }
+
+    /// Properties opened from a Browse dialog, light and dark, for review
+    /// with `$OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`): the dialog, the
+    /// Properties window, and the screen with both.
+    #[gtk::test]
+    fn properties_from_a_dialog_are_captured_light_and_dark() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            let fixture = Fixture::empty();
+            fs::create_dir(fixture.path("Drop here")).expect("a folder");
+            for name in ["Beach.jpg", "cover.png", "Garden.png"] {
+                fixture.write(name);
+            }
+            let portal = Portal::new();
+            let _answer = dialog_on(
+                &portal,
+                &fixture,
+                "OpenFile",
+                vec![("title", "Browse".to_variant())],
+            );
+            let test = &portal.test;
+            test.activate("theme", Some(theme));
+            wait_until("the folder's listing", || test.window.is_listed());
+            let properties = properties_from_dialog(test, "Drop here");
+            capture(&test.window, &format!("dialog-child-browse-{theme}.png"));
+            crate::test_support::harness::capture_dialog(
+                &properties,
+                &format!("dialog-child-properties-{theme}.png"),
+            );
+            if let Some(directory) = std::env::var_os("OX_NATIVE_CAPTURE_DIR") {
+                crate::test_support::harness::wait_for_frames(&properties, 3);
+                let path = std::path::Path::new(&directory).join(format!("dialog-child-screen-{theme}.png"));
+                let saved = Command::new("import")
+                    .args(["-window", "root"])
+                    .arg(&path)
+                    .status()
+                    .is_ok_and(|status| status.success());
+                assert!(saved, "the screen is saved");
+            }
+            properties.close();
+            settle();
+        }
+    }
+
+    /// Properties opened from inside an Open dialog, as Properties >
+    /// Customize > Choose File... opens one, belong to the dialog, as in
+    /// Windows: the dialog's modeless child, so the desktop keeps it above
+    /// the dialog and never counts it among the windows the modal dialog
+    /// blocks, and the dialog stays usable beside it. Cancel closes it and
+    /// leaves the dialog; another one closes with the dialog.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn properties_opened_from_a_dialog_belong_to_the_dialog() {
+        let fixture = Fixture::empty();
+        fs::create_dir(fixture.path("Drop here")).expect("a folder");
+        fs::create_dir(fixture.path("Old scans")).expect("a folder");
+        fixture.write("cover.png");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        // As on Wayland, where the dialog is a modal child of its caller.
+        window.set_modal(true);
+        settle();
+
+        let properties = properties_from_dialog(test, "Drop here");
+        assert_eq!(
+            properties.transient_for().as_ref(),
+            Some(window.upcast_ref::<gtk::Window>()),
+            "Properties is the dialog's child"
+        );
+        assert!(!properties.is_modal(), "the dialog stays usable beside it");
+        assert!(!window.has_open_dialog(), "no dialog over the dialog");
+        assert!(!window.dialog_in_front(), "the dialog's keys still work");
+        let cancel = crate::test_support::harness::descendants::<gtk::Button>(&properties)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some("Cancel"))
+            .expect("a Cancel button");
+        cancel.emit_clicked();
+        wait_until("Properties to close", || !properties.is_visible());
+        assert!(window.is_visible(), "the dialog stays open");
+        assert!(window.picker().is_some_and(|picker| !picker.reply.is_answered()));
+
+        let other = properties_from_dialog(test, "Old scans");
+        assert_eq!(
+            other.transient_for().as_ref(),
+            Some(window.upcast_ref::<gtk::Window>())
+        );
+        window.close();
+        wait_until("the dialog to close", || !window.is_visible());
+        assert!(!other.is_visible(), "Properties closes with the dialog");
+    }
+
     /// F11 leaves a dialog at its size, as a Windows Open or Save dialog
     /// does, while Ctrl+E still moves to the search box.
     ///
@@ -4143,8 +5106,8 @@ mod tests {
         );
     }
 
-    /// F3 opens no second pane in a dialog, and a pane split off anyway
-    /// lists only the type chosen, as the first one does.
+    /// A pane split off in a dialog, where Split view is off, lists only
+    /// the type chosen, as the first one does.
     ///
     /// parity: INT-032
     #[gtk::test]
@@ -4167,14 +5130,6 @@ mod tests {
         let test = &portal.test;
         let window = &test.window;
         wait_until("the text file", || test.names() == ["notes.txt"]);
-
-        press(test, gdk::Key::F3, gdk::ModifierType::empty());
-        assert!(
-            !gtk::subclass::prelude::ObjectSubclassIsExt::imp(window)
-                .end_pane_column
-                .is_visible(),
-            "F3 splits nothing"
-        );
 
         window.split_tab(None).expect("the folder splits");
         let split = window.pane_on(PaneSide::End);
@@ -4332,7 +5287,26 @@ mod tests {
                 })
                 .collect();
         headings.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let first = headings.into_iter().next().map(|(_, text)| text);
+        // A heading shows its title alone, as Windows 11's Open and Save
+        // dialogs do since 22H2 (VIEW-022); its group's count, read from
+        // the grouped layout, tells which files the type lists.
+        let layout = window
+            .folder_pane()
+            .grouped()
+            .and_then(|grouped| grouped.layout());
+        let first = headings.into_iter().next().map(|(_, title)| {
+            let count = layout.as_ref().and_then(|layout| {
+                layout
+                    .groups()
+                    .iter()
+                    .find(|group| group.title == title)
+                    .map(crate::folder_view::group_slots::GroupRun::len)
+            });
+            match count {
+                Some(count) => format!("{title} ({count})"),
+                None => title,
+            }
+        });
         (first, window.folder_pane().details().vadjustment().value())
     }
 
@@ -4441,33 +5415,152 @@ mod tests {
     }
 
     /// The command bar's Sort menu in a Save dialog, as Chrome opens one
-    /// through the portal: Group by shows its choices in the same popup,
-    /// so there is only ever one menu on screen, and a choice there groups
-    /// the dialog's list and closes the menu. More works the same way.
+    /// through the portal: Group by and More open beside the menu, and the
+    /// compositor only ever sees one popup holding a grab, the Sort menu,
+    /// as for a menu without submenus. Each submenu is a popup of the Sort
+    /// menu's surface without a grab of its own (`gdk_popup_get_autohide`,
+    /// what GDK sends `xdg_popup.grab` for), one opens only once the other
+    /// has left the screen, and a submenu leaves the screen before the
+    /// menu. Side menus that each took a second, nested grab once froze
+    /// the KDE Plasma Wayland session in this dialog.
     ///
     /// parity: VIEW-022, INT-032
     #[gtk::test]
-    fn the_sort_menu_of_a_save_dialog_keeps_one_popup() {
-        sort_menu_keeps_one_popup("SaveFile", vec![("current_name", "page.html".to_variant())]);
+    fn the_sort_menu_of_a_save_dialog_keeps_one_grabbing_popup() {
+        sort_menu_keeps_one_grab("SaveFile", vec![("current_name", "page.html".to_variant())]);
     }
 
     /// The same in an Open dialog.
     ///
     /// parity: VIEW-022, INT-032
     #[gtk::test]
-    fn the_sort_menu_of_an_open_dialog_keeps_one_popup() {
-        sort_menu_keeps_one_popup("OpenFile", Vec::new());
+    fn the_sort_menu_of_an_open_dialog_keeps_one_grabbing_popup() {
+        sort_menu_keeps_one_grab("OpenFile", Vec::new());
+    }
+
+    /// A row the pointer rests on in a Save dialog's Sort menu shows the
+    /// hover's gray, as in a browsing window, even right after a key: the
+    /// release of the Ctrl+S that opened the dialog, or a Tab to its name,
+    /// turns the window's focus-visible on, and the row the pointer moves
+    /// the keyboard to drew in the keyboard's blue.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn a_menu_row_the_pointer_rests_on_shows_the_hover_after_a_key() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "page.html".to_variant())],
+        );
+        let window = portal.test.window.clone();
+        let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(&window)
+            .into_iter()
+            .find(|button| button.has_css_class("sort-command"))
+            .expect("the dialog's command bar has Sort");
+        let menu = sort
+            .popover()
+            .and_downcast::<crate::window::menu_popover::MenuPopover>()
+            .expect("an app menu");
+        sort.popup();
+        wait_until("the Sort menu", || menu.is_mapped());
+        // As a key released after the focus moved leaves it.
+        window.set_focus_visible(true);
+
+        menu.hover_row(Some("Date modified"));
+
+        let row = menu.row("Date modified");
+        assert!(
+            row.has_focus(),
+            "the keyboard goes on from the row the pointer is on"
+        );
+        assert!(!window.gets_focus_visible());
+        assert!(
+            !row.state_flags().contains(gtk::StateFlags::FOCUS_VISIBLE),
+            "the row draws as hovered, not as keyboard-focused"
+        );
+        menu.popdown();
+    }
+
+    /// The dividers of a menu that opens from the command bar keep the
+    /// menu's own side margins in a narrow window, such as a dialog
+    /// narrower than 1190 pixels, as in a wide one: the command bar's
+    /// narrow-window rule for its own dividers once reached them too.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn menu_dividers_in_a_narrow_dialog_keep_the_menu_s_margins() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "page.html".to_variant())],
+        );
+        let window = portal.test.window.clone();
+        window.set_default_size(900, 600);
+        wait_until("a narrow dialog", || window.has_css_class("max-1190"));
+        let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(&window)
+            .into_iter()
+            .find(|button| button.has_css_class("sort-command"))
+            .expect("the dialog's command bar has Sort");
+        let menu = sort
+            .popover()
+            .and_downcast::<crate::window::menu_popover::MenuPopover>()
+            .expect("an app menu");
+        sort.popup();
+        wait_until("the Sort menu", || menu.is_mapped());
+        let list = menu.row_list();
+        let dividers: Vec<gtk::Separator> = crate::window::widget_tree::descendants::<gtk::Separator>(&list);
+        wait_until("the menu laid out", || {
+            dividers.iter().all(|divider| divider.width() > 0)
+        });
+        assert!(!dividers.is_empty(), "the Sort menu has dividers");
+        for divider in &dividers {
+            assert_eq!(
+                list.width() - divider.width(),
+                10,
+                "5 pixels at either side (menus.css), not the command bar's 6"
+            );
+        }
+        // And 4 pixels above and below, not none: a divider asks for its
+        // 1-pixel line and its margins. This reads what it asks for rather
+        // than where the list placed it.
+        for divider in &dividers {
+            let (height, _, _, _) = divider.measure(gtk::Orientation::Vertical, -1);
+            assert_eq!(height, 1 + 4 + 4, "4 pixels above and below a divider");
+        }
+        menu.popdown();
+    }
+
+    /// The popups of `window`'s menus on screen, each with whether it
+    /// holds a pointer grab.
+    fn shown_popups(window: &gtk::Widget) -> Vec<(crate::window::menu_popover::MenuPopover, bool)> {
+        crate::window::widget_tree::descendants::<crate::window::menu_popover::MenuPopover>(window)
+            .into_iter()
+            .filter(WidgetExt::is_mapped)
+            .map(|menu| {
+                let popup = gtk::prelude::NativeExt::surface(&menu).and_downcast::<gdk::Popup>();
+                let grabs = popup.is_some_and(|popup| popup.is_autohide());
+                (menu, grabs)
+            })
+            .collect()
     }
 
     /// Opens a `method` dialog with `entries` and goes through its Sort
-    /// menu's Group by and More, checking one popup shows at a time.
-    fn sort_menu_keeps_one_popup(method: &str, entries: Vec<(&str, glib::Variant)>) {
+    /// menu's Group by and More, checking only the Sort menu grabs.
+    fn sort_menu_keeps_one_grab(method: &str, entries: Vec<(&str, glib::Variant)>) {
         let fixture = Fixture::empty();
         fixture.write("notes.txt");
         let portal = Portal::new();
         let _answer = dialog_on(&portal, &fixture, method, entries);
         let test = &portal.test;
-        let window = &test.window;
+        let window: &gtk::Widget = test.window.upcast_ref();
         let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(window)
             .into_iter()
             .find(|button| button.has_css_class("sort-command"))
@@ -4476,42 +5569,90 @@ mod tests {
             .popover()
             .and_downcast::<crate::window::menu_popover::MenuPopover>()
             .expect("an app menu");
-        let shown_menus = || {
-            crate::window::widget_tree::descendants::<crate::window::menu_popover::MenuPopover>(window)
+        let grabbing = || -> Vec<crate::window::menu_popover::MenuPopover> {
+            shown_popups(window)
                 .into_iter()
-                .filter(|menu| menu.is_visible() || menu.is_mapped())
-                .count()
+                .filter_map(|(menu, grabs)| grabs.then_some(menu))
+                .collect()
         };
+        // Every submenu that comes on screen: whether the menu was on screen
+        // as it went, and whether another submenu was.
+        let unmapped: Rc<RefCell<Vec<&'static str>>> = Rc::default();
 
         sort.popup();
-        wait_until("the Sort menu", || menu.is_visible());
-        menu.row("Group by").emit_activate();
-        wait_until("Group by's choices", || {
-            menu.row_labels().contains(&"Same as sort".to_owned())
+        wait_until("the Sort menu", || menu.is_mapped());
+        assert_eq!(grabbing(), std::slice::from_ref(&menu), "the Sort menu grabs");
+        let menu_surface = gtk::prelude::NativeExt::surface(&menu).expect("on screen");
+
+        // The pointer rests on More, then on Group by.
+        menu.hover_row(Some("More"));
+        wait_until("More", || {
+            menu.open_submenu_menu().is_some_and(|more| more.is_mapped())
         });
-        settle();
-        assert_eq!(shown_menus(), 1, "Group by opens no second popup");
-        assert!(menu.is_visible(), "the Sort menu shows Group by");
-        menu.row("Type").emit_activate();
-        assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
-        wait_until("the menu to close", || !menu.is_visible());
-        settle();
-        assert_eq!(shown_menus(), 0, "no menu is left on screen");
-
-        sort.popup();
-        wait_until("the Sort menu again", || menu.is_visible());
-        assert!(
-            menu.row_labels().contains(&"Group by".to_owned())
-                && menu.row_labels().contains(&"Ascending".to_owned()),
-            "it opens at its top level: {:?}",
-            menu.row_labels()
+        let more = menu.open_submenu_menu().expect("More");
+        let more_surface = gtk::prelude::NativeExt::surface(&more).expect("on screen");
+        let order = Rc::clone(&unmapped);
+        more_surface.connect_mapped_notify(move |surface| {
+            if !surface.is_mapped() {
+                order.borrow_mut().push("More");
+            }
+        });
+        menu.hover_row(Some("Group by"));
+        wait_until("Group by", || {
+            menu.open_submenu_menu()
+                .is_some_and(|group_by| group_by != more && group_by.is_mapped())
+        });
+        let group_by = menu.open_submenu_menu().expect("Group by");
+        assert_eq!(
+            *unmapped.borrow(),
+            ["More"],
+            "More left the screen before Group by came"
         );
-        menu.row("More").emit_activate();
-        wait_until("More's choices", || {
-            menu.row_labels().contains(&"Size".to_owned())
-        });
-        assert_eq!(shown_menus(), 1, "More opens no second popup");
-        menu.row("Size").emit_activate();
+        settle();
+        let popup = gtk::prelude::NativeExt::surface(&group_by)
+            .and_downcast::<gdk::Popup>()
+            .expect("a popup");
+        assert!(!popup.is_autohide(), "a submenu takes no grab of its own");
+        assert_eq!(
+            popup.parent().as_ref(),
+            Some(&menu_surface),
+            "a popup of the Sort menu's"
+        );
+        assert_eq!(
+            grabbing(),
+            std::slice::from_ref(&menu),
+            "still only the Sort menu grabs"
+        );
+        assert_eq!(shown_popups(window).len(), 2, "the Sort menu and Group by");
+
+        // Choosing Type groups the list and closes both, Group by first.
+        let group_by_surface = gtk::prelude::NativeExt::surface(&group_by).expect("on screen");
+        for (surface, name) in [(&group_by_surface, "Group by"), (&menu_surface, "Sort")] {
+            let order = Rc::clone(&unmapped);
+            surface.connect_mapped_notify(move |surface| {
+                if !surface.is_mapped() {
+                    order.borrow_mut().push(name);
+                }
+            });
+        }
+        group_by.row("Type").emit_activate();
+        assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
+        wait_until("the menus to close", || !menu.is_visible());
+        settle();
+        assert_eq!(*unmapped.borrow(), ["More", "Group by", "Sort"]);
+        assert!(shown_popups(window).is_empty(), "no menu is left on screen");
+
+        // The keyboard: Right on More opens it with no further grab, and a
+        // choice there sorts.
+        sort.popup();
+        wait_until("the Sort menu again", || menu.is_mapped());
+        assert!(menu.open_submenu_menu().is_none(), "it opens without a submenu");
+        menu.row("More").grab_focus();
+        assert!(menu.press_in_list(gdk::Key::Right));
+        let more = menu.open_submenu_menu().expect("Right opens More");
+        wait_until("More", || more.is_mapped());
+        assert_eq!(grabbing(), std::slice::from_ref(&menu));
+        more.row("Size").emit_activate();
         assert_eq!(test.action_state("sort").as_deref(), Some("size"));
         wait_until("the menu to close", || !menu.is_visible());
     }

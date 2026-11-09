@@ -16,9 +16,10 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::transfer::Cancellation;
 use ox_core::update::{
-    installer_name, CommandOutput, FetchError, Installation, InstalledBuild, PackageCommand, PackageManager,
-    ReleaseServer, ReleaseVersion, RestartLauncher, RuntimeIdentity, TrustedUrl, UpdateError, UpdateService,
-    UpdateServiceParts, Updater, UpdaterParts, LATEST_RELEASE_URL, REPOSITORY, RUNTIME_PROTOCOL,
+    installer_name, CommandOutput, FetchError, HelperReport, Installation, InstalledBuild, PackageCommand,
+    PackageManager, ReleaseServer, ReleaseVersion, RestartLauncher, RuntimeIdentity, TrustedUrl, UpdateError,
+    UpdateService, UpdateServiceParts, Updater, UpdaterParts, LATEST_RELEASE_URL, REPOSITORY,
+    RUNTIME_PROTOCOL,
 };
 use tempfile::TempDir;
 
@@ -109,20 +110,39 @@ impl PackageManager for SimulatedPackages {
                 "Package: openxplorer\nVersion: {NEXT}\nArchitecture: all\n"
             )),
             PackageCommand::Install(_) => {
-                let hold = self
-                    .hold_installation
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .take();
-                if let Some(hold) = hold {
-                    // The test lets APT go on; a dropped sender does too.
-                    let _ = hold.recv();
-                }
+                self.wait_while_held();
                 success("")
             }
+            // The update helper, which reports its steps as it goes.
+            PackageCommand::InstallRelease { version, .. } => {
+                self.wait_while_held();
+                let reports = [
+                    HelperReport::Downloading,
+                    HelperReport::Installing,
+                    HelperReport::Installed(*version),
+                ];
+                let lines: Vec<String> = reports.iter().map(HelperReport::encode).collect();
+                success(&lines.join("\n"))
+            }
+            PackageCommand::InstallAsRoot(_) => panic!("only the update helper runs APT as root"),
             PackageCommand::QueryInstalled => success(&format!("install ok installed\n{NEXT}")),
         };
         Ok(output)
+    }
+}
+
+impl SimulatedPackages {
+    /// Waits until the test lets the installation go on, if it holds it.
+    fn wait_while_held(&self) {
+        let hold = self
+            .hold_installation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(hold) = hold {
+            // The test lets APT go on; a dropped sender does too.
+            let _ = hold.recv();
+        }
     }
 }
 
@@ -149,6 +169,12 @@ struct SimulatedUpdates {
 
 impl SimulatedUpdates {
     fn new(installation: Installation) -> Self {
+        Self::with_helper(installation, None)
+    }
+
+    /// The simulated update service of a build whose package installed
+    /// the update helper at `helper`, or none.
+    fn with_helper(installation: Installation, helper: Option<&str>) -> Self {
         let root = tempfile::tempdir().expect("a temporary folder");
         let installed = root.path().join("openxplorer");
         std::fs::write(&installed, b"installed build").expect("the temporary folder is writable");
@@ -161,6 +187,7 @@ impl SimulatedUpdates {
                 updates_folder: root.path().join("updates"),
                 server: Box::new(SimulatedGitHub),
                 package_manager: Box::new(packages.clone()),
+                install_helper: helper.map(Into::into),
             }),
             running: running_identity(),
             installed_build: installed_build(&installed),
@@ -207,7 +234,8 @@ fn open_dialog(test: &TestWindow, updates: &Updates) -> UpdateDialog {
 
 /// "Check for updates" checks GitHub at once and offers the newer release
 /// the original repository publishes; the status bar and About say so in
-/// every window. A check the user asked for pops
+/// every window, and the command bar shows no Update unless Settings asks
+/// for it. A check the user asked for pops
 /// up no notice: the dialog says it already.
 ///
 /// parity: UPD-001, UPD-002
@@ -236,10 +264,7 @@ fn checking_offers_a_newer_release_and_the_status_bar_says_so() {
     assert_eq!(tooltip, "Check for updates\nOpenXplorer 1.0.1 is available.");
     assert!(test.window.shows_status_bar_update(), "a found update shows it");
     assert_eq!(test.window.status_bar_update_label(), "Update available");
-    assert!(
-        !test.window.command_bar_checks_updates(),
-        "only the status bar offers it"
-    );
+    assert_eq!(test.window.shown_update_button(), None, "hidden by default");
     assert_eq!(test.window.update_notice().shown_update(), None);
     capture_dialog(&dialog, "native-update-available.png");
     dialog.close();
@@ -288,6 +313,18 @@ fn installing_verifies_installs_and_offers_the_restart() {
     let fixture = Fixture::standard();
     let simulated = SimulatedUpdates::new(Installation::DebianPackage);
     let test = simulated.window(&fixture);
+    // The command bar's Update, which says Restart once installed, shows
+    // only when Settings asks for it.
+    test.context.update_preferences(
+        ox_core::settings::PreferencesUpdate {
+            show_update_button: Some(true),
+            ..ox_core::settings::PreferencesUpdate::default()
+        },
+        |result| result.expect("the setting is saved"),
+    );
+    wait_until("the setting to be saved", || {
+        test.context.settings_data().preferences.show_update_button
+    });
     let dialog = open_dialog(&test, &simulated.updates);
 
     dialog.click("Install update…");
@@ -313,6 +350,7 @@ fn installing_verifies_installs_and_offers_the_restart() {
             ("Restart now".to_owned(), true),
         ]
     );
+    assert_eq!(test.window.shown_update_button().as_deref(), Some("Restart"));
     assert_eq!(
         test.window.status_bar_update_label(),
         "Restart to finish updating"
@@ -320,6 +358,67 @@ fn installing_verifies_installs_and_offers_the_restart() {
     assert_eq!(
         simulated.updates.new_window_refusal().as_deref(),
         Some("Finish the application update and restart before opening another window.")
+    );
+    assert_eq!(
+        simulated.updates.file_refusal().as_deref(),
+        Some("Restart OpenXplorer to finish the application update before using files.")
+    );
+    dialog.click("Restart now");
+    let launched = simulated
+        .launches
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    assert_eq!(launched, [["/usr/bin/openxplorer", "--restart"]]);
+    dialog.close();
+}
+
+/// Where the package installed the update helper, Install update… hands
+/// it the version instead of running `pkexec apt-get`, so an
+/// administrator at the machine is not asked for a password. Nothing else
+/// changes: every window stays locked while it installs, the dialog shows
+/// the same steps, and the restart is offered and required just the same.
+///
+/// parity: UPD-003, UPD-005, UPD-006, UPD-007
+#[gtk::test]
+fn the_update_helper_installs_with_the_same_lock_and_restart() {
+    let fixture = Fixture::standard();
+    let helper = "/opt/openxplorer/libexec/openxplorer-install-update";
+    let simulated = SimulatedUpdates::with_helper(Installation::DebianPackage, Some(helper));
+    let (let_helper_finish, hold) = channel();
+    simulated
+        .packages
+        .hold_installation
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .replace(hold);
+    let test = simulated.window(&fixture);
+    let dialog = open_dialog(&test, &simulated.updates);
+
+    dialog.click("Install update…");
+    wait_until("the helper to start", || {
+        simulated.packages.programs().contains(&"/usr/bin/pkexec")
+    });
+    test.window.close();
+    settle();
+    assert!(test.window.is_visible(), "the window stays open");
+    assert!(!test.window.is_sensitive(), "the window is locked");
+    let_helper_finish.send(()).expect("the helper is waiting");
+    wait_until("the installation", || !simulated.updates.state().is_installing());
+
+    assert_eq!(
+        simulated.updates.state(),
+        UpdateState::Installed { version: NEXT }
+    );
+    assert_eq!(
+        simulated.packages.programs(),
+        ["/usr/bin/pkexec", "/usr/bin/dpkg-query"],
+        "no download or dpkg-deb in the app, and no pkexec apt-get"
+    );
+    assert_eq!(
+        dialog.status(),
+        "OpenXplorer 1.0.1 is installed. Restart to use the update."
     );
     assert_eq!(
         simulated.updates.file_refusal().as_deref(),
@@ -533,4 +632,66 @@ fn browsing_never_checks_and_untrusted_text_stays_text() {
         "the release notes are not shown"
     );
     dialog.close();
+}
+
+/// The switch of Settings › About › "Show the Update button in the
+/// command bar" in `test`'s window, opening Settings there.
+fn update_button_switch(test: &TestWindow) -> gtk::Switch {
+    test.window
+        .open_settings(Some(crate::settings_page::SettingsView::Category(
+            crate::settings_page::Category::About,
+        )));
+    let title = descendants::<gtk::Label>(&test.window)
+        .into_iter()
+        .find(|label| label.text() == "Show the Update button in the command bar")
+        .expect("About has the setting");
+    let mut widget = title.parent();
+    while let Some(row) = widget {
+        if let Some(switch) = descendants::<gtk::Switch>(&row).into_iter().next() {
+            return switch;
+        }
+        widget = row.parent();
+    }
+    panic!("the setting has a switch")
+}
+
+/// Settings › About › "Show the Update button in the command bar", off by
+/// default, brings back the command bar's Update while a release waits
+/// and Restart once it is installed, and hides it again when turned off.
+///
+/// parity: UPD-001
+#[gtk::test]
+fn the_command_bar_shows_update_only_when_settings_ask() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    simulated.updates.check_automatically(None);
+    wait_until("the check", || !simulated.updates.state().is_busy());
+    assert!(test.window.shows_status_bar_update());
+    assert_eq!(test.window.shown_update_button(), None, "off by default");
+
+    let switch = update_button_switch(&test);
+    assert!(!switch.is_active(), "the setting is off by default");
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.show_update_button
+    });
+    // Back in a folder, as the user goes after changing the setting.
+    test.activate("new-tab", None);
+    test.wait_for_listing("a folder tab");
+    wait_until("the command bar's Update", || {
+        test.window.shown_update_button().as_deref() == Some("Update")
+    });
+
+    let switch = update_button_switch(&test);
+    switch.set_active(false);
+    wait_until("the choice to be saved", || {
+        !test.context.settings_data().preferences.show_update_button
+    });
+    test.activate("new-tab", None);
+    test.wait_for_listing("a folder tab");
+    wait_until("the command bar's Update to hide", || {
+        test.window.shown_update_button().is_none()
+    });
+    assert!(test.window.shows_status_bar_update(), "the status bar keeps it");
 }

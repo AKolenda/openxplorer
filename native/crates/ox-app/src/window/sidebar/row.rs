@@ -2,7 +2,7 @@
 //! One sidebar row as a widget: the `.side-entry` button of `renderSidebar`
 //! in `v2.0.0:desktop/ui/app.js`, styled by `.side-entry` in `style.css`.
 //!
-//! A row is an expander chevron (This PC, Network), a 20-pixel icon box, the
+//! A row is an expander chevron (This PC, Network), a 16-pixel icon, the
 //! name (with a capacity bar under a drive's) and, on Quick access rows, the
 //! pin. The accent bar of the selected
 //! row (`.side-entry.selected:before`) is an overlay at the row's left
@@ -17,11 +17,12 @@ use crate::window::widget_tree::descendants;
 use crate::window::window_action::WindowAction;
 
 use super::super::saved_search::saved_search_target;
-use super::entries::{EjectButton, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
+use super::entries::{EjectButton, RowLevel, RowTarget, Section, SidebarEntry};
 
-/// Glyph icons are 18 pixels (`.side-icon svg`), art 19 (`folderIcon(19)`).
-const GLYPH_SIZE: i32 = 18;
-const ART_SIZE: i32 = 19;
+/// Glyphs and art are 16 pixels, as Windows 11's navigation pane icons
+/// (owner decision 2026-11-06; the web's were 18 and 19).
+const GLYPH_SIZE: i32 = 16;
+const ART_SIZE: i32 = 16;
 
 /// The expander chevron of This PC and Network (`icon('down')` at 9px).
 const EXPANDER_SIZE: i32 = 9;
@@ -194,23 +195,17 @@ fn selection_bar() -> gtk::Box {
         .build()
 }
 
-/// The CSS classes that place a row: a group head or indented inside a
-/// group, and in the Quick access box with its first and last rows marked.
-fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static str> {
+/// The CSS classes that place a row: a group head, indented inside a
+/// group, or one of the pinned folders.
+fn placement_classes(entry: &SidebarEntry) -> Vec<&'static str> {
     let mut classes = Vec::new();
     match entry.level {
         RowLevel::Place => {}
         RowLevel::Group => classes.push("group"),
         RowLevel::Child => classes.push("indent"),
     }
-    if matches!(entry.section, Section::QuickAccess | Section::SavedSearches) {
+    if entry.section == Section::QuickAccess {
         classes.push("quick-access");
-        if edges.first {
-            classes.push("section-start");
-        }
-        if edges.last {
-            classes.push("section-end");
-        }
     }
     classes
 }
@@ -218,12 +213,7 @@ fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static 
 /// The row for `entry`, which runs `win.go-to` or `win.mount-volume`,
 /// drawn for its section `collapsed` or expanded: a head shows it, and
 /// the rows inside a collapsed section are hidden (SIDE-033).
-pub(super) fn sidebar_row(
-    entry: &SidebarEntry,
-    edges: SectionEdges,
-    icon_size: u32,
-    collapsed: bool,
-) -> gtk::ListBoxRow {
+pub(super) fn sidebar_row(entry: &SidebarEntry, icon_size: u32, collapsed: bool) -> gtk::ListBoxRow {
     let overlay = gtk::Overlay::builder()
         .child(&row_content(entry, icon_size, collapsed))
         .build();
@@ -231,7 +221,7 @@ pub(super) fn sidebar_row(
     let row = gtk::ListBoxRow::builder()
         .child(&overlay)
         .tooltip_text(&entry.tooltip)
-        .css_classes(placement_classes(entry, edges))
+        .css_classes(placement_classes(entry))
         .build();
     // The visible label names the row; the address is its description.
     row.update_property(&[

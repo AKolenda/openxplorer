@@ -60,7 +60,7 @@ impl BrowserWindow {
     /// Shows the layout `steps` steps bigger (smaller when negative) and
     /// saves it. Unlike choosing a view in the menu, zooming keeps the
     /// selected item in sight instead of going back to the top.
-    pub(super) fn zoom_view(&self, steps: i32) {
+    pub(crate) fn zoom_view(&self, steps: i32) {
         let pane = self.folder_pane();
         let view = pane.view();
         let zoomed = view.zoomed(steps);

@@ -21,7 +21,7 @@ from verify_layout import InstalledTree, Report, VerificationError
 
 # The version at the top of each channel's metainfo, which a verified tree
 # must carry.
-METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.14', Channel.STABLE: '2.0.14'}
+METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.16', Channel.STABLE: '2.0.16'}
 
 
 @dataclass(frozen=True)
@@ -34,12 +34,14 @@ class LayoutCase:
     command: str
     mount_helper: str | None
     admin_delete: str | None
+    install_update: str | None = None
 
 
 LAYOUT_CASES = (
     LayoutCase(Channel.STABLE, Layout.DEBIAN, '/opt/openxplorer/bin/openxplorer',
                '/usr/bin/openxplorer', '/opt/openxplorer/bin/openxplorer-mount-share',
-               '/opt/openxplorer/libexec/openxplorer-admin-delete'),
+               '/opt/openxplorer/libexec/openxplorer-admin-delete',
+               '/opt/openxplorer/libexec/openxplorer-install-update'),
     LayoutCase(Channel.PREVIEW, Layout.DEBIAN, '/opt/openxplorer-native/bin/openxplorer-native',
                '/usr/bin/openxplorer-native', None,
                '/opt/openxplorer-native/libexec/openxplorer-admin-delete'),
@@ -70,6 +72,8 @@ class StagingTestCase(unittest.TestCase):
         shutil.copyfile(shutil.which('true') or '/bin/true', self.mount_helper)
         self.admin_delete = self.folder / 'openxplorer-admin-delete'
         shutil.copyfile(shutil.which('true') or '/bin/true', self.admin_delete)
+        self.install_update = self.folder / 'openxplorer-install-update'
+        shutil.copyfile(shutil.which('true') or '/bin/true', self.install_update)
         crate_folder = self.folder / 'crates' / 'glib-0.22.0'
         crate_folder.mkdir(parents=True)
         (crate_folder / 'LICENSE-MIT').write_text('MIT licence text\n', encoding='utf-8')
@@ -80,7 +84,7 @@ class StagingTestCase(unittest.TestCase):
         """Install one package into a fresh staging folder and return it as a tree."""
         staging = self.folder / f'{channel.name}-{layout.name}'
         request = InstallRequest(channel, layout, self.program, staging, self.mount_helper,
-                                 self.admin_delete)
+                                 self.admin_delete, self.install_update)
         package_data.install(request, self.crates)
         root = staging / 'app' if layout is Layout.FLATPAK else staging
         return InstalledTree(root, channel, layout, METAINFO_VERSIONS[channel])
@@ -100,6 +104,8 @@ class InstalledPathsTests(unittest.TestCase):
                 self.assertEqual(paths.mount_helper, expected_helper)
                 expected_delete = case.admin_delete and PurePosixPath(case.admin_delete)
                 self.assertEqual(paths.admin_delete, expected_delete)
+                expected_update = case.install_update and PurePosixPath(case.install_update)
+                self.assertEqual(paths.install_update, expected_update)
 
     def test_the_debian_program_is_where_the_updater_recognises_the_package(self) -> None:
         # Installation::detect in ox-core's update allows in-app updates only
@@ -187,6 +193,113 @@ class InstallTests(StagingTestCase):
                     helpers.add(str(tree.paths.admin_delete))
         self.assertEqual(len(actions), 2)
         self.assertEqual(len(helpers), 4)
+
+    # parity: UPD-003
+    def test_only_the_stable_debian_package_installs_the_update_helper(self) -> None:
+        """Only that package updates itself (Installation::detect), so no
+        other package carries a helper or a rule that skips the password."""
+        for case in LAYOUT_CASES:
+            with self.subTest(channel=case.channel.name, layout=case.layout.name):
+                tree = self.install(case.channel, case.layout)
+                installed = [path.name for path in tree.root.rglob('*install-update*')]
+
+                if case.channel is Channel.STABLE and case.layout is Layout.DEBIAN:
+                    self.assertEqual(sorted(installed), [
+                        'install-update.rules',
+                        'io.winspace.Development.install-update.policy',
+                        'openxplorer-install-update'])
+                else:
+                    self.assertEqual(installed, [])
+                    self.assertIsNone(tree.paths.install_update_rule_template)
+
+    # parity: UPD-003
+    def test_no_package_installs_an_active_rule_that_skips_the_password(self) -> None:
+        """No package's payload puts a rule where polkit reads rules. The
+        stable Debian package ships the rule as a template outside polkit's
+        folders; its postinst copies it to /etc/polkit-1/rules.d, so that
+        the setting "Install updates without asking for a password", on by
+        default, can delete the copy."""
+        for case in LAYOUT_CASES:
+            with self.subTest(channel=case.channel.name, layout=case.layout.name):
+                tree = self.install(case.channel, case.layout)
+                active = [path for folder in package_data.POLKIT_RULES_FOLDERS
+                          for path in (tree.root / folder.relative_to('/')).rglob('*')]
+
+                self.assertEqual(active, [])
+
+    # parity: UPD-003
+    def test_the_stable_debian_package_ships_the_rule_as_a_template(self) -> None:
+        tree = self.install(Channel.STABLE, Layout.DEBIAN)
+        paths = tree.paths
+
+        self.assertEqual(paths.install_update_rule_template,
+                         PurePosixPath('/usr/share/openxplorer/install-update.rules'))
+        template = tree.path_of(paths.install_update_rule_template)
+        action = package_data.install_update_action(Channel.STABLE)
+        self.assertEqual(template.read_text(encoding='utf-8'), package_data.build_rules_file(action))
+        self.assertNotIn('@ACTION_ID@', template.read_text(encoding='utf-8'))
+        self.assertEqual(template.stat().st_mode & 0o777, package_data.DATA_MODE)
+        for path in (paths.install_update, paths.install_update_policy):
+            self.assertTrue(tree.path_of(path).is_file(), path)
+        self.assertEqual(package_data.PASSWORDLESS_RULE,
+                         PurePosixPath('/etc/polkit-1/rules.d/'
+                                       '60-io.winspace.Development.install-update.rules'))
+
+    # parity: UPD-003
+    def test_the_update_helper_runs_under_its_own_action_and_rule(self) -> None:
+        tree = self.install(Channel.STABLE, Layout.DEBIAN)
+        report = Report()
+
+        verify_layout.check_install_update(report, tree)
+        verify_layout.check_promised_files(report, tree)
+
+        for check in ("The update action is the channel's own",
+                      'The update action runs exactly the installed helper',
+                      'The update action asks an administrator by default',
+                      'The update rule covers only the update action',
+                      'The update rule needs a local, active session',
+                      'The update rule lets only administrators through',
+                      'The package ships no rule where polkit reads rules',
+                      'Every promised file is installed'):
+            self.assertIn(check, report.passed)
+        policy = tree.path_of(tree.paths.install_update_policy).read_text(encoding='utf-8')
+        self.assertIn('/opt/openxplorer/libexec/openxplorer-install-update', policy)
+        self.assertNotEqual(package_data.install_update_action(Channel.STABLE),
+                            package_data.admin_delete_action(Channel.STABLE))
+        self.assertEqual(tree.path_of(tree.paths.install_update_rule_template).stat().st_mode & 0o777,
+                         package_data.DATA_MODE)
+
+    # parity: UPD-003
+    def test_a_rule_that_lets_more_through_fails_verification(self) -> None:
+        """The verifier refuses a rule for any action, for a remote or
+        inactive session, or for anyone who is not an administrator."""
+        action = package_data.install_update_action(Channel.STABLE)
+        loosened = (
+            ('if (action.id !== "' + action + '") {\n        return polkit.Result.NOT_HANDLED;\n    }\n',
+             ''),
+            ('    if (!subject.local || !subject.active) {\n'
+             '        return polkit.Result.NOT_HANDLED;\n    }\n', ''),
+            ('subject.isInGroup("wheel")', 'subject.isInGroup("users")'),
+            ('    return polkit.Result.NOT_HANDLED;\n});', '    return polkit.Result.YES;\n});'),
+        )
+        tree = self.install(Channel.STABLE, Layout.DEBIAN)
+        rules = tree.path_of(tree.paths.install_update_rule_template)
+        original = rules.read_text(encoding='utf-8')
+        verify_layout.check_install_update(Report(), tree)
+        for old, new in loosened:
+            with self.subTest(old=old[:40]):
+                self.assertIn(old, original)
+                rules.write_text(original.replace(old, new), encoding='utf-8')
+
+                with self.assertRaises(VerificationError):
+                    verify_layout.check_install_update(Report(), tree)
+
+    def test_the_stable_debian_package_needs_the_update_helper(self) -> None:
+        request = InstallRequest(Channel.STABLE, Layout.DEBIAN, self.program, self.folder / 'stage',
+                                 self.mount_helper, self.admin_delete)
+
+        with self.assertRaisesRegex(RuntimeError, 'openxplorer-install-update'):
+            package_data.install(request, self.crates)
 
     def test_a_flatpak_installs_no_privileged_helper(self) -> None:
         """A Flatpak has no host pkexec to start one with, so it ships

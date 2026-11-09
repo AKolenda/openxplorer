@@ -205,10 +205,12 @@ jobs:
           node-version: '22'
       - name: Install the package validators
         # verify_layout.py runs desktop-file-validate and appstreamcli on the
-        # staged Debian package; dpkg-deb is already on the image.
+        # staged Debian package; dpkg-deb is already on the image. It also
+        # starts the update helper (openxplorer-install-update --help), which
+        # links libsoup-3.0, so the runner needs that library too.
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
+          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream libsoup-3.0-0
       - name: Verify release source and public-data policies
         run: |
           /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
@@ -262,3 +264,44 @@ jobs:
               --title "OpenXplorer $version" --notes-file "$RUNNER_TEMP/release-notes.md" \
               "${assets[@]}" dist/SHA256SUMS
           fi
+
+  # Keeps only the newest release packages. After this run publishes, deletes
+  # the release packages of every successful run older than the newest one,
+  # including this run's own when retry-release.yml reran it after a newer
+  # run succeeded; the published versions stay on the Releases page. A failed
+  # run keeps its packages for retry-release.yml, which reruns only the failed
+  # jobs, until they expire. The production concurrency group keeps runs from
+  # overlapping.
+  prune-artifacts:
+    if: github.ref == 'refs/heads/main'
+    name: Delete earlier release packages
+    needs: [release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete release packages older than the newest successful run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          succeeded=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/checks.yml/runs?status=success&per_page=100&created=>=$(date -u -d '-30 days' +%F)" \
+            --jq '.workflow_runs[].id')
+          # This run's release has succeeded, since this job needs it.
+          succeeded=$(printf '%s\n%s\n' "$succeeded" "$GITHUB_RUN_ID")
+          keep=$(printf '%s\n' "$succeeded" | sort -n | tail -n 1)
+          # Lists every page before deleting, since deleting shifts the pages.
+          artifacts=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq "
+            .artifacts[]
+            | select(.expired | not)
+            | select(.workflow_run.id < $keep)
+            | select(.name | startswith(\"release-\"))
+            | \"\(.id) \(.workflow_run.id)\"")
+          echo "$artifacts" | while read -r id run; do
+            [ -n "$id" ] || continue
+            printf '%s\n' "$succeeded" | grep -qx "$run" || continue
+            if ! gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" 2>"$RUNNER_TEMP/delete.err"; then
+              # Already expired or deleted.
+              grep -q 'HTTP 404' "$RUNNER_TEMP/delete.err" || { cat "$RUNNER_TEMP/delete.err" >&2; exit 1; }
+            fi
+          done

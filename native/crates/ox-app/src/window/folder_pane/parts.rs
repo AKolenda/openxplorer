@@ -59,6 +59,7 @@ impl PaneParts {
         let owners = CellOwners::new();
         let details = DetailsView::new(&model, &owners);
         let icon_view = IconView::new(&owners);
+        icon_view.share_collapsed_groups(model.collapsed_groups());
         let views = view_stack(&details, &icon_view);
         let top_keeper = keep_views_at_their_top(&model, &views, &details, &icon_view);
         let empty = EmptyPage::new();

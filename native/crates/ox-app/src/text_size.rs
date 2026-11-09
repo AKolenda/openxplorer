@@ -128,14 +128,16 @@ impl Step {
     }
 
     /// The GDK key names that perform the step with Ctrl held, from
-    /// `action()` in text-size.js: `+`, `=` and keypad Add; `-`, `_` and
-    /// keypad Subtract; `0` and keypad 0. `KP_Insert` is keypad 0 with
-    /// `NumLock` off, which the web app matched by its physical code.
+    /// `action()` in text-size.js: `+` and `=`; `-`, `_` and keypad
+    /// Subtract; `0` and keypad 0. `KP_Insert` is keypad 0 with `NumLock`
+    /// off, which the web app matched by its physical code. Keypad Add is
+    /// not one: as in Windows File Explorer, Ctrl with it fits the details
+    /// columns (VIEW-072).
     ///
     /// The first key is the one menus show.
     pub(crate) const fn keys(self) -> &'static [&'static str] {
         match self {
-            Step::Increase => &["plus", "equal", "KP_Add"],
+            Step::Increase => &["plus", "equal"],
             Step::Decrease => &["minus", "underscore", "KP_Subtract"],
             Step::Reset => &["0", "KP_0", "KP_Insert"],
         }
@@ -174,10 +176,12 @@ pub(crate) fn ceil_pixels(value: f64) -> i32 {
 }
 
 /// The metrics at `size`, with the formulas and minimums of `metrics()`
-/// in text-size.js.
+/// in text-size.js, except the details rows: 32 pixels apart at 100%, as
+/// Windows 11 File Explorer's are, where the web's were 38 (owner decision
+/// 2026-11-06), growing with the text as the web's did.
 pub(crate) fn metrics(size: TextSize) -> Metrics {
     let scale = f64::from(size.percent()) / 100.0;
-    let detail_row = ceil_pixels(24.0 * scale + 14.0).max(38);
+    let detail_row = ceil_pixels(24.0 * scale + 8.0).max(32);
     let grid_growth = ceil_pixels((scale - 1.0) * 46.0).max(0);
     let grid_width = ceil_pixels(90.0 * scale + 45.0).max(135);
     Metrics {
@@ -249,13 +253,14 @@ mod tests {
         assert_eq!(step_for("0"), Some(Step::Reset));
     }
 
-    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs` (keypad add, keypad
-    /// subtract and keypad zero)
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs` (keypad subtract
+    /// and keypad zero). Its keypad add case no longer holds: Ctrl+keypad
+    /// Add fits the details columns, as in Windows File Explorer (VIEW-072).
     ///
     /// parity: VIEW-043
     #[test]
     fn keypad_keys_are_recognised() {
-        assert_eq!(step_for("KP_Add"), Some(Step::Increase));
+        assert_eq!(step_for("KP_Add"), None, "Ctrl+keypad Add fits the columns");
         assert_eq!(step_for("KP_Subtract"), Some(Step::Decrease));
         assert_eq!(step_for("KP_0"), Some(Step::Reset));
         assert_eq!(step_for("KP_Insert"), Some(Step::Reset));
@@ -301,14 +306,15 @@ mod tests {
         assert_eq!(Step::Decrease.apply(TextSize::from_percent(0)).percent(), 90);
     }
 
-    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::default metrics unchanged`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::default metrics unchanged`,
+    /// with Windows 11's 32-pixel details rows (owner decision 2026-11-06).
     ///
     /// parity: VIEW-044
     #[test]
     fn default_metrics_are_unchanged() {
         let expected = Metrics {
             scale: 1.0,
-            detail_row: 38,
+            detail_row: 32,
             grid_row: 130,
             grid_width: 135,
         };

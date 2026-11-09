@@ -27,6 +27,7 @@ mod attributes;
 mod classify;
 mod enumerate;
 mod error;
+mod extension;
 mod info;
 mod inspect;
 mod meta;
@@ -37,6 +38,7 @@ mod type_label;
 
 pub use enumerate::enumerate_folder;
 pub use error::EntryError;
+pub use extension::known_extension;
 pub use info::entry_from_info;
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
 pub use meta::EntryMeta;
@@ -150,7 +152,7 @@ pub struct Entry {
     pub target_uri: Option<String>,
     /// `None` for folders and when the backend reports no size.
     pub size: Option<u64>,
-    /// Human-readable type, for example "File folder" or "PNG image".
+    /// Human-readable type, for example "File folder" or "PNG File".
     pub type_label: String,
     /// MIME type, when known.
     pub content_type: Option<String>,
@@ -161,8 +163,7 @@ pub struct Entry {
     /// Hidden by name, by the folder's `.hidden` list or by the backend
     /// (`standard::is-hidden`).
     pub is_hidden: bool,
-    /// A symbolic link, listed with its target's type
-    /// (`standard::is-symlink`).
+    /// A symbolic link (`standard::is-symlink`); see [`Entry::is_shortcut`].
     pub is_symlink: bool,
     /// For items in `trash:///`: where Restore puts them back.
     pub trash_orig_path: Option<PathBuf>,
@@ -186,6 +187,13 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Whether the item is a shortcut, as Windows Explorer has them
+    /// ([`is_shortcut`]): its name is all name, with no extension to keep
+    /// or ask about, and its Type reads "Shortcut".
+    pub fn is_shortcut(&self) -> bool {
+        is_shortcut(&self.uri, &self.name, self.is_symlink, self.is_virtual)
+    }
+
     /// The GIO icon for the item's type, for when there is no thumbnail and
     /// no Explorer-style artwork for its type.
     pub fn icon(&self) -> Option<gio::Icon> {
@@ -209,7 +217,7 @@ impl Entry {
             Some(guessed.to_string())
         };
         let folder_type = is_dir.then_some(classify::FolderType::FileFolder);
-        let type_label = type_label::type_label(folder_type, content_type.as_deref());
+        let type_label = type_label::type_label(folder_type, content_type.as_deref(), &name);
         let serialized_icon = content_type
             .as_deref()
             .map(gio::content_type_get_icon)
@@ -248,11 +256,89 @@ impl Entry {
         }
     }
 
+    /// A computer or server found on the network, as Network lists it
+    /// (`network:///`, HOME-008): a shortcut to `uri`, the server's list
+    /// of shared folders, called `name`, of the type "Computer", as
+    /// Windows Explorer's Network calls one. No file command acts on it.
+    pub fn network_computer(uri: String, name: String) -> Self {
+        let folder_type = classify::FolderType::Computer;
+        let serialized_icon = gio::prelude::IconExt::serialize(&gio::ThemedIcon::new("network-server"));
+        let type_label = type_label::type_label(Some(folder_type), None, &name);
+        Self {
+            target_uri: Some(uri.clone()),
+            uri,
+            name,
+            kind: EntryKind::Shortcut,
+            is_dir: true,
+            is_virtual: true,
+            can_operate: false,
+            size: None,
+            type_label,
+            content_type: None,
+            modified: None,
+            is_hidden: false,
+            is_symlink: false,
+            trash_orig_path: None,
+            trash_deletion_date: None,
+            can_rename: Some(false),
+            can_trash: Some(false),
+            can_delete: Some(false),
+            can_write: Some(false),
+            serialized_icon,
+            meta: Box::default(),
+        }
+    }
+
     /// The URI to open when the item is activated: the validated target of
     /// a share or shortcut, otherwise the item itself.
     pub fn navigation_uri(&self) -> &str {
         self.target_uri.as_deref().unwrap_or(&self.uri)
     }
+
+    /// The address of the item a command acts on: for a row of Recent
+    /// files, the file it stands for ([`EntryMeta::recent_target`]);
+    /// otherwise the item's own address.
+    pub fn item_uri(&self) -> &str {
+        self.meta.recent_target.as_deref().unwrap_or(&self.uri)
+    }
+
+    /// This row as the item it stands for: a row of Recent files becomes
+    /// its file, at that file's address, for what describes items by
+    /// their address (several items' Properties); anything else is
+    /// returned as it is.
+    #[must_use]
+    pub fn as_item(&self) -> Entry {
+        let mut item = self.clone();
+        if let Some(target) = item.meta.recent_target.take() {
+            item.uri = target;
+            item.target_uri = None;
+        }
+        item
+    }
+
+    /// The URI to open when the item is activated, as
+    /// [`Entry::navigation_uri`], except that a row of Recent files opens
+    /// the file it stands for.
+    pub fn opened_uri(&self) -> &str {
+        self.meta
+            .recent_target
+            .as_deref()
+            .unwrap_or_else(|| self.navigation_uri())
+    }
+}
+
+/// Whether the item named `name` at `uri` is a shortcut: a symbolic link,
+/// the app's shortcut, whose name has no known type's extension, such as
+/// "Report.txt - Shortcut", the name the app gives the shortcuts it makes
+/// (Windows hides a shortcut's own `.lnk`). A link named for a type
+/// ("photo.jpg", "libz.so") stays what Windows makes of a symbolic link:
+/// typed by that extension, renamed with it kept and asked about. A
+/// server, a share or an item of Recent is never one.
+pub(super) fn is_shortcut(uri: &str, name: &str, is_symlink: bool, is_virtual: bool) -> bool {
+    is_symlink
+        && !is_virtual
+        && crate::location::scheme(uri).as_deref() != Some("recent")
+        && known_extension(name).is_none()
 }
 
 #[cfg(test)]

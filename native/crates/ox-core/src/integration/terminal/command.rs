@@ -25,13 +25,40 @@ pub fn command_in_terminal(
     hold_name: Option<&str>,
     command: Vec<OsString>,
 ) -> Vec<OsString> {
-    let mut wrapped = vec![
-        terminal.executable().as_os_str().to_owned(),
-        terminal.kind().command_option().into(),
-    ];
+    let mut wrapped = vec![terminal.executable().as_os_str().to_owned()];
+    // kitty has no option that introduces the program: it runs its
+    // trailing arguments.
+    if let Some(option) = terminal.kind().command_option() {
+        wrapped.push(option.into());
+    }
     if let Some(name) = hold_name {
         wrapped.extend(["/bin/sh", "-c", HOLD_SCRIPT, name].map(OsString::from));
     }
     wrapped.extend(command);
     wrapped
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::integration::terminal::{Terminal, TerminalKind};
+
+    /// parity: OPEN-020
+    #[test]
+    fn a_program_follows_the_terminals_own_command_option() {
+        let gnome =
+            Terminal::new("/usr/bin/gnome-terminal".into(), TerminalKind::GnomeTerminal).expect("absolute");
+        let kitty = Terminal::new("/usr/bin/kitty".into(), TerminalKind::Kitty).expect("absolute");
+        let command = vec![OsString::from("/usr/bin/htop")];
+
+        assert_eq!(
+            command_in_terminal(&gnome, None, command.clone()),
+            ["/usr/bin/gnome-terminal", "--", "/usr/bin/htop"].map(OsString::from)
+        );
+        // kitty runs the program itself, so no option comes between them.
+        assert_eq!(
+            command_in_terminal(&kitty, None, command),
+            ["/usr/bin/kitty", "/usr/bin/htop"].map(OsString::from)
+        );
+    }
 }

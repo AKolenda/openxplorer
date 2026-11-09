@@ -17,11 +17,12 @@ use super::commit::commit_replace;
 use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
-use super::guard::{check_write_tree, SourceChange};
-use super::item_failure::{FailedItem, FailureAnswer, ItemFailures};
+use super::guard::{check_write_tree, check_write_tree_reading, SourceChange, Unreadable};
+use super::item_failure::{FailedItem, FailureAnswer, FailureCause, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
-use super::limits::{Incoming, StorageRules, TreeTotals};
+use super::limits::{FreeSpace, Incoming, StorageRules, TreeTotals};
 use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
+use super::names::child_node;
 use super::node::{Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 use super::relisting::SourceFolders;
 use super::request::{destination_folder, distinct_items};
@@ -39,6 +40,10 @@ type ProgressCallback = Box<dyn FnMut(Progress) + Send>;
 /// Waits between device cleanup attempts; tests record the delay instead.
 type SleepCallback = Box<dyn Fn(Duration) + Send + Sync>;
 
+/// The URI under which the destination folder with the given URI is
+/// written as administrator, or why it may not be (OPS-047).
+pub type ElevatedDestination = dyn Fn(&str) -> Result<String, TransferError> + Send + Sync;
+
 /// Runs copy, move, Trash and delete operations over [`Node`]s.
 pub struct TransferEngine {
     factory: NodeFactory,
@@ -54,6 +59,15 @@ pub struct TransferEngine {
     move_by_copying: MoveByCopying,
     /// What to do when an item fails (OPS-047).
     failures: ItemFailures,
+    /// Where Continue writes a destination folder as administrator; without
+    /// it Continue fails the item.
+    elevation: Option<Box<ElevatedDestination>>,
+    /// Asked about every existing folder a Replace written as
+    /// administrator merges into.
+    elevated_merge_check: Option<Box<WriteGuard>>,
+    /// The `admin://` URI an item of a Recycle Bin or delete run is
+    /// deleted under after Continue, or why it may not be.
+    elevated_item: Option<Box<ElevatedDestination>>,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -158,6 +172,9 @@ struct RunState {
     result: TransferResult,
     /// Folders that moves took items from, relisted at the end (MTP).
     moved_from: SourceFolders,
+    /// Continue for all current items was answered in a Recycle Bin or
+    /// delete run: every later item is deleted as administrator (OPS-047).
+    elevated_removal: bool,
 }
 
 /// How an item that did not fail ended.
@@ -191,6 +208,9 @@ impl TransferEngine {
             unstorable: Unstorable::default(),
             move_by_copying: MoveByCopying::default(),
             failures: ItemFailures::default(),
+            elevation: None,
+            elevated_merge_check: None,
+            elevated_item: None,
         }
     }
 
@@ -255,6 +275,54 @@ impl TransferEngine {
     ) -> Self {
         self.failures = ItemFailures::with_question(Box::new(question));
         self
+    }
+
+    /// OPS-047: where the user's Continue writes a destination folder as
+    /// administrator. `elevation` returns the folder's `admin://` URI once
+    /// it is safe to write there ([`crate::admin_copy::elevated_destination`]),
+    /// or the refusal, which fails the item and is asked about like any
+    /// other failure.
+    #[must_use]
+    pub fn with_elevation(
+        mut self,
+        elevation: impl Fn(&str) -> Result<String, TransferError> + Send + Sync + 'static,
+    ) -> Self {
+        self.elevation = Some(Box::new(elevation));
+        self
+    }
+
+    /// OPS-047: where the user's Continue deletes an item of a Recycle Bin
+    /// or delete run as administrator: `elevation` returns the item's
+    /// `admin://` URI once it is safe to delete it there
+    /// ([`crate::admin_copy::elevated_item`]), or the refusal, which fails
+    /// the item and is asked about like any other failure.
+    #[must_use]
+    pub fn with_elevated_item(
+        mut self,
+        elevation: impl Fn(&str) -> Result<String, TransferError> + Send + Sync + 'static,
+    ) -> Self {
+        self.elevated_item = Some(Box::new(elevation));
+        self
+    }
+
+    /// OPS-047: checks each existing folder a Replace written as
+    /// administrator merges into before anything is written into it
+    /// ([`crate::admin_copy::check_elevated_folder`]); a refusal fails the
+    /// item. Without it such a merge is refused outright.
+    #[must_use]
+    pub fn with_elevated_merge_check(
+        mut self,
+        check: impl Fn(&str) -> Result<(), TransferError> + Send + Sync + 'static,
+    ) -> Self {
+        self.elevated_merge_check = Some(Box::new(check));
+        self
+    }
+
+    /// The check for folders a Replace into `placement` merges into: none
+    /// for an ordinary run, and for a run written as administrator the
+    /// installed check, or a refusal of every merge without one.
+    fn merge_check(&self, placement: &Placement) -> Option<&WriteGuard> {
+        merge_check(self.elevated_merge_check.as_deref(), placement)
     }
 
     /// Replaces the delay used between device cleanup retries (tests).
@@ -351,17 +419,11 @@ impl TransferEngine {
     ) -> Result<TransferResult, TransferError> {
         let folder = destination_folder(&self.factory, folder_uri, cancel)?;
         // XFER-028: what the destination's file system can hold.
-        let filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
+        let mut filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
         self.unstorable.start_run(
             StorageRules::of(filesystem.kind.as_deref()),
             filesystem.id.clone(),
         );
-        let incoming = Incoming {
-            mode,
-            policy,
-            folder: folder.as_ref(),
-            filesystem: &filesystem,
-        };
         // Walking folders on a share can take a while: say so once, as
         // Dolphin shows its examining phase.
         let mut announced = false;
@@ -378,12 +440,44 @@ impl TransferEngine {
                 });
             }
         };
-        let measured = incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
+        let measured = loop {
+            let incoming = Incoming {
+                mode,
+                policy,
+                folder: folder.as_ref(),
+                filesystem: &filesystem,
+            };
+            let shortfall = match incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)? {
+                FreeSpace::Fits(measured) => break measured,
+                FreeSpace::Short(shortfall) => shortfall,
+            };
+            // As Windows asks before it copies: "There is not enough
+            // space", with Try Again, which checks again, and Cancel.
+            let error = shortfall.error(&folder.display_name());
+            if cancel.is_cancelled() || !self.failures.asks_about(&error) {
+                return Err(error);
+            }
+            let question = FailedItem {
+                more_items: false,
+                needed: Some(shortfall.needed),
+                ..FailedItem::new(mode, folder.display_name(), "", Some(folder_uri), &error)
+            };
+            match self.failures.answer(&question) {
+                // The user may have made room meanwhile: read the free
+                // space again.
+                Some(FailureAnswer::Retry) => {
+                    filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
+                }
+                Some(FailureAnswer::Cancel) => return Err(TransferError::Cancelled),
+                _ => return Err(error),
+            }
+        };
         self.report_batch_size(measured);
         let placement = Placement {
             mode,
             policy,
             destination_folder: folder.as_ref(),
+            requested_folder: folder.as_ref(),
             name,
         };
         Ok(self.run_items(ItemAction::Transfer(placement), uris, cancel))
@@ -414,8 +508,11 @@ impl TransferEngine {
             total: uris.len(),
         };
         let mut state = RunState::default();
+        // The destination under `admin://` once the user answered Continue
+        // for all current items (OPS-047).
+        let mut elevated: Option<Box<dyn Node>> = None;
         for (index, uri) in uris.iter().enumerate() {
-            self.run_item(&batch, index, uri, &mut state);
+            self.run_item(&batch, index, uri, &mut state, &mut elevated);
             if state.result.cancelled {
                 break;
             }
@@ -442,31 +539,100 @@ impl TransferEngine {
     /// reported with its exact location.
     ///
     /// A failure the user may answer is asked about first (OPS-047):
-    /// Retry runs the item again once its staging is gone, Cancel stops
+    /// Retry runs the item again once its staging is gone, Continue runs it
+    /// again into the destination under `admin://` (and with Continue for
+    /// all, every later item of the run, through `elevated`), Cancel stops
     /// the run after recording it.
-    fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
+    fn run_item(
+        &mut self,
+        batch: &Batch,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+        elevated: &mut Option<Box<dyn Node>>,
+    ) {
         let mut staging = ItemStaging::default();
         let checkpoint = Accounting::checkpoint(&self.byte_counts);
-        self.failures.start_item(batch.mode(), self.display_name(uri));
-        let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
+        // The question names the folder the user chose, never `admin://`.
+        let destination = batch.destination_uri();
+        // This item's own destination under `admin://`, after Continue.
+        let mut item_folder: Option<Box<dyn Node>> = None;
+        self.failures
+            .start_item(batch.mode(), self.display_name(uri), destination.clone());
+        // Whether this item is deleted as administrator, after Continue.
+        let (mut outcome, mut removal_elevated) =
+            self.first_attempt(batch, elevated.as_deref(), index, uri, state, &mut staging);
         // Whether the user saw the error of `outcome` in the question.
         let mut answered = false;
         while let Err(error) = &outcome {
-            if batch.cancel.is_cancelled() || !self.failures.asks_about(error) {
+            if batch.cancel.is_cancelled() {
+                break;
+            }
+            // Continue answered about an entry inside the item: the item
+            // runs again as administrator without asking twice.
+            let asked_inside = self.failures.take_elevation();
+            if asked_inside.is_none() && !self.failures.asks_about(error) {
                 break;
             }
             let failed = FailedItem {
-                mode: batch.mode(),
-                name: self.display_name(uri),
-                error: error.to_string(),
                 more_items: index + 1 < batch.total,
+                ..FailedItem::new(
+                    batch.mode(),
+                    self.display_name(uri),
+                    uri,
+                    destination.as_deref(),
+                    error,
+                )
             };
-            match self.failures.answer(&failed) {
+            let answer = match asked_inside {
+                Some(answer) => Some(answer),
+                None => self.failures.answer(&failed),
+            };
+            match answer {
                 Some(FailureAnswer::Retry) => {
-                    self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    self.discard_leftover_stage(
+                        batch.mode(),
+                        std::mem::take(&mut staging),
+                        &mut state.result,
+                    );
                     Accounting::roll_back(&self.byte_counts, checkpoint);
-                    self.failures.start_item(batch.mode(), self.display_name(uri));
-                    outcome = self.process_item(batch, index, uri, state, &mut staging);
+                    self.failures
+                        .start_item(batch.mode(), self.display_name(uri), destination.clone());
+                    let folder = elevated.as_deref().or(item_folder.as_deref());
+                    outcome = if removal_elevated {
+                        self.remove_elevated(batch, index, uri, state)
+                    } else {
+                        self.attempt(batch, folder, index, uri, state, &mut staging)
+                    };
+                }
+                Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) if batch.is_removal() => {
+                    removal_elevated = true;
+                    state.elevated_removal |= answer == FailureAnswer::ElevateAll;
+                    outcome = self.remove_elevated(batch, index, uri, state);
+                }
+                Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) => {
+                    self.discard_leftover_stage(
+                        batch.mode(),
+                        std::mem::take(&mut staging),
+                        &mut state.result,
+                    );
+                    Accounting::roll_back(&self.byte_counts, checkpoint);
+                    self.failures
+                        .start_item(batch.mode(), self.display_name(uri), destination.clone());
+                    outcome = match self.elevated_folder(batch) {
+                        Ok(folder) => {
+                            let slot = if answer == FailureAnswer::ElevateAll {
+                                &mut *elevated
+                            } else {
+                                &mut item_folder
+                            };
+                            let folder: &dyn Node = &**slot.insert(folder);
+                            self.attempt(batch, Some(folder), index, uri, state, &mut staging)
+                        }
+                        // Refused before anything was written: asked about
+                        // like any failure, so the user sees why.
+                        Err(error) => Err(error),
+                    };
                 }
                 Some(FailureAnswer::Cancel) => {
                     state.result.cancelled = true;
@@ -480,27 +646,140 @@ impl TransferEngine {
                 None => break,
             }
         }
-        // OPS-047: the entries inside it that were left out, even when the
-        // item failed or was cancelled after them.
+        self.record_item(batch, uri, outcome, answered, staging, &mut state.result);
+    }
+
+    /// Records how the item at `uri` ended in `result`: `outcome`, the
+    /// entries inside it that were left out (OPS-047), even when the item
+    /// failed or was cancelled after them, and any staging left behind.
+    /// `answered` when the user saw its error in the question.
+    fn record_item(
+        &mut self,
+        batch: &Batch,
+        uri: &str,
+        outcome: Result<ItemOutcome, TransferError>,
+        answered: bool,
+        mut staging: ItemStaging,
+        result: &mut TransferResult,
+    ) {
         for (message, seen) in self.failures.take_left_out() {
             if seen {
-                state.result.presented.push(message.clone());
+                result.presented.push(message.clone());
             }
-            state.result.errors.push(message);
+            result.errors.push(message);
         }
         match outcome {
-            Ok(ItemOutcome::Skipped) => state.result.skipped.push(uri.to_owned()),
+            Ok(ItemOutcome::Skipped) => result.skipped.push(uri.to_owned()),
             Ok(ItemOutcome::Done) => {
-                state.result.done.push(uri.to_owned());
+                result.done.push(uri.to_owned());
                 // A published copy leaves its private folder empty. Failing
-                // to remove it is reported, but the copy stays done.
+                // to remove it is told, but the copy stays done.
                 if let Err(error) = staging.remove_empty_folder() {
-                    self.record_failure(batch, uri, &error, false, &mut state.result);
+                    self.record_failure(batch, uri, &error, false, result);
                 }
             }
-            Err(error) => self.record_failure(batch, uri, &error, answered, &mut state.result),
+            Err(error) => {
+                // An earlier "Skip all", or No to "Move by copying?",
+                // answered it already.
+                let answered = answered
+                    || self.failures.skips_for_all(&error)
+                    || (matches!(error, TransferError::NotSupported(_)) && self.move_by_copying.declined());
+                self.record_failure(batch, uri, &error, answered, result);
+            }
         }
-        self.discard_leftover_stage(staging, &mut state.result);
+        self.discard_leftover_stage(batch.mode(), staging, result);
+    }
+
+    /// The first attempt at the item at `uri`, and whether it ended as
+    /// administrator. Every item is first copied, moved, trashed or deleted
+    /// as the user. Continue for all current items in a Recycle Bin or
+    /// delete run then answers only an item the user may not delete;
+    /// anything else stays the user's own delete, as asked (OPS-047).
+    fn first_attempt(
+        &mut self,
+        batch: &Batch,
+        elevated: Option<&dyn Node>,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+        staging: &mut ItemStaging,
+    ) -> (Result<ItemOutcome, TransferError>, bool) {
+        let outcome = self.attempt(batch, elevated, index, uri, state, staging);
+        let denied = matches!(outcome, Err(TransferError::PermissionDenied(_)));
+        if state.elevated_removal && batch.is_removal() && denied && !batch.cancel.is_cancelled() {
+            return (self.remove_elevated(batch, index, uri, state), true);
+        }
+        (outcome, false)
+    }
+
+    /// Runs one attempt at the top-level item at `uri`, writing into
+    /// `elevated`, the destination folder under `admin://`, when the user
+    /// answered Continue.
+    fn attempt(
+        &mut self,
+        batch: &Batch,
+        elevated: Option<&dyn Node>,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+        staging: &mut ItemStaging,
+    ) -> Result<ItemOutcome, TransferError> {
+        let Some(elevated_batch) = elevated.and_then(|folder| batch.writing_into(folder)) else {
+            return self.process_item(batch, index, uri, state, staging);
+        };
+        self.move_by_copying.set_elevated(true);
+        let outcome = self.process_item(&elevated_batch, index, uri, state, staging);
+        self.move_by_copying.set_elevated(false);
+        outcome
+    }
+
+    /// Deletes the item at `uri` of the Recycle Bin or delete run `batch`
+    /// permanently as administrator, under `admin://`: Continue (OPS-047).
+    /// The Recycle Bin has no administrator path, so the app confirmed the
+    /// permanent delete first. A folder goes to the privileged helper of
+    /// [`crate::admin_delete`], anything else to `gvfsd-admin`.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::NotSupported`] without an item elevation, its
+    /// refusal, and every error of a permanent delete.
+    fn remove_elevated(
+        &mut self,
+        batch: &Batch,
+        index: usize,
+        uri: &str,
+        state: &mut RunState,
+    ) -> Result<ItemOutcome, TransferError> {
+        let Some(elevation) = self.elevated_item.as_ref() else {
+            return Err(TransferError::NotSupported(crate::i18n::gettext(
+                "This item can't be deleted as administrator.",
+            )));
+        };
+        let admin = elevation(uri)?;
+        let delete = Batch {
+            action: ItemAction::Remove(Removal::PermanentDelete),
+            cancel: batch.cancel,
+            total: batch.total,
+        };
+        let mut staging = ItemStaging::default();
+        self.process_item(&delete, index, &admin, state, &mut staging)
+    }
+
+    /// The destination folder of `batch` under `admin://`, for Continue.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::NotSupported`] without an elevation or a
+    /// destination, the elevation's refusal, and the error of reaching the
+    /// folder there.
+    fn elevated_folder(&self, batch: &Batch) -> Result<Box<dyn Node>, TransferError> {
+        let (Some(elevation), Some(folder)) = (self.elevation.as_ref(), batch.destination_uri()) else {
+            return Err(TransferError::NotSupported(crate::i18n::gettext(
+                "This item can't be copied as administrator.",
+            )));
+        };
+        let admin = elevation(&folder)?;
+        destination_folder(&self.factory, &admin, batch.cancel)
     }
 
     /// Copies, moves, trashes or deletes one top-level item.
@@ -608,6 +887,9 @@ impl TransferEngine {
         let source = selected.node.as_ref();
         if selected.kind == NodeKind::Directory {
             guard_destination(source, placement.destination_folder)?;
+            // Written as administrator, the folder is also checked against
+            // the `file:` folder the user chose, whose links resolve.
+            guard_destination(source, placement.requested_folder)?;
         }
         self.unstorable.start_item(source, batch.cancel);
         // XFER-028: a name or link the destination cannot store.
@@ -620,19 +902,47 @@ impl TransferEngine {
         let destination = destination.as_ref();
         // XFER-020: check every affected path before changing this
         // top-level item, because a writable parent can contain protected
-        // backup descendants.
+        // backup descendants. A copy writes nothing from a folder it
+        // cannot list, and asks about that folder by itself while the
+        // rest is copied (OPS-047); a move is never made unchecked.
         let source_change = batch.source_change();
-        check_write_tree(
+        let unreadable = match placement.mode {
+            TransferMode::Copy => Unreadable::NotWalked,
+            _ => Unreadable::Fails,
+        };
+        check_write_tree_reading(
             self.guard(),
             source,
             None,
             Some(destination),
             batch.cancel,
             source_change,
+            unreadable,
         )?;
+        // Written as administrator, the same tree is checked again where
+        // the user sees it: snapshot roots are known by their `file:` URIs.
+        if placement.requested_folder.uri() != placement.destination_folder.uri() {
+            let requested = child_node(placement.requested_folder, destination.name())?;
+            check_write_tree_reading(
+                self.guard(),
+                source,
+                None,
+                Some(requested.as_ref()),
+                batch.cancel,
+                SourceChange::Kept,
+                unreadable,
+            )?;
+        }
         if placement.mode == TransferMode::Move {
             state.moved_from.remember(source);
-            match self.move_item(source, destination, placement.policy, batch.cancel) {
+            let moved = self.move_item(
+                source,
+                destination,
+                placement.policy,
+                batch.cancel,
+                self.merge_check(placement),
+            );
+            match moved {
                 // XFER-013: the backend cannot move here (another filesystem,
                 // share or device). Once the user agreed, the item is copied
                 // through staging and the source is removed only once its
@@ -645,11 +955,12 @@ impl TransferEngine {
                 {
                     let kept =
                         self.move_by_copying(placement, selected, destination, batch.cancel, staging)?;
+                    // The entries the user skipped stay where they were:
+                    // the user's own answer, said nothing more about.
                     if let Some(notice) = kept {
-                        state
-                            .result
-                            .errors
-                            .push(format!("{}: {notice}", source.display_name()));
+                        let message = format!("{}: {notice}", source.display_name());
+                        state.result.presented.push(message.clone());
+                        state.result.errors.push(message);
                     }
                 }
                 moved => moved?,
@@ -674,9 +985,10 @@ impl TransferEngine {
         destination: &dyn Node,
         policy: ConflictPolicy,
         cancel: &Cancellation,
+        merge_check: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
         if policy == ConflictPolicy::Replace {
-            commit_replace(source, destination, cancel, self.guard(), None)
+            commit_replace(source, destination, cancel, self.guard(), None, merge_check)
         } else {
             source.move_native(destination, Some(cancel))
         }
@@ -742,6 +1054,7 @@ impl TransferEngine {
             policy: placement.policy,
             cancel,
             guard: self.write_guard.as_deref(),
+            merge_check: merge_check(self.elevated_merge_check.as_deref(), placement),
             unstorable: &mut self.unstorable,
             failures: &mut self.failures,
             emit: &mut *self.emit,
@@ -753,8 +1066,11 @@ impl TransferEngine {
 
     /// Adds a failed item to `result`, unless the user's cancellation
     /// explains it; `answered` when the user saw the error in the question.
+    /// A failure the user has not seen, such as a problem that needs
+    /// recovery by hand, is told in the progress window now, also after a
+    /// cancellation, as nothing is said once the run ends.
     fn record_failure(
-        &self,
+        &mut self,
         batch: &Batch,
         uri: &str,
         error: &TransferError,
@@ -774,22 +1090,54 @@ impl TransferEngine {
             if needs_recovery {
                 result.recovery.push(message.clone());
             }
-            if answered {
+            let shown = answered || self.tell(batch.mode(), uri, error);
+            if shown {
                 result.presented.push(message.clone());
             }
             result.errors.push(message);
         }
     }
 
-    /// Removes the staging an item left behind. XFER-003: a leftover is
-    /// reported with its exact location.
-    fn discard_leftover_stage(&self, staging: ItemStaging, result: &mut TransferResult) {
+    /// Tells the user about `error`, the failure of the item at `uri` that
+    /// no question asked about, in the question about failed items; true
+    /// when it showed.
+    fn tell(&mut self, mode: TransferMode, uri: &str, error: &TransferError) -> bool {
+        let item = FailedItem {
+            more_items: false,
+            cause: FailureCause::NeedsAttention,
+            ..FailedItem::new(mode, self.display_name(uri), uri, None, error)
+        };
+        self.failures.tell(&item)
+    }
+
+    /// Removes the staging an item of a `mode` run left behind. XFER-003: a
+    /// leftover is told with its exact location, worded for that run.
+    fn discard_leftover_stage(
+        &mut self,
+        mode: TransferMode,
+        staging: ItemStaging,
+        result: &mut TransferResult,
+    ) {
         let Some(stage) = staging.stage else {
             return;
         };
         let root = stage.root();
         if let Err(problem) = discard_stage(root, staging.created, staging.place, &*self.sleep) {
             let message = leftover_report(root, staging.place, &problem);
+            let item = FailedItem {
+                more_items: false,
+                cause: FailureCause::NeedsAttention,
+                ..FailedItem::new(
+                    mode,
+                    root.display_name(),
+                    &root.uri(),
+                    None,
+                    &TransferError::RecoveryRequired(message.clone()),
+                )
+            };
+            if self.failures.tell(&item) {
+                result.presented.push(message.clone());
+            }
             result.recovery.push(message.clone());
             result.errors.push(message);
         }
@@ -808,4 +1156,22 @@ impl TransferEngine {
             Err(_) => uri.to_string(),
         }
     }
+}
+
+/// The check for folders a Replace into `placement` merges into, from the
+/// engine's `installed` check (see `TransferEngine::merge_check`).
+fn merge_check<'a>(installed: Option<&'a WriteGuard>, placement: &Placement) -> Option<&'a WriteGuard> {
+    if placement.requested_folder.uri() == placement.destination_folder.uri() {
+        return None;
+    }
+    Some(installed.unwrap_or(&refuse_elevated_merge))
+}
+
+/// Refuses a merge into an existing folder written as administrator when
+/// no check is installed.
+fn refuse_elevated_merge(uri: &str) -> Result<(), TransferError> {
+    Err(TransferError::failed(crate::i18n::format_message(
+        "{uri} already exists, so the items can't be merged into it as administrator.",
+        &[("uri", uri)],
+    )))
 }

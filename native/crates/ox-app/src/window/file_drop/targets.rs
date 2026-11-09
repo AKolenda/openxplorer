@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The parts of the window that take dropped files (DND-011, DND-014,
-//! DND-016, DND-021, DND-025, TAB-018): each zone's drop target, which
+//! DND-016, DND-025, DND-028, TAB-018): each zone's drop target, which
 //! asks [`spot`] where a drop at a point goes, [`highlight`] to show it,
-//! [`spring`] to open a folder the drag stays over and [`autoscroll`] to
-//! scroll a zone the drag hovers near the edge of.
+//! [`label`] to say on the drag icon what a release would do, and
+//! [`autoscroll`] to scroll a zone the drag hovers near the edge of. As in
+//! Windows Explorer, a folder a drag stays over never opens (DND-021).
 //!
 //! Ports `publishFileDragLayout` and `showFileDropHint` of
 //! `v2.0.0:desktop/ui/app.js`. The web app published rectangles for the native
@@ -13,8 +14,8 @@
 
 mod autoscroll;
 mod highlight;
+mod label;
 mod spot;
-mod spring;
 #[cfg(test)]
 mod tests;
 
@@ -23,6 +24,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
 pub(in crate::window) use autoscroll::{scroll_step, DragScroll, TICK as SCROLL_TICK};
+pub(in crate::window) use label::DropLabels;
 
 use spot::DropSpot;
 
@@ -117,11 +119,16 @@ impl BrowserWindow {
                 self.open_subfolders_after_hover(x, y);
             }
             DropZone::CrumbMenu => self.keep_drag_crumb_menu(),
-            DropZone::FolderView | DropZone::Sidebar | DropZone::Tabs => self.close_drag_crumb_menu(),
+            DropZone::Sidebar => {
+                self.close_drag_crumb_menu();
+                self.hover_sidebar_during_drag(Some(y));
+            }
+            DropZone::FolderView | DropZone::Tabs => self.close_drag_crumb_menu(),
         }
         // Asked at every motion, even where nothing takes the drop, so the
         // first offer is remembered as the drag reaches the window.
         let action = self.hover_action(drop);
+        self.show_drop_label(drop, spot.as_ref(), self.drop_run(drop));
         match spot {
             Some(_) => action,
             None => gdk::DragAction::empty(),
@@ -129,17 +136,13 @@ impl BrowserWindow {
     }
 
     /// A drag is at (`x`, `y`) of `widget`, the window's `zone`: scrolls
-    /// the zone near its edge, and highlights where a drop would go. While
-    /// the zone scrolls, the folder under the pointer changes without the
-    /// pointer moving, so no folder opens by staying under it (DND-021).
+    /// the zone near its edge, and highlights where a drop would go.
     fn hover_drop_at(&self, zone: DropZone, widget: &gtk::Widget, x: f64, y: f64) -> Option<DropSpot> {
-        let scrolls =
-            matches!(zone, DropZone::FolderView | DropZone::Sidebar) && self.scroll_drag_near_edge(widget, y);
+        if matches!(zone, DropZone::FolderView | DropZone::Sidebar) {
+            self.scroll_drag_near_edge(widget, y);
+        }
         let spot = self.drop_spot(zone, widget, x, y);
         self.show_drop_spot(zone, spot.as_ref());
-        if scrolls {
-            self.open_folder_after_hover(None);
-        }
         spot
     }
 
@@ -148,12 +151,17 @@ impl BrowserWindow {
     /// forgotten, as they may change before the next drag.
     fn leave_drop_zone(&self, zone: DropZone) {
         self.show_drop_spot(zone, None);
+        self.hide_drop_label();
         self.stop_drag_scroll();
         match zone {
             DropZone::FolderView => self.forget_program_checks(),
             DropZone::Breadcrumbs => self.leave_crumbs_during_drag(),
             DropZone::CrumbMenu => self.close_drag_crumb_menu(),
-            DropZone::Sidebar | DropZone::Tabs => {}
+            DropZone::Sidebar => self.hover_sidebar_during_drag(None),
+            // GTK can leave its own drop outline on the strip after a drop,
+            // a thin line behind every tab but the one in front. The tab
+            // under the drag has the strip's own highlight instead.
+            DropZone::Tabs => self.tab_strip().unset_state_flags(gtk::StateFlags::DROP_ACTIVE),
         }
     }
 
@@ -192,6 +200,12 @@ impl BrowserWindow {
             }
         ));
         true
+    }
+
+    /// A drag is at `y` of the sidebar's list, or left it with `None`: a
+    /// collapsed section held under it expands.
+    pub(in crate::window) fn hover_sidebar_during_drag(&self, y: Option<f64>) {
+        self.sidebar().expand_after_drag_hover(y);
     }
 
     /// Keeps where a drop happened, in the folder pane's coordinates, for

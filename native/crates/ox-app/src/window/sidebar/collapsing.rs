@@ -11,6 +11,10 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::entries::{RowLevel, Section, SidebarEntry};
+
+/// How long a drag must stay over a collapsed section's head before it
+/// expands (DND-027).
+const DRAG_EXPAND_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 use super::{row, Sidebar};
 
 impl Sidebar {
@@ -68,9 +72,74 @@ impl Sidebar {
         self.highlight_location();
     }
 
+    /// A drag is at `y` of the list, or left it with `None`: held over the
+    /// head of a collapsed section for [`DRAG_EXPAND_DELAY`], the section
+    /// expands, as Windows Explorer's navigation pane expands a collapsed
+    /// node under a drag. Nothing in the sidebar opens in the folder view.
+    pub(in crate::window) fn expand_after_drag_hover(&self, y: Option<f64>) {
+        let section = y.and_then(|y| self.collapsed_head_at(y));
+        let waiting = self
+            .imp()
+            .drag_expand
+            .borrow()
+            .as_ref()
+            .map(|(section, _)| *section);
+        if waiting == section {
+            return;
+        }
+        if let Some((_, timer)) = self.imp().drag_expand.take() {
+            timer.remove();
+        }
+        let Some(section) = section else {
+            return;
+        };
+        let timer = glib::timeout_add_local_once(
+            DRAG_EXPAND_DELAY,
+            glib::clone!(
+                #[weak(rename_to = sidebar)]
+                self,
+                move || {
+                    sidebar.imp().drag_expand.replace(None);
+                    sidebar.collapse_section(section, false);
+                }
+            ),
+        );
+        self.imp().drag_expand.replace(Some((section, timer)));
+    }
+
+    /// The collapsed section whose head row is at `y` of the list.
+    fn collapsed_head_at(&self, y: f64) -> Option<Section> {
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let row = self.list().row_at_y(y as i32)?;
+        let index = usize::try_from(row.index()).ok()?;
+        let entries = self.imp().entries.borrow();
+        let entry = entries.get(index)?;
+        (entry.level == RowLevel::Group && self.is_collapsed(entry.section)).then_some(entry.section)
+    }
+
+    /// The labels of the rows shown, without those a collapsed section
+    /// hides, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn labels_shown(&self) -> Vec<String> {
+        let entries = self.imp().entries.borrow();
+        entries
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| {
+                i32::try_from(*index)
+                    .ok()
+                    .and_then(|index| self.list().row_at_index(index))
+                    .is_some_and(|row| row.is_visible())
+            })
+            .map(|(_, entry)| entry.label.clone())
+            .collect()
+    }
+
     /// Left collapses This PC or Network while its head row has keyboard
     /// focus, and Right expands it, as in Explorer's navigation pane and
-    /// the folder tree; the chevron itself takes no focus.
+    /// the folder tree; the chevron itself takes no focus. As in Windows
+    /// 11's tree, Right on an expanded head moves to its first row, and
+    /// Left on a row inside This PC or Network moves to the head.
     pub(super) fn collapse_sections_with_arrow_keys(&self, list: &gtk::ListBox) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -80,15 +149,36 @@ impl Sidebar {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
-                if !modifiers.is_empty() {
+                // Caps Lock and Num Lock do not make it another key, as in
+                // the picker and the Properties tabs (CMD-039).
+                let held = gdk::ModifierType::CONTROL_MASK
+                    | gdk::ModifierType::SHIFT_MASK
+                    | gdk::ModifierType::ALT_MASK
+                    | gdk::ModifierType::SUPER_MASK
+                    | gdk::ModifierType::HYPER_MASK
+                    | gdk::ModifierType::META_MASK;
+                if modifiers.intersects(held) {
                     return glib::Propagation::Proceed;
+                }
+                // The keypad's plus and asterisk expand the section, and
+                // its minus collapses it, as Num Lock with them does in
+                // Windows' navigation pane; on any row they stay here
+                // rather than typing into the file list (CMD-039).
+                let keypad = match key {
+                    gdk::Key::KP_Add | gdk::Key::KP_Multiply => Some(true),
+                    gdk::Key::KP_Subtract => Some(false),
+                    _ => None,
+                };
+                if let Some(expand) = keypad {
+                    sidebar.expand_focused_section(expand);
+                    return glib::Propagation::Stop;
                 }
                 let expand = match key {
                     gdk::Key::Right | gdk::Key::KP_Right => true,
                     gdk::Key::Left | gdk::Key::KP_Left => false,
                     _ => return glib::Propagation::Proceed,
                 };
-                if sidebar.expand_focused_section(expand) {
+                if sidebar.expand_focused_section(expand) || sidebar.step_through_tree(expand) {
                     glib::Propagation::Stop
                 } else {
                     glib::Propagation::Proceed
@@ -96,6 +186,24 @@ impl Sidebar {
             }
         ));
         list.add_controller(keys);
+    }
+
+    /// Ctrl+Shift+E (CMD-039): expands the collapsed section whose head
+    /// stands for the location, and puts keyboard focus on the row
+    /// highlighted for it, as Windows 11's navigation pane opens down to
+    /// the folder shown; false when no row stands for it.
+    pub(in crate::window) fn reveal_location(&self) -> bool {
+        // The arrow keys move the highlight without opening the place, so
+        // highlight the location's row again first.
+        self.highlight_location();
+        let head = self.list().selected_row().and_then(|row| self.head_section(&row));
+        if let Some(section) = head.filter(|section| self.is_collapsed(*section)) {
+            self.collapse_section(section, false);
+        }
+        match self.list().selected_row() {
+            Some(row) => row.grab_focus(),
+            None => false,
+        }
     }
 
     /// Expands, or collapses, the section whose head row has keyboard
@@ -110,6 +218,39 @@ impl Sidebar {
         }
         self.collapse_section(section, !expand);
         true
+    }
+
+    /// Moves keyboard focus as Windows' tree does once a section is as
+    /// the key asks: `into` (Right) from an expanded head to its first
+    /// row, else (Left) from a row inside a section to its head; false
+    /// where there is nowhere to go.
+    fn step_through_tree(&self, into: bool) -> bool {
+        let Some(focused) = self.list().focus_child().and_downcast::<gtk::ListBoxRow>() else {
+            return false;
+        };
+        let Ok(index) = usize::try_from(focused.index()) else {
+            return false;
+        };
+        let target = {
+            let entries = self.imp().entries.borrow();
+            let Some(entry) = entries.get(index) else {
+                return false;
+            };
+            match (into, entry.level) {
+                (true, RowLevel::Group) if !self.is_collapsed(entry.section) => entries
+                    .get(index + 1)
+                    .filter(|next| next.section == entry.section && next.level == RowLevel::Child)
+                    .map(|_| index + 1),
+                (false, RowLevel::Child) => entries[..index]
+                    .iter()
+                    .rposition(|head| head.level == RowLevel::Group && head.section == entry.section),
+                _ => None,
+            }
+        };
+        let row = target
+            .and_then(|target| i32::try_from(target).ok())
+            .and_then(|target| self.list().row_at_index(target));
+        row.is_some_and(|row| row.grab_focus())
     }
 
     /// The section `row` is the head of, `None` for any other row.

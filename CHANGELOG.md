@@ -1,3 +1,81 @@
+# 2.0.16 — 2026-11-09
+
+Updates install without a password for administrators at the computer, search looks and works like Windows 11's, the Preview pane shows what's in a file, and more of Windows 11's File Explorer keyboard shortcuts work. A paste keeps going past an unreadable or missing item, Compact view and group headings match Windows 11, Recent files open as the real file, the Open and Save dialog keeps its size, and a tab's menu opens from the keyboard. Much of this release is the work of @addition-official.
+
+## Security
+* In the Debian package, **Check for updates** now installs through a small helper of its own instead of a general administrator command, so an administrator (a member of `sudo`, `admin` or `wheel`) in an active session at the computer installs updates without typing a password. Anyone else, and any remote or inactive session, is still asked for an administrator's password. The helper takes only a version number: it installs only GitHub's current latest official release, only when that is newer than the installed version, and only after checking the download's size, checksum and package details. It never downgrades or reinstalls, runs with a cleared environment, and reads no settings or files the user can change. Trust in the release is the same as before: GitHub's connection and its checksum, not an independent signature.
+* It is on by default. **Settings › About › Install updates without asking for a password** turns it off, and turning it back on asks for an administrator's password. Updating to 2.0.16 itself still asks once, since the helper arrives with it. The RPM, Arch, Flatpak and preview packages never update themselves, so they are unchanged.
+
+## What's Changed
+* **Preview pane:** View › Preview pane (Alt+P) shows the selected file's contents, as in Windows 11: text and source files as plain wrapped text (the first 1 MB), pictures as large as the pane allows, PDF pages one under another, and audio and video in the pane's player. A folder, several items or a file with no preview says "No preview available.". PDF pages are drawn by `pdftoppm` in the same sandbox and limits as the thumbnailers, and nothing is read for a network file while network previews are off.
+* **Search:** searching looks like Windows 11's by default. There is no filter bar above the results: the command bar shows **Search options** (All subfolders or Current folder, Date modified, Kind, Size and File contents) and **Close search**, the tab reads "notes - Search Results in Documents", and the words searched for are highlighted in the names. Size has Windows' groups from Empty to Gigantic, Date modified runs to Last year, and `kind:`, `datemodified:` and `size:` typed in the search box work as in Windows (`kind:picture`, `size:tiny`). "…" › Pin to Quick access saves a search, and results show sooner in a big folder. Settings › Search › Show the search filter bar brings back the filter bar.
+* **Keyboard shortcuts:** more of Windows 11's File Explorer keys work: Ctrl+1 to Ctrl+9 show that tab (and that tab of a Properties window), Ctrl+Shift+E opens the navigation pane down to the current folder, the keypad's plus, minus and asterisk open and close folders in the navigation pane, Ctrl+F5 refreshes, and Ctrl+Insert and Shift+Insert copy and paste files. Ctrl+Shift+1 to Ctrl+Shift+8 now work when typed, on any keyboard layout. Alt pressed alone moves the keyboard to the command bar, and Escape gives it back; the command bar's "…" is named See more. The Keyboard shortcuts window finds a shortcut by its keys however they are typed ("ctrl shift e"), and its scroll bar no longer covers the keys.
+* **Tabs:** Shift+F10 or the Menu key on a focused tab opens its menu, and Escape gives the keyboard back to the tab. F6 reaches the tab in front, and no outline is left on the tab strip after files are dropped on a tab.
+* **Views:** Compact view spaces Details, Tiles, Content and the navigation pane as Windows 11's Compact view does. Group headings are drawn as Windows 11 draws them: the title in regular weight, a quarter larger than the names, with no line after it.
+* **Names and sizes:** with Hide extensions for known file types on, every type the desktop knows hides its extension, `sunset.png` and `data.json` included. The Details pane and tooltips write sizes as the status bar does, and the Size column is always wide enough for "9,999,999 KB". Renaming and new items drop periods and spaces at the end of a name, erasing the whole name in place keeps the old one, and names with a line break or that aren't valid UTF-8 can be renamed, copied and recycled.
+* **Copying and moving:** a paste no longer stops at the first unreadable folder or missing item: everything else is pasted, and that item is asked about in the progress window (Folder Access Denied, Item Not Found). A folder pasted or dropped into its own subfolder is refused with Windows 11's "Interrupted Action", "The destination folder is a subfolder of the source folder.". Undo after a partial copy or move reverses only what was done.
+* **Recent files:** a Recent files row opens, copies, drags and shows Properties as the file it stands for, and says Item Not Found when that file is gone. As in Windows 11's Recent list, it can be copied but not cut, renamed or deleted.
+* **Open and Save dialogs:** the dialog opens at the size it was last left at, and on GNOME a dialog whose app's window handle has a space in it now stays attached to that app instead of falling behind it.
+* **Details:** dragging a column's edge past its start stops the column at its narrowest width instead of folding it to nothing.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.16_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.16-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.16-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.16-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.16-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.15...v2.0.16
+
+# 2.0.15 — 2026-11-08
+
+OpenXplorer now looks and works much more like Windows 11's File Explorer, from the command bar, menus and status bar to Properties, This PC and the progress window. It also makes previews with the desktop's own thumbnailers in a sandbox, can paste a picture as a file, and offers to continue as administrator when a copy, move or delete is denied. Much of this release is the work of @addition-official and @clansty.
+
+## Security
+* Previews made by the desktop's own thumbnailers, new in this release, run in bubblewrap, as GNOME's Files runs them: with no network, no session bus and no other processes, a private empty home and `/tmp`, and only the previewed item of your files, read-only. Together they may use at most 2 GiB of memory, 64 processes and one processor's worth of time, at a lower priority than the app. Where bubblewrap is missing or can't run, no outside thumbnailer is started.
+* A picture whose header asks for more than 64 megapixels (256 for a JPEG), a damaged picture, or one that takes longer than about 10 seconds to decode keeps its type icon instead of being decoded, in thumbnails, the Details pane's preview and custom icons, and is not handed to a thumbnailer either.
+* **Continue**, offered when a copy, move or delete is denied, checks the location with the same refusals as the **Open as administrator** folder delete before it asks for a password: a folder other accounts can change, or one on a drive users can mount, is refused and the reason is shown. It uses the existing administrator paths and adds no new privilege mechanism. GVfs has no administrator Recycle Bin, so in a Recycle Bin delete Continue first asks whether to delete the item permanently.
+
+## What's Changed
+* **Look:** Windows 11's density, with 32 px rows, 48 px bars and 16 px icons, about 22 rows in a 900 px window. The title bar and tab strip, the file list's sort chevron, hover, selection and focus ring, and the menus' rounded corners, spacing and fade-in are drawn as in Windows 11. The classic menu shows a bold Open and no shortcut text, menu rows show no tooltips, and the Back, Forward, Up and Refresh tooltips name where they lead. File types are named as Windows names them ("ODS Spreadsheet", "PNG File").
+* **Command bar and status bar:** "…", View and This PC's commands are laid out as in Windows 11, and the Recycle Bin has Empty Recycle Bin and Restore all items there. The status bar reads like Windows 11's: the item count, the selection and its size, and the Details and Large icons toggles.
+* **Views:** new Tiles and Content views (Ctrl+Shift+7 and Ctrl+Shift+8), which keep a folder's groups. Groups collapse and expand under their headings in Details, Tiles and Content. In Details, a click anywhere on a row selects it, a rubber band can start beside a name, and Ctrl+plus on the number pad or the column titles' menu sizes the columns to fit. New users start with the Details pane closed and en-US dates written as 9/13/2026.
+* **Details pane:** laid out as in Windows 11: the picture, the name, Share, Properties and the file's details, photo details included.
+* **Navigation pane:** in Windows 11's order: Home, the pinned folders, then This PC and Network. This PC, Network and drives have Windows 11's right-click menus, and the Map network drive button below the pane is gone (it stays in those menus and in "…"). **Recent files** now opens, and its rows offer Open file location.
+* **This PC and Network:** This PC shows drives and network locations as tiles with a capacity bar, in collapsible groups. Network lists the computers on your network as items, with an info bar when discovery is off. A drive can be copied and pasted or dragged into a folder as a shortcut, as in Windows. Map network drive, Enter network credentials and Disconnect use Windows 11's layout and words, and Map network drive offers only free drive letters.
+* **Address bar and keys:** a chevron before the crumbs lists the top-level places, a long path folds its first crumbs into «, and a crumb's menu lists every subfolder. The keyboard reaches the « and the chevron, and every Tab stop shows where the keyboard is. Address bar suggestions have 40 px rows and show the current one with a light fill and a blue bar; Up and Down wrap back to what you typed, and Escape puts it back. F3 goes to search, Space only selects, and scrolling over the address bar no longer changes folder. The file list's focused item is outlined only while the list has the keyboard.
+* **Menus and dragging:** right-click menus are laid out as in Windows 11 24H2: the top strip's Cut, Copy, Rename, Share and Delete buttons carry labels, with thin lines between them, and the strip sits on the side nearest the pointer; Settings › Appearance › Buttons in the right-click menu can keep it always at the top or the bottom instead. This PC's group headings have Collapse group, Expand all groups and Collapse all groups, as the file list's do. Submenus fly out to the side on hover. Show more options has Send to: a compressed folder, a shortcut on the desktop, Documents, a mail recipient, drives and Bluetooth devices. A right-button drag asks Copy here, Move here or Create shortcuts here, and a drag says what a drop will do ("Move to Documents"). New lists Windows 11's items and creates each file at once, ready to rename. Open with chooses an app as Windows 11 does: the current default, suggested apps, More apps, Just once and Always.
+* **Copying, moving and deleting:** Delete sends items to the Recycle Bin without asking, and a permanent delete asks Windows' Yes or No question. Copy, cut and drag take up to 100,000 items, and a folder held under a drag no longer opens. The progress window asks Replace or Skip Files, with a File Conflict window to compare both files, and asks about every failed item in Windows 11's words, with nothing reported afterwards; the Operation result dialog is gone. Compress and extract show their progress there too. A new setting lets Replace overwrite the old file as Windows does; by default it still goes to the Recycle Bin first, and cancelling the copy brings it back.
+* **Renaming:** the part of the name Windows 11 selects is selected, shortcuts are treated as Windows treats them, Windows' forbidden characters are refused as you type, and a taken name offers "name (2)".
+* **Properties:** every Properties window has Windows 11's fixed size and 9-point text. Files gain a Details tab, local folders the whole Customize tab (folder templates, a folder picture and Change Icon's grid of icons), drives Windows 11's used and free space ring without counting their files, and several items show their names, Read-only and Hidden. A folder that is a mount point shows as a folder, and Read-only stays in step with a change made on the Security tab.
+* **Folder Options:** its own compact window, with Windows 11's General, View and Search tabs: Browse folders, Privacy, the View tree and the search options.
+* **Open and Save dialogs:** laid out as Windows lays them out. The name is drawn selected only while it has the keyboard, and a window opened from inside a dialog belongs to it.
+* **Recycle Bin:** a restore that meets a taken name asks Replace or Skip Files, also when two items go back to the same name.
+* **Search:** results are a step in the tab's history ("Search Results in Documents"), so Back and Forward move between a folder and its results, also in a middle-clicked tab, and files whose text matches are kept.
+* **Thumbnails and clipboard:** the desktop's own thumbnailers make previews of videos and other files, also when installed outside `/usr` or on NixOS, and pictures no gdk-pixbuf loader declares get previews. Paste writes a picture on the clipboard, such as a screenshot, as a new image file, and Copy and Cut also put the items' paths on the clipboard as text; Settings › Files & folders › Clipboard can turn either off. Open in Terminal can start kitty, and pasting into a folder opened through a symbolic link works.
+* **Fixes:** the file list is drawn again after "Working on it..." on a slow share, instead of staying blank. A hovered submenu no longer opens after the keyboard moves on. Select all, Select none and Invert selection work on This PC's drives. A template given to subfolders is kept when only the folder changes later. Tiles and Content write sizes as the status bar does.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.15_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.15-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.15-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.15-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.15-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.14...v2.0.15
+
 # 2.0.14 — 2026-11-05
 
 ## Security

@@ -341,6 +341,18 @@ impl TestWindow {
             .expect("the window has the action");
     }
 
+    /// Opens the details pane, which a new window has closed, as Windows
+    /// 11 Explorer's; does nothing while it is switched on.
+    pub(crate) fn open_details_pane(&self) {
+        let state = self
+            .window
+            .lookup_action("details-pane")
+            .and_then(|action| action.state());
+        if state.and_then(|state| state.get::<bool>()) != Some(true) {
+            self.activate("details-pane", None);
+        }
+    }
+
     /// The string state of the window action `name`.
     pub(crate) fn action_state(&self, name: &str) -> Option<String> {
         let state = self.window.lookup_action(name)?.state()?;
@@ -373,6 +385,38 @@ impl TestWindow {
             !self.context.settings_data().preferences.per_folder_views
         });
     }
+
+    /// Turns Settings' "Paste pictures as new files" on or off, as another
+    /// process would, and waits until the window reads it, for tests of that
+    /// switch (CLIP-015).
+    pub(crate) fn set_paste_pictures_as_files(&self, on: bool) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                paste_pictures_as_files: Some(on),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("picture paste to follow the setting", || {
+            self.context.settings_data().preferences.paste_pictures_as_files == on
+        });
+    }
+
+    /// Turns Settings' "Also copy paths as text" on or off, as another process
+    /// would, and waits until the window reads it, for tests of that switch
+    /// (CLIP-004).
+    pub(crate) fn set_copy_paths_as_text(&self, on: bool) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                copy_paths_as_text: Some(on),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("paths as text to follow the setting", || {
+            self.context.settings_data().preferences.copy_paths_as_text == on
+        });
+    }
 }
 
 impl Drop for TestWindow {
@@ -387,6 +431,18 @@ impl Drop for TestWindow {
             settle();
             thread::sleep(POLL_INTERVAL);
         }
+        // A dialog still shown over the window, as a failed test leaves
+        // its question, would outlive it and stay on the screen.
+        let dialogs: Vec<gtk::Window> = gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+            .filter(|dialog| {
+                dialog.is_visible() && dialog.transient_for().as_ref() == Some(self.window.upcast_ref())
+            })
+            .collect();
+        for dialog in &dialogs {
+            put_away(dialog);
+        }
         // `close()` does nothing for an unpresented window and can ask a
         // question for a presented one. Tests exercise those user-facing
         // requests explicitly; fixture teardown must always unregister it.
@@ -395,6 +451,19 @@ impl Drop for TestWindow {
         // directory that is about to be deleted.
         self.context.search_cache().shut_down();
         settle();
+    }
+}
+
+/// Takes `window`, left shown by a test, off the screen. The app's own
+/// dialogs and browser windows are destroyed, as their code does; any
+/// other window is only hidden, as its owner may destroy it or answer for
+/// it later: GTK's `AlertDialog` does both with its window, so destroying
+/// or closing it here would do either twice.
+pub(crate) fn put_away(window: &gtk::Window) {
+    if window.is::<crate::dialog::Dialog>() || window.is::<BrowserWindow>() {
+        window.destroy();
+    } else {
+        window.set_visible(false);
     }
 }
 
@@ -481,6 +550,21 @@ pub(crate) fn capture(window: &BrowserWindow, filename: &str) {
     });
 }
 
+/// Saves a PNG of `window` with its open menus drawn over it into
+/// `$OX_NATIVE_CAPTURE_DIR`, when set, as the snapshot hook draws them.
+pub(crate) fn capture_with_menus(window: &BrowserWindow, filename: &str) {
+    let Some(directory) = capture_directory() else {
+        return;
+    };
+    // A menu fades and slides in as it opens.
+    wait_for(crate::window::MENU_OPENING_MOTION);
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
+    let path = directory.join(filename);
+    wait_until("the window to be saved", || {
+        crate::snapshot::save_png_with_menus(window.upcast_ref(), &path).is_ok()
+    });
+}
+
 /// Saves a PNG of the open `popover` into `$OX_NATIVE_CAPTURE_DIR`, when
 /// set. A popover is a surface of its own, which a window capture leaves
 /// out.
@@ -488,6 +572,8 @@ pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, fi
     let Some(directory) = capture_directory() else {
         return;
     };
+    // A menu fades and slides in as it opens.
+    wait_for(crate::window::MENU_OPENING_MOTION);
     wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
     crate::snapshot::render_png(popover, None, &directory.join(filename))
         .expect("an open popover is drawn and the capture directory is writable");

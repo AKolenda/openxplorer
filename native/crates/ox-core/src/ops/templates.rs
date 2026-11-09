@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The templates New offers: six built-in starters and the files in the
-//! user's Templates folder.
+//! user's Templates folder, and the documents of Windows' New menu
+//! ([`NewDocument`]).
 //!
 //! Ports `PRESETS` and `list_templates` in `v2.0.0:desktop/file_services.py`.
 //! OPS-048 limits which files count as user templates: at most
@@ -118,6 +119,72 @@ impl BuiltinTemplate {
                 "<title>New page</title></head><body></body></html>\n"
             )
             .as_bytes(),
+        }
+    }
+}
+
+/// The documents New makes in place, as Windows 11 File Explorer's New
+/// menu lists its registered types on a stock system, in that order:
+/// "Bitmap image", "Rich Text Document", "Text Document" and "Compressed
+/// (zipped) Folder". Each is made as "New <type>.<extension>" with fixed
+/// content, then renamed in place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NewDocument {
+    /// A blank 1 × 1 white `.bmp`, so image programs can open it.
+    BitmapImage,
+    /// A minimal `.rtf` with no text.
+    RichTextDocument,
+    /// An empty `.txt`.
+    TextDocument,
+    /// An empty `.zip`: an end of central directory record and nothing
+    /// else, the 22 bytes Windows writes.
+    CompressedFolder,
+}
+
+/// A blank 1 × 1 white bitmap: the 14-byte file header, the 40-byte
+/// `BITMAPINFOHEADER` (24 bits per pixel, uncompressed, 72 DPI) and one row
+/// of one pixel padded to four bytes.
+const BLANK_BITMAP: [u8; 58] = [
+    b'B', b'M', 58, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, // file header
+    40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 24, 0, // size, width, height, planes, bits
+    0, 0, 0, 0, 4, 0, 0, 0, 0x13, 0x0b, 0, 0, 0x13, 0x0b, 0, 0, // compression, image size, DPI
+    0, 0, 0, 0, 0, 0, 0, 0, // palette
+    0xff, 0xff, 0xff, 0, // one white pixel and its padding
+];
+
+/// An empty ZIP: only the end of central directory record.
+const EMPTY_ZIP: [u8; 22] = [
+    b'P', b'K', 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+impl NewDocument {
+    /// Every document, in the order New lists them.
+    pub const ALL: [NewDocument; 4] = [
+        NewDocument::BitmapImage,
+        NewDocument::RichTextDocument,
+        NewDocument::TextDocument,
+        NewDocument::CompressedFolder,
+    ];
+
+    /// The extension of the new file, without its dot.
+    pub fn extension(self) -> &'static str {
+        match self {
+            NewDocument::BitmapImage => "bmp",
+            NewDocument::RichTextDocument => "rtf",
+            NewDocument::TextDocument => "txt",
+            NewDocument::CompressedFolder => "zip",
+        }
+    }
+
+    /// The new file's content.
+    pub fn contents(self) -> &'static [u8] {
+        match self {
+            NewDocument::BitmapImage => &BLANK_BITMAP,
+            NewDocument::RichTextDocument => {
+                b"{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\f0\\fs22\\par}\n"
+            }
+            NewDocument::TextDocument => b"",
+            NewDocument::CompressedFolder => &EMPTY_ZIP,
         }
     }
 }
@@ -335,10 +402,17 @@ fn folder_entries(directory: &gio::File, cancel: &Cancellation) -> Result<Vec<gi
 /// The name of a subfolder whose templates are listed: a folder, not
 /// hidden and not a link, with a UTF-8 name.
 fn subfolder_name(info: &gio::FileInfo) -> Option<String> {
-    let is_folder = info.file_type() == gio::FileType::Directory && !info.is_symlink() && !info.is_hidden();
+    let is_folder = info.file_type() == gio::FileType::Directory && !is_link_or_hidden(info);
     is_folder
         .then(|| info.name().to_str().map(str::to_owned))
         .flatten()
+}
+
+/// Whether `info` is a link or a hidden item. Read as attributes, so a
+/// backend that leaves either out (`GVfs`'s SMB sets `standard::is-hidden`
+/// only on dot names) counts as neither, without GIO's critical warning.
+fn is_link_or_hidden(info: &gio::FileInfo) -> bool {
+    info.boolean("standard::is-symlink") || info.boolean("standard::is-hidden")
 }
 
 /// The file name of a qualifying template: a regular file, not hidden and
@@ -346,7 +420,7 @@ fn subfolder_name(info: &gio::FileInfo) -> Option<String> {
 /// launcher, which would describe a program rather than hold a document.
 /// A name that is not valid UTF-8 is skipped: a template id is text.
 fn template_name(info: &gio::FileInfo) -> Option<String> {
-    let is_plain_file = info.file_type() == gio::FileType::Regular && !info.is_symlink() && !info.is_hidden();
+    let is_plain_file = info.file_type() == gio::FileType::Regular && !is_link_or_hidden(info);
     let size = u64::try_from(info.size()).unwrap_or(u64::MAX);
     if !is_plain_file || size > MAX_TEMPLATE_BYTES {
         return None;
@@ -372,6 +446,33 @@ mod tests {
         let user = TemplateId::User("Letter.odt".into());
         assert_eq!(user.to_string(), "user:Letter.odt");
         assert_eq!("user:Letter.odt".parse::<TemplateId>(), Ok(user));
+    }
+
+    /// The bitmap is a whole, valid BMP: its header gives its own size,
+    /// where its pixels start, one 24-bit pixel, and that pixel is white.
+    #[test]
+    fn the_new_bitmap_is_a_valid_blank_bmp() {
+        let bitmap = NewDocument::BitmapImage.contents();
+        let u32_at = |at: usize| u32::from_le_bytes(bitmap[at..at + 4].try_into().expect("four bytes"));
+
+        assert_eq!(&bitmap[..2], b"BM");
+        assert_eq!(u32_at(2) as usize, bitmap.len());
+        assert_eq!(u32_at(10), 54, "the pixels follow both headers");
+        assert_eq!(u32_at(14), 40, "a BITMAPINFOHEADER");
+        assert_eq!((u32_at(18), u32_at(22)), (1, 1));
+        assert_eq!(&bitmap[26..30], [1, 0, 24, 0], "one plane, 24 bits");
+        assert_eq!(u32_at(30), 0, "uncompressed");
+        assert_eq!(&bitmap[54..], [0xff, 0xff, 0xff, 0], "white, padded to 4 bytes");
+    }
+
+    #[test]
+    fn each_new_document_has_its_windows_extension() {
+        let extensions = NewDocument::ALL.map(NewDocument::extension);
+
+        assert_eq!(extensions, ["bmp", "rtf", "txt", "zip"]);
+        assert!(NewDocument::TextDocument.contents().is_empty());
+        assert!(NewDocument::RichTextDocument.contents().starts_with(b"{\\rtf1"));
+        assert_eq!(&NewDocument::CompressedFolder.contents()[..4], b"PK\x05\x06");
     }
 
     #[test]

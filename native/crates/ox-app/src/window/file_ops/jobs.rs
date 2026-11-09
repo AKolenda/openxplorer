@@ -9,7 +9,7 @@ use gtk::subclass::prelude::*;
 use ox_core::ops::OperationContext;
 use ox_core::transfer::Cancellation;
 
-pub(super) const MAX_JOBS: usize = 4;
+pub(in crate::window) const MAX_JOBS: usize = 4;
 
 #[derive(Debug)]
 pub(super) struct Job {
@@ -63,7 +63,8 @@ impl BrowserWindow {
         let mut context = OperationContext::new(self.context().write_protection());
         context.unstorable = Some(self.unstorable_asker());
         context.move_by_copying = Some(self.move_by_copying_asker());
-        context.item_failure = Some(self.failure_asker());
+        context.item_failure = Some(self.failure_asker(&context.cancel));
+        context.replaced_files = self.replaced_files();
         let panel = if self.transfer_panel().is_busy() {
             TransferPanel::for_window(self)
         } else {

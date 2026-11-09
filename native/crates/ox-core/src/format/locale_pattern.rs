@@ -14,7 +14,9 @@
 //! in the result is mapped back to the field it came from. The reference
 //! values are chosen so no two fields print the same digits. The locale's
 //! order and separators survive; the year becomes four digits and the
-//! month and day two, as in the web UI's Date modified column. When the
+//! month and day two, as in the web UI's Date modified column, except
+//! where Windows' default short date writes the month and day without a
+//! leading zero: `en_US`, whose `M/d/yyyy` reads `9/13/2026`. When the
 //! sample holds anything unexpected (month names, era years, native
 //! digits) the ISO pattern is used instead.
 
@@ -32,8 +34,8 @@ const ISO_TIME: &str = "%H:%M:%S";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct LocalePatterns {
     /// The numeric date with a four-digit year and two-digit month and day:
-    /// `%m/%d/%Y` for `C` and `en_US`, `%d.%m.%Y` for `de_DE`,
-    /// `%Y年%m月%d日` for `ja_JP`.
+    /// `%m/%d/%Y` for `C`, `%d.%m.%Y` for `de_DE`, `%Y年%m月%d日` for
+    /// `ja_JP`; `%-m/%-d/%Y` for `en_US`, as Windows writes it there.
     pub(super) date: String,
     /// The clock time with seconds: `%H:%M:%S` for `C` and `de_DE`,
     /// `%-I:%M:%S %p` for `en_US`. A time zone name in the locale's format
@@ -52,7 +54,13 @@ impl LocalePatterns {
     /// The patterns that `samples` show, or the ISO patterns for samples
     /// that cannot be mapped to numbers.
     pub(super) fn from_samples(samples: &LocaleSamples) -> Self {
-        let date = date_pattern_from_sample(&samples.date);
+        let date = date_pattern_from_sample(&samples.date).map(|date| {
+            if has_unpadded_short_date(samples) {
+                without_date_padding(&date)
+            } else {
+                date
+            }
+        });
         let time = time_pattern_from_sample(&samples.time, &samples.day_period, &samples.zone);
         Self {
             date: date.unwrap_or_else(|| ISO_DATE.to_string()),
@@ -122,6 +130,9 @@ pub(super) struct LocaleSamples {
     pub(super) day_period: String,
     /// `%Z`, the time zone name, which the time pattern leaves out.
     pub(super) zone: String,
+    /// The `LC_TIME` locale's name, such as `en_US.UTF-8`; empty for the
+    /// C locale.
+    pub(super) locale: String,
 }
 
 impl LocaleSamples {
@@ -140,8 +151,58 @@ impl LocaleSamples {
             time: sample("%X"),
             day_period: sample("%p"),
             zone: sample("%Z"),
+            locale: time_locale_from_environment(),
         }
     }
+}
+
+/// The name of the process's time locale: `LC_ALL`, else `LC_TIME`, else
+/// `LANG`, as the C library chooses it.
+fn time_locale_from_environment() -> String {
+    ["LC_ALL", "LC_TIME", "LANG"]
+        .into_iter()
+        .filter_map(|variable| std::env::var(variable).ok())
+        .find(|value| !value.is_empty())
+        .unwrap_or_default()
+}
+
+/// Whether Windows' default short date in the sampled locale writes the
+/// month and day without a leading zero: `M/d/yyyy` in `en_US`. Other
+/// locales keep their two-digit fields, as most of Windows' own short
+/// dates have them (`dd/MM/yyyy` in `en_GB`, `dd.MM.yyyy` in `de_DE`).
+///
+/// The sample must be `en_US`'s own `%x` too, so a process whose
+/// environment names `en_US` but that runs in the C locale, having never
+/// set its locale or lacking `en_US`, keeps the C locale's `11/22/33`
+/// order and padding.
+fn has_unpadded_short_date(samples: &LocaleSamples) -> bool {
+    let name = samples.locale.split(['.', '@']).next().unwrap_or_default();
+    name == "en_US" && samples.date.trim() == "11/22/2033"
+}
+
+/// `pattern` with its month and day written without a leading zero:
+/// `%m/%d/%Y` becomes `%-m/%-d/%Y`. A literal `%%` stays as it is.
+fn without_date_padding(pattern: &str) -> String {
+    let mut unpadded = String::with_capacity(pattern.len() + 2);
+    let mut characters = pattern.chars();
+    while let Some(character) = characters.next() {
+        if character != '%' {
+            unpadded.push(character);
+            continue;
+        }
+        match characters.next() {
+            Some(field @ ('m' | 'd')) => {
+                unpadded.push_str("%-");
+                unpadded.push(field);
+            }
+            Some(other) => {
+                unpadded.push('%');
+                unpadded.push(other);
+            }
+            None => unpadded.push('%'),
+        }
+    }
+    unpadded
 }
 
 /// The patterns of the process's `LC_TIME` locale, derived on the first
@@ -521,6 +582,38 @@ mod tests {
         assert_eq!(time_pattern_from_sample("PM", "PM", "UTC"), None);
         assert_eq!(time_pattern_from_sample("13:44:55:13", "", "UTC"), None);
         assert_eq!(time_pattern_from_sample("13 Uhr", "", "UTC"), None);
+    }
+
+    /// In `en_US` the month and day lose their leading zero, as Windows'
+    /// `M/d/yyyy` writes them; the C locale and other locales keep theirs.
+    ///
+    /// parity: LOOK-026
+    #[test]
+    fn only_en_us_drops_the_leading_zero_of_the_month_and_day() {
+        let date_in = |locale: &str, date: &str| {
+            LocalePatterns::from_samples(&LocaleSamples {
+                date: date.to_string(),
+                time: "01:44:55 PM".to_string(),
+                day_period: "PM".to_string(),
+                zone: "UTC".to_string(),
+                locale: locale.to_string(),
+            })
+            .date
+        };
+        assert_eq!(date_in("en_US.UTF-8", "11/22/2033"), "%-m/%-d/%Y");
+        assert_eq!(date_in("en_US", "11/22/2033"), "%-m/%-d/%Y");
+        assert_eq!(date_in("", "11/22/33"), "%m/%d/%Y", "the C locale");
+        assert_eq!(date_in("C.UTF-8", "11/22/33"), "%m/%d/%Y");
+        assert_eq!(
+            date_in("en_US.UTF-8", "11/22/33"),
+            "%m/%d/%Y",
+            "named in the environment, but the C locale's format"
+        );
+        assert_eq!(date_in("en_GB.UTF-8", "22/11/33"), "%d/%m/%Y");
+        assert_eq!(date_in("de_DE.UTF-8", "22.11.2033"), "%d.%m.%Y");
+        assert_eq!(date_in("en_US.UTF-8", "22 Nov 2033"), ISO_DATE, "no numbers");
+        assert_eq!(without_date_padding("%d%%%m%%%Y"), "%-d%%%-m%%%Y");
+        assert_eq!(without_date_padding("%%m %m"), "%%m %-m");
     }
 
     #[test]

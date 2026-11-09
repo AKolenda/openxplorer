@@ -52,8 +52,8 @@ msgid "- Report an issue (in this Help window and in About this build) opens the
 msgstr "- “报告问题”（位于本帮助窗口和“关于此版本”中）会在浏览器中打开项目的问题跟踪器。请描述你做了什么、期望什么以及发生了什么，并且不要包含私人文件名。"
 
 #: crates/ox-app/resources/manual.md
-msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it."
-msgstr "- 此电脑列出驱动器、USB 存储设备和已连接的手机。单击其中一个即可打开；需要时会自动挂载。\n- 拔下驱动器前，先在其菜单中使用“弹出”或“安全删除”。"
+msgid "- This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.\n- Use Eject or Safely remove on a drive's menu before unplugging it.\n- Copy a drive and paste it into a folder, or drag it there, to make a shortcut to it, such as Local Disk - Shortcut. The drive's files are not copied."
+msgstr "- 此电脑列出驱动器、USB 存储设备和已连接的手机。单击其中一个即可打开；需要时会自动挂载。\n- 拔下驱动器前，先在其菜单中使用“弹出”或“安全删除”。\n- 复制驱动器并粘贴到文件夹中，或将其拖到文件夹中，即可创建指向它的快捷方式，例如“本地磁盘 - Shortcut”。驱动器中的文件不会被复制。"
 
 #: crates/ox-app/resources/manual.md
 msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H shows or hides hidden files. Alt+Shift+P or Alt+P shows the details pane, F9 the navigation pane.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
@@ -138,6 +138,14 @@ msgstr "文件命令"
 #: crates/ox-app/resources/ui/details-pane.ui
 msgid "Close details pane"
 msgstr "关闭详细信息窗格"
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Availability"
+msgstr "可用性"
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Available on this device"
+msgstr "在此设备上可用"
 
 #: crates/ox-app/resources/ui/network-sign-in.ui
 msgid "Cancel sign-in"
@@ -2012,8 +2020,8 @@ msgid "About this build"
 msgstr "关于此版本"
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs."
-msgstr "一个面向 Zorin 的独立文件管理器，灵感来自 Windows 11。桌面端：GTK 4 + GIO/GVfs。"
+msgid "An independent Windows 11–inspired file manager for Linux. Desktop: GTK 4 + GIO/GVfs."
+msgstr "一个面向 Linux 的独立文件管理器，灵感来自 Windows 11。桌面端：GTK 4 + GIO/GVfs。"
 
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/status_bar.rs
 msgid "Check for updates"
@@ -2044,7 +2052,7 @@ msgid "Updates"
 msgstr "更新"
 
 #: crates/ox-app/src/settings_page/about.rs
-msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgid "license licence agpl source code copyright mit notice. Original component notices are preserved."
 msgstr "许可证 agpl 源代码 版权 mit 声明。原始组件的声明均已保留。"
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -3222,7 +3230,7 @@ msgid "What OpenXplorer asks before it deletes, runs or closes."
 msgstr "OpenXplorer 在删除、运行或关闭前会询问什么。"
 
 #: crates/ox-app/src/settings_page/pages.rs
-msgid "What this build is, how it is updated and its licence."
+msgid "What this build is, how it is updated and its license."
 msgstr "此构建是什么、如何更新及其许可证。"
 
 #: crates/ox-app/src/settings_page/pages.rs
@@ -3415,8 +3423,8 @@ msgid "Update installation did not complete. {reason}{recovery}"
 msgstr "更新安装未完成。{reason}{recovery}"
 
 #: crates/ox-app/src/window/about.rs
-msgid "An independent Windows 11–inspired file manager for Zorin.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
-msgstr "一款面向 Zorin 的独立文件管理器，灵感来自 Windows 11。\n\n桌面版：Rust + GTK 4 + GIO/GVfs。"
+msgid "An independent Windows 11–inspired file manager for Linux.\n\nDesktop: Rust + GTK 4 + GIO/GVfs."
+msgstr "一款面向 Linux 的独立文件管理器，灵感来自 Windows 11。\n\n桌面版：Rust + GTK 4 + GIO/GVfs。"
 
 #: crates/ox-app/src/window/about.rs
 msgid "Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\nComplete corresponding source and build tools: {REPOSITORY}, tag v{version}, and the source archive published with each release at {REPOSITORY}/releases."
@@ -3663,8 +3671,8 @@ msgid "Extract all files from this archive"
 msgstr "从此压缩包中解压所有文件"
 
 #: crates/ox-app/src/window/command_bar.rs
-msgid "More options"
-msgstr "更多选项"
+msgid "See more"
+msgstr "查看更多"
 
 #: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
@@ -3709,6 +3717,10 @@ msgstr "{label}（Delete）"
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Ascending"
 msgstr "升序"
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Compressed (zipped) Folder"
+msgstr "压缩(zipped)文件夹"
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "CSV file"
@@ -3818,6 +3830,10 @@ msgstr "选择匹配的项目…"
 msgid "Select none"
 msgstr "全不选"
 
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Shortcut"
+msgstr "快捷方式"
+
 #: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/settings-page.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/location/virtual_place.rs packaging/data/io.winspace.Development.desktop
 msgid "Settings"
 msgstr "设置"
@@ -3825,6 +3841,9 @@ msgstr "设置"
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Show hidden files"
 msgstr "显示隐藏文件"
+
+msgid "Hidden items"
+msgstr "隐藏的项目"
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Smaller text"
@@ -3837,6 +3856,10 @@ msgstr "分屏视图"
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Terminal"
 msgstr "终端"
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Text Document"
+msgstr "文本文档"
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
 msgid "Text document"
@@ -3994,33 +4017,9 @@ msgstr "显示子文件夹"
 msgid "This link points to an address OpenXplorer cannot open."
 msgstr "此链接指向 OpenXplorer 无法打开的地址。"
 
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter."
-msgstr "文件通过 GIO/GVfs 访问。保存的位置不是系统范围的驱动器盘符。"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Items"
-msgstr "项目"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Multiple items"
-msgstr "多个项目"
-
 #: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/sidebar/row.rs crates/ox-core/src/entry/classify.rs
 msgid "Network share"
 msgstr "网络共享"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Select an item to see its properties. Double-click to open it."
-msgstr "选择项目以查看其属性。双击可将其打开。"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "Storage"
-msgstr "存储"
-
-#: crates/ox-app/src/window/details_pane/content.rs
-msgid "This computer"
-msgstr "此计算机"
 
 #: crates/ox-app/src/window/details_pane/content.rs
 msgid "{selected} items selected"
@@ -4051,8 +4050,8 @@ msgid "Only a folder on a drive or share can be cached for search."
 msgstr "只有驱动器或共享上的文件夹可以缓存以用于搜索。"
 
 #: crates/ox-app/src/window/disabled_reasons.rs
-msgid "Only a search result has a file location to open."
-msgstr "只有搜索结果才有可打开的文件位置。"
+msgid "Only a search result or a recent file has a file location to open."
+msgstr "只有搜索结果或最近使用的文件才有可打开的文件位置。"
 
 #: crates/ox-app/src/window/disabled_reasons.rs
 msgid "Pages such as This PC have no properties."
@@ -4167,12 +4166,15 @@ msgid "This network item needs an app that supports SMB addresses. For a local-o
 msgstr "此网络项目需要支持 SMB 地址的应用。对于仅支持本地访问的编辑器，请通过已有的本地挂载点打开它。"
 
 #: crates/ox-app/src/window/file_drag/payload.rs
-msgid "Select up to 200 files or folders. Extract ZIP contents before dragging them."
-msgstr "最多可选择 200 个文件或文件夹。拖动前请先解压 ZIP 内容。"
+msgid "Extract ZIP contents before dragging them."
+msgstr "拖动前请先解压 ZIP 内容。"
 
 #: crates/ox-app/src/window/file_drag/payload.rs
 msgid "This file selection is too large to drag."
 msgstr "此文件选择过大，无法拖动。"
+
+msgid "This file selection is too large to copy or cut."
+msgstr "此文件选择过大，无法复制或剪切。"
 
 #: crates/ox-app/src/window/file_drop.rs
 msgid "A folder cannot be copied into itself."
@@ -4683,8 +4685,8 @@ msgid "Folder Views"
 msgstr "文件夹视图"
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Open File Explorer to:"
-msgstr "打开文件资源管理器时打开："
+msgid "Open OpenXplorer to:"
+msgstr "打开 OpenXplorer 时打开："
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "Remember each folder's view settings"
@@ -5599,6 +5601,18 @@ msgstr "没有以“{prefix}”开头的名称"
 msgid "Another file operation is still running."
 msgstr "另一个文件操作仍在运行。"
 
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size all columns to fit"
+msgstr "将所有列调整为合适的大小"
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Ctrl+Plus (numeric keypad)"
+msgstr "Ctrl+加号(数字小键盘)"
+
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size column to fit"
+msgstr "将该列调整为合适的大小"
+
 #: crates/ox-app/src/window/watch_state.rs
 msgid "{seconds} seconds"
 msgstr "{seconds} 秒"
@@ -5945,24 +5959,57 @@ msgid "Only folders and network shares can be pinned to Quick access."
 msgstr "只能将文件夹和网络共享固定到“快速访问”。"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Compressed folder"
-msgstr "压缩文件夹"
+msgid "Application"
+msgstr "应用程序"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Excel worksheet"
-msgstr "Excel 工作表"
+msgid "Microsoft Excel 97-2003 Worksheet"
+msgstr "Microsoft Excel 97-2003 工作表"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "MP4 video"
-msgstr "MP4 视频"
+msgid "Microsoft Excel Worksheet"
+msgstr "Microsoft Excel 工作表"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "PowerPoint presentation"
-msgstr "PowerPoint 演示文稿"
+msgid "Microsoft PowerPoint 97-2003 Presentation"
+msgstr "Microsoft PowerPoint 97-2003 演示文稿"
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Word document"
-msgstr "Word 文档"
+msgid "Microsoft PowerPoint Presentation"
+msgstr "Microsoft PowerPoint 演示文稿"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "Microsoft Word 97 - 2003 Document"
+msgstr "Microsoft Word 97 - 2003 文档"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "Microsoft Word Document"
+msgstr "Microsoft Word 文档"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Presentation"
+msgstr "OpenDocument 演示文稿"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Spreadsheet"
+msgstr "OpenDocument 电子表格"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Text"
+msgstr "OpenDocument 文本"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "PDF Document"
+msgstr "PDF 文档"
+
+#: crates/ox-core/src/entry/type_label.rs
+msgid "PDF File"
+msgstr "PDF 文件"
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/entry/type_label.rs
+msgid "{extension} File"
+msgstr "{extension} 文件"
 
 #: crates/ox-core/src/folder_locations.rs
 msgid "Choose a dedicated folder, not your entire home directory or the filesystem root."
@@ -6031,6 +6078,11 @@ msgstr "TB"
 #: crates/ox-core/src/format.rs
 msgid "{bytes} bytes"
 msgstr "{bytes} 字节"
+
+#: crates/ox-core/src/format/explorer_text.rs
+msgid "{bytes} byte"
+msgid_plural "{bytes} bytes"
+msgstr[0] "{bytes} 字节"
 
 #: crates/ox-core/src/format.rs
 msgid "{value} {unit}"
@@ -6973,60 +7025,12 @@ msgid "Undo can only rename an item back within its own folder."
 msgstr "撤销只能把项目重命名回它所在的文件夹内。"
 
 #: crates/ox-core/src/ops/report.rs
-msgid "Operation result"
-msgstr "操作结果"
-
-#: crates/ox-core/src/ops/report.rs
 msgid "Operation stopped"
 msgstr "操作已停止"
 
 #: crates/ox-core/src/ops/report.rs
-msgid "{count} completed."
-msgstr "{count} 个已完成。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) copied."
-msgstr "已复制 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) duplicated."
-msgstr "已创建 {count} 个副本。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) linked."
-msgstr "已创建 {count} 个链接。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) moved."
-msgstr "已移动 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) permanently deleted."
-msgstr "已永久删除 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) renamed."
-msgstr "已重命名 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} item(s) restored."
-msgstr "已还原 {count} 个项目。"
-
-#: crates/ox-core/src/ops/report.rs
 msgid "{count} item(s) sent to Trash."
 msgstr "已将 {count} 个项目移到回收站。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{count} skipped (name already exists)."
-msgstr "已跳过 {count} 个（名称已存在）。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} redone."
-msgstr "已重做 {title}。"
-
-#: crates/ox-core/src/ops/report.rs
-msgid "{title} undone."
-msgstr "已撤销 {title}。"
 
 #: crates/ox-core/src/ops/run_transfer.rs crates/ox-core/src/transfer/request.rs
 msgid "Choose a destination folder."

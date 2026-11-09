@@ -120,7 +120,7 @@ impl BrowserWindow {
     }
 
     /// Every browser window of the app, this one included.
-    fn browser_windows(&self) -> Vec<BrowserWindow> {
+    pub(super) fn browser_windows(&self) -> Vec<BrowserWindow> {
         let Some(app) = self.application() else {
             return vec![self.clone()];
         };

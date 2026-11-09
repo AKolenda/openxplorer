@@ -4,13 +4,18 @@
 //! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
 //! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
 //! New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾,
-//! View ▾, More options, then at the right Settings and the Details
-//! toggle; the appearance toggle there is hidden,
+//! View ▾, See more ("…"), then at the right Update while a release waits
+//! (only when Settings › About › "Show the Update button in the command
+//! bar" is on, as Windows 11 File Explorer has no such button), Settings
+//! and the Details toggle; the appearance toggle there is hidden,
 //! as Settings › Appearance chooses the theme. Every control runs a window or application
 //! action. New is disabled where nothing can be created, and Delete is named
 //! plainly "Delete", as in Windows Explorer, or "Delete permanently" in the
 //! Recycle Bin (CMD-003). Share, which was Copy path in the Python app, shows
 //! only where the desktop can share by email (CMD-037, `super::share`).
+//! In the Recycle Bin, as in Windows 11 File Explorer, Empty Recycle Bin
+//! and Restore all items follow View, Restore all items reading Restore
+//! the selected items while items are selected (OPS-041, OPS-042).
 //!
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at
@@ -32,8 +37,8 @@ use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
 
 use menus::{appearance_items, more_menu};
-pub(super) use menus::{group_by_menu, new_menu, sort_menu, view_menu};
-pub(super) use menus::{FolderPin, MoreMenuState, MorePlace, NetworkDrive};
+pub(super) use menus::{disconnect_network_drive, FolderPin, MoreMenuState, MorePlace, NetworkDrive};
+pub(super) use menus::{group_by_menu, new_menu, search_options_menu, sort_menu, view_menu};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -122,7 +127,7 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/command-bar.ui")]
     pub(crate) struct CommandBar {
-        /// New to More options, filled from the tables.
+        /// New to See more, filled from the tables.
         #[template_child]
         pub(super) file_commands: TemplateChild<gtk::Box>,
         /// The appearance toggle (`#theme-toggle`).
@@ -137,6 +142,15 @@ mod imp {
         /// Opens the Settings page.
         #[template_child]
         pub(super) settings_button: TemplateChild<gtk::Button>,
+        /// Opens Software updates while a release waits.
+        #[template_child]
+        pub(super) update_button: TemplateChild<gtk::Button>,
+        /// The glyph of [`Self::update_button`].
+        #[template_child]
+        pub(super) update_glyph: TemplateChild<gtk::Image>,
+        /// "Update" or "Restart".
+        #[template_child]
+        pub(super) update_label: TemplateChild<gtk::Label>,
         /// Shows whether the details pane is open.
         #[template_child]
         pub(super) details_toggle: TemplateChild<gtk::ToggleButton>,
@@ -158,10 +172,14 @@ mod imp {
         pub(super) delete_button: OnceCell<gtk::Button>,
         /// Extract all, shown inside a ZIP opened like a folder (ARC-026).
         pub(super) extract_button: OnceCell<gtk::Button>,
-        /// The "…" menu, which offers Map network location only in This
+        /// Empty Recycle Bin and Restore, shown in the Recycle Bin.
+        pub(super) recycle_bin: OnceCell<super::RecycleBinCommands>,
+        /// Search options and Close search, shown while searching.
+        pub(super) search_commands: OnceCell<super::SearchCommands>,
+        /// The "…" menu, which offers Map network drive only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
-        /// What the "…" menu shows now: Map network location or not, Pin
+        /// What the "…" menu shows now: Map network drive or not, Pin
         /// or Unpin.
         pub(super) more_state: RefCell<super::MoreMenuState>,
     }
@@ -203,7 +221,7 @@ glib::wrapper! {
 }
 
 impl CommandBar {
-    /// New ▾ │ Cut … Delete │ Sort ▾, View ▾ and More options,
+    /// New ▾ │ Cut … Delete │ Sort ▾, View ▾ and See more ("…"),
     /// remembering the commands a compact window hides.
     fn add_file_commands(&self) {
         let imp = self.imp();
@@ -254,12 +272,25 @@ impl CommandBar {
             "view-command",
             view_menu(),
         ));
+        let recycle_bin = RecycleBinCommands::new();
+        group.append(&recycle_bin.separator);
+        group.append(&recycle_bin.empty);
+        group.append(&recycle_bin.restore);
+        imp.recycle_bin
+            .set(recycle_bin)
+            .expect("constructed runs once per object");
+        let search = SearchCommands::new();
+        group.append(&search.options);
+        group.append(&search.close);
+        imp.search_commands
+            .set(search)
+            .expect("constructed runs once per object");
         let (more, menu) = more_button();
         group.append(&more);
         imp.more_menu.set(menu).expect("constructed runs once per object");
     }
 
-    /// Shows `state` in "…": Map network location only in This PC and
+    /// Shows `state` in "…": Map network drive only in This PC and
     /// Network, as Windows 11 File Explorer lists Map network drive, and
     /// Pin to Quick access or Unpin from Quick access for the folder shown.
     pub(super) fn show_more_menu(&self, state: MoreMenuState) {
@@ -273,16 +304,50 @@ impl CommandBar {
         imp.more_state.replace(state);
     }
 
-    /// Gives the appearance toggle, Settings and the Details toggle,
-    /// which the template places at the right, what it cannot express.
+    /// Gives Update, the appearance toggle, Settings and the Details
+    /// toggle, which the template places at the right, what it cannot
+    /// express.
     ///
     /// Settings › Appearance chooses the theme, so the appearance toggle
-    /// stays built but hidden.
+    /// stays built but hidden; Update shows only while a release waits
+    /// and Settings asks for it ([`Self::show_update`]).
     fn finish_right_commands(&self) {
+        self.finish_update_button();
         self.finish_appearance_button();
         self.finish_settings_button();
         self.finish_details_toggle();
         self.imp().appearance_button.set_visible(false);
+    }
+
+    /// The download glyph and Software updates.
+    fn finish_update_button(&self) {
+        let imp = self.imp();
+        icons::set_icon(&imp.update_glyph, Icon::ArrowDownload, TEXT_COMMAND_GLYPH);
+        WindowAction::CheckUpdates.assign_to(&*imp.update_button);
+    }
+
+    /// Shows Update with `label`, "Update" or "Restart", and `tooltip`
+    /// saying why, or hides it for `None`.
+    pub(super) fn show_update(&self, label: Option<&str>, tooltip: Option<&str>) {
+        let imp = self.imp();
+        let Some(label) = label else {
+            imp.update_button.set_visible(false);
+            return;
+        };
+        imp.update_label.set_text(label);
+        imp.update_button.set_tooltip_text(tooltip);
+        imp.update_button
+            .update_property(&[gtk::accessible::Property::Label(label)]);
+        imp.update_button.set_visible(true);
+    }
+
+    /// The label of Update while it shows, for tests.
+    #[cfg(test)]
+    pub(super) fn shown_update(&self) -> Option<String> {
+        let imp = self.imp();
+        imp.update_button
+            .is_visible()
+            .then(|| imp.update_label.text().to_string())
     }
 
     /// The appearance menu, and the light appearance until the window
@@ -356,11 +421,12 @@ impl CommandBar {
     }
 
     /// Hides what the web layout hides in a window of `band`'s width: the
-    /// appearance label from 1050 pixels, and Cut, Rename, Share and
-    /// Details from 680.
+    /// appearance label from 1050 pixels, and Cut, Rename, Share,
+    /// Details and Update's label from 680.
     pub(super) fn fit_to_width(&self, band: WindowWidth) {
         let imp = self.imp();
         imp.appearance_label.set_visible(band.shows_appearance_label());
+        imp.update_label.set_visible(!band.is_compact());
         for control in imp.hidden_when_compact.borrow().iter() {
             control.set_visible(!band.is_compact());
         }
@@ -388,6 +454,152 @@ impl CommandBar {
         if let Some(button) = self.imp().extract_button.get() {
             button.set_visible(shown);
         }
+    }
+
+    /// The Search options button, shown while a search shows in Windows
+    /// 11's layout.
+    pub(super) fn search_options_button(&self) -> Option<gtk::MenuButton> {
+        self.imp()
+            .search_commands
+            .get()
+            .map(|commands| commands.options.clone())
+    }
+
+    /// Shows Search options and Close search while a search shows in
+    /// Windows 11's layout (SRCH-046), or hides them.
+    pub(super) fn show_search_commands(&self, shown: bool) {
+        if let Some(commands) = self.imp().search_commands.get() {
+            commands.options.set_visible(shown);
+            commands.close.set_visible(shown);
+            if !shown {
+                commands.options.popdown();
+            }
+        }
+    }
+
+    /// Shows Empty Recycle Bin and Restore with what Restore restores
+    /// while the window shows the Recycle Bin, or hides them for `None`.
+    pub(super) fn show_recycle_bin_commands(&self, restore: Option<RestoreTarget>) {
+        if let Some(commands) = self.imp().recycle_bin.get() {
+            commands.show(restore);
+        }
+    }
+}
+
+/// What Restore in the Recycle Bin's command bar restores.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RestoreTarget {
+    /// Nothing is selected: "Restore all items".
+    AllItems,
+    /// "Restore the selected items".
+    SelectedItems,
+}
+
+impl RestoreTarget {
+    /// The command's label, as Windows 11 File Explorer words it.
+    fn label(self) -> &'static str {
+        match self {
+            RestoreTarget::AllItems => ox_core::i18n::gettext_static("Restore all items"),
+            RestoreTarget::SelectedItems => ox_core::i18n::gettext_static("Restore the selected items"),
+        }
+    }
+
+    /// The window action the command runs.
+    fn action(self) -> WindowAction {
+        match self {
+            RestoreTarget::AllItems => WindowAction::RestoreAllItems,
+            RestoreTarget::SelectedItems => WindowAction::Restore,
+        }
+    }
+}
+
+/// The Recycle Bin's commands after View, as Windows 11 File Explorer
+/// shows them there: a separator, Empty Recycle Bin and Restore.
+#[derive(Debug)]
+pub(super) struct RecycleBinCommands {
+    separator: gtk::Separator,
+    empty: gtk::Button,
+    restore: gtk::Button,
+    restore_label: gtk::Label,
+}
+
+impl RecycleBinCommands {
+    /// The commands, hidden until the window shows the Recycle Bin.
+    fn new() -> Self {
+        let separator = separator();
+        separator.set_visible(false);
+        let (empty, _) = text_button(
+            &ox_core::i18n::gettext("Empty Recycle Bin"),
+            Icon::DeleteDismiss,
+            WindowAction::EmptyRecycleBin,
+            "empty-recycle-bin-command",
+        );
+        empty.set_visible(false);
+        let target = RestoreTarget::AllItems;
+        let (restore, restore_label) = text_button(
+            target.label(),
+            Icon::ArrowCounterclockwise,
+            target.action(),
+            "restore-command",
+        );
+        restore.set_visible(false);
+        Self {
+            separator,
+            empty,
+            restore,
+            restore_label,
+        }
+    }
+
+    /// Shows the commands with Restore restoring `restore`, or hides them
+    /// for `None`.
+    fn show(&self, restore: Option<RestoreTarget>) {
+        let shown = restore.is_some();
+        self.separator.set_visible(shown);
+        self.empty.set_visible(shown);
+        self.restore.set_visible(shown);
+        let Some(target) = restore else {
+            return;
+        };
+        let label = target.label();
+        if self.restore_label.text() != label {
+            self.restore_label.set_text(label);
+            self.restore
+                .update_property(&[gtk::accessible::Property::Label(label)]);
+        }
+        self.restore
+            .set_action_name(Some(&target.action().detailed_name()));
+    }
+}
+
+/// Windows 11's commands while a search shows (SRCH-046): Search
+/// options, a menu of what the search looks at, and Close search.
+#[derive(Debug)]
+pub(super) struct SearchCommands {
+    options: gtk::MenuButton,
+    close: gtk::Button,
+}
+
+impl SearchCommands {
+    /// The commands, hidden until a search shows.
+    fn new() -> Self {
+        let label = ox_core::i18n::gettext("Search options");
+        let options = text_menu_button(
+            &label,
+            Icon::SearchSettings,
+            "search-options-command",
+            search_options_menu(),
+        );
+        name_menu_button(&options, &label);
+        options.set_visible(false);
+        let (close, _) = text_button(
+            &ox_core::i18n::gettext("Close search"),
+            Icon::Dismiss16,
+            WindowAction::CloseSearch,
+            "close-search-command",
+        );
+        close.set_visible(false);
+        Self { options, close }
     }
 }
 
@@ -435,24 +647,38 @@ fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<Menu
         .build()
 }
 
+/// A command with a glyph and `label` that runs `action`; `css_class`
+/// names it for the stylesheet and the tests. Returns the label too, for
+/// a command whose label changes.
+fn text_button(label: &str, glyph: Icon, action: WindowAction, css_class: &str) -> (gtk::Button, gtk::Label) {
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
+    content.append(&icons::image(glyph, TEXT_COMMAND_GLYPH));
+    let text = gtk::Label::new(Some(label));
+    content.append(&text);
+    let button = gtk::Button::builder()
+        .child(&content)
+        .action_name(action.detailed_name())
+        .valign(gtk::Align::Center)
+        .css_classes(["command", "text-command", css_class])
+        .build();
+    button.update_property(&[gtk::accessible::Property::Label(label)]);
+    (button, text)
+}
+
 /// Extract all, as Windows Explorer's command bar shows it while a ZIP is
 /// selected or open; hidden otherwise. A selected TAR archive shows it
 /// too, as Extract all… in its menu does.
 fn extract_all_button() -> gtk::Button {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::image(Icon::FolderZip, TEXT_COMMAND_GLYPH));
-    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Extract all"))));
-    let button = gtk::Button::builder()
-        .child(&content)
-        .tooltip_text(ox_core::i18n::gettext("Extract all files from this archive"))
-        .action_name(WindowAction::ExtractAll.detailed_name())
-        .valign(gtk::Align::Center)
-        .visible(false)
-        .css_classes(["command", "text-command", "extract-command"])
-        .build();
-    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
-        "Extract all",
-    ))]);
+    let (button, _) = text_button(
+        &ox_core::i18n::gettext("Extract all"),
+        Icon::FolderZip,
+        WindowAction::ExtractAll,
+        "extract-command",
+    );
+    button.set_tooltip_text(Some(&ox_core::i18n::gettext(
+        "Extract all files from this archive",
+    )));
+    button.set_visible(false);
     button
 }
 
@@ -461,12 +687,12 @@ fn more_button() -> (gtk::MenuButton, MenuPopover) {
     let menu = MenuPopover::new(more_menu(&MoreMenuState::default()));
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
-        .tooltip_text(ox_core::i18n::gettext("More options"))
+        .tooltip_text(ox_core::i18n::gettext("See more"))
         .popover(&menu)
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
-    name_menu_button(&button, &ox_core::i18n::gettext("More options"));
+    name_menu_button(&button, &ox_core::i18n::gettext("See more"));
     (button, menu)
 }
 

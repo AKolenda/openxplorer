@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Windows 11's Compact view (View > Compact view, and Settings >
-//! Appearance): the Details rows, the sidebar's rows and the folder tree's
-//! rows stand closer, so more items fit (VIEW-067). Off by default, as in
-//! Windows.
+//! Appearance): the Details rows and headings, the column titles, Tiles,
+//! Content's headings, the sidebar's rows and the folder tree's rows
+//! stand closer, as Windows 11's Compact view spaces them, so more items
+//! fit (VIEW-067). Off by default, as in Windows.
 //!
 //! Inside the app this is the compact density: "compact" already names the
 //! List layout (`FolderView::Compact`). The choice is saved and every
 //! window follows it. On, the window carries the [`DENSITY_CLASS`] class,
 //! which the text-size stylesheet (`theme/fonts.rs`) and
-//! `resources/skin/sidebar.css` match. The Icons and List layouts keep
+//! `resources/skin/sidebar.css` match, and the grid's Page Up and Page
+//! Down count (`folder_view/grid.rs`). The Icons and List layouts keep
 //! their spacing: the List layout counts its rows per column from its row
-//! height in code (`folder_view/grid.rs`).
+//! height in code.
 
 use gtk::prelude::*;
 
@@ -21,7 +23,7 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// The window's class while Compact view is on.
-const DENSITY_CLASS: &str = "compact-density";
+pub(crate) const DENSITY_CLASS: &str = "compact-density";
 
 impl BrowserWindow {
     /// Adds the Compact view toggle, starting from the saved preference.

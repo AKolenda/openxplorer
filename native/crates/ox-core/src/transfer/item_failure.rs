@@ -1,47 +1,145 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! An item that fails for a reason other than a name conflict (OPS-047):
-//! an unreadable source, a denied permission, a device that is gone, an
-//! I/O error. The engine asks the app, as KIO's `SkipDialog` asks
-//! Dolphin's user and Nautilus asks its own: "Retry" runs that item again,
-//! "Skip" leaves it out, "Skip all" leaves out every later failing item
-//! without asking, and "Cancel" stops the run, keeping what is done.
-//! Skipped items are reported at the end like any failure (OPS-023), and
-//! their staging is removed as for any failed item. Without a question
-//! installed the error is recorded and the next item runs, as before.
+//! an unreadable source, a denied permission, a full drive, a file in use,
+//! a device that is gone, an I/O error. The engine asks the app, which
+//! words the question as Windows 11 does by the failure's
+//! [`FailureCause`]: "Try Again" runs that item again, "Skip" leaves it
+//! out, "Skip" with "Do this for all current items" leaves out every later
+//! failing item without asking, and "Cancel" stops the run, keeping what
+//! is done. "Continue", which Windows offers when the destination folder
+//! needs an administrator, runs the item again into that folder under
+//! `admin://` once [`crate::admin_copy`] found it safe; with "Do this for
+//! all current items", every later item of the run goes there too.
+//! Skipped items are recorded like any failure, as answered
+//! (OPS-023), and their staging is removed as for any failed item. Without
+//! a question installed the error is recorded and the next item runs, as
+//! before.
 //!
 //! Inside a folder, the question is about the one entry that failed, as
 //! in Windows Explorer: "Retry" copies that entry again, "Skip" leaves only
 //! it out, and the rest of the folder is still copied and published. The
-//! entries left out are reported at the end, and a move keeps them, with
+//! entries left out are recorded as answered, and a move keeps them, with
 //! their folders, where they were.
+//!
+//! Nothing is said once the run ends: as in Windows Explorer, which has no
+//! summary of an operation, every failure is asked about while it
+//! happens. A problem that needs recovery by hand, such as a kept backup,
+//! is told in the same place ([`FailureCause::NeedsAttention`]).
 
 use std::collections::HashSet;
 
 use super::error::TransferError;
 use super::types::TransferMode;
 
+/// What kind of failure a [`FailedItem`] is, which picks Windows' question
+/// about it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureCause {
+    /// The item, or the folder it goes into, may not be read or written:
+    /// "File Access Denied", or "Destination Folder Access Denied" when the
+    /// destination folder is the one that may not be written.
+    AccessDenied,
+    /// The destination's drive is full: "There is not enough space on …".
+    NoSpace,
+    /// Another program holds the item: "File In Use".
+    InUse,
+    /// The item is gone from its folder: "Could not find this item".
+    NotFound,
+    /// A folder would go into itself or a folder inside it (XFER-016):
+    /// refused, so the question offers only Skip and Cancel.
+    InsideSource,
+    /// Anything else; the question shows the system's error.
+    Other,
+    /// Something the user must sort out by hand, such as a backup kept
+    /// after a replacement or staging left behind: the question says what
+    /// and where, and only lets the run go on (OPS-023).
+    NeedsAttention,
+}
+
+impl FailureCause {
+    /// The cause of `error`.
+    pub fn of(error: &TransferError) -> Self {
+        match error {
+            TransferError::PermissionDenied(_) => Self::AccessDenied,
+            TransferError::NoSpace(_) => Self::NoSpace,
+            TransferError::Busy(_) => Self::InUse,
+            TransferError::NotFound(_) => Self::NotFound,
+            TransferError::InsideSource(_) => Self::InsideSource,
+            TransferError::RecoveryRequired(_) => Self::NeedsAttention,
+            _ => Self::Other,
+        }
+    }
+}
+
 /// A failed item, as the question shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FailedItem {
     /// What the run does: copy, move, Trash or delete.
     pub mode: TransferMode,
-    /// The item's name.
+    /// The item's name: its path below the top-level item for an entry
+    /// inside a folder.
     pub name: String,
-    /// Why it failed.
+    /// Why it failed, in the system's words.
     pub error: String,
-    /// Whether other items of the run remain, so "Skip all" means
-    /// something.
+    /// Whether other items of the run remain, so "Do this for all current
+    /// items" means something.
     pub more_items: bool,
+    /// What kind of failure it is.
+    pub cause: FailureCause,
+    /// The failed item's URI, which the question describes; empty when the
+    /// question is about the whole run, as a full drive found before any
+    /// item ran.
+    pub uri: String,
+    /// The folder a copy or move writes into, `None` for the Recycle Bin and
+    /// deletes.
+    pub destination_folder: Option<String>,
+    /// For a full drive, how many bytes the run needs there, when known.
+    pub needed: Option<u64>,
+    /// Whether the run can do the item again as administrator, so the
+    /// question may offer Continue with the shield; only the transfer
+    /// engine can. Operations outside it offer Try Again instead.
+    pub administrator: bool,
+}
+
+impl FailedItem {
+    /// The item at `uri`, called `name`, that failed with `error` in a run
+    /// in `mode` writing into `destination_folder`.
+    pub fn new(
+        mode: TransferMode,
+        name: String,
+        uri: &str,
+        destination_folder: Option<&str>,
+        error: &TransferError,
+    ) -> Self {
+        Self {
+            mode,
+            name,
+            error: error.to_string(),
+            more_items: true,
+            cause: FailureCause::of(error),
+            uri: uri.to_owned(),
+            destination_folder: destination_folder.map(str::to_owned),
+            needed: None,
+            administrator: true,
+        }
+    }
 }
 
 /// The user's answer about a [`FailedItem`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailureAnswer {
-    /// Run the item again.
+    /// Run the item again: "Try Again".
     Retry,
+    /// Run the item again with administrator rights, writing into the
+    /// destination folder under `admin://`: "Continue" (OPS-047).
+    Elevate,
+    /// As [`Self::Elevate`], and write every later item of the run the
+    /// same way: "Continue" with "Do this for all current items".
+    ElevateAll,
     /// Leave it out and go on.
     Skip,
-    /// Leave it and every later failing item out, without asking.
+    /// Leave it and every later failing item out, without asking: "Skip"
+    /// with "Do this for all current items".
     SkipAll,
     /// Stop the run; what is done stays done.
     Cancel,
@@ -56,14 +154,28 @@ pub type FailureQuestion = dyn FnMut(&FailedItem) -> FailureAnswer + Send;
 pub(crate) struct ItemFailures {
     question: Option<Box<FailureQuestion>>,
     skip_all: bool,
-    /// The run's mode and the name of the top-level item running, for
-    /// questions about the entries inside it.
-    current: Option<(TransferMode, String)>,
+    /// The top-level item running, for questions about the entries
+    /// inside it.
+    current: Option<RunningItem>,
     /// The entries of the running item left out, "Folder/inner/name: why",
     /// each with whether the user saw it in the question.
     left_out: Vec<(String, bool)>,
     /// The source URIs of those entries.
     left_out_sources: HashSet<String>,
+    /// The answer about an entry inside the running item that asked for
+    /// the whole item to run again as administrator.
+    elevation: Option<FailureAnswer>,
+}
+
+/// The top-level item of a run that is running.
+#[derive(Debug, Clone)]
+struct RunningItem {
+    /// What the run does.
+    mode: TransferMode,
+    /// The item's name.
+    name: String,
+    /// The folder the run writes into, for a copy or move.
+    destination_folder: Option<String>,
 }
 
 /// What the copy does about an entry inside a folder that failed.
@@ -91,11 +203,28 @@ impl ItemFailures {
     }
 
     /// Starts (or starts again) the top-level item `name` of a run in
-    /// `mode`: nothing of it is left out yet.
-    pub(crate) fn start_item(&mut self, mode: TransferMode, name: String) {
-        self.current = Some((mode, name));
+    /// `mode` that writes into `destination_folder`: nothing of it is left
+    /// out yet.
+    pub(crate) fn start_item(
+        &mut self,
+        mode: TransferMode,
+        name: String,
+        destination_folder: Option<String>,
+    ) {
+        self.current = Some(RunningItem {
+            mode,
+            name,
+            destination_folder,
+        });
         self.left_out.clear();
         self.left_out_sources.clear();
+        self.elevation = None;
+    }
+
+    /// Continue or Continue for all, when the user answered it about an
+    /// entry inside the running item, which then failed as a whole.
+    pub(crate) fn take_elevation(&mut self) -> Option<FailureAnswer> {
+        self.elevation.take()
     }
 
     /// What to do about `entry`, the path of an entry below the running
@@ -115,6 +244,7 @@ impl ItemFailures {
                 | TransferError::RecoveryRequired(_)
                 | TransferError::NotSupported(_)
                 | TransferError::ReplaceUnsupported(_)
+                | TransferError::InsideSource(_)
                 // The share or device is gone: every later entry would
                 // fail too.
                 | TransferError::NotMounted(_)
@@ -122,27 +252,36 @@ impl ItemFailures {
         if !per_entry {
             return EntryDecision::Fail;
         }
-        let (mode, top) = self
-            .current
-            .clone()
-            .unwrap_or((TransferMode::Copy, String::new()));
-        let name = if top.is_empty() {
+        let running = self.current.clone().unwrap_or(RunningItem {
+            mode: TransferMode::Copy,
+            name: String::new(),
+            destination_folder: None,
+        });
+        let name = if running.name.is_empty() {
             entry.to_owned()
         } else {
-            format!("{top}/{entry}")
+            format!("{}/{entry}", running.name)
         };
-        let mut answered = false;
+        // "Skip all" answered this entry too.
+        let mut answered = self.skip_all;
         if !self.skip_all {
-            let failed = FailedItem {
-                mode,
-                name: name.clone(),
-                error: error.to_string(),
-                // Other entries, or other items, may follow.
-                more_items: true,
-            };
+            // Other entries, or other items, may follow.
+            let failed = FailedItem::new(
+                running.mode,
+                name.clone(),
+                source_uri,
+                running.destination_folder.as_deref(),
+                error,
+            );
             match self.answer(&failed) {
                 Some(FailureAnswer::Retry) => return EntryDecision::Retry,
                 Some(FailureAnswer::Cancel) => return EntryDecision::Cancel,
+                // The destination is the whole item's: it runs again as
+                // administrator, from the start.
+                Some(answer @ (FailureAnswer::Elevate | FailureAnswer::ElevateAll)) => {
+                    self.elevation = Some(answer);
+                    return EntryDecision::Fail;
+                }
                 Some(FailureAnswer::Skip | FailureAnswer::SkipAll) => answered = true,
                 None => {}
             }
@@ -169,15 +308,13 @@ impl ItemFailures {
     /// own, such as "Move by copying?") are not, nor anything after "Skip
     /// all".
     pub(crate) fn asks_about(&self, error: &TransferError) -> bool {
-        let askable = !matches!(
-            error,
-            TransferError::Cancelled
-                | TransferError::Exists(_)
-                | TransferError::RecoveryRequired(_)
-                | TransferError::NotSupported(_)
-                | TransferError::ReplaceUnsupported(_)
-        );
-        askable && !self.skip_all && self.question.is_some()
+        askable(error) && !self.skip_all && self.question.is_some()
+    }
+
+    /// Whether an item that failed with `error` is left out by an earlier
+    /// "Skip all", which answered it: it is not reported afterwards.
+    pub(crate) fn skips_for_all(&self, error: &TransferError) -> bool {
+        askable(error) && self.skip_all
     }
 
     /// The user's answer about `item`, which [`Self::asks_about`] allowed;
@@ -187,4 +324,31 @@ impl ItemFailures {
         self.skip_all = answer == FailureAnswer::SkipAll;
         Some(answer)
     }
+
+    /// Tells the user, in the question about failed items, about `item`,
+    /// whose cause is [`FailureCause::NeedsAttention`] or a failure the
+    /// run cannot ask about otherwise, and waits until they read it; also
+    /// after "Skip all" and a cancellation, because the user must act on
+    /// it. True when the question showed it.
+    pub(crate) fn tell(&mut self, item: &FailedItem) -> bool {
+        let Some(question) = self.question.as_mut() else {
+            return false;
+        };
+        question(item);
+        true
+    }
+}
+
+/// Whether an item that failed with `error` may be asked about: not a name
+/// conflict, a cancellation, a problem that needs recovery by hand or
+/// something the location cannot do at all.
+fn askable(error: &TransferError) -> bool {
+    !matches!(
+        error,
+        TransferError::Cancelled
+            | TransferError::Exists(_)
+            | TransferError::RecoveryRequired(_)
+            | TransferError::NotSupported(_)
+            | TransferError::ReplaceUnsupported(_)
+    )
 }

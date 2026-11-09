@@ -232,16 +232,21 @@ impl ChoiceList {
     /// When no option is labelled `label`.
     #[cfg(test)]
     pub(crate) fn choose_labelled(&self, label: &str) {
+        assert!(self.try_choose_labelled(label), "the drop-down offers {label:?}");
+    }
+
+    /// Chooses the option labelled `label` as a click on its row does;
+    /// false when no option is labelled so. The snapshot hook's scenes use
+    /// it.
+    pub(crate) fn try_choose_labelled(&self, label: &str) -> bool {
         let options = self.imp().options.borrow().clone();
-        let position = options
-            .iter()
-            .position(|option| option == label)
-            .unwrap_or_else(|| panic!("the drop-down offers {label:?}"));
-        let row = self
-            .list()
-            .row_at_index(i32::try_from(position).expect("a few options"))
-            .expect("every option has a row");
-        row.activate();
+        let Some(position) = options.iter().position(|option| option == label) else {
+            return false;
+        };
+        let row = i32::try_from(position)
+            .ok()
+            .and_then(|position| self.list().row_at_index(position));
+        row.is_some_and(|row| row.activate())
     }
 
     fn focus_chosen_row(&self) {

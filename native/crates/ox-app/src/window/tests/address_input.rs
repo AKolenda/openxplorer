@@ -39,7 +39,7 @@ pub(super) fn click_gesture(widget: &impl IsA<gtk::Widget>, button: u32) -> gtk:
 
 /// Emits `key-pressed` with `key` on the first key controller of `widget`;
 /// whether a handler took the key.
-fn press_key(widget: &impl IsA<gtk::Widget>, key: gdk::Key) -> bool {
+pub(super) fn press_key(widget: &impl IsA<gtk::Widget>, key: gdk::Key) -> bool {
     let keys = controllers::<gtk::EventControllerKey>(widget);
     let controller = keys.first().expect("the widget has a key controller");
     let no_keycode = 0_u32;
@@ -102,12 +102,16 @@ fn an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded() {
     );
 }
 
+/// Left and Right stop at the last crumb and at the chevron before the
+/// first, which takes the keyboard as the crumbs do.
+///
 /// parity: NAV-018
 #[gtk::test]
-fn left_and_right_stop_at_the_first_and_last_crumb() {
+fn left_and_right_stop_at_the_first_chevron_and_the_last_crumb() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     let crumbs = test.window.address_bar().crumb_buttons();
+    let (chevron, _) = test.window.address_bar().strip_buttons();
     let first = crumbs.first().expect("crumbs");
     let last = crumbs.last().expect("crumbs");
     let before_last = &crumbs[crumbs.len() - 2];
@@ -119,7 +123,11 @@ fn left_and_right_stop_at_the_first_and_last_crumb() {
     assert!(before_last.has_focus());
     first.grab_focus();
     press_key(&crumb_box(&test), gdk::Key::Left);
-    assert!(first.has_focus(), "Left stops at the first crumb");
+    assert!(chevron.has_focus(), "Left goes on to the chevron");
+    press_key(&crumb_box(&test), gdk::Key::Left);
+    assert!(chevron.has_focus(), "and stops there");
+    press_key(&crumb_box(&test), gdk::Key::Right);
+    assert!(first.has_focus());
 }
 
 /// parity: NAV-018
@@ -158,37 +166,6 @@ fn a_middle_clicked_crumb_opens_in_a_background_tab() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
 }
 
-/// parity: NAV-023
-#[gtk::test]
-fn the_wheel_scrolls_overflowing_crumbs_sideways() {
-    let fixture = Fixture::standard();
-    let mut deep = fixture.root().to_path_buf();
-    for level in 0..14 {
-        deep.push(format!("A rather long folder name at level {level}"));
-    }
-    std::fs::create_dir_all(&deep).expect("deep fixture folders");
-    let test = TestWindow::open(&ox_core::location::file_uri(&deep));
-    let adjustment = test.window.address_bar().crumb_adjustment();
-    wait_until("the crumbs to overflow", || {
-        adjustment.upper() > adjustment.page_size()
-    });
-    let scroller = descendants::<gtk::ScrolledWindow>(test.window.address_bar())
-        .into_iter()
-        .next()
-        .expect("the crumbs scroll");
-    adjustment.set_value(0.0);
-    let wheel = controllers::<gtk::EventControllerScroll>(&scroller);
-    let wheel = wheel.first().expect("the crumbs follow the wheel");
-
-    let handled = wheel.emit_by_name::<bool>("scroll", &[&0.0_f64, &1.0_f64]);
-
-    assert!(handled, "the page itself does not scroll");
-    assert!(
-        adjustment.value() > 0.0,
-        "a plain wheel scrolls the crumbs sideways"
-    );
-}
-
 /// parity: NAV-026
 #[gtk::test]
 fn ctrl_l_alt_d_the_chevron_and_blank_space_edit_the_whole_address() {
@@ -209,12 +186,9 @@ fn ctrl_l_alt_d_the_chevron_and_blank_space_edit_the_whole_address() {
         gtk::AccessibleProperty::Label
     ));
 
-    let scroller = descendants::<gtk::ScrolledWindow>(address)
-        .into_iter()
-        .next()
-        .expect("the crumbs");
-    click_gesture(&scroller, gdk::BUTTON_PRIMARY)
-        .emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
+    // The bar's own click, which the icon and blank space reach; the
+    // crumbs and chevrons claim theirs.
+    click_gesture(address, gdk::BUTTON_PRIMARY).emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
 
     assert_eq!(address.mode(), AddressMode::Entry);
     let entry = address.entry();
@@ -277,6 +251,7 @@ fn f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there() {
     }
 
     test.activate("address-history", None);
+    let typed = address.entry().text();
 
     assert_eq!(address.mode(), AddressMode::Entry);
     assert!(address.suggestions_shown());
@@ -297,6 +272,40 @@ fn f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there() {
         documents,
         "Down puts the row into the address"
     );
+    let press = |key: gdk::Key| {
+        let no_keycode = 0_u32;
+        list_keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[&key.into_glib(), &no_keycode, &gdk::ModifierType::empty()],
+        )
+    };
+    press(gdk::Key::Up);
+    assert_eq!(address.entry().text(), root, "Up goes back a row");
+    press(gdk::Key::Up);
+    assert_eq!(
+        address.entry().text(),
+        typed,
+        "Up past the first row puts back the typed text"
+    );
+    press(gdk::Key::Up);
+    assert_eq!(
+        address.entry().text(),
+        documents,
+        "Up from no row wraps to the last"
+    );
+    press(gdk::Key::Down);
+    assert_eq!(
+        address.entry().text(),
+        typed,
+        "Down past the last row puts back the typed text"
+    );
+    press(gdk::Key::Down);
+    press(gdk::Key::Escape);
+    assert_eq!(address.entry().text(), typed, "Escape puts back the typed text");
+    assert!(!address.suggestions_shown(), "Escape closes the list");
+    test.activate("address-history", None);
+    press(gdk::Key::Down);
+    press(gdk::Key::Down);
     address.entry().emit_by_name::<()>("activate", &[]);
     wait_until("the typed address", || {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
@@ -328,6 +337,40 @@ fn typing_a_path_offers_the_matching_names() {
         address.suggestion_rows(),
         [format!("{base}/Notes 2.txt"), format!("{base}/Notes 10.txt")]
     );
+
+    // Typing on into a folder not listed yet leaves the old rows showing
+    // while it is listed; Escape then puts back what was typed last, not
+    // the text the rows were listed for.
+    // As typed: set_text would first empty the entry, which closes the list.
+    let entry = address.entry();
+    entry.delete_text(
+        i32::try_from(typed.chars().count()).expect("a short path") - 2,
+        -1,
+    );
+    let mut end = -1;
+    entry.insert_text("Documents/", &mut end);
+    let typed_on = format!("{base}/Documents/");
+    assert_eq!(entry.text(), typed_on);
+    assert!(
+        address.suggestions_shown(),
+        "the old rows show while Documents is listed"
+    );
+    let list_keys = controllers::<gtk::EventControllerKey>(&address.entry())
+        .into_iter()
+        .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+        .expect("the list's keys");
+    let no_keycode = 0_u32;
+    let escape = gdk::Key::Escape.into_glib();
+    list_keys.emit_by_name::<bool>(
+        "key-pressed",
+        &[&escape, &no_keycode, &gdk::ModifierType::empty()],
+    );
+    assert_eq!(
+        address.entry().text(),
+        typed_on,
+        "Escape keeps the text typed last"
+    );
+    assert!(!address.suggestions_shown(), "Escape closes the list");
     address.hide_suggestions();
 }
 
@@ -340,7 +383,7 @@ fn choosing_a_folder_from_a_crumb_menu_goes_there() {
     }
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     let address = test.window.address_bar();
-    let target = (fixture.uri_of("Documents"), "", 0_u32).to_variant();
+    let target = (fixture.uri_of("Documents"), "").to_variant();
 
     WidgetExt::activate_action(&test.window, "win.crumb-subfolders", Some(&target)).expect("the action");
 
@@ -361,48 +404,27 @@ fn choosing_a_folder_from_a_crumb_menu_goes_there() {
     assert!(descendants::<MenuPopover>(address).is_empty(), "the menu is gone");
 }
 
-/// parity: NAV-022
+/// As in Windows Explorer, the wheel over a crumb never switches to the
+/// folder beside it: no crumb takes the wheel, and the crumbs never
+/// scroll, as those that do not fit collapse into the « button.
 #[gtk::test]
-fn the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it() {
+fn the_wheel_on_a_crumb_never_switches_folders() {
     let fixture = Fixture::standard();
-    for folder in ["Music", ".cache"] {
-        std::fs::create_dir(fixture.path(folder)).expect("fixture subfolder");
-    }
-    let deep = (1..=12).fold(String::from("Documents"), |path, level| {
-        format!("{path}/A rather long folder name at level {level}")
-    });
-    std::fs::create_dir_all(fixture.path(&deep)).expect("fixture subfolders");
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let address = test.window.address_bar();
-    let scroll_last_crumb = |dy: f64| {
-        let crumb = address.crumb_buttons().pop().expect("a crumb");
-        let wheel = controllers::<gtk::EventControllerScroll>(&crumb)
-            .pop()
-            .expect("the crumb's wheel");
-        wheel.emit_by_name::<bool>("scroll", &[&0.0_f64, &dy])
-    };
+    let crumbs = test.window.address_bar().crumb_buttons();
 
-    assert!(!scroll_last_crumb(0.1), "a fraction of a notch does nothing");
-    wait_for(std::time::Duration::from_millis(200));
-    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
-    assert!(scroll_last_crumb(1.0));
-    wait_until("the next folder", || {
-        test.window.current_uri() == Some(fixture.uri_of("Music"))
-    });
-    test.wait_for_listing("Music");
-    assert!(scroll_last_crumb(1.0));
-    wait_for(std::time::Duration::from_millis(200));
-    assert_eq!(
-        test.window.current_uri(),
-        Some(fixture.uri_of("Music")),
-        "hidden .cache is skipped and Music is last"
+    assert!(!crumbs.is_empty());
+    assert!(
+        crumbs[0].ancestor(gtk::ScrolledWindow::static_type()).is_none(),
+        "the crumbs never scroll"
     );
-
-    test.window
-        .navigate(&fixture.uri_of(&deep))
-        .expect("valid folder");
-    wait_until("the crumbs to overflow", || address.crumbs_overflow());
-    assert!(!scroll_last_crumb(1.0), "overflowing crumbs scroll sideways");
+    for crumb in &crumbs {
+        assert!(
+            controllers::<gtk::EventControllerScroll>(crumb).is_empty(),
+            "{} takes no wheel",
+            crumb.label().unwrap_or_default()
+        );
+    }
 }
 
 /// parity: NAV-029
@@ -583,4 +605,124 @@ fn a_typed_zip_opens_the_archive_browser() {
 
     archive_browser(&test);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+}
+
+/// The key controller of the address entry that moves through the list.
+fn list_keys(address: &crate::window::address_bar::AddressBar) -> gtk::EventControllerKey {
+    controllers::<gtk::EventControllerKey>(&address.entry())
+        .into_iter()
+        .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+        .expect("the list's keys")
+}
+
+/// Presses `key` on the list's keys.
+fn press_list_key(keys: &gtk::EventControllerKey, key: gdk::Key) {
+    let no_keycode = 0_u32;
+    keys.emit_by_name::<bool>(
+        "key-pressed",
+        &[&key.into_glib(), &no_keycode, &gdk::ModifierType::empty()],
+    );
+}
+
+/// Escape right after an edit keeps the edit while the edited folder's
+/// names are still being listed: only the stale list closes.
+///
+/// parity: NAV-030
+#[gtk::test]
+fn escape_keeps_an_edit_whose_folder_is_still_being_listed() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Report.txt");
+    let test = TestWindow::open(&fixture.uri());
+    let address = test.window.address_bar();
+    test.activate("location", None);
+    address
+        .entry()
+        .set_text(&format!("{}/No", fixture.root().display()));
+    wait_until("the completions", || address.suggestions_shown());
+
+    // Typed as keys change the text: "No" goes, then the rest comes,
+    // each a single change.
+    let entry = address.entry();
+    let root_end = i32::try_from(fixture.root().display().to_string().chars().count() + 1).expect("short");
+    entry.delete_text(root_end, -1);
+    let mut position = root_end;
+    entry.insert_text("Documents/R", &mut position);
+    let edited = format!("{}/Documents/R", fixture.root().display());
+    assert_eq!(entry.text(), edited);
+    assert!(
+        address.suggestions_shown(),
+        "the old list still shows while Documents is listed"
+    );
+    press_list_key(&list_keys(address), gdk::Key::Escape);
+
+    assert_eq!(address.entry().text(), edited, "the edit stays");
+    assert!(!address.suggestions_shown(), "the stale list closes");
+    // Documents' names arrive after Escape; "Report.txt" matches, but the
+    // list Escape closed stays closed until the next edit.
+    wait_for(std::time::Duration::from_millis(500));
+    assert!(!address.suggestions_shown(), "late completions stay closed");
+    assert_eq!(address.entry().text(), edited);
+    let mut position = -1;
+    entry.insert_text("e", &mut position);
+    wait_until("the completions of the next edit", || address.suggestions_shown());
+    assert_eq!(
+        address.suggestion_rows(),
+        [format!("{}/Documents/Report.txt", fixture.root().display())]
+    );
+    address.hide_suggestions();
+}
+
+/// A list taller than its room scrolls, and the arrow keys bring the
+/// selected row into view, as Windows' address bar drop-down does.
+///
+/// parity: NAV-030
+#[gtk::test]
+fn a_list_taller_than_its_room_scrolls_to_the_selected_row() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let address = test.window.address_bar();
+    test.activate("location", None);
+    let rows: Vec<String> = (0..12).map(|number| format!("/srv/folder {number:02}")).collect();
+    let typed = address.typed_text();
+    address.show_completions(&typed, &rows);
+    assert!(address.suggestions_shown());
+    let scroller = address.suggestion_scroller();
+    let limit = scroller.max_content_height();
+    let display = gdk::Display::default().expect("a display");
+    let monitor = display
+        .monitor_at_surface(
+            &address
+                .native()
+                .and_then(|native| native.surface())
+                .expect("a surface"),
+        )
+        .expect("a monitor");
+    assert!(
+        limit > 0 && limit <= monitor.geometry().height() / 2,
+        "the list is held to half the monitor"
+    );
+
+    scroller.set_max_content_height(100);
+    wait_until("the list cut to its room", || {
+        scroller.height() <= 100 && scroller.vadjustment().upper() > 200.0
+    });
+    let keys = list_keys(address);
+    for _ in 0..12 {
+        press_list_key(&keys, gdk::Key::Down);
+    }
+
+    let last = address.suggestion_row(11);
+    assert_eq!(address.entry().text(), rows[11]);
+    let parent = last.parent().expect("the list");
+    let bounds = last.compute_bounds(&parent).expect("the row is laid out");
+    let adjustment = scroller.vadjustment();
+    assert!(adjustment.value() > 0.0, "the list scrolled");
+    assert!(
+        f64::from(bounds.y() + bounds.height()) <= adjustment.value() + adjustment.page_size() + 0.5,
+        "the selected row shows whole"
+    );
+    press_list_key(&keys, gdk::Key::Down);
+    press_list_key(&keys, gdk::Key::Down);
+    assert!(adjustment.value().abs() < 0.5, "the first row again, at the top");
+    address.hide_suggestions();
 }

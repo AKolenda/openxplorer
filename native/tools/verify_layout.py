@@ -18,6 +18,7 @@ import argparse
 import configparser
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import sys
@@ -98,6 +99,8 @@ def verify_tree(report: Report, tree: InstalledTree) -> None:
         check_mount_helper(report, tree, helper)
     if tree.paths.admin_delete is not None:
         check_admin_delete(report, tree)
+    if tree.paths.install_update is not None:
+        check_install_update(report, tree)
 
 
 def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
@@ -121,6 +124,9 @@ def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
         files.append(paths.mount_helper)
     if paths.admin_delete is not None:
         files += [paths.admin_delete, paths.admin_delete_policy]
+    if paths.install_update is not None:
+        files += [paths.install_update, paths.install_update_policy,
+                  paths.install_update_rule_template]
     return files
 
 
@@ -306,6 +312,63 @@ def check_admin_delete(report: Report, tree: InstalledTree) -> None:
                  and found.findtext('defaults/allow_active', '') == 'auth_admin_keep')
     report.check('The polkit action gives the helper no display',
                  'org.freedesktop.policykit.exec.allow_gui' not in annotations)
+
+
+def check_install_update(report: Report, tree: InstalledTree) -> None:
+    """Check the update helper, its polkit action and the rule that skips the password.
+
+    The rule may let an administrator through without a password only
+    because it covers this one action, whose program is exactly the
+    installed helper, and only in an active local session; anyone else
+    falls back to the action's defaults, which ask for an administrator.
+    The package ships it as a template, never in a folder polkit reads:
+    the postinst installs the copy polkit reads, so that "Install updates
+    without asking for a password", on by default, can turn it off.
+    """
+    paths = tree.paths
+    helper = paths.install_update
+    if (helper is None or paths.install_update_policy is None
+            or paths.install_update_rule_template is None):
+        raise VerificationError('This package installs no update helper')
+    active = [path for folder in package_data.POLKIT_RULES_FOLDERS
+              for path in tree.path_of(folder).rglob('*')]
+    report.check('The package ships no rule where polkit reads rules',
+                 not active and not any(str(paths.install_update_rule_template).startswith(
+                     str(folder) + '/') for folder in package_data.POLKIT_RULES_FOLDERS))
+    installed = tree.path_of(helper)
+    with installed.open('rb') as program:
+        report.check('The update helper is a compiled program', program.read(4) == ELF_MAGIC)
+    report.check('The update helper is executable and not on PATH',
+                 installed.stat().st_mode & 0o111 != 0
+                 and not str(helper).startswith(str(paths.commands) + '/'))
+    subprocess.run([str(installed), '--help'], check=True, stdout=subprocess.DEVNULL)
+    report.check('The update helper starts', True)
+    action_id = package_data.install_update_action(tree.channel)
+    action = ElementTree.parse(tree.path_of(paths.install_update_policy)).getroot()
+    found = action.findall('action')
+    if len(found) != 1:
+        raise VerificationError('The update policy must declare exactly one action')
+    report.check("The update action is the channel's own", found[0].get('id') == action_id)
+    annotations = {note.get('key'): (note.text or '') for note in found[0].findall('annotate')}
+    report.check('The update action runs exactly the installed helper',
+                 annotations.get('org.freedesktop.policykit.exec.path') == str(helper))
+    report.check('The update action asks an administrator by default',
+                 found[0].findtext('defaults/allow_any', '') == 'auth_admin'
+                 and found[0].findtext('defaults/allow_inactive', '') == 'auth_admin'
+                 and found[0].findtext('defaults/allow_active', '') == 'auth_admin_keep')
+    report.check('The update action gives the helper no display',
+                 'org.freedesktop.policykit.exec.allow_gui' not in annotations)
+    rules = tree.path_of(paths.install_update_rule_template).read_text(encoding='utf-8')
+    code = '\n'.join(line for line in rules.splitlines() if not line.lstrip().startswith('//'))
+    report.check('The update rule covers only the update action',
+                 code.count('action.id') == 1 and f'action.id !== "{action_id}"' in code
+                 and code.count('"io.winspace.') == 1)
+    report.check('The update rule needs a local, active session',
+                 '!subject.local || !subject.active' in code)
+    groups = sorted(set(re.findall(r'subject\.isInGroup\("([^"]+)"\)', code)))
+    report.check('The update rule lets only administrators through',
+                 groups == sorted(package_data.ADMINISTRATOR_GROUPS)
+                 and code.count('polkit.Result.YES') == 1)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -3,7 +3,9 @@
 //! Compress to ZIP file.
 //!
 //! With `OX_NATIVE_CAPTURE_DIR` set, these also save
-//! `native-archive-browser.png` and `native-extract-dialog.png`.
+//! `native-archive-browser.png`, `native-extract-dialog.png`,
+//! `native-extract-conflict-{light,dark}.png` and
+//! `native-compress-to-submenu-{light,dark}.png`.
 
 use std::fs;
 use std::path::Path;
@@ -18,7 +20,8 @@ use ox_core::transfer::Cancellation;
 use super::item_dialogs::{press, texts};
 use crate::archive_view::ArchiveBrowserView;
 use crate::test_support::harness::{
-    capture, capture_popover, descendants, wait_for, wait_until, Fixture, TestWindow,
+    capture, capture_dialog, capture_popover, descendants, wait_for, wait_until, Fixture, TestWindow,
+    ThemeGuard,
 };
 
 /// A standard fixture with `Bundle.zip`, which holds `Docs/a.txt` and
@@ -108,7 +111,7 @@ fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
     assert!(opened.contains("winspace-archive-previews"), "{opened}");
     assert_eq!(
         browser.status_text(),
-        "Opened a temporary copy. Changes are not saved back to the ZIP."
+        "Opened a temporary copy. Changes are not saved back to the archive."
     );
     assert!(!fixture.path("readme.txt").exists(), "browsing extracts nothing");
 }
@@ -321,18 +324,14 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
     press(&frame, "Extract");
 
-    wait_until("the name-conflict question", || {
-        super::file_ops_support::dialog_over(&test).is_some()
-    });
-    super::file_ops_support::open_dialog(&test).press("Skip duplicates");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
 
     wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
-    wait_until("the move's report", || {
-        super::file_ops_support::dialog_over(&test)
-            .is_some_and(|dialog| dialog.message_text().contains("1 skipped"))
-    });
-    super::file_ops_support::open_dialog(&test).press("OK");
     super::file_ops_support::assert_ended_without_a_message(&test);
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing reports the name Skip left alone, as in Windows"
+    );
     assert_eq!(
         fs::read(fixture.path("readme.txt")).expect("kept"),
         b"mine",
@@ -363,8 +362,10 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
 }
 
 /// Cancel in the name-conflict question of an extraction into an existing
-/// folder just stops, as in Windows Explorer: no message follows, nothing
-/// is added and the private folder is removed.
+/// folder just stops, as in Windows Explorer: no message follows, the
+/// file it asked about is unchanged and the private folder is removed.
+/// As Windows asks at the end of the job, the items without a conflict
+/// were already extracted, and stay.
 ///
 /// parity: ARC-011, ARC-012
 #[gtk::test]
@@ -380,11 +381,8 @@ fn cancelling_an_extractions_conflict_question_says_nothing() {
     });
     descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
     press(&frame, "Extract");
-    wait_until("the name-conflict question", || {
-        super::file_ops_support::dialog_over(&test).is_some()
-    });
 
-    super::file_ops_support::open_dialog(&test).press("Cancel");
+    super::file_ops_support::cancel_conflicts(&test);
     wait_until("the private folder to be removed", || {
         fs::read_dir(fixture.root())
             .expect("the folder")
@@ -400,7 +398,10 @@ fn cancelling_an_extractions_conflict_question_says_nothing() {
 
     assert!(super::file_ops_support::dialog_over(&test).is_none());
     assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
-    assert!(!fixture.path("Docs").exists(), "nothing is added");
+    assert!(
+        fixture.path("Docs/a.txt").is_file(),
+        "the items without a conflict came first"
+    );
     assert_eq!(fs::read(fixture.path("readme.txt")).expect("kept"), b"mine");
 }
 
@@ -576,22 +577,28 @@ fn write_tar_gz(fixture: &Fixture) {
     assert!(status.success());
 }
 
-/// A .tar.gz opens in the archive browser and extracts like a ZIP, also
-/// now that ZIPs open like folders by default; with "Open archives as
-/// folders" off it opens in its default application,
-/// unless it was handed to the app.
+/// A .tar.gz opens in the archive browser window when archives open in
+/// a pop-up window, which calls it an archive, not a ZIP, and extracts
+/// like a ZIP; with "Open archives as folders" off it opens in its
+/// default application, unless it was handed to the app.
 ///
 /// parity: ARC-022, ARC-024
 #[gtk::test]
 fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
     let fixture = Fixture::standard();
     write_tar_gz(&fixture);
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.select_named("Site.tar.gz");
 
     test.activate("open", None);
     let browser = archive_browser(&test);
     wait_until("the listing", || browser.row_names() == ["Docs"]);
+    let shown = texts(&test.shown_dialog().expect("the browser"));
+    assert!(
+        shown.iter().any(|text| text.starts_with("Read-only archive.")),
+        "{shown:?}"
+    );
+    assert!(!shown.iter().any(|text| text.contains("ZIP")), "{shown:?}");
     test.shown_dialog().expect("the browser").close();
     test.activate("extract-here", None);
     // Its lone top-level folder is lifted out rather than nested (ARC-025).
@@ -641,32 +648,137 @@ fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
     super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
-/// Compress to… asks for the name and format, writes a .tar.xz, and
-/// keeps the dialog open with the reason when the name is taken.
+/// The labels of the drop-down `dropdown` offers.
+fn dropdown_labels(dropdown: &gtk::DropDown) -> Vec<String> {
+    let model = dropdown.model().expect("a list");
+    (0..model.n_items())
+        .filter_map(|index| model.item(index).and_downcast::<gtk::StringObject>())
+        .map(|item| item.string().to_string())
+        .collect()
+}
+
+/// Opens Compress to › Additional options for `name` and returns the
+/// dialog with its path field and its format and method drop-downs.
+fn create_archive_dialog(
+    test: &TestWindow,
+    name: &str,
+) -> (
+    crate::dialog::DialogFrame,
+    gtk::Entry,
+    gtk::DropDown,
+    gtk::DropDown,
+) {
+    test.wait_for_listing("the folder");
+    test.select_named(name);
+    test.activate("compress-to", None);
+    let frame = test.wait_for_dialog("the Create archive dialog");
+    let field = descendants::<gtk::Entry>(&frame).remove(0);
+    let mut dropdowns = descendants::<gtk::DropDown>(&frame);
+    assert_eq!(dropdowns.len(), 2, "Archive format and Compression method");
+    let method = dropdowns.remove(1);
+    let format = dropdowns.remove(0);
+    (frame, field, format, method)
+}
+
+/// Compress to › Additional options is laid out as Windows 11's: the
+/// heading, the archive's whole path with Browse…, the archive format,
+/// the compression method and level, the link check boxes (grayed: links
+/// are never kept), and Create and Cancel. Choosing the format or the
+/// method changes the path's ending.
 ///
 /// parity: ARC-023
 #[gtk::test]
-fn compress_to_asks_for_a_name_and_a_format() {
+fn additional_options_lay_out_the_create_archive_dialog() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let compress = |name: &str| {
-        test.select_named("Notes 2.txt");
-        test.activate("compress-to", None);
-        let frame = test.wait_for_dialog("the Compress dialog");
-        assert_eq!(descendants::<gtk::Entry>(&frame)[0].text(), "Notes 2");
-        descendants::<gtk::Entry>(&frame)[0].set_text(name);
-        descendants::<gtk::DropDown>(&frame)[0].set_selected(1);
-        press(&frame, "Compress");
-        frame
-    };
+    let (frame, field, format, method) = create_archive_dialog(&test, "Notes 2.txt");
 
-    compress("Backup");
-    let archive = fixture.path("Backup.tar.xz");
-    wait_until("the new archive", || archive.exists());
-    super::file_ops_support::assert_ended_without_a_message(&test);
-    let frame = compress("Backup");
+    assert_eq!(frame.title(), "Select a destination and create archive");
+    let shown = texts(&frame);
+    for text in [
+        "Files will be added to this archive:",
+        "Archive format:",
+        "Compression method:",
+        "Compression level:",
+        "Faster",
+        "Smaller",
+    ] {
+        assert!(shown.contains(&text.to_owned()), "{text}: {shown:?}");
+    }
+    assert!(descendants::<gtk::Button>(&frame)
+        .iter()
+        .any(|button| button.label().as_deref() == Some("Browse…")));
+    let checks = descendants::<gtk::CheckButton>(&frame);
+    let labels: Vec<String> = checks
+        .iter()
+        .filter_map(|check| check.label().map(|label| label.to_string()))
+        .collect();
+    assert_eq!(labels, ["Retain symbolic links", "Retain hard links"]);
+    assert!(checks.iter().all(|check| !check.is_sensitive()));
+    assert_eq!(frame.button_labels(), ["Create", "Cancel"]);
+    let notes = fixture.root().join("Notes 2");
+    assert_eq!(field.text(), format!("{}.zip", notes.display()));
+    assert_eq!(dropdown_labels(&format), ["zip", "tar"]);
+    assert_eq!(dropdown_labels(&method), ["Deflate"]);
+    assert_eq!(descendants::<gtk::Scale>(&frame).len(), 1);
+
+    format.set_selected(1);
+    assert_eq!(dropdown_labels(&method), ["None", "GZip", "BZip2", "XZ"]);
+    assert_eq!(field.text(), format!("{}.tar", notes.display()));
+    let endings = [(1, ".tar.gz"), (2, ".tar.bz2"), (3, ".tar.xz"), (0, ".tar")];
+    for (index, ending) in endings {
+        method.set_selected(index);
+        assert_eq!(field.text(), format!("{}{ending}", notes.display()));
+    }
+    let level = descendants::<gtk::Scale>(&frame).remove(0);
+    assert!(!level.is_sensitive(), "a plain TAR is not compressed");
+    method.set_selected(3);
+    assert!(level.is_sensitive());
+    format.set_selected(0);
+    assert_eq!(field.text(), format!("{}.zip", notes.display()));
+    press(&frame, "Cancel");
+    wait_until("the dialog to close", || test.shown_dialog().is_none());
+    assert!(!fixture.path("Notes 2.zip").exists(), "Cancel writes nothing");
+}
+
+/// Create writes the format and method chosen under the path in the
+/// field, keeps the dialog open with the reason when the name is taken,
+/// and Undo takes the new archive away again.
+///
+/// parity: ARC-023, OPS-029
+#[gtk::test]
+fn create_writes_the_chosen_format_and_undo_takes_it_away() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let cases = [
+        (0, 0, "Notes 2.zip", b"PK".as_slice()),
+        (1, 1, "Notes 2.tar.gz", &[0x1f, 0x8b]),
+        (1, 2, "Notes 2.tar.bz2", b"BZh"),
+        (1, 3, "Notes 2.tar.xz", &[0xfd, b'7']),
+        (1, 0, "Notes 2.tar", b"Note"),
+    ];
+    for (format_index, method_index, archive, magic) in cases {
+        let (frame, _field, format, method) = create_archive_dialog(&test, "Notes 2.txt");
+        format.set_selected(format_index);
+        method.set_selected(method_index);
+        press(&frame, "Create");
+        wait_until("the dialog to close", || test.shown_dialog().is_none());
+        super::file_ops_support::assert_ended_without_a_message(&test);
+        let bytes = fs::read(fixture.path(archive)).expect("written");
+        assert!(bytes.starts_with(magic), "{archive}");
+    }
+
+    let (frame, _field, _format, _method) = create_archive_dialog(&test, "Notes 2.txt");
+    press(&frame, "Create");
     wait_until("the refusal", || !frame.error_text().is_empty());
-    assert_eq!(test.shown_dialog(), Some(frame));
+    assert_eq!(test.shown_dialog(), Some(frame.clone()));
+    press(&frame, "Cancel");
+    wait_until("the dialog to close", || test.shown_dialog().is_none());
+
+    test.activate("undo", None);
+    wait_until("the last archive to go", || !fixture.path("Notes 2.tar").exists());
+    assert!(fixture.path("Notes 2.tar.xz").exists(), "only the last one");
 }
 
 /// parity: ARC-009, ARC-023, ARC-025
@@ -702,4 +814,211 @@ fn open_in_archive_manager_hands_the_zip_to_the_desktop() {
     wait_until("the launch", || !test.context.recorded_launches().is_empty());
     assert_eq!(test.context.recorded_launches(), [fixture.uri_of("Bundle.zip")]);
     assert!(test.shown_dialog().is_none());
+}
+
+/// Extracting onto files that already exist asks Replace or Skip under a
+/// line that says what really happens: extracting from the archive into
+/// the chosen folder, never a move out of the private folder the
+/// extraction is built in.
+///
+/// parity: ARC-012, OPS-019
+#[gtk::test]
+fn extracting_onto_existing_files_names_the_archive() {
+    let fixture = fixture_with_zip();
+    fs::write(fixture.path("readme.txt"), b"mine").expect("a file the archive also has");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+    descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
+    press(&frame, "Extract");
+
+    let window = super::file_ops_support::asking_window(&test);
+    let shown = texts(&window);
+    let folder = fixture
+        .root()
+        .file_name()
+        .expect("a named folder")
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        shown.contains(&format!("Extracting 2 items from Bundle.zip to {folder}")),
+        "{shown:?}"
+    );
+    assert!(
+        !shown.iter().any(|text| text.contains(".openxplorer-extract-")),
+        "{shown:?}"
+    );
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        capture_dialog(&window, &format!("native-extract-conflict-{theme}.png"));
+    }
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
+    wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
+    super::file_ops_support::assert_ended_without_a_message(&test);
+}
+
+/// Compress to › TAR File puts one file, several files or a folder into a
+/// new plain .tar beside them, named after the first item, which then
+/// opens in the tab like any archive.
+///
+/// parity: ARC-023, ARC-026
+#[gtk::test]
+fn compress_to_tar_puts_the_selection_into_a_new_tar_beside_it() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Second.txt"), b"second").expect("a second file");
+    let test = TestWindow::open(&fixture.uri());
+    let choose = PreferencesUpdate {
+        zip_opening: Some(ZipOpening::Folder),
+        ..PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(choose, |result| result.expect("saved"));
+    test.wait_for_listing("the folder");
+    test.select_named("Notes 2.txt");
+    let notes = test
+        .window
+        .folder_pane()
+        .model()
+        .first_selected()
+        .expect("Notes 2.txt is selected");
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.window.right_click(Some(notes));
+        let menu = test.window.context_menu();
+        assert!(test.window.open_context_submenu("Compress to"));
+        crate::test_support::harness::capture_with_menus(
+            &test.window,
+            &format!("native-compress-to-submenu-{theme}.png"),
+        );
+        menu.popdown();
+        wait_until("the menu to close", || !menu.is_mapped());
+    }
+    let cases: [(&[&str], &str, &[&str]); 3] = [
+        (&["Notes 2.txt"], "Notes 2.tar", &["Notes 2.txt"]),
+        (
+            &["Notes 2.txt", "Second.txt"],
+            "Notes 2 (2).tar",
+            &["Notes 2.txt", "Second.txt"],
+        ),
+        (&["Documents"], "Documents.tar", &["Documents"]),
+    ];
+    for (selected, archive, inside) in cases {
+        test.wait_for_listing("the folder");
+        super::file_ops_support::select_names(&test, selected);
+        test.activate("compress-to-tar", None);
+        // The TAR grows under its final name, as Explorer writes it, so
+        // it is read once its two end blocks are there.
+        wait_until("the finished TAR", || {
+            fs::read(fixture.path(archive)).is_ok_and(|bytes| {
+                bytes.len() >= 3 * 512 && bytes[bytes.len() - 1024..].iter().all(|&byte| byte == 0)
+            })
+        });
+        super::file_ops_support::assert_ended_without_a_message(&test);
+        let bytes = fs::read(fixture.path(archive)).expect("written");
+        assert_eq!(bytes.get(257..262), Some(b"ustar".as_slice()), "{archive}");
+        wait_until("the TAR in the listing", || {
+            test.names().contains(&(*archive).to_owned())
+        });
+
+        let root = ox_core::location::ArchiveLocation::root(&fixture.uri_of(archive));
+        test.select_named(archive);
+        test.activate("open", None);
+        wait_until("the TAR in the tab", || {
+            test.window.current_uri() == Some(root.uri())
+        });
+        test.wait_for_listing("the TAR's listing");
+        assert_eq!(test.names(), inside, "{archive}");
+        test.activate("up", None);
+        wait_until("out of the TAR", || {
+            test.window.current_uri() == Some(fixture.uri())
+        });
+    }
+}
+
+/// Compress to › TAR File and ZIP File work as in Windows 11: the new
+/// archive appears beside the item under the next free name ("(2)" when
+/// the name is taken), selected and renamed in place, and Undo takes it
+/// away again, to the Recycle Bin.
+///
+/// parity: ARC-023, OPS-029
+#[gtk::test]
+fn a_new_archive_is_renamed_in_place_and_undo_takes_it_away() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Notes 2.tar"), b"taken").expect("a file with the TAR's name");
+    let test = TestWindow::open(&fixture.uri());
+    for (action, archive) in [
+        ("compress-to-tar", "Notes 2 (2).tar"),
+        ("compress-to-zip", "Notes 2.zip"),
+    ] {
+        test.wait_for_listing("the folder");
+        test.select_named("Notes 2.txt");
+        test.activate(action, None);
+
+        wait_until("the new archive renamed in place", || {
+            super::file_ops_support::is_renaming_in_place(&test)
+        });
+        assert_eq!(test.selected_names(), [archive], "{action}");
+        let field = super::file_ops_support::name_editor(&test);
+        super::new_folder::press_in(&field, gtk::gdk::Key::Escape);
+        wait_until("the rename to end", || {
+            !super::file_ops_support::is_renaming_in_place(&test)
+        });
+        assert!(fixture.path(archive).exists(), "{action}");
+
+        test.activate("undo", None);
+
+        wait_until("the archive to go", || !fixture.path(archive).exists());
+    }
+    assert_eq!(fs::read(fixture.path("Notes 2.tar")).expect("kept"), b"taken");
+}
+
+/// The color, font (size and weight) and line height GTK draws
+/// `frame`'s heading with.
+fn heading_look(frame: &crate::dialog::DialogFrame) -> (String, String, i32) {
+    let title = frame.title_label();
+    let (_, height, _, _) = title.measure(gtk::Orientation::Vertical, -1);
+    let font = title
+        .pango_context()
+        .font_description()
+        .map(|font| font.to_str().to_string())
+        .unwrap_or_default();
+    (title.color().to_str().to_string(), font, height)
+}
+
+/// The Create archive window's heading looks like the app's other
+/// dialog headings, such as the Extract dialog's, in both themes: the
+/// same color, size and weight, with its own text.
+///
+/// parity: ARC-023
+#[gtk::test]
+fn the_create_archive_heading_looks_like_other_dialog_headings() {
+    let _theme = ThemeGuard::keep();
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.wait_for_listing("the folder");
+        test.select_named("Bundle.zip");
+        test.activate("extract-all", None);
+        let extract = test.wait_for_dialog("the Extract dialog");
+        crate::test_support::harness::wait_for_frames(&extract, 2);
+        let expected = heading_look(&extract);
+        extract.close();
+        wait_until("the Extract dialog to close", || test.shown_dialog().is_none());
+
+        let (frame, _field, _format, _method) = create_archive_dialog(&test, "Notes 2.txt");
+        crate::test_support::harness::wait_for_frames(&frame, 2);
+
+        assert_eq!(heading_look(&frame), expected, "{theme}");
+        assert_eq!(frame.title(), "Select a destination and create archive");
+        frame.close();
+        wait_until("the dialog to close", || test.shown_dialog().is_none());
+    }
 }

@@ -124,8 +124,9 @@ fn switching_views_keeps_the_selection_and_shows_the_active_view() {
     assert_eq!(status_bar.active_view_buttons(), ["Details view"]);
 }
 
-/// The command-bar toggle, View › Details pane and the pane's own close
-/// button all run `win.details-pane`, which is saved.
+/// The command-bar toggle and View › Details pane run
+/// `win.details-pane`, which is saved; like Windows' pane, the pane has
+/// no close button of its own.
 ///
 /// parity: VIEW-027
 #[gtk::test]
@@ -146,10 +147,10 @@ fn the_details_button_shows_whether_the_pane_is_open() {
     });
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
-    let runs_the_toggle = descendants::<gtk::Button>(pane)
+    let closes_itself = descendants::<gtk::Button>(pane)
         .into_iter()
         .any(|button| button.action_name().as_deref() == Some("win.details-pane"));
-    assert!(runs_the_toggle, "the pane's close button runs the same toggle");
+    assert!(!closes_itself, "like Windows' pane, it has no close button");
 }
 
 #[gtk::test]
@@ -157,7 +158,7 @@ fn both_views_show_each_name_with_its_icon() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
@@ -187,7 +188,7 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
     std::fs::set_permissions(fixture.path("Locked.txt"), locked).expect("make it read-only");
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
@@ -206,18 +207,19 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
 
 /// Regression: after a merge the Documents folder's Type column read
 /// GIO's "Word 2007 document", "Excel 2007 spreadsheet" and "Plain text
-/// document". The files are real, so GIO names their types, the app's
-/// loader lists them and the details view draws the cells read here.
+/// document"; it shows the names Windows 11 gives these types. The files
+/// are real, so GIO names their types, the app's loader lists them and
+/// the details view draws the cells read here.
 ///
 /// parity: VIEW-002
 #[gtk::test]
-fn the_type_column_shows_the_interface_names_for_documents() {
+fn the_type_column_shows_the_windows_names_for_documents() {
     let fixture = Fixture::standard();
     let documents = [
-        ("Meeting notes.docx", "Word document"),
-        ("Project budget.xlsx", "Excel worksheet"),
-        ("Q3 presentation.pptx", "PowerPoint presentation"),
-        ("Website assets.zip", "Compressed folder"),
+        ("Meeting notes.docx", "Microsoft Word Document"),
+        ("Project budget.xlsx", "Microsoft Excel Worksheet"),
+        ("Q3 presentation.pptx", "Microsoft PowerPoint Presentation"),
+        ("Website assets.zip", "Compressed (zipped) Folder"),
     ];
     for (name, _) in documents {
         fixture.write(name);
@@ -230,13 +232,13 @@ fn the_type_column_shows_the_interface_names_for_documents() {
         labels.iter().map(|label| label.text().into()).collect()
     };
     wait_until("the Type cells to be bound", || {
-        shown_texts().iter().any(|text| text == "Word document")
+        shown_texts().iter().any(|text| text == "Microsoft Word Document")
     });
     let texts = shown_texts();
     for (name, type_label) in documents {
         assert!(texts.iter().any(|text| text == type_label), "{name}: {texts:?}");
     }
-    assert!(texts.iter().any(|text| text == "Text document"), "{texts:?}");
+    assert!(texts.iter().any(|text| text == "Text Document"), "{texts:?}");
 }
 
 /// The labels the details view of `test` shows, in its rows and titles.
@@ -500,9 +502,11 @@ fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
 
 /// A window that opened in the icon view used to keep one column, because
 /// GTK ignored the column count set while it allocated the view. Tiles sit
-/// where `renderRows` in app.js puts them: `floor(width / 135)` columns
+/// where `renderRows` in app.js puts them: `floor(width / cell)` columns
 /// sharing the width less 20 pixels, the first 10 pixels in and 5 down,
-/// 4 pixels apart, 128 pixels tall on a 130-pixel pitch.
+/// 4 pixels apart. Large icons' 96-pixel icons (Windows 11's, owner
+/// decision 2026-11-06) make the web's 135 × 130 cell 40 pixels wider and
+/// taller: 168 pixels tall on a 170-pixel pitch.
 ///
 /// parity: VIEW-005, LOOK-014
 #[gtk::test]
@@ -515,14 +519,14 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     test.show(&fixture.uri());
     wait_for_frames(&test.window, 4);
     let (width, tiles) = tile_bounds(&test);
-    let columns = width / 135;
+    let columns = width / 175;
     assert!(columns >= 2, "a {width}-pixel pane holds several columns");
     let tile_width = (width - 20) / columns - 4;
-    assert_eq!(tiles[0], Bounds::new(10, 5, tile_width, 128), "the first tile");
+    assert_eq!(tiles[0], Bounds::new(10, 5, tile_width, 168), "the first tile");
     let first_row: Vec<_> = tiles.iter().filter(|tile| tile.y == 5).collect();
     assert_eq!(first_row.len(), usize::try_from(columns).expect("a few columns"));
     let next_row = tiles.iter().find(|tile| tile.y != 5).expect("a second row");
-    assert_eq!(next_row.y, 5 + 130, "rows are 130 pixels apart");
+    assert_eq!(next_row.y, 5 + 170, "rows are 170 pixels apart");
     let first_cell = descendants::<FileCell>(test.window.folder_pane().icon_view().grid())
         .into_iter()
         .next()
@@ -532,7 +536,7 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
         .next()
         .expect("a name");
     let name_top = name.compute_bounds(&first_cell).map(|rect| pixels(rect.y()));
-    assert_eq!(name_top, Some(56 + 8), "the name starts 8 pixels under the icon");
+    assert_eq!(name_top, Some(96 + 8), "the name starts 8 pixels under the icon");
 }
 
 /// Choosing a view starts it from the top and saves it; Explorer's keys
@@ -640,7 +644,7 @@ fn text_size_keys_work_inside_dialogs() {
     let _theme = ThemeGuard::keep();
     let before = test.window.skin().text_size();
     let rename = crate::dialog::Dialog::new(&test.window, "Rename", "");
-    let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
+    let map = crate::dialogs::map_network_dialog(&test.window, &[], |_, _| {});
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let properties = test.wait_for_properties("Notes 2.txt Properties");
@@ -684,7 +688,7 @@ fn zooming_changes_and_saves_the_view() {
     // The Python app's view key is saved while every folder shares one.
     test.share_one_view();
     test.window.folder_pane().model().select_only(3);
-    test.window.zoom_view(6);
+    test.window.zoom_view(7);
     assert_eq!(
         test.window.folder_pane().view(),
         FolderView::Icons(IconSize::MEDIUM)
@@ -695,5 +699,5 @@ fn zooming_changes_and_saves_the_view() {
     });
     assert_eq!(test.selected_names().len(), 1, "zooming keeps the selection");
     test.window.zoom_view(1);
-    assert_eq!(test.window.folder_pane().view().as_str(), "icons-48");
+    assert_eq!(test.window.folder_pane().view().as_str(), "icons-56");
 }

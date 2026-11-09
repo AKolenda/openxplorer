@@ -35,7 +35,7 @@ pub(crate) struct NetworkServices {
     visited: RefCell<VisitedNetwork>,
     /// The kernel's CIFS and SMB3 mounts, as last read.
     stable_mounts: RefCell<Vec<StableMount>>,
-    /// Where Discover servers looks.
+    /// Where the listing of Network discovers computers.
     discoverer: RefCell<Discoverer>,
 }
 
@@ -90,12 +90,19 @@ impl NetworkServices {
         self.visited.borrow_mut().remember(uri)
     }
 
+    /// Records the share `uri` mapped for this session only under `label`,
+    /// which its Network row shows.
+    pub(crate) fn remember_mapped(&self, uri: &str, label: &str) {
+        self.visited.borrow_mut().remember_mapped(uri, label);
+    }
+
     /// Forgets every browsed root on `host`, when signing out of it.
     pub(crate) fn forget_visited_host(&self, host: &str) {
         self.visited.borrow_mut().forget_host(host);
     }
 
-    /// The browsed roots, oldest first, as the Network list merges them.
+    /// The shares mapped this session, then the browsed roots, oldest
+    /// first, as the Network list merges them.
     pub(crate) fn visited_bookmarks(&self) -> Vec<Bookmark> {
         self.visited.borrow().to_bookmarks()
     }
@@ -112,12 +119,12 @@ impl NetworkServices {
         changed
     }
 
-    /// Where Discover servers looks.
+    /// Where the listing of Network discovers computers.
     pub(crate) fn discoverer(&self) -> Discoverer {
         self.discoverer.borrow().clone()
     }
 
-    /// Makes Discover servers find what `discoverer` returns, for tests.
+    /// Makes Network find what `discoverer` returns, for tests.
     #[cfg(test)]
     pub(crate) fn set_discoverer(&self, discoverer: Discoverer) {
         self.discoverer.replace(discoverer);

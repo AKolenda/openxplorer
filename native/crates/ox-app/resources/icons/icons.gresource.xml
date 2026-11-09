@@ -13,6 +13,7 @@
     <file>scalable/actions/ox-add-20-symbolic.svg</file>
     <file>scalable/actions/ox-add-network-location-24-symbolic.svg</file>
     <file>scalable/actions/ox-apps-20-symbolic.svg</file>
+    <file>scalable/actions/ox-apps-list-detail-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-autofit-height-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-clockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-counterclockwise-20-symbolic.svg</file>
@@ -26,9 +27,12 @@
     <file>scalable/actions/ox-arrow-swap-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-undo-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-up-20-symbolic.svg</file>
+    <file>scalable/actions/ox-bluetooth-20-symbolic.svg</file>
     <file>scalable/actions/ox-braces-20-symbolic.svg</file>
     <file>scalable/actions/ox-checkbox-checked-20-symbolic.svg</file>
     <file>scalable/actions/ox-checkmark-20-symbolic.svg</file>
+    <file>scalable/actions/ox-chevron-double-left-16-symbolic.svg</file>
+    <file>scalable/actions/ox-chevron-double-right-16-symbolic.svg</file>
     <file>scalable/actions/ox-chevron-down-16-symbolic.svg</file>
     <file>scalable/actions/ox-chevron-down-20-symbolic.svg</file>
     <file>scalable/actions/ox-chevron-left-16-symbolic.svg</file>
@@ -36,6 +40,7 @@
     <file>scalable/actions/ox-chevron-up-16-symbolic.svg</file>
     <file>scalable/actions/ox-clipboard-paste-20-symbolic.svg</file>
     <file>scalable/actions/ox-code-20-symbolic.svg</file>
+    <file>scalable/actions/ox-content-view-20-symbolic.svg</file>
     <file>scalable/actions/ox-copy-20-symbolic.svg</file>
     <file>scalable/actions/ox-cut-20-symbolic.svg</file>
     <file>scalable/actions/ox-delete-20-symbolic.svg</file>
@@ -52,6 +57,7 @@
     <file>scalable/actions/ox-history-20-symbolic.svg</file>
     <file>scalable/actions/ox-invert-selection-24-symbolic.svg</file>
     <file>scalable/actions/ox-link-20-symbolic.svg</file>
+    <file>scalable/actions/ox-mail-20-color.svg</file>
     <file>scalable/actions/ox-map-network-drive-24-symbolic.svg</file>
     <file>scalable/actions/ox-markdown-20-symbolic.svg</file>
     <file>scalable/actions/ox-maximize-20-symbolic.svg</file>
@@ -67,6 +73,7 @@
     <file>scalable/actions/ox-rectangle-landscape-20-symbolic.svg</file>
     <file>scalable/actions/ox-rename-20-symbolic.svg</file>
     <file>scalable/actions/ox-search-20-symbolic.svg</file>
+    <file>scalable/actions/ox-search-settings-20-symbolic.svg</file>
     <file>scalable/actions/ox-select-all-24-symbolic.svg</file>
     <file>scalable/actions/ox-select-all-off-20-symbolic.svg</file>
     <file>scalable/actions/ox-select-all-on-20-symbolic.svg</file>

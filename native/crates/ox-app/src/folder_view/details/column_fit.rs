@@ -6,6 +6,11 @@
 //! the column's limits, and Name stops filling the spare width once it
 //! has a width of its own; wider columns then scroll sideways.
 //!
+//! A fitted column is never narrower than its title, as in Windows File
+//! Explorer, and [`DetailsView::fit_all_columns`] fits every shown column
+//! at once: Windows' "Size all columns to fit" and Ctrl+plus on the
+//! number pad (VIEW-072).
+//!
 //! Ports `fitColumn`, `setColumnWidth` and the `.column-resizer` handlers
 //! of `renderColumns` in `v2.0.0:desktop/ui/app.js` (VIEW-028, VIEW-029,
 //! VIEW-030). GTK draws the resize edge itself and has no widget for it,
@@ -70,6 +75,12 @@ impl DetailsView {
             }
         ));
         header.add_controller(double_click);
+        // The list's font is known once it is shown, and Size follows it.
+        self.column_view().connect_map(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |_| view.fit_size_to_its_font()
+        ));
         let titles = self.titles(&header);
         for ((column, view_column), (_, title)) in self.view_columns().zip(titles) {
             // The title holds its column, so the column holds it weakly.
@@ -77,17 +88,29 @@ impl DetailsView {
                 title.update_property(&[gtk::accessible::Property::ValueNow(start)]);
             }
             let title = title.downgrade();
+            let view = self.downgrade();
             view_column.connect_fixed_width_notify(move |view_column| {
                 let width = view_column.fixed_width();
                 let saved = column_widths::saved_width(column, width);
                 if let (Some(saved), Some(title)) = (saved, title.upgrade()) {
                     title.update_property(&[gtk::accessible::Property::ValueNow(saved)]);
                 }
-                if width > 0 {
+                // -1 is no width of its own. GTK sets 0 when a title's end
+                // is dragged past the column's start, which the limits
+                // turn into the narrowest width, as for any other drag.
+                if width >= 0 {
                     // A column with a width of its own stops filling the
                     // space: after a resize, every width is exact.
                     view_column.set_expand(false);
-                    let clamped = column_widths::clamped_fixed_width(column, width);
+                    let mut clamped = column_widths::clamped_fixed_width(column, width);
+                    // Size never gets narrower than its text in the list's
+                    // font, whatever drags or keys ask.
+                    if column == SortColumn::Size {
+                        if let Some(view) = view.upgrade() {
+                            let narrowest = column_widths::fixed_width(column, Some(view.size_minimum()));
+                            clamped = clamped.max(narrowest);
+                        }
+                    }
                     if clamped != width {
                         view_column.set_fixed_width(clamped);
                     }
@@ -165,7 +188,8 @@ impl DetailsView {
     }
 
     /// Fits `column` to the widest text among the first
-    /// [`FIT_ITEM_LIMIT`] shown items (`fitColumn`).
+    /// [`FIT_ITEM_LIMIT`] shown items (`fitColumn`), and never narrower
+    /// than its title, as Windows File Explorer fits a column.
     pub(crate) fn fit_column(&self, column: SortColumn) {
         let Some(view_column) = self.column(column) else {
             return;
@@ -175,8 +199,66 @@ impl DetailsView {
             widest += self.name_check_room();
         }
         let width = column_widths::fitted_width(column, widest);
+        let fitted = column_widths::fixed_width(column, Some(width));
+        let title = self.title_width(column);
+        let fixed = if title > fitted {
+            column_widths::clamped_fixed_width(column, title)
+        } else {
+            fitted
+        };
         view_column.set_expand(false);
-        view_column.set_fixed_width(column_widths::fixed_width(column, Some(width)));
+        view_column.set_fixed_width(fixed);
+    }
+
+    /// Fits every shown column, as [`Self::fit_column`] fits one: Windows
+    /// File Explorer's "Size all columns to fit" and Ctrl+plus on the
+    /// number pad (VIEW-072).
+    pub(crate) fn fit_all_columns(&self) {
+        let shown: Vec<SortColumn> = self
+            .view_columns()
+            .filter(|(_, view_column)| view_column.is_visible())
+            .map(|(column, _)| column)
+            .collect();
+        for column in shown {
+            self.fit_column(column);
+        }
+    }
+
+    /// The width `column`'s title needs to show its whole label: what its
+    /// label and sort indicator need, and the title's padding and border
+    /// around them. The title itself cannot say: GTK gives a title its
+    /// column's fixed width whatever it holds.
+    pub(crate) fn title_width(&self, column: SortColumn) -> i32 {
+        let Some(header) = self.header() else { return 0 };
+        let titles = self.titles(&header);
+        let Some((_, title)) = titles.into_iter().find(|(shown, _)| *shown == column) else {
+            return 0;
+        };
+        let Some(content) = title.first_child() else {
+            return 0;
+        };
+        let needed = content.measure(gtk::Orientation::Horizontal, -1).1;
+        // `width()` leaves out the title's own padding and border; its
+        // bounds, its border box, include them.
+        let outer = title.compute_bounds(&title).map_or(0.0, |bounds| bounds.width());
+        #[expect(clippy::cast_possible_truncation, reason = "a title's width fits in i32")]
+        let padding = ((f64::from(outer) - f64::from(title.width())).ceil() as i32).max(0);
+        needed + padding
+    }
+
+    /// The shown column whose title is under `x`, a position in the
+    /// titles' row, as the titles' menu fits the column it was opened on.
+    pub(crate) fn column_at(&self, x: f64) -> Option<SortColumn> {
+        let header = self.header()?;
+        let titles = self.titles(&header);
+        let shown = titles.iter().filter(|(_, title)| title.is_visible());
+        shown
+            .filter_map(|(column, title)| Some((*column, title.compute_bounds(&header)?)))
+            .find(|(_, bounds)| {
+                let start = f64::from(bounds.x());
+                (start..start + f64::from(bounds.width())).contains(&x)
+            })
+            .map(|(column, _)| column)
     }
 
     /// The width in pixels of the widest text `column` shows for the first
@@ -297,11 +379,11 @@ mod tests {
         for _ in 0..20 {
             view.title_key(SortColumn::Size, gdk::Key::Left);
         }
-        let narrowest = column_widths::clamped_fixed_width(SortColumn::Size, 0);
+        let narrowest = column_widths::fixed_width(SortColumn::Size, Some(view.size_minimum()));
         assert_eq!(
             size.fixed_width(),
             narrowest,
-            "Size stops at its 70-pixel minimum"
+            "Size stops where its text still fits"
         );
     }
 
@@ -347,6 +429,58 @@ mod tests {
         window.destroy();
     }
 
+    /// "Size all columns to fit" fits every shown column to its widest
+    /// text, and a column whose title is wider than its values to the
+    /// title; hidden columns keep their widths (VIEW-072).
+    ///
+    /// parity: VIEW-072
+    #[gtk::test]
+    fn sizing_all_columns_fits_each_shown_one_and_keeps_its_title_whole() {
+        let (view, _model) = view_of(&["a.txt", "A rather long file name that needs a wide column.txt"]);
+        let window = gtk::Window::builder()
+            .default_width(900)
+            .default_height(300)
+            .child(&view)
+            .build();
+        window.present();
+        let header = view.header().expect("column titles");
+        wait_until("the titles to be laid out", || {
+            view.titles(&header)
+                .iter()
+                .all(|(_, title)| !title.is_visible() || title.width() > 0)
+        });
+        let hidden: Vec<(SortColumn, i32)> = view
+            .view_columns()
+            .filter(|(_, column)| !column.is_visible())
+            .map(|(column, view_column)| (column, view_column.fixed_width()))
+            .collect();
+        assert!(!hidden.is_empty(), "some columns are hidden by default");
+
+        view.fit_all_columns();
+
+        for (column, view_column) in view.view_columns().filter(|(_, column)| column.is_visible()) {
+            let mut widest = view.widest_text(column);
+            if column == SortColumn::Name {
+                widest += view.name_check_room();
+            }
+            let text = column_widths::fixed_width(column, Some(column_widths::fitted_width(column, widest)));
+            let title = view.title_width(column);
+            assert!(title > 0, "{column:?} has a title");
+            let mut expected = text.max(column_widths::clamped_fixed_width(column, title));
+            if column == SortColumn::Size {
+                // Never narrower than its text in the list's font.
+                expected = expected.max(column_widths::fixed_width(column, Some(view.size_minimum())));
+            }
+            assert_eq!(view_column.fixed_width(), expected, "{column:?}");
+            assert!(!view_column.expands(), "{column:?}");
+        }
+        for (column, width) in hidden {
+            let view_column = view.column(column).expect("the column");
+            assert_eq!(view_column.fixed_width(), width, "{column:?} stays as it was");
+        }
+        window.destroy();
+    }
+
     /// Dragging a title's edge sets its column's fixed width; the column
     /// holds it within its limits.
     ///
@@ -361,6 +495,12 @@ mod tests {
             column_widths::clamped_fixed_width(SortColumn::Name, 40)
         );
         assert!(name.fixed_width() > 140, "Name keeps its 140-pixel minimum");
+        name.set_fixed_width(0);
+        assert_eq!(
+            name.fixed_width(),
+            column_widths::clamped_fixed_width(SortColumn::Name, 0),
+            "a drag past the column's start leaves the narrowest Name, not none"
+        );
         name.set_fixed_width(5_000);
         assert_eq!(
             name.fixed_width(),
@@ -396,6 +536,66 @@ mod tests {
             "{text} pixels of text in a {}-pixel column",
             column.fixed_width()
         );
+    }
+
+    /// The pixels "9,999,999 KB", a Size of 9.5 GB, takes in the list's
+    /// own font, which a larger desktop font or text size widens.
+    fn size_text_width(view: &DetailsView) -> i32 {
+        let text = ox_core::format::column_size_text(Some(9_999_999 * 1024));
+        view.column_view().create_pango_layout(Some(&text)).pixel_size().0
+    }
+
+    /// The room a Size cell's text has in a Size column `fixed` pixels
+    /// wide: its padding (folder-views.css) is 12 pixels at the start and
+    /// 26 at the end, the list's own 14 among them.
+    fn size_text_room(fixed: i32) -> i32 {
+        fixed - 12 - 26
+    }
+
+    /// Size's default and narrowest width follow the list's font: with a
+    /// font as large as the desktop's at 125% text size, "9,999,999 KB"
+    /// still fits a Size column nobody resized, one restored from a saved
+    /// width narrower than that, and one dragged as narrow as it goes; a
+    /// wider width the user chose is kept.
+    ///
+    /// parity: VIEW-028
+    #[gtk::test]
+    fn size_fits_nine_digits_of_kilobytes_in_the_lists_own_font() {
+        let (view, _model) = view_of(&["a.txt"]);
+        let large = gtk::CssProvider::new();
+        large.load_from_string("columnview { font-family: \"Noto Sans\", sans-serif; font-size: 18.3px; }");
+        let display = gdk::Display::default().expect("a display");
+        gtk::style_context_add_provider_for_display(&display, &large, gtk::STYLE_PROVIDER_PRIORITY_USER);
+        let window = gtk::Window::new();
+        window.set_child(Some(&view));
+        window.present();
+        wait_until("the list to be shown", || view.column_view().is_mapped());
+        let size = view.column(SortColumn::Size).expect("a Size column");
+        let text = size_text_width(&view);
+        let fits = |what: &str| {
+            assert!(
+                text <= size_text_room(size.fixed_width()),
+                "{what}: {text} pixels of text in a {}-pixel column",
+                size.fixed_width()
+            );
+        };
+
+        view.apply_column_widths(None);
+        fits("the default width");
+        let narrow = ox_core::settings::ColumnWidths {
+            size: Some(90),
+            ..Default::default()
+        };
+        view.apply_column_widths(Some(&narrow));
+        fits("a narrower saved width");
+        size.set_fixed_width(0);
+        fits("a drag past the column's start");
+        let wide = size.fixed_width() + 60;
+        size.set_fixed_width(wide);
+        assert_eq!(size.fixed_width(), wide, "a wider width the user chose is kept");
+
+        gtk::style_context_remove_provider_for_display(&display, &large);
+        window.destroy();
     }
 
     /// Name fills the spare width until it is resized; then its width is

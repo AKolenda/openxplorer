@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.14
+Version:        2.0.16
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,21 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Mon Nov 09 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.16-1
+- OpenXplorer 2.0.16: Windows 11's search layout, file contents in the
+  Preview pane, pastes that keep going past an unreadable item, Windows
+  11's Compact view and group headings, more of its keyboard shortcuts,
+  a tab menu from the keyboard, and an Open and Save dialog that keeps
+  its size. (The password-free update helper is only in the Debian
+  package.)
+
+* Sun Nov 08 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.15-1
+- OpenXplorer 2.0.15: Windows 11's layout for the command bar, right-click
+  menus with labeled buttons, address bar suggestions, views, This PC,
+  Properties, dialogs and progress window, Continue as administrator when
+  an operation is denied, sandboxed desktop thumbnailers, pictures pasted
+  as files, and no blank file list after a slow share opens.
+
 * Thu Nov 05 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.14-1
 - OpenXplorer 2.0.14: a notice when a new release is out, administrator
   folder deletes through a pinned walk, and no crash when a tab is dragged

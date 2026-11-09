@@ -54,20 +54,24 @@ mod parts;
 mod text;
 mod virtual_place;
 
-pub(crate) use text::{decode_uri_component, python_strip, quote_component, unquote_lossy};
+pub(crate) use text::{
+    decode_uri_component, has_control_character, python_strip, quote_component, unquote_lossy,
+};
 
 pub use archive_location::{is_archive_location, ArchiveLocation, ARCHIVE_SCHEME};
 pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
 pub use names::{
-    ends_like_windows_drops, is_reserved_device_name, name_with_copy_marker, new_copy_name, safe_label,
-    validate_name, ItemKind, MAX_LABEL_CHARS,
+    ends_like_windows_drops, fitted_name, has_windows_forbidden_character, is_reserved_device_name,
+    kept_both_name, name_with_copy_marker, new_copy_name, safe_label, validate_name, ItemKind,
+    MAX_LABEL_CHARS, WINDOWS_FORBIDDEN_CHARACTERS,
 };
 pub use normalise::{
-    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
+    file_uri, is_smb_server, normalise, normalise_item, normalise_location, require_item_uri, require_share,
     typed_local_path, without_user,
 };
 pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};
+pub use text::{breaks_a_line, without_line_breaks};
 pub use virtual_place::{
     is_virtual_location, normalise_navigation, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI,
     RECENT_LOCATIONS_URI, RECENT_URI, SETTINGS_URI, TRASH_URI,

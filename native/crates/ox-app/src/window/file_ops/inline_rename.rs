@@ -2,8 +2,10 @@
 //! Renaming in place: the name becomes a text field in its row or tile
 //! (OPS-010).
 //!
-//! As in Explorer and Dolphin, the field starts with a file's name before
-//! its extension selected, or a folder's whole name. Enter or moving focus
+//! As in Windows 11, the field starts with a file's name before its last
+//! extension selected ("archive.tar" of "archive.tar.gz"), or the whole
+//! name of a folder, a shortcut or a name with no extension
+//! ([`super::rename::name_selection`]). Enter or moving focus
 //! away commits; Escape cancels. The field's own right-click menu and
 //! switching to another window keep the rename going. The name is checked with the Python Rename
 //! dialog's rules and messages (`validateName`, then the backend's); a
@@ -16,6 +18,12 @@
 //! selected, the field edits one of them and Enter gives the typed name to
 //! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab and
 //! the arrows are then the field's own keys.
+//!
+//! As in Windows, a character Windows forbids in names is refused as it
+//! is typed or pasted, with Windows' balloon ([`super::name_balloon`]),
+//! and a file renamed to the name of another file in its folder asks
+//! Windows' "Rename File" question, which offers the first free numbered
+//! name ([`super::rename_conflict`]).
 
 use std::rc::Rc;
 
@@ -23,13 +31,15 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::entry::Entry;
-use ox_core::ops::rename_item;
+use ox_core::ops::{rename_item, OpsError, RenamedItem};
 
+use super::name_balloon::refuse_forbidden_characters;
 use super::names::check_typed_name;
 use super::numbered_rename::numbered_batch_for;
-use super::rename::selected_name_length;
+use super::rename::{has_no_extension, selected_name_length};
+use super::rename_conflict::TakenNameAnswer;
 use crate::folder_view::cells::FileCell;
-use crate::folder_view::shown_name::{hidden_extension, shown_name};
+use crate::folder_view::shown_name::{hidden_extension, shown_name, shows_whole};
 use crate::window::folder_pane::FolderView;
 use crate::window::BrowserWindow;
 
@@ -45,6 +55,10 @@ struct RenameTarget {
     name: String,
     /// True for a folder, whose name has no extension.
     is_folder: bool,
+    /// True for a folder or a shortcut, whose name has no extension to
+    /// ask about changing: a Windows shortcut's own `.lnk` is hidden and
+    /// kept, so Explorer never asks.
+    has_no_extension: bool,
     /// The extension the field leaves out, with its dot, while names hide
     /// known types' extensions; the rename puts it back, as Windows'
     /// does (VIEW-069).
@@ -77,8 +91,8 @@ impl BrowserWindow {
     /// selected items in the order shown, the typed name goes to them all.
     pub(super) fn rename_in_place(&self, cell: &FileCell, entry: &Entry, several: Option<Vec<Entry>>) {
         let hidden_extension =
-            hidden_extension(&entry.name, entry.is_dir, self.file_name_extensions()).map(str::to_owned);
-        let shown = shown_name(&entry.name, entry.is_dir, self.file_name_extensions());
+            hidden_extension(&entry.name, shows_whole(entry), self.file_name_extensions()).map(str::to_owned);
+        let shown = shown_name(&entry.name, shows_whole(entry), self.file_name_extensions());
         let editor = gtk::Entry::builder()
             .text(shown)
             .hexpand(true)
@@ -91,10 +105,13 @@ impl BrowserWindow {
             uri: entry.uri.clone(),
             name: entry.name.clone(),
             is_folder: entry.is_dir,
+            has_no_extension: has_no_extension(entry),
             several: several.map(Rc::from),
             hidden_extension: hidden_extension.clone(),
         };
         self.connect_name_editor(cell, &editor, &target);
+        // Added last, its key handler runs before the field's other ones.
+        refuse_forbidden_characters(&editor);
         cell.show_name_editor(&editor);
         editor.grab_focus();
         // With the extension left out, the whole name shown is selected.
@@ -237,13 +254,19 @@ impl BrowserWindow {
         if !editor.is_sensitive() || editor.parent().is_none() {
             return;
         }
-        // An empty name stays empty, to be refused, rather than becoming
-        // the extension alone.
+        // A name erased whole (or left as spaces) keeps the old name, as
+        // in Windows 11: no rename, no message, nothing to undo. It never
+        // becomes the extension alone.
         let typed = match &target.hidden_extension {
-            Some(extension) if !editor.text().trim().is_empty() => format!("{}{extension}", editor.text()),
-            _ => editor.text().to_string(),
+            _ if editor.text().trim().is_empty() => target.name.clone(),
+            Some(extension) => format!("{}{extension}", editor.text()),
+            None => editor.text().to_string(),
         };
-        if typed == target.name {
+        // A name the shell trims back to the old one ("Notes.txt." for
+        // "Notes.txt") is no new name either.
+        let unchanged =
+            typed == target.name || check_typed_name(&typed).is_ok_and(|name| name == target.name);
+        if unchanged {
             self.end_rename_in_place(cell);
             if let Some(next) = self.take_rename_next() {
                 let model = self.folder_pane().model();
@@ -328,7 +351,7 @@ impl BrowserWindow {
             return;
         }
         let confirmed = self
-            .confirm_extension_change(&target.name, name, target.is_folder)
+            .confirm_extension_change(&target.name, name, target.has_no_extension)
             .await
             && self.confirm_hiding_rename(&target.name, name).await;
         if !confirmed {
@@ -337,17 +360,10 @@ impl BrowserWindow {
             editor.grab_focus();
             return;
         }
-        // A drive may have started formatting during the questions.
-        let (context, _writing) = match self.admit_write() {
-            Ok(admitted) => admitted,
-            Err(refusal) => {
-                self.take_rename_next();
-                self.close_name_editor(cell);
-                self.show_message(&refusal);
-                return;
-            }
+        let Some(renamed) = self.rename_or_offer_number(cell, editor, target, name).await else {
+            return;
         };
-        match rename_item(&target.uri, name, &context).await {
+        match renamed {
             Ok(renamed) => {
                 // Before the folder is listed again, which rebinds the cell.
                 self.close_name_editor(cell);
@@ -363,6 +379,55 @@ impl BrowserWindow {
                 self.show_message(&error.to_string());
             }
         }
+    }
+
+    /// Renames the item to `name`; when another file has that name, asks
+    /// Windows' "Rename File" question and, on Yes, renames it to the
+    /// numbered name it offered. `None` when nothing is left to report:
+    /// the write was refused, or No gave the field back for another try.
+    async fn rename_or_offer_number(
+        &self,
+        cell: &FileCell,
+        editor: &gtk::Entry,
+        target: &RenameTarget,
+        name: &str,
+    ) -> Option<Result<RenamedItem, OpsError>> {
+        // A drive may have started formatting during the questions.
+        let refusal = match self.admitted_rename(cell, &target.uri, name).await? {
+            Err(OpsError::Exists(refusal)) if !target.is_folder => refusal,
+            renamed => return Some(renamed),
+        };
+        match self.ask_about_taken_name(&target.uri, name).await {
+            TakenNameAnswer::Rename(numbered) => self.admitted_rename(cell, &target.uri, &numbered).await,
+            TakenNameAnswer::KeepEditing => {
+                self.take_rename_next();
+                editor.set_sensitive(true);
+                editor.grab_focus();
+                None
+            }
+            TakenNameAnswer::NotAsked => Some(Err(OpsError::Exists(refusal))),
+        }
+    }
+
+    /// Renames the item at `uri` to `name` once the window admits a write;
+    /// `None`, with the field closed and the refusal in the toast, when it
+    /// does not, as when a drive started formatting during a question.
+    async fn admitted_rename(
+        &self,
+        cell: &FileCell,
+        uri: &str,
+        name: &str,
+    ) -> Option<Result<RenamedItem, OpsError>> {
+        let (context, _writing) = match self.admit_write() {
+            Ok(admitted) => admitted,
+            Err(refusal) => {
+                self.take_rename_next();
+                self.close_name_editor(cell);
+                self.show_message(&refusal);
+                return None;
+            }
+        };
+        Some(rename_item(uri, name, &context).await)
     }
 
     /// Gives every item of `several` the name typed for the edited one,

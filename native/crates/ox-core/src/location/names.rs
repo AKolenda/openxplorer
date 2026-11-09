@@ -26,6 +26,17 @@ pub fn is_reserved_device_name(name: &str) -> bool {
     RESERVED_DEVICE_NAMES.contains(&glib::casefold(base_name.trim_end_matches(' ')).as_str())
 }
 
+/// The characters Windows refuses in a file or folder name, in the order
+/// its "A file name can't contain any of the following characters" balloon
+/// lists them.
+pub const WINDOWS_FORBIDDEN_CHARACTERS: [char; 9] = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
+
+/// True when `text` has a character Windows refuses in a name
+/// ([`WINDOWS_FORBIDDEN_CHARACTERS`]).
+pub fn has_windows_forbidden_character(text: &str) -> bool {
+    text.contains(WINDOWS_FORBIDDEN_CHARACTERS)
+}
+
 /// True when Windows cannot keep `name` as it is: it drops a dot or a
 /// space at the end of a name.
 pub fn ends_like_windows_drops(name: &str) -> bool {
@@ -93,6 +104,19 @@ pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, 
     name_with_copy_marker(name, &copy_marker(number), kind)
 }
 
+/// The name the copied item gets when the user keeps both versions in
+/// Windows' File Conflict window: "If you select both versions, the
+/// copied file will have a number added to its name", `report (2).png`,
+/// then `report (3).png`. `number` starts at 2; the number goes where
+/// [`new_copy_name`] puts its marker.
+///
+/// # Errors
+///
+/// As [`new_copy_name`].
+pub fn kept_both_name(name: &str, number: u32, kind: ItemKind) -> Result<String, LocationError> {
+    name_with_copy_marker(name, &format!(" ({number})"), kind)
+}
+
 /// The marker of the `number`th copy: ` - Copy`, then ` - Copy (2)`.
 fn copy_marker(number: u32) -> String {
     if number <= 1 {
@@ -122,6 +146,37 @@ pub fn name_with_copy_marker(name: &str, marker: &str, kind: ItemKind) -> Result
         )));
     }
     Ok(format!("{stem}{marker}{suffix}"))
+}
+
+/// `name` as `render` writes it, such as `report.txt - Shortcut (2)`,
+/// with the part before a file's last extension shortened by whole
+/// characters until the result fits 255 bytes, so the extension and what
+/// `render` adds are kept.
+///
+/// # Errors
+///
+/// The [`validate_name`] error for an invalid name, and "This file name is
+/// too long to generate a duplicate name." when nothing of the stem can be
+/// kept.
+pub fn fitted_name(
+    name: &str,
+    kind: ItemKind,
+    render: impl Fn(&str) -> String,
+) -> Result<String, LocationError> {
+    validate_name(name)?;
+    let (mut stem, suffix) = split_extension(name, kind);
+    loop {
+        let fitted = render(&format!("{stem}{suffix}"));
+        if fitted.len() <= NAME_MAX_BYTES {
+            return Ok(fitted);
+        }
+        stem = without_last_char(stem);
+        if stem.is_empty() {
+            return Err(LocationError::new(crate::i18n::gettext(
+                "This file name is too long to generate a duplicate name.",
+            )));
+        }
+    }
 }
 
 /// A user-supplied sidebar label, trimmed, or `fallback` when it is empty.
@@ -181,6 +236,24 @@ mod tests {
         assert!(!ends_like_windows_drops("notes.txt") && !ends_like_windows_drops(".hidden"));
     }
 
+    /// parity: OPS-010
+    #[test]
+    fn the_characters_windows_refuses_in_names_are_found_anywhere() {
+        for refused in ["a\\b", "a/b", "10:30", "*", "why?", "\"quoted\"", "<b>", "a|b"] {
+            assert!(has_windows_forbidden_character(refused), "{refused}");
+        }
+        for accepted in [
+            "Notes (2).txt",
+            "Résumé.txt",
+            ".hidden",
+            "a - b",
+            "100%",
+            "#1 & co",
+        ] {
+            assert!(!has_windows_forbidden_character(accepted), "{accepted}");
+        }
+    }
+
     /// parity: OPS-006
     #[test]
     fn names_are_validated_like_python() {
@@ -238,6 +311,23 @@ mod tests {
         );
     }
 
+    /// Keeping both versions in the File Conflict window numbers the
+    /// copied file as Windows does: "report (2).png", then "(3)".
+    ///
+    /// parity: OPS-028
+    #[test]
+    fn kept_both_names_follow_windows_file_conflicts() {
+        let kept = |name: &str, number: u32, kind: ItemKind| {
+            kept_both_name(name, number, kind).expect("a valid name with room for the number")
+        };
+        assert_eq!(kept("report.png", 2, ItemKind::File), "report (2).png");
+        assert_eq!(kept("report.png", 3, ItemKind::File), "report (3).png");
+        assert_eq!(kept("Photos", 2, ItemKind::Folder), "Photos (2)");
+        assert_eq!(kept(".profile", 2, ItemKind::File), ".profile (2)");
+        assert_eq!(kept("archive.tar.gz", 2, ItemKind::File), "archive.tar (2).gz");
+        assert!(kept_both_name("a/b", 2, ItemKind::File).is_err());
+    }
+
     /// parity: XFER-008
     #[test]
     fn long_copy_names_are_shortened_by_whole_characters() {
@@ -250,6 +340,24 @@ mod tests {
         let copy = new_copy_name(&name, 2, ItemKind::File).expect("the stem can be shortened");
         assert_eq!(copy, format!("{} - Copy (2).txt", "é".repeat(120)));
         assert_eq!(copy.len(), 255);
+    }
+
+    /// A name with a marker after it keeps its extension and the marker:
+    /// the part before the extension loses whole characters instead.
+    ///
+    /// parity: CMD-038
+    #[test]
+    fn a_fitted_name_shortens_the_stem_by_whole_characters() {
+        let shortcut = |name: &str| format!("{name} - Shortcut (2)");
+        let short = fitted_name("report.txt", ItemKind::File, shortcut);
+        let long = fitted_name(&format!("{}.txt", "é".repeat(125)), ItemKind::File, shortcut);
+        let folder = fitted_name(&"e".repeat(250), ItemKind::Folder, shortcut);
+
+        assert_eq!(short.as_deref(), Ok("report.txt - Shortcut (2)"));
+        assert_eq!(long, Ok(format!("{}.txt - Shortcut (2)", "é".repeat(118))));
+        assert_eq!(folder, Ok(format!("{} - Shortcut (2)", "e".repeat(240))));
+        let long_extension = format!("a.{}", "x".repeat(250));
+        assert!(fitted_name(&long_extension, ItemKind::File, shortcut).is_err());
     }
 
     /// parity: XFER-008

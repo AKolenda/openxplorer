@@ -125,7 +125,7 @@ fn a_middle_click_opens_only_for_its_own_press_and_release() {
     emit("released");
     let opened = test.window.tab_count();
     let hint_after_open = hint(&test);
-    test.window.show_result_dialog("Operation result", "Done.");
+    test.window.show_result_dialog("Operation stopped", "Done.");
     test.wait_for_dialog("a dialog");
     emit("pressed");
     emit("released");
@@ -163,24 +163,20 @@ fn middle_clicking_a_sidebar_place_opens_it_in_a_background_tab() {
 
 /// parity: TAB-024
 #[gtk::test]
-fn middle_clicking_a_this_pc_card_opens_it_behind_the_page() {
+fn middle_clicking_a_this_pc_tile_opens_it_behind_the_page() {
     let test = TestWindow::open(Page::ThisPc.uri());
     wait_for_frames(&test.window, 2);
     let landing = test.window.folder_pane().landing();
-    let card = descendants::<gtk::Button>(landing)
+    let local_disk = descendants::<gtk::FlowBoxChild>(landing)
         .into_iter()
-        .find(|button| button.action_name().as_deref() == Some("win.go-to"))
-        .expect("This PC shows a card for a drive");
-    let target = card
-        .action_target_value()
-        .and_then(|target| target.get::<String>())
-        .expect("a card names its location");
+        .next()
+        .expect("This PC shows Local Disk's tile first");
 
-    middle_click_at(&card, (4.0, 4.0));
+    middle_click_at(&local_disk, (4.0, 4.0));
 
     assert_eq!(test.window.tab_count(), 2);
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::ThisPc.uri()));
-    assert_eq!(tab_uris(&test)[1], target);
+    assert_eq!(tab_uris(&test)[1], "file:///");
 }
 
 /// parity: TAB-002

@@ -136,6 +136,9 @@ pub(crate) struct StagedCopy<'a> {
     pub(crate) cancel: &'a Cancellation,
     /// Asked about every destination a Replace changes.
     pub(crate) guard: Option<&'a WriteGuard>,
+    /// Asked about every existing folder a Replace merges into, when the
+    /// item is written as administrator (OPS-047).
+    pub(crate) merge_check: Option<&'a WriteGuard>,
     /// What the destination cannot store, and the user's answers about it
     /// (XFER-028).
     pub(crate) unstorable: &'a mut Unstorable,
@@ -251,7 +254,8 @@ impl StagedCopy<'_> {
         let mut copier = Copier::new(self.cancel, name, modes, &mut *self.unstorable, &mut *self.emit)
             .accounting(self.accounting)
             .recording(self.copied.as_deref_mut())
-            .asking(&mut *self.failures);
+            .asking(&mut *self.failures)
+            .guarded(self.guard, staged_item.as_ref(), self.destination);
         if self.source_kind == NodeKind::Directory {
             // XFER-002: a failed exclusive folder creation grants no right to
             // clean up this path.
@@ -299,7 +303,8 @@ impl StagedCopy<'_> {
         let mut copier = Copier::new(self.cancel, name, modes, &mut *self.unstorable, &mut *self.emit)
             .accounting(self.accounting)
             .recording(self.copied.as_deref_mut())
-            .asking(&mut *self.failures);
+            .asking(&mut *self.failures)
+            .guarded(self.guard, stage.item(), self.destination);
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;
@@ -342,6 +347,7 @@ impl StagedCopy<'_> {
                 self.cancel,
                 self.guard,
                 Some(modes),
+                self.merge_check,
             )
         } else {
             publish_staged(stage.item(), self.destination, modes, self.cancel)

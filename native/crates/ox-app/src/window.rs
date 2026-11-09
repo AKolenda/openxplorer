@@ -21,7 +21,8 @@
 //! places ([`environment`]), Quick access ([`quick_access`]), connecting
 //! and removing drives ([`mounting`]), network sign-in
 //! ([`network_session`]), the network commands ([`network_actions`],
-//! [`network_sign_out`]) and the places' menus ([`place_menus`]), the
+//! [`network_sign_out`]), Network's info bar ([`network_info_bar`]) and
+//! the places' menus ([`place_menus`]), the
 //! skin ([`appearance`]), activation, actions, input
 //! ([`type_to_select`]), the file operations and their [`dialog`]s
 //! ([`file_ops`]), dragging and dropping files ([`file_drag`],
@@ -58,11 +59,11 @@ mod button_style;
 mod cache_folder;
 mod caller_window;
 mod caption_buttons;
-mod card_grid;
 mod closing;
 mod command_bar;
 mod compact_density;
 mod compress_dialog;
+pub(crate) mod conflict_window;
 mod connections;
 mod context_menu;
 mod copy_path;
@@ -74,10 +75,12 @@ mod details_pane;
 mod disabled_reasons;
 mod disk_tools;
 mod drag_surface;
+mod drive_shortcuts;
 mod empty_page;
 mod environment;
 mod expand_arrows;
 mod expanding;
+mod explorer_options;
 mod external_requests;
 mod extract_into;
 mod file_drag;
@@ -94,6 +97,7 @@ mod full_screen;
 mod gestures;
 mod grid_keys;
 mod group_day;
+mod group_headings;
 mod help;
 mod history_menu;
 mod imp;
@@ -113,18 +117,19 @@ mod mounting;
 mod navigation;
 mod navigation_buttons;
 mod network_actions;
-mod network_page;
+mod network_info_bar;
 mod network_session;
 mod network_sign_out;
 mod open_several;
 mod pane_content;
 mod picker;
+mod place_commands;
 mod place_editor;
 mod place_menus;
 mod preferences;
 mod progress_window;
 mod quick_access;
-mod quick_look;
+mod quiet_tooltips;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;
@@ -132,9 +137,12 @@ mod rubber_band;
 mod run_on_open;
 mod saved_search;
 mod search_box;
+mod search_layout;
+mod search_steps;
 mod select_matching;
 mod selection;
 mod selection_keys;
+mod send_to;
 mod service_actions;
 mod session;
 mod session_restore;
@@ -158,6 +166,7 @@ mod tab_commands;
 mod tab_layout;
 mod tab_menu;
 mod tab_moves;
+mod tab_order;
 mod tab_strip;
 mod title_bar;
 mod toast;
@@ -166,6 +175,7 @@ mod type_applications;
 mod type_to_select;
 mod update_notice;
 mod version_restore;
+mod view_keys;
 mod view_options;
 mod view_style;
 mod view_zoom;
@@ -201,8 +211,10 @@ pub(crate) use actions::follow_text_size_keys;
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
 pub(crate) use closing::{QUIT_WHILE_WRITING, WAIT_FOR_FORMAT};
+pub(crate) use compact_density::DENSITY_CLASS as COMPACT_DENSITY_CLASS;
 pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
+pub(crate) use menu_popover::OPENING_MOTION as MENU_OPENING_MOTION;
 pub(crate) use progress_window::ProgressWindow;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
@@ -232,7 +244,9 @@ impl BrowserWindow {
         window.install_split_view();
         window.install_size_scans();
         window.install_item_dialogs();
+        window.install_network_info_bar();
         window.install_archive_actions();
+        window.install_send_to_actions();
         window.install_input();
         window.connect_signals();
         window.connect_settings_page();

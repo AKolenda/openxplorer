@@ -53,7 +53,7 @@ use crate::location::{is_smb_server, normalise, validate_name};
 use crate::transfer::{
     Cancellation, Node, NodeFactory, NodeKind, Progress, ProgressScope, TransferError, WriteGuard,
 };
-use plan::{plan, plan_selected, ExtractionPlan};
+use plan::{plan, plan_selected, ExtractionPlan, PathKind};
 pub(super) use staging::is_staging_name;
 use staging::{ExtractionStaging, Output};
 use unpack::Unpacking;
@@ -221,7 +221,7 @@ impl ZipExtractor {
     ) -> Result<ExtractionSummary, ArchiveError> {
         let archive = open_archive(self.opener.as_ref(), archive_uri, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
-        let plan = plan(archive.members(), &self.limits, cancel)?;
+        let plan = plan(archive.members(), archive.link_targets(), &self.limits, cancel)?;
         Ok(plan.summary)
     }
 
@@ -261,14 +261,24 @@ impl ZipExtractor {
             .prepare_destination(&destination_uri, &request.folder_name, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         let name = request.folder_name.clone();
-        self.report("Checking ZIP contents…".to_owned(), 0.0);
+        self.report("Checking the archive…".to_owned(), 0.0);
         let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         // ARC-026: a copy out of the archive checks only what it copies.
         let plan = match &self.selection {
             Some(selected) => plan_selected(archive.members(), selected, &self.limits, cancel)?,
-            None => plan(archive.members(), &self.limits, cancel)?,
+            None => plan(archive.members(), archive.link_targets(), &self.limits, cancel)?,
         };
+        // ARC-012, ARC-016: a link is checked against the folder the
+        // archive is unpacked in. Into an existing folder that is a private
+        // folder whose items are then moved in beside what the folder
+        // already holds, through which a link could lead anywhere, so an
+        // archive with a link is refused there before anything is written.
+        if self.into_existing {
+            if let Some(link) = plan.members.iter().find(|member| member.kind == PathKind::Link) {
+                return Err(ArchiveError::LinkIntoExistingFolder(link.segments.join("/")));
+            }
+        }
         self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         cancel.check()?;

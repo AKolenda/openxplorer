@@ -107,7 +107,7 @@ impl FileCell {
 }
 
 /// Gives the details rows `factory` builds the arrow and indent of their
-/// row in `tree`; [`super::connect_file_cells`] must have connected the
+/// row in `tree`; [`super::connect_mapped_file_cells`] must have connected the
 /// factory first.
 pub(crate) fn connect_expanders(factory: &gtk::SignalListItemFactory, tree: &FolderTree) {
     let setup_tree = tree.clone();

@@ -22,18 +22,18 @@ const HEIGHT: i32 = 480;
 
 /// The navigation row and the command bar, where their lines and fills
 /// run the whole width (from `the_bars_and_panes_stack_as_in_explorer`).
-const BARS: std::ops::Range<i32> = 42..159;
+const BARS: std::ops::Range<i32> = 42..138;
 
 /// How far a channel may stray between the two pictures.
 const CHANNEL_TOLERANCE: u8 = 2;
 
 /// The edge of a details row's icon in logical pixels
 /// (`ROW_ICON_SIZE` in `src/folder_view/details.rs`).
-const ROW_ICON: i32 = 21;
+const ROW_ICON: i32 = 16;
 
 /// Where the file list's rows start, in logical pixels: below the column
 /// headers and right of the sidebar.
-const ROWS_TOP: i32 = 200;
+const ROWS_TOP: i32 = 172;
 const ROWS_LEFT: i32 = 220;
 
 /// Whether the test runs in `native/tools/check.py`'s isolation: temporary
@@ -58,7 +58,17 @@ fn isolated() -> bool {
 
 /// Saves the app's window at `scale` into `picture`, showing `folder`.
 fn snapshot(folder: &Path, scale: u32, picture: &Path) -> gdk::Texture {
-    let status = Command::new(env!("CARGO_BIN_EXE_openxplorer-native"))
+    snapshot_with_config(folder, scale, picture, None)
+}
+
+/// [`snapshot`] with the settings in `config` (an `XDG_CONFIG_HOME` inside
+/// the run's temporary folder) when given.
+fn snapshot_with_config(folder: &Path, scale: u32, picture: &Path, config: Option<&Path>) -> gdk::Texture {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_openxplorer-native"));
+    if let Some(config) = config {
+        command.env("XDG_CONFIG_HOME", config);
+    }
+    let status = command
         .env("GDK_SCALE", scale.to_string())
         .env("OPENXPLORER_SNAPSHOT", picture)
         .env("OPENXPLORER_START", folder)
@@ -143,7 +153,7 @@ fn same(first: [u8; 4], second: [u8; 4]) -> bool {
 /// them into their neighbours.
 ///
 /// The folder artwork of the first row is checked the same way: at twice
-/// the scale it is the vector file drawn at 42 device pixels.
+/// the scale it is the vector file drawn at 32 device pixels.
 ///
 /// parity: LOOK-028
 #[test]
@@ -183,8 +193,8 @@ fn twice_the_scale_draws_the_bars_on_whole_device_pixels() {
 }
 
 /// The folder of the first row, at twice the scale, is the bundled vector
-/// artwork drawn at 42 device pixels, pixel for pixel: drawn at the
-/// device's resolution, not the 21-pixel picture enlarged, which would
+/// artwork drawn at 32 device pixels, pixel for pixel: drawn at the
+/// device's resolution, not the 16-pixel picture enlarged, which would
 /// blur its edges.
 fn folder_artwork_is_drawn_from_its_vector_at_twice_the_scale(double: &(Vec<u8>, usize)) {
     let edge = 2 * ROW_ICON;
@@ -200,6 +210,64 @@ fn folder_artwork_is_drawn_from_its_vector_at_twice_the_scale(double: &(Vec<u8>,
             assert!(
                 same(drawn, shown),
                 "({x}, {y}) of the folder: {drawn:?} drawn, {shown:?} shown"
+            );
+        }
+    }
+}
+
+/// The tops of the folders' yellow down the file list, one per row, in
+/// device pixels: where each run of rows holding yellow starts.
+fn folder_row_tops(pixels: &(Vec<u8>, usize), scale: i32) -> Vec<i32> {
+    let is_yellow = |[blue, green, red, _]: [u8; 4]| red > 240 && (200..230).contains(&green) && blue < 90;
+    let (left, right) = (scale * ROWS_LEFT, scale * (ROWS_LEFT + 120));
+    let mut tops = Vec::new();
+    let mut in_row = false;
+    for y in scale * 140..scale * (HEIGHT - 60) {
+        let yellow = (left..right).any(|x| is_yellow(pixel_at(pixels, x, y)));
+        if yellow && !in_row {
+            tops.push(y);
+        }
+        in_row = yellow;
+    }
+    tops
+}
+
+/// Compact view's Details rows stand 21 pixels apart at 100% and 42
+/// device pixels apart at twice the scale, as Windows 11's Compact view
+/// spaces them; the usual rows 32 and 64.
+///
+/// parity: VIEW-067, LOOK-028
+#[test]
+fn compact_view_rows_keep_their_spacing_at_twice_the_scale() {
+    if !isolated() {
+        return;
+    }
+    // Only the pictures are read here, which needs no display: GTK is
+    // initialised once per process, by the other test's thread.
+    let folder = tempfile::tempdir().expect("a folder to show");
+    for name in ["Alpha", "Beta", "Gamma"] {
+        std::fs::create_dir(folder.path().join(name)).expect("a subfolder");
+    }
+    let pictures = tempfile::tempdir().expect("a folder for the pictures");
+    let compact_config = pictures.path().join("config");
+    let settings = compact_config.join("winspace");
+    std::fs::create_dir_all(&settings).expect("a settings folder");
+    std::fs::write(
+        settings.join("settings.json"),
+        r#"{"preferences": {"compactView": true}}"#,
+    )
+    .expect("the settings");
+    for (config, pitch) in [(None, 32), (Some(compact_config.as_path()), 21)] {
+        for scale in [1_i32, 2] {
+            let picture = pictures.path().join(format!("rows-{pitch}-{scale}.png"));
+            let texture = snapshot_with_config(folder.path(), scale.unsigned_abs(), &picture, config);
+            let tops = folder_row_tops(&pixels(&texture), scale);
+            assert!(tops.len() >= 3, "three folder rows at scale {scale}: {tops:?}");
+            let pitches: Vec<i32> = tops.windows(2).map(|pair| pair[1] - pair[0]).collect();
+            assert!(
+                pitches.iter().all(|step| *step == pitch * scale),
+                "rows {pitch} apart at 100%, {} at scale {scale}: {pitches:?}",
+                pitch * scale
             );
         }
     }

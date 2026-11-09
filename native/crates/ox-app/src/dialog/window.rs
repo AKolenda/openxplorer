@@ -46,6 +46,14 @@ use crate::window::{BrowserWindow, ButtonStyle};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DialogButton(usize);
 
+/// The size of the close glyph in a titled dialog's title bar, as in the
+/// Properties window's.
+const CLOSE_GLYPH: i32 = 12;
+
+/// How wide the widest scroll bar of a dialog's body is, under the pointer
+/// or always shown (base.css §4.12).
+const SCROLL_BAR_ROOM: i32 = 12;
+
 /// The answer a button, Escape or closing the window gives.
 type Answer = Option<DialogButton>;
 
@@ -190,6 +198,54 @@ impl Dialog {
         dialog
     }
 
+    /// A dialog over `parent` laid out as a Windows dialog window rather
+    /// than a `ContentDialog`: `title` is in a title bar of its own, with
+    /// a close button, and not over the body. Format and Map network
+    /// drive are such windows in Windows: the title bar shows
+    /// it is a window of its own, which can be moved anywhere, even off
+    /// its parent, while it stays modal to that window alone (the
+    /// parent's window group, [`BrowserWindow`]).
+    pub(crate) fn with_title_bar(parent: &impl IsA<gtk::Window>, title: &str, message: &str) -> Self {
+        let dialog = Self::new(parent, title, message);
+        dialog.add_css_class("titled");
+        dialog.imp().frame.title_label().set_visible(false);
+        dialog.set_titlebar(Some(&dialog.title_bar(title)));
+        dialog
+    }
+
+    /// The title and the close button, as a handle the window is dragged
+    /// by, as the Properties window's title bar is.
+    fn title_bar(&self, title: &str) -> gtk::WindowHandle {
+        let bar = gtk::Box::builder()
+            .css_classes(["ox-titlebar", "dialog-titlebar"])
+            .build();
+        let label = gtk::Label::builder()
+            .label(title)
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(1)
+            .css_classes(["dialog-window-title"])
+            .build();
+        bar.append(&label);
+        let close_text = ox_core::i18n::gettext("Close");
+        let close = gtk::Button::builder()
+            .child(&crate::icons::image(crate::icons::Icon::Dismiss, CLOSE_GLYPH))
+            .css_classes(["caption", "close"])
+            .focus_on_click(false)
+            .tooltip_text(close_text.as_str())
+            .build();
+        close.update_property(&[gtk::accessible::Property::Label(&close_text)]);
+        // Closing the window is a cancellation, as Escape is.
+        close.connect_clicked(glib::clone!(
+            #[weak(rename_to = dialog)]
+            self,
+            move |_| dialog.close()
+        ));
+        bar.append(&close);
+        gtk::WindowHandle::builder().child(&bar).build()
+    }
+
     /// The box the fields, notes and check boxes go in, in the order added.
     fn fields(&self) -> gtk::Box {
         self.imp().frame.body()
@@ -262,6 +318,14 @@ impl Dialog {
         self.append_field(&scrolled);
     }
 
+    /// Keeps the body's contents clear of its scroll bar: a gap at the end
+    /// as wide as an overlay scroll bar under the pointer (an 8-pixel
+    /// slider and its 2-pixel margins, base.css §4.12), which is also the
+    /// trough of an always-shown one, so no field or text lies under it.
+    pub(crate) fn keep_clear_of_scroll_bar(&self) {
+        self.imp().frame.body().set_margin_end(SCROLL_BAR_ROOM);
+    }
+
     /// Shows or hides `field`, added with [`Self::add_labelled`] or
     /// [`Self::add_text_field`], together with its label.
     pub(crate) fn set_field_visible(field: &impl IsA<gtk::Widget>, visible: bool) {
@@ -304,24 +368,6 @@ impl Dialog {
             self.set_default_widget(Some(&button));
         }
         answer
-    }
-
-    /// Makes Enter in `entry` press `button` instead of the primary
-    /// button, for a field that belongs to one of several answers.
-    pub(crate) fn submit_with(&self, entry: &gtk::Entry, button: DialogButton) {
-        entry.set_activates_default(false);
-        let answers = self.imp().answers.clone();
-        entry.connect_activate(move |_| {
-            let _ = answers.try_send(Some(button));
-        });
-    }
-
-    /// Lets `button` be pressed, or greys it out, such as Apply while
-    /// nothing has changed.
-    pub(crate) fn set_button_sensitive(&self, button: DialogButton, sensitive: bool) {
-        if let Some(button) = self.imp().buttons.borrow().get(button.0) {
-            button.set_sensitive(sensitive);
-        }
     }
 
     /// A button appended to the actions and remembered.

@@ -7,21 +7,32 @@
 //! A request reads the cache through GIO (`thumbnail::path`,
 //! `thumbnail::is-valid`, `thumbnail::failed`) at low priority. A missing
 //! thumbnail is made by the session's thumbnailer service
-//! ([`service`]) when it has one and supports the type, else, for the
-//! picture types gdk-pixbuf reads, by the app itself ([`writer`]). Only a
-//! few are decoded or made at a time ([`slots`]); a type that cannot be
-//! previewed, or a failed attempt, keeps its icon. [`PreviewPolicy`]
-//! says which items of a folder get previews, from the Settings the user
-//! chose (VIEW-058).
+//! ([`service`]) when it has one and supports the type, else, for a
+//! picture gdk-pixbuf may read ([`pixbuf_may_read`]), by the app itself
+//! ([`writer`]), which costs less than a program, else by a thumbnailer
+//! the desktop installs for the type ([`thumbnailers`], a program the app
+//! starts in a sandbox). The desktop's thumbnailer is asked for a picture
+//! only when the app cannot read it ([`writer::Failure::Unreadable`]): one
+//! the cache refuses would be refused for the program too, and a dropped
+//! request needs no picture at all. Only a few are decoded or made at a
+//! time ([`slots`]); a type that cannot be previewed, or a failed attempt,
+//! keeps its icon. Every picture the app decodes itself, and every file it
+//! reads back from the cache, goes through [`picture_guard`], so a huge,
+//! damaged or animated one keeps its icon instead of holding the app up.
+//! [`PreviewPolicy`] says which items of a folder get previews, from the
+//! Settings the user chose (VIEW-058).
 
+mod network_fs;
 mod service;
 mod slots;
+mod thumbnailers;
 mod writer;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gtk::gdk_pixbuf::{Pixbuf, PixbufFormat};
 use gtk::prelude::*;
@@ -29,7 +40,12 @@ use gtk::{gdk, gio, glib};
 use ox_core::entry::{cached_thumbnail, CachedThumbnail, Entry, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES};
 use ox_core::settings::{ViewOptions, PREVIEW_SIZE_LIMIT};
 
+pub(crate) use network_fs::is_on_network_filesystem;
 pub(crate) use slots::Slots;
+pub(crate) use thumbnailers::pdf_pages;
+
+use crate::picture_guard::{self, Limits};
+use thumbnailers::Catalogue;
 use writer::Source;
 
 /// How many previews are decoded at a time.
@@ -48,6 +64,10 @@ const MAX_KEPT: usize = 512;
 pub(crate) struct PreviewPolicy {
     /// Previews are shown at all; off, every item keeps its icon.
     pub shown: bool,
+    /// Items on a server or a device get previews too, wherever they are
+    /// listed; off, they keep their icons even in a folder on this
+    /// computer (search results, Recent, Quick access).
+    pub remote: bool,
     /// Files larger than this keep their icon.
     pub size_limit: Option<u64>,
     /// Pictures get previews.
@@ -64,6 +84,7 @@ impl PreviewPolicy {
     pub(crate) fn for_folder(options: &ViewOptions, is_remote: bool) -> Self {
         Self {
             shown: options.show_previews && (options.remote_previews || !is_remote),
+            remote: options.remote_previews,
             size_limit: options.skip_large_previews.then_some(PREVIEW_SIZE_LIMIT),
             pictures: options.preview_pictures,
             videos: options.preview_videos,
@@ -80,6 +101,17 @@ impl PreviewPolicy {
         }
     }
 
+    /// The preview request for `entry` at `pixels` device pixels, when
+    /// [`Self::allows`] it; with network previews off it asks for a file
+    /// on this computer's own disks only.
+    pub(crate) fn request(self, entry: &Entry, pixels: i32) -> Option<PreviewRequest> {
+        let request = PreviewRequest::for_entry(entry, pixels).filter(|_| self.allows(entry))?;
+        Some(PreviewRequest {
+            local_only: !self.remote,
+            ..request
+        })
+    }
+
     /// Whether `entry` may show a preview: a file of a known type within
     /// the size limit.
     pub(crate) fn allows(self, entry: &Entry) -> bool {
@@ -91,8 +123,37 @@ impl PreviewPolicy {
             .content_type
             .as_deref()
             .is_some_and(|content_type| self.allows_type(content_type));
-        self.shown && !entry.is_dir && !entry.is_virtual && type_allowed && within_limit
+        let reachable = self.remote || !is_remote_item(entry);
+        self.shown && !entry.is_dir && !entry.is_virtual && type_allowed && within_limit && reachable
     }
+}
+
+/// Whether `entry`, or the item it stands for, is on a server or a
+/// device rather than this computer, by its URI: a search result or a
+/// recent item may be listed in a folder that is not.
+fn is_remote_item(entry: &Entry) -> bool {
+    use ox_core::location::{location_kind, LocationKind};
+
+    std::iter::once(entry.uri.as_str())
+        .chain(entry.target_uri.as_deref())
+        .chain(entry.meta.recent_target.as_deref())
+        .any(|uri| {
+            matches!(
+                location_kind(uri),
+                LocationKind::Smb | LocationKind::Remote | LocationKind::Device
+            )
+        })
+}
+
+/// The file `entry` stands for, when it is another: a Recently used
+/// files row's file (kept in its metadata, as `GVfs` names it only in the
+/// row's target), or a share's or shortcut's target.
+fn stands_for(entry: &Entry) -> Option<&str> {
+    entry
+        .meta
+        .recent_target
+        .as_deref()
+        .or(entry.target_uri.as_deref())
 }
 
 /// A decoded preview's item, version and size.
@@ -109,6 +170,13 @@ pub(crate) struct PreviewRequest {
     pub modified: Option<u64>,
     /// The edge of the picture wanted, in device pixels.
     pub pixels: i32,
+    /// Only a file on this computer's own disks gets a preview: one on a
+    /// network file system (a kernel share, sshfs, `GVfs`'s mounts) keeps its
+    /// icon, as network previews are off ([`network_fs`]).
+    pub local_only: bool,
+    /// The file the item stands for, when it is another (a recent item's,
+    /// a search result's), which [`Self::local_only`] looks at too.
+    pub target_uri: Option<String>,
 }
 
 impl PreviewRequest {
@@ -120,6 +188,8 @@ impl PreviewRequest {
             content_type: entry.content_type.clone()?,
             modified: entry.modified,
             pixels,
+            local_only: false,
+            target_uri: stands_for(entry).map(str::to_owned),
         })
     }
 
@@ -135,7 +205,7 @@ thread_local! {
     static KEPT: RefCell<HashMap<PreviewKey, gdk::Texture>> = RefCell::new(HashMap::new());
     /// Item versions no thumbnail could be made of in this run.
     static FAILED: RefCell<HashSet<(String, Option<u64>)>> = RefCell::new(HashSet::new());
-    /// The picture types gdk-pixbuf reads.
+    /// The types gdk-pixbuf's loaders declare they read.
     static PIXBUF_TYPES: HashSet<String> = Pixbuf::formats()
         .iter()
         .flat_map(PixbufFormat::mime_types)
@@ -143,9 +213,30 @@ thread_local! {
         .collect();
 }
 
+/// Whether gdk-pixbuf may be asked to decode the item of `content_type`,
+/// given the `declared` MIME types its loaders say they read.
+///
+/// Every picture qualifies, not only the types a loader declares: what a
+/// loader reads and what GIO names the file differ, gdk-pixbuf's dds
+/// loader declaring `image/x-dds` alone for the `image/vnd.ms-dds` files
+/// GIO reports, so matching the lists exactly would leave pictures
+/// without thumbnails. Decoding settles it instead: [`writer`] reads
+/// what a loader reads and answers [`writer::Failure::Unreadable`] for the
+/// rest, which leaves the item to a thumbnailer of the desktop's, or to
+/// its icon when there is none.
+fn pixbuf_may_read(content_type: &str, declared: &HashSet<String>) -> bool {
+    let is_picture = content_type
+        .split_once('/')
+        .is_some_and(|(kind, _)| kind == "image");
+    is_picture || declared.contains(content_type)
+}
+
 /// The preview `request` asks for, or `None` when the item keeps its icon.
 pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
     let key = request.key();
+    if request.local_only && is_on_network(&request.uri, request.target_uri.as_deref()).await {
+        return None;
+    }
     if let Some(texture) = KEPT.with_borrow(|kept| kept.get(&key).cloned()) {
         return Some(texture);
     }
@@ -164,6 +255,28 @@ pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
         kept.insert(key, texture.clone());
     });
     Some(texture)
+}
+
+/// Whether the item at `uri`, or the file `target` it stands for, is on a
+/// network file system, asked off the main thread, which a server that
+/// does not answer would hold up. A URI without a local path is left to
+/// [`PreviewPolicy::allows`], which tells servers and devices by their
+/// URIs.
+async fn is_on_network(uri: &str, target: Option<&str>) -> bool {
+    let paths: Vec<PathBuf> = std::iter::once(uri)
+        .chain(target)
+        .filter_map(|uri| gio::File::for_uri(uri).path())
+        .collect();
+    if paths.is_empty() {
+        return false;
+    }
+    gio::spawn_blocking(move || {
+        paths
+            .iter()
+            .any(|path| network_fs::is_on_network_filesystem(path))
+    })
+    .await
+    .unwrap_or(true)
 }
 
 /// The cached thumbnail of the item, made first if it is missing.
@@ -186,18 +299,44 @@ async fn thumbnail_of(request: &PreviewRequest) -> Option<PathBuf> {
     if FAILED.with_borrow(|failed| failed.contains(&version)) {
         return None;
     }
-    let made = make_thumbnail(request).await;
-    if made.is_none() {
-        FAILED.with_borrow_mut(|failed| failed.insert(version));
+    match make_thumbnail(request).await {
+        Ok(path) => Some(path),
+        Err(Missing::Failed) => {
+            FAILED.with_borrow_mut(|failed| failed.insert(version));
+            None
+        }
+        // Asked again next time: the user may turn them back on, or the
+        // disk be less busy.
+        Err(Missing::TurnedOff | Missing::Later) => None,
     }
-    made
+}
+
+/// Why no thumbnail was made of an item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Missing {
+    /// None could be made, and this version of the item is not tried
+    /// again in this run.
+    Failed,
+    /// The user turned the desktop's thumbnailers off for its type, which
+    /// they may turn back on at any time.
+    TurnedOff,
+    /// Decoding the picture took longer than its time limit; it is tried
+    /// again the next time it is shown.
+    Later,
 }
 
 /// Makes the missing thumbnail of the item: by the thumbnailer service
-/// when it supports the type, else by gdk-pixbuf for a picture.
-async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
+/// when it supports the type, else by gdk-pixbuf for a picture, else by
+/// the desktop's own thumbnailer for the type when it installs one.
+async fn make_thumbnail(request: &PreviewRequest) -> Result<PathBuf, Missing> {
     let flavor = ThumbnailFlavor::for_pixels(request.pixels);
     let cache_dir = glib::user_cache_dir();
+    // The cache's own pictures keep their icons: a thumbnail of a
+    // thumbnail would grow the cache from itself, so nothing is read, made
+    // or asked of the service and the desktop's programs for them.
+    if writer::inside_cache(&cache_dir, &request.uri) {
+        return Err(Missing::Failed);
+    }
     // GIO looks up local files only, and one size: a thumbnail this app
     // made earlier may be there all the same.
     let earlier = (cache_dir.clone(), request.uri.clone(), request.modified);
@@ -209,46 +348,173 @@ async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
         })
         .await;
     if let Some(Some(path)) = found {
-        return Some(path);
+        return Ok(path);
     }
     if let Some(service) = service::service().await {
         if service.supports(&request.uri, &request.content_type) {
             let _slot = MAKING.with(Rc::clone).take().await;
             let made = service.make(&request.uri, &request.content_type, flavor).await;
             let path = ox_core::entry::thumbnail_file(&cache_dir, &request.uri, flavor);
-            return made.then_some(path);
+            return made.then_some(path).ok_or(Missing::Failed);
         }
     }
     // Test safety: tests write thumbnails only into a private cache.
     #[cfg(test)]
     if !cache_dir.starts_with(std::env::temp_dir()) {
-        return None;
+        return Err(Missing::Failed);
     }
-    let is_picture = PIXBUF_TYPES.with(|types| types.contains(&request.content_type));
-    let modified = request.modified?;
-    if !is_picture {
-        return None;
+    let Some(modified) = request.modified else {
+        return Err(Missing::Failed);
+    };
+    make_thumbnail_with(request, &cache_dir, None, flavor, modified).await
+}
+
+/// The thumbnail `request` asks for: the app decodes a picture itself
+/// ([`pixbuf_may_read`]), which costs less than a program of the
+/// desktop's, and a program of the desktop's makes it when the type is not
+/// a picture or gdk-pixbuf cannot read it (a type without its loader). `catalogue` is the desktop's own
+/// list unless a test hands its own.
+async fn make_thumbnail_with(
+    request: &PreviewRequest,
+    cache_dir: &Path,
+    catalogue: Option<Arc<Catalogue>>,
+    flavor: ThumbnailFlavor,
+    modified: u64,
+) -> Result<PathBuf, Missing> {
+    if PIXBUF_TYPES.with(|declared| pixbuf_may_read(&request.content_type, declared)) {
+        match by_decoding(request, cache_dir, modified, flavor).await {
+            Ok(path) => return Ok(path),
+            // Only a picture the app cannot read leaves room for another
+            // thumbnailer, and one larger than the app decodes itself for
+            // a thumbnailer whose memory is limited, as a scan of many
+            // megapixels still deserves its preview. One it read and the
+            // cache refused is refused for every thumbnailer, one damaged
+            // or slow would be read the same way by the program, and a
+            // dropped request has nobody left to show a picture to:
+            // forking a program for any of them would only cost one.
+            Err(writer::Failure::Unreadable) => {}
+            Err(writer::Failure::TooLarge) => {
+                return by_thumbnailer(request, cache_dir, modified, flavor, catalogue, true).await;
+            }
+            Err(writer::Failure::TimedOut) => return Err(Missing::Later),
+            Err(writer::Failure::Unwritable | writer::Failure::Refused | writer::Failure::Cancelled) => {
+                return Err(Missing::Failed);
+            }
+        }
     }
+    by_thumbnailer(request, cache_dir, modified, flavor, catalogue, false).await
+}
+
+/// The thumbnail of `request` decoded in the app, or why there is none:
+/// [`writer::Failure::Unreadable`] leaves the type to another thumbnailer,
+/// the others do not.
+async fn by_decoding(
+    request: &PreviewRequest,
+    cache_dir: &Path,
+    modified: u64,
+    flavor: ThumbnailFlavor,
+) -> Result<PathBuf, writer::Failure> {
     let source = Source {
         uri: request.uri.clone(),
         modified,
     };
-    MAKING
+    let cache_dir = cache_dir.to_path_buf();
+    let decoded = MAKING
         .with(Rc::clone)
         .blocking(move |cancel| writer::write_thumbnail(&cache_dir, &source, flavor, cancel))
-        .await
-        .flatten()
+        .await;
+    // A worker that never ran belongs to a request already dropped.
+    decoded.unwrap_or(Err(writer::Failure::Cancelled))
 }
 
-/// The thumbnail at `path`, scaled to fit `pixels` square.
+/// The thumbnail of `request` made by the desktop's thumbnailer for its
+/// type, or [`Missing::TurnedOff`] when the user turned them off for it
+/// and [`Missing::Failed`] when none makes it or it failed. With
+/// `oversized`, a picture too large for the app to decode, only a
+/// thumbnailer whose memory is limited runs.
+async fn by_thumbnailer(
+    request: &PreviewRequest,
+    cache_dir: &Path,
+    modified: u64,
+    flavor: ThumbnailFlavor,
+    catalogue: Option<Arc<Catalogue>>,
+    oversized: bool,
+) -> Result<PathBuf, Missing> {
+    let job = thumbnailers::Job {
+        cache_dir: cache_dir.to_path_buf(),
+        uri: request.uri.clone(),
+        content_type: request.content_type.clone(),
+        modified,
+        flavor,
+    };
+    MAKING
+        .with(Rc::clone)
+        .blocking(move |cancel| {
+            // The desktop's entries are files, read in the worker rather
+            // than on the thread that asked, and once per run; what the
+            // user turned off is read for each request, so a change takes
+            // effect at once, and with every program off the entries are
+            // not even read. A test hands its own, with nothing off.
+            let installed = if let Some(catalogue) = catalogue {
+                catalogue
+            } else {
+                let disabled = thumbnailers::Disabled::of_session();
+                if disabled.covers(&job.content_type) {
+                    return Err(Missing::TurnedOff);
+                }
+                Arc::new(thumbnailers::installed().with_disabled(disabled))
+            };
+            if oversized && !installed.limits_memory() {
+                return Err(Missing::Failed);
+            }
+            thumbnailers::write_thumbnail(&job, &installed, cancel).ok_or(Missing::Failed)
+        })
+        .await
+        .unwrap_or(Err(Missing::Failed))
+}
+
+/// The thumbnail at `path`, scaled to fit `pixels` square; `None` for a
+/// file in the cache that is not a sensible thumbnail (more than the
+/// largest standard size, damaged, or slow to read), so the item keeps
+/// its icon.
 fn decode(path: &std::path::Path, pixels: i32) -> Option<gdk::Texture> {
-    let pixbuf = Pixbuf::from_file_at_scale(path, pixels, pixels, true).ok()?;
-    Some(gdk::Texture::for_pixbuf(&pixbuf))
+    let file = gio::File::for_path(path);
+    let decoded = picture_guard::decode_to_fit(&file, pixels, pixels, Limits::THUMBNAIL_FILE, None).ok()?;
+    Some(gdk::Texture::for_pixbuf(&decoded.pixbuf))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    use gtk::gdk_pixbuf::Colorspace;
+    use ox_core::entry::thumbnail_file;
+
     use super::*;
+
+    /// A picture whose type no loader declares is still decoded, and a
+    /// file that is no picture never reaches gdk-pixbuf.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn pictures_a_loader_does_not_declare_are_tried() {
+        // gdk-pixbuf's dds loader declares `image/x-dds` alone, while GIO
+        // names the same files `image/vnd.ms-dds`.
+        let declared: HashSet<String> = ["image/jpeg", "image/x-dds"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+
+        assert!(pixbuf_may_read("image/vnd.ms-dds", &declared));
+        assert!(pixbuf_may_read("image/jpeg", &declared));
+        assert!(!pixbuf_may_read("application/pdf", &declared));
+        assert!(!pixbuf_may_read("video/mp4", &declared));
+        assert!(!pixbuf_may_read("text/plain", &declared));
+        // A loader's own declaration counts too, whatever its kind.
+        let font = HashSet::from(["application/x-font-ttf".to_owned()]);
+        assert!(pixbuf_may_read("application/x-font-ttf", &font));
+    }
 
     /// Previews follow Settings: off, only in folders on this computer,
     /// and not for files over the limit.
@@ -281,5 +547,241 @@ mod tests {
             ..ViewOptions::default()
         };
         assert!(!PreviewPolicy::for_folder(&no_pictures, false).allows(&picture));
+
+        // A file of a server or a phone listed in a folder of this
+        // computer, as a recent item or a search result is, keeps its icon
+        // unless network previews are on.
+        let local = PreviewPolicy::for_folder(&options, false);
+        let mut shared = picture.clone();
+        shared.uri = "smb://fileserver.example/team/photo.jpg".to_owned();
+        assert!(!local.allows(&shared), "a share");
+        // A Recently used files row keeps its file in its metadata, not in
+        // its target, which stays empty for a file.
+        let mut recent = picture.clone();
+        recent.uri = "recent:///3a1b2c".to_owned();
+        recent.target_uri = None;
+        recent.meta.recent_target = Some("mtp://Example_Phone/DCIM/photo.jpg".to_owned());
+        assert!(!local.allows(&recent), "a recent item on a phone");
+        let mut recent_share = recent.clone();
+        recent_share.meta.recent_target = Some("smb://fileserver.example/team/photo.jpg".to_owned());
+        assert!(!local.allows(&recent_share), "a recent item on a share");
+        // One on this computer is previewed, and its file is what the
+        // network file system check looks at.
+        let mut recent_local = recent.clone();
+        recent_local.meta.recent_target = Some("file:///home/demo/Pictures/photo.jpg".to_owned());
+        let request = local.request(&recent_local, 128).expect("a recent local picture");
+        assert!(request.local_only);
+        assert_eq!(
+            request.target_uri.as_deref(),
+            Some("file:///home/demo/Pictures/photo.jpg")
+        );
+        let everywhere = ViewOptions {
+            remote_previews: true,
+            ..ViewOptions::default()
+        };
+        assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&shared));
+        assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&recent));
+    }
+
+    /// A thumbnailer of the test's own, and the file it leaves when it is
+    /// started: it hands back `handed.png`, so a test tells its picture
+    /// from the app's, and its start from no program run at all.
+    fn fake_thumbnailer(folder: &Path) -> (Catalogue, PathBuf) {
+        let started = folder.join("started");
+        let handed = folder.join("handed.png");
+        let picture = Pixbuf::new(Colorspace::Rgb, false, 8, 64, 64).expect("a picture");
+        picture.fill(0xcc_3333ff);
+        picture.savev(&handed, "png", &[]).expect("the picture");
+        let script = folder.join("ox-test-thumbnailer");
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\ntouch '{}'\ncp '{}' \"$2\"\n",
+                started.display(),
+                handed.display()
+            ),
+        )
+        .expect("the script");
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("the mode");
+        let command = [script.to_str().expect("a path"), "%i", "%o", "%s"];
+        let thumbnailer = thumbnailers::Thumbnailer::for_test(&command, &["image/png"]);
+        (Catalogue::for_test(vec![thumbnailer]), started)
+    }
+
+    /// The request for the file at `path`, of `content_type` at the normal
+    /// size.
+    fn request_of(path: &Path, content_type: &str) -> PreviewRequest {
+        PreviewRequest {
+            uri: gio::File::for_path(path).uri().to_string(),
+            content_type: content_type.to_owned(),
+            modified: Some(1_700_000_000),
+            pixels: 128,
+            local_only: false,
+            target_uri: None,
+        }
+    }
+
+    /// A picture the app cannot read — here a PNG that is no picture, as a
+    /// type whose gdk-pixbuf loader is missing looks from the app — is
+    /// made by the desktop's thumbnailer for its type, and the app writes
+    /// it into the cache as it writes its own.
+    ///
+    /// parity: VIEW-057
+    #[gtk::test]
+    fn a_picture_the_app_cannot_read_falls_back_to_the_desktop_thumbnailer() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (thumbnailers, started) = fake_thumbnailer(folder.path());
+        let cache = folder.path().join("cache");
+        let item = folder.path().join("photo.png");
+        fs::write(&item, b"not a picture").expect("the item");
+        let request = request_of(&item, "image/png");
+        // Reading it is what fails, which is the one failure that leaves
+        // room for another thumbnailer.
+        assert_eq!(
+            writer::write_thumbnail(
+                &cache,
+                &writer::Source {
+                    uri: request.uri.clone(),
+                    modified: 1_700_000_000,
+                },
+                ThumbnailFlavor::Normal,
+                &gio::Cancellable::new(),
+            ),
+            Err(writer::Failure::Unreadable)
+        );
+
+        let written = glib::MainContext::default()
+            .block_on(make_thumbnail_with(
+                &request,
+                &cache,
+                Some(Arc::new(thumbnailers)),
+                ThumbnailFlavor::Normal,
+                1_700_000_000,
+            ))
+            .expect("a thumbnail");
+
+        assert!(started.exists(), "the desktop's thumbnailer made it");
+        assert_eq!(
+            written,
+            thumbnail_file(&cache, &request.uri, ThumbnailFlavor::Normal)
+        );
+        let thumbnail = Pixbuf::from_file(&written).expect("a PNG");
+        assert_eq!((thumbnail.width(), thumbnail.height()), (64, 64));
+        assert_eq!(
+            thumbnail.option("tEXt::Thumb::URI").as_deref(),
+            Some(request.uri.as_str())
+        );
+    }
+
+    /// A picture larger than the app decodes itself, as a scan of many
+    /// megapixels is, is made by the desktop's thumbnailer for its type,
+    /// whose memory is limited, rather than keeping its icon.
+    ///
+    /// parity: VIEW-057
+    #[gtk::test]
+    fn a_picture_too_large_to_decode_goes_to_a_limited_thumbnailer() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (thumbnailers, started) = fake_thumbnailer(folder.path());
+        let cache = folder.path().join("cache");
+        let item = crate::picture_guard::huge_png(&folder.path().join("Scan.png"));
+        let request = request_of(&item, "image/png");
+
+        let written = glib::MainContext::default()
+            .block_on(make_thumbnail_with(
+                &request,
+                &cache,
+                Some(Arc::new(thumbnailers)),
+                ThumbnailFlavor::Normal,
+                1_700_000_000,
+            ))
+            .expect("a thumbnail");
+
+        assert!(started.exists(), "the desktop's thumbnailer made it");
+        assert_eq!(
+            written,
+            thumbnail_file(&cache, &request.uri, ThumbnailFlavor::Normal)
+        );
+    }
+
+    /// A picture the app reads itself is never handed to a program of the
+    /// desktop's, which costs more than decoding it.
+    ///
+    /// parity: VIEW-057
+    #[gtk::test]
+    fn a_picture_the_app_reads_starts_no_thumbnailer() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (thumbnailers, started) = fake_thumbnailer(folder.path());
+        let cache = folder.path().join("cache");
+        let item = folder.path().join("photo.png");
+        let picture = Pixbuf::new(Colorspace::Rgb, false, 8, 400, 200).expect("a picture");
+        picture.fill(0x3366_99ff);
+        picture.savev(&item, "png", &[]).expect("the picture");
+        let request = request_of(&item, "image/png");
+
+        let written = glib::MainContext::default()
+            .block_on(make_thumbnail_with(
+                &request,
+                &cache,
+                Some(Arc::new(thumbnailers)),
+                ThumbnailFlavor::Normal,
+                1_700_000_000,
+            ))
+            .expect("a thumbnail");
+
+        assert!(!started.exists(), "the app decoded the picture itself");
+        assert_eq!(
+            written,
+            thumbnail_file(&cache, &request.uri, ThumbnailFlavor::Normal)
+        );
+        let thumbnail = Pixbuf::from_file(&written).expect("a PNG");
+        assert_eq!((thumbnail.width(), thumbnail.height()), (128, 64));
+    }
+
+    /// A picture of the cache's own folder is decoded but never written
+    /// there, and no program of the desktop's is started to try what the
+    /// cache refuses whatever makes it: browsing `~/.cache/thumbnails`
+    /// itself forks nothing for its pictures.
+    ///
+    /// parity: VIEW-057
+    #[gtk::test]
+    fn a_picture_of_the_cache_itself_starts_no_thumbnailer() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (thumbnailers, started) = fake_thumbnailer(folder.path());
+        let cache = folder.path().join("cache");
+        let inside = cache.join("thumbnails").join(ThumbnailFlavor::Normal.as_str());
+        fs::create_dir_all(&inside).expect("the cache folder");
+        let item = inside.join("photo.png");
+        let picture = Pixbuf::new(Colorspace::Rgb, false, 8, 400, 200).expect("a picture");
+        picture.fill(0x3366_99ff);
+        picture.savev(&item, "png", &[]).expect("the picture");
+        let request = request_of(&item, "image/png");
+        assert_eq!(
+            writer::write_thumbnail(
+                &cache,
+                &writer::Source {
+                    uri: request.uri.clone(),
+                    modified: 1_700_000_000,
+                },
+                ThumbnailFlavor::Normal,
+                &gio::Cancellable::new(),
+            ),
+            Err(writer::Failure::Unwritable),
+            "the picture reads, but the cache refuses its thumbnail"
+        );
+
+        let made = glib::MainContext::default().block_on(make_thumbnail_with(
+            &request,
+            &cache,
+            Some(Arc::new(thumbnailers)),
+            ThumbnailFlavor::Normal,
+            1_700_000_000,
+        ));
+
+        assert_eq!(
+            made,
+            Err(Missing::Failed),
+            "the cache holds no pictures of itself"
+        );
+        assert!(!started.exists(), "and no program is started for one");
     }
 }

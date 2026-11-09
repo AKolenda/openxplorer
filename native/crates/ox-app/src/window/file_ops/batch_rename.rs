@@ -13,11 +13,10 @@
 
 use gtk::prelude::*;
 use ox_core::entry::Entry;
-use ox_core::ops::{
-    rename_batch, summarize_batch_rename, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER,
-};
+use ox_core::ops::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
 
 use super::extension_confirm::changes_extension;
+use super::rename::has_no_extension;
 use super::running::FinishedOperation;
 use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
@@ -44,7 +43,9 @@ impl BrowserWindow {
             .map(|entry| BatchItem {
                 uri: entry.uri.clone(),
                 name: entry.name.clone(),
-                is_dir: entry.is_dir,
+                // A shortcut's name, like a folder's, has no extension:
+                // Windows numbers it whole and keeps its hidden `.lnk`.
+                is_dir: has_no_extension(entry),
             })
             .collect();
         let message = ox_core::i18n::format_message(
@@ -107,7 +108,6 @@ impl BrowserWindow {
         let outcome = rename_batch(batch, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
-            summary: summarize_batch_rename(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         });

@@ -398,6 +398,18 @@ mod tests {
             all_files: true,
         };
         assert_eq!(selection_text(one_file), "1 item selected  19.0 KB");
+        let tooltip_example = SelectionSummary {
+            count: 1,
+            bytes: 4_486,
+            all_files: true,
+        };
+        assert_eq!(selection_text(tooltip_example), "1 item selected  4.38 KB");
+        let one_byte = SelectionSummary {
+            count: 1,
+            bytes: 1,
+            all_files: true,
+        };
+        assert_eq!(selection_text(one_byte), "1 item selected  1 byte");
         let three_files = SelectionSummary {
             count: 3,
             bytes: 1_300_000,

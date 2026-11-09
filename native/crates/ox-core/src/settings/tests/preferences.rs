@@ -319,6 +319,37 @@ fn zip_opening_is_the_folder_until_the_window_is_chosen() {
     assert!(!file.contains("zipOpening"), "the folder is not stored");
 }
 
+/// The compact menu's strip sits on the pointer's side until the user
+/// chooses the top or the bottom, which is then stored; an unknown value
+/// changes nothing, and the pointer's side is not stored.
+///
+/// parity: CMD-008
+#[test]
+fn the_strip_position_is_the_pointers_side_until_chosen() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert_eq!(
+        store.snapshot().preferences.strip_position,
+        StripPosition::Pointer
+    );
+    save_preferences(&mut store, &json!({"menuStripPosition": "bottom"}));
+    save_preferences(&mut store, &json!({"menuStripPosition": "left"}));
+    let reopened = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(reopened.strip_position, StripPosition::Bottom);
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(file.contains("\"menuStripPosition\": \"bottom\""), "{file}");
+    save_preferences(&mut store, &json!({"menuStripPosition": "pointer"}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(
+        !file.contains("menuStripPosition"),
+        "the pointer's side is not stored"
+    );
+    assert!(StripPosition::Pointer.at_bottom(true));
+    assert!(!StripPosition::Pointer.at_bottom(false));
+    assert!(!StripPosition::Top.at_bottom(true));
+    assert!(StripPosition::Bottom.at_bottom(false));
+}
+
 /// Apply to all folders gives Downloads the applied Group by too: the
 /// Group by kept for Downloads apart from the shared style would
 /// otherwise outlive the change, so Downloads stayed grouped by date.
@@ -419,7 +450,7 @@ fn views_saved_by_the_old_display_style_dialog_still_load() {
     save_preferences(&mut store, &json!({"theme": "dark"}));
     let reread = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(reread.folder_views, preferences.folder_views);
-    assert!(reread.folder_views[0].subfolders);
+    assert!(reread.folder_views[0].subfolders.is_some());
     assert_eq!(reread.view_for("file:///home/someone/Projects/site").sort, "size");
 }
 
@@ -594,4 +625,40 @@ fn a_thumbnail_toggle_keeps_the_applied_columns() {
         Some(vec!["type".to_owned()]),
         "choosing the columns in Settings still reaches the shared view"
     );
+}
+
+/// Optimizing Downloads on the Customize tab changes its view but keeps
+/// the Group by date modified it shows until the user chooses another.
+/// parity: PROP-036
+#[test]
+fn a_template_keeps_downloads_grouped_by_date() {
+    const DOWNLOADS: &str = "file:///home/someone/Downloads";
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    save_preferences(&mut store, &json!({"perFolderViews": true}));
+
+    let saved = store
+        .customize_folder(DOWNLOADS, Some(DOWNLOADS), FolderTemplate::Pictures, false)
+        .unwrap();
+
+    let style = saved.view_in(DOWNLOADS, Some(DOWNLOADS));
+    assert_eq!(style.mode, "icons");
+    assert_eq!(style.grouping(), GroupBy::Modified);
+}
+
+/// The command bar's Update button stays hidden until the user asks for
+/// it in Settings › About; only the choice to show it is stored.
+///
+/// parity: UPD-001
+#[test]
+fn the_command_bar_update_button_is_hidden_until_chosen() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert!(!store.snapshot().preferences.show_update_button);
+    save_preferences(&mut store, &json!({"showUpdateButton": true}));
+    let reopened = Settings::open(root.path()).snapshot().preferences;
+    assert!(reopened.show_update_button);
+    save_preferences(&mut store, &json!({"showUpdateButton": false}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(!file.contains("showUpdateButton"), "hidden is not stored");
 }

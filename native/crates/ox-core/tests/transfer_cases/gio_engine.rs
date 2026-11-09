@@ -122,11 +122,13 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
     }
 }
 
-/// A Replace merge moves single children into the existing folder. Like the
-/// Python app, whose `require_item_uri` refuses the escaped name, it stops
-/// at a Latin-1 name, and the existing file under that name survives.
+/// A Replace merge moves single children into the existing folder, a
+/// Latin-1 name too: it replaces the file of that exact name, as Replace
+/// asks, and leaves the existing folder's other files alone. (Until
+/// 2026-11-08 it stopped there, as the Python app's `require_item_uri`
+/// refused the escaped name; an item already listed is no typed address.)
 #[test]
-fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
+fn replace_merge_replaces_a_latin1_name_and_keeps_the_other_files() {
     let fixture = Fixture::new();
     let album = latin1_album(&fixture.source_folder);
     let existing = fixture.destination_folder.join("album");
@@ -140,11 +142,12 @@ fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
         Request::Copy(ConflictPolicy::Replace),
     );
 
-    assert!(result.done.is_empty(), "{result:?}");
-    assert!(result.errors[0].contains("valid UTF-8"), "{result:?}");
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert_eq!(result.done, [file_uri(&album)]);
     let song = fs::read(existing.join(OsStr::from_bytes(LATIN1_NAME))).expect("read");
-    assert_eq!(song, b"old song");
+    assert_eq!(song, b"song", "replaced by the copied song");
     assert_eq!(read(&existing.join("keep.txt")), "keep");
+    assert_eq!(read(&existing.join("ok.txt")), "ok");
     assert_latin1_album(&album);
     fixture.assert_no_staging();
 }
@@ -261,7 +264,8 @@ fn a_move_to_another_filesystem_copies_then_removes_the_source() {
 
 /// An unreadable item asks what to do: Retry runs it again once it can be
 /// read, "Skip all" leaves it and every later failure out without asking,
-/// and what failed is still reported.
+/// and each failure left out counts as answered, so none is reported
+/// afterwards.
 ///
 /// parity: OPS-047
 #[test]
@@ -269,7 +273,7 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     use std::os::unix::fs::PermissionsExt;
     use std::sync::{Arc, Mutex};
 
-    use ox_core::transfer::{FailedItem, FailureAnswer};
+    use ox_core::transfer::{FailedItem, FailureAnswer, FailureCause};
 
     let fixture = Fixture::new();
     let names = ["a.txt", "b.txt", "c.txt", "d.txt"];
@@ -290,6 +294,12 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     let log = Arc::clone(&asked);
     let first = paths[0].clone();
     let mut engine = gio_engine().with_failure_question(move |item: &FailedItem| {
+        assert_eq!(
+            item.cause,
+            FailureCause::AccessDenied,
+            "an unreadable file: {item:?}"
+        );
+        assert!(item.uri.ends_with(&item.name), "the item's own URI: {item:?}");
         let mut asked = log.lock().expect("question log");
         asked.push(item.name.clone());
         if asked.len() == 1 {
@@ -306,7 +316,10 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     assert_eq!(*asked.lock().expect("question log"), ["a.txt", "b.txt"]);
     assert_eq!(result.done, [file_uri(&paths[0]), file_uri(&paths[2])]);
     assert_eq!(result.errors.len(), 2, "{result:?}");
-    assert_eq!(result.presented, result.errors[..1], "d.txt was left out unasked");
+    assert_eq!(
+        result.presented, result.errors,
+        "Skip for all current items answered d.txt too"
+    );
     assert!(!result.cancelled);
     assert_eq!(list(&fixture.destination_folder), ["a.txt", "c.txt"]);
     fixture.assert_no_staging();
@@ -372,7 +385,8 @@ fn an_entry_inside_a_folder_is_asked_about_by_itself() {
 }
 
 /// "Skip all" about an entry inside a folder leaves out every later entry
-/// that cannot be copied without asking again, and "Cancel" stops the run:
+/// that cannot be copied without asking again, all of them answered, and
+/// "Cancel" stops the run:
 /// nothing of the cancelled folder is published and its staging is gone.
 ///
 /// parity: OPS-047
@@ -399,9 +413,8 @@ fn skip_all_and_cancel_about_an_entry_inside_a_folder() {
     assert_eq!(*asked.lock().expect("count"), 1, "asked once");
     assert_eq!(result.errors.len(), 3, "{result:?}");
     assert_eq!(
-        result.presented,
-        result.errors[..1],
-        "the later pipes were unasked"
+        result.presented, result.errors,
+        "Skip all answered the later pipes too"
     );
     assert_eq!(list(&fixture.destination_folder.join("tree")), ["a.txt"]);
     fixture.assert_no_staging();

@@ -59,6 +59,9 @@ struct CommandSubject {
     name: String,
     /// It opens as a folder.
     is_folder: bool,
+    /// It is the file a row of Recent files stands for, which may have
+    /// gone since the row was listed.
+    is_recent_file: bool,
 }
 
 impl BrowserWindow {
@@ -110,7 +113,8 @@ impl BrowserWindow {
     }
 
     /// The one selected item, or the folder shown when nothing is
-    /// selected; `None` for several items or a landing page.
+    /// selected; `None` for several items or a landing page. A row of
+    /// Recent files is the file it stands for.
     fn command_subject(&self) -> Option<CommandSubject> {
         let items = self.folder_pane().model().selected_items();
         match items.as_slice() {
@@ -118,9 +122,10 @@ impl BrowserWindow {
             [item] => {
                 let entry = item.entry();
                 Some(CommandSubject {
-                    uri: entry.navigation_uri().to_owned(),
+                    uri: entry.opened_uri().to_owned(),
                     name: entry.name.clone(),
                     is_folder: entry.is_dir,
+                    is_recent_file: entry.meta.recent_target.is_some(),
                 })
             }
             _ => None,
@@ -138,20 +143,53 @@ impl BrowserWindow {
             uri,
             name,
             is_folder: true,
+            is_recent_file: false,
         })
     }
 
-    /// Open with…: the Open with dialog for the item.
+    /// Open with…: the Open with dialog for the item. The file a Recent
+    /// row stands for is looked up first: when it is gone, "Item Not
+    /// Found" says so, as opening the row does.
     fn open_with(&self) {
         let Some(subject) = self.command_subject() else {
             return;
         };
+        let is_recent_file = subject.is_recent_file;
         let subject = OpenWithSubject {
             uri: subject.uri,
             name: subject.name,
             is_folder: subject.is_folder,
         };
-        self.present_open_with(subject);
+        if !is_recent_file {
+            self.present_open_with(subject);
+            return;
+        }
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                if window.recent_file_is_there(&subject.uri).await {
+                    window.present_open_with(subject);
+                }
+            }
+        ));
+    }
+
+    /// Whether the file at `uri` that a Recent row stands for can be read
+    /// now, its share mounted first when it has to be, as opening the row
+    /// does; says "Item Not Found" when it is gone, and why otherwise.
+    async fn recent_file_is_there(&self, uri: &str) -> bool {
+        match self.read_again(uri).await {
+            Ok(_) => true,
+            Err(super::activation::ReadAgain::Gone(_)) => {
+                self.report_item_not_found(uri);
+                false
+            }
+            Err(failure) => {
+                self.show_message(&failure.to_string());
+                false
+            }
+        }
     }
 
     /// Open folder with…: the Open with dialog for the folder at `uri`,
@@ -332,9 +370,9 @@ impl BrowserWindow {
         for item in items {
             let entry = item.entry();
             let folder = if entry.is_dir {
-                Some(entry.navigation_uri().to_owned())
+                Some(entry.opened_uri().to_owned())
             } else {
-                parent_location(&entry.uri)
+                parent_location(entry.item_uri())
             };
             if let Some(folder) = folder.filter(|folder| !folders.contains(folder)) {
                 folders.push(folder);
@@ -417,7 +455,10 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let prepared = integration::prepare_launch(subject.uri, app_id.clone()).await;
+                if subject.is_recent_file && !window.recent_file_is_there(&subject.uri).await {
+                    return;
+                }
+                let prepared = integration::prepare_launch(subject.uri.clone(), app_id.clone()).await;
                 let launched = prepared
                     .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
@@ -456,7 +497,7 @@ impl BrowserWindow {
     }
 
     /// Shows the application's updates in this window: the status bar's
-    /// notice, the notice the daily check pops
+    /// notice, the command bar's Update when Settings asks for it, the notice the daily check pops
     /// up, and the lock while an update installs (UPD-005).
     fn follow_updates(&self) {
         let updates = self.context().updates();
@@ -486,11 +527,24 @@ impl BrowserWindow {
 
     fn show_update_state(&self, updates: &Updates) {
         let state = updates.state();
+        self.show_command_bar_update();
         self.status_bar().show_update_notice(&state);
         self.imp().update_notice.show_update(updates.notice());
         // Nothing in any window works while the package manager runs;
         // the Software updates dialog stays usable.
         self.set_sensitive(!state.is_installing());
+    }
+
+    /// The command bar's Update, "Update" or "Restart", only while
+    /// Settings › About › "Show the Update button in the command bar" is
+    /// on, as Windows 11 Explorer's command bar has no such button; the
+    /// status bar's Update available shows either way.
+    pub(super) fn show_command_bar_update(&self) {
+        let state = self.context().updates().state();
+        let shown = self.context().settings_data().preferences.show_update_button;
+        let label = state.command_bar_label().filter(|_| shown);
+        let notice = state.status_bar_notice();
+        self.command_bar().show_update(label, notice.as_deref());
     }
 
     /// Later on the update notice: closes it in every window and keeps
@@ -504,14 +558,10 @@ impl BrowserWindow {
         });
     }
 
-    /// Whether any button of the command bar opens Software updates, for
-    /// tests: only the status bar and Settings › About do.
+    /// The command bar's Update while it shows, for tests.
     #[cfg(test)]
-    pub(crate) fn command_bar_checks_updates(&self) -> bool {
-        let action = WindowAction::CheckUpdates.detailed_name();
-        crate::window::widget_tree::descendants::<gtk::Button>(self.command_bar())
-            .iter()
-            .any(|button| button.action_name().as_deref() == Some(action.as_str()))
+    pub(crate) fn shown_update_button(&self) -> Option<String> {
+        self.command_bar().shown_update()
     }
 
     /// The text of the status bar's "Check for updates", for tests.

@@ -18,6 +18,7 @@ use crate::text_size::Step;
 use super::details_pane::PaneMode;
 use super::folder_pane::FolderView;
 use super::preferences::Preference;
+use super::selection_keys::SelectionChange;
 use super::session::{Direction, TabId, TabPlacement};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -129,6 +130,7 @@ impl BrowserWindow {
         self.install_tab_commands();
         self.install_closing_actions();
         self.install_window_keys();
+        self.install_view_keys();
         self.install_tab_move_actions();
         self.install_navigation_actions();
         self.install_address_actions();
@@ -146,6 +148,7 @@ impl BrowserWindow {
         self.install_network_actions();
         self.install_disk_tool_actions();
         self.install_search_actions();
+        self.install_search_layout_actions();
         self.install_link_target_action();
         self.install_administrator_action();
         self.install_service_actions();
@@ -228,24 +231,21 @@ impl BrowserWindow {
             plain_action(WindowAction::Search, BrowserWindow::focus_search),
             text_action(WindowAction::GoTo, BrowserWindow::navigate_or_report),
             text_action(WindowAction::MountVolume, BrowserWindow::mount_volume),
-            text_action(
-                WindowAction::OpenServerAddress,
-                BrowserWindow::open_server_address,
-            ),
         ]);
     }
 
     fn install_selection_actions(&self) {
+        self.install_group_heading_actions();
         self.add_action_entries([
             plain_action(WindowAction::Open, BrowserWindow::open_selection),
             plain_action(WindowAction::SelectAll, |window| {
-                window.folder_pane().model().select_all();
+                window.change_selection(SelectionChange::All);
             }),
             plain_action(WindowAction::SelectNone, |window| {
-                window.folder_pane().model().select_none();
+                window.change_selection(SelectionChange::Clear);
             }),
             plain_action(WindowAction::InvertSelection, |window| {
-                window.folder_pane().model().invert_selection();
+                window.change_selection(SelectionChange::Invert);
             }),
             plain_action(
                 WindowAction::SelectMatching,
@@ -253,6 +253,11 @@ impl BrowserWindow {
             ),
             plain_action(WindowAction::PinSelected, BrowserWindow::pin_selected),
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
+            text_action(WindowAction::PinLocation, BrowserWindow::pin_location),
+            plain_action(
+                WindowAction::PlaceMoreOptions,
+                BrowserWindow::show_place_more_options,
+            ),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
             plain_action(WindowAction::Share, BrowserWindow::share),
             plain_action(WindowAction::About, BrowserWindow::show_about),
@@ -424,11 +429,12 @@ impl BrowserWindow {
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
 const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
-    (WindowAction::Refresh, &["F5", "<Primary>r"]),
+    // Ctrl+F5 is Windows' other Refresh key (CMD-039).
+    (WindowAction::Refresh, &["F5", "<Primary>r", "<Primary>F5"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
-    // Ctrl+E is Explorer's other search key (CMD-036).
-    (WindowAction::Search, &["<Primary>f", "<Primary>e"]),
+    // Ctrl+E and F3 are Explorer's other search keys (CMD-036).
+    (WindowAction::Search, &["<Primary>f", "<Primary>e", "F3"]),
     // Explorer's Alt+P shows its Preview pane, which is the details pane
     // here, as it previews the selection too (VIEW-063).
     // Windows' keys: Alt+Shift+P for the Details pane, Alt+P for the
@@ -444,12 +450,13 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
     // Dolphin's Open Preferred Search Tool (OPEN-024).
     (WindowAction::SearchTool, &["<Primary><Shift>f"]),
-    // Dolphin's Split (VIEW-059); Explorer leaves F3 to its search box,
-    // which Ctrl+F reaches here.
-    (WindowAction::SplitView, &["F3"]),
     // Dolphin's Handbook and GNOME's Keyboard Shortcuts (CMD-033, CMD-032).
     (WindowAction::Help, &["F1"]),
     (WindowAction::KeyboardShortcuts, &["<Primary>question"]),
+    // Windows File Explorer's Ctrl+plus on the number pad: "Resize all
+    // columns to fit text" (VIEW-072). Ctrl+plus on the main keyboard
+    // keeps changing the text size.
+    (WindowAction::FitAllColumns, &["<Primary>KP_Add"]),
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).

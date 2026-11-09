@@ -80,6 +80,9 @@ class Picture:
     scene: tuple[str, ...] = ()
     # Whether the settings hold the mapped sample share \\studio-nas\Projects.
     with_share: bool = False
+    # A tab of the Properties window the scene opened last, saved in place
+    # of the browser window (customize, security, ...).
+    properties: str = ''
 
     def variables(self) -> dict[str, str]:
         """Return the snapshot hook's variables for this picture."""
@@ -91,6 +94,7 @@ class Picture:
             'OPENXPLORER_SETTINGS': self.settings,
             'OPENXPLORER_SEARCH': self.search,
             'OPENXPLORER_SCENE': ';'.join(self.scene),
+            'OPENXPLORER_PROPERTIES': self.properties,
         }
         return {name: value for name, value in variables.items() if value}
 

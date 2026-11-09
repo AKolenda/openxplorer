@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Dropping files and folders onto the window (DND-009 to DND-014,
-//! DND-017 to DND-021, DND-025, DND-026, TAB-018).
+//! DND-017 to DND-020, DND-025, DND-026, TAB-018).
 //!
 //! Ports `decode_uris` and `NativeFileDrop` of
 //! `v2.0.0:desktop/native_file_drop.py` and `receiveFileDrop` and
@@ -34,12 +34,13 @@ mod launcher;
 mod program;
 mod targets;
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{parent_location, require_item_uri, same_location, LocationError, TRASH_URI};
+use ox_core::location::{require_item_uri, same_location, LocationError, TRASH_URI};
 use ox_core::ops::{is_recycle_bin_item, LinkRequest};
 use ox_core::transfer::TransferMode;
 
@@ -50,14 +51,17 @@ use super::session::{TabPlacement, TabPosition};
 use super::zip_copies::{is_zip_copy, CopiesFailure, ZipDragContent};
 use super::BrowserWindow;
 
-use action::drop_run_action;
+#[cfg(test)]
+pub(crate) use action::DragOrigin;
 pub(in crate::window) use action::DropRun;
+use action::{drop_run_action, is_in_folder};
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
-pub(super) use targets::{scroll_step, DragScroll, DropZone, SCROLL_TICK};
+pub(super) use targets::{scroll_step, DragScroll, DropLabels, DropZone, SCROLL_TICK};
 
-/// The most items one drop brings.
-const MAX_DROPPED_ITEMS: usize = 200;
+/// The most items one drop brings: as many as one transfer takes. Windows
+/// Explorer sets no limit of its own.
+const MAX_DROPPED_ITEMS: usize = ox_core::transfer::MAX_ITEMS;
 
 /// How long the window waits for a drop's items (`timeout_add_seconds(10,
 /// ...)` in `native_file_drop.py`).
@@ -108,9 +112,13 @@ impl DropDestination {
 /// Why a drop is refused, in the Python app's words.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum DropRefusal {
-    /// No items, or more than [`MAX_DROPPED_ITEMS`].
-    #[error("{}", ox_core::i18n::gettext("Drop between 1 and 200 files or folders."))]
+    /// No items, or more than [`MAX_DROPPED_ITEMS`], in a transfer's
+    /// words.
+    #[error("{}", ox_core::i18n::gettext("Select between 1 and 100,000 items."))]
     ItemCount,
+    /// No folders, or more than Quick access takes from one drop.
+    #[error("{}", ox_core::i18n::gettext("Drop between 1 and 200 files or folders."))]
+    PinCount,
     /// A link or text rather than local or SMB files.
     #[error(
         "{}",
@@ -159,6 +167,10 @@ pub(crate) enum DropRefusal {
     /// The items could not be read in time, or at all.
     #[error("{}", ox_core::i18n::gettext("The file drop is empty or too large."))]
     Unreadable,
+    /// A drive dropped on the Recycle Bin: a drive is never deleted, as
+    /// Windows Explorer takes no drive into the Recycle Bin.
+    #[error("{}", ox_core::i18n::gettext("A drive cannot be moved to the Recycle Bin."))]
+    DriveToRecycleBin,
     /// Recycle Bin items dropped on the Recycle Bin.
     #[error("{}", ox_core::i18n::gettext("These items are in the Recycle Bin already."))]
     InRecycleBin,
@@ -172,7 +184,7 @@ pub(crate) enum DropRefusal {
     /// a day (ARC-026).
     #[error(
         "{}",
-        ox_core::i18n::gettext("Items from a ZIP cannot be linked. Copy or move them instead.")
+        ox_core::i18n::gettext("Items from an archive cannot be linked. Copy or move them instead.")
     )]
     LinkToZipCopy,
     /// The copies of items dragged out of a ZIP could not be made: the
@@ -196,10 +208,11 @@ pub(super) fn dropped_uris(uris: &[String]) -> Result<Vec<String>, DropRefusal> 
     if !uris.iter().all(|uri| is_file_location(uri)) {
         return Err(DropRefusal::NotFiles);
     }
+    let mut seen: HashSet<String> = HashSet::with_capacity(uris.len());
     let mut items: Vec<String> = Vec::with_capacity(uris.len());
     for uri in uris {
         let item = require_item_uri(uri)?;
-        if !items.contains(&item) {
+        if seen.insert(item.clone()) {
             items.push(item);
         }
     }
@@ -216,8 +229,20 @@ fn is_file_location(uri: &str) -> bool {
 /// into the folder it is in has nothing to do.
 fn outside_folder(uris: Vec<String>, folder: &str) -> Vec<String> {
     uris.into_iter()
-        .filter(|uri| !parent_location(uri).is_some_and(|parent| same_location(&parent, folder)))
+        .filter(|uri| !is_in_folder(uri, folder))
         .collect()
+}
+
+/// Refuses a drop of Recycle Bin items that brings none or too many, or
+/// mixes them with other items.
+fn check_recycle_bin_items(uris: &[String]) -> Result<(), DropRefusal> {
+    if !(1..=MAX_DROPPED_ITEMS).contains(&uris.len()) {
+        return Err(DropRefusal::ItemCount);
+    }
+    if !uris.iter().all(|uri| is_recycle_bin_item(uri)) {
+        return Err(DropRefusal::MixedWithRecycleBin);
+    }
+    Ok(())
 }
 
 /// The action `drop` is finished with: a copy whenever the drag offers
@@ -491,6 +516,12 @@ impl BrowserWindow {
                     return Err(DropRefusal::InRecycleBin);
                 }
                 let items = dropped_uris(uris)?;
+                // Safety rule "a drive is never deleted": a drive, dragged
+                // from This PC or the sidebar or by another app, is refused
+                // before anything is moved to the Trash or deleted.
+                if !self.split_drives(&items).drives.is_empty() {
+                    return Err(DropRefusal::DriveToRecycleBin);
+                }
                 glib::spawn_future_local(glib::clone!(
                     #[weak(rename_to = window)]
                     self,
@@ -502,7 +533,9 @@ impl BrowserWindow {
     }
 
     /// Copies, moves or links `uris` into `folder`, or asks which. Items
-    /// moved into the folder they are in are left alone.
+    /// moved into the folder they are in are left alone. Recycle Bin items
+    /// are always moved out, after the menu's answer for a right-button
+    /// drop.
     fn drop_into_folder(
         &self,
         uris: &[String],
@@ -510,11 +543,41 @@ impl BrowserWindow {
         action: DropAction,
     ) -> Result<(), DropRefusal> {
         if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+            check_recycle_bin_items(uris)?;
+            // A right-button drop asks first (Move here or Cancel, DND-027);
+            // any other drop moves them out at once (OPS-046).
+            if let DropAction::Ask(origin) = action {
+                self.ask_drop_action(uris.to_vec(), folder, origin);
+                return Ok(());
+            }
             return self.drop_from_recycle_bin(uris, folder);
         }
         let uris = dropped_uris(uris)?;
         if uris.iter().any(|uri| same_location(uri, &folder)) {
             return Err(DropRefusal::IntoItself);
+        }
+        // Safety rule "a drive is never copied whole": a dropped drive
+        // becomes a shortcut, whatever the drop's action, as a drive's
+        // drop effect in Windows Explorer is a link; the other items
+        // follow the action once the shortcuts are made
+        // ([`super::drive_shortcuts`]). A drop that asks opens the drop
+        // menu first, which offers drives "Create shortcuts here" alone.
+        let split = self.split_drives(&uris);
+        if !split.drives.is_empty() && !matches!(action, DropAction::Ask(_)) {
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                async move {
+                    let made = window.make_drive_shortcuts(split.drives, folder.clone()).await;
+                    if !made || split.others.is_empty() {
+                        return;
+                    }
+                    if let Err(refusal) = window.drop_into_folder(&split.others, folder, action) {
+                        window.show_message(&refusal.to_string());
+                    }
+                }
+            ));
+            return Ok(());
         }
         let mode = match action {
             DropAction::Copy => TransferMode::Copy,
@@ -529,11 +592,21 @@ impl BrowserWindow {
                 });
                 return Ok(());
             }
-            DropAction::Ask => {
-                self.ask_drop_action(uris, folder);
+            DropAction::Ask(origin) => {
+                self.ask_drop_action(uris, folder, origin);
                 return Ok(());
             }
         };
+        // A copy dropped back in the items' own folder makes copies beside
+        // them, `report - Copy.pdf`, as Windows Explorer does (DND-027).
+        if mode == TransferMode::Copy && uris.iter().all(|uri| is_in_folder(uri, &folder)) {
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                async move { window.duplicate_uris(&uris).await }
+            ));
+            return Ok(());
+        }
         let uris = if mode == TransferMode::Move {
             outside_folder(uris, &folder)
         } else {
@@ -552,12 +625,7 @@ impl BrowserWindow {
     /// Moves the Recycle Bin items `uris` into `folder`, whatever the
     /// drop's action, as Dolphin does (OPS-046, DND-018).
     fn drop_from_recycle_bin(&self, uris: &[String], folder: String) -> Result<(), DropRefusal> {
-        if !(1..=MAX_DROPPED_ITEMS).contains(&uris.len()) {
-            return Err(DropRefusal::ItemCount);
-        }
-        if !uris.iter().all(|uri| is_recycle_bin_item(uri)) {
-            return Err(DropRefusal::MixedWithRecycleBin);
-        }
+        check_recycle_bin_items(uris)?;
         let uris = uris.to_vec();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -621,6 +689,29 @@ mod tests {
         );
     }
 
+    /// A drive dropped on the Recycle Bin is refused before anything is
+    /// moved to the Trash or deleted, alone or with other items; other
+    /// items still go there.
+    ///
+    /// parity: OPS-045
+    #[gtk::test]
+    fn a_drive_dropped_on_the_recycle_bin_is_refused() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let drop = |dropped: &[String]| {
+            test.window
+                .send_dropped_items(dropped, DropDestination::RecycleBin, DropAction::Move)
+        };
+
+        let alone = drop(&uris(&["file:///"]));
+        let with_a_file = drop(&[fixture.uri_of("Notes 2.txt"), "file:///".to_owned()]);
+
+        assert_eq!(alone, Err(DropRefusal::DriveToRecycleBin));
+        assert_eq!(with_a_file, Err(DropRefusal::DriveToRecycleBin));
+        assert!(fixture.path("Notes 2.txt").is_file(), "nothing went to the Trash");
+        assert_eq!(drop(&[fixture.uri_of("Notes 2.txt")]), Ok(()));
+    }
+
     /// parity: DND-012
     #[test]
     fn links_text_and_whole_shares_are_not_dropped() {
@@ -631,6 +722,10 @@ mod tests {
         assert_eq!(web, Err(DropRefusal::NotFiles));
         assert_eq!(too_many, Err(DropRefusal::ItemCount));
         assert_eq!(dropped_uris(&[]), Err(DropRefusal::ItemCount));
+        assert_eq!(
+            DropRefusal::ItemCount.to_string(),
+            "Select between 1 and 100,000 items."
+        );
         assert!(matches!(share, Err(DropRefusal::Location(_))), "{share:?}");
         assert_eq!(
             DropRefusal::NotFiles.to_string(),

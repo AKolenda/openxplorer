@@ -11,6 +11,12 @@
 //! before it are noted as they change and saved as usual. Every browser window
 //! opens through [`BrowserWindow::present_as_new_window`]; snapshot
 //! windows set their own size and do not save it.
+//!
+//! Another application's Open or Save dialog (INT-032) is resized like
+//! any window and keeps a size of its own, as Windows' common file dialog
+//! does: it opens at the size the last dialog was left at, within the same
+//! minimum, and saves it the same way, never maximized and never over the
+//! windows' size ([`BrowserWindow::open_dialog_at_saved_size`]).
 
 use std::time::Duration;
 
@@ -32,6 +38,14 @@ const DEFAULT_SIZE: WindowSize = WindowSize {
     maximized: false,
 };
 
+/// The size of another application's Open or Save dialog when nothing was
+/// saved: about Windows 11's Save As dialog at 100 %.
+const DIALOG_SIZE: WindowSize = WindowSize {
+    width: 980,
+    height: 640,
+    maximized: false,
+};
+
 impl BrowserWindow {
     /// Shows a new window at the saved size and saves its size from now
     /// on.
@@ -48,13 +62,29 @@ impl BrowserWindow {
         let Some(size) = self.context().settings_data().preferences.window_size else {
             return false;
         };
-        let width = i32::try_from(size.width).unwrap_or(i32::MAX);
-        let height = i32::try_from(size.height).unwrap_or(i32::MAX);
-        self.set_default_size(width, height);
+        self.set_default_size(pixels(size.width), pixels(size.height));
         if size.maximized {
             self.maximize();
         }
         size.maximized
+    }
+
+    /// Gives another application's Open or Save dialog the size the last
+    /// one was left at, else [`DIALOG_SIZE`], before it is shown.
+    pub(super) fn open_dialog_at_saved_size(&self) {
+        let size = self
+            .context()
+            .settings_data()
+            .preferences
+            .dialog_size
+            .unwrap_or(DIALOG_SIZE);
+        self.set_default_size(pixels(size.width), pixels(size.height));
+    }
+
+    /// Saves the dialog's size whenever the user changes it, once it is
+    /// shown, as [`Self::remember_size`] does for a window.
+    pub(super) fn remember_dialog_size(&self) {
+        self.remember_size(false);
     }
 
     /// Saves the window's size whenever the user changes it, once it is
@@ -83,7 +113,9 @@ impl BrowserWindow {
         if self.is_full_screen_now() {
             return false;
         }
-        let size = self.size_now(self.is_maximized_now());
+        // A dialog's size is saved as it is when not maximized, and it
+        // never opens maximized.
+        let size = self.size_now(!self.is_picking() && self.is_maximized_now());
         size.is_some() && self.imp().size_to_save.replace(size) != size
     }
 
@@ -138,16 +170,33 @@ impl BrowserWindow {
         }
     }
 
-    /// Saves the size last noted, unless it is the one saved already.
+    /// Saves the size last noted, unless it is the one saved already: a
+    /// dialog's as the dialogs' size, a window's as the windows'.
     fn save_size(&self) {
         let Some(size) = self.imp().size_to_save.get() else {
             return;
         };
-        let saved = self.context().settings_data().preferences.window_size;
-        if saved.unwrap_or(DEFAULT_SIZE) != size {
-            self.save_preference(Preference::WindowSize(size));
+        let preferences = self.context().settings_data().preferences;
+        let (saved, preference) = if self.is_picking() {
+            (
+                preferences.dialog_size.unwrap_or(DIALOG_SIZE),
+                Preference::DialogSize(size),
+            )
+        } else {
+            (
+                preferences.window_size.unwrap_or(DEFAULT_SIZE),
+                Preference::WindowSize(size),
+            )
+        };
+        if saved != size {
+            self.save_preference(preference);
         }
     }
+}
+
+/// A saved size in pixels, as GTK takes it.
+fn pixels(size: u32) -> i32 {
+    i32::try_from(size).unwrap_or(i32::MAX)
 }
 
 #[cfg(test)]

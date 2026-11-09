@@ -494,7 +494,7 @@ fn a_tab_whose_landing_neighbour_closes_while_it_settles_lands_before_the_next()
     );
 }
 
-/// F3 while a tab is dragged along its row splits no tab, not even the
+/// Split view while a tab is dragged along its row splits no tab, not even the
 /// one in front that is not dragged: splitting gives that tab another id,
 /// by which the dragged tab keeps where it lands, so it would land at the
 /// end of the row instead.

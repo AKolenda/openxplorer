@@ -61,6 +61,8 @@ never takes over the Python app's name. Every package build sets it.
 | Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
 | Permanent-delete helper | `/opt/<command>/libexec/openxplorer-admin-delete` | `/usr/libexec/<command>/openxplorer-admin-delete` | none |
 | Its polkit action | `/usr/share/polkit-1/actions/<id>.policy` | same | none |
+| Update helper (stable) | `/opt/openxplorer/libexec/openxplorer-install-update` | none | none |
+| Its polkit action and rule template | `/usr/share/polkit-1/actions/<id>.install-update.policy`, `/usr/share/openxplorer/install-update.rules` (not an active rule) | none | none |
 | Translations | `/usr/share/locale/<lang>/LC_MESSAGES/<package>.mo` | same | under `/app/share` |
 
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
@@ -99,6 +101,49 @@ never takes over the Python app's name. Every package build sets it.
   `pkexec` to start one with, so the app refuses a whole-folder `admin://`
   deletion there and says why, rather than falling back to the walk by path
   that `crates/ox-core/src/admin_delete.rs` exists to replace.
+- **Update helper.** `openxplorer-install-update`
+  (`crates/ox-core/src/bin/openxplorer-install-update.rs`) installs the
+  latest release as root when the user updates the app, so that an
+  administrator at the machine is not asked for a password. Only the
+  stable Debian package installs it, because only that package updates
+  itself; the RPM, Arch and Flatpak packages update through their own
+  package manager. It takes only a version: it fetches the release itself,
+  refuses anything but the latest release newer than the installed
+  package, verifies the download's size, SHA-256 digest and package
+  identity, and installs it with `apt-get`
+  (`crates/ox-core/src/update/install_helper.rs` documents the threat
+  model). Its polkit action (`<id>.install-update`) asks for an
+  administrator (`auth_admin_keep`).
+- **Install updates without asking for a password.** On by default, with
+  a switch on Settings › About to turn it off. The package installs the
+  polkit rule that lets a member of `sudo`, `admin` or `wheel` in an
+  active local session run the update helper without a password as a
+  template, `/usr/share/openxplorer/install-update.rules`, which polkit
+  does not read, and nothing in `/usr/share/polkit-1/rules.d`. The stable
+  `postinst` copies it to `/etc/polkit-1/rules.d/60-<id>.install-update.rules`
+  and records the setting as on
+  (`packaging/debian/install-update-rule`), on a fresh installation and on
+  every upgrade, so the rule is always the installed version's, unless the
+  user turned the setting off. Polkit rules cannot read the app's
+  settings, so the switch runs
+  `pkexec openxplorer-install-update --disable-passwordless` (or
+  `--enable-passwordless`) under the update action: turning it on asks for
+  an administrator's password, while turning it off does not for an
+  administrator at the machine, whom the rule still lets through. As root, the helper deletes the rule, or copies the template,
+  never text from the caller, to it (0644, owned by root, written
+  atomically and never through a link;
+  `crates/ox-core/src/update/passwordless.rs`). Because Ubuntu and Debian
+  keep `/etc/polkit-1/rules.d` unreadable to users, the `postinst` and the
+  helper also write `/var/lib/openxplorer/install-updates-without-password`,
+  `on` or `off`, which the switch reads only when it cannot read the rules
+  folder; otherwise the switch is on only while the rule file is there.
+  The record's `off` is what keeps the setting off across upgrades. The
+  stable `postrm` deletes both on `remove` and `purge`
+  (`packaging/debian/remove-update-rule`); an upgrade keeps them, and the
+  user's choice. Only the stable Debian package shows the setting, because
+  only it has the helper. Polkit older than 0.106 reads no rules files and
+  keeps asking. The app falls back to `pkexec apt-get` on its own download
+  when a package has no helper, or when the helper cannot reach GitHub.
 - **Translations.** One compiled catalogue for each `native/po/<lang>.po`,
   written by `tools/i18n.py` without GNU gettext; the app looks for it in the
   `locale` folder of every XDG data directory (`crates/ox-core/src/i18n.rs`).
@@ -219,10 +264,16 @@ Build release packages on Ubuntu 24.04, the oldest supported base:
   names its real architecture.
 - **Maintainer scripts.** postinst and postrm
   ([`debian/refresh-caches`](debian/refresh-caches)) refresh the application,
-  icon and AppStream caches, as the Python package's do, and nothing else:
-  installing never changes defaults, user data, passwords, folder locations or
-  mounts. dpkg triggers do not refresh the AppStream cache for the swcatalog
-  catalog, which is why the scripts exist.
+  icon and AppStream caches, as the Python package's do: installing never
+  changes defaults, user data, passwords, folder locations or mounts. dpkg
+  triggers do not refresh the AppStream cache for the swcatalog catalog,
+  which is why the scripts exist. The stable postinst first runs
+  [`debian/install-update-rule`](debian/install-update-rule), which installs
+  the rule of "Install updates without asking for a password" unless the
+  user turned it off, and the stable postrm first runs
+  [`debian/remove-update-rule`](debian/remove-update-rule): on `remove` and
+  `purge` it deletes that rule and its record, so uninstalling never leaves
+  updates without a password behind.
 - **Relations.** The stable package replaces, conflicts with and provides
   `winspace-explorer (<< 0.8.0)`, as the Python package does.
 - **Reproducible.** File times come from `SOURCE_DATE_EPOCH` or the last
@@ -319,7 +370,6 @@ flatpak run io.winspace.Development.Native
 | `--filesystem=host` | A file manager shows, copies and changes the user's files wherever they are: home, other disks under `/media`, `/run/media` and `/mnt`, `/opt`, `/srv`. |
 | `--talk-name=org.gtk.vfs.*`, `--filesystem=xdg-run/gvfsd`, `--filesystem=xdg-run/gvfs` | GVfs: the sandbox's GIO asks the host's GVfs daemons for `smb://`, `mtp://`, `trash:///` and the drive and phone list, reaches their private sockets, and opens files on shares through their FUSE paths. |
 | `--talk-name=org.freedesktop.secrets` | Saved SMB passwords live in the desktop's Secret Service under the Python app's schema, so both apps find each other's sign-ins. |
-| `--talk-name=org.gnome.NautilusPreviewer` | Quick Look: Space asks GNOME Sushi on the host to preview the selected file, and the app follows its window. |
 | `--own-name=org.freedesktop.FileManager1` | "Show in folder" (opt-in): after the user turns it on in Settings, the running app answers browsers' and other apps' requests to show a downloaded file in its folder. Flatpak only permits owning the name; the app claims it only while the integration is on. |
 | `--talk-name=org.freedesktop.Flatpak` | `flatpak-spawn --host`: Open in Terminal starts the host's terminal, and making OpenXplorer the default file manager (opt-in) runs the host's `xdg-mime`. |
 | `--system-talk-name=org.freedesktop.UDisks2` | Format… on a removable drive: the app's Format dialog asks the host's UDisks to unmount, format and mount the drive again. UDisks checks with polkit, which may ask for the user's password. |

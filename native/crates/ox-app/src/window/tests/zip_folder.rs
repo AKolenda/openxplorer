@@ -278,7 +278,11 @@ fn a_drag_offers_copies_made_when_the_drop_asks() {
     );
     let every_modifier = gdk::ModifierType::SHIFT_MASK | gdk::ModifierType::CONTROL_MASK;
     assert_eq!(
-        crate::window::file_drag::drag_actions(&content, every_modifier),
+        crate::window::file_drag::drag_actions(
+            &content,
+            crate::window::file_drag::DragButton::Primary,
+            every_modifier,
+        ),
         gdk::DragAction::COPY,
         "never a link to a copy that lasts a day, nor the menu that offers one"
     );
@@ -349,7 +353,7 @@ fn a_drop_in_the_app_copies_out_of_a_zip_and_never_links() {
     assert!(!linked);
     assert_eq!(
         test.window.shown_message(),
-        "Items from a ZIP cannot be linked. Copy or move them instead."
+        "Items from an archive cannot be linked. Copy or move them instead."
     );
     assert!(test
         .window
@@ -721,4 +725,90 @@ fn a_copy_opened_from_a_zip_is_removed_later() {
 
     wait_until("the copy to be removed", removed);
     crate::window::zip_folder::keep_copies_for_tests(None);
+}
+
+/// Writes `name` into `fixture`: a TAR holding `Docs/a.txt` and
+/// `readme.txt`, compressed as its ending says, with Python's `tarfile`
+/// (and Zstandard with ruzstd, which `tarfile` lacks before Python 3.14).
+pub(super) fn write_tar_named(fixture: &Fixture, name: &str) {
+    let endings = [
+        (".tar.gz", "w:gz"),
+        (".tgz", "w:gz"),
+        (".tar.bz2", "w:bz2"),
+        (".tar.xz", "w:xz"),
+    ];
+    let mode = endings
+        .iter()
+        .find(|(ending, _)| name.ends_with(ending))
+        .map_or("w", |(_, mode)| *mode);
+    let script = "import io, sys, tarfile\n\
+                  with tarfile.open(sys.argv[1], sys.argv[2]) as archive:\n\
+                  \x20   folder = tarfile.TarInfo('Docs'); folder.type = tarfile.DIRTYPE\n\
+                  \x20   archive.addfile(folder)\n\
+                  \x20   for path, data in (('Docs/a.txt', b'first'), ('readme.txt', b'read me')):\n\
+                  \x20       member = tarfile.TarInfo(path); member.size = len(data)\n\
+                  \x20       archive.addfile(member, io.BytesIO(data))\n";
+    let path = fixture.path(name);
+    let status = std::process::Command::new("python3")
+        .args(["-c", script])
+        .arg(&path)
+        .arg(mode)
+        .status()
+        .expect("Python 3 writes the fixture archive");
+    assert!(status.success());
+    if name.rsplit_once('.').is_some_and(|(_, ending)| ending == "zst") {
+        let plain = fs::read(&path).expect("the plain TAR");
+        let compressed =
+            ruzstd::encoding::compress_to_vec(plain.as_slice(), ruzstd::encoding::CompressionLevel::Fastest);
+        fs::write(&path, compressed).expect("the .tar.zst");
+    }
+}
+
+/// Every kind of TAR the app reads opens in the tab like a ZIP, as
+/// Windows 11 reads .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz and .tar.zst
+/// itself: no pop-up window, folders open in the tab, and Up leaves it.
+///
+/// parity: ARC-022, ARC-026
+#[gtk::test]
+fn tar_archives_open_in_the_tab_like_a_folder() {
+    let fixture = Fixture::standard();
+    let names = [
+        "Bundle.tar",
+        "Bundle.tar.gz",
+        "Bundle.tgz",
+        "Bundle.tar.bz2",
+        "Bundle.tar.xz",
+        "Bundle.tar.zst",
+    ];
+    for name in names {
+        write_tar_named(&fixture, name);
+    }
+    let test = opening_zips_as_folders(&fixture);
+    test.wait_for_listing("the folder");
+    for name in names {
+        let root = ArchiveLocation::root(&fixture.uri_of(name));
+        test.select_named(name);
+        test.activate("open", None);
+        wait_until(name, || test.window.current_uri() == Some(root.uri()));
+        test.wait_for_listing("the archive's listing");
+        assert!(test.shown_dialog().is_none(), "{name}: no pop-up window");
+        assert_eq!(test.names(), ["Docs", "readme.txt"], "{name}");
+        assert!(extract_button(&test).is_visible(), "{name}");
+
+        test.select_named("Docs");
+        test.activate("open", None);
+        let docs = root.member("Docs/");
+        wait_until("the folder inside", || {
+            test.window.current_uri() == Some(docs.uri())
+        });
+        test.wait_for_listing("the folder's listing");
+        assert_eq!(test.names(), ["a.txt"], "{name}");
+        test.activate("up", None);
+        wait_until("the root", || test.window.current_uri() == Some(root.uri()));
+        test.activate("up", None);
+        wait_until("out of the archive", || {
+            test.window.current_uri() == Some(fixture.uri())
+        });
+        test.wait_for_listing("the folder");
+    }
 }

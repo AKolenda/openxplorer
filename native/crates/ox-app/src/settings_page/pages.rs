@@ -29,7 +29,8 @@ pub(crate) enum Category {
     General,
     /// Theme, text size, the right-click menu and the pane widths.
     Appearance,
-    /// Folder views, the details view, previews and folder sizes.
+    /// Folder views, the details view, the clipboard, previews and folder
+    /// sizes.
     FilesAndFolders,
     /// How ZIP and TAR archives open.
     Archives,
@@ -107,7 +108,7 @@ impl Category {
                 "Choose what opens when you open a folder, a network link or a ZIP file.",
             ),
             Category::About => {
-                crate::i18n::message_id("What this build is, how it is updated and its licence.")
+                crate::i18n::message_id("What this build is, how it is updated and its license.")
             }
         }
     }

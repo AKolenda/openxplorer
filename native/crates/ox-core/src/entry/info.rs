@@ -9,8 +9,8 @@
 use gio::prelude::*;
 
 use super::attributes::{optional_boolean, path_attribute, string_attribute, time_attribute};
-use super::classify::{classify_entry, Classification, ItemMetadata};
-use super::type_label::type_label;
+use super::classify::{classify_entry, Classification, FolderType, ItemMetadata};
+use super::type_label::{shortcut_label, type_label};
 use super::{Entry, EntryKind, EntryMeta};
 use crate::location::{is_virtual_location, normalise, scheme};
 
@@ -36,13 +36,24 @@ pub(super) fn build_entry(
     let kind = file_kind(info);
     let content_type = string_attribute(info, "standard::content-type");
     let classification = classify_info(uri, info, kind, content_type.as_deref());
-    let type_label = type_label(classification.folder_type, content_type.as_deref());
+    let name = display_name(uri, info, fallback_name);
+    let is_symlink = info.boolean("standard::is-symlink");
+    let type_label = if is_shortcut(uri, &name, is_symlink, &classification) {
+        shortcut_label()
+    } else if is_symlink && content_type.as_deref() == Some("inode/symlink") {
+        // A link read without following it (Properties) is typed by its
+        // name's extension, as Windows types a symbolic link.
+        let (guessed, _) = gio::content_type_guess(Some(name.as_str()), None::<&[u8]>);
+        type_label(classification.folder_type, Some(guessed.as_str()), &name)
+    } else {
+        type_label(classification.folder_type, content_type.as_deref(), &name)
+    };
     let is_dir = classification.is_dir();
     // A folder's own size is not the size of its contents, so none is shown.
     let size = if is_dir { None } else { reported_size(info) };
     Entry {
         uri: uri.to_owned(),
-        name: display_name(uri, info, fallback_name),
+        name,
         kind,
         is_dir,
         is_virtual: classification.is_virtual,
@@ -53,7 +64,7 @@ pub(super) fn build_entry(
         content_type,
         modified: time_attribute(info, "time::modified"),
         is_hidden: info.boolean("standard::is-hidden"),
-        is_symlink: info.boolean("standard::is-symlink"),
+        is_symlink,
         trash_orig_path: path_attribute(info, "trash::orig-path"),
         trash_deletion_date: deletion_date(info),
         can_rename: optional_boolean(info, "access::can-rename"),
@@ -66,6 +77,14 @@ pub(super) fn build_entry(
             ..EntryMeta::from_info(info)
         }),
     }
+}
+
+/// Whether the item named `name` at `uri` is a shortcut to a file or a
+/// folder ([`super::is_shortcut`]), typed "Shortcut" as in Windows
+/// Explorer.
+fn is_shortcut(uri: &str, name: &str, is_symlink: bool, classification: &Classification) -> bool {
+    let is_file_or_folder = matches!(classification.folder_type, None | Some(FolderType::FileFolder));
+    is_file_or_folder && super::is_shortcut(uri, name, is_symlink, classification.is_virtual)
 }
 
 /// The file the Recently used files row at `uri` stands for, when `info`
@@ -231,6 +250,54 @@ mod tests {
         assert_eq!(date_text(file.modified), "—");
     }
 
+    /// A symbolic link named with no known type's extension is the app's
+    /// shortcut, and its Type is "Shortcut", as Windows Explorer's is,
+    /// whether it points to a file or a folder; one named for a type is
+    /// typed by it, as Windows types a symbolic link.
+    ///
+    /// parity: VIEW-002
+    #[test]
+    fn a_symbolic_link_with_no_known_extension_is_typed_shortcut() {
+        let file_link = file_info(
+            gio::FileType::Regular,
+            "Report.txt - Shortcut",
+            Some("text/plain"),
+        );
+        file_link.set_is_symlink(true);
+        let folder_link = file_info(
+            gio::FileType::Directory,
+            "Reports - Shortcut",
+            Some(FOLDER_MIME_TYPE),
+        );
+        folder_link.set_is_symlink(true);
+        let plain = file_info(gio::FileType::Regular, "Report.txt", Some("text/plain"));
+        let named_link = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        named_link.set_is_symlink(true);
+        let unfollowed_link = file_info(gio::FileType::SymbolicLink, "notes.txt", Some("inode/symlink"));
+        unfollowed_link.set_is_symlink(true);
+
+        let file = entry_for_uri("file:///tmp/Report.txt%20-%20Shortcut", &file_link);
+        let folder = entry_for_uri("file:///tmp/Reports%20-%20Shortcut", &folder_link);
+        let original = entry_for_uri("file:///tmp/Report.txt", &plain);
+        let named = entry_for_uri("file:///tmp/notes.txt", &named_link);
+        let unfollowed = entry_for_uri("file:///tmp/notes.txt", &unfollowed_link);
+
+        assert_eq!(file.type_label, "Shortcut");
+        assert!(file.is_symlink);
+        assert_eq!(folder.type_label, "Shortcut");
+        assert!(folder.is_dir, "a link to a folder still opens as one");
+        assert_eq!(original.type_label, "Text Document");
+        assert_eq!(
+            named.type_label, "Text Document",
+            "a link named for a type is typed by it, as Windows types a symbolic link"
+        );
+        assert!(!named.is_shortcut());
+        assert_eq!(
+            unfollowed.type_label, "Text Document",
+            "read without following it, as Properties reads it"
+        );
+    }
+
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`
     ///
     /// parity: VIEW-002
@@ -241,7 +308,7 @@ mod tests {
         let file = entry_for_uri("smb://nas/work/README", &info);
         assert!(!file.is_dir);
         assert_eq!(file.size, Some(0));
-        assert_eq!(file.type_label, "Text document");
+        assert_eq!(file.type_label, "Text Document");
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`
@@ -330,7 +397,7 @@ mod tests {
     /// A Recently used files row keeps the file it stands for, which `GVfs`
     /// names only in `standard::target-uri` (the row's own name is a
     /// hash of it). Only a real location is kept, and only for `recent:`
-    /// rows; opening the row is unchanged.
+    /// rows; opening the row and the commands on it act on that file.
     ///
     /// parity: CMD-037
     #[test]
@@ -339,7 +406,21 @@ mod tests {
         let regular = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
         let row = entry_for_uri(row_uri, &with_target(regular, "file:///srv/notes.txt"));
         assert_eq!(row.meta.recent_target.as_deref(), Some("file:///srv/notes.txt"));
-        assert_eq!(row.navigation_uri(), row_uri, "opening is unchanged");
+        assert_eq!(row.navigation_uri(), row_uri);
+        assert_eq!(
+            row.opened_uri(),
+            "file:///srv/notes.txt",
+            "opening opens the file"
+        );
+        assert_eq!(
+            row.item_uri(),
+            "file:///srv/notes.txt",
+            "commands act on the file"
+        );
+        let item = row.as_item();
+        assert_eq!(item.uri, "file:///srv/notes.txt", "described as the file");
+        assert_eq!(item.meta.recent_target, None);
+        assert_eq!(item.name, row.name);
 
         let shortcut = file_info(gio::FileType::Shortcut, "plan.txt", Some("text/plain"));
         let shortcut_row = entry_for_uri(
@@ -350,6 +431,7 @@ mod tests {
             shortcut_row.meta.recent_target.as_deref(),
             Some("smb://studio-nas/projects/plan.txt")
         );
+        assert_eq!(shortcut_row.opened_uri(), "smb://studio-nas/projects/plan.txt");
 
         let not_utf8 = file_info(gio::FileType::Regular, "bad", None);
         let not_utf8_row = entry_for_uri(row_uri, &with_target(not_utf8, "file:///tmp/bad%FF"));
@@ -368,6 +450,12 @@ mod tests {
         let script = file_info(gio::FileType::Regular, "x", None);
         let unsafe_row = entry_for_uri(row_uri, &with_target(script, "javascript:alert(1)"));
         assert_eq!(unsafe_row.meta.recent_target, None, "not a location");
+        assert_eq!(
+            unsafe_row.opened_uri(),
+            row_uri,
+            "a row that names no file stays itself"
+        );
+        assert_eq!(unsafe_row.item_uri(), row_uri);
 
         let elsewhere = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
         let plain = entry_for_uri(
@@ -375,6 +463,8 @@ mod tests {
             &with_target(elsewhere, "file:///srv/other.txt"),
         );
         assert_eq!(plain.meta.recent_target, None, "only Recent rows");
+        assert_eq!(plain.item_uri(), "file:///srv/notes.txt");
+        assert_eq!(plain.as_item().uri, plain.uri, "anything else stays itself");
     }
 
     #[test]

@@ -43,7 +43,7 @@
       </object>
     </child>
     <child>
-      <!-- The search options (SRCH-036, SRCH-037) are ChoiceButtons, added
+      <!-- The search options (SRCH-036, SRCH-037, SRCH-043) are ChoiceButtons, added
            in code. -->
       <object class="GtkBox" id="options_slot">
         <property name="valign">center</property>

@@ -20,7 +20,7 @@ use super::command_bar::CommandBar;
 use super::connections::ExternalHandlers;
 use super::details_pane::DetailsPane;
 use super::file_drag::OutgoingDrag;
-use super::file_drop::{FirstOffer, PendingDrop, ProgramChecks};
+use super::file_drop::{DropLabels, FirstOffer, PendingDrop, ProgramChecks};
 use super::file_ops::FileOperations;
 use super::folder_pane::FolderPane;
 use super::menu_popover::MenuPopover;
@@ -56,9 +56,9 @@ pub(crate) struct BrowserWindow {
     /// "+", right after the last tab.
     #[template_child]
     pub(super) new_tab_button: TemplateChild<gtk::Button>,
-    /// Lists the open windows.
+    /// The empty part of the title bar, after "+", where the tab row ends.
     #[template_child]
-    pub(super) open_windows_button: TemplateChild<gtk::MenuButton>,
+    pub(super) title_drag: TemplateChild<gtk::Box>,
     /// The history buttons, the address and the search box.
     #[template_child]
     pub(super) navigation_row: TemplateChild<gtk::Box>,
@@ -163,6 +163,9 @@ pub(crate) struct BrowserWindow {
     /// What the command bar's "…" menu keeps of the places the sidebar
     /// was last drawn from, until they are first drawn.
     pub(super) more_menu_places: RefCell<Option<super::location_view::MoreMenuPlaces>>,
+    /// The place menu last opened on a page (a This PC tile), its folder
+    /// pane and where in it, for "Show more options".
+    pub(super) place_menu: RefCell<Option<super::place_menus::OpenPlaceMenu>>,
     /// What every window shares: the skin, settings and places. It
     /// comes from the application, so [`super::BrowserWindow::new`]
     /// sets it.
@@ -185,6 +188,20 @@ pub(crate) struct BrowserWindow {
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
+    /// The group heading the heading menu opened on, which its commands
+    /// act on (VIEW-022).
+    pub(super) menu_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The header class of This PC's group whose heading menu opened
+    /// last, which its Collapse group and Expand group act on.
+    pub(super) this_pc_menu_group: Cell<Option<&'static str>>,
+    /// The group heading whose row shows the keyboard ring.
+    pub(super) focused_row: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The group heading last clicked or moved to, which keeps the
+    /// keyboard while the list has it and no row or tile does.
+    pub(super) key_heading: RefCell<Option<crate::folder_view::grid::GroupSlot>>,
+    /// The heading a first click selected the group of, and the selection
+    /// and the keyboard's place before it, which a double-click puts back.
+    pub(super) selection_before_click: RefCell<Option<super::group_headings::BeforeClick>>,
     pub(super) typeahead: RefCell<Typeahead>,
     /// The input method of the view that last had the keyboard, so a dead key
     /// or an IME commit typed on the window's chrome composes as it does in
@@ -193,10 +210,26 @@ pub(crate) struct BrowserWindow {
     /// The column Up and Down keep to in the icon grid, across rows of
     /// different lengths; see [`super::grid_keys`].
     pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
-    /// The link to GNOME's previewer (PROP-012).
-    pub(super) quick_look: super::quick_look::QuickLook,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// Counts the re-reads of changed text matches, so a late one never
+    /// removes what a newer one kept; see [`super::live_search`].
+    pub(super) content_recheck: Cell<u64>,
+    /// Set while the window itself empties the search box, which then
+    /// does not leave search results as the user emptying it does; see
+    /// [`super::search_steps`].
+    pub(super) clears_search_box: Cell<bool>,
+    /// Where the active tab was in its search results, put back once they
+    /// are found again after it came back to the front; see
+    /// [`super::search_steps`].
+    pub(super) results_view: RefCell<Option<super::search_steps::ResultsView>>,
+    /// Set while the window puts a tab's search back in the search box,
+    /// which unlike the user editing it keeps what the tab had selected.
+    pub(super) restores_results: Cell<bool>,
+    /// The files a search of names and contents last read or listed in the
+    /// searched folder, and their size and modification time; see
+    /// [`super::live_search`].
+    pub(super) contents_checked: RefCell<std::collections::HashMap<String, super::live_search::FileStamp>>,
     /// In tests, a volume id and the root it mounts at, standing in for a
     /// drive the isolated session does not have.
     #[cfg(test)]
@@ -225,6 +258,12 @@ pub(crate) struct BrowserWindow {
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].
     pub(super) file_list_awaits_focus: Cell<bool>,
+    /// Folder Options' "Always search file names and contents" as the
+    /// window last followed it; `None` until it first did.
+    pub(super) searches_contents: Cell<Option<bool>>,
+    /// Settings > Search > "Show the search filter bar" as the window
+    /// last followed it (SRCH-046); `None` before it first did.
+    pub(super) shows_search_filter_bar: Cell<Option<bool>>,
     /// Set while a pin request is being checked and saved; another waits
     /// its turn by being ignored, as `state.pinBusy` in app.js.
     pub(super) pinning: Cell<bool>,
@@ -252,12 +291,17 @@ pub(crate) struct BrowserWindow {
     pub(super) pending_drop: RefCell<Option<PendingDrop>>,
     /// What the drag over the window offered when it arrived.
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
+    /// What the label on the drag icon says over the window (DND-028).
+    pub(super) drop_labels: RefCell<DropLabels>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
+    /// Why tooltips are off now: a drag of this window's items, and the
+    /// drop menu, show none, as in Windows Explorer (DND-027).
+    pub(super) tooltips_off: Cell<super::quiet_tooltips::TooltipsOff>,
+    /// The widgets whose tooltips were turned off, to turn them on again.
+    pub(super) muted_tooltips: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
-    /// The folder a file drag hovers over, and the timer that opens it.
-    pub(super) folder_hover: RefCell<Option<(String, glib::SourceId)>>,
     /// The scroll of a zone a file drag hovers near the edge of.
     pub(super) drag_scroll: RefCell<Option<super::file_drop::DragScroll>>,
     /// The crumb divider a file drag hovers over, and the timer that
@@ -289,6 +333,8 @@ pub(crate) struct BrowserWindow {
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
+    /// Network's info bar, shown while discovery cannot run.
+    pub(super) network_info_bar: OnceCell<gtk::Button>,
     /// The rename a slow second click on a name scheduled (OPS-011).
     pub(super) slow_click_rename: super::slow_click_rename::SlowClickRename,
     /// Measured folder sizes and the running folder-size scan.
@@ -331,9 +377,13 @@ impl ObjectImpl for BrowserWindow {
         self.parent_constructed();
         crate::i18n::translate_template(&*self.obj(), "window.ui");
         let window = self.obj();
+        // Each window has a window group of its own, which the dialogs
+        // over it join, so a modal dialog holds back only the window it
+        // belongs to and every other window stays usable, as in Windows.
+        // In GTK's one default group a modal dialog held back them all.
+        gtk::WindowGroup::new().add_window(&*window);
         window.finish_title_bar();
         window.add_navigation_buttons();
-        window.watch_quick_look();
         self.transfer_panel
             .set(TransferPanel::for_window(&window))
             .expect("constructed runs once per object");

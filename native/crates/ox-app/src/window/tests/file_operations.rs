@@ -31,31 +31,6 @@ use crate::window::file_drop::DropAction;
 use crate::window::session::PaneSide;
 use crate::window::transfer_panel::TransferKind;
 
-/// parity: OPS-002
-#[gtk::test]
-fn a_new_menu_file_starts_from_its_template_and_is_created_from_it() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-
-    test.activate("new-markdown-document", None);
-    let dialog = open_dialog(&test);
-
-    assert_eq!(dialog.title_text(), "New from template");
-    assert_eq!(
-        dialog.message_text(),
-        "Create a new copy without changing the template."
-    );
-    assert_eq!(dialog.button_labels(), ["Cancel", "Create"]);
-    assert_eq!(text_field(&dialog).text(), "New document.md");
-    dialog.press("Create");
-    wait_for_no_dialog(&test);
-    wait_until("the new file to be selected", || {
-        test.selected_names() == ["New document.md"]
-    });
-    let contents = fs::read_to_string(fixture.path("New document.md")).expect("the new file");
-    assert_eq!(contents, "# New document\n");
-}
-
 /// parity: OPS-004
 #[gtk::test]
 fn new_link_asks_for_the_path_and_selects_the_new_link() {
@@ -92,7 +67,7 @@ fn new_is_disabled_where_nothing_can_be_created() {
     let test = TestWindow::open(Page::ThisPc.uri());
 
     assert!(!is_enabled(&test, "new-folder"));
-    assert!(!is_enabled(&test, "new-file"));
+    assert!(!is_enabled(&test, "new-text-document"));
     assert!(!is_enabled(&test, "paste"));
 }
 
@@ -241,13 +216,16 @@ fn ctrl_z_undoes_from_the_tree_and_a_split_pane_but_not_in_a_text_field() {
     assert!(!fixture.path("Budget.txt").exists());
 }
 
+/// A folder renamed to a taken name is refused in the toast, as Windows'
+/// "Rename File" question is only for two files (see `renaming.rs`).
+///
 /// parity: OPS-006, OPS-008, OPS-010
 #[gtk::test]
 fn a_refused_name_in_place_keeps_the_field_for_another_try() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    select_names(&test, &["Notes 2.txt"]);
+    select_names(&test, &["Documents"]);
     test.activate("rename", None);
     let field = name_editor(&test);
 
@@ -256,17 +234,19 @@ fn a_refused_name_in_place_keeps_the_field_for_another_try() {
     let taken = "An item named “Notes 10.txt” already exists. Nothing was overwritten.";
     wait_until("the refusal", || test.window.shown_message() == taken);
     wait_until("the field to come back", || field.is_sensitive());
-    field.set_text("a/b");
+    let asked = dialog_over(&test).map(|dialog| dialog.title_text());
+    field.set_text("..");
     field.emit_activate();
     let invalid = test.window.shown_message();
-    field.set_text("Notes 2.txt");
+    field.set_text("Documents");
     field.emit_activate();
 
     wait_until("the unchanged name to end the rename", || {
         !is_renaming_in_place(&test)
     });
+    assert_eq!(asked, None, "a folder is not offered a numbered name");
     assert_eq!(invalid, "Use a name without slashes or control characters.");
-    assert!(fixture.path("Notes 2.txt").is_file());
+    assert!(fixture.path("Documents").is_dir());
     let kept = fs::read(fixture.path("Notes 10.txt")).expect("the other file stays");
     assert_eq!(kept, b"Synthetic test data\n");
 }
@@ -356,6 +336,42 @@ fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together
     });
     assert_eq!(first, "Synthetic test data\n");
     assert!(!fixture.path("Plan 1.txt").exists());
+}
+
+/// Rename items gives a shortcut a whole new name, as Windows does: its
+/// name has no extension to keep or ask about, since Windows keeps a
+/// shortcut's `.lnk` hidden. A dot in the batch name asks nothing.
+///
+/// parity: OPS-014, OPS-049
+#[gtk::test]
+fn rename_items_names_a_shortcut_whole_without_the_extension_question() {
+    let fixture = Fixture::empty();
+    fixture.write("Report.txt");
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    fs::create_dir(fixture.path("v1.2 release")).expect("the folder is made");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Report.txt - Shortcut", "v1.2 release"]);
+    test.activate("rename-items", None);
+    let dialog = open_dialog(&test);
+    text_field(&dialog).set_text("Q3.#");
+    dialog.press("Rename");
+
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .any(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+    };
+    wait_until("the renamed items", || {
+        question() || test.selected_names().len() == 2 && fixture.path("Q3.2").exists()
+    });
+    assert!(!question(), "no extension question");
+    let shortcut = ["Q3.1", "Q3.2"]
+        .into_iter()
+        .find(|name| fixture.path(name).is_symlink());
+    assert!(shortcut.is_some(), "the shortcut's whole name is replaced");
+    assert!(fixture.path("Report.txt").is_file());
 }
 
 /// An error shown for an earlier name goes once a name is accepted, also

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The window's network and device commands: Map network location, Keep
-//! in Network, Remove saved location, Open in new window, Discover
-//! servers, Sign out, Disconnect, Eject and Safely remove.
+//! The window's network and device commands: Map network drive, Keep
+//! in Network, Remove saved location, Open in new window, Sign out,
+//! Disconnect, Eject and Safely remove. Network discovers computers when
+//! it is listed ([`super::loading`]).
 //!
-//! Ports `connectDialog`, `removeBookmark`, the Keep in Network item of
-//! `networkLocationMenu` and `discoverNetwork` in `v2.0.0:desktop/ui/app.js`, and
+//! Ports `connectDialog`, `removeBookmark` and the Keep in Network item of
+//! `networkLocationMenu` in `v2.0.0:desktop/ui/app.js`, and
 //! `connect` and `after_connect` in `v2.0.0:desktop/winspace.py`. Sign out is in
 //! [`super::network_sign_out`], the device commands in
 //! [`super::mounting`].
@@ -15,7 +16,7 @@ use ox_core::network::{connect_share, ConnectedShare};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
-use crate::dialogs::{map_network_dialog, network_location_dialog, MapRequest, ShareKeeping};
+use crate::dialogs::{drive_letter, map_network_dialog, network_location_dialog, MapRequest, ShareKeeping};
 use crate::network::user_recent_servers;
 use crate::places::network_row;
 use crate::settings_store::Change;
@@ -25,7 +26,7 @@ use super::actions::{plain_action, text_action};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// Connect's label while Map network location connects.
+/// Finish's label while Map network drive connects.
 const CONNECTING: &str = "Connecting…";
 
 /// A settings change that adds or removes the share `uri` under Network.
@@ -36,13 +37,13 @@ fn share_change(action: BookmarkAction, uri: String, label: String) -> Change {
     })
 }
 
-/// Which connect dialog opens: Map network location, which "…" names
-/// Map network drive as Windows 11 does, or Add a network location.
+/// Which connect dialog opens: Map network drive or Add a network
+/// location.
 #[derive(Debug, Clone, Copy)]
 enum ConnectDialog {
-    /// Starts at a Windows share.
+    /// Windows 11's Map network drive.
     MapNetworkDrive,
-    /// Starts at a web address.
+    /// The Type list, starting at a web address.
     AddNetworkLocation,
 }
 
@@ -77,8 +78,6 @@ impl BrowserWindow {
                 WindowAction::AddNetworkLocation,
                 BrowserWindow::open_network_location_dialog,
             ),
-            plain_action(WindowAction::DiscoverServers, BrowserWindow::discover_servers),
-            plain_action(WindowAction::StopDiscovery, BrowserWindow::stop_discovery),
             text_action(WindowAction::KeepInNetwork, BrowserWindow::keep_in_network),
             text_action(
                 WindowAction::RemoveSavedLocation,
@@ -98,7 +97,7 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Map network location: asks for a share, then connects it.
+    /// Map network drive: asks for a share, then connects it.
     fn open_map_network_dialog(&self) {
         self.open_connect_dialog(ConnectDialog::MapNetworkDrive);
     }
@@ -116,7 +115,14 @@ impl BrowserWindow {
             move |dialog: &Dialog, request: MapRequest| window.connect_mapped_share(dialog, request)
         );
         let dialog = match kind {
-            ConnectDialog::MapNetworkDrive => map_network_dialog(self, on_connect),
+            ConnectDialog::MapNetworkDrive => {
+                let network = self.network_locations();
+                let taken: Vec<&str> = network
+                    .iter()
+                    .filter_map(|row| drive_letter(&row.label))
+                    .collect();
+                map_network_dialog(self, &taken, on_connect)
+            }
             ConnectDialog::AddNetworkLocation => network_location_dialog(self, on_connect),
         };
         dialog.open();
@@ -131,12 +137,23 @@ impl BrowserWindow {
         let window = self.downgrade();
         let form = dialog.downgrade();
         dialog.run(CONNECTING, async move {
-            let connected = connect_share(&prompts, &signing_out, &request.address, &request.label).await;
+            let connected = connect_share(
+                &prompts,
+                &signing_out,
+                &request.address,
+                &request.label,
+                request.credentials,
+            )
+            .await;
             let (Some(window), Some(dialog)) = (window.upgrade(), form.upgrade()) else {
                 return;
             };
             match connected {
-                Ok(share) => window.keep_mapped_share(&dialog, share, request.keeping),
+                Ok(share) => {
+                    let label = request.label_for(&share.label);
+                    let share = ConnectedShare { label, ..share };
+                    window.keep_mapped_share(&dialog, share, request.keeping);
+                }
                 Err(error) => dialog.show_error(&error.to_string()),
             }
         });
@@ -147,12 +164,15 @@ impl BrowserWindow {
     /// (`after_connect`). A save that fails keeps the dialog open with the
     /// reason.
     pub(super) fn keep_mapped_share(&self, dialog: &Dialog, share: ConnectedShare, keeping: ShareKeeping) {
-        self.context().remember_network(&share.uri);
         if keeping == ShareKeeping::ThisSessionOnly {
+            // The row keeps the drive letter for the session, as the
+            // mapping lasts until sign-out in Windows.
+            self.context().remember_mapped_share(&share.uri, &share.label);
             dialog.finish();
             self.navigate_or_report(&share.uri);
             return;
         }
+        self.context().remember_network(&share.uri);
         // A share kept in the sidebar is offered to Files and the GTK file
         // chooser too; one for this session only leaves no record.
         add_recent_server(&share);
@@ -225,34 +245,5 @@ impl BrowserWindow {
             return;
         }
         window.present_as_new_window();
-    }
-
-    /// Discover servers: looks for advertised SMB servers, redrawing the
-    /// Network page as they are found.
-    pub(super) fn discover_servers(&self) {
-        let discoverer = self.context().network().discoverer();
-        self.network().discovery().start(
-            discoverer,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move || window.render_landing()
-            ),
-        );
-        self.render_landing();
-    }
-
-    /// Starts discovery the first time the window shows the Network page
-    /// (`load` in app.js).
-    pub(super) fn discover_servers_once(&self) {
-        if !self.network().discovery().state().has_started {
-            self.discover_servers();
-        }
-    }
-
-    /// Stop: ends discovery and ignores what it would still find.
-    fn stop_discovery(&self) {
-        self.network().discovery().stop();
-        self.render_landing();
     }
 }

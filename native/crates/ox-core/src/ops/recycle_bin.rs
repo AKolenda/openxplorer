@@ -10,7 +10,10 @@
 //! The safety rules:
 //!
 //! - Restoring never overwrites: an item whose original name is taken
-//!   again stays in the Recycle Bin, and the error says so.
+//!   again stays in the Recycle Bin, and the error says so. Restore and
+//!   Restore all items first ask about such names as Windows does
+//!   ([`super::restore_conflicts`]); only Replace there moves the item in
+//!   the way, to the Recycle Bin.
 //! - Missing parent folders of the original location are created again
 //!   (OPS-041). Before anything changes, the write protection is asked
 //!   about the original location and every location the item's tree
@@ -27,13 +30,13 @@ use gio::prelude::*;
 
 use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::error::OpsError;
-use super::results::record_failure;
+use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
 use super::undo::UndoRecord;
 use crate::entry::{entry_from_info, ATTRIBUTES};
 use crate::gio_node::GioNode;
 use crate::location::TRASH_URI;
-use crate::transfer::{Cancellation, Node, SourceChange, TransferResult};
+use crate::transfer::{Cancellation, Node, SourceChange, TransferMode, TransferResult};
 
 /// How often Undo of Move to Trash lists the Recycle Bin again when an
 /// item it restores is not listed yet, and how long it waits each time:
@@ -104,18 +107,19 @@ pub async fn restore_from_recycle_bin(
 }
 
 /// Deletes the Recycle Bin items `uris` permanently, leaving the others.
+/// An item that fails is asked about as Windows asks, in the progress
+/// window, through `context`'s question.
 ///
 /// # Errors
 ///
-/// None for the whole request; each item's failure is reported in the
-/// result.
+/// None for the whole request; each item's failure is in the result.
 pub async fn delete_from_recycle_bin(
     uris: &[String],
-    cancel: &Cancellation,
+    context: &OperationContext,
 ) -> Result<TransferResult, OpsError> {
     let uris = uris.to_vec();
-    let cancel = cancel.clone();
-    on_worker(move || Ok(delete_items_blocking(&uris, &cancel))).await
+    let context = context.clone();
+    on_worker(move || Ok(delete_items_blocking(&uris, &context))).await
 }
 
 /// Deletes everything in the Recycle Bin permanently, after the user
@@ -123,14 +127,14 @@ pub async fn delete_from_recycle_bin(
 ///
 /// # Errors
 ///
-/// When the Recycle Bin cannot be listed. Each item's failure is reported
-/// in the result.
-pub async fn empty_recycle_bin(cancel: &Cancellation) -> Result<TransferResult, OpsError> {
-    let cancel = cancel.clone();
+/// When the Recycle Bin cannot be listed. Each item's failure is asked
+/// about, as [`delete_from_recycle_bin`] asks, and is in the result.
+pub async fn empty_recycle_bin(context: &OperationContext) -> Result<TransferResult, OpsError> {
+    let context = context.clone();
     on_worker(move || {
-        let items = list_recycle_bin_blocking(&cancel)?;
+        let items = list_recycle_bin_blocking(&context.cancel)?;
         let uris: Vec<String> = items.into_iter().map(|item| item.uri).collect();
-        Ok(delete_items_blocking(&uris, &cancel))
+        Ok(delete_items_blocking(&uris, &context))
     })
     .await
 }
@@ -209,16 +213,20 @@ fn read_items(listing: &gio::FileEnumerator, cancel: &Cancellation) -> Result<Ve
     }
 }
 
-/// Restores each item of `uris` and reports what happened.
+/// Restores each item of `uris`, asking about each failure.
 fn restore_items_blocking(uris: &[String], context: &OperationContext) -> TransferOutcome {
     let mut outcome = TransferOutcome::default();
-    for uri in uris {
-        match restore_item(uri, context) {
-            Ok(restored) => {
-                outcome.result.done.push(uri.clone());
-                outcome.created.push(restored);
-            }
-            Err(error) => record_failure(&mut outcome.result, &GioNode::new(uri).display_name(), &error),
+    let mut questions = ItemQuestions::new(context, TransferMode::Move);
+    for (index, uri) in uris.iter().enumerate() {
+        let name = GioNode::new(uri).display_name();
+        let item = AskedItem {
+            name: &name,
+            uri,
+            more_items: index + 1 < uris.len(),
+        };
+        if let Some(restored) = questions.run(&mut outcome.result, item, || restore_item(uri, context)) {
+            outcome.result.done.push(uri.clone());
+            outcome.created.push(restored);
         }
         if outcome.result.cancelled {
             break;
@@ -247,7 +255,7 @@ pub(super) fn forget_removed_items() {
 
 /// Restores the Recycle Bin item `uri` to its original location and
 /// returns that location's URI.
-fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsError> {
+pub(super) fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsError> {
     context.cancel.check()?;
     let item = top_level_item(uri)?;
     let info = item.query_info(
@@ -307,7 +315,10 @@ pub(super) fn move_out(
 
 /// OPS-041: creates the missing folders above a restored item's original
 /// location.
-fn recreate_original_folder(target: &gio::File, context: &OperationContext) -> Result<(), OpsError> {
+pub(super) fn recreate_original_folder(
+    target: &gio::File,
+    context: &OperationContext,
+) -> Result<(), OpsError> {
     let Some(folder) = target.parent() else {
         return Ok(());
     };
@@ -327,13 +338,25 @@ fn name_taken_in_original_folder(original_path: &Path) -> OpsError {
     ))
 }
 
-/// Deletes each item of `uris` permanently and reports what happened.
-fn delete_items_blocking(uris: &[String], cancel: &Cancellation) -> TransferResult {
+/// Deletes each item of `uris` permanently, asking about each failure as
+/// Windows does: an item that is gone asks "Item Not Found", one the user
+/// may not delete "File Access Denied", anything else "Interrupted
+/// Action".
+fn delete_items_blocking(uris: &[String], context: &OperationContext) -> TransferResult {
     let mut result = TransferResult::default();
-    for uri in uris {
-        match delete_item(uri, cancel) {
-            Ok(()) => result.done.push(uri.clone()),
-            Err(error) => record_failure(&mut result, &GioNode::new(uri).display_name(), &error),
+    let mut questions = ItemQuestions::new(context, TransferMode::Delete);
+    for (index, uri) in uris.iter().enumerate() {
+        let name = GioNode::new(uri).display_name();
+        let item = AskedItem {
+            name: &name,
+            uri,
+            more_items: index + 1 < uris.len(),
+        };
+        if questions
+            .run(&mut result, item, || delete_item(uri, &context.cancel))
+            .is_some()
+        {
+            result.done.push(uri.clone());
         }
         if result.cancelled {
             break;
@@ -381,18 +404,55 @@ pub(crate) fn restore_trashed_since(
     since: u64,
     context: &OperationContext,
 ) -> Result<TransferResult, OpsError> {
-    let items = listing_holding(original_paths, since, &context.cancel)?;
+    let found = find_trashed_since(original_paths, since, &context.cancel)?;
+    Ok(restore_found(original_paths, &found, context))
+}
+
+/// The Recycle Bin item, for each of `original_paths`, deleted from it
+/// most recently since `since`, or `None` when there is none. Undo of a
+/// Replace looks them up before it moves anything else to the Trash
+/// from the same paths, so it restores the replaced files, not those.
+///
+/// # Errors
+///
+/// When the Recycle Bin cannot be listed.
+pub(crate) fn find_trashed_since(
+    original_paths: &[PathBuf],
+    since: u64,
+    cancel: &Cancellation,
+) -> Result<Vec<Option<String>>, OpsError> {
+    let items = listing_holding(original_paths, since, cancel)?;
+    Ok(original_paths
+        .iter()
+        .map(|path| newest_trashed_from(&items, path, since).map(|item| item.uri.clone()))
+        .collect())
+}
+
+/// Restores each found Recycle Bin item (`found`, from
+/// [`find_trashed_since`]) to its path of `original_paths`, never
+/// overwriting, asking about each failure.
+pub(crate) fn restore_found(
+    original_paths: &[PathBuf],
+    found: &[Option<String>],
+    context: &OperationContext,
+) -> TransferResult {
     let mut result = TransferResult::default();
-    for original_path in original_paths {
-        let restored = match newest_trashed_from(&items, original_path, since) {
-            Some(item) => put_back(&gio::File::for_uri(&item.uri), original_path, context),
+    let mut questions = ItemQuestions::new(context, TransferMode::Move);
+    for (index, (original_path, item)) in original_paths.iter().zip(found).enumerate() {
+        let name = path_name(original_path);
+        let asked = AskedItem {
+            name: &name,
+            uri: item.as_deref().unwrap_or_default(),
+            more_items: index + 1 < original_paths.len(),
+        };
+        let restore = || match item {
+            Some(uri) => put_back(&gio::File::for_uri(uri), original_path, context),
             None => Err(OpsError::NotFound(crate::i18n::gettext(
                 "It is no longer in the Recycle Bin.",
             ))),
         };
-        match restored {
-            Ok(uri) => result.done.push(uri),
-            Err(error) => record_failure(&mut result, &path_name(original_path), &error),
+        if let Some(uri) = questions.run(&mut result, asked, restore) {
+            result.done.push(uri);
         }
         if result.cancelled {
             break;
@@ -401,7 +461,7 @@ pub(crate) fn restore_trashed_since(
     if !result.done.is_empty() {
         forget_removed_items();
     }
-    Ok(result)
+    result
 }
 
 /// The Recycle Bin's items, listed again a few times while one of
@@ -440,7 +500,7 @@ fn newest_trashed_from<'a>(
 }
 
 /// The last component of `path`, for messages.
-fn path_name(path: &Path) -> String {
+pub(super) fn path_name(path: &Path) -> String {
     path.file_name().map_or_else(
         || path.display().to_string(),
         |name| name.to_string_lossy().into_owned(),

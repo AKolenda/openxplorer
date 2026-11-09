@@ -226,13 +226,12 @@ impl BrowserWindow {
     /// Draws the landing page at `uri` in the folder pane on `side`, when
     /// `uri` is one.
     pub(super) fn render_landing_in(&self, side: PaneSide, uri: &str, places: &Places) {
-        let Some(page) = Page::from_uri(uri) else {
+        let Some(page) = Page::drawn_at(uri) else {
             return;
         };
         let body = self.pane_on(side).landing();
         let locations = self.imp().locations.borrow();
-        let discovery = self.network().discovery().state();
-        landing::render(body, page, places, &locations, &discovery);
+        landing::render(body, page, places, &locations, self.skin().drawn_text_size());
     }
 }
 

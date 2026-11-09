@@ -201,11 +201,11 @@ mod tests {
     }
 
     #[test]
-    fn the_palettes_keep_the_current_apps_surfaces() {
+    fn the_palettes_keep_the_content_and_tint_the_strip_as_mica_alt() {
         assert!(palette(Appearance::Light).contains("@define-color ox_bg #ffffff;"));
         assert!(palette(Appearance::Dark).contains("@define-color ox_bg #202020;"));
-        assert!(palette(Appearance::Light).contains("@define-color ox_title #eff1f4;"));
-        assert!(palette(Appearance::Dark).contains("@define-color ox_title #191919;"));
+        assert!(palette(Appearance::Light).contains("@define-color ox_title #f3f3f3;"));
+        assert!(palette(Appearance::Dark).contains("@define-color ox_title #202020;"));
     }
 
     /// Loads `css` into a provider and returns GTK's parsing errors.
@@ -221,22 +221,40 @@ mod tests {
     }
 
     /// Focused controls draw a 2px ring inside them; the file list draws
-    /// none around itself, only a 1px ring on the focused row or tile,
-    /// apart from the selection's fill.
+    /// none around itself. The focused row, tile or navigation pane entry
+    /// draws Windows 11's two-tone ring instead, 2px dark outside 1px
+    /// light, apart from the selection's fill, and the file list's focused
+    /// row or tile a 1px outline after a click, as Windows 11's Details
+    /// view does while the list has the keyboard.
     ///
     /// parity: ACC-009
     #[test]
     fn focus_rings_sit_on_controls_and_items_not_around_the_file_list() {
         let code = without_comments(RULES);
-        for rule in [
+        let item_ring = "{\n  outline: 2px solid @ox_item_focus_outer;\n  outline-offset: -2px;\n  \
+                         box-shadow: inset 0 0 0 3px @ox_item_focus_inner;\n}";
+        let item_rings = [
+            "columnview.files > listview > row",
+            "gridview.files > child",
+            ".sidebar list.places > row",
+            ".folder-tree listview > row",
+        ]
+        .map(|item| format!("{item}:focus-visible {item_ring}"));
+        let item_outlines = [
+            "columnview.files.keyboard-in > listview > row",
+            "gridview.files.keyboard-in > child",
+        ]
+        .map(|item| {
+            format!("{item}:focus:not(:focus-visible):not(.file-drop-active) {{ outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }}")
+        });
+        let control_rings = [
             "window.ox button:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
             ".tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
-            "columnview.files > listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
-            "gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
-            ".sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
             "paned.workspace > separator.keyboard-focus",
-        ] {
-            assert!(code.contains(rule), "{rule}");
+        ]
+        .map(str::to_owned);
+        for rule in item_rings.iter().chain(&item_outlines).chain(&control_rings) {
+            assert!(code.contains(rule.as_str()), "{rule}");
         }
         assert!(
             !code.contains("columnview.files:focus"),
@@ -250,14 +268,35 @@ mod tests {
     fn higher_contrast_thickens_drop_outlines_and_outlines_the_open_place() {
         let code = without_comments(HIGH_CONTRAST_RULES);
         for rule in [
-            ".sidebar list > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }",
-            ".sidebar list > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
-            ".sidebar list > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
+            ".sidebar list.places > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }",
+            ".sidebar list.places > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
+            ".sidebar list.places > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
             ".tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }",
-            "box-shadow: inset 0 0 0 2px @ox_focus_outer;",
+            "box-shadow: inset 0 0 0 2px @ox_focus_outer; }",
+            "outline: 2px solid @ox_text;\n  outline-offset: -2px;\n  box-shadow: inset 0 0 0 3px @ox_bg;",
+            "gridview.files.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: 2px solid @ox_text; outline-offset: -2px; }",
         ] {
             assert!(code.contains(rule), "{rule}");
         }
+    }
+
+    /// High contrast rings a focused tile or Content row once, on its
+    /// cell: the high-contrast provider outranks the base rule that clears
+    /// the ring of the grid's slot around the cell, so it clears it too,
+    /// after the ring it gives every slot.
+    ///
+    /// parity: ACC-011, VIEW-071
+    #[test]
+    fn high_contrast_rings_a_tile_or_content_row_once() {
+        let code = without_comments(HIGH_CONTRAST_RULES);
+        let generic = code
+            .find("gridview.files > child:focus-visible,")
+            .expect("every slot gets the high-contrast ring");
+        let cleared = code
+            .find("gridview.files.tiles > child:focus-visible,\ngridview.files.content > child:focus-visible { outline: none; box-shadow: none; }")
+            .expect("Tiles and Content clear the slot's ring");
+        assert!(cleared > generic, "the clearing rule comes after the ring");
+        assert!(code.contains("gridview.files.tiles > child:focus-visible > .item-cell:not(.group-slot)"));
     }
 
     #[gtk::test]

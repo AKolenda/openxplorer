@@ -160,6 +160,7 @@ fn map_network_location_refuses_bad_input_before_mounting() {
                 &registry,
                 case.address,
                 case.label,
+                CredentialChoice::Known,
             ));
 
             let message = refused.expect_err("the input is refused").to_string();
@@ -176,4 +177,32 @@ fn an_invalid_address_is_not_mounted() {
 
         assert!(matches!(refused, Err(NetworkError::Location(_))), "{refused:?}");
     });
+}
+
+/// A share that is already mounted counts as mounted, unless Map network
+/// drive asked for different credentials: the existing connection keeps
+/// its account, so the request is refused in Windows' words instead of
+/// reporting success under the old account.
+///
+/// parity: NET-001
+#[test]
+fn different_credentials_are_refused_for_a_share_already_connected() {
+    let already = || {
+        Err(glib::Error::new(
+            gio::IOErrorEnum::AlreadyMounted,
+            "already mounted",
+        ))
+    };
+    assert!(accept_mount(already(), CredentialChoice::Known).is_ok());
+    let refused = accept_mount(already(), CredentialChoice::Different).expect_err("refused");
+    assert!(
+        matches!(refused, NetworkError::ConnectedWithAnotherAccount),
+        "{refused:?}"
+    );
+    assert!(refused
+        .to_string()
+        .starts_with("Multiple connections to a server"));
+    assert!(accept_mount(Ok(()), CredentialChoice::Different).is_ok());
+    let failed = Err(glib::Error::new(gio::IOErrorEnum::PermissionDenied, "refused"));
+    assert!(accept_mount(failed, CredentialChoice::Known).is_err());
 }
