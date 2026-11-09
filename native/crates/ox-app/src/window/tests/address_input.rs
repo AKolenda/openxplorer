@@ -481,6 +481,35 @@ fn escape_keeps_the_folder_and_the_selection_and_switching_tabs_ends_editing() {
     assert_eq!(address.mode(), AddressMode::Crumbs);
 }
 
+/// Enter on "Recycle Bin", "Recent" or "Recent locations", or on their
+/// addresses, opens that place, so they stay reachable while the
+/// navigation pane does not list them (SIDE-034); a folder of that name
+/// in the current folder still comes first.
+///
+/// parity: SIDE-034, NAV-033
+#[gtk::test]
+fn the_recycle_bin_and_recent_open_from_the_typed_address() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let opens = |typed: &str, expected: &str| {
+        test.window.navigate(&fixture.uri()).expect("the fixture");
+        test.wait_for_listing("the fixture");
+        test.activate("location", None);
+        test.window.submit_address(typed);
+        wait_until(typed, || test.window.current_uri().as_deref() == Some(expected));
+    };
+
+    opens("Recycle Bin", "trash:///");
+    opens("trash:///", "trash:///");
+    opens("Recent", "recent:///");
+    opens("recent:///", "recent:///");
+    opens("Recent locations", "ox:recent-locations");
+    opens("ox:recent-locations", "ox:recent-locations");
+    std::fs::create_dir(fixture.path("Recent")).expect("a folder called Recent");
+    opens("Recent", &fixture.uri_of("Recent"));
+    assert_eq!(test.window.tab_count(), 1);
+}
+
 /// parity: NAV-033
 #[gtk::test]
 fn a_typed_relative_name_or_tilde_opens_in_the_same_tab() {
