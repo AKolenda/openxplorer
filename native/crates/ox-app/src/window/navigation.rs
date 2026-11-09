@@ -114,11 +114,13 @@ impl BrowserWindow {
         }
     }
 
-    /// The home folder or landing page whose title is `typed` ("Home",
-    /// "This PC", "Network"), as the address bar shows them.
+    /// The place whose title is `typed` ("Home", "This PC", "Network"),
+    /// as the address bar shows them: "Home" leads where the navigation
+    /// pane's Home does, the Home page or, while "Open the home folder on
+    /// Home" is on, the home folder.
     pub(super) fn place_titled(&self, typed: &str) -> Option<String> {
         if typed.trim().eq_ignore_ascii_case("home") {
-            return Some(self.imp().locations.borrow().home_uri());
+            return Some(self.home_location());
         }
         Page::from_title(typed).map(|page| page.uri().to_owned())
     }
