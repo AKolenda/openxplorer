@@ -210,8 +210,8 @@ fn ctrl_keypad_plus_does_nothing_in_the_other_views() {
     }
 }
 
-/// The column titles' menu starts as Windows 11's: "Size column to fit"
-/// for the title it was opened on, "Size all columns to fit", then the
+/// The column titles' menu starts as Windows 11's: "Size Column to Fit"
+/// for the title it was opened on, "Size All Columns to Fit", then the
 /// columns. Outside the titles there is no column to fit. Each item fits
 /// its columns.
 ///
@@ -233,7 +233,7 @@ fn the_titles_menu_sizes_one_column_or_all_to_fit() {
     let menu = test.window.show_column_menu(&header, x, 4.0);
     let items = menu.items();
     let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-    assert_eq!(labels[..2], ["Size column to fit", "Size all columns to fit"]);
+    assert_eq!(labels[..2], ["Size Column to Fit", "Size All Columns to Fit"]);
     assert_eq!(items[0].target, Some("size".to_variant()));
     assert_ne!(items[0].availability, ItemAvailability::Disabled);
     menu.popdown();
@@ -251,7 +251,7 @@ fn the_titles_menu_sizes_one_column_or_all_to_fit() {
             .map(|column| column.fixed_width()),
         Some(fitted(&details, SortColumn::Size))
     );
-    assert!(name.expands(), "Size column to fit leaves Name as it was");
+    assert!(name.expands(), "Size Column to Fit leaves Name as it was");
     test.activate("fit-all-columns", None);
     assert_all_fitted(&details);
 }
@@ -273,7 +273,7 @@ fn open_titles_menu(header: &gtk::Widget) -> Option<MenuPopover> {
 }
 
 /// A real right-click on a column title opens the titles' menu, and a real
-/// click on "Size all columns to fit" fits the columns. The menu never
+/// click on "Size All Columns to Fit" fits the columns. The menu never
 /// opened from a real right-click before: its gesture waited for the
 /// press after the titles had it.
 ///
@@ -299,7 +299,7 @@ fn a_real_right_click_on_a_title_opens_the_menu_that_sizes_all_columns() {
     wait_until("the titles' menu", || open_titles_menu(&header).is_some());
     let menu = open_titles_menu(&header).expect("the titles' menu");
     assert_eq!(menu.items()[0].target, Some("size".to_variant()));
-    let row = menu.row_list().row_at_index(1).expect("Size all columns to fit");
+    let row = menu.row_list().row_at_index(1).expect("Size All Columns to Fit");
     let middle = (20.0, f64::from(row.height()) / 2.0);
     let on_row = screen_point(&mut pointer, &row, middle, on_title);
     pointer.move_to(on_row.0, on_row.1);

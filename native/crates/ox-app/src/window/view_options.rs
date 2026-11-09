@@ -215,29 +215,70 @@ mod tests {
 
     use super::*;
     use crate::folder_view::details::chosen_from_keys;
+    use crate::window::menu_popover::ItemAvailability;
 
-    /// The titles' menu offers every column but Name, checked while it
-    /// shows; choosing one adds it at the end or hides it.
-    ///
-    /// parity: VIEW-033
-    #[test]
-    fn the_titles_menu_shows_and_hides_columns() {
-        let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
-        let entries = column_toggle_entries(&chosen);
-        let checked: Vec<(String, bool)> = entries
+    /// The labels and marks of `entries`, a divider as `None`.
+    fn shown(entries: &[MenuEntry]) -> Vec<Option<(String, ItemCheck, bool)>> {
+        entries
             .iter()
-            .filter_map(|entry| match entry {
-                MenuEntry::Item(item) => Some((item.label.clone(), item.check == ItemCheck::Fixed(true))),
+            .map(|entry| match entry {
+                MenuEntry::Item(item) => Some((
+                    item.label.clone(),
+                    item.check.clone(),
+                    item.availability == ItemAvailability::Disabled,
+                )),
                 MenuEntry::Divider => None,
             })
-            .collect();
-        assert_eq!(checked.len(), SortColumn::CHOOSABLE.len());
-        assert!(!checked.iter().any(|(label, _)| label == "Name"));
-        assert!(checked.contains(&("Type".to_owned(), true)));
-        assert!(checked.contains(&("Owner".to_owned(), false)));
+            .collect()
+    }
+
+    /// The titles' menu is Windows 11 File Explorer's: "Size Column to
+    /// Fit", "Size All Columns to Fit", a divider, the columns as check
+    /// items (Name first, checked and greyed, as it cannot be hidden;
+    /// Windows' Date modified, Type, Size and Date created in its order,
+    /// then the app's own File extension, Owner and Permissions), a
+    /// divider and "More...". No row shows an icon. Choosing a column
+    /// adds it at the end or hides it.
+    ///
+    /// parity: VIEW-033, VIEW-072
+    #[test]
+    fn the_titles_menu_is_windows_11s_with_check_marks_only() {
+        let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
+        let entries = column_menu_entries(&chosen, Some(SortColumn::Size));
+        let item = |label: &str, checked: bool, disabled: bool| {
+            Some((label.to_owned(), ItemCheck::Fixed(checked), disabled))
+        };
+        let command = |label: &str| Some((label.to_owned(), ItemCheck::Plain, false));
+        assert_eq!(
+            shown(&entries),
+            [
+                command("Size Column to Fit"),
+                command("Size All Columns to Fit"),
+                None,
+                item("Name", true, true),
+                item("Date modified", true, false),
+                item("Type", true, false),
+                item("Size", true, false),
+                item("Date created", false, false),
+                item("File extension", false, false),
+                item("Owner", false, false),
+                item("Permissions", false, false),
+                None,
+                command("More..."),
+            ]
+        );
+        let items = entries.iter().filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item),
+            MenuEntry::Divider => None,
+        });
+        for item in items {
+            assert!(!item.shows_glyph, "{} shows no icon", item.label);
+            assert!(item.application_icon.is_none(), "{} shows no icon", item.label);
+        }
 
         let with_owner = toggled(chosen.clone(), SortColumn::Owner);
         assert_eq!(with_owner.last(), Some(&SortColumn::Owner));
-        assert!(!toggled(chosen, SortColumn::Type).contains(&SortColumn::Type));
+        assert!(!toggled(chosen.clone(), SortColumn::Type).contains(&SortColumn::Type));
+        assert_eq!(toggled(chosen.clone(), SortColumn::Name), chosen, "Name cannot be hidden");
     }
 }
