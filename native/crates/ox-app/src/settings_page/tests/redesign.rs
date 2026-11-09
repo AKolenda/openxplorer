@@ -183,7 +183,7 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// The pages are the mockup's, and every setting row of the earlier
 /// layout is on one of them, found by its earlier name too: none was
 /// left out, and the only rows added are those of the commands that left
-/// the "…" menu.
+/// the "…" menu, and since then Home's layout (HOME-012).
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -204,7 +204,16 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         ]
     );
     let rows = every_row(&settings);
-    assert_eq!(rows.len(), MOVED_ROWS.len(), "as many rows as before");
+    // "Show Quick access, Recent and Favorites on Home" came later.
+    let added_since = ["Show Quick access, Recent and Favorites on Home"];
+    for title in added_since {
+        settings.row(title);
+    }
+    assert_eq!(
+        rows.len(),
+        MOVED_ROWS.len() + added_since.len(),
+        "as many rows as before, and the ones added since"
+    );
     for (earlier, now) in MOVED_ROWS {
         let row = settings.row(now);
         settings.page.search(earlier);
