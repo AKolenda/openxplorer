@@ -33,7 +33,8 @@ use crate::folder_view::details::GroupTitle;
 use crate::folder_view::group_slots::RowHeights;
 pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
 use crate::folder_view::icon_size::{
-    compact_row, content_row, group_heading_row, tiles_cell, CONTENT_ICON, TILES_ICON,
+    compact_density_heading_row, compact_density_tiles_row, compact_row, content_row, group_heading_row,
+    tiles_cell, CONTENT_ICON, TILES_ICON,
 };
 use crate::text_size::TextSize;
 
@@ -304,17 +305,35 @@ impl IconView {
 
     /// How tall a page of the view and its rows are, for Page Up and Page
     /// Down in grouped Tiles and Content.
+    /// In Compact view (VIEW-067) the rows are as close as its stylesheet
+    /// draws them (`theme/fonts.rs`).
     pub(crate) fn row_heights(&self) -> RowHeights {
         let text_size = self.imp().text_size.get();
-        let item = match self.layout() {
-            GridLayout::Content => content_row(text_size),
-            _ => tiles_cell(text_size).height,
+        let content = self.layout() == GridLayout::Content;
+        let (item, heading) = match (self.in_compact_density(), content) {
+            (false, true) => (content_row(text_size), group_heading_row(text_size)),
+            (false, false) => (tiles_cell(text_size).height, group_heading_row(text_size)),
+            (true, true) => (
+                content_row(text_size),
+                compact_density_heading_row(text_size, true),
+            ),
+            (true, false) => (
+                compact_density_tiles_row(text_size),
+                compact_density_heading_row(text_size, false),
+            ),
         };
         RowHeights {
             page: self.scroll_adjustment().page_size(),
             item,
-            heading: group_heading_row(text_size),
+            heading,
         }
+    }
+
+    /// Whether the window showing the view is in Compact view: it carries
+    /// the class `window/compact_density.rs` sets.
+    fn in_compact_density(&self) -> bool {
+        self.root()
+            .is_some_and(|root| root.has_css_class(crate::window::COMPACT_DENSITY_CLASS))
     }
 
     /// Gives the grid the folder's items, grouped in Tiles and Content
