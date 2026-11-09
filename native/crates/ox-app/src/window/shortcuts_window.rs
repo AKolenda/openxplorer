@@ -418,17 +418,17 @@ fn shortcut_grid(group: Group, rows: &[&ShortcutRow]) -> (gtk::Grid, Vec<Shortcu
 /// "delete", "num" for "keypad" and "numeric".
 fn search_words(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.to_lowercase().chars().collect();
+    let is_separator = |character: char| matches!(character, '+' | '-');
     let mut spaced = String::new();
     for (index, &character) in chars.iter().enumerate() {
-        let before = index.checked_sub(1).and_then(|before| chars.get(before));
-        let after = chars.get(index + 1);
-        let joins_keys = |character: Option<&char>| {
-            character.is_some_and(|other| !other.is_whitespace() && !matches!(other, '+' | '-'))
-        };
+        // The nearest characters before and after that are not spaces: a
+        // "+" or "-" joins two keys, spaces or not, when a key comes before
+        // it (not another separator) and one comes after it.
+        let before = chars[..index].iter().rev().find(|other| !other.is_whitespace());
+        let after = chars[index + 1..].iter().find(|other| !other.is_whitespace());
+        let joins_keys = before.is_some_and(|other| !is_separator(*other)) && after.is_some();
         match character {
-            '+' | '-' if joins_keys(before) && after.is_some_and(|other| !other.is_whitespace()) => {
-                spaced.push(' ');
-            }
+            '+' | '-' if joins_keys => spaced.push(' '),
             '+' => spaced.push_str(" plus "),
             '-' => spaced.push_str(" minus "),
             '*' => spaced.push_str(" asterisk "),
@@ -471,6 +471,10 @@ fn query_matches(query: &str, label: &str, section: &str, combinations: &[String
         return true;
     }
     let words = search_words(&query);
+    // A query that leaves no word, such as a bracket alone, finds nothing.
+    if words.is_empty() {
+        return false;
+    }
     let named = search_words(&format!("{label} {section}"));
     let in_name = |word: &str| word.chars().count() > 1 && named.iter().any(|named| named.starts_with(word));
     let fits = |keys: &[String]| words.iter().all(|word| keys.contains(word) || in_name(word));
