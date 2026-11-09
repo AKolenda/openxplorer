@@ -381,8 +381,35 @@ const TILES_BELOW_HEADING: i32 = 6;
 const PILLS_BELOW_TILES: i32 = 45;
 const HEADER_BELOW_PILLS: i32 = 19;
 const ROWS_BELOW_HEADER: i32 = 14;
-/// The narrowest Name gets in a narrow window.
+/// The narrowest Name gets in a narrow window, and the narrowest Date
+/// accessed and File location.
 const NARROWEST_NAME: i32 = 140;
+const NARROWEST_DETAIL: i32 = 90;
+/// The page's own padding across (`.landing .page.home-page`).
+const PAGE_PADDING: i32 = 20;
+
+/// The width of the pane Home is scrolled in: what is on screen, which
+/// a wide page does not widen.
+fn visible_width(widget: &impl IsA<gtk::Widget>) -> Option<i32> {
+    let scroller = widget.ancestor(gtk::ScrolledWindow::static_type())?;
+    Some(scroller.width()).filter(|width| *width > 0)
+}
+
+/// Name, Date accessed and File location's widths in `room` pixels:
+/// Windows' 484, 298 and 300 while they fit; then Name narrows, down to
+/// 140; then the other two share what is left, down to 90 each.
+fn column_widths(room: i32) -> (i32, i32, i32) {
+    let details = DATE_WIDTH + LOCATION_WIDTH;
+    if room >= NAME_WIDTH + details {
+        return (NAME_WIDTH, DATE_WIDTH, LOCATION_WIDTH);
+    }
+    if room - details >= NARROWEST_NAME {
+        return (room - details, DATE_WIDTH, LOCATION_WIDTH);
+    }
+    let left = (room - NARROWEST_NAME).max(2 * NARROWEST_DETAIL);
+    let date = (left * DATE_WIDTH / details).max(NARROWEST_DETAIL);
+    (NARROWEST_NAME, date, (left - date).max(NARROWEST_DETAIL))
+}
 /// Pixels from one row of the list to the next, as Windows 11's Home
 /// spaces them, and in Compact view.
 const ROW_PITCH: i32 = 36;
@@ -450,11 +477,17 @@ impl Columns {
         row.append(&date);
         row.append(&location);
         row.add_tick_callback(move |row, _| {
-            if let Some(list) = row.parent() {
-                let room = list.width() - ROW_INDENT - ROW_ICON - ICON_GAP - DATE_WIDTH - LOCATION_WIDTH - 16;
-                let width = room.clamp(NARROWEST_NAME, NAME_WIDTH);
-                if name.width_request() != width {
-                    name.set_size_request(width, -1);
+            if let Some(room) = visible_width(row) {
+                let room = room - LIST_INDENT - ROW_INDENT - ROW_ICON - ICON_GAP - PAGE_PADDING;
+                let (name_width, date_width, location_width) = column_widths(room);
+                for (cell, width) in [
+                    (&name, name_width),
+                    (&date, date_width),
+                    (&location, location_width),
+                ] {
+                    if cell.width_request() != width {
+                        cell.set_size_request(width, -1);
+                    }
                 }
             }
             glib::ControlFlow::Continue
@@ -861,8 +894,8 @@ const TILE_BOX_PADDING: i32 = 8;
 fn keep_tiles_apart(flow: &gtk::FlowBox) {
     flow.set_halign(gtk::Align::Start);
     flow.add_tick_callback(|flow, _| {
-        if let Some(parent) = flow.parent() {
-            let fit = (parent.width() - TILE_BOX_PADDING) / TILE_PITCH;
+        if let Some(room) = visible_width(flow) {
+            let fit = (room - SECTION_INDENT - PAGE_PADDING - TILE_BOX_PADDING) / TILE_PITCH;
             let per_row = u32::try_from(fit.max(1)).unwrap_or(1).min(MOST_TILES_PER_ROW);
             if flow.max_children_per_line() != per_row {
                 flow.set_max_children_per_line(per_row);
@@ -1840,5 +1873,21 @@ mod layout_tests {
         );
         assert_eq!(file_location("file:///home/demo/a.txt", home), "Home");
         assert_eq!(file_location("file:///srv/shared/a.txt", home), "/srv/shared");
+    }
+
+    /// The columns keep Windows' widths while they fit, then Name
+    /// narrows, then the other two, never below their narrowest.
+    #[test]
+    fn the_columns_narrow_name_first() {
+        use super::column_widths;
+        assert_eq!(column_widths(1200), (484, 298, 300));
+        assert_eq!(column_widths(800), (202, 298, 300));
+        let (name, date, location) = column_widths(400);
+        assert_eq!(name, 140);
+        assert!(
+            date >= 90 && location >= 90 && date + location <= 260,
+            "{date} {location}"
+        );
+        assert_eq!(column_widths(100), (140, 90, 90));
     }
 }
