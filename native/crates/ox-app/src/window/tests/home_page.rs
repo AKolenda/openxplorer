@@ -441,3 +441,58 @@ fn the_address_bars_home_opens_the_home_page() {
         "the chevron's Home"
     );
 }
+
+/// Home's spacing, measured on Windows 11's Home (1920x1080, 1x, normal
+/// view): Recent rows 36 pixels apart; 51 pixels from the pills' middle
+/// to the column headers' and 50 from there to the first row's; Name,
+/// Date accessed and File location 484 and 298 pixels apart from the
+/// left, not stretched to the edge; Quick access tiles 60 pixels high,
+/// about 37 pixels from the heading's middle to the first tile's name and
+/// 45 from the last tiles to the pills; the chevrons about 30 pixels in
+/// from the pane's edge.
+///
+/// parity: HOME-013, HOME-015
+#[gtk::test]
+fn home_is_spaced_as_windows_11_home() {
+    use super::geometry::bounds;
+
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Fictional plan\n").expect("fixture file");
+    fs::write(fixture.path("Documents/list.txt"), b"Fictional list\n").expect("fixture file");
+    add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
+    add_to_desktop_history(&fixture.uri_of("Documents/list.txt"), "text/plain");
+    let test = home_window(&fixture);
+    test.window.set_default_size(1600, 1000);
+    test.activate("pin-location", Some(&fixture.uri_of("Documents")));
+    wait_until("the tiles and two recent files", || {
+        !home_page::tile_names(body(&test)).is_empty() && home_page::list_names(body(&test)).len() == 2
+    });
+    crate::test_support::harness::wait_for_frames(&test.window, 4);
+    let metrics = home_page::metrics(body(&test));
+    let page = bounds(&test, body(&test));
+    let near = |what: &str, got: i32, want: i32, slack: i32| {
+        assert!((got - want).abs() <= slack, "{what}: {got}, want {want}±{slack}");
+    };
+
+    near("row pitch", bounds(&test, &metrics.rows[1]).y - bounds(&test, &metrics.rows[0]).y, 36, 0);
+    let middle = |widget: &gtk::Widget| {
+        let place = bounds(&test, widget);
+        place.y + place.height / 2
+    };
+    near("pills to headers", middle(&metrics.header) - middle(&metrics.pills), 51, 3);
+    near("headers to the first row", middle(&metrics.rows[0]) - middle(&metrics.header), 50, 3);
+    let (name, date, location) = (
+        bounds(&test, &metrics.columns[0]).x,
+        bounds(&test, &metrics.columns[1]).x,
+        bounds(&test, &metrics.columns[2]).x,
+    );
+    near("Name to Date accessed", date - name, 484, 2);
+    near("Date accessed to File location", location - date, 298, 2);
+    near("Name from the pane's edge", name - page.x, 90, 4);
+    near("tile height", bounds(&test, &metrics.tiles[0]).height, 60, 0);
+    near("heading to the first tile's name", middle(&metrics.first_tile_name) - middle(&metrics.heading), 37, 4);
+    let last_tile = metrics.tiles.last().expect("a tile");
+    near("tiles to the pills", bounds(&test, &metrics.pills).y - bounds(&test, last_tile).bottom(), 45, 4);
+    near("chevron from the pane's edge", bounds(&test, &metrics.chevron).x - page.x, 30, 4);
+}
