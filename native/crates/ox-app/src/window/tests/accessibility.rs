@@ -20,7 +20,7 @@ use crate::folder_view::column_widths;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::resizer_control::ResizerControl;
 use crate::test_support::harness::{
-    application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow,
+    application, descendants, skin, wait_for, wait_for_frames, wait_until, Fixture, TestWindow,
 };
 use crate::text_size::TextSize;
 use crate::theme::desktop_text::{DesktopText, DesktopTextWatch};
@@ -547,4 +547,95 @@ fn menus_open_their_items_from_the_keyboard() {
     let rows = descendants::<gtk::ListBoxRow>(&menu);
     assert!(!rows.is_empty());
     assert!(rows.iter().all(gtk::ListBoxRow::is_activatable));
+}
+
+/// Alt pressed and released alone moves the keyboard to the command bar's
+/// first button with its focus ring showing, as Windows' "Alt moves
+/// focus to the app bar" (Microsoft's "Use a screen reader to explore and
+/// navigate File Explorer"); Escape gives it back to the item it left.
+/// Alt with another key is that shortcut alone: Alt+D still edits the
+/// address and leaves the command bar alone. Real keys, on the private
+/// display.
+///
+/// parity: ACC-015
+#[gtk::test]
+fn alt_alone_moves_the_keyboard_to_the_command_bar_and_escape_brings_it_back() {
+    use crate::test_support::pointer::{screen_point, Pointer};
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.present();
+    test.window.folder_pane().focus_view();
+    let item = test.window.folder_pane().focused_position();
+    let mut pointer = Pointer::connect();
+    // Without a window manager the keyboard follows the pointer.
+    let (x, y) = screen_point(&mut pointer, &test.window, (300.0, 300.0), (300, 300));
+    pointer.move_to(x, y);
+    wait_until("the window to have the keyboard", || test.window.is_active());
+
+    pointer.tap_key(gdk::Key::Alt_L);
+    wait_until("the command bar to take the keyboard", || {
+        test.window.focused_region() == Some(Region::Commands)
+    });
+    let focused = gtk::prelude::GtkWindowExt::focus(&test.window).expect("a focused control");
+    let first = descendants::<gtk::Widget>(test.window.command_bar())
+        .into_iter()
+        .find(|widget| widget.is_focusable() && widget.is_mapped() && widget.is_sensitive())
+        .expect("the command bar has a control");
+    assert!(
+        focused == first || focused.is_ancestor(&first),
+        "the first control, {first:?}, has the keyboard, not {focused:?}"
+    );
+    assert!(
+        gtk::prelude::GtkWindowExt::gets_focus_visible(&test.window),
+        "the focus ring shows"
+    );
+
+    pointer.tap_key(gdk::Key::Escape);
+    wait_until("the file list to take the keyboard back", || {
+        test.window.focused_region() == Some(Region::Files)
+    });
+    assert_eq!(
+        test.window.folder_pane().focused_position(),
+        item,
+        "the same item"
+    );
+
+    pointer.hold_key(gdk::Key::Alt_L);
+    pointer.tap_key(gdk::Key::d);
+    pointer.let_go_key(gdk::Key::Alt_L);
+    wait_until("Alt+D to edit the address", || {
+        test.window.focused_region() == Some(Region::Address)
+    });
+    wait_for(std::time::Duration::from_millis(200));
+    assert_eq!(
+        test.window.focused_region(),
+        Some(Region::Address),
+        "Alt with another key does not move the keyboard to the command bar"
+    );
+
+    // Once the keyboard has left the command bar Alt moved it to, Escape
+    // there no longer jumps back to the address bar Alt took it from.
+    pointer.tap_key(gdk::Key::Alt_L);
+    wait_until("Alt to move the keyboard to the command bar again", || {
+        test.window.focused_region() == Some(Region::Commands)
+    });
+    pointer.tap_key(gdk::Key::F6);
+    wait_until("F6 to leave the command bar", || {
+        test.window.focused_region() != Some(Region::Commands)
+    });
+    pointer.hold_key(gdk::Key::Shift_L);
+    pointer.tap_key(gdk::Key::F6);
+    pointer.let_go_key(gdk::Key::Shift_L);
+    wait_until("Shift+F6 to come back to the command bar", || {
+        test.window.focused_region() == Some(Region::Commands)
+    });
+    pointer.tap_key(gdk::Key::Escape);
+    wait_for(std::time::Duration::from_millis(200));
+    assert_ne!(
+        test.window.focused_region(),
+        Some(Region::Address),
+        "Escape gives the keyboard back only straight after Alt"
+    );
+    // Back to the screen's middle, as the other real-pointer tests end.
+    pointer.move_to(720, 500);
 }

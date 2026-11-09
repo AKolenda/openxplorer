@@ -70,6 +70,24 @@ pub(super) fn step_title(locations: &LocationContext, uri: &str, is_search: bool
     }
 }
 
+/// The title of `tab`'s tab and of the window while it is in front: its
+/// step's title, which in Windows 11's search layout (SRCH-046) names the
+/// query first, "notes - Search Results in Documents", as Windows 11 File
+/// Explorer titles its tab; `names_query` is false while the search filter
+/// bar shows, which keeps "Search Results in Documents".
+pub(super) fn tab_title(locations: &LocationContext, tab: &Tab, names_query: bool) -> String {
+    let uri = tab.uri();
+    let search = tab.history.current_search();
+    let title = step_title(locations, uri, search.is_some());
+    match search {
+        Some(step) if names_query && !step.query.trim().is_empty() => ox_core::i18n::format_message(
+            "{query} - {results}",
+            &[("query", step.query.trim()), ("results", &title)],
+        ),
+        _ => title,
+    }
+}
+
 /// The address-bar icon of a history step at `uri`: the magnifier for a
 /// search, as Windows 11 File Explorer shows it, else [`address_icon`].
 pub(super) fn step_icon(uri: &str, home_uri: &str, is_search: bool) -> Icon {
@@ -152,6 +170,7 @@ fn tab_view(
     session: &Session,
     locations: &LocationContext,
     network: &[NetworkLocation],
+    names_query: bool,
 ) -> TabView {
     let uri = tab.uri();
     let is_search = tab.history.current_search().is_some();
@@ -162,7 +181,7 @@ fn tab_view(
     TabView {
         id: tab.id,
         uri: uri.to_owned(),
-        title: step_title(locations, uri, is_search),
+        title: tab_title(locations, tab, names_query),
         tooltip,
         icon: if is_search {
             Art::Glyph(Icon::Search)
@@ -269,8 +288,11 @@ impl BrowserWindow {
     /// does: in This PC and Network the network drive commands; in a
     /// folder Undo and Redo while each can run, named for the step, and
     /// Unpin from Quick access while the folder is pinned, else Pin to
-    /// Quick access. It follows the location, every change to Quick access
-    /// or the network shares, and the undo journal.
+    /// Quick access; on search results in Windows 11's search layout
+    /// always Pin to Quick access, which saves the search (SRCH-046), as
+    /// Windows 11's "…" pins a search to Quick access. It follows the
+    /// location, the search, every change to Quick access or the network
+    /// shares, and the undo journal.
     pub(super) fn update_more_menu(&self) {
         let Some(uri) = self.current_uri() else {
             return;
@@ -296,7 +318,10 @@ impl BrowserWindow {
             .quick_access
             .iter()
             .find(|pin| page.is_none() && location::same_location(&pin.uri, &uri));
-        let pin = pinned.map_or(FolderPin::Unpinned, |pin| FolderPin::Pinned(pin.uri.clone()));
+        let pin = match pinned {
+            Some(pin) if !self.pins_search() => FolderPin::Pinned(pin.uri.clone()),
+            _ => FolderPin::Unpinned,
+        };
         let context = self.context();
         let state = MoreMenuState {
             place,
@@ -323,9 +348,14 @@ impl BrowserWindow {
         };
         let full_path = self.context().settings_data().preferences.full_path_in_title;
         let is_search = self.shows_search_step();
+        let names_query = !self.shows_search_filter_bar();
         let locations = self.imp().locations.borrow();
         let place = if is_search {
-            step_title(&locations, &uri, true)
+            let session = self.imp().session.borrow();
+            match session.active() {
+                Some(tab) => tab_title(&locations, tab, names_query),
+                None => step_title(&locations, &uri, true),
+            }
         } else if full_path && Page::from_uri(&uri).is_none() {
             locations.display_location(&uri)
         } else {
@@ -381,13 +411,14 @@ impl BrowserWindow {
     /// Redraws the tab strip.
     pub(super) fn render_tabs(&self) {
         let network = self.network_locations();
+        let names_query = !self.shows_search_filter_bar();
         let mut views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
             let tab_views = session
                 .tabs()
                 .iter()
-                .map(|tab| tab_view(tab, &session, &locations, &network));
+                .map(|tab| tab_view(tab, &session, &locations, &network, names_query));
             tab_views.collect()
         };
         self.mark_snapshot_tabs(&mut views);
@@ -564,7 +595,7 @@ mod tests {
             let mut session = Session::default();
             let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
             let tab = session.tab(id).expect("the tab was added");
-            let view = tab_view(tab, &session, &locations, &[]);
+            let view = tab_view(tab, &session, &locations, &[], true);
             assert_eq!(view.title, case.title, "{}", case.uri);
             assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
             assert!(view.active);

@@ -75,6 +75,12 @@ impl DetailsView {
             }
         ));
         header.add_controller(double_click);
+        // The list's font is known once it is shown, and Size follows it.
+        self.column_view().connect_map(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |_| view.fit_size_to_its_font()
+        ));
         let titles = self.titles(&header);
         for ((column, view_column), (_, title)) in self.view_columns().zip(titles) {
             // The title holds its column, so the column holds it weakly.
@@ -82,6 +88,7 @@ impl DetailsView {
                 title.update_property(&[gtk::accessible::Property::ValueNow(start)]);
             }
             let title = title.downgrade();
+            let view = self.downgrade();
             view_column.connect_fixed_width_notify(move |view_column| {
                 let width = view_column.fixed_width();
                 let saved = column_widths::saved_width(column, width);
@@ -95,7 +102,15 @@ impl DetailsView {
                     // A column with a width of its own stops filling the
                     // space: after a resize, every width is exact.
                     view_column.set_expand(false);
-                    let clamped = column_widths::clamped_fixed_width(column, width);
+                    let mut clamped = column_widths::clamped_fixed_width(column, width);
+                    // Size never gets narrower than its text in the list's
+                    // font, whatever drags or keys ask.
+                    if column == SortColumn::Size {
+                        if let Some(view) = view.upgrade() {
+                            let narrowest = column_widths::fixed_width(column, Some(view.size_minimum()));
+                            clamped = clamped.max(narrowest);
+                        }
+                    }
                     if clamped != width {
                         view_column.set_fixed_width(clamped);
                     }
@@ -364,11 +379,11 @@ mod tests {
         for _ in 0..20 {
             view.title_key(SortColumn::Size, gdk::Key::Left);
         }
-        let narrowest = column_widths::clamped_fixed_width(SortColumn::Size, 0);
+        let narrowest = column_widths::fixed_width(SortColumn::Size, Some(view.size_minimum()));
         assert_eq!(
             size.fixed_width(),
             narrowest,
-            "Size stops at its 70-pixel minimum"
+            "Size stops where its text still fits"
         );
     }
 
@@ -451,7 +466,11 @@ mod tests {
             let text = column_widths::fixed_width(column, Some(column_widths::fitted_width(column, widest)));
             let title = view.title_width(column);
             assert!(title > 0, "{column:?} has a title");
-            let expected = text.max(column_widths::clamped_fixed_width(column, title));
+            let mut expected = text.max(column_widths::clamped_fixed_width(column, title));
+            if column == SortColumn::Size {
+                // Never narrower than its text in the list's font.
+                expected = expected.max(column_widths::fixed_width(column, Some(view.size_minimum())));
+            }
             assert_eq!(view_column.fixed_width(), expected, "{column:?}");
             assert!(!view_column.expands(), "{column:?}");
         }
@@ -517,6 +536,66 @@ mod tests {
             "{text} pixels of text in a {}-pixel column",
             column.fixed_width()
         );
+    }
+
+    /// The pixels "9,999,999 KB", a Size of 9.5 GB, takes in the list's
+    /// own font, which a larger desktop font or text size widens.
+    fn size_text_width(view: &DetailsView) -> i32 {
+        let text = ox_core::format::column_size_text(Some(9_999_999 * 1024));
+        view.column_view().create_pango_layout(Some(&text)).pixel_size().0
+    }
+
+    /// The room a Size cell's text has in a Size column `fixed` pixels
+    /// wide: its padding (folder-views.css) is 12 pixels at the start and
+    /// 26 at the end, the list's own 14 among them.
+    fn size_text_room(fixed: i32) -> i32 {
+        fixed - 12 - 26
+    }
+
+    /// Size's default and narrowest width follow the list's font: with a
+    /// font as large as the desktop's at 125% text size, "9,999,999 KB"
+    /// still fits a Size column nobody resized, one restored from a saved
+    /// width narrower than that, and one dragged as narrow as it goes; a
+    /// wider width the user chose is kept.
+    ///
+    /// parity: VIEW-028
+    #[gtk::test]
+    fn size_fits_nine_digits_of_kilobytes_in_the_lists_own_font() {
+        let (view, _model) = view_of(&["a.txt"]);
+        let large = gtk::CssProvider::new();
+        large.load_from_string("columnview { font-family: \"Noto Sans\", sans-serif; font-size: 18.3px; }");
+        let display = gdk::Display::default().expect("a display");
+        gtk::style_context_add_provider_for_display(&display, &large, gtk::STYLE_PROVIDER_PRIORITY_USER);
+        let window = gtk::Window::new();
+        window.set_child(Some(&view));
+        window.present();
+        wait_until("the list to be shown", || view.column_view().is_mapped());
+        let size = view.column(SortColumn::Size).expect("a Size column");
+        let text = size_text_width(&view);
+        let fits = |what: &str| {
+            assert!(
+                text <= size_text_room(size.fixed_width()),
+                "{what}: {text} pixels of text in a {}-pixel column",
+                size.fixed_width()
+            );
+        };
+
+        view.apply_column_widths(None);
+        fits("the default width");
+        let narrow = ox_core::settings::ColumnWidths {
+            size: Some(90),
+            ..Default::default()
+        };
+        view.apply_column_widths(Some(&narrow));
+        fits("a narrower saved width");
+        size.set_fixed_width(0);
+        fits("a drag past the column's start");
+        let wide = size.fixed_width() + 60;
+        size.set_fixed_width(wide);
+        assert_eq!(size.fixed_width(), wide, "a wider width the user chose is kept");
+
+        gtk::style_context_remove_provider_for_display(&display, &large);
+        window.destroy();
     }
 
     /// Name fills the spare width until it is resized; then its width is

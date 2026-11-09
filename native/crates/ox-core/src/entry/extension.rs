@@ -6,8 +6,10 @@
 //! symbolic link named for one (`photo.jpg`) is typed and renamed by it,
 //! while a link named with none is a shortcut. The desktop's register of
 //! file types here is the shared MIME database, which GIO reads: an
-//! extension is known when GIO names a type for it from the name alone,
-//! without guessing.
+//! extension is known when GIO names a type for it from the name alone.
+//! GIO calls that guess uncertain when more than one type shares the
+//! extension (`.png`, `.html`, `.json`, `.py`), which does not make the
+//! extension unknown: the Open and Save dialog reads it the same way.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -27,8 +29,9 @@ pub fn known_extension(name: &str) -> Option<&str> {
 }
 
 /// Whether `extension`, with its dot, names a file type the desktop
-/// knows: GIO names a type for it from the name alone, sure of it, and
-/// not the type of unknown data. Each extension is asked once per thread.
+/// knows: GIO names a type for it from the name alone that is not the type
+/// of unknown data, sure of it or not. Each extension is asked once per
+/// thread.
 fn is_known_extension(extension: &str) -> bool {
     thread_local! {
         static KNOWN: RefCell<HashMap<String, bool>> = RefCell::default();
@@ -38,8 +41,8 @@ fn is_known_extension(extension: &str) -> bool {
         return known;
     }
     let sample = format!("name{key}");
-    let (content_type, uncertain) = gio::content_type_guess(Some(sample.as_str()), None::<&[u8]>);
-    let known = !uncertain && !gio::content_type_is_unknown(&content_type);
+    let (content_type, _uncertain) = gio::content_type_guess(Some(sample.as_str()), None::<&[u8]>);
+    let known = !gio::content_type_is_unknown(&content_type);
     KNOWN.with(|cache| cache.borrow_mut().insert(key, known));
     known
 }

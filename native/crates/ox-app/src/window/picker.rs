@@ -1988,6 +1988,40 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// In a Save dialog, a name erased whole while renaming an item in
+    /// place keeps the old name, as in the main window and in Windows 11:
+    /// the field closes, nothing is renamed and no message shows.
+    ///
+    /// parity: INT-032, OPS-010
+    #[gtk::test]
+    fn an_erased_name_in_a_save_dialog_keeps_the_old_name() {
+        use crate::window::tests::file_ops_support::{is_renaming_in_place, name_editor, select_names};
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        let test = &portal.test;
+        select_names(test, &["notes.txt"]);
+        test.activate("rename", None);
+        let editor = name_editor(test);
+        editor.set_text("");
+        editor.emit_activate();
+
+        wait_until("the rename to end", || !is_renaming_in_place(test));
+        assert!(fixture.path("notes.txt").is_file());
+        assert_eq!(test.window.shown_message(), "", "no message");
+        assert!(test.window.is_visible(), "the dialog stays open");
+    }
+
     /// A caller's folder on a share that stopped answering does not
     /// freeze the app: the dialog opens in the next folder Windows would
     /// use (here the home folder, as the test home has no Documents or

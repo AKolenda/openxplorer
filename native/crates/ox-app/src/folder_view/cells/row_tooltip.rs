@@ -64,7 +64,7 @@ fn infotip(item: &FileItem) -> Option<String> {
             lines.push(format_message("Type: {type}", &[("type", &entry.type_label)]));
         }
         if let Some(size) = item.file_size() {
-            let size = format::size_text(Some(size));
+            let size = format::short_size(size);
             lines.push(format_message("Size: {size}", &[("size", &size)]));
         }
         if entry.modified.is_some() {
@@ -157,6 +157,28 @@ mod tests {
     use super::*;
     use crate::test_support::{file_entry, folder_entry};
 
+    /// The infotip writes a size as the status bar and the details pane
+    /// do, "4.38 KB" for 4,486 bytes, and one byte in the singular.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn the_infotip_size_reads_as_the_status_bar_writes_it() {
+        let size_line = |bytes| {
+            let mut entry = file_entry("Notes 2.txt");
+            entry.size = Some(bytes);
+            let tooltip = RowTooltip::default()
+                .text(&FileItem::new(entry))
+                .unwrap_or_default();
+            tooltip
+                .lines()
+                .find(|line| line.starts_with("Size:"))
+                .map(str::to_owned)
+        };
+        assert_eq!(size_line(4_486).as_deref(), Some("Size: 4.38 KB"));
+        assert_eq!(size_line(1).as_deref(), Some("Size: 1 byte"));
+        assert_eq!(size_line(912).as_deref(), Some("Size: 912 bytes"));
+    }
+
     /// An item's tooltip is Explorer's infotip, with only what is known,
     /// or its full path while searching.
     ///
@@ -172,7 +194,7 @@ mod tests {
             RowTooltip::default().text(&item),
             Some(format!(
                 "Type: Text document\nSize: {}\nDate modified: {}",
-                format::size_text(Some(2_048)),
+                format::short_size(2_048),
                 format::date_short_time_text(Some(1_789_378_200))
             ))
         );

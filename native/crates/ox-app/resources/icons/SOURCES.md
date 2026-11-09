@@ -14,7 +14,8 @@ icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
 `panel_right_gallery_20_regular` (Preview pane) and `circle_small_20_filled`
 (the dot that marks a chosen view, sort or open pane). Added on 2026-11-06,
 also awaiting the owner's review: `apps_list_detail_20_regular` (Tiles) and
-`content_view_20_regular` (Content). Undo, Redo and Pin
+`content_view_20_regular` (Content). Added on 2026-11-08, also awaiting the
+owner's review: `search_settings_20_regular` (Search options while searching). Undo, Redo and Pin
 are drawn in Windows' blue (#0078d4, or #60cdff in the dark theme) by the menu's CSS, and Redo shows
 `arrow_undo_20_regular` mirrored by it (`-gtk-icon-transform`), as Windows
 11 draws them; the files are not changed. Microsoft publishes no colour
@@ -127,6 +128,7 @@ it.
 | `actions/ox-rectangle-landscape-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/rectangle_landscape_20_regular.svg` | 0ff1b572b52110eebe5f13c6ee3fa7b0ad8b0edbba55f4bde353f221ac304f87 |
 | `actions/ox-rename-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/rename_20_regular.svg` | e4cd064a10bd0345430f78eccb012c966502bc6285ff70c9ee23962d52836f47 |
 | `actions/ox-search-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/search_20_regular.svg` | bdcaed7e5348ba774acf854b840ef8bcf30c024bf5d3bf50b1e08d3aac8aab17 |
+| `actions/ox-search-settings-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/search_settings_20_regular.svg` | a9781033dd55931b19d57b06c0aab1f27fa3c7372e0d7809fc52b789c7765fb6 |
 | `actions/ox-select-all-24-symbolic.svg` | OpenXplorer, original | `native/icon-sources/select-all.svg` | db931e919e6ce6933dbed59895ad40b935869f17af47ce68d1270a98f7dbaad4 |
 | `actions/ox-select-all-off-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_all_off_20_regular.svg` | bb1a786c70234a30f5f26f92c3d885a7a91159d9b31c1a0c4fa6a9505b2b910f |
 | `actions/ox-select-all-on-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_all_on_20_regular.svg` | 199464932860850ba995faf317487f035e08707fd062dc682607deb69ec261f9 |

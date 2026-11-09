@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::search::{display_path, NamePattern, SearchResults};
+use ox_core::search::{display_path, FacetMatcher, NamePattern, SearchResults};
 
 use super::report::RESULT_LIMIT;
 use crate::folder_view::filter::Visibility;
@@ -62,11 +62,17 @@ pub(crate) fn merge_results(listing: Option<Listing<'_>>, text: &str, found: Sea
 }
 
 /// The listed items whose names match `text` as the folder filter
-/// matches them (SRCH-003, SRCH-004): what a live search of the folder
-/// shows before its walk adds the subfolders' matches, at most
-/// [`RESULT_LIMIT`] with a flag when more matched.
-pub(crate) fn listed_name_matches(listing: Listing<'_>, text: &str) -> MergedResults {
-    matching_items(listing, text, "")
+/// matches them (SRCH-003, SRCH-004) and that pass `filter`, such as the
+/// options typed into the box (SRCH-044): what a live search of the
+/// folder shows before its walk adds the subfolders' matches, at most
+/// [`RESULT_LIMIT`] with a flag when more matched. The limit counts only
+/// items the search shows.
+pub(crate) fn listed_matches_passing(
+    listing: Listing<'_>,
+    text: &str,
+    filter: &FacetMatcher,
+) -> MergedResults {
+    matching_items(listing, text, "", filter)
 }
 
 /// The listed items whose name and folder hold every word of `text`,
@@ -74,17 +80,17 @@ pub(crate) fn listed_name_matches(listing: Listing<'_>, text: &str) -> MergedRes
 /// whole name (SRCH-004).
 fn listing_matches(listing: Listing<'_>, text: &str) -> MergedResults {
     let folder = display_path(listing.folder).to_lowercase();
-    matching_items(listing, text, &folder)
+    matching_items(listing, text, &folder, &FacetMatcher::default())
 }
 
 /// Stops after the first excess match, retaining at most the displayed
 /// rows even when the folder already lists many thousands of matches.
-fn matching_items(listing: Listing<'_>, text: &str, folder: &str) -> MergedResults {
+fn matching_items(listing: Listing<'_>, text: &str, folder: &str, filter: &FacetMatcher) -> MergedResults {
     let pattern = NamePattern::new(text);
     let items = listing.items.iter::<FileItem>().filter_map(Result::ok);
     let mut matching = items.filter(|item| {
         let is_listed = listing.shows_hidden || item.visibility() == Visibility::Visible;
-        is_listed && pattern.matches_lowercase(item.lowercase_name(), folder)
+        is_listed && pattern.matches_lowercase(item.lowercase_name(), folder) && filter.matches(item.entry())
     });
     let items = matching.by_ref().take(RESULT_LIMIT).collect();
     let is_truncated = matching.next().is_some();
@@ -214,7 +220,7 @@ mod tests {
                 shows_hidden: false,
             };
 
-            let live = listed_name_matches(listing, "file");
+            let live = listed_matches_passing(listing, "file", &FacetMatcher::default());
             let cached = merge_results(Some(listing), "work file", found(Vec::new(), false));
 
             for matches in [live, cached] {

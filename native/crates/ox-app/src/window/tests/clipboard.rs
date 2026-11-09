@@ -591,3 +591,32 @@ fn the_panels_cancel_stops_a_copy_without_a_report() {
     );
     assert!(!fixture.path("Documents/Beta.txt").exists(), "the copy stopped");
 }
+
+/// A file another program named with bytes that are not UTF-8 is copied
+/// and pasted under its exact name, with no message.
+///
+/// parity: CLIP-001, OPS-035
+#[gtk::test]
+fn a_name_that_is_not_utf8_is_copied_and_pasted() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let fixture = Fixture::standard();
+    let name = OsStr::from_bytes(b"Caf\xe9 menu.txt");
+    fs::write(fixture.root().join(name), b"menu").expect("a Latin-1 name");
+    let test = TestWindow::open(&fixture.uri());
+    let shown = test
+        .names()
+        .into_iter()
+        .find(|shown| shown.starts_with("Caf"))
+        .expect("the file is listed");
+    select_names(&test, &[shown.as_str()]);
+
+    test.activate("copy", None);
+    show_documents(&test, &fixture);
+    test.activate("paste", None);
+
+    wait_until("the copy", || {
+        fixture.root().join("Documents").join(name).is_file()
+    });
+    super::file_ops_support::assert_ended_without_a_message(&test);
+}

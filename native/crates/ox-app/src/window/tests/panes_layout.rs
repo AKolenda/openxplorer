@@ -7,6 +7,8 @@ use ox_core::settings::{PreferencesUpdate, Settings};
 
 use super::geometry::{bounds, laid_out, laid_out_with_details_pane, Bounds};
 use super::icons::{pixel_rows, Pixel};
+use crate::folder_view::column_widths;
+use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{
     descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -44,9 +46,11 @@ fn columns_run_from_14_pixels_in_with_the_web_widths() {
         .map(|title| bounds(&test, title))
         .collect();
     let widths: Vec<i32> = titles.iter().map(|title| title.width).collect();
+    // Size is as wide as its text needs in the list's font.
+    let size = i32::try_from(test.window.folder_pane().details().size_minimum()).expect("a width");
     assert_eq!(
         &widths[1..],
-        [176, 135, 90 + 14],
+        [176, 135, size + 14],
         "Date, Type, and Size with the end padding"
     );
     assert_eq!(titles[0].x, list.x, "Name holds the 14 pixels before the columns");
@@ -413,4 +417,27 @@ fn a_selected_tile_keeps_the_text_colour() {
         other.color().to_str(),
         "not GTK's white selected text on the pale selection"
     );
+}
+
+/// A larger text size widens Size so a 9.5 GB size still shows whole,
+/// at 1x and at 2x alike, since the list measures in its own pixels.
+///
+/// parity: VIEW-028
+#[gtk::test]
+fn a_larger_text_size_widens_size_to_its_text() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let details = test.window.folder_pane().details();
+    let size = details.column(SortColumn::Size).expect("a Size column");
+    let before = details.size_minimum();
+    for _ in 0..3 {
+        test.activate("text-larger", None);
+    }
+    crate::test_support::harness::wait_until("Size to follow the larger text", || {
+        details.size_minimum() > before
+            && size.fixed_width()
+                >= column_widths::fixed_width(SortColumn::Size, Some(details.size_minimum()))
+    });
+    // The text size belongs to the whole app: the next test starts at 100%.
+    test.activate("text-reset", None);
 }

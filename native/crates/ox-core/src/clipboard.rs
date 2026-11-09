@@ -209,7 +209,16 @@ impl ClipboardFiles {
             // share or device root, or an encoded line break into the GNOME
             // or URI-list formats (`validate_clipboard` in
             // v2.0.0:desktop/file_clipboard.py, `require_item_uri` in v2.0.0:desktop/core.py).
+            // `require_item_uri` lets an item already listed keep a line
+            // break in its name; the clipboard still refuses an escaped
+            // control character, as typed addresses do.
             let uri = require_item_uri(uri)?;
+            if crate::location::has_control_character(&crate::location::unquote_lossy(&uri)) {
+                return Err(LocationError::new(crate::i18n::gettext(
+                    "Encoded control characters are not allowed.",
+                ))
+                .into());
+            }
             if seen.insert(uri.clone()) {
                 canonical.push(uri);
             }
@@ -310,7 +319,7 @@ impl ClipboardFiles {
     /// a payload whose lines are not items, which a terminal would paste as
     /// more than was copied. A control character is one, and so is U+2028 or
     /// U+2029 ([`breaks_a_line`]), which an editor honours as a line break.
-    /// No URI can bring a control character, since [`require_item_uri`]
+    /// No URI can bring a control character, since [`Self::new`] refuses
     /// refuses an encoded one; a device's label could, and the app cleans a
     /// label as it reads it. This is the guard behind the public `devices`
     /// field that keeps such a name from ever becoming a second line.
