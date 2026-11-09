@@ -155,7 +155,7 @@ fn refusal_over(window: &PropertiesWindow) -> Dialog {
             .find(|dialog| {
                 dialog.is_visible()
                     && dialog.transient_for().as_ref() == Some(window.upcast_ref())
-                    && dialog.title_text() != "Change the extension?"
+                    && !super::file_ops_support::is_extension_question(&dialog)
             })
     };
     wait_until("a message over Properties", || find().is_some());
@@ -648,7 +648,7 @@ fn closing_during_ok_waits_for_the_change() {
     let question = message_over(&window);
     window.close();
     assert!(!window.is_closed(), "the window waits for the change");
-    question.press("Cancel");
+    question.press("No");
     refusal_over(&window).press("OK");
     assert!(!window.is_closed(), "a refused change keeps the window");
 
@@ -657,7 +657,7 @@ fn closing_during_ok_waits_for_the_change() {
     wait_until("the question again", || extension_questions(&window) == 1);
     let question = message_over(&window);
     window.close();
-    question.press("Change extension");
+    question.press("Yes");
     wait_until("the rename", || fixture.path("Notes 2.md").exists());
     wait_until("the window to close", || window.is_closed());
     assert!(
@@ -1063,12 +1063,9 @@ fn the_name_in_properties_asks_before_changing_the_extension() {
     name.set_text("Notes 2.md");
     press(&window, "Apply");
     let question = message_over(&window);
-    assert_eq!(
-        question.title_text(),
-        "Change the extension?",
-        "the question is over Properties"
-    );
-    question.press("Cancel");
+    assert_eq!(question.title_text(), "Rename", "the question is over Properties");
+    super::file_ops_support::assert_windows_extension_question(&question);
+    question.press("No");
     let refusal = refusal_over(&window);
     assert_eq!(refusal.message_text(), "The name was not changed.");
     refusal.press("OK");
@@ -1076,7 +1073,7 @@ fn the_name_in_properties_asks_before_changing_the_extension() {
 
     press(&window, "Apply");
     wait_until("the question again", || extension_questions(&window) == 1);
-    message_over(&window).press("Change extension");
+    message_over(&window).press("Yes");
 
     wait_until("the rename", || fixture.path("Notes 2.md").exists());
     assert!(!window.is_closed(), "Apply keeps the window open");
@@ -1090,7 +1087,7 @@ fn extension_questions(window: &PropertiesWindow) -> usize {
         .filter(|dialog| {
             dialog.is_visible()
                 && dialog.transient_for().as_ref() == Some(window.upcast_ref())
-                && dialog.title_text() == "Change the extension?"
+                && super::file_ops_support::is_extension_question(&dialog)
         })
         .count()
 }
@@ -2581,7 +2578,7 @@ fn ok_during_apply_closes_once_the_change_is_made() {
     wait_until("the question", || extension_questions(&window) == 1);
     window.ok_button().emit_clicked();
     assert!(!window.is_closed(), "the change is still being made");
-    message_over(&window).press("Change extension");
+    message_over(&window).press("Yes");
 
     wait_until("the rename", || fixture.path("Notes 2.md").exists());
     wait_until("the window to close", || window.is_closed());

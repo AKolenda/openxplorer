@@ -1792,9 +1792,25 @@ mod tests {
     }
 
     impl Portal {
+        /// A portal whose dialogs show names with their extensions, as
+        /// most of these tests type and read whole names.
         fn new() -> Self {
+            Self::showing_extensions(true)
+        }
+
+        /// A portal whose dialogs hide the extensions of known file
+        /// types, as Windows and the app do by default (VIEW-069).
+        fn hiding_extensions() -> Self {
+            Self::showing_extensions(false)
+        }
+
+        /// A portal whose dialogs show extensions when `shown`.
+        fn showing_extensions(shown: bool) -> Self {
             let bus = PrivateBus::start();
             let test = TestWindow::without_tabs();
+            if shown {
+                test.activate("file-name-extensions", None);
+            }
             let connection = bus.connect();
             let backend_name = connection.unique_name().expect("a bus name").to_string();
             let window = test.window.downgrade();
@@ -2483,7 +2499,7 @@ mod tests {
 
         test.window.activate_item(test.position_of(&shown));
         let question = replace_question(test);
-        press_in(&question, "Replace");
+        press_in(&question, "Yes");
 
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
@@ -2513,13 +2529,13 @@ mod tests {
         let question = replace_question(&portal.test);
         assert_eq!(
             question.message().as_str(),
-            "“two.txt” already exists. Do you want to replace it?"
+            "two.txt already exists.\nDo you want to replace it?"
         );
         assert!(
             answer.borrow().is_none(),
             "nothing is answered before the user says so"
         );
-        press_in(&question, "Cancel");
+        press_in(&question, "No");
         window.cancel_picking();
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
@@ -2584,7 +2600,7 @@ mod tests {
             fs::read_to_string(&target).expect("the other program's file"),
             "written by another program"
         );
-        press_in(&question, "Cancel");
+        press_in(&question, "No");
         window.cancel_picking();
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
@@ -3228,6 +3244,249 @@ mod tests {
         window.cancel_picking();
         let (response, _) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_CANCELLED);
+    }
+
+    /// The Save dialog's File name box shows a name as the window shows
+    /// names, as in Windows 11: with extensions hidden (the default),
+    /// "extra_2.txt" reads "extra_2", for the caller's name, a file
+    /// selected and a file double-clicked; Save still writes the name with
+    /// its extension, also after another type is chosen.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_hidden_file_name_leaves_out_the_extension() {
+        let fixture = Fixture::empty();
+        fixture.write("extra_2.txt");
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(name.text(), "report", "the new file's name without .txt");
+        assert_eq!(name.selection_bounds(), Some((0, 6)), "all of it selected");
+        capture(window, "picker-save-extensions-hidden.png");
+
+        window
+            .folder_model()
+            .selection()
+            .select_item(test.position_of("extra_2.txt"), true);
+        settle();
+        assert_eq!(name.text(), "extra_2", "a file selected, without .txt");
+
+        types.set_selected(1);
+        assert_eq!(name.text(), "extra_2", "another type keeps hiding it");
+        types.set_selected(0);
+        assert_eq!(name.text(), "extra_2");
+
+        name.set_text("summary");
+        enter(&name);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("summary.txt")], "Save adds the extension");
+    }
+
+    /// With extensions hidden, a file selected keeps its own extension
+    /// when saved, and choosing another type gives it that type's.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_hidden_a_selected_file_is_saved_with_the_types_extension() {
+        let fixture = Fixture::empty();
+        fixture.write("extra_2.txt");
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(name.text(), "report");
+
+        types.set_selected(1);
+        assert_eq!(name.text(), "report", "the extension stays hidden");
+        enter(&name);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("report.md")], "the new type's extension");
+    }
+
+    /// With extensions shown, File name holds the whole name, as Windows
+    /// shows it then ("extra_2.txt").
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_shown_file_name_holds_the_whole_name() {
+        let fixture = Fixture::empty();
+        fixture.write("extra_2.txt");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        assert_eq!(name.text(), "report.txt");
+        capture(window, "picker-save-extensions-shown.png");
+        window
+            .folder_model()
+            .selection()
+            .select_item(test.position_of("extra_2.txt"), true);
+        settle();
+        assert_eq!(name.text(), "extra_2.txt");
+        picker.types.clone().expect("a type list").set_selected(1);
+        assert_eq!(name.text(), "extra_2.md");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// Two types, "Text" (*.txt) and "Markdown" (*.md).
+    fn two_text_types() -> glib::Variant {
+        let types: Vec<glib::Variant> = [("Text", "*.txt"), ("Markdown", "*.md")]
+            .iter()
+            .map(|(name, glob)| ((*name).to_owned(), vec![(0_u32, (*glob).to_owned())]).to_variant())
+            .collect();
+        glib::Variant::array_from_iter_with_type(types[0].type_(), types.clone())
+    }
+
+    /// Saving over a file asks as Windows 11 does: a compact message box
+    /// titled "Confirm Save As" with the warning icon, "extra_2.txt
+    /// already exists." and "Do you want to replace it?" on the next line,
+    /// and Yes and No, with No focused so Enter replaces nothing. No goes
+    /// back to the dialog with the name kept; Yes replaces the file.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn saving_over_a_file_asks_in_windows_confirm_save_as_box() {
+        let fixture = Fixture::empty();
+        fs::write(fixture.path("extra_2.txt"), "old").expect("a file");
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "extra_2.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        enter(&name);
+
+        let question = replace_question(&portal.test);
+        assert_eq!(question.title().as_str(), "Confirm Save As");
+        assert_eq!(
+            question.message().as_str(),
+            "extra_2.txt already exists.\nDo you want to replace it?"
+        );
+        assert_eq!(question.button_labels(), ["Yes", "No"]);
+        crate::window::tests::file_ops_support::assert_windows_message_box(question.upcast_ref(), "No");
+        let focus = gtk::prelude::GtkWindowExt::focus(window).and_downcast::<gtk::Button>();
+        assert_eq!(
+            focus.and_then(|button| button.label()).as_deref(),
+            Some("No"),
+            "No has the keyboard, so Enter replaces nothing"
+        );
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let (width, height) = (gtk::prelude::WidgetExt::width(&question), question.height());
+        assert!(width < 420, "sized to its words, not 510 pixels: {width}");
+        assert!(height < 200, "no empty room: {height}");
+        capture(window, "confirm-save-as-short.png");
+
+        press_in(&question, "No");
+        wait_until("the question to close", || {
+            window.dialog_layer().shown().is_none()
+        });
+        assert!(answer.borrow().is_none(), "No keeps the dialog open");
+        assert_eq!(name.text(), "extra_2", "with the name kept");
+        assert_eq!(
+            fs::read_to_string(fixture.path("extra_2.txt")).expect("kept"),
+            "old"
+        );
+
+        enter(&name);
+        let question = replace_question(&portal.test);
+        question.close();
+        wait_until("Escape to answer No", || window.dialog_layer().shown().is_none());
+        assert!(answer.borrow().is_none(), "Escape keeps the dialog open");
+
+        enter(&name);
+        let question = replace_question(&portal.test);
+        press_in(&question, "Yes");
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("extra_2.txt")]);
+    }
+
+    /// A long name wraps in Confirm Save As, which stays a compact box
+    /// rather than growing to the dialog's width.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn confirm_save_as_wraps_a_long_name_in_a_compact_box() {
+        let fixture = Fixture::empty();
+        let long = format!(
+            "{} final.txt",
+            "Quarterly planning notes for the garden club".repeat(3)
+        );
+        fs::write(fixture.path(&long), "old").expect("a file");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", long.to_variant())],
+        );
+        let window = &portal.test.window;
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        enter(&name);
+        let question = replace_question(&portal.test);
+        assert_eq!(
+            question.message().as_str(),
+            format!("{long} already exists.\nDo you want to replace it?")
+        );
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let (width, height) = (gtk::prelude::WidgetExt::width(&question), question.height());
+        assert!(
+            width <= 520,
+            "the box wraps the name instead of widening: {width}"
+        );
+        assert!(height < 260, "no empty room under the words: {height}");
+        capture(window, "confirm-save-as-long.png");
+        press_in(&question, "No");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
     /// A folder dialog lists only folders and answers the selected one.
@@ -4627,11 +4886,11 @@ mod tests {
         let question = replace_question(test);
         assert_eq!(
             question.message().as_str(),
-            "“README” already exists. Do you want to replace it?",
+            "README already exists.\nDo you want to replace it?",
             "README itself, not a new README.txt"
         );
         assert_eq!(name.text(), "README");
-        press_in(&question, "Cancel");
+        press_in(&question, "No");
         wait_until("the question to close", || {
             window.dialog_layer().shown().is_none()
         });
@@ -4640,7 +4899,7 @@ mod tests {
         window.submit_address(&fixture.path("Drafts/plan.txt").display().to_string());
         let question = replace_question(test);
         assert_eq!(name.text(), "plan.txt");
-        press_in(&question, "Replace");
+        press_in(&question, "Yes");
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(

@@ -31,6 +31,93 @@ pub(in crate::window) fn ask_before_recycling(test: &TestWindow) {
     });
 }
 
+/// The question Windows Explorer asks before a rename changes a file's
+/// extension.
+pub(in crate::window) const EXTENSION_QUESTION: &str =
+    "If you change a file name extension, the file might become unusable.\nAre you sure you want to change it?";
+
+/// Whether `dialog` is the question asked before a rename changes a
+/// file's extension. Its title, "Rename", is also the Rename dialog's, so
+/// the question is told apart by its words.
+pub(in crate::window) fn is_extension_question(dialog: &Dialog) -> bool {
+    dialog
+        .message_text()
+        .starts_with("If you change a file name extension")
+}
+
+/// Checks that `dialog` is the extension question drawn as Windows 11
+/// draws it: a message box titled "Rename" with the warning icon, the two
+/// lines of its question and Yes, focused and pressed by Enter, then No;
+/// Alt+Y and Alt+N press them, and the box is sized to its words.
+pub(in crate::window) fn assert_windows_extension_question(dialog: &Dialog) {
+    assert_eq!(dialog.title_text(), "Rename");
+    assert_eq!(dialog.message_text(), EXTENSION_QUESTION);
+    assert_eq!(dialog.button_labels(), ["Yes", "No"]);
+    assert_windows_message_box(dialog.upcast_ref(), "Yes");
+    assert_eq!(
+        focused_button(dialog).as_deref(),
+        Some("Yes"),
+        "Yes has the keyboard"
+    );
+    let default = dialog.default_widget().and_downcast::<gtk::Button>();
+    assert_eq!(
+        default.and_then(|button| button.label()).as_deref(),
+        Some("Yes"),
+        "Enter presses Yes"
+    );
+    wait_until("the box to be drawn", || dialog.is_mapped() && dialog.width() > 0);
+    assert!(
+        dialog.width() < 480,
+        "a compact box sized to its words, not a 510-pixel dialog: {}",
+        dialog.width()
+    );
+    assert!(dialog.height() < 240, "no empty room: {}", dialog.height());
+}
+
+/// Checks the parts every Windows message box of the app shares, inside
+/// `widget`: its caption with the title, the warning icon beside the
+/// words, and Alt with the first letter of each button pressing it.
+/// `default` is the label of the button drawn as the one Enter presses.
+pub(in crate::window) fn assert_windows_message_box(widget: &gtk::Widget, default: &str) {
+    let icon = descendants::<gtk::Image>(widget)
+        .into_iter()
+        .find(|image| image.icon_name().as_deref() == Some("ox-warning-32-color") && image.is_visible());
+    assert!(icon.is_some(), "the warning icon shows");
+    let frame = descendants::<crate::dialog::DialogFrame>(widget)
+        .into_iter()
+        .chain(widget.clone().downcast::<crate::dialog::DialogFrame>())
+        .next()
+        .expect("the box is drawn by a dialog frame");
+    assert!(frame.has_css_class("message-box"), "the shared message-box style");
+    let accent: Vec<String> = descendants::<gtk::Button>(widget)
+        .into_iter()
+        .filter(|button| button.has_css_class("accent") && button.is_visible())
+        .filter_map(|button| button.label().map(String::from))
+        .collect();
+    assert_eq!(accent, [default], "the default button is drawn as the default");
+    let triggers: Vec<String> = frame
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .filter_map(|shortcut| shortcut.trigger())
+                .map(|trigger| trigger.to_str().to_string())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    for key in ["<Alt>y", "<Alt>n"] {
+        assert!(
+            triggers.iter().any(|trigger| trigger == key),
+            "{key} presses its button: {triggers:?}"
+        );
+    }
+}
+
 /// The label of the button that has focus in `dialog`, the one Enter
 /// presses.
 pub(in crate::window) fn focused_button(dialog: &Dialog) -> Option<String> {

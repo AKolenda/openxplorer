@@ -324,6 +324,13 @@ fn cancelling_the_hide_question_keeps_the_name_and_the_field() {
     assert!(!fixture.path(".Notes 2.txt").exists());
 }
 
+/// Windows 11 asks in a small message box titled "Rename", with the
+/// warning icon, "If you change a file name extension, the file might
+/// become unusable." and, on the next line, "Are you sure you want to
+/// change it?", and Yes (focused, so Enter renames) and No. No keeps the
+/// old name; whether Windows leaves the name box open after No is not
+/// known, so the field stays open with the typed name, as before.
+///
 /// parity: OPS-049
 #[gtk::test]
 fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
@@ -337,14 +344,9 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     field.set_text("Notes 2.md");
     field.emit_activate();
     let question = open_dialog(&test);
-    assert_eq!(question.title_text(), "Change the extension?");
-    assert_eq!(
-        question.message_text(),
-        "If you change a file name extension, the file might become unusable. Are you sure you \
-         want to change it?"
-    );
-    assert_eq!(question.button_labels(), ["Cancel", "Change extension"]);
-    question.press("Cancel");
+    super::file_ops_support::assert_windows_extension_question(&question);
+    crate::test_support::harness::capture_dialog(&question, "rename-extension-question.png");
+    question.press("No");
     wait_for_no_dialog(&test);
     wait_until("the field to come back", || field.is_sensitive());
     assert!(is_renaming_in_place(&test), "editing goes on");
@@ -352,10 +354,60 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     assert!(fixture.path("Notes 2.txt").is_file());
 
     field.emit_activate();
-    open_dialog(&test).press("Change extension");
+    open_dialog(&test).press("Yes");
 
     wait_until("the rename", || fixture.path("Notes 2.md").is_file());
     assert!(!fixture.path("Notes 2.txt").exists());
+}
+
+/// Escape answers the extension question No, as closing it does: the old
+/// name stays. Enter presses Yes, the focused default button.
+///
+/// parity: OPS-049
+#[gtk::test]
+fn escape_answers_the_extension_question_no_and_enter_yes() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Notes 2.md");
+    field.emit_activate();
+    let question = open_dialog(&test);
+    assert!(super::file_ops_support::is_extension_question(&question));
+    question.close();
+    wait_for_no_dialog(&test);
+    wait_until("the field to come back", || field.is_sensitive());
+    assert!(fixture.path("Notes 2.txt").is_file(), "No: the old name stays");
+    assert!(!fixture.path("Notes 2.md").exists());
+
+    field.emit_activate();
+    let question = open_dialog(&test);
+    let enter = question.default_widget().and_downcast::<gtk::Button>();
+    enter.expect("Enter presses a button").emit_clicked();
+    wait_until("the rename", || fixture.path("Notes 2.md").is_file());
+}
+
+/// With extensions hidden, as by default, the name box holds the name
+/// without its extension, so a new name keeps it and nothing is asked.
+///
+/// parity: OPS-049, VIEW-069
+#[gtk::test]
+fn renaming_with_extensions_hidden_keeps_the_extension_without_asking() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    assert_eq!(field.text(), "Notes 2");
+
+    field.set_text("Plan");
+    field.emit_activate();
+
+    wait_until("the rename", || fixture.path("Plan.txt").is_file());
+    assert!(dialog_over(&test).is_none(), "nothing is asked");
 }
 
 /// A name longer than 255 bytes is refused before the extension question,
