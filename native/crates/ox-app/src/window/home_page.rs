@@ -17,7 +17,7 @@
 //!   new tabs for Recent, Favorites, and Shared", Windows Insider blog,
 //!   build 22635.3930). Shared lists files shared through a Microsoft
 //!   account, so it is left out.
-//! - Recent: the desktop's recently used files, as GVfs lists them at
+//! - Recent: the desktop's recently used files, as `GVfs` lists them at
 //!   `recent:///`, the same source as the navigation pane's Recent files;
 //!   a row opens the real file (`EntryMeta::recent_target`) and offers
 //!   Open file location (Windows Insider blog, Release Preview
@@ -29,7 +29,7 @@
 //!   are expanded or collapsed", Windows Insider blog, 2026-08-17), saved
 //!   as `homeFolded`.
 //!
-//! Nothing here sends anything anywhere: Recent shows only what GVfs
+//! Nothing here sends anything anywhere: Recent shows only what `GVfs`
 //! already lists, and Favorites is a list in the settings file.
 
 use std::rc::Rc;
@@ -578,8 +578,7 @@ fn connect_edge_keys(flow: &gtk::FlowBox, page: &gtk::Box, section: Section) {
                         fold.grab_focus();
                     }
                 }
-                (true, Section::Files) => focus_switcher(&page),
-                (false, Section::QuickAccess) => focus_switcher(&page),
+                (true, Section::Files) | (false, Section::QuickAccess) => focus_switcher(&page),
                 (false, Section::Files) => return glib::Propagation::Proceed,
             }
             glib::Propagation::Stop
@@ -597,6 +596,51 @@ fn item_of<'a>(items: &'a [Item], child: &gtk::FlowBoxChild) -> Option<&'a Item>
 fn selected_item<'a>(flow: &gtk::FlowBox, items: &'a [Item]) -> Option<&'a Item> {
     let child = flow.selected_children().into_iter().next()?;
     item_of(items, &child)
+}
+
+/// The Menu key and Shift+F10 open the selected item's menu under it;
+/// Alt+Enter opens its Properties.
+fn connect_item_keys(flow: &gtk::FlowBox, items: &Rc<Vec<Item>>) {
+    let shortcuts = gtk::ShortcutController::new();
+    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+        let menu = gtk::CallbackAction::new(glib::clone!(
+            #[strong]
+            items,
+            move |flow, _| {
+                let Some(item) = flow
+                    .downcast_ref::<gtk::FlowBox>()
+                    .and_then(|flow| selected_item(flow, &items))
+                else {
+                    return glib::Propagation::Proceed;
+                };
+                let width = f64::from(item.child.width());
+                let height = f64::from(item.child.height());
+                item.popup_menu(width / 2.0, height / 2.0, classic);
+                glib::Propagation::Stop
+            }
+        ));
+        let trigger = gtk::ShortcutTrigger::parse_string(key);
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(menu)));
+    }
+    let properties = gtk::CallbackAction::new(glib::clone!(
+        #[strong]
+        items,
+        move |flow, _| {
+            let Some(item) = flow
+                .downcast_ref::<gtk::FlowBox>()
+                .and_then(|flow| selected_item(flow, &items))
+            else {
+                return glib::Propagation::Proceed;
+            };
+            WindowAction::PropertiesOf.activate_from(&item.child, Some(&item.properties.to_variant()));
+            glib::Propagation::Stop
+        }
+    ));
+    for key in ["<Alt>Return", "<Alt>KP_Enter"] {
+        let trigger = gtk::ShortcutTrigger::parse_string(key);
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(properties.clone())));
+    }
+    flow.add_controller(shortcuts);
 }
 
 /// A box of `items`: tiles for Quick access, one row each for the lists.
@@ -657,46 +701,7 @@ fn item_box(page: &gtk::Box, items: Vec<Item>, section: Section, rows: bool) -> 
         ));
         item.child.add_controller(right_click);
     }
-    let shortcuts = gtk::ShortcutController::new();
-    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
-        let menu = gtk::CallbackAction::new(glib::clone!(
-            #[strong]
-            items,
-            move |flow, _| {
-                let Some(item) = flow
-                    .downcast_ref::<gtk::FlowBox>()
-                    .and_then(|flow| selected_item(flow, &items))
-                else {
-                    return glib::Propagation::Proceed;
-                };
-                let width = f64::from(item.child.width());
-                let height = f64::from(item.child.height());
-                item.popup_menu(width / 2.0, height / 2.0, classic);
-                glib::Propagation::Stop
-            }
-        ));
-        let trigger = gtk::ShortcutTrigger::parse_string(key);
-        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(menu)));
-    }
-    let properties = gtk::CallbackAction::new(glib::clone!(
-        #[strong]
-        items,
-        move |flow, _| {
-            let Some(item) = flow
-                .downcast_ref::<gtk::FlowBox>()
-                .and_then(|flow| selected_item(flow, &items))
-            else {
-                return glib::Propagation::Proceed;
-            };
-            WindowAction::PropertiesOf.activate_from(&item.child, Some(&item.properties.to_variant()));
-            glib::Propagation::Stop
-        }
-    ));
-    for key in ["<Alt>Return", "<Alt>KP_Enter"] {
-        let trigger = gtk::ShortcutTrigger::parse_string(key);
-        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(properties.clone())));
-    }
-    flow.add_controller(shortcuts);
+    connect_item_keys(&flow, &items);
     connect_edge_keys(&flow, page, section);
     // One selection on the page at a time, as in one item view: selecting
     // in one section clears the other.
@@ -883,7 +888,7 @@ impl KeptFocus {
 }
 
 /// Draws Home into `page`, replacing what it showed: Quick access from
-/// `places`, Favorites from `preferences`, and Recent once GVfs has
+/// `places`, Favorites from `preferences`, and Recent once `GVfs` has
 /// listed it.
 pub(super) fn render(page: &gtk::Box, places: &Places, preferences: &Preferences, text_size: TextSize) {
     let kept = KeptFocus::read(page);
@@ -953,7 +958,7 @@ pub(super) fn leave(page: &gtk::Box) {
     page.remove_css_class(HOME_CLASS);
 }
 
-/// The recently used files GVfs lists, newest first, each with the file
+/// The recently used files `GVfs` lists, newest first, each with the file
 /// it stands for; folders and rows without a file are left out.
 async fn recent_files() -> Vec<(Entry, String)> {
     let folder = gio::File::for_uri(RECENT_URI);
@@ -1001,7 +1006,7 @@ async fn recent_files() -> Vec<(Entry, String)> {
 /// used list.
 const WATCHED_CLASS: &str = "home-recent-watched";
 /// How long Recent waits after the desktop's list changes before it asks
-/// GVfs again, which reads the same file and may not have yet.
+/// `GVfs` again, which reads the same file and may not have yet.
 const RECENT_SETTLE: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// Lists Recent again whenever the desktop's recently used list changes,
@@ -1051,7 +1056,7 @@ fn watch_recent_files(page: &gtk::Box) {
     handler.set(Some(id));
 }
 
-/// Lists the recent files into `list` once GVfs has read them, if `page`
+/// Lists the recent files into `list` once `GVfs` has read them, if `page`
 /// still shows this drawing of Home then.
 fn list_recent(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
     let page = page.downgrade();
@@ -1208,7 +1213,7 @@ pub(super) fn select_named(page: &gtk::Box, name: &str) -> bool {
 pub(crate) fn section_titles(page: &gtk::Box) -> Vec<String> {
     let mut titles: Vec<String> = descendants_with_class(page, Section::QuickAccess.fold_class())
         .iter()
-        .flat_map(|button| descendants_of_type::<gtk::Label>(button))
+        .flat_map(descendants_of_type::<gtk::Label>)
         .map(|label| label.text().to_string())
         .collect();
     titles.extend(Tab::ALL.into_iter().filter_map(|tab| {
@@ -1241,7 +1246,7 @@ pub(crate) fn choose_tab(page: &gtk::Box, title: &str) {
 pub(crate) fn tile_names(page: &gtk::Box) -> Vec<String> {
     descendants_with_class(page, "home-tiles")
         .iter()
-        .flat_map(|flow| descendants_of_type::<gtk::FlowBoxChild>(flow))
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
         .filter_map(|child| item_name(&child))
         .collect()
 }
@@ -1252,7 +1257,7 @@ pub(crate) fn list_names(page: &gtk::Box) -> Vec<String> {
     let tab = shown_tab(page);
     descendants_with_class(page, tab.list_class())
         .iter()
-        .flat_map(|list| descendants_of_type::<gtk::FlowBoxChild>(list))
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
         .filter_map(|child| item_name(&child))
         .collect()
 }

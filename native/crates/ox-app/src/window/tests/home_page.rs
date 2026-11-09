@@ -3,7 +3,7 @@
 //! "Show Quick access, Recent and Favorites on Home" (off by default, so
 //! Home still opens the home folder, NAV-038): Quick access holds the
 //! navigation pane's pinned folders as tiles, and a Recent / Favorites
-//! switcher lists the desktop's recently used files (GVfs `recent:///`)
+//! switcher lists the desktop's recently used files (`GVfs` `recent:///`)
 //! and the files added to Favorites. Every name below is fictional.
 
 use std::fs;
@@ -166,7 +166,7 @@ fn a_favorite_file_is_listed_opened_and_removed() {
     });
     assert_eq!(
         test.context.settings_data().preferences.favorites,
-        [notes.clone()]
+        std::slice::from_ref(&notes)
     );
     let labels = home_page::menu_labels(body(&test), "Notes 2.txt");
     assert!(labels.contains(&"Open file location".to_owned()), "{labels:?}");
@@ -176,7 +176,7 @@ fn a_favorite_file_is_listed_opened_and_removed() {
     wait_until("the file to be opened", || {
         !test.context.recorded_launches().is_empty()
     });
-    assert_eq!(test.context.recorded_launches(), [notes.clone()]);
+    assert_eq!(test.context.recorded_launches(), std::slice::from_ref(&notes));
 
     test.activate("remove-from-favorites", Some(&notes));
     wait_until("the favorite to go", || {
@@ -211,7 +211,7 @@ fn a_files_menu_adds_it_to_favorites_only_with_the_option() {
     assert!(labels(&test).contains(&"Remove from Favorites".to_owned()));
 }
 
-/// Recent lists the desktop's recently used files from GVfs, as the
+/// Recent lists the desktop's recently used files from `GVfs`, as the
 /// navigation pane's Recent files does; a row opens the real file, and
 /// Open file location opens its folder with it selected.
 ///
@@ -241,7 +241,7 @@ fn a_recent_file_opens_the_real_file_and_its_location() {
     wait_until("the file to be opened", || {
         !test.context.recorded_launches().is_empty()
     });
-    assert_eq!(test.context.recorded_launches(), [plan.clone()]);
+    assert_eq!(test.context.recorded_launches(), std::slice::from_ref(&plan));
 
     test.activate("open-file-location-of", Some(&plan));
     test.wait_for_listing("the file's folder");
