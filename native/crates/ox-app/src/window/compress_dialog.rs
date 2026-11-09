@@ -6,7 +6,7 @@
 //! Choosing a format or a method changes the path's ending. Only what the
 //! app writes is offered: ZIP (deflated) and TAR, plain or compressed with
 //! gzip, bzip2 or XZ. Links are never kept, so the link check boxes show
-//! greyed and clear. A taken name is refused in the dialog; nothing is
+//! grayed and clear. A taken name is refused in the dialog; nothing is
 //! replaced, and Undo takes the new archive away again.
 
 use std::path::Path;
@@ -101,7 +101,7 @@ impl CreateArchiveControls {
         self.follow_method();
     }
 
-    /// Gives the path the chosen method's ending, and greys the level
+    /// Gives the path the chosen method's ending, and grays out the level
     /// for a TAR that is not compressed.
     fn follow_method(&self) {
         let (label, ending) = self.method();

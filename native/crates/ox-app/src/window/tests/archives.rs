@@ -682,7 +682,7 @@ fn create_archive_dialog(
 
 /// Compress to › Additional options is laid out as Windows 11's: the
 /// heading, the archive's whole path with Browse…, the archive format,
-/// the compression method and level, the link check boxes (greyed: links
+/// the compression method and level, the link check boxes (grayed: links
 /// are never kept), and Create and Cancel. Choosing the format or the
 /// method changes the path's ending.
 ///
