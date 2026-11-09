@@ -11,7 +11,7 @@
 //! | The destination folder may not be written | Destination Folder Access Denied | You'll need to provide administrator permission to copy to this folder | Continue (shield) · Skip · Cancel |
 //! | Another program holds it | File In Use (Folder …) | The action can't be completed because the file is open in another program · Close the file and try again. | Try Again · Skip · Cancel |
 //! | It is gone | Item Not Found | Could not find this item · This is no longer located in <folder>. Verify the item's location and try again. | Try Again · Skip · Cancel |
-//! | A folder would go into a folder inside it | Interrupted Action | You can't copy (move) a folder into a folder inside it | Skip · Cancel |
+//! | A folder would go into a folder inside it | Interrupted Action | The destination folder is a subfolder of the source folder. | Skip · Cancel |
 //! | Anything else | Interrupted Action | An unexpected error is keeping you from copying the file. … · the system's error | Try Again · Skip · Cancel |
 //! | Something to sort out by hand, such as a kept backup | Interrupted Action | An unexpected error is keeping you from copying the file. … · what happened and where | OK, shown after Cancel too |
 //!
@@ -162,11 +162,8 @@ fn wording(question: Question, item: &FailedItem, is_folder: bool, folder: &str)
         ),
         Question::InsideSource => (
             gettext("Interrupted Action"),
-            if item.mode == TransferMode::Move {
-                gettext("You can't move a folder into a folder inside it.")
-            } else {
-                gettext("You can't copy a folder into a folder inside it.")
-            },
+            // Windows 11's own sentence, for a copy and a move alike.
+            gettext("The destination folder is a subfolder of the source folder."),
             String::new(),
         ),
         Question::Unexpected => (
@@ -785,22 +782,13 @@ mod tests {
         assert!(unknown.drive.is_empty());
     }
 
-    /// A folder pasted into a folder inside it is refused in plain words,
-    /// never as an unexpected error with the system's text.
+    /// A folder pasted into a folder inside it is refused in Windows 11's
+    /// words, never as an unexpected error with the system's text.
     ///
     /// parity: XFER-016
     #[test]
-    fn a_folder_pasted_into_itself_is_refused_in_plain_words() {
-        for (mode, heading) in [
-            (
-                TransferMode::Copy,
-                "You can't copy a folder into a folder inside it.",
-            ),
-            (
-                TransferMode::Move,
-                "You can't move a folder into a folder inside it.",
-            ),
-        ] {
+    fn a_folder_pasted_into_itself_is_refused_in_windows_words() {
+        for mode in [TransferMode::Copy, TransferMode::Move] {
             let inside = wording(
                 Question::InsideSource,
                 &item(mode, FailureCause::InsideSource),
@@ -813,7 +801,11 @@ mod tests {
                     inside.heading.as_str(),
                     inside.message.as_str()
                 ),
-                ("Interrupted Action", heading, ""),
+                (
+                    "Interrupted Action",
+                    "The destination folder is a subfolder of the source folder.",
+                    ""
+                ),
                 "no unexpected error, no system error"
             );
         }
