@@ -313,3 +313,31 @@ fn a_link_is_refused_when_extracting_into_an_existing_folder() {
         .extract("Unpacked")
         .expect("into a new folder it extracts");
 }
+
+/// Extract here and Extract all lift a lone top-level folder out of the
+/// new folder; a link inside it was checked against the new folder, so
+/// lifting could lead it out beside the output (`pkg/leak ->
+/// ../outside/secret`, with `outside` already beside it). An archive
+/// with a link is therefore never lifted: it stays in the new folder.
+///
+/// parity: ARC-016, ARC-025
+#[test]
+fn an_archive_with_a_link_is_never_lifted() {
+    for lift in [
+        ox_core::archive::lift_single_folder as fn(_) -> _,
+        ox_core::archive::lift_same_named_folder,
+    ] {
+        let fixture = fixture_with(&["d:pkg", "f:pkg/a.txt:a", "l:pkg/leak:../outside/secret"]);
+        fs::create_dir(fixture.destination.join("outside")).expect("a folder beside the output");
+
+        let extracted = fixture.extract("pkg").expect("into a new folder it extracts");
+        let output = lift(extracted);
+
+        assert_eq!(output.name, "pkg");
+        let link = fixture.destination.join("pkg/pkg/leak");
+        assert!(
+            fs::symlink_metadata(&link).is_ok_and(|metadata| metadata.file_type().is_symlink()),
+            "the link stays inside the new folder"
+        );
+    }
+}
