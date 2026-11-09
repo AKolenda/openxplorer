@@ -250,6 +250,63 @@ pub(crate) fn content_row(text_size: TextSize) -> i32 {
     text_size::ceil_pixels(2.0 * text_line(scale) + 1.0).max(CONTENT_ICON) + CONTENT_CHROME
 }
 
+/// The distance from one Details row to the next in Compact view
+/// (VIEW-067) at `text_size`: 21 pixels at 100%, as Windows 11's Compact
+/// view spaces them, growing with the text.
+pub(crate) fn compact_density_details_row(text_size: TextSize) -> i32 {
+    let scale = text_size::metrics(text_size).scale;
+    text_size::ceil_pixels(24.0 * scale - 3.0).max(21)
+}
+
+/// Pixels of a Tiles cell beside its content in Compact view: 4 pixels of
+/// padding above and below the icon and lines, and a 1-pixel gap below,
+/// so rows of tiles are 57 pixels apart at 100%, as in Windows 11's
+/// Compact view (VIEW-067).
+pub(crate) const COMPACT_TILES_CHROME: i32 = 4 + 4 + 1;
+
+/// The height of a line of Tiles' and Content's text in Compact view at
+/// `text_size`: 16 pixels at 100%, Windows 11's pitch of the tiles' lines,
+/// growing with the text. The stylesheet sets it as the lines' height
+/// (`theme/fonts.rs`), so the rows are as far apart whatever the font's
+/// own line height: Noto Sans' is 16 pixels at 12, the distribution
+/// checks' fallback font's 14.
+pub(crate) fn compact_density_line(text_size: TextSize) -> i32 {
+    text_size::ceil_pixels(16.0 * text_size::metrics(text_size).scale)
+}
+
+/// A row of Tiles in Compact view at `text_size`: three lines on a
+/// 16-pixel pitch beside the 48-pixel icon, with [`COMPACT_TILES_CHROME`].
+pub(crate) fn compact_density_tiles_row(text_size: TextSize) -> i32 {
+    (3 * compact_density_line(text_size)).max(TILES_ICON) + COMPACT_TILES_CHROME
+}
+
+/// Pixels of a group heading's row in Tiles beside its title in Compact
+/// view: no gap above, 4 pixels of padding above and below the title,
+/// room inside its hover box, and a 1-pixel gap under it
+/// (`theme/fonts.rs`), so a heading over
+/// one row of tiles stands 83 pixels above the next at 100%, as in
+/// Windows 11's Compact view.
+pub(crate) const COMPACT_TILES_HEADING_CHROME: i32 = 4 + 4 + 1;
+
+/// Pixels of a group heading's row in Content beside its title in Compact
+/// view: a 2-pixel gap above, 5 pixels of padding above and below the
+/// title, as in the usual view, and a 3-pixel gap under it, so its title
+/// stands as far from the items' names as in Windows 11's Compact view.
+pub(crate) const COMPACT_CONTENT_HEADING_CHROME: i32 = 2 + 5 + 5 + 3;
+
+/// The height of a group heading's row in Compact view at `text_size`, in
+/// Content or else in Tiles: one line of title with
+/// [`COMPACT_CONTENT_HEADING_CHROME`] or [`COMPACT_TILES_HEADING_CHROME`].
+pub(crate) fn compact_density_heading_row(text_size: TextSize, content: bool) -> i32 {
+    let scale = text_size::metrics(text_size).scale;
+    let chrome = if content {
+        COMPACT_CONTENT_HEADING_CHROME
+    } else {
+        COMPACT_TILES_HEADING_CHROME
+    };
+    text_size::ceil_pixels(text_line(scale)) + chrome
+}
+
 /// The height of a compact-view item at `text_size`, as Explorer's List
 /// layout packs its names closer than the details rows: 26 pixels at
 /// 100%, growing with the text (the web's 38-pixel details row less its
