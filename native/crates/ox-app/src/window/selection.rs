@@ -148,7 +148,15 @@ impl BrowserWindow {
     pub(super) fn update_status(&self) {
         let on_page = self.current_uri().as_deref().and_then(Page::drawn_at).is_some();
         let shown = self.folder_pane().model().n_items();
-        let subject = if on_page {
+        let home_items = super::home_page::item_count(self.folder_pane().landing())
+            .filter(|_| self.current_uri().as_deref() == Some(Page::Home.uri()));
+        let subject = if let Some(shown) = home_items {
+            // Home counts its tiles and rows, as Windows 11's does.
+            StatusSubject::Folder {
+                shown,
+                loading: false,
+            }
+        } else if on_page {
             StatusSubject::Page
         } else if let Some(count) = self.search_count(shown) {
             StatusSubject::Search(count)

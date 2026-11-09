@@ -511,7 +511,14 @@ fn home_is_spaced_as_windows_11_home() {
     near("Date accessed to File location", location - date, 298, 2);
     near("Name from the pane's edge", name - page.x, 90, 4);
     let cells = home_page::row_cell_widgets(body(&test), "plan.txt");
-    near("a row's name under Name", bounds(&test, &cells[0]).x, name, 1);
+    let icon = home_page::row_icon(body(&test), "plan.txt");
+    near("a row's icon under Name", bounds(&test, &icon).x, name, 1);
+    near(
+        "a row's name right of its icon",
+        bounds(&test, &cells[0]).x - name,
+        36,
+        4,
+    );
     near(
         "a row's date under Date accessed",
         bounds(&test, &cells[1]).x,
@@ -544,5 +551,18 @@ fn home_is_spaced_as_windows_11_home() {
         30,
         4,
     );
+    let folder = home_page::tile_folder(body(&test), "Documents");
+    near(
+        "a tile's folder from the pane's edge",
+        bounds(&test, &folder).x - page.x,
+        92,
+        4,
+    );
     assert!(misses.borrow().is_empty(), "{:#?}", misses.borrow());
+    let shown = home_page::tile_names(body(&test)).len() + home_page::list_names(body(&test)).len();
+    assert_eq!(
+        test.window.status_bar().texts().0,
+        format!("{shown} items"),
+        "Home counts its tiles and rows"
+    );
 }

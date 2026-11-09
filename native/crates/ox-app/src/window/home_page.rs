@@ -376,7 +376,10 @@ const LOCATION_WIDTH: i32 = 300;
 /// the pills, 51 from the pills' middle to the column headers' and 50
 /// from there to the first row's.
 const SECTION_INDENT: i32 = 14;
-const LIST_INDENT: i32 = 20;
+/// Quick access's tiles stand further in than the heading: their folders
+/// about 92 pixels from the pane's edge, as in Windows 11.
+const TILES_INDENT: i32 = 76;
+const LIST_INDENT: i32 = 48;
 const TILES_BELOW_HEADING: i32 = 6;
 const PILLS_BELOW_TILES: i32 = 45;
 const HEADER_BELOW_PILLS: i32 = 19;
@@ -417,7 +420,7 @@ const COMPACT_ROW_PITCH: i32 = 26;
 /// Pixels from a row's left edge to its icon, and from the icon to the
 /// name: Windows puts names about 90 pixels in from the pane's edge.
 const ROW_INDENT: i32 = 34;
-const ICON_GAP: i32 = 8;
+const ICON_GAP: i32 = 14;
 
 /// The columns of the Recent and Favorites list: every row's cells and
 /// the header's share their widths, which the header sets.
@@ -443,8 +446,9 @@ impl Columns {
     }
 
     /// A row's or the header's cells, put in their column groups.
-    fn cells(&self, name: &gtk::Label, date: &gtk::Label, location: &gtk::Label) {
-        for cell in [name, date, location] {
+    fn cells(&self, name: &impl IsA<gtk::Widget>, date: &gtk::Label, location: &gtk::Label) {
+        name.set_hexpand(false);
+        for cell in [date, location] {
             cell.set_hexpand(false);
         }
         self.name.add_widget(name);
@@ -461,10 +465,10 @@ impl Columns {
         row.set_size_request(-1, ROW_PITCH);
         row.set_margin_top(HEADER_BELOW_PILLS);
         row.set_margin_bottom(ROWS_BELOW_HEADER);
-        // Room for the rows' indent and icon: a spacer, as a size group
-        // counts a cell's margins.
+        // Name stands over the rows' icons, as in Windows 11; the rows'
+        // indent is a spacer, as a size group counts a cell's margins.
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        spacer.set_size_request(ROW_INDENT + ROW_ICON + ICON_GAP, -1);
+        spacer.set_size_request(ROW_INDENT, -1);
         row.append(&spacer);
         let name = label(ox_core::i18n::gettext_static("Name"), "home-column");
         name.set_size_request(NAME_WIDTH, -1);
@@ -478,7 +482,7 @@ impl Columns {
         row.append(&location);
         row.add_tick_callback(move |row, _| {
             if let Some(room) = visible_width(row) {
-                let room = room - LIST_INDENT - ROW_INDENT - ROW_ICON - ICON_GAP - PAGE_PADDING;
+                let room = room - LIST_INDENT - ROW_INDENT - PAGE_PADDING;
                 let (name_width, date_width, location_width) = column_widths(room);
                 for (cell, width) in [
                     (&name, name_width),
@@ -505,20 +509,26 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     row.set_halign(gtk::Align::Start);
     row.set_size_request(-1, columns.pitch);
     let icon = ArtImage::new(Art::for_file_name(name), ROW_ICON);
-    icon.set_margin_start(ROW_INDENT);
     icon.set_margin_end(ICON_GAP);
     icon.set_valign(gtk::Align::Center);
-    let name_cell = label(name, "home-row-name");
+    let name_text = label(name, "home-row-name");
+    // The icon and the name share the Name column, as in Windows 11.
+    let name_cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    name_cell.append(&icon);
+    name_cell.append(&name_text);
     let date = label(
         &ox_core::format::date_short_time_text(accessed),
         "home-row-detail",
     );
     let location = label(&file_location(uri, &columns.home), "home-row-detail");
     columns.cells(&name_cell, &date, &location);
-    for cell in [&name_cell, &date, &location] {
+    name_text.set_valign(gtk::Align::Center);
+    for cell in [&date, &location] {
         cell.set_valign(gtk::Align::Center);
     }
-    row.append(&icon);
+    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    spacer.set_size_request(ROW_INDENT, -1);
+    row.append(&spacer);
     row.append(&name_cell);
     row.append(&date);
     row.append(&location);
@@ -743,6 +753,7 @@ fn show_tab(page: &gtk::Box, tab: Tab) {
             }
         }
     }
+    recount(page);
 }
 
 /// Left and Right move between the tabs and show the one reached, as a
@@ -895,7 +906,7 @@ fn keep_tiles_apart(flow: &gtk::FlowBox) {
     flow.set_halign(gtk::Align::Start);
     flow.add_tick_callback(|flow, _| {
         if let Some(room) = visible_width(flow) {
-            let fit = (room - SECTION_INDENT - PAGE_PADDING - TILE_BOX_PADDING) / TILE_PITCH;
+            let fit = (room - TILES_INDENT - PAGE_PADDING - TILE_BOX_PADDING) / TILE_PITCH;
             let per_row = u32::try_from(fit.max(1)).unwrap_or(1).min(MOST_TILES_PER_ROW);
             if flow.max_children_per_line() != per_row {
                 flow.set_max_children_per_line(per_row);
@@ -1008,6 +1019,7 @@ fn fill_list(page: &gtk::Box, list: &gtk::Box, items: Vec<Item>, tab: Tab, colum
         list.append(&columns.header());
         list.append(&item_box(page, items, Section::Files, true));
     }
+    recount(page);
     // The column groups live as long as the list.
     let kept = columns.clone();
     list.connect_destroy(move |_| {
@@ -1025,12 +1037,6 @@ fn quick_access_heading(page: &gtk::Box, folded: bool) -> gtk::Button {
             .label(ox_core::i18n::gettext_static("Quick access"))
             .xalign(0.0)
             .css_classes(["group-title"])
-            .build(),
-    );
-    row.append(
-        &gtk::Separator::builder()
-            .hexpand(true)
-            .valign(gtk::Align::Center)
             .build(),
     );
     let button = gtk::Button::builder()
@@ -1097,12 +1103,6 @@ fn switcher(page: &gtk::Box, folded: bool) -> gtk::Box {
         row.append(&button);
         first.get_or_insert(button);
     }
-    row.append(
-        &gtk::Separator::builder()
-            .hexpand(true)
-            .valign(gtk::Align::Center)
-            .build(),
-    );
     row
 }
 
@@ -1190,7 +1190,7 @@ pub(super) fn render(
     heading.set_margin_start(SECTION_INDENT);
     page.append(&heading);
     let quick_body = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    quick_body.set_margin_start(SECTION_INDENT);
+    quick_body.set_margin_start(TILES_INDENT);
     quick_body.set_margin_top(TILES_BELOW_HEADING);
     quick_body.add_css_class(Section::QuickAccess.body_class());
     let tiles: Vec<Item> = places
@@ -1232,6 +1232,31 @@ pub(super) fn render(
     page.add_css_class(DRAWN_CLASS);
     if let Some(kept) = kept {
         kept.restore(page);
+    }
+    recount(page);
+}
+
+/// How many items Home shows, as Windows 11's status bar counts them on
+/// Home: the Quick access tiles and the rows of the list shown.
+pub(super) fn item_count(page: &gtk::Box) -> Option<u32> {
+    if !page.has_css_class(HOME_CLASS) {
+        return None;
+    }
+    let tiles = descendants_with_class(page, "home-tiles")
+        .iter()
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
+        .count();
+    let rows = descendants_with_class(page, shown_tab(page).list_class())
+        .iter()
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
+        .count();
+    u32::try_from(tiles + rows).ok()
+}
+
+/// Has the window count Home's items again in its status bar.
+fn recount(page: &gtk::Box) {
+    if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
+        window.update_status();
     }
 }
 
@@ -1798,6 +1823,32 @@ pub(crate) fn row_cell_widgets(page: &gtk::Box, name: &str) -> Vec<gtk::Widget> 
         .into_iter()
         .map(gtk::Label::upcast)
         .collect()
+}
+
+/// The icon of the row named `name` in the list shown, for tests.
+#[cfg(test)]
+pub(crate) fn row_icon(page: &gtk::Box, name: &str) -> gtk::Widget {
+    let tab = shown_tab(page);
+    let row = descendants_with_class(page, tab.list_class())
+        .iter()
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
+        .find(|child| item_name(child).as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("the list has a row named {name}"));
+    descendants_of_type::<ArtImage>(&row)
+        .into_iter()
+        .next()
+        .expect("a row's icon")
+        .upcast()
+}
+
+/// The folder of the tile named `name`, for tests.
+#[cfg(test)]
+pub(crate) fn tile_folder(page: &gtk::Box, name: &str) -> gtk::Widget {
+    descendants_of_type::<gtk::Overlay>(&tile_named(page, name))
+        .into_iter()
+        .next()
+        .expect("the tile's folder")
+        .upcast()
 }
 
 /// The widgets the spacing test measures, for tests.
