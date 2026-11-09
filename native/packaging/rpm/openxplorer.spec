@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.15
+Version:        2.0.16
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Mon Nov 09 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.16-1
+- OpenXplorer 2.0.16: file contents in the Preview pane, more of Windows
+  11's keyboard shortcuts, a tab menu from the keyboard, and an Open and
+  Save dialog that keeps its size. (The password-free update helper is
+  only in the Debian package.)
+
 * Sun Nov 08 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.15-1
 - OpenXplorer 2.0.15: Windows 11's layout for the command bar, right-click
   menus with labeled buttons, address bar suggestions, views, This PC,
