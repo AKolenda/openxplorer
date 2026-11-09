@@ -82,6 +82,13 @@ const FREQUENT_FOLDERS: RowText = RowText {
                experimental",
 };
 
+const SEARCH_FILTER_BAR: RowText = RowText {
+    title: "Show the search filter bar",
+    description: "While searching, show the scope, kind, date and size lists above the results \
+                  instead of Search options in the command bar.",
+    keywords: "search filter bar strip options scope kind date size cache save search windows layout",
+};
+
 const WATCH_FOLDERS: RowText = RowText {
     title: "Watch folders for changes",
     description: "Watch enabled local folders for changes while OpenXplorer is open.",
@@ -132,8 +139,26 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let card = status_card(page);
     indexing.append_card(&card);
     follow_cache_status(page, &card);
+    indexing.append_group(&search_results_group(page));
     indexing.append_group(&instant_search_group(page));
     indexing
+}
+
+/// How a search shows its options (SRCH-046): Windows 11's Search options
+/// in the command bar, or the search filter bar.
+fn search_results_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Search results"));
+    let row = SettingRow::new(SEARCH_FILTER_BAR);
+    let filter_bar = PreferenceBinding {
+        read: |preferences| preferences.show_search_filter_bar,
+        write: |shown| PreferencesUpdate {
+            show_search_filter_bar: Some(shown),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(filter_bar), ControlName::RowTitle);
+    group.add_row(&row);
+    group
 }
 
 /// Where instant search stands, with "Refresh all" (SRCH-023).

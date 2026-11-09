@@ -765,6 +765,24 @@ fn the_compact_view_switch_saves_the_choice() {
     });
 }
 
+/// Settings > Search > "Show the search filter bar" is off by default, so
+/// searches show Windows 11's Search options; turning it on saves the
+/// choice and the window's next search shows the filter bar.
+///
+/// parity: SRCH-046
+#[gtk::test]
+fn the_search_filter_bar_switch_is_off_by_default_and_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row_in(Category::Search, "Show the search filter bar"));
+    assert!(!switch.is_active(), "off by default");
+
+    switch.set_active(true);
+
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().show_search_filter_bar
+    });
+}
+
 /// "When replacing a file, move the old one to the Recycle Bin" is in
 /// Files & folders, on by default (the owner's choice), and saves only
 /// its turning off, which the window's next Replace follows.

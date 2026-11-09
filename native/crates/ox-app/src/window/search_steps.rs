@@ -72,6 +72,7 @@ impl BrowserWindow {
                 scope: search.scope(),
                 search_in: search.search_in(),
                 facets: search.facets(),
+                current_folder_only: search.is_current_folder_only(),
             }
         };
         let shows_results_now = {
@@ -160,6 +161,7 @@ impl BrowserWindow {
         search.set_scope(step.scope);
         search.set_search_in(step.search_in);
         search.set_facets(step.facets);
+        search.set_current_folder_only(step.current_folder_only);
         drop(search);
         self.imp().restores_results.set(true);
         self.search_box().set_query(&step.query);

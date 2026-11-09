@@ -148,6 +148,7 @@ impl BrowserWindow {
         self.install_network_actions();
         self.install_disk_tool_actions();
         self.install_search_actions();
+        self.install_search_layout_actions();
         self.install_link_target_action();
         self.install_administrator_action();
         self.install_service_actions();

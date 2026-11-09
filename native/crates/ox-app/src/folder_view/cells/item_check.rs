@@ -68,8 +68,19 @@ impl FileCell {
         let check = &self.imp().check;
         check.add_css_class("item-check");
         check.set_focusable(false);
-        check.set_tooltip_text(Some(check_name()));
-        check.update_property(&[gtk::accessible::Property::Label(check_name())]);
+        // The tooltip is asked for when shown, not set: setting a tooltip
+        // asks the display where the pointer is, and a search that
+        // replaces a big folder's rows makes hundreds of cells at once.
+        // Its text is also the box's description, as a set tooltip's is.
+        check.set_has_tooltip(true);
+        check.connect_query_tooltip(|_, _, _, _, tooltip| {
+            tooltip.set_text(Some(check_name()));
+            true
+        });
+        check.update_property(&[
+            gtk::accessible::Property::Label(check_name()),
+            gtk::accessible::Property::Description(check_name()),
+        ]);
         check.set_visible(owners.shows_item_checks());
         self.imp()
             .check_takes_clicks

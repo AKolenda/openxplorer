@@ -287,9 +287,10 @@ impl FolderModel {
         self.update_filter(|state| state.set_query(query))
     }
 
-    /// Sets the search options (SRCH-037); returns true when they changed.
-    pub(crate) fn set_facets(&self, facets: SearchFacets) -> bool {
-        self.update_filter(|state| state.set_facets(facets))
+    /// Sets the search options chosen (SRCH-037, SRCH-043) and typed
+    /// (SRCH-044); returns true when they changed.
+    pub(crate) fn set_facets(&self, facets: SearchFacets, typed: SearchFacets) -> bool {
+        self.update_filter(|state| state.set_facets(facets, typed))
     }
 
     /// Whether hidden items are shown.

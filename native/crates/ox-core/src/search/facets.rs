@@ -1,13 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The search options that narrow what a search shows by kind of item and
-//! by when it was modified.
+//! The search options that narrow what a search shows by kind of item, by
+//! when it was modified and by size.
 //!
 //! New in the native app, from Dolphin's search facets
 //! (`DolphinFacetsWidget`: type and date, SRCH-037) and Windows File
-//! Explorer's "Kind" and "Date modified" search options. A kind is decided
-//! from the item's MIME type, as Dolphin's are from Baloo's types; a date
-//! range is counted in local time from the start of today, the week
-//! (Monday), the month or the year.
+//! Explorer's "Kind", "Date modified" and "Size" search options
+//! (SRCH-043; Microsoft: "Select Search options on the top toolbar [...]
+//! You can also select date modified, kind (like document, picture, or
+//! video), size", <https://support.microsoft.com/en-us/office/foundations-experiences/find-what-you-need-with-microsoft-search>).
+//! A kind is decided from the item's MIME type, as Dolphin's are from
+//! Baloo's types; a date range is counted in local time from the start of
+//! today, the week (Monday), the month or the year, or over the day,
+//! week, month or year before; the size groups are
+//! those Microsoft documents for `System.Size` on Windows 10, version 1809
+//! and later
+//! (<https://learn.microsoft.com/en-us/windows/win32/properties/props-system-size>).
+//! Options typed into the search box ([`super::TypedQuery`], SRCH-044)
+//! and options chosen from the lists narrow together.
 
 use glib::DateTime;
 
@@ -45,13 +54,16 @@ const DOCUMENT_TYPES: [&str; 9] = [
 ];
 
 impl KindFacet {
-    /// Every kind, in the order the search options list them.
+    /// Every kind, in the order the search options list them: after Any
+    /// kind, alphabetically and in the singular, as Windows 11 File
+    /// Explorer's Kind list names its `System.Kind` values (Document,
+    /// Folder, Music, Picture, Video).
     pub const ALL: [KindFacet; 6] = [
         KindFacet::Any,
-        KindFacet::Folders,
         KindFacet::Documents,
-        KindFacet::Images,
+        KindFacet::Folders,
         KindFacet::Audio,
+        KindFacet::Images,
         KindFacet::Videos,
     ];
 
@@ -59,11 +71,11 @@ impl KindFacet {
     pub fn label(self) -> &'static str {
         match self {
             KindFacet::Any => crate::i18n::gettext_static("Any kind"),
-            KindFacet::Folders => crate::i18n::gettext_static("Folders"),
-            KindFacet::Documents => crate::i18n::gettext_static("Documents"),
-            KindFacet::Images => crate::i18n::gettext_static("Images"),
-            KindFacet::Audio => crate::i18n::gettext_static("Audio files"),
-            KindFacet::Videos => crate::i18n::gettext_static("Videos"),
+            KindFacet::Folders => crate::i18n::gettext_static("Folder"),
+            KindFacet::Documents => crate::i18n::gettext_static("Document"),
+            KindFacet::Images => crate::i18n::gettext_static("Picture"),
+            KindFacet::Audio => crate::i18n::gettext_static("Music"),
+            KindFacet::Videos => crate::i18n::gettext_static("Video"),
         }
     }
 
@@ -111,21 +123,32 @@ pub enum DateFacet {
     Yesterday,
     /// Since Monday.
     ThisWeek,
+    /// From the Monday before this week's until this week's.
+    LastWeek,
     /// Since the first of the month.
     ThisMonth,
+    /// During the month before this one.
+    LastMonth,
     /// Since the first of January.
     ThisYear,
+    /// During the year before this one.
+    LastYear,
 }
 
 impl DateFacet {
-    /// Every range, in the order the search options list them.
-    pub const ALL: [DateFacet; 6] = [
+    /// Every range, in the order the search options list them: Windows
+    /// 11 File Explorer's Date modified list, from Today "all the way to
+    /// Last year", after Any date.
+    pub const ALL: [DateFacet; 9] = [
         DateFacet::Any,
         DateFacet::Today,
         DateFacet::Yesterday,
         DateFacet::ThisWeek,
+        DateFacet::LastWeek,
         DateFacet::ThisMonth,
+        DateFacet::LastMonth,
         DateFacet::ThisYear,
+        DateFacet::LastYear,
     ];
 
     /// What the search options show.
@@ -135,8 +158,11 @@ impl DateFacet {
             DateFacet::Today => crate::i18n::gettext_static("Today"),
             DateFacet::Yesterday => crate::i18n::gettext_static("Yesterday"),
             DateFacet::ThisWeek => crate::i18n::gettext_static("This week"),
+            DateFacet::LastWeek => crate::i18n::gettext_static("Last week"),
             DateFacet::ThisMonth => crate::i18n::gettext_static("This month"),
+            DateFacet::LastMonth => crate::i18n::gettext_static("Last month"),
             DateFacet::ThisYear => crate::i18n::gettext_static("This year"),
+            DateFacet::LastYear => crate::i18n::gettext_static("Last year"),
         }
     }
 
@@ -162,20 +188,118 @@ impl DateFacet {
                 return Some((yesterday.to_unix(), today.to_unix()));
             }
             DateFacet::ThisWeek => today.add_days(1 - now.day_of_week()).ok()?,
+            DateFacet::LastWeek => {
+                let monday = today.add_days(1 - now.day_of_week()).ok()?;
+                let before = monday.add_days(-7).ok()?;
+                return Some((before.to_unix(), monday.to_unix()));
+            }
             DateFacet::ThisMonth => today.add_days(1 - now.day_of_month()).ok()?,
+            DateFacet::LastMonth => {
+                let first = today.add_days(1 - now.day_of_month()).ok()?;
+                return Some((first.add_months(-1).ok()?.to_unix(), first.to_unix()));
+            }
             DateFacet::ThisYear => today.add_days(1 - now.day_of_year()).ok()?,
+            DateFacet::LastYear => {
+                let first = today.add_days(1 - now.day_of_year()).ok()?;
+                return Some((first.add_years(-1).ok()?.to_unix(), first.to_unix()));
+            }
         };
         Some((from.to_unix(), i64::MAX))
     }
 }
 
-/// The search options: kind and modification date.
+/// How big the files a search shows are. The groups and their first
+/// sizes are `System.Size`'s on Windows 10, version 1809 and later; each
+/// group ends where the next starts. Folders have no size, so a size
+/// option shows files only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SizeFacet {
+    /// Any size, folders too.
+    #[default]
+    Any,
+    /// 0 bytes.
+    Empty,
+    /// From 1 byte: "Tiny (0 – 16 KB)".
+    Tiny,
+    /// From 16,383 bytes: "Small (16 KB – 1 MB)".
+    Small,
+    /// From 1,048,577 bytes: "Medium (1 – 128 MB)".
+    Medium,
+    /// From 134,217,729 bytes: "Large (128 MB – 1 GB)".
+    Large,
+    /// From 1,073,741,825 bytes: "Huge (1 – 4 GB)".
+    Huge,
+    /// From 4,294,967,297 bytes: "Gigantic (>4 GB)".
+    Gigantic,
+    /// More than this many bytes, as `size:>500` asks.
+    Larger(u64),
+    /// Fewer than this many bytes, as `size:<500` asks.
+    Smaller(u64),
+}
+
+/// The first size of each group after Empty, in bytes (`minValue`).
+const SIZE_GROUP_STARTS: [u64; 6] = [1, 16_383, 1_048_577, 134_217_729, 1_073_741_825, 4_294_967_297];
+
+impl SizeFacet {
+    /// Every group the search options list, in order.
+    pub const ALL: [SizeFacet; 8] = [
+        SizeFacet::Any,
+        SizeFacet::Empty,
+        SizeFacet::Tiny,
+        SizeFacet::Small,
+        SizeFacet::Medium,
+        SizeFacet::Large,
+        SizeFacet::Huge,
+        SizeFacet::Gigantic,
+    ];
+
+    /// What the search options show.
+    pub fn label(self) -> &'static str {
+        match self {
+            SizeFacet::Any => crate::i18n::gettext_static("Any size"),
+            SizeFacet::Empty => crate::i18n::gettext_static("Empty (0 KB)"),
+            SizeFacet::Tiny => crate::i18n::gettext_static("Tiny (0 – 16 KB)"),
+            SizeFacet::Small => crate::i18n::gettext_static("Small (16 KB – 1 MB)"),
+            SizeFacet::Medium => crate::i18n::gettext_static("Medium (1 – 128 MB)"),
+            SizeFacet::Large => crate::i18n::gettext_static("Large (128 MB – 1 GB)"),
+            SizeFacet::Huge => crate::i18n::gettext_static("Huge (1 – 4 GB)"),
+            SizeFacet::Gigantic => crate::i18n::gettext_static("Gigantic (> 4 GB)"),
+            SizeFacet::Larger(_) | SizeFacet::Smaller(_) => crate::i18n::gettext_static("Size"),
+        }
+    }
+
+    /// The sizes in bytes the option admits, both ends included; `None`
+    /// for any size, and an empty range (`from > until`) for none.
+    fn bounds(self) -> Option<(u64, u64)> {
+        let group = |index: usize| {
+            let from = SIZE_GROUP_STARTS[index];
+            let until = SIZE_GROUP_STARTS.get(index + 1).map_or(u64::MAX, |next| next - 1);
+            Some((from, until))
+        };
+        match self {
+            SizeFacet::Any => None,
+            SizeFacet::Empty => Some((0, 0)),
+            SizeFacet::Tiny => group(0),
+            SizeFacet::Small => group(1),
+            SizeFacet::Medium => group(2),
+            SizeFacet::Large => group(3),
+            SizeFacet::Huge => group(4),
+            SizeFacet::Gigantic => group(5),
+            SizeFacet::Larger(bytes) => Some(bytes.checked_add(1).map_or((1, 0), |from| (from, u64::MAX))),
+            SizeFacet::Smaller(bytes) => Some(bytes.checked_sub(1).map_or((1, 0), |until| (0, until))),
+        }
+    }
+}
+
+/// The search options: kind, modification date and size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SearchFacets {
     /// The kind of item shown.
     pub kind: KindFacet,
     /// When the items shown were modified.
     pub date: DateFacet,
+    /// How big the files shown are.
+    pub size: SizeFacet,
 }
 
 impl SearchFacets {
@@ -187,29 +311,64 @@ impl SearchFacets {
     /// A check of entries against these options, with date ranges seen at
     /// the local time `now`.
     pub fn matcher(&self, now: &DateTime) -> FacetMatcher {
+        self.matcher_with(&SearchFacets::default(), now)
+    }
+
+    /// A check of entries against these options and `other` together, as
+    /// the lists' options and those typed into the box narrow together.
+    pub fn matcher_with(&self, other: &SearchFacets, now: &DateTime) -> FacetMatcher {
+        let (kind, kinds_clash) = match (self.kind, other.kind) {
+            (KindFacet::Any, kind) | (kind, KindFacet::Any) => (kind, false),
+            (one, two) => (one, one != two),
+        };
+        let range = both(self.date.range(now), other.date.range(now), |one, two| {
+            (one.0.max(two.0), one.1.min(two.1))
+        });
+        let size = both(self.size.bounds(), other.size.bounds(), |one, two| {
+            (one.0.max(two.0), one.1.min(two.1))
+        });
         FacetMatcher {
-            kind: self.kind,
-            range: self.date.range(now),
+            kind,
+            kinds_clash,
+            range,
+            size,
         }
     }
 }
 
-/// [`SearchFacets`] with their date range worked out.
+/// `one` and `two` together: either alone, or `join` of both.
+fn both<T>(one: Option<T>, two: Option<T>, join: impl FnOnce(T, T) -> T) -> Option<T> {
+    match (one, two) {
+        (Some(one), Some(two)) => Some(join(one, two)),
+        (one, two) => one.or(two),
+    }
+}
+
+/// [`SearchFacets`] with their date range and sizes worked out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FacetMatcher {
     kind: KindFacet,
+    /// Two different kinds were asked for, which no item is.
+    kinds_clash: bool,
+    /// Modification times, `until` excluded.
     range: Option<(i64, i64)>,
+    /// Sizes in bytes, both ends included.
+    size: Option<(u64, u64)>,
 }
 
 impl FacetMatcher {
     /// Whether `entry` passes every option. An item with no known
-    /// modification time passes no date range.
+    /// modification time passes no date range, and a folder, or a file of
+    /// unknown size, passes no size.
     pub fn matches(&self, entry: &Entry) -> bool {
         let in_range = self.range.is_none_or(|(from, until)| {
             let modified = entry.modified.and_then(|seconds| i64::try_from(seconds).ok());
             modified.is_some_and(|seconds| (from..until).contains(&seconds))
         });
-        in_range && self.kind.matches(entry)
+        let in_size = self.size.is_none_or(|(from, until)| {
+            !entry.is_dir && entry.size.is_some_and(|size| (from..=until).contains(&size))
+        });
+        !self.kinds_clash && in_range && in_size && self.kind.matches(entry)
     }
 }
 
@@ -291,6 +450,181 @@ mod tests {
             shown(date(DateFacet::ThisYear)).len(),
             4,
             "the folder has no time"
+        );
+    }
+
+    fn sized(name: &str, size: Option<u64>) -> Entry {
+        let mut item = entry(name, "text/plain", None);
+        item.size = size;
+        item
+    }
+
+    /// The size groups are Windows' own (`System.Size`, Windows 10
+    /// version 1809 and later), each starting at its documented
+    /// `minValue`; a folder, which has no size, is in none.
+    ///
+    /// parity: SRCH-043
+    #[test]
+    fn sizes_follow_the_documented_groups() {
+        let sizes: [u64; 13] = [
+            0,
+            1,
+            16_382,
+            16_383,
+            1_048_576,
+            1_048_577,
+            134_217_728,
+            134_217_729,
+            1_073_741_824,
+            1_073_741_825,
+            4_294_967_296,
+            4_294_967_297,
+            u64::MAX,
+        ];
+        let mut items: Vec<Entry> = sizes
+            .iter()
+            .map(|size| sized(&size.to_string(), Some(*size)))
+            .collect();
+        let mut folder = sized("Work", None);
+        folder.is_dir = true;
+        items.push(folder);
+        let now = local(2026, 9, 16, 12);
+        let shown = |size: SizeFacet| -> Vec<String> {
+            let matcher = SearchFacets {
+                size,
+                ..SearchFacets::default()
+            }
+            .matcher(&now);
+            items
+                .iter()
+                .filter(|item| matcher.matches(item))
+                .map(|item| item.name.clone())
+                .collect()
+        };
+        assert_eq!(shown(SizeFacet::Any).len(), 14);
+        assert_eq!(shown(SizeFacet::Empty), ["0"]);
+        assert_eq!(shown(SizeFacet::Tiny), ["1", "16382"]);
+        assert_eq!(shown(SizeFacet::Small), ["16383", "1048576"]);
+        assert_eq!(shown(SizeFacet::Medium), ["1048577", "134217728"]);
+        assert_eq!(shown(SizeFacet::Large), ["134217729", "1073741824"]);
+        assert_eq!(shown(SizeFacet::Huge), ["1073741825", "4294967296"]);
+        assert_eq!(
+            shown(SizeFacet::Gigantic),
+            ["4294967297", u64::MAX.to_string().as_str()]
+        );
+        assert_eq!(shown(SizeFacet::Larger(16_382)).len(), 10);
+        assert_eq!(shown(SizeFacet::Smaller(16_383)), ["0", "1", "16382"]);
+        assert_eq!(shown(SizeFacet::Larger(4_294_967_296)).len(), 2);
+        assert!(shown(SizeFacet::Smaller(0)).is_empty());
+        assert_eq!(
+            SizeFacet::ALL.map(SizeFacet::label),
+            [
+                "Any size",
+                "Empty (0 KB)",
+                "Tiny (0 – 16 KB)",
+                "Small (16 KB – 1 MB)",
+                "Medium (1 – 128 MB)",
+                "Large (128 MB – 1 GB)",
+                "Huge (1 – 4 GB)",
+                "Gigantic (> 4 GB)",
+            ]
+        );
+    }
+
+    /// Last week runs from the Monday before this week's to this week's,
+    /// last month and last year over the whole month and year before this
+    /// one, and the list reads as Windows 11's Date modified list.
+    ///
+    /// parity: SRCH-043
+    #[test]
+    fn last_week_is_the_week_before_this_one() {
+        // Wednesday 16 September 2026, noon.
+        let now = local(2026, 9, 16, 12);
+        let (from, until) = DateFacet::LastWeek.range(&now).expect("a range");
+        assert_eq!(from, local(2026, 9, 7, 0).to_unix());
+        assert_eq!(until, local(2026, 9, 14, 0).to_unix());
+        let (from, until) = DateFacet::LastMonth.range(&now).expect("a range");
+        assert_eq!(from, local(2026, 8, 1, 0).to_unix());
+        assert_eq!(until, local(2026, 9, 1, 0).to_unix());
+        let (from, until) = DateFacet::LastYear.range(&now).expect("a range");
+        assert_eq!(from, local(2025, 1, 1, 0).to_unix());
+        assert_eq!(until, local(2026, 1, 1, 0).to_unix());
+        // In January, last month is December of the year before.
+        let january = local(2026, 1, 20, 12);
+        let (from, until) = DateFacet::LastMonth.range(&january).expect("a range");
+        assert_eq!(from, local(2025, 12, 1, 0).to_unix());
+        assert_eq!(until, local(2026, 1, 1, 0).to_unix());
+        assert_eq!(
+            DateFacet::ALL.map(DateFacet::label),
+            [
+                "Any date",
+                "Today",
+                "Yesterday",
+                "This week",
+                "Last week",
+                "This month",
+                "Last month",
+                "This year",
+                "Last year",
+            ]
+        );
+    }
+
+    /// Options typed into the box and options chosen from the lists
+    /// narrow together: an item must pass both.
+    ///
+    /// parity: SRCH-044
+    #[test]
+    fn typed_and_chosen_options_narrow_together() {
+        let now = local(2026, 9, 16, 12);
+        let mut small_doc = entry("a.txt", "text/plain", at(&now));
+        small_doc.size = Some(20_000);
+        let mut tiny_doc = entry("b.txt", "text/plain", at(&now));
+        tiny_doc.size = Some(10);
+        let mut tiny_old = entry("c.txt", "text/plain", at(&local(2025, 1, 1, 9)));
+        tiny_old.size = Some(10);
+        let mut tiny_photo = entry("d.png", "image/png", at(&now));
+        tiny_photo.size = Some(10);
+        let all = [&small_doc, &tiny_doc, &tiny_old, &tiny_photo];
+        let chosen = SearchFacets {
+            kind: KindFacet::Documents,
+            ..SearchFacets::default()
+        };
+        let typed = SearchFacets {
+            size: SizeFacet::Tiny,
+            date: DateFacet::ThisYear,
+            ..SearchFacets::default()
+        };
+        let matcher = chosen.matcher_with(&typed, &now);
+        let shown: Vec<&str> = all
+            .iter()
+            .filter(|item| matcher.matches(item))
+            .map(|item| item.name.as_str())
+            .collect();
+        assert_eq!(shown, ["b.txt"]);
+        let clash = SearchFacets {
+            kind: KindFacet::Images,
+            ..SearchFacets::default()
+        };
+        let matcher = chosen.matcher_with(&clash, &now);
+        assert!(
+            all.iter().all(|item| !matcher.matches(item)),
+            "a document is not a picture"
+        );
+        let matcher = SearchFacets {
+            date: DateFacet::Today,
+            ..SearchFacets::default()
+        }
+        .matcher_with(
+            &SearchFacets {
+                date: DateFacet::Yesterday,
+                ..SearchFacets::default()
+            },
+            &now,
+        );
+        assert!(
+            all.iter().all(|item| !matcher.matches(item)),
+            "today is not yesterday"
         );
     }
 }
