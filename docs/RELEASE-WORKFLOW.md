@@ -8,7 +8,8 @@ enabled and review changes before merging them.
 
 The native packages are built in distribution containers (`native-package` and
 `native-flatpak` jobs). The `release` job downloads, verifies and publishes
-them; it installs `desktop-file-utils` and `appstream` for the package checks.
+them; it installs `desktop-file-utils` and `appstream` for the package checks,
+and `libsoup-3.0-0` for the update helper those checks start.
 The `website` job installs its pinned pnpm and Playwright versions, checks the
 site and deploys it to Cloudflare.
 
