@@ -81,32 +81,125 @@ impl BrowserWindow {
 mod tests {
     use gtk::prelude::*;
 
+    use super::super::menu_popover::ItemAvailability;
     use super::*;
 
-    /// parity: TAB-012
-    #[test]
-    fn a_tab_menu_offers_the_python_items_in_order() {
-        let tab = TabId::from_variant(&1_u64.to_variant()).expect("a tab id is a u64");
+    fn tab() -> TabId {
+        TabId::from_variant(&1_u64.to_variant()).expect("a tab id is a u64")
+    }
 
-        let labels: Vec<String> = tab_menu(tab, "file:///tmp", false)
-            .into_iter()
+    /// The facts of the middle of three tabs, with or without the extra items.
+    fn middle_tab(extra_items: bool) -> TabMenuFacts {
+        TabMenuFacts {
+            is_only_tab: false,
+            is_last_tab: false,
+            extra_items,
+        }
+    }
+
+    fn labels(entries: &[MenuEntry]) -> Vec<String> {
+        entries
+            .iter()
             .map(|entry| match entry {
-                MenuEntry::Item(item) => item.label,
+                MenuEntry::Item(item) => item.label.clone(),
                 MenuEntry::Divider => "-".to_owned(),
             })
-            .collect();
+            .collect()
+    }
+
+    fn item<'a>(entries: &'a [MenuEntry], label: &str) -> &'a MenuItem {
+        entries
+            .iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Item(item) if item.label == label => Some(item),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("the menu has {label}"))
+    }
+
+    /// Windows 11 File Explorer's tab menu, in its order: Close tab with
+    /// its X and Ctrl+W, Close other tabs and Close tabs to the right
+    /// without an icon, and Duplicate tab; nothing else.
+    ///
+    /// parity: TAB-012, TAB-059
+    #[test]
+    fn a_tab_menu_offers_windows_items_in_order() {
+        let entries = tab_menu(tab(), "file:///tmp", middle_tab(false));
 
         assert_eq!(
-            labels,
+            labels(&entries),
             [
-                "Move tab to new window",
-                "Move tab to window…",
-                "Duplicate tab",
-                "Open windows…",
-                "-",
                 "Close tab",
                 "Close other tabs",
+                "Close tabs to the right",
+                "Duplicate tab",
             ]
         );
+        let close = item(&entries, "Close tab");
+        assert!(close.shows_glyph);
+        assert_eq!(close.glyph, Icon::Dismiss);
+        assert_eq!(close.shortcut, Some("Ctrl+W"));
+        assert!(!item(&entries, "Close other tabs").shows_glyph);
+        assert!(!item(&entries, "Close tabs to the right").shows_glyph);
+        let duplicate = item(&entries, "Duplicate tab");
+        assert!(duplicate.shows_glyph);
+        assert_eq!(duplicate.glyph, Icon::Copy);
+    }
+
+    /// "Show more items in the tab menu" adds the app's own items back
+    /// after Windows', so Move tab to new window, Move tab to window… and
+    /// Open windows… are not lost.
+    ///
+    /// parity: TAB-012, TAB-060
+    #[test]
+    fn the_extra_items_follow_windows_items_when_asked_for() {
+        let entries = tab_menu(tab(), "file:///tmp", middle_tab(true));
+
+        assert_eq!(
+            labels(&entries),
+            [
+                "Close tab",
+                "Close other tabs",
+                "Close tabs to the right",
+                "Duplicate tab",
+                "-",
+                "Move tab to new window",
+                "Move tab to window…",
+                "Open windows…",
+            ]
+        );
+    }
+
+    /// Close other tabs has nothing to close on the only tab, and Close
+    /// tabs to the right nothing on the last one, so they are grayed out
+    /// there.
+    ///
+    /// parity: TAB-015, TAB-059
+    #[test]
+    fn close_items_are_disabled_when_there_is_nothing_to_close() {
+        let disabled = |facts: TabMenuFacts| -> Vec<String> {
+            tab_menu(tab(), "file:///tmp", facts)
+                .into_iter()
+                .filter_map(|entry| match entry {
+                    MenuEntry::Item(item) if item.availability == ItemAvailability::Disabled => {
+                        Some(item.label)
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let only = TabMenuFacts {
+            is_only_tab: true,
+            is_last_tab: true,
+            extra_items: false,
+        };
+        let last = TabMenuFacts {
+            is_last_tab: true,
+            ..middle_tab(false)
+        };
+
+        assert_eq!(disabled(only), ["Close other tabs", "Close tabs to the right"]);
+        assert_eq!(disabled(last), ["Close tabs to the right"]);
+        assert!(disabled(middle_tab(false)).is_empty());
     }
 }

@@ -1702,6 +1702,34 @@ mod tests {
         assert_eq!(read.hide_expand_arrows, Some(true));
     }
 
+    /// The app's extras beyond Windows 11's tab menu and navigation pane
+    /// start off, so both look as Windows draws them, and are not stored
+    /// then; each one turned on is saved and read back.
+    ///
+    /// parity: TAB-060, SIDE-034
+    #[test]
+    fn tab_menu_and_navigation_pane_extras_start_off_and_are_stored_when_on() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.more_tab_menu_items);
+        assert!(!preferences.more_navigation_pane_items);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("moreTabMenuItems").is_none(), "not stored while off");
+        assert!(stored.get("moreNavigationPaneItems").is_none(), "not stored while off");
+
+        let on = PreferencesUpdate::from_json(&json!({
+            "moreTabMenuItems": true,
+            "moreNavigationPaneItems": true,
+        }))
+        .expect("valid preferences");
+        preferences.apply(&on);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["moreTabMenuItems"], json!(true));
+        assert_eq!(stored["moreNavigationPaneItems"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.more_tab_menu_items, Some(true));
+        assert_eq!(read.more_navigation_pane_items, Some(true));
+    }
+
     /// The clipboard's extras beyond Windows start on, as they were before
     /// they could be turned off, and are not stored then; each one turned
     /// off, as Windows 11 File Explorer behaves, is saved under its key and

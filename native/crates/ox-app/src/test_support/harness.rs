@@ -402,6 +402,39 @@ impl TestWindow {
         });
     }
 
+    /// Turns Settings' "Show more items in the navigation pane" on or off,
+    /// as another process would, and waits until the window reads it
+    /// (SIDE-034).
+    pub(crate) fn set_more_navigation_pane_items(&self, on: bool) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                more_navigation_pane_items: Some(on),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("the navigation pane to follow the setting", || {
+            self.context.settings_data().preferences.more_navigation_pane_items == on
+        });
+        settle();
+    }
+
+    /// Turns Settings' "Show more items in the tab menu" on or off, as
+    /// another process would, and waits until the window reads it
+    /// (TAB-060).
+    pub(crate) fn set_more_tab_menu_items(&self, on: bool) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                more_tab_menu_items: Some(on),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("the tab menu to follow the setting", || {
+            self.context.settings_data().preferences.more_tab_menu_items == on
+        });
+    }
+
     /// Turns Settings' "Also copy paths as text" on or off, as another process
     /// would, and waits until the window reads it, for tests of that switch
     /// (CLIP-004).

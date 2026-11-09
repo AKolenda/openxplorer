@@ -55,6 +55,78 @@ fn with_fixture_pinned(fixture: &Fixture) -> TestWindow {
     test
 }
 
+/// The rows the app adds to Windows 11's navigation pane.
+const MORE_ROWS: [&str; 3] = ["Recent files", "Recent locations", "Recycle Bin"];
+
+/// The capacity bars drawn in the sidebar.
+fn capacity_bars(test: &TestWindow) -> usize {
+    descendants::<gtk::ProgressBar>(test.window.sidebar().list())
+        .iter()
+        .filter(|bar| bar.has_css_class("capacity"))
+        .count()
+}
+
+/// By default the navigation pane is Windows 11's: Home, the pinned
+/// folders, This PC with its drives, then Network, with no capacity bar
+/// and none of the app's own rows. The Recycle Bin and Recent stay
+/// reachable from the address bar. "Show more items in the navigation
+/// pane" brings the capacity bars, Recent files, Recent locations and the
+/// Recycle Bin back, as the pane was before.
+///
+/// parity: SIDE-001, SIDE-034
+#[gtk::test]
+fn the_navigation_pane_is_windows_by_default_and_a_setting_adds_more_rows() {
+    let fixture = Fixture::standard();
+    let test = with_fixture_pinned(&fixture);
+    let sidebar = test.window.sidebar();
+    wait_for(std::time::Duration::from_millis(300));
+    settle_frames(&test);
+
+    let labels = sidebar.labels();
+    let at = |label: &str| {
+        labels
+            .iter()
+            .position(|shown| shown == label)
+            .unwrap_or_else(|| panic!("{label} is in the sidebar: {labels:?}"))
+    };
+    assert_eq!(at("Home"), 0);
+    assert!(at("Home") < at("Example projects"));
+    assert!(at("Example projects") < at("This PC"));
+    assert_eq!(at("Local Disk"), at("This PC") + 1, "the drives are under This PC");
+    assert!(at("Local Disk") < at("Network"));
+    for row in MORE_ROWS {
+        assert!(!labels.iter().any(|shown| shown == row), "{row} is not listed: {labels:?}");
+    }
+    assert_eq!(capacity_bars(&test), 0, "no capacity bar under Local Disk");
+    for typed in ["Recycle Bin", "Recent", "Recent locations"] {
+        let uri = test.window.resolve_address(typed).expect("a place");
+        test.window.navigate(&uri).expect("the place opens");
+        wait_until(typed, || {
+            test.window
+                .current_uri()
+                .is_some_and(|current| same_location(&current, &uri))
+        });
+    }
+
+    test.set_more_navigation_pane_items(true);
+    for row in MORE_ROWS {
+        wait_for_row(&test, row);
+    }
+    wait_until("the capacity bar under Local Disk", || capacity_bars(&test) > 0);
+    let labels = sidebar.labels();
+    assert_eq!(&labels[labels.len() - 3..], MORE_ROWS, "after Network, as before");
+
+    test.set_more_navigation_pane_items(false);
+    wait_until("the rows to go again", || {
+        !sidebar.labels().iter().any(|shown| shown == "Recycle Bin")
+    });
+}
+
+/// Lets freshly drawn rows finish their first frames.
+fn settle_frames(test: &TestWindow) {
+    wait_for_frames(&test.window, 3);
+}
+
 /// parity: SIDE-001
 #[gtk::test]
 fn quick_access_has_no_heading_and_this_pc_opens_from_its_name() {

@@ -768,7 +768,7 @@ fn right_clicking_a_pin_opens_its_menu() {
     );
 }
 
-/// parity: TAB-012, TAB-013
+/// parity: TAB-012, TAB-013, TAB-060
 #[gtk::test]
 fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder() {
     let fixture = Fixture::standard();
@@ -797,13 +797,29 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     assert_eq!(
         menu.row_labels(),
         [
-            "Move tab to new window",
-            "Move tab to window…",
-            "Duplicate tab",
-            "Open windows…",
-            "-",
             "Close tab",
             "Close other tabs",
+            "Close tabs to the right",
+            "Duplicate tab",
+        ]
+    );
+    assert!(!menu.row("Close other tabs").is_sensitive(), "the only tab");
+    assert!(!menu.row("Close tabs to the right").is_sensitive(), "the last tab");
+    menu.popdown();
+    test.set_more_tab_menu_items(true);
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
+    let menu = test.window.tab_strip().menu();
+    assert_eq!(
+        menu.row_labels(),
+        [
+            "Close tab",
+            "Close other tabs",
+            "Close tabs to the right",
+            "Duplicate tab",
+            "-",
+            "Move tab to new window",
+            "Move tab to window…",
+            "Open windows…",
         ]
     );
     assert!(
@@ -868,7 +884,7 @@ fn the_menu_key_and_shift_f10_open_the_focused_tabs_menu() {
         assert!(action.activate(gtk::ShortcutActionFlags::empty(), &tab, None));
         let menu = test.window.tab_strip().menu();
         assert!(menu.is_visible(), "{key:?} opens the tab menu");
-        assert_eq!(menu.row_labels()[0], "Move tab to new window");
+        assert_eq!(menu.row_labels()[0], "Close tab");
         assert!(
             !menu.row("Close other tabs").is_sensitive(),
             "the only tab has no others to close"

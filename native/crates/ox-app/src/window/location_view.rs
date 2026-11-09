@@ -462,6 +462,8 @@ impl BrowserWindow {
 mod tests {
     use super::*;
     use crate::test_support::{studio_nas_mapped_drive, studio_nas_server};
+    use crate::icons::Tint;
+    use ox_core::location::{RECENT_LOCATIONS_URI, RECENT_URI, TRASH_URI};
 
     /// parity: NAV-024
     #[test]
@@ -502,7 +504,7 @@ mod tests {
 
     /// parity: TAB-010, DEV-004, NAV-025, LOOK-015, LOOK-016
     #[test]
-    fn tabs_and_the_address_bar_show_the_current_apps_icons() {
+    fn tabs_and_the_address_bar_show_each_locations_own_icon() {
         let cases = [
             IconCase {
                 uri: "file:///tmp/work",
@@ -524,10 +526,28 @@ mod tests {
                 tab: Art::Glyph(Icon::Phone),
                 address: Icon::Phone,
             },
+            // This PC, the Recycle Bin and the recent lists show the icon
+            // of their navigation pane row, as Windows 11 File Explorer's
+            // This PC and Recycle Bin tabs do.
             IconCase {
                 uri: Page::ThisPc.uri(),
-                tab: Art::Folder,
+                tab: Art::TintedGlyph(Icon::Laptop, Tint::ThisPc),
                 address: Icon::Laptop,
+            },
+            IconCase {
+                uri: TRASH_URI,
+                tab: Art::Glyph(Icon::Delete),
+                address: Icon::Delete,
+            },
+            IconCase {
+                uri: RECENT_URI,
+                tab: Art::Glyph(Icon::History),
+                address: Icon::History,
+            },
+            IconCase {
+                uri: RECENT_LOCATIONS_URI,
+                tab: Art::Glyph(Icon::Clock),
+                address: Icon::Clock,
             },
             IconCase {
                 uri: Page::Network.uri(),
