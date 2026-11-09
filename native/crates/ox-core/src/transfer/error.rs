@@ -49,6 +49,10 @@ pub enum TransferError {
     /// `ETXTBSY`).
     #[error("{0}")]
     Busy(String),
+    /// A folder would go into itself or a folder inside it (XFER-016):
+    /// refused before anything changes, and never worth trying again.
+    #[error("{0}")]
+    InsideSource(String),
     /// Any other backend or validation failure.
     #[error("{0}")]
     Failed(String),

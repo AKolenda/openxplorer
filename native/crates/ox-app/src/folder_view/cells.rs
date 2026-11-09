@@ -537,8 +537,8 @@ impl FileCell {
     }
 
     /// The heading row of a slot, made the first time a slot shows: the
-    /// chevron, the title and the line. The window handles clicks on it
-    /// (`window/group_headings.rs`).
+    /// chevron, the title and the rest of the row. The window handles
+    /// clicks on it (`window/group_headings.rs`).
     fn slot_row(&self) -> gtk::Box {
         let imp = self.imp();
         if let Some(row) = imp.slot_row.borrow().as_ref() {
@@ -552,16 +552,19 @@ impl FileCell {
             .single_line_mode(true)
             .css_classes(["group-title"])
             .build();
-        let line = gtk::Separator::builder()
+        // The rest of the row after the title: Windows 11 draws no line
+        // there, so it is an empty filler that only takes the room, and
+        // the slots after it in a grid's row carry it on.
+        let rest = gtk::Box::builder()
             .hexpand(true)
-            .valign(gtk::Align::Center)
+            .css_classes(["group-rest"])
             .build();
         let row = gtk::Box::builder()
             .spacing(10)
             .hexpand(true)
             .css_classes(["group-header"])
             .build();
-        // The chevron and the title, which the line follows.
+        // The chevron and the title, which the rest of the row follows.
         let hit = gtk::Box::builder()
             .spacing(8)
             .css_classes(["group-heading-hit"])
@@ -569,9 +572,9 @@ impl FileCell {
         hit.append(&chevron);
         hit.append(&title);
         row.append(&hit);
-        row.append(&line);
+        row.append(&rest);
         // The pointer anywhere over a heading's row, its heading or a slot
-        // carrying its line, lights the whole row, as in Windows 11. Only
+        // carrying the row on, lights the whole row, as in Windows 11. Only
         // a change of state restyles anything.
         let motion = gtk::EventControllerMotion::new();
         let hover = glib::clone!(

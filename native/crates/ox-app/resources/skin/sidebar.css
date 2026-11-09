@@ -93,6 +93,10 @@ window.ox .sidebar button.side-expander:hover { background-color: @ox_pressed; }
    at the row's end, as GNOME's places sidebar shows it. */
 window.ox .sidebar button.side-eject { min-width: 24px; min-height: 24px; margin-left: 6px; color: @ox_muted; }
 window.ox .sidebar button.side-eject:hover { background-color: @ox_pressed; color: @ox_text; }
+/* In Compact view (VIEW-067) the button is 20px tall, its 16px glyph
+   with 2px above and below, so a drive's row is no taller than the
+   23px rows round it. */
+window.ox.compact-density .sidebar button.side-eject { min-height: 20px; }
 /* The accent bar of the selected row: 3 x 16 with 2px corners, centred
    on the row (§4.4; the web's .side-entry.selected:before is 3 x 15) by
    a top margin that follows the row's height (theme/fonts.rs). Windows 11

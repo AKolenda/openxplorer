@@ -62,7 +62,8 @@ fn selection_bar_offset(test: &TestWindow) -> i32 {
 }
 
 /// View > Compact view draws the details rows and the sidebar's rows
-/// closer, 24 pixels at 100% text, with the selected place's
+/// closer, 19 and 23 pixels at 100% text (21 and 24 apart with their
+/// margins, as Windows 11's Compact view), with the selected place's
 /// accent bar still centred, and saves the choice; turning it off brings
 /// the usual heights back.
 ///
@@ -85,10 +86,10 @@ fn compact_view_draws_closer_rows_and_is_saved() {
     });
     let compact_row = details_row_height(&test);
     let compact_side = sidebar_row_height(&test);
-    assert_eq!(compact_row, 24, "details rows, from {usual_row}");
-    assert_eq!(compact_side, 24, "sidebar rows, from {usual_side}");
+    assert_eq!(compact_row, 19, "details rows, from {usual_row}");
+    assert_eq!(compact_side, 23, "sidebar rows, from {usual_side}");
     assert!(compact_row < usual_row && compact_side < usual_side);
-    assert_eq!(selection_bar_offset(&test), 4, "centred on a 24-pixel row");
+    assert_eq!(selection_bar_offset(&test), 4, "centred on a 23-pixel row");
 
     test.activate("compact-density", None);
     wait_for_frames(&test.window, 3);
