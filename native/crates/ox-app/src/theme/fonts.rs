@@ -8,7 +8,10 @@
 
 use crate::folder_view::grid::{self, IconSize};
 use crate::folder_view::icon_size::{
-    compact_row, content_row, group_heading_row, tiles_cell, CONTENT_CHROME, HEADING_CHROME, TILES_CHROME,
+    compact_density_details_row, compact_density_heading_row, compact_density_line,
+    compact_density_tiles_row, compact_row, content_row, group_heading_row, tiles_cell,
+    COMPACT_CONTENT_HEADING_CHROME, COMPACT_TILES_CHROME, COMPACT_TILES_HEADING_CHROME, CONTENT_CHROME,
+    HEADING_CHROME, TILES_CHROME,
 };
 use crate::text_size::{self, TextSize};
 
@@ -19,6 +22,7 @@ pub(crate) fn css_for_text_size(text_size: TextSize) -> String {
     let scale = metrics.scale;
     let mut rules: Vec<String> = Vec::new();
     rules.extend(FONT_SIZES.iter().map(|font| font.rule(scale)));
+    rules.push(group_title_rule(scale));
     rules.extend(SCALED_HEIGHTS.iter().map(|height| height.rule(scale)));
     rules.push(solid_frame_rule(scale));
     rules.push(details_row_rule(metrics.detail_row));
@@ -67,6 +71,10 @@ const FONT_SIZES: &[FontSize] = &[
     font("columnview.files", 12.0),
     font("columnview.files > header > button", 12.0),
     font("gridview.files", 12.0),
+    // A group's title, as Windows 11 draws it: a quarter larger than the
+    // items' names (VIEW-022).
+    font("columnview.files .group-slot .group-title", 15.0),
+    font("gridview.files .group-slot .group-title", 15.0),
     font(".details .detail-name", 14.0),
     font(".details button.detail-button", 12.0),
     font(".details .detail-section", 13.0),
@@ -208,11 +216,39 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
 /// 2026-11-06; the web's were 35).
 const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list.places > row", 31, 20.0, 11.0);
 
-/// A sidebar row in Compact view: 24 pixels at 100% instead of 31, as
-/// Windows 11's Compact view packs them, and no lower, as Compact view's
-/// details rows, growing with the text as the usual rows do.
+/// A sidebar row in Compact view: 23 pixels at 100% instead of 31, 24
+/// apart with the 1-pixel gap, as Windows 11's Compact view packs them,
+/// growing with the text as the usual rows do. A separator keeps its 24
+/// pixels, one row's room, as in Windows.
 const COMPACT_SIDEBAR_ROW: ScaledHeight =
-    grows("window.compact-density .sidebar list.places > row", 24, 20.0, 4.0);
+    grows("window.compact-density .sidebar list.places > row", 23, 20.0, 3.0);
+
+/// The column titles in Compact view: 25 pixels at 100% instead of 31,
+/// so with the header's line the header is 26 tall, as Windows 11's
+/// Compact view draws its column header, growing with the text as the
+/// usual titles do.
+const COMPACT_COLUMN_TITLES: ScaledHeight = grows(
+    "window.compact-density columnview.files > header > button",
+    25,
+    24.0,
+    1.0,
+);
+
+/// A group heading's title (VIEW-022): its 15-pixel text on a line 20
+/// pixels tall at 100%, growing with the text, whatever the font's and
+/// GTK's own line height (21 pixels with Noto Sans on GTK 4.14, 20 on
+/// 4.18, 17 with the distribution checks' fallback font). The line
+/// overhangs the title's allocation above and below by its difference
+/// from the items' 16-pixel line, so a heading's row keeps the height the
+/// items' text sets, with the title centred on it.
+fn group_title_rule(scale: f64) -> String {
+    let line = text_size::ceil_pixels(20.0 * scale);
+    let overhang = (line - text_size::ceil_pixels(16.0 * scale)) / 2;
+    format!(
+        "columnview.files .group-slot .group-title, gridview.files .group-slot .group-title \
+         {{ line-height: {line}px; margin: -{overhang}px 0; }}"
+    )
+}
 
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
@@ -283,23 +319,70 @@ fn details_row_rule(detail_row: i32) -> String {
     )
 }
 
-/// Compact view's rows (`window.compact-density`, set by
-/// `window/compact_density.rs`, VIEW-067): the sidebar's rows stand
-/// closer, and the details rows as close as the List layout's items
-/// ([`compact_row`]), less the 1-pixel margin above and below each, so
-/// rows 32 pixels apart at 100% stand 26 apart. The window class makes
-/// these rules win over the usual heights above. The folder tree's rows
-/// are in `skin/sidebar.css`, as their usual height is.
-fn compact_density_rules(scale: f64, text_size: TextSize) -> [String; 2] {
-    let row = compact_row(text_size) - 2;
-    [
+/// Compact view (`window.compact-density`, set by
+/// `window/compact_density.rs`, VIEW-067), spaced as Windows 11's Compact
+/// view at 100%: Details rows 21 pixels apart (19 less the 1-pixel margin
+/// above and below each), a group heading's box 8 pixels taller than a
+/// row, so its title has room inside its hover box, with 2 pixels above
+/// it and 1 below, so its larger title's capitals stand 26 pixels under
+/// the row before and 27 over the row after; the column header 26 tall with
+/// its line, the first heading's title 14 under it; the sidebar's rows 24
+/// apart; rows of Tiles 57 apart, a heading 26 tall; Content's items as
+/// usual (Windows 11 spaces them 48 apart in both views) under a heading
+/// 32 tall, their lines 18 apart. Tiles' and Content's lines are each
+/// [`compact_density_line`] tall, so those distances hold whatever the
+/// font's own line height. The window class makes these rules win
+/// over the usual ones. The folder tree's rows are in `skin/sidebar.css`,
+/// as their usual height is.
+fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
+    let row = compact_density_details_row(text_size) - 2;
+    // A heading's box: 8 pixels taller than a row, taken from the room
+    // above and below it, so its title has room inside its hover box and
+    // stands where it would in a row's box.
+    let box_height = row + 8;
+    let tile = compact_density_tiles_row(text_size) - COMPACT_TILES_CHROME;
+    let tiles_heading = compact_density_heading_row(text_size, false) - COMPACT_TILES_HEADING_CHROME;
+    let content_heading = compact_density_heading_row(text_size, true) - COMPACT_CONTENT_HEADING_CHROME;
+    let line = compact_density_line(text_size);
+    vec![
+        format!("window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}"),
         format!(
-            "window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}\n\
-             window.compact-density columnview.files > listview > row > cell > .group-slot, \
+            "window.compact-density columnview.files > listview > row > cell > .group-slot, \
              window.compact-density columnview.files > listview > row > cell > .group-rule \
-             {{ min-height: {row}px; }}"
+             {{ min-height: {box_height}px; margin-top: 2px; padding-bottom: 1px; }}"
         ),
+        COMPACT_COLUMN_TITLES.rule(scale),
+        // The first heading's title 14 pixels under the header, as in
+        // Windows (the usual list starts 1 pixel down).
+        "window.compact-density columnview.files.grouped > listview { padding-top: 4px; }".to_owned(),
         COMPACT_SIDEBAR_ROW.rule(scale),
+        format!(
+            "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) \
+             {{ min-height: {tile}px; padding-top: 4px; padding-bottom: 4px; margin: 0 4px 1px 4px; }}"
+        ),
+        // The tiles' lines 16 pixels apart, each as tall whatever the
+        // font's own line height.
+        format!(
+            "window.compact-density gridview.files.tiles > child .item-lines {{ border-spacing: 0; }}\n\
+             window.compact-density gridview.files.tiles > child .item-lines label {{ line-height: {line}px; }}"
+        ),
+        format!(
+            "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
+             {{ min-height: {tiles_heading}px; margin-top: 0; margin-bottom: 1px; padding: 4px 0; }}"
+        ),
+        // Content's lines 18 pixels apart, the name's and the date's and
+        // size's, as in Windows 11's Compact view.
+        format!(
+            "window.compact-density gridview.files.content > child .item-lines, \
+             window.compact-density gridview.files.content > child .item-properties {{ border-spacing: 2px; }}\n\
+             window.compact-density gridview.files.content > child .item-lines label, \
+             window.compact-density gridview.files.content > child .item-properties label \
+             {{ line-height: {line}px; }}"
+        ),
+        format!(
+            "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
+             {{ min-height: {content_heading}px; margin: 2px 0 3px 0; padding: 5px 0; }}"
+        ),
     ]
 }
 
@@ -397,29 +480,82 @@ mod tests {
         css_for_text_size(TextSize::from_percent(percent))
     }
 
-    /// Compact view's rows are 24 pixels in Details and the sidebar at
-    /// 100%, and still grow with larger text, staying closer than the
-    /// usual rows.
+    /// Compact view spaces Details rows 21 pixels apart at 100% (19 and
+    /// the margins), a heading's box 27 tall with 2 pixels above and 1
+    /// below, the column titles 25 tall (26 with the header's line) and
+    /// the sidebar's rows 24 apart
+    /// (23 and the gap), as Windows 11's Compact view; Tiles' rows 57
+    /// apart and their headings and Content's closer too. Everything still
+    /// grows with larger text.
     ///
     /// parity: VIEW-067
     #[test]
-    fn compact_view_rows_are_closer_and_grow_with_the_text() {
+    fn compact_view_spaces_rows_as_windows_and_grows_with_the_text() {
         let css = css_at(100);
-        assert!(
-            css.contains("window.compact-density columnview.files > listview > row { min-height: 24px; }")
-        );
-        assert!(css.contains("window.compact-density .sidebar list.places > row { min-height: 24px; }"));
+        for rule in [
+            "window.compact-density columnview.files > listview > row { min-height: 19px; }",
+            "window.compact-density columnview.files > listview > row > cell > .group-slot, \
+             window.compact-density columnview.files > listview > row > cell > .group-rule \
+             { min-height: 27px; margin-top: 2px; padding-bottom: 1px; }",
+            "window.compact-density columnview.files > header > button { min-height: 25px; }",
+            "window.compact-density columnview.files.grouped > listview { padding-top: 4px; }",
+            "window.compact-density .sidebar list.places > row { min-height: 23px; }",
+            "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) \
+             { min-height: 48px; padding-top: 4px; padding-bottom: 4px; margin: 0 4px 1px 4px; }",
+            "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
+             { min-height: 17px; margin-top: 0; margin-bottom: 1px; padding: 4px 0; }",
+            "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
+             { min-height: 17px; margin: 2px 0 3px 0; padding: 5px 0; }",
+            "window.compact-density gridview.files.tiles > child .item-lines label { line-height: 16px; }",
+            "window.compact-density gridview.files.content > child .item-properties label { line-height: 16px; }",
+        ] {
+            assert!(css.contains(rule), "{rule}");
+        }
         let larger = css_at(150);
-        assert!(
-            larger.contains("window.compact-density columnview.files > listview > row { min-height: 36px; }")
-        );
-        assert!(larger.contains("window.compact-density .sidebar list.places > row { min-height: 34px; }"));
-        assert!(larger.contains(".sidebar list.places > row { min-height: 41px; }"));
-        assert!(larger.contains("columnview.files > listview > row { min-height: 42px; }"));
+        for rule in [
+            "window.compact-density columnview.files > listview > row { min-height: 31px; }",
+            "window.compact-density columnview.files > header > button { min-height: 37px; }",
+            "window.compact-density .sidebar list.places > row { min-height: 33px; }",
+            ".sidebar list.places > row { min-height: 41px; }",
+            "columnview.files > listview > row { min-height: 42px; }",
+        ] {
+            assert!(larger.contains(rule), "{rule}");
+        }
+        assert!(larger.contains(
+            "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 72px;"
+        ));
+        assert!(larger.contains(
+            "window.compact-density gridview.files.tiles > child .item-lines label { line-height: 24px; }"
+        ));
+    }
+
+    /// The usual view's spacing does not change with Compact view: its
+    /// rows, headings, column titles, sidebar rows, tiles and Content rows
+    /// keep their heights.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn the_usual_view_keeps_its_heights() {
+        let css = css_at(100);
+        for rule in [
+            "columnview.files > listview > row { min-height: 30px; }",
+            "columnview.files > listview > row > cell > .group-slot, \
+             columnview.files > listview > row > cell > .group-rule { min-height: 30px; }",
+            "columnview.files > header > button { min-height: 31px; }",
+            ".sidebar list.places > row { min-height: 31px; }",
+            ".sidebar .pill { margin-top: 8px; }",
+            "gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 53px; }",
+            "gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }",
+            "gridview.files > child > .item-cell.group-slot.heading-row { min-height: 17px; }",
+            "columnview.files .group-slot .group-title, gridview.files .group-slot .group-title \
+             { line-height: 20px; margin: -2px 0; }",
+        ] {
+            assert!(css.contains(rule), "{rule}");
+        }
     }
 
     /// The selected sidebar row's 16-pixel accent bar stays centred on the
-    /// row, 8 pixels down a 31-pixel row, 4 down Compact view's 24-pixel
+    /// row, 8 pixels down a 31-pixel row, 4 down Compact view's 23-pixel
     /// one, and further down the taller rows of larger text.
     ///
     /// parity: LOOK-014, VIEW-067

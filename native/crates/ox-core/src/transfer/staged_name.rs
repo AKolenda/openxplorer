@@ -98,6 +98,7 @@ impl StagedName {
             TransferError::NoSpace(message) => TransferError::NoSpace(self.reword(&message)),
             TransferError::Busy(message) => TransferError::Busy(self.reword(&message)),
             TransferError::Failed(message) => TransferError::Failed(self.reword(&message)),
+            TransferError::InsideSource(message) => TransferError::InsideSource(self.reword(&message)),
             TransferError::Cancelled | TransferError::RecoveryRequired(_) => error,
         }
     }

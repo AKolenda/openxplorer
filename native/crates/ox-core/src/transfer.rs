@@ -95,7 +95,7 @@ pub(crate) use commit::verify_installation;
 pub use engine::{ElevatedDestination, TransferEngine};
 pub use error::TransferError;
 pub use guard::MAX_DEPTH;
-pub(crate) use guard::{check_write_tree, nesting_error, SourceChange};
+pub(crate) use guard::{check_write_tree, check_write_tree_reading, nesting_error, SourceChange, Unreadable};
 pub use item_failure::{FailedItem, FailureAnswer, FailureCause, FailureQuestion};
 pub(crate) use limits::payload_refusal;
 pub use limits::{storable_name, stores_symbolic_links, FilesystemInfo, FAT_MAX_FILE_SIZE};

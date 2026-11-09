@@ -36,7 +36,9 @@
 //!   negative, as Ctrl+wheel notches over the file list give it;
 //! - `type=<text>`: puts the text in the text field with keyboard focus,
 //!   in the dialog the scene opened last if there is one, such as the
-//!   keyboard shortcuts window's search.
+//!   keyboard shortcuts window's search;
+//! - `scroll=end`: scrolls the body of the dialog the scene opened last to
+//!   its end, as dragging its scroll bar down does;
 //! - `search=<text>`: types `<text>` into the search box, as a key
 //!   press there does; the next step, or the picture, does not wait for
 //!   the search to finish, so a last `search=` pictures a search while it
@@ -93,6 +95,8 @@ pub(crate) enum SceneStep {
     Zoom(i32),
     /// Put this text in the focused text field.
     Type(String),
+    /// Scroll the last dialog's body to its end.
+    ScrollToEnd,
     /// Type this into the search box.
     Search(String),
     /// Open the search strip's option list with this name.
@@ -154,6 +158,7 @@ impl SceneStep {
             "key" => Some(Self::Key(argument.to_owned())),
             "zoom" => argument.parse().ok().map(Self::Zoom),
             "type" => Some(Self::Type(argument.to_owned())),
+            "scroll" => (argument == "end").then_some(Self::ScrollToEnd),
             "wait" => {
                 let pause = Duration::from_millis(argument.parse().ok()?);
                 (pause <= LONGEST_WAIT).then_some(Self::Wait(pause))
@@ -221,6 +226,22 @@ impl SceneStep {
             }
             Self::Zoom(steps) => {
                 window.zoom_view(*steps);
+                Ok(Duration::ZERO)
+            }
+            Self::ScrollToEnd => {
+                let parent: &gtk::Window = window.upcast_ref();
+                let dialog = gtk::Window::list_toplevels()
+                    .into_iter()
+                    .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+                    .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
+                    .last()
+                    .ok_or_else(|| "no dialog is open".to_owned())?;
+                let scroller = crate::window::widget_tree::descendants::<gtk::ScrolledWindow>(&dialog)
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| "the dialog does not scroll".to_owned())?;
+                let adjustment = scroller.vadjustment();
+                adjustment.set_value(adjustment.upper() - adjustment.page_size());
                 Ok(Duration::ZERO)
             }
             Self::Type(text) => {
@@ -419,17 +440,19 @@ mod tests {
             "longer than ten seconds"
         );
         assert_eq!(SceneStep::parse_scene("zoom=big"), None);
+        assert_eq!(SceneStep::parse_scene("scroll=up"), None);
     }
 
     #[test]
     fn a_scene_takes_keys_and_zoom_steps() {
         assert_eq!(
-            SceneStep::parse_scene("key=<Primary><Shift>e; key=KP_Multiply; zoom=-2; type=tab"),
+            SceneStep::parse_scene("key=<Primary><Shift>e; key=KP_Multiply; zoom=-2; type=tab; scroll=end"),
             Some(vec![
                 SceneStep::Key("<Primary><Shift>e".to_owned()),
                 SceneStep::Key("KP_Multiply".to_owned()),
                 SceneStep::Zoom(-2),
                 SceneStep::Type("tab".to_owned()),
+                SceneStep::ScrollToEnd,
             ])
         );
     }

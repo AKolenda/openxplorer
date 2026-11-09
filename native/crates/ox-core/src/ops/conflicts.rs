@@ -261,7 +261,21 @@ impl Scanner<'_> {
             self.free(source, folder);
             return Ok(());
         }
-        let incoming = facts(source, cancel)?;
+        // An incoming item that is gone or cannot be read does not stop
+        // the check: its name is still taken, so it stays a conflict,
+        // with its own facts unknown and never merged, and is answered
+        // like any other. Should it be back by its turn, the answer
+        // applies; otherwise the copy or move asks about it alone
+        // (OPS-047), while the other items are pasted.
+        let incoming = match facts(source, cancel) {
+            Ok(incoming) => incoming,
+            Err(OpsError::NotFound(_) | OpsError::PermissionDenied(_)) => {
+                let present = facts(&existing, cancel)?;
+                self.conflict(source, folder, &existing, ItemFacts::default(), present);
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
         let present = facts(&existing, cancel)?;
         // The folder copied into itself or a folder inside it is left to
         // the engine, which refuses it with its own message.
@@ -279,6 +293,20 @@ impl Scanner<'_> {
             self.free(source, folder);
             return Ok(());
         }
+        self.conflict(source, folder, &existing, incoming, present);
+        Ok(())
+    }
+
+    /// Plans `source` going into `folder` as a conflict with `existing`,
+    /// the item of its name there, with each side's facts.
+    fn conflict(
+        &mut self,
+        source: &GioNode,
+        folder: &GioNode,
+        existing: &GioNode,
+        incoming: ItemFacts,
+        present: ItemFacts,
+    ) {
         let index = self.scan.conflicts.len();
         self.scan.conflicts.push(NameConflict {
             incoming_uri: source.uri(),
@@ -291,7 +319,6 @@ impl Scanner<'_> {
             destination_folder: folder.uri(),
             kind: PlannedKind::Conflict(index),
         });
-        Ok(())
     }
 
     /// Plans `source` going into `folder` under its free name.
