@@ -648,7 +648,7 @@ mod tests {
     #[gtk::test]
     fn a_sidebar_folder_can_be_dragged_and_a_page_cannot() {
         let fixture = Fixture::standard();
-        let test = TestWindow::open(&fixture.uri());
+        let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
         let home_row = test.window.sidebar().middle_of("Home");
         let home = test
             .window

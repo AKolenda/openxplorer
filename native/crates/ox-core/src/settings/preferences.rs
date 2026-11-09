@@ -398,11 +398,12 @@ pub struct Preferences {
     /// after the current tab (Dolphin's `OpenNewTabAfterLastTab`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub open_tabs_at_end: bool,
-    /// Home shows Quick access and the Recent and Favorites lists, as
-    /// Windows 11 File Explorer's Home does, instead of the home folder's
-    /// contents (HOME-012). Off by default; stored only when on.
+    /// Home opens the home folder, as the Python app's did (NAV-038),
+    /// instead of the Home page with Quick access and the Recent and
+    /// Favorites lists that Windows 11 File Explorer shows (HOME-012).
+    /// Off by default; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub home_sections: bool,
+    pub home_opens_folder: bool,
     /// The files added to Favorites, by location, in the order they were
     /// added (HOME-014). Stored only when there is one.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -618,7 +619,7 @@ impl Default for Preferences {
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
             open_tabs_at_end: false,
-            home_sections: false,
+            home_opens_folder: false,
             favorites: Vec::new(),
             home_folded: Vec::new(),
             restore_session: false,
@@ -832,7 +833,7 @@ impl Preferences {
         }
         let columns_changed = self.apply_view_options(update);
         replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
-        replace_if_some(&mut self.home_sections, update.home_sections);
+        replace_if_some(&mut self.home_opens_folder, update.home_opens_folder);
         replace_if_some(&mut self.restore_session, update.restore_session);
         replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
         replace_if_some(
@@ -1016,8 +1017,8 @@ pub struct PreferencesUpdate {
     pub hidden_sidebar_places: Option<Vec<String>>,
     /// Open tabs from a folder at the end, or after the current tab.
     pub open_tabs_at_end: Option<bool>,
-    /// Show Quick access, Recent and Favorites on Home.
-    pub home_sections: Option<bool>,
+    /// Open the home folder on Home instead of the Home page.
+    pub home_opens_folder: Option<bool>,
     /// Replaces the Favorites; up to 500 locations, else ignored.
     pub favorites: Option<Vec<String>>,
     /// Replaces Home's folded sections; up to 16 short ASCII keys, else
@@ -1142,7 +1143,7 @@ impl PreferencesUpdate {
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
             open_tabs_at_end: flag("openTabsAtEnd"),
-            home_sections: flag("homeSections"),
+            home_opens_folder: flag("homeOpensFolder"),
             favorites: values.get("favorites").and_then(read_keys),
             home_folded: values.get("homeFolded").and_then(read_keys),
             restore_session: flag("restoreSession"),

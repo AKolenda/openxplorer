@@ -17,7 +17,7 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::location::file_uri;
 use ox_core::places::FolderLocations;
-use ox_core::settings::{Settings, Theme};
+use ox_core::settings::{PreferencesUpdate, Settings, Theme};
 use tempfile::TempDir;
 
 use crate::app_context::AppContext;
@@ -233,6 +233,25 @@ impl TestWindow {
     pub(crate) fn open_prepared(uri: &str, prepare: impl FnOnce(&AppContext)) -> Self {
         let test = Self::prepared(&skin(), prepare);
         test.show(uri);
+        test
+    }
+
+    /// A window like [`Self::open`] whose settings have "Open the home
+    /// folder on Home" on, so Home, new tabs and new windows open the home
+    /// folder as in the Python app (NAV-038), not the Home page.
+    pub(crate) fn open_with_home_folder_on_home(uri: &str) -> Self {
+        let test = Self::open_prepared(uri, |context| {
+            let update = PreferencesUpdate {
+                home_opens_folder: Some(true),
+                ..PreferencesUpdate::default()
+            };
+            context.update_preferences(update, |result| {
+                result.expect("the settings file takes the choice");
+            });
+        });
+        wait_until("the setting to be saved", || {
+            test.context.settings_data().preferences.home_opens_folder
+        });
         test
     }
 

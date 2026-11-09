@@ -280,7 +280,7 @@ fn tabs_are_announced_as_tabs_with_their_selected_state() {
 #[gtk::test]
 fn the_new_tab_button_opens_the_home_folder_in_front() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
+    let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
     let button = &test.window.imp().new_tab_button;
     assert_eq!(button.tooltip_text().as_deref(), Some("New tab (Ctrl+T)"));
     button.emit_clicked();

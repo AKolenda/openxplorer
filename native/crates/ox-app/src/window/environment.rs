@@ -183,7 +183,7 @@ impl BrowserWindow {
             &places,
             &searches,
             &self.imp().locations.borrow(),
-            self.context().settings_data().preferences.home_sections,
+            !self.context().settings_data().preferences.home_opens_folder,
         );
         // Recent files hides while the desktop remembers no history
         // (SAFE-022), as in Nautilus.

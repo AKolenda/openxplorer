@@ -59,7 +59,7 @@ fn sidebar_rows_are_named_by_their_label_and_described_by_their_address() {
 fn the_home_row_is_selected_in_the_home_folder() {
     let fixture = Fixture::standard();
     let home = ox_core::location::file_uri(&gtk::glib::home_dir());
-    let test = TestWindow::open(&fixture.uri());
+    let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
     test.window.navigate(&home).expect("the home folder");
     test.wait_for_listing("the home folder");
     let selected = test.window.sidebar().list().selected_row();

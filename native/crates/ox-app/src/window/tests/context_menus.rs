@@ -112,6 +112,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
         rows,
         [
             "Open",
+            "Add to Favorites",
             "Open containing folder in Terminal",
             "Open with…",
             "-",

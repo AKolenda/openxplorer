@@ -119,7 +119,7 @@ fn only_the_folder_under_a_drag_is_highlighted() {
 #[gtk::test]
 fn sidebar_folders_take_drops_and_quick_access_pins_only_between_pins() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
+    let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
     let sidebar = test.window.sidebar();
     let home = sidebar.middle_of("Home");
     let documents = sidebar.middle_of("Documents");

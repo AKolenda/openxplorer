@@ -918,7 +918,7 @@ python_tests = [
 ]
 bridge = ["environment", "list"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/history.rs (home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home); native/crates/ox-app/src/locations.rs (the_legacy_home_page_means_the_home_folder)."
+native_note = "Since HOME-012 this is behind Settings > General > Start up > 'Open the home folder on Home' (homeOpensFolder, off by default): by default Home opens Windows 11's Home page (ox:home) with Quick access, Recent and Favorites. With the setting on, the sidebar Home entry, Alt+Home, new tabs, Ctrl+T and new windows open the real home folder, as here. The home folder itself is unchanged either way: reachable as before (typing ~ or its path, the This PC drive, crumbs) and its tab still titled 'Home'. Tests: native/crates/ox-app/src/window/tests/home_page.rs (home_is_windows_home_by_default_and_the_setting_opens_the_home_folder); native/crates/ox-app/src/window/tests/history.rs (home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home); native/crates/ox-app/src/locations.rs (the_legacy_home_page_means_the_home_folder)."
 
 [[feature]]
 id = "NAV-039"
@@ -1250,7 +1250,7 @@ native_note = "Recording ported: native/crates/ox-app/src/app_context.rs (open_f
 id = "HOME-012"
 area = "HOME"
 title = "Home laid out as Windows 11's Home, behind an option"
-behaviour = "Settings > General > Start up > 'Show Quick access, Recent and Favorites on Home' (homeSections, off by default and stored only when on). Off, Home opens the home folder as before (NAV-038). On, the navigation pane's Home row, Alt+Home, the HomePage key, a new tab, a new window with no startup folder and a typed 'home:' open the Home page (ox:home), titled Home with the house icon: a 'Quick access' section, then a Recent / Favorites switcher with Recent shown first. Back and Forward step to and from it as to any location; F5 draws it again."
+behaviour = "By default the navigation pane's Home row, Alt+Home, the HomePage key, a new tab, a new window with no startup folder and a typed 'home:' open the Home page (ox:home), titled Home with the house icon: a 'Quick access' section, then a Recent / Favorites switcher with Recent shown first. Back and Forward step to and from it as to any location; F5 draws it again."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
@@ -1262,7 +1262,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-app/src/locations.rs (Page::Home); BrowserWindow::home_location in native/crates/ox-app/src/window/navigation.rs. Tested in native/crates/ox-app/src/window/tests/home_page.rs (the_option_turns_home_into_quick_access_recent_and_favorites). Microsoft names the sections Quick access, Favorites and Recent (build 23475) and shows tabs for Recent, Favorites and Shared (build 22635.3930); Shared needs a Microsoft account and is left out. Layout, sizes, order of the tabs on screen and which tab opens first are not documented: check them in Windows."
+native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-app/src/locations.rs (Page::Home); BrowserWindow::home_location in native/crates/ox-app/src/window/navigation.rs. Settings > General > Start up > 'Open the home folder on Home' (homeOpensFolder, off by default and stored only when on) brings back the home folder on Home (NAV-038). Tested in native/crates/ox-app/src/window/tests/home_page.rs (home_is_windows_home_by_default_and_the_setting_opens_the_home_folder). Microsoft names the sections Quick access, Favorites and Recent (build 23475) and shows tabs for Recent, Favorites and Shared (build 22635.3930); Shared needs a Microsoft account and is left out. Layout, sizes, order of the tabs on screen and which tab opens first are not documented: check them in Windows."
 
 [[feature]]
 id = "HOME-013"
@@ -1285,7 +1285,7 @@ native_note = "native/crates/ox-app/src/window/home_page.rs (folder_tile, reusin
 id = "HOME-014"
 area = "HOME"
 title = "Home: Favorites, with Add to Favorites and Remove from Favorites"
-behaviour = "A file's right-click menu (compact and classic) offers 'Add to Favorites' while the Home option is on, or 'Remove from Favorites' for a favorite; so do the rows of Recent. Favorites lists those files in the order added (favorites in the settings file, up to 500 locations, the name read from the location so no drive or share is read to draw Home). A double-click or Enter opens the real file in its default application; the menu has Open, Open file location, Remove from Favorites, Copy as path and Properties. Empty, it says 'Files you add to Favorites show here.'"
+behaviour = "A file's right-click menu (compact and classic) offers 'Add to Favorites' while Home shows Favorites (not with 'Open the home folder on Home'), or 'Remove from Favorites' for a favorite; so do the rows of Recent. Favorites lists those files in the order added (favorites in the settings file, up to 500 locations, the name read from the location so no drive or share is read to draw Home). A double-click or Enter opens the real file in its default application; the menu has Open, Open file location, Remove from Favorites, Copy as path and Properties. Empty, it says 'Files you add to Favorites show here.'"
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
@@ -1297,7 +1297,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-core/src/settings.rs (Settings::set_favorite); native/crates/ox-app/src/window/context_menu/entries.rs (favorite_item). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_favorite_file_is_listed_opened_and_removed, a_files_menu_adds_it_to_favorites_only_with_the_option). Microsoft: Pin to Quick access was extended to files (build 22557) and pinned files became Favorites (build 22593). The wording 'Add to Favorites' and 'Remove from Favorites' is not on an official page; the app's Pin to Quick access still takes folders only (the folders-only rule of pinEntries), so Favorites has its own commands."
+native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-core/src/settings.rs (Settings::set_favorite); native/crates/ox-app/src/window/context_menu/entries.rs (favorite_item). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_favorite_file_is_listed_opened_and_removed, a_files_menu_adds_it_to_favorites_while_home_shows_them). Microsoft: Pin to Quick access was extended to files (build 22557) and pinned files became Favorites (build 22593). The wording 'Add to Favorites' and 'Remove from Favorites' is not on an official page; the app's Pin to Quick access still takes folders only (the folders-only rule of pinEntries), so Favorites has its own commands."
 
 [[feature]]
 id = "HOME-015"

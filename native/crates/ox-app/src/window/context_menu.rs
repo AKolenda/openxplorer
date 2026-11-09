@@ -325,7 +325,7 @@ impl BrowserWindow {
     /// (HOME-014): the real file, a Recent row's included, and whether it
     /// is one already.
     fn favorite_fact(&self, entry: &Entry, is_single: bool) -> Option<(String, bool)> {
-        if !is_single || entry.is_dir || !self.context().settings_data().preferences.home_sections {
+        if !is_single || entry.is_dir || self.context().settings_data().preferences.home_opens_folder {
             return None;
         }
         let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);

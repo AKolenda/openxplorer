@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Home laid out as Windows 11 File Explorer's Home (HOME-012 to
-//! HOME-016), while "Show Quick access, Recent and Favorites on Home" is
-//! on. It is off by default: Home then opens the home folder, as the
-//! Python app's did (NAV-038).
+//! HOME-016), by default. The setting "Open the home folder on Home"
+//! (off by default) brings back the home folder on Home, as the Python
+//! app's did (NAV-038).
 //!
 //! Only what Microsoft documents is drawn:
 //!

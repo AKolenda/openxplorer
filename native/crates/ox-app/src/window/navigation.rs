@@ -638,13 +638,13 @@ impl BrowserWindow {
     }
 
     /// Where Home leads: the Home page with Quick access, Recent and
-    /// Favorites while its option is on (HOME-012), else the home folder,
-    /// as in the Python app (NAV-038).
+    /// Favorites (HOME-012), or the home folder, as in the Python app,
+    /// while "Open the home folder on Home" is on (NAV-038).
     pub(super) fn home_location(&self) -> String {
-        if self.context().settings_data().preferences.home_sections {
-            return Page::Home.uri().to_owned();
+        if self.context().settings_data().preferences.home_opens_folder {
+            return self.imp().locations.borrow().home_uri();
         }
-        self.imp().locations.borrow().home_uri()
+        Page::Home.uri().to_owned()
     }
 }
 

@@ -204,8 +204,8 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         ]
     );
     let rows = every_row(&settings);
-    // "Show Quick access, Recent and Favorites on Home" came later.
-    let added_since = ["Show Quick access, Recent and Favorites on Home"];
+    // "Open the home folder on Home" came later.
+    let added_since = ["Open the home folder on Home"];
     for title in added_since {
         settings.row(title);
     }
