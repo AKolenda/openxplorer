@@ -347,3 +347,97 @@ fn the_list_has_name_date_accessed_and_file_location_columns() {
     assert!(!cells[1].is_empty() && cells[1] != "—", "a date: {cells:?}");
     assert!(cells[2].ends_with("Example projects/Documents"), "{cells:?}");
 }
+
+/// Clicks the navigation pane's Home row with the real pointer, then
+/// waits for the Home page with the Home row selected.
+fn click_the_home_row(test: &TestWindow) {
+    use crate::test_support::pointer::{screen_point, Button, Pointer};
+
+    let mut pointer = Pointer::connect();
+    let row = test
+        .window
+        .sidebar()
+        .list()
+        .row_at_index(0)
+        .expect("Home comes first");
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    let middle = (f64::from(row.width()) / 2.0, f64::from(row.height()) / 2.0);
+    let (x, y) = screen_point(&mut pointer, &row, middle, (8, 8));
+    pointer.move_to(x, y);
+    pointer.press(Button::Primary);
+    pointer.release(Button::Primary);
+    wait_until("the Home page", || {
+        test.window.current_uri().as_deref() == Some(HOME_PAGE)
+    });
+    let selected = test.window.sidebar().list().selected_row();
+    assert_eq!(
+        selected.map(|row| row.index()),
+        Some(0),
+        "the Home row is selected"
+    );
+    assert_eq!(
+        home_page::section_titles(body(test)),
+        ["Quick access", "Recent", "Favorites"]
+    );
+}
+
+/// A real click on the navigation pane's Home row opens the Home page,
+/// whatever the settings file holds besides "Open the home folder on
+/// Home": nothing at all (no file, or an empty file) or other choices,
+/// This PC as the startup folder among them.
+///
+/// parity: HOME-012
+#[gtk::test]
+fn a_real_click_on_the_home_row_opens_the_home_page_whatever_else_the_settings_hold() {
+    let fixture = Fixture::standard();
+
+    let test = TestWindow::open(&fixture.uri());
+    click_the_home_row(&test);
+
+    let test = TestWindow::open(&fixture.uri());
+    fs::write(test.settings_directory().join("settings.json"), b"").expect("an empty settings file");
+    test.context.reload_settings();
+    test.window.navigate(&fixture.uri()).expect("the fixture folder");
+    test.wait_for_listing("the fixture folder");
+    click_the_home_row(&test);
+
+    let test = TestWindow::open(&fixture.uri());
+    let others = PreferencesUpdate {
+        startup_folder: Some(ox_core::location::PC_URI.to_owned()),
+        show_hidden: Some(true),
+        show_full_path: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&others)
+        .expect("the settings file takes the choices");
+    test.context.reload_settings();
+    wait_until("the choices to be read", || {
+        test.context.settings_data().preferences.show_hidden
+    });
+    assert!(!test.context.settings_data().preferences.home_opens_folder);
+    click_the_home_row(&test);
+}
+
+/// The address bar leads to the same Home as the navigation pane: the
+/// chevron's "Home" and the Home page's own address, "Home", typed or
+/// left as it is and entered, open the Home page.
+///
+/// parity: HOME-012
+#[gtk::test]
+fn the_address_bars_home_opens_the_home_page() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.submit_address("Home");
+    wait_until("the Home page from a typed Home", || {
+        test.window.current_uri().as_deref() == Some(HOME_PAGE)
+    });
+
+    test.window.navigate(&fixture.uri()).expect("the fixture folder");
+    test.wait_for_listing("the fixture folder");
+    assert_eq!(
+        test.window.top_level_places_targets().first().map(String::as_str),
+        Some(HOME_PAGE),
+        "the chevron's Home"
+    );
+}
