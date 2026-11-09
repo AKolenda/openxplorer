@@ -1367,3 +1367,20 @@ pub(crate) fn is_folded(page: &gtk::Box, index: usize) -> bool {
     let hidden = section_body(page, section).is_some_and(|body| !body.is_visible());
     is_section_folded(page, section) && hidden
 }
+
+#[cfg(test)]
+mod layout_tests {
+    use super::file_location;
+
+    /// A file's location is its folder, from the home folder down, with
+    /// "/" between folders; a file right in the home folder is in "Home";
+    /// elsewhere the folder's whole path.
+    #[test]
+    fn the_file_location_is_the_folder_from_home_down() {
+        let home = std::path::Path::new("/home/demo");
+        assert_eq!(file_location("file:///home/demo/Downloads/Setup%20guide.pdf", home), "Downloads");
+        assert_eq!(file_location("file:///home/demo/Downloads/sub/a.txt", home), "Downloads/sub");
+        assert_eq!(file_location("file:///home/demo/a.txt", home), "Home");
+        assert_eq!(file_location("file:///srv/shared/a.txt", home), "/srv/shared");
+    }
+}

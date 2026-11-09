@@ -291,3 +291,56 @@ fn each_section_folds_by_click_and_by_keyboard() {
         "F5 keeps Quick access folded"
     );
 }
+
+/// Quick access tiles are laid out as Windows 11's: a 48 px folder, then
+/// three lines: the name, where the folder is (the parent folder's name,
+/// "Home" for a folder in the home folder; never Windows' cloud status)
+/// and a pin glyph for a pinned folder.
+///
+/// parity: HOME-013
+#[gtk::test]
+fn a_quick_access_tile_shows_its_name_its_location_and_a_pin() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Projects")));
+    wait_until("the Projects tile", || {
+        home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
+    });
+
+    assert_eq!(
+        home_page::tile_lines(body(&test), "Projects"),
+        ["Projects", "Example projects"]
+    );
+    assert!(home_page::tile_has_pin(body(&test), "Projects"), "a pinned folder shows the pin");
+    assert_eq!(home_page::tile_icon_size(body(&test), "Projects"), 48);
+}
+
+/// The Recent and Favorites switcher has a glyph on each of its tabs
+/// (a clock for Recent, a star for Favorites), and the list under it is
+/// a Details list with Name, Date accessed and File location columns.
+///
+/// parity: HOME-015
+#[gtk::test]
+fn the_list_has_name_date_accessed_and_file_location_columns() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Fictional plan\n").expect("fixture file");
+    add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
+    let test = home_window(&fixture);
+    wait_until("the recent file", || {
+        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+    });
+
+    assert!(home_page::tab_has_icon(body(&test), "Recent"));
+    assert!(home_page::tab_has_icon(body(&test), "Favorites"));
+    assert_eq!(
+        home_page::list_headers(body(&test)),
+        ["Name", "Date accessed", "File location"]
+    );
+    let cells = home_page::row_cells(body(&test), "plan.txt");
+    assert_eq!(cells.len(), 3, "{cells:?}");
+    assert_eq!(cells[0], "plan.txt");
+    assert!(!cells[1].is_empty() && cells[1] != "—", "a date: {cells:?}");
+    assert!(cells[2].ends_with("Example projects/Documents"), "{cells:?}");
+}
