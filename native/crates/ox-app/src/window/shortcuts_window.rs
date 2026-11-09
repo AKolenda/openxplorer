@@ -644,6 +644,73 @@ mod tests {
         assert!(query_matches("escape", "Close", "Dialogs", &close));
     }
 
+    /// A query that is only a key's symbol, such as "+", "-" or "*",
+    /// finds the shortcuts of that key, not every shortcut whose keys are
+    /// joined by it: "+" finds Num + and Ctrl++, not Ctrl+C.
+    ///
+    /// parity: CMD-032
+    #[test]
+    fn a_symbol_alone_finds_its_key_not_the_separators() {
+        let copy = ["Ctrl+C".to_owned(), "Ctrl+Insert".to_owned()];
+        let back = ["Alt+Left".to_owned(), "Back".to_owned()];
+        let plus = ["Num +".to_owned()];
+        let minus = ["Num -".to_owned()];
+        let larger = ["Ctrl++".to_owned(), "Ctrl+=".to_owned()];
+        for query in ["+", " + ", "-", "*"] {
+            assert!(
+                !query_matches(query, "Copy", "Files", &copy),
+                "{query:?} skips Copy"
+            );
+            assert!(
+                !query_matches(query, "Back", "Navigation", &back),
+                "{query:?} skips Back"
+            );
+        }
+        assert!(query_matches(
+            "+",
+            "Expand the selected folder",
+            "Navigation",
+            &plus
+        ));
+        assert!(query_matches("+", "Larger text", "Text size", &larger));
+        assert!(query_matches(
+            "-",
+            "Collapse the selected folder",
+            "Navigation",
+            &minus
+        ));
+        assert!(!query_matches(
+            "-",
+            "Expand the selected folder",
+            "Navigation",
+            &plus
+        ));
+        let settings = ["Ctrl+,".to_owned()];
+        assert!(query_matches(",", "Settings", "Tabs and windows", &settings));
+        assert!(!query_matches(",", "Copy", "Files", &copy));
+    }
+
+    /// Typing "+" in the shortcuts window shows the Plus key's shortcuts
+    /// and hides Copy and the other Ctrl and Alt shortcuts.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_plus_key_alone_is_searchable() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let dialog = test.window.shortcuts_dialog();
+        let shown = shown_after(&dialog, "+");
+        assert!(shown.contains(&"Expand the selected folder in the navigation pane".to_owned()));
+        assert!(shown.contains(&"Larger text".to_owned()));
+        for hidden in ["Copy", "Paste", "Back", "New tab"] {
+            assert!(
+                !shown.contains(&hidden.to_owned()),
+                "{hidden} is not a Plus key shortcut"
+            );
+        }
+        dialog.finish();
+    }
+
     /// The labels the search leaves shown after typing `query`.
     fn shown_after(dialog: &Dialog, query: &str) -> Vec<String> {
         let search = descendants::<gtk::Entry>(dialog).remove(0);
