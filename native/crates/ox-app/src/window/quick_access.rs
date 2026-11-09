@@ -104,8 +104,15 @@ impl BrowserWindow {
         self.show_message(message);
     }
 
-    /// Pins the folder the tab shows (`pinCurrent`).
+    /// Pins the folder the tab shows (`pinCurrent`); on search results in
+    /// Windows 11's search layout, saves the search to the navigation pane
+    /// instead (SRCH-046), as Windows 11's "…" > Pin to Quick access pins
+    /// the search.
     pub(super) fn pin_folder(&self) {
+        if self.pins_search() {
+            self.save_search();
+            return;
+        }
         let Some(uri) = self.current_uri().filter(|uri| Page::from_uri(uri).is_none()) else {
             return;
         };

@@ -5,7 +5,8 @@
 //! `v2.0.0:desktop/ui/style.css` (SRCH-012): a search glyph; the caption (the
 //! error, "Searching…" or where the search looked); the "Search scope"
 //! list; the search options Dolphin and Windows offer: file names or
-//! names and contents (SRCH-036), kind and date modified (SRCH-037);
+//! names and contents (SRCH-036), kind and date modified (SRCH-037) and
+//! size (SRCH-043);
 //! "Cache this folder" while the folder is not, or only partly,
 //! indexed; for cached results a note on how fresh they are; Dolphin's
 //! "Save search" (SRCH-038); Dolphin's "Keep Filter When Changing
@@ -17,7 +18,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::search::{DateFacet, KindFacet, SearchFacets, SearchIn};
+use ox_core::search::{DateFacet, KindFacet, SearchFacets, SearchIn, SizeFacet};
 
 use super::report::{SearchReport, FRESHNESS_TOOLTIP};
 use super::source::SearchScope;
@@ -108,6 +109,8 @@ mod imp {
         pub(super) kind: OnceCell<ChoiceButton>,
         /// When the items shown were modified; built by `constructed`.
         pub(super) date: OnceCell<ChoiceButton>,
+        /// How big the files shown are; built by `constructed`.
+        pub(super) size: OnceCell<ChoiceButton>,
         /// Set while the strip shows the window's choices in its lists,
         /// so the lists' changes are not reported as the user's.
         pub(super) is_showing: Cell<bool>,
@@ -197,6 +200,7 @@ impl SearchInfoStrip {
         let search_in = SEARCH_IN.map(|(_, label)| ox_core::i18n::gettext_static(label));
         let kinds = KindFacet::ALL.map(KindFacet::label);
         let dates = DateFacet::ALL.map(DateFacet::label);
+        let sizes = SizeFacet::ALL.map(SizeFacet::label);
         let lists = [
             (
                 &imp.search_in,
@@ -209,6 +213,7 @@ impl SearchInfoStrip {
                 &dates[..],
                 ox_core::i18n::gettext_static("Date modified"),
             ),
+            (&imp.size, &sizes[..], ox_core::i18n::gettext_static("Size")),
         ];
         for (slot, labels, name) in lists {
             let labels: Vec<String> = labels.iter().map(|label| (*label).to_owned()).collect();
@@ -262,9 +267,11 @@ impl SearchInfoStrip {
         let imp = self.imp();
         let kind = Self::option_list(&imp.kind).choices.selected() as usize;
         let date = Self::option_list(&imp.date).choices.selected() as usize;
+        let size = Self::option_list(&imp.size).choices.selected() as usize;
         SearchFacets {
             kind: KindFacet::ALL.get(kind).copied().unwrap_or_default(),
             date: DateFacet::ALL.get(date).copied().unwrap_or_default(),
+            size: SizeFacet::ALL.get(size).copied().unwrap_or_default(),
         }
     }
 
@@ -279,10 +286,12 @@ impl SearchInfoStrip {
         let search_in_position = SEARCH_IN.iter().position(|(shown, _)| *shown == search_in);
         let kind = KindFacet::ALL.iter().position(|shown| *shown == facets.kind);
         let date = DateFacet::ALL.iter().position(|shown| *shown == facets.date);
+        let size = SizeFacet::ALL.iter().position(|shown| *shown == facets.size);
         let shown = [
             (&imp.search_in, search_in_position),
             (&imp.kind, kind),
             (&imp.date, date),
+            (&imp.size, size),
         ];
         self.showing(|| {
             for (slot, position) in shown {
@@ -463,6 +472,53 @@ impl SearchInfoStrip {
         Self::option_list(&self.imp().kind)
             .choices
             .choose_labelled(kind.label());
+    }
+
+    /// The search option list named `name` (`Search in`, `Kind`, `Date
+    /// modified` or `Size`).
+    fn named_option(&self, name: &str) -> Option<&ChoiceButton> {
+        let imp = self.imp();
+        let named = [
+            (&imp.search_in, "Search in"),
+            (&imp.kind, "Kind"),
+            (&imp.date, "Date modified"),
+            (&imp.size, "Size"),
+        ];
+        named
+            .into_iter()
+            .find(|(_, label)| ox_core::i18n::gettext_static(label) == name || *label == name)
+            .map(|(slot, _)| Self::option_list(slot))
+    }
+
+    /// Opens the search option list named `name`, as a click on it does;
+    /// false when the strip has no such list. For the snapshot hook.
+    pub(crate) fn open_option(&self, name: &str) -> bool {
+        let list = self.named_option(name);
+        list.inspect(|list| list.button.popup()).is_some()
+    }
+
+    /// Chooses `label` in the search option list named `name`, as a click
+    /// on its row does; false when there is no such list or option. For
+    /// the snapshot hook.
+    pub(crate) fn choose_option(&self, name: &str, label: &str) -> bool {
+        self.named_option(name)
+            .is_some_and(|list| list.choices.try_choose_labelled(label))
+    }
+
+    /// Chooses a size as the user would, for tests.
+    #[cfg(test)]
+    pub(crate) fn choose_size(&self, size: SizeFacet) {
+        Self::option_list(&self.imp().size)
+            .choices
+            .choose_labelled(size.label());
+    }
+
+    /// Chooses a date range as the user would, for tests.
+    #[cfg(test)]
+    pub(crate) fn choose_date(&self, date: DateFacet) {
+        Self::option_list(&self.imp().date)
+            .choices
+            .choose_labelled(date.label());
     }
 
     /// Clicks "Save search", for tests.

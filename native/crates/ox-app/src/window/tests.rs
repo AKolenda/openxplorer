@@ -74,6 +74,7 @@ mod restore_conflicts;
 mod right_drag;
 mod search;
 mod search_history;
+mod search_layout;
 mod search_options;
 mod selection;
 mod send_to;

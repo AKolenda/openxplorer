@@ -139,6 +139,75 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
     entries
 }
 
+/// Search options, as Windows 11 File Explorer lists them while it
+/// searches (SRCH-046): All subfolders or Current folder; Date modified,
+/// Kind and Size, each a submenu of its choices; then File contents. As in
+/// Sort, no row has a glyph and a dot marks each choice. Windows' System
+/// files, Zipped (compressed) folders and Change indexed locations are
+/// left out: the app has nothing they would do.
+pub(in crate::window) fn search_options_menu() -> Vec<MenuEntry> {
+    use crate::window::search_layout::{option_key, ALL_SUBFOLDERS, CURRENT_FOLDER};
+    use ox_core::search::{DateFacet, KindFacet, SizeFacet};
+    let depth = |label: &str, value: &str| -> MenuEntry {
+        MenuItem::choice(label, Icon::Search, WindowAction::SearchDepth, value)
+            .without_glyph()
+            .into()
+    };
+    let choices = |labels: Vec<&'static str>, action: WindowAction| -> Vec<MenuEntry> {
+        labels
+            .into_iter()
+            .enumerate()
+            .map(|(position, label)| {
+                MenuItem::choice(label, Icon::Search, action, &option_key(position))
+                    .without_glyph()
+                    .into()
+            })
+            .collect()
+    };
+    let submenu = |label: &str, action: WindowAction, entries: Vec<MenuEntry>| -> MenuEntry {
+        MenuItem::submenu(label, Icon::Search, action, entries)
+            .without_glyph()
+            .into()
+    };
+    vec![
+        depth(&gettext("All subfolders"), ALL_SUBFOLDERS),
+        depth(&gettext("Current folder"), CURRENT_FOLDER),
+        MenuEntry::Divider,
+        submenu(
+            &gettext("Date modified"),
+            WindowAction::SearchDate,
+            choices(
+                DateFacet::ALL.map(DateFacet::label).to_vec(),
+                WindowAction::SearchDate,
+            ),
+        ),
+        submenu(
+            &gettext("Kind"),
+            WindowAction::SearchKind,
+            choices(
+                KindFacet::ALL.map(KindFacet::label).to_vec(),
+                WindowAction::SearchKind,
+            ),
+        ),
+        submenu(
+            &gettext("Size"),
+            WindowAction::SearchSize,
+            choices(
+                SizeFacet::ALL.map(SizeFacet::label).to_vec(),
+                WindowAction::SearchSize,
+            ),
+        ),
+        MenuEntry::Divider,
+        MenuItem::toggle(
+            &gettext("File contents"),
+            Icon::Search,
+            WindowAction::SearchContents,
+        )
+        .without_glyph()
+        .into(),
+    ]
+}
+
 /// The Group by submenu: every way of grouping, the current one checked.
 pub(in crate::window) fn group_by_menu() -> Vec<MenuEntry> {
     GroupBy::ALL.into_iter().map(group_item).collect()

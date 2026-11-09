@@ -38,7 +38,17 @@
 //!   in the dialog the scene opened last if there is one, such as the
 //!   keyboard shortcuts window's search;
 //! - `scroll=end`: scrolls the body of the dialog the scene opened last to
-//!   its end, as dragging its scroll bar down does.
+//!   its end, as dragging its scroll bar down does;
+//! - `search=<text>`: types `<text>` into the search box, as a key
+//!   press there does; the next step, or the picture, does not wait for
+//!   the search to finish, so a last `search=` pictures a search while it
+//!   runs;
+//! - `option=<name>`: opens the search strip's option list `<name>`
+//!   (`Kind`, `Date modified`, `Size`, `Search in`), or with `Search
+//!   options` the command bar's Search options, as a click does; a
+//!   following `submenu=` opens one of its submenus;
+//! - `choose=<name>:<label>`: chooses `<label>` in that list, whether the
+//!   search filter bar shows or not.
 //!
 //! The steps drive the window through the same actions its buttons, menus
 //! and keys use, so the picture shows the app as a user would see it. They
@@ -87,6 +97,17 @@ pub(crate) enum SceneStep {
     Type(String),
     /// Scroll the last dialog's body to its end.
     ScrollToEnd,
+    /// Type this into the search box.
+    Search(String),
+    /// Open the search strip's option list with this name.
+    Option(String),
+    /// Choose an option, by its label, in the search strip's list.
+    Choose {
+        /// The list's name.
+        list: String,
+        /// The option's label.
+        label: String,
+    },
 }
 
 impl SceneStep {
@@ -114,6 +135,15 @@ impl SceneStep {
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
             "focus" => Some(Self::Focus(argument.to_owned())),
+            "search" => Some(Self::Search(argument.to_owned())),
+            "option" => Some(Self::Option(argument.to_owned())),
+            "choose" => {
+                let (list, label) = argument.split_once(':')?;
+                Some(Self::Choose {
+                    list: list.trim().to_owned(),
+                    label: label.trim().to_owned(),
+                })
+            }
             "action" => {
                 let (name, target) = match argument.split_once(':') {
                     Some((name, target)) => (name, Some(target.to_owned())),
@@ -152,10 +182,10 @@ impl SceneStep {
                     .map(|()| crate::window::MENU_OPENING_MOTION)
                     .map_err(|_| format!("the window has no action “{name}”"))
             }
-            Self::Submenu(label) => window
-                .open_context_submenu(label)
-                .then_some(crate::window::MENU_OPENING_MOTION)
-                .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
+            Self::Submenu(label) => (window.open_context_submenu(label)
+                || window.open_search_options_submenu(label))
+            .then_some(crate::window::MENU_OPENING_MOTION)
+            .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
             Self::Tab(name) => {
                 let properties = window
                     .properties_windows()
@@ -198,22 +228,7 @@ impl SceneStep {
                 window.zoom_view(*steps);
                 Ok(Duration::ZERO)
             }
-            Self::ScrollToEnd => {
-                let parent: &gtk::Window = window.upcast_ref();
-                let dialog = gtk::Window::list_toplevels()
-                    .into_iter()
-                    .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
-                    .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
-                    .last()
-                    .ok_or_else(|| "no dialog is open".to_owned())?;
-                let scroller = crate::window::widget_tree::descendants::<gtk::ScrolledWindow>(&dialog)
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| "the dialog does not scroll".to_owned())?;
-                let adjustment = scroller.vadjustment();
-                adjustment.set_value(adjustment.upper() - adjustment.page_size());
-                Ok(Duration::ZERO)
-            }
+            Self::ScrollToEnd => scroll_dialog_to_end(window).map(|()| Duration::ZERO),
             Self::Type(text) => {
                 let parent: &gtk::Window = window.upcast_ref();
                 let dialog = gtk::Window::list_toplevels()
@@ -233,8 +248,39 @@ impl SceneStep {
                 field.set_position(-1);
                 Ok(Duration::ZERO)
             }
+            Self::Search(text) => {
+                window.search_folder(text);
+                Ok(Duration::ZERO)
+            }
+            Self::Option(name) => window
+                .open_search_option(name)
+                .then_some(crate::window::MENU_OPENING_MOTION)
+                .ok_or_else(|| format!("the search strip has no list “{name}”")),
+            Self::Choose { list, label } => window
+                .choose_search_option(list, label)
+                .then_some(Duration::ZERO)
+                .ok_or_else(|| format!("the search list “{list}” has no option “{label}”")),
         }
     }
+}
+
+/// Scrolls the body of the dialog the scene opened last to its end, as
+/// dragging its scroll bar down does.
+fn scroll_dialog_to_end(window: &BrowserWindow) -> Result<(), String> {
+    let parent: &gtk::Window = window.upcast_ref();
+    let dialog = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+        .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
+        .last()
+        .ok_or_else(|| "no dialog is open".to_owned())?;
+    let scroller = crate::window::widget_tree::descendants::<gtk::ScrolledWindow>(&dialog)
+        .into_iter()
+        .next()
+        .ok_or_else(|| "the dialog does not scroll".to_owned())?;
+    let adjustment = scroller.vadjustment();
+    adjustment.set_value(adjustment.upper() - adjustment.page_size());
+    Ok(())
 }
 
 /// Presses `accelerator` where keyboard focus is in `window`, as GTK
@@ -363,6 +409,24 @@ mod tests {
                 SceneStep::Wait(Duration::from_millis(250)),
             ]
         );
+    }
+
+    #[test]
+    fn a_scene_can_type_a_search_and_open_or_choose_its_options() {
+        let scene =
+            SceneStep::parse_scene("search=notes;option=Size;choose=Kind:Documents").expect("a valid scene");
+        assert_eq!(
+            scene,
+            [
+                SceneStep::Search("notes".to_owned()),
+                SceneStep::Option("Size".to_owned()),
+                SceneStep::Choose {
+                    list: "Kind".to_owned(),
+                    label: "Documents".to_owned()
+                },
+            ]
+        );
+        assert_eq!(SceneStep::parse_scene("choose=Kind"), None);
     }
 
     #[test]

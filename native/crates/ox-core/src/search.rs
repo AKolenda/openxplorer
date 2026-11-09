@@ -43,7 +43,8 @@
 //! | `crawl` | A full scan | `index_service.py` |
 //! | `update` | A live update of changed folders | `index_service.py` |
 //! | `live` | Searching a folder's tree without the cache (SRCH-035) | Dolphin |
-//! | `facets` | Narrowing a search by kind and date (SRCH-037) | Dolphin |
+//! | `facets` | Narrowing a search by kind, date and size (SRCH-037, SRCH-043) | Dolphin, Windows |
+//! | `syntax` | Options typed into the search box (SRCH-044) | Windows |
 //! | `saved` | Searches saved to the sidebar (SRCH-038) | Dolphin |
 //! | `contents` | Reading file text for a search of contents, never cached (SRCH-036) | Dolphin |
 //! | `limits` | The entry, folder and watch limits | `index_service.py`, `local_watch.py` |
@@ -80,6 +81,7 @@ mod scan;
 mod schema;
 mod service;
 mod state;
+mod syntax;
 mod text;
 mod tick;
 mod update;
@@ -94,7 +96,7 @@ mod service_tests;
 
 pub use contents::SearchIn;
 pub use error::SearchError;
-pub use facets::{DateFacet, FacetMatcher, KindFacet, SearchFacets};
+pub use facets::{DateFacet, FacetMatcher, KindFacet, SearchFacets, SizeFacet};
 pub use frequent::FrequentIndexing;
 pub use index::SearchIndex;
 pub use live::{matches_by_contents, walk_search, walks_subfolders, LiveSearch, LiveSearchEnd};
@@ -111,4 +113,5 @@ pub use root::{
 pub use saved::{SavedSearch, SavedSearches, MAX_SAVED_SEARCHES};
 pub use scan::ListedItem;
 pub use service::{AutoIndex, IndexService, IndexSettings};
+pub use syntax::TypedQuery;
 pub use text::display_path;

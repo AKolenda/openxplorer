@@ -68,6 +68,9 @@ pub(crate) struct SearchStep {
     pub search_in: SearchIn,
     /// The search options that narrowed what was shown.
     pub facets: SearchFacets,
+    /// Whether only the folder itself was searched (Search options >
+    /// Current folder, SRCH-046).
+    pub current_folder_only: bool,
 }
 
 /// One entry of a tab's history: a location, and the search shown there,
@@ -345,6 +348,7 @@ mod tests {
             scope: SearchScope::default(),
             search_in: SearchIn::default(),
             facets: SearchFacets::default(),
+            current_folder_only: false,
         }
     }
 

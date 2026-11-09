@@ -364,6 +364,23 @@ pub(crate) enum WindowAction {
     /// Caches the current folder for search, or stops caching it (a
     /// check item).
     CacheFolder,
+    /// Search options > All subfolders or Current folder: whether a search
+    /// looks in the folder's subfolders too, in the string target `all`
+    /// or `current` (SRCH-046).
+    SearchDepth,
+    /// Search options > Date modified: the date option's position in the
+    /// list, in the string target.
+    SearchDate,
+    /// Search options > Kind: the kind option's position, in the string
+    /// target.
+    SearchKind,
+    /// Search options > Size: the size option's position, in the string
+    /// target.
+    SearchSize,
+    /// Search options > File contents: names and contents are searched.
+    SearchContents,
+    /// Close search: ends the search and shows the folder again.
+    CloseSearch,
     /// Caches the folder whose URI is the string target for search, or
     /// stops caching it (the menus of a pin and of a folder).
     CacheFolderOf,
@@ -642,6 +659,12 @@ impl WindowAction {
             WindowAction::MountDiskImage => "mount-disk-image",
             WindowAction::AnalyseDiskUsage => "analyse-disk-usage",
             WindowAction::CacheFolder => "cache-folder",
+            WindowAction::SearchDepth => "search-depth",
+            WindowAction::SearchDate => "search-date",
+            WindowAction::SearchKind => "search-kind",
+            WindowAction::SearchSize => "search-size",
+            WindowAction::SearchContents => "search-contents",
+            WindowAction::CloseSearch => "close-search",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
             WindowAction::ShowTarget => "show-target",

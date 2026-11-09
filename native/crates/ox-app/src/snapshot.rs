@@ -138,11 +138,18 @@ pub(crate) fn save_when_listed(
     let timing = RefCell::new(SaveTiming::starting_now());
     let done = RefCell::new(Some(done));
     let properties_shown = Cell::new(false);
+    // After a `search=` step the picture shows the search while it runs, so
+    // the running search no longer holds it back.
+    let pictures_running_search = Cell::new(false);
     window.add_tick_callback(move |window, _| {
         if let Some(size) = request.size {
             fit_content(window.upcast_ref(), size);
         }
-        let listing = Listing::of(window);
+        let listing = if pictures_running_search.get() {
+            Listing::of_folder(window)
+        } else {
+            Listing::of(window)
+        };
         milestones.note_frame(listing);
         // A window that changes its layout as it narrows (Settings does)
         // takes a few frames to reach the size; the frames that settle the
@@ -162,6 +169,7 @@ pub(crate) fn save_when_listed(
         }
         let step = steps.borrow_mut().pop_front();
         let outcome = if let Some(step) = step {
+            pictures_running_search.set(matches!(step, scene::SceneStep::Search(_)));
             match step.run(window) {
                 Ok(pause) => {
                     // The next step, or the picture, waits for the pause
@@ -280,6 +288,16 @@ impl Listing {
     /// into the window counts as part of it until it shows its results.
     fn of(window: &BrowserWindow) -> Self {
         if window.is_listed() && !window.is_search_running() {
+            Listing::Drawn
+        } else {
+            Listing::Running
+        }
+    }
+
+    /// Where the listing of `window`'s active tab is now, whether or not a
+    /// search typed into the window has shown its results.
+    fn of_folder(window: &BrowserWindow) -> Self {
+        if window.is_listed() {
             Listing::Drawn
         } else {
             Listing::Running
