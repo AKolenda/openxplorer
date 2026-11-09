@@ -53,6 +53,7 @@ mod late_replies;
 mod listing;
 mod look;
 mod middle_click;
+mod more_explorer_keys;
 pub(super) mod name_conflicts;
 mod narrow_windows;
 mod network;

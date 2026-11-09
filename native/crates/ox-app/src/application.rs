@@ -86,7 +86,7 @@ enum Launch {
     Interactive,
     /// The developer snapshot hook ([`crate::snapshot`]): one window, saved
     /// as a picture, in an instance of its own.
-    Snapshot(SnapshotRequest),
+    Snapshot(Box<SnapshotRequest>),
 }
 
 /// Brings the window with `id` to the front (`focusWindow`), or says that
@@ -497,7 +497,7 @@ pub fn run() -> glib::ExitCode {
     }
     ox_core::i18n::install(crate::config::I18N_DOMAIN);
     let launch = match SnapshotRequest::from_environment() {
-        Ok(Some(request)) => Launch::Snapshot(request),
+        Ok(Some(request)) => Launch::Snapshot(Box::new(request)),
         Ok(None) => Launch::Interactive,
         Err(error) => {
             eprintln!("OpenXplorer snapshot: {error}");

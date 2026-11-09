@@ -71,7 +71,12 @@ impl DetailsPane {
             }
             MediaPreview::Document { uri } => self.load_picture(generation, None, Some(uri.clone()), false),
             MediaPreview::Folder { uri } => self.load_folder_picture(generation, uri.clone()),
-            MediaPreview::Recording { path, is_video, art } => self.show_player(path, *is_video, *art),
+            MediaPreview::Recording {
+                uri,
+                local_only,
+                is_video,
+                art,
+            } => self.load_player(generation, uri.clone(), *local_only, *is_video, *art),
         }
     }
 
@@ -205,6 +210,29 @@ impl DetailsPane {
                 "Preview",
             ))]);
             pane.set_preview_widget(Some(picture.upcast_ref()));
+        });
+    }
+
+    /// Finds the path of the recording at `uri` off the main thread, as
+    /// the Preview pane's pages find theirs (a share's through its mount,
+    /// and with `local_only` none on a network file system), and shows its
+    /// player if the selection is still `generation`'s; the item keeps its
+    /// art without one.
+    fn load_player(&self, generation: u64, uri: String, local_only: bool, is_video: bool, art: Art) {
+        let pane = self.downgrade();
+        glib::spawn_future_local(async move {
+            let path = gio::spawn_blocking(move || {
+                ox_core::network::local_path(&uri).filter(|path| super::contents::allowed(path, local_only))
+            })
+            .await
+            .ok()
+            .flatten();
+            let Some(pane) = pane.upgrade() else {
+                return;
+            };
+            if let Some(path) = path.filter(|_| pane.imp().media_generation.get() == generation) {
+                pane.show_player(&path, is_video, art);
+            }
         });
     }
 

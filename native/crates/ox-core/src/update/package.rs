@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use super::release::INSTALLER_ARCHITECTURE;
 use super::{ReleaseVersion, UpdateError};
+use crate::transfer::Cancellation;
 
 /// How long `dpkg-deb` and `dpkg-query` may run.
 const PACKAGE_QUERY_TIME_LIMIT: Duration = Duration::from_secs(30);
@@ -17,19 +18,38 @@ const PACKAGE_QUERY_TIME_LIMIT: Duration = Duration::from_secs(30);
 /// The Debian package name.
 const PACKAGE_NAME: &str = "openxplorer";
 
+/// APT's options for installing a downloaded installer. `--no-remove`
+/// refuses a dependency resolution that would remove packages.
+const APT_INSTALL: [&str; 3] = ["-y", "--no-remove", "install"];
+
 /// How many characters of APT's error output a failure message keeps.
 const MAX_FAILURE_CHARS: usize = 2000;
 
-/// One of the three commands an installation runs, always with a fixed
-/// program path and fixed arguments around the downloaded installer.
+/// One of the commands an installation runs, always with a fixed program
+/// path and fixed arguments around the downloaded installer, the update
+/// helper or the version.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PackageCommand {
     /// `dpkg-deb -f <installer> Package Version Architecture`: what the
     /// downloaded installer says it is.
     InspectInstaller(PathBuf),
     /// `pkexec apt-get -y --no-remove install <installer>`: the
-    /// installation, behind the administrator prompt.
+    /// installation, behind the administrator prompt. Used when the
+    /// package has no update helper (an older package).
     Install(PathBuf),
+    /// `pkexec <helper> <version>`: the update helper, which downloads,
+    /// verifies and installs that version as root under its own polkit
+    /// action ([`super::install_helper`]). Only the version comes from the
+    /// app.
+    InstallRelease {
+        /// The installed helper, `/opt/openxplorer/libexec/openxplorer-install-update`.
+        helper: PathBuf,
+        /// The version to install.
+        version: ReleaseVersion,
+    },
+    /// `apt-get -y --no-remove install <installer>`, which the update
+    /// helper runs: it is root already.
+    InstallAsRoot(PathBuf),
     /// `dpkg-query -W -f=${Status}\n${Version} openxplorer`: what is
     /// installed now.
     QueryInstalled,
@@ -40,7 +60,8 @@ impl PackageCommand {
     pub fn program(&self) -> &'static str {
         match self {
             Self::InspectInstaller(_) => "/usr/bin/dpkg-deb",
-            Self::Install(_) => "/usr/bin/pkexec",
+            Self::Install(_) | Self::InstallRelease { .. } => "/usr/bin/pkexec",
+            Self::InstallAsRoot(_) => "/usr/bin/apt-get",
             Self::QueryInstalled => "/usr/bin/dpkg-query",
         }
     }
@@ -62,9 +83,16 @@ impl PackageCommand {
                 arguments.extend(["Package", "Version", "Architecture"].map(OsString::from));
             }
             Self::Install(installer) => {
-                // --no-remove refuses a dependency resolution that would
-                // remove packages.
-                arguments.extend(["/usr/bin/apt-get", "-y", "--no-remove", "install"].map(OsString::from));
+                arguments.push("/usr/bin/apt-get".into());
+                arguments.extend(APT_INSTALL.map(OsString::from));
+                arguments.push(installer.into());
+            }
+            Self::InstallRelease { helper, version } => {
+                arguments.push(helper.into());
+                arguments.push(version.to_string().into());
+            }
+            Self::InstallAsRoot(installer) => {
+                arguments.extend(APT_INSTALL.map(OsString::from));
                 arguments.push(installer.into());
             }
             Self::QueryInstalled => {
@@ -78,12 +106,21 @@ impl PackageCommand {
     ///
     /// Safety rule "never interrupt the package manager"
     /// (`v2.0.0:desktop/updater.py`: "No timeout: killing apt/dpkg mid-install can
-    /// damage package state"): the installation has no limit.
+    /// damage package state"): the installation has no limit, nor has the
+    /// update helper, which runs APT.
     pub fn time_limit(&self) -> Option<Duration> {
         match self {
             Self::InspectInstaller(_) | Self::QueryInstalled => Some(PACKAGE_QUERY_TIME_LIMIT),
-            Self::Install(_) => None,
+            Self::Install(_) | Self::InstallRelease { .. } | Self::InstallAsRoot(_) => None,
         }
+    }
+
+    /// Whether the command gets the caller's standard input. APT run by
+    /// the update helper reads nothing: its input is `/dev/null`, so
+    /// neither a prompt nor the app's `cancel` line can reach it. The
+    /// update helper itself reads the app's `cancel` line there.
+    pub fn reads_input(&self) -> bool {
+        !matches!(self, Self::InstallAsRoot(_))
     }
 }
 
@@ -117,6 +154,30 @@ pub trait PackageManager: Send + Sync {
     /// [`UpdateError::Io`] if it cannot start, and
     /// [`UpdateError::PackageToolTimedOut`] if it was stopped at its limit.
     fn run(&self, command: &PackageCommand) -> Result<CommandOutput, UpdateError>;
+
+    /// Runs `command` as [`run`](Self::run) does, handing each line of its
+    /// standard output to `on_line` as it is printed, and writing a line
+    /// `cancel` to its standard input once `cancel` is cancelled. The
+    /// update helper is run this way, so the app hears its steps and can
+    /// stop it before APT starts.
+    ///
+    /// The default runs the command to completion and then hands over its
+    /// lines, which is all a double needs.
+    ///
+    /// # Errors
+    ///
+    /// As [`run`](Self::run).
+    fn run_reporting(
+        &self,
+        command: &PackageCommand,
+        on_line: &mut dyn FnMut(&str),
+        cancel: &Cancellation,
+    ) -> Result<CommandOutput, UpdateError> {
+        let _ = cancel;
+        let output = self.run(command)?;
+        output.stdout.lines().for_each(&mut *on_line);
+        Ok(output)
+    }
 }
 
 /// Checks what `dpkg-deb` says the installer is.
@@ -162,6 +223,19 @@ pub(super) fn installation_failure(output: &CommandOutput) -> Option<UpdateError
     Some(UpdateError::InstallFailed {
         details: last_chars(report.trim(), MAX_FAILURE_CHARS),
     })
+}
+
+/// The version `dpkg-query` reports as installed, if the package is
+/// installed and its version is a plain release version.
+pub(super) fn installed_version(output: &CommandOutput) -> Option<ReleaseVersion> {
+    if !output.is_success() {
+        return None;
+    }
+    let (status, version) = output.stdout.trim().split_once('\n')?;
+    if status != "install ok installed" {
+        return None;
+    }
+    version.parse().ok()
 }
 
 /// Checks that `dpkg-query` reports `version` as installed.

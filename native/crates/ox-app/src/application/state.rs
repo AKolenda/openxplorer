@@ -162,6 +162,9 @@ impl AppState {
             self.context.skin().set_theme(theme);
         }
         let window = self.build_window(app, request.start.as_deref());
+        if request.save_dialog {
+            window.begin_picking(snapshot_save_call(app, request.start.as_deref()));
+        }
         if let Some(size) = request.size {
             window.set_default_size(size.width, size.height);
         }
@@ -322,6 +325,39 @@ pub(super) fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item =
         .into_iter()
         .filter_map(|window| window.downcast::<BrowserWindow>().ok())
         .filter(|window| !window.is_picking())
+}
+
+/// The Save dialog the snapshot hook pictures (`OPENXPLORER_SAVE_DIALOG`):
+/// `Untitled.txt` in the local folder `start` names (the request refuses
+/// any other start), else the home folder, as
+/// the desktop portal asks for it, answering nobody.
+fn snapshot_save_call(app: &gtk::Application, start: Option<&str>) -> ox_core::integration::ChooserCall {
+    use ox_core::integration::{
+        options_from_entries, path_variant, ChooserCall, ChooserReply, ChooserRequest,
+    };
+    let folder = match start {
+        Some(start) => {
+            crate::snapshot::save_dialog_folder(start).expect("the snapshot request checked its start")
+        }
+        None => glib::home_dir(),
+    };
+    let options = options_from_entries(&[
+        ("current_folder", path_variant(&folder.to_string_lossy())),
+        ("current_name", "Untitled.txt".to_variant()),
+    ]);
+    let request = ChooserRequest::from_call("SaveFile", "Save File", &options)
+        .expect("a Save call for a plain name is valid");
+    let connection = app
+        .dbus_connection()
+        .or_else(|| gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok())
+        .expect("the snapshot hook runs on a session bus");
+    ChooserCall {
+        reply: ChooserReply::unattended(request.clone(), connection),
+        request,
+        app_id: String::new(),
+        parent_window: String::new(),
+        caller: None,
+    }
 }
 
 /// Shows another application's Open or Save dialog in a new window

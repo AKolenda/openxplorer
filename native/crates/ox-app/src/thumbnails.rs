@@ -40,7 +40,9 @@ use gtk::{gdk, gio, glib};
 use ox_core::entry::{cached_thumbnail, CachedThumbnail, Entry, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES};
 use ox_core::settings::{ViewOptions, PREVIEW_SIZE_LIMIT};
 
+pub(crate) use network_fs::is_on_network_filesystem;
 pub(crate) use slots::Slots;
+pub(crate) use thumbnailers::pdf_pages;
 
 use crate::picture_guard::{self, Limits};
 use thumbnailers::Catalogue;

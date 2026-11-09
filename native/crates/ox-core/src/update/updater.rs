@@ -13,8 +13,8 @@ use super::download::download_installer;
 use super::package::{check_installed_version, check_installer_fields, installation_failure};
 use super::server::read_release_answer;
 use super::{
-    parse_release, GitHubReleases, Installation, PackageCommand, PackageManager, Release, ReleaseServer,
-    ReleaseVersion, SystemPackageManager, UpdateError,
+    parse_release, CommandOutput, GitHubReleases, HelperReport, Installation, PackageCommand, PackageManager,
+    Release, ReleaseServer, ReleaseVersion, SystemPackageManager, UpdateError,
 };
 use crate::transfer::Cancellation;
 
@@ -84,6 +84,10 @@ pub struct UpdaterParts {
     pub server: Box<dyn ReleaseServer>,
     /// What runs the package tools.
     pub package_manager: Box<dyn PackageManager>,
+    /// The update helper the package installed
+    /// ([`Installation::install_helper`]), or `None` to run `pkexec
+    /// apt-get` on the app's own download, as a package without one does.
+    pub install_helper: Option<PathBuf>,
 }
 
 /// Checks GitHub for a newer release and installs it through the system
@@ -94,6 +98,7 @@ pub struct Updater {
     updates_folder: PathBuf,
     server: Box<dyn ReleaseServer>,
     package_manager: Box<dyn PackageManager>,
+    install_helper: Option<PathBuf>,
     /// The release the last check found, cleared when a check starts.
     /// Held for the whole of a check or installation, so only one runs.
     checked_release: Mutex<Option<Release>>,
@@ -111,6 +116,7 @@ impl Updater {
             updates_folder: parts.updates_folder,
             server: parts.server,
             package_manager: parts.package_manager,
+            install_helper: parts.install_helper,
             checked_release: Mutex::new(None),
             installed_version: Mutex::new(None),
         }
@@ -118,14 +124,17 @@ impl Updater {
 
     /// The updater of the native app whose executable is at `executable`
     /// (see [`Installation::detect_for_executable`]): GitHub, the system's
-    /// package tools and `~/.cache/winspace/updates`.
+    /// package tools, the package's update helper if it has one, and
+    /// `~/.cache/winspace/updates`.
     pub fn for_executable(current_version: ReleaseVersion, executable: &Path) -> Self {
+        let installation = Installation::detect_for_executable(executable, Path::new("/"));
         Self::new(UpdaterParts {
             current_version,
-            installation: Installation::detect_for_executable(executable, Path::new("/")),
+            installation,
             updates_folder: default_updates_folder(),
             server: Box::new(GitHubReleases::new(current_version)),
             package_manager: Box::new(SystemPackageManager),
+            install_helper: installation.install_helper(Path::new("/")),
         })
     }
 
@@ -175,16 +184,26 @@ impl Updater {
     /// size, digest and package fields matched. Only the version comes
     /// from the caller; the address, digest and size are the check's.
     ///
-    /// Cancelling stops the task before the administrator prompt. Once APT
-    /// runs, cancelling has no effect: interrupting it can damage the
-    /// system's package state.
+    /// Where the package installed the update helper, the helper downloads,
+    /// verifies and installs the release as root instead
+    /// ([`install_update_command`](super::install_update_command)): the
+    /// app hands it only the version, and an administrator at the machine
+    /// is not asked for a password. If the helper cannot reach GitHub,
+    /// which can happen behind a proxy only the user's session knows, the
+    /// app downloads the release itself and installs it through `pkexec
+    /// apt-get`, as before.
+    ///
+    /// Cancelling stops the task before the administrator prompt, or tells
+    /// the helper to stop before APT starts. Once APT runs, cancelling has
+    /// no effect: interrupting it can damage the system's package state.
     ///
     /// # Errors
     ///
     /// [`UpdateError::NotConfirmed`], [`UpdateError::TaskRunning`],
     /// [`UpdateError::NotChecked`], [`UpdateError::InstallUnavailable`],
-    /// every download and verification error, and the package manager's
-    /// refusals. The download is deleted in every case.
+    /// every download and verification error, whether the app or the
+    /// helper found it, and the package manager's refusals. The download
+    /// is deleted in every case.
     pub fn install(
         &self,
         version: ReleaseVersion,
@@ -206,16 +225,69 @@ impl Updater {
             });
         }
         on_progress(InstallProgress::Downloading(version));
-        let staged = download_installer(
-            self.server.as_ref(),
-            &release.installer,
-            &self.updates_folder,
-            cancel,
-        )?;
-        self.install_download(&staged.path(), version, on_progress, cancel)?;
+        let through_helper = self
+            .install_helper
+            .as_deref()
+            .map(|helper| self.install_through_helper(helper, version, on_progress, cancel));
+        match through_helper {
+            Some(Ok(())) => {}
+            // No helper, or it could not reach GitHub: the app's own path.
+            None | Some(Err(UpdateError::Unreachable)) => {
+                let staged = download_installer(
+                    self.server.as_ref(),
+                    &release.installer,
+                    &self.updates_folder,
+                    cancel,
+                )?;
+                self.install_download(&staged.path(), version, on_progress, cancel)?;
+            }
+            Some(Err(error)) => return Err(error),
+        }
         *lock_ignoring_poison(&self.installed_version) = Some(version);
         on_progress(InstallProgress::Installed);
         Ok(())
+    }
+
+    /// Runs the update helper for `version` through pkexec, shows its
+    /// steps, and checks with `dpkg-query` that `version` is installed.
+    ///
+    /// Safety rule "success means the package manager confirms it": the
+    /// helper's own report is not enough; the app asks `dpkg-query` too.
+    fn install_through_helper(
+        &self,
+        helper: &Path,
+        version: ReleaseVersion,
+        on_progress: &dyn Fn(InstallProgress),
+        cancel: &Cancellation,
+    ) -> Result<(), UpdateError> {
+        if cancel.is_cancelled() {
+            return Err(UpdateError::Cancelled);
+        }
+        let packages = self.package_manager.as_ref();
+        let command = PackageCommand::InstallRelease {
+            helper: helper.to_path_buf(),
+            version,
+        };
+        let mut outcome = None;
+        let mut on_line = |line: &str| match HelperReport::decode(line) {
+            Some(HelperReport::Installing) => on_progress(InstallProgress::AwaitingApproval),
+            Some(report @ (HelperReport::Installed(_) | HelperReport::Failed(_))) => outcome = Some(report),
+            // "Downloading" is already shown, and other lines are pkexec's.
+            Some(HelperReport::Downloading) | None => {}
+        };
+        let output = packages.run_reporting(&command, &mut on_line, cancel)?;
+        match outcome {
+            Some(HelperReport::Failed(failure)) => return Err(failure.into_error()),
+            Some(HelperReport::Installed(installed)) if installed == version && output.is_success() => {}
+            // pkexec refused (126, 127) or the helper ended without saying
+            // why: the same failure as a refused `pkexec apt-get`.
+            _ => {
+                return Err(installation_failure(&without_reports(output))
+                    .unwrap_or(UpdateError::InstallNotConfirmed));
+            }
+        }
+        let query = packages.run(&PackageCommand::QueryInstalled)?;
+        check_installed_version(&query, version)
     }
 
     /// Checks the verified download with `dpkg-deb`, installs it behind
@@ -258,6 +330,20 @@ impl Updater {
     }
 }
 
+/// `output` without the helper's report lines, so a failure shows only
+/// what pkexec or the helper printed for people.
+fn without_reports(output: CommandOutput) -> CommandOutput {
+    let stdout: Vec<&str> = output
+        .stdout
+        .lines()
+        .filter(|line| HelperReport::decode(line).is_none())
+        .collect();
+    CommandOutput {
+        stdout: stdout.join("\n"),
+        ..output
+    }
+}
+
 /// Locks `mutex`, using its value even if a panicking thread held it: each
 /// value here is replaced whole, so it is never half-written.
 fn lock_ignoring_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -271,6 +357,7 @@ impl fmt::Debug for UpdaterParts {
             .field("current_version", &self.current_version)
             .field("installation", &self.installation)
             .field("updates_folder", &self.updates_folder)
+            .field("install_helper", &self.install_helper)
             .finish_non_exhaustive()
     }
 }
@@ -282,6 +369,7 @@ impl fmt::Debug for Updater {
             .field("current_version", &self.current_version)
             .field("installation", &self.installation)
             .field("updates_folder", &self.updates_folder)
+            .field("install_helper", &self.install_helper)
             .finish_non_exhaustive()
     }
 }
