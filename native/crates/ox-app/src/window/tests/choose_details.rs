@@ -526,3 +526,160 @@ fn a_real_click_on_more_opens_choose_details() {
     });
     pointer.move_to(720, 500);
 }
+
+/// Opens the titles' menu with a real right-click at `x` in `widget`
+/// and returns it. On this display without a window manager, the first
+/// click after a menu closed is sometimes swallowed, so a click that
+/// opens nothing is made once more.
+fn right_click_menu(
+    pointer: &mut Pointer,
+    details: &DetailsView,
+    widget: &gtk::Widget,
+    x: f64,
+) -> MenuPopover {
+    let point = screen_point(pointer, widget, (x, 10.0), (720, 500));
+    for _ in 0..2 {
+        pointer.move_to(point.0, point.1);
+        pointer.press(Button::Secondary);
+        pointer.release(Button::Secondary);
+        for _ in 0..40 {
+            if open_titles_menu(details).is_some() {
+                break;
+            }
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(50));
+        }
+        if open_titles_menu(details).is_some() {
+            break;
+        }
+    }
+    let menu = open_titles_menu(details).expect("the titles' menu");
+    wait_for_frames(&menu, 3);
+    menu
+}
+
+/// Closes the open titles' menu with a real Escape.
+fn escape_menu(pointer: &mut Pointer, details: &DetailsView) {
+    pointer.tap_key(gdk::Key::Escape);
+    wait_until("the menu to close", || open_titles_menu(details).is_none());
+}
+
+/// With the real pointer: a right-click on each column title opens the
+/// titles' menu fitting that column, and a click on each column's row
+/// shows or hides it; Name's row is greyed and a click on it changes
+/// nothing.
+///
+/// parity: VIEW-033
+#[gtk::test]
+fn real_clicks_on_every_title_and_every_column_row() {
+    let mut pointer = Pointer::connect();
+    let (_fixture, test) = window_with_files();
+    let details = test.window.folder_pane().details().clone();
+    let header = details.header().expect("column titles");
+    for column in [
+        SortColumn::Name,
+        SortColumn::Modified,
+        SortColumn::Type,
+        SortColumn::Size,
+    ] {
+        let x = details.title_middle(column).expect("a shown title");
+        let menu = right_click_menu(&mut pointer, &details, &header, x);
+        assert_eq!(
+            menu.items()[0].target,
+            Some(column.as_str().to_variant()),
+            "{column:?}"
+        );
+        escape_menu(&mut pointer, &details);
+    }
+
+    let mut expected = DEFAULT_CHOSEN.to_vec();
+    let toggles = [
+        SortColumn::Created,
+        SortColumn::Extension,
+        SortColumn::Owner,
+        SortColumn::Permissions,
+        SortColumn::Modified,
+        SortColumn::Type,
+        SortColumn::Size,
+        SortColumn::Name,
+    ];
+    for column in toggles {
+        let x = details.title_middle(SortColumn::Name).expect("the Name title");
+        let menu = right_click_menu(&mut pointer, &details, &header, x);
+        let index = menu
+            .items()
+            .iter()
+            .position(|item| item.label == column.label())
+            .expect("the column's row");
+        let row = menu
+            .row_list()
+            .row_at_index(i32::try_from(index).expect("a few rows"))
+            .expect("the row");
+        let middle = (30.0, f64::from(row.height()) / 2.0);
+        let on_row = screen_point(&mut pointer, &row, middle, (720, 500));
+        pointer.move_to(on_row.0, on_row.1);
+        pointer.press(Button::Primary);
+        pointer.release(Button::Primary);
+        if column == SortColumn::Name {
+            assert!(!row.is_sensitive(), "Name is greyed");
+            escape_menu(&mut pointer, &details);
+        } else {
+            wait_until("the menu to close", || open_titles_menu(&details).is_none());
+            if expected.contains(&column) {
+                expected.retain(|shown| *shown != column);
+            } else {
+                expected.push(column);
+            }
+        }
+        wait_until(&format!("{column:?} toggled"), || {
+            details.chosen_columns() == expected
+        });
+        let shown = details
+            .column(column)
+            .is_some_and(|view_column| view_column.is_visible());
+        assert_eq!(
+            shown,
+            column == SortColumn::Name || expected.contains(&column),
+            "{column:?}"
+        );
+    }
+    pointer.move_to(720, 500);
+}
+
+/// Search results and the Recycle Bin list in Details too, and their
+/// titles open the same menu.
+///
+/// parity: VIEW-033
+#[gtk::test]
+fn the_titles_menu_opens_in_search_results_and_the_recycle_bin() {
+    super::file_ops_support::require_private_trash();
+    let (fixture, test) = window_with_files();
+    let check_menu = |what: &str| {
+        let details = test.window.folder_pane().details().clone();
+        let header = details.header().expect("column titles");
+        let x = details.title_middle(SortColumn::Name).expect("the Name title");
+        let menu = test.window.show_column_menu(&header, x, 4.0);
+        let labels: Vec<String> = menu.items().into_iter().map(|item| item.label).collect();
+        assert_eq!(
+            labels.first().map(String::as_str),
+            Some("Size Column to Fit"),
+            "{what}"
+        );
+        assert_eq!(labels.last().map(String::as_str), Some("More..."), "{what}");
+        menu.popdown();
+    };
+    test.search_for("Garden");
+    wait_until("the search result", || test.names() == ["Garden plan.txt"]);
+    check_menu("search results");
+
+    gtk::gio::File::for_path(fixture.path("Trip notes.txt"))
+        .trash(gtk::gio::Cancellable::NONE)
+        .expect("the private Recycle Bin");
+    test.window
+        .navigate(ox_core::location::TRASH_URI)
+        .expect("the Recycle Bin");
+    wait_until("the trashed file", || {
+        test.names().iter().any(|name| name == "Trip notes.txt")
+    });
+    wait_for_frames(&test.window, 3);
+    check_menu("the Recycle Bin");
+}

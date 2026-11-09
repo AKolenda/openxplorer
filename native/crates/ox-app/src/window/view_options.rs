@@ -190,24 +190,28 @@ impl BrowserWindow {
 
     /// The titles' menu at (`x`, `y`) in `header`. It belongs to the
     /// details view: the titles' row takes no keyboard focus, and a menu
-    /// inside it could not take the keyboard either.
+    /// inside it could not take the keyboard either. The view keeps one
+    /// menu, shown again each time, as the file list keeps its menu: a
+    /// menu destroyed as it closed left GTK pointing at its gone surface
+    /// while the pointer was still over it.
     pub(super) fn show_column_menu(&self, header: &gtk::Widget, x: f64, y: f64) -> MenuPopover {
         let details = self.folder_pane().details();
         let chosen = details.chosen_columns();
         #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in f32")]
         let point = gtk::graphene::Point::new(x as f32, y as f32);
         let at = header.compute_point(details, &point).unwrap_or(point);
+        let kept = std::iter::successors(details.first_child(), WidgetExt::next_sibling)
+            .find_map(|child| child.downcast::<MenuPopover>().ok());
+        let popover = kept.unwrap_or_else(|| {
+            let popover = MenuPopover::new(Vec::new());
+            popover.set_parent(details);
+            popover
+        });
         // The rows are drawn once the menu is in the window, which enables
         // them: the keyboard starts on the first one as the menu maps.
-        let popover = MenuPopover::new(Vec::new());
-        popover.set_parent(details);
         popover.set_entries(column_menu_entries(&chosen, details.column_at(x)));
         #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in i32")]
         popover.set_pointing_to(Some(&gdk::Rectangle::new(at.x() as i32, at.y() as i32, 1, 1)));
-        popover.connect_closed(|popover| {
-            let popover = popover.clone();
-            glib::idle_add_local_once(move || popover.unparent());
-        });
         popover.popup();
         popover
     }
