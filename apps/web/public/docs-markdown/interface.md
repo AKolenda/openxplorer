@@ -34,7 +34,7 @@ View → Folder tree (F7) shows a tree of folders below the navigation places. E
 
 New lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder. Each new item is made at once, as “New Text Document.txt” for example, or “New Text Document (2).txt” when that name is taken, and renamed in place. Your Templates folder adds its files after them, with its subfolders as submenus; a template is copied under its own name the same way. Creating never overwrites an existing file.
 
-Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys; Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E and F3 move to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. Ctrl+1 to Ctrl+9 show the tab of that number, like Alt+1 to Alt+9; Ctrl+F5 refreshes like F5; Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V; and, while the navigation pane is shown, Ctrl+Shift+E opens it down to the folder you are in and moves to it there. In the navigation pane, the keypad’s plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
+Settings → About → Keyboard shortcuts (Ctrl+?) lists the available keys, and its search finds a shortcut by its name or by its keys, typed as you like (ctrl shift e, Ctrl+Shift+E); Settings → About also has Help (F1), License & source and About this build. Windows Explorer’s keys work too: Ctrl+E and F3 move to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. Ctrl+1 to Ctrl+9 show the tab of that number, like Alt+1 to Alt+9; Ctrl+F5 refreshes like F5; Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V; and, while the navigation pane is shown, Ctrl+Shift+E opens it down to the folder you are in and moves to it there. In the navigation pane, the keypad’s plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
 
 ## Rename an item
 
@@ -172,4 +172,4 @@ The website tour shows pictures and cannot drag files. Compatibility with a part
 
 ---
 
-OpenXplorer 2.0.15. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.16. Project-authored documentation: AGPL-3.0-only.

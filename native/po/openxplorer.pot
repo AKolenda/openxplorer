@@ -9824,6 +9824,10 @@ msgid "Folder Options replaces Adjust view display style, with Windows' General 
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "In the Debian package, administrators at the computer install updates without typing a password, through a small helper that only installs a verified, newer official release; Settings › About can turn this off. The Preview pane shows the selected file's contents: text, pictures, PDF pages drawn in a sandbox, and audio and video. More of Windows 11's File Explorer keyboard shortcuts work, a tab's menu opens from the keyboard, the Open and Save dialog keeps its size and stays attached to the app that opened it, and a Details column dragged past its start stops at its narrowest width."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Make OpenXplorer default also sends other apps' Open and Save dialogs to OpenXplorer, and GTK 3 apps use them too after the next login. Format on a removable drive opens OpenXplorer's own Format dialog instead of GNOME Disks, and Enter in Extract all extracts. Deleting many files on a share asks the server about each file once instead of three times. A move between drives keeps the source files of a folder it skipped partway, Undo asks first when it cannot check a whole copy, signing out of a server forgets its passwords on every port, and the Recycle Bin and search results no longer show stale items."
 msgstr ""
 
