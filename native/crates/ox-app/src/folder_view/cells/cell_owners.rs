@@ -27,6 +27,10 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::row_tooltip::RowTooltip;
+
+/// How many cells are registered before the ones that went are first
+/// forgotten.
+const MIN_OWNERS_BEFORE_PRUNING: usize = 256;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::shown_name::{shown_name, shows_whole, Extensions};
@@ -138,6 +142,9 @@ fn item_widget(cell: &gtk::Widget) -> Option<gtk::Widget> {
 #[derive(Debug, Default)]
 pub(crate) struct CellOwners {
     owners: RefCell<Vec<CellOwner>>,
+    /// How many owners were left after the cells that went were last
+    /// forgotten; see [`CellOwners::register_mapped`].
+    alive_after_pruning: Cell<usize>,
     /// The URIs of the items a cut put on the clipboard, whose cells are
     /// dimmed until they are pasted or the clipboard changes.
     cut_uris: RefCell<HashSet<String>>,
@@ -162,6 +169,8 @@ pub(crate) struct CellOwners {
     item_checks_pass_clicks: Cell<bool>,
     /// Whether names show the extensions of known types (VIEW-069).
     extensions: Cell<Extensions>,
+    /// The words marked in the names, lower-cased (SRCH-046).
+    marked_words: RefCell<Vec<String>>,
 }
 
 impl CellOwners {
@@ -180,7 +189,14 @@ impl CellOwners {
         positions: Option<PositionMap>,
     ) {
         let mut owners = self.owners.borrow_mut();
-        owners.retain(CellOwner::is_alive);
+        // Forgetting the cells that went looks at every cell, so it waits
+        // until the list has doubled: a view that makes hundreds of cells
+        // at once, as a search's results replacing a big folder do, would
+        // otherwise look at every cell for each new one.
+        if owners.len() >= (2 * self.alive_after_pruning.get()).max(MIN_OWNERS_BEFORE_PRUNING) {
+            owners.retain(CellOwner::is_alive);
+            self.alive_after_pruning.set(owners.len());
+        }
         owners.push(CellOwner {
             cell: cell.as_ref().downgrade(),
             list_item: list_item.downgrade(),
@@ -449,9 +465,28 @@ impl CellOwners {
     /// Shows names with or without the extensions of known types; a cell
     /// bound later follows when it is bound.
     pub(crate) fn set_extensions(&self, extensions: Extensions) {
-        if self.extensions.replace(extensions) == extensions {
-            return;
+        if self.extensions.replace(extensions) != extensions {
+            self.show_names_again();
         }
+    }
+
+    /// The words a search marks in the names it shows (SRCH-046); none
+    /// while nothing is searched or the search filter bar shows.
+    pub(crate) fn marked_words(&self) -> Vec<String> {
+        self.marked_words.borrow().clone()
+    }
+
+    /// Marks `words` in the names shown, and in those bound later.
+    pub(crate) fn set_marked_words(&self, words: Vec<String>) {
+        if *self.marked_words.borrow() != words {
+            self.marked_words.replace(words);
+            self.show_names_again();
+        }
+    }
+
+    /// Shows the names of the bound cells again, after what they show of
+    /// them changed.
+    fn show_names_again(&self) {
         let bound: Vec<(gtk::ListItem, gtk::Widget, FileItem)> = self
             .owners
             .borrow()
@@ -461,13 +496,14 @@ impl CellOwners {
                 Some((owner.list_item.upgrade()?, cell, item))
             })
             .collect();
+        let words = self.marked_words();
         for (list_item, cell, item) in bound {
             if let Some(cell) = cell.downcast_ref::<FileCell>() {
                 // The name a screen reader reads follows the one shown,
                 // as binding set them together.
                 let name = self.shown_name(&item);
                 list_item.set_accessible_label(&name);
-                cell.show_name(&name);
+                cell.show_name(&name, &words);
             }
         }
     }

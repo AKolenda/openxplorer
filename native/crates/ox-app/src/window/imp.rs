@@ -261,6 +261,9 @@ pub(crate) struct BrowserWindow {
     /// Folder Options' "Always search file names and contents" as the
     /// window last followed it; `None` until it first did.
     pub(super) searches_contents: Cell<Option<bool>>,
+    /// Settings > Search > "Show the search filter bar" as the window
+    /// last followed it (SRCH-046); `None` before it first did.
+    pub(super) shows_search_filter_bar: Cell<Option<bool>>,
     /// Set while a pin request is being checked and saved; another waits
     /// its turn by being ignored, as `state.pinBusy` in app.js.
     pub(super) pinning: Cell<bool>,

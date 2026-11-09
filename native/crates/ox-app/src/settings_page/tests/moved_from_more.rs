@@ -17,7 +17,7 @@ use crate::window::WindowAction;
 
 impl SettingsTest {
     /// The row titled `title` on `category`'s page.
-    fn row_in(&self, category: Category, title: &str) -> SettingRow {
+    pub(super) fn row_in(&self, category: Category, title: &str) -> SettingRow {
         let rows = self.page.category_section(category).rows();
         rows.into_iter()
             .find(|row| row.text().title == title)
