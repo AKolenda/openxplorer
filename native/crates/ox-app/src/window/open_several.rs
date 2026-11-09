@@ -69,36 +69,41 @@ impl BrowserWindow {
     /// too, since browsing one is a dialog of its own and several would
     /// stack. An item that cannot be opened from here is left out.
     fn open_each(&self, entries: &[Entry]) {
-        for entry in entries {
-            // A row of Recent files opens as the file it stands for, read
-            // again, its share mounted first when it has to be, as opening
-            // it alone does.
-            if entry.meta.recent_target.is_some() {
-                self.open_recent_row_with_others(entry);
-            } else {
+        if !entries.iter().any(|entry| entry.meta.recent_target.is_some()) {
+            for entry in entries {
                 self.open_with_others(entry);
             }
+            return;
         }
-    }
-
-    /// Opens the file the Recent row `entry` stands for as
-    /// [`Self::open_each`] opens an item, once it is read again; says
-    /// "Item Not Found" when it is gone.
-    fn open_recent_row_with_others(&self, entry: &Entry) {
-        let entry = entry.clone();
+        // Rows of Recent files open as the files they stand for, each
+        // read again, its share mounted first when it has to be, as
+        // opening one alone does. The items open one after another, so a
+        // slow one keeps the view's order rather than opening last.
+        let entries = entries.to_vec();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                match window.read_again(entry.opened_uri()).await {
-                    Ok(fresh) => window.open_with_others(&fresh),
-                    Err(super::activation::ReadAgain::Gone(_)) => {
-                        window.report_item_not_found(entry.opened_uri());
-                    }
-                    Err(failure) => window.report_open_failure(&failure.to_string(), &entry),
+                for entry in &entries {
+                    window.open_resolved_with_others(entry).await;
                 }
             }
         ));
+    }
+
+    /// Opens `entry` as [`Self::open_each`] opens an item; a row of
+    /// Recent files once the file it stands for is read again, or says
+    /// "Item Not Found" when that file is gone.
+    async fn open_resolved_with_others(&self, entry: &Entry) {
+        if entry.meta.recent_target.is_none() {
+            self.open_with_others(entry);
+            return;
+        }
+        match self.read_again(entry.opened_uri()).await {
+            Ok(fresh) => self.open_with_others(&fresh),
+            Err(super::activation::ReadAgain::Gone(_)) => self.report_item_not_found(entry.opened_uri()),
+            Err(failure) => self.report_open_failure(&failure.to_string(), entry),
+        }
     }
 
     /// Opens `entry` as one of several items, as [`Self::open_each`] says.

@@ -210,9 +210,14 @@ impl BrowserWindow {
     pub(super) fn open_properties(&self, tab: PropertiesTab) {
         let selected = self.folder_pane().model().selected_items();
         if selected.len() > 1 && tab != PropertiesTab::PreviousVersions {
-            // Rows of Recent files are described as the files they stand for.
-            let entries = selected.iter().map(|item| item.entry().as_item()).collect();
-            self.show_selection_properties(entries, tab);
+            // Rows of Recent files are described as the files they stand
+            // for, whose shares are mounted first, as one item's are.
+            let entries: Vec<ox_core::entry::Entry> =
+                selected.iter().map(|item| item.entry().as_item()).collect();
+            let uris = entries.iter().map(|entry| entry.uri.clone()).collect();
+            self.after_mounting_each(uris, move |window| {
+                window.show_selection_properties(entries, tab);
+            });
             return;
         }
         if let Some(target) = self.properties_target() {

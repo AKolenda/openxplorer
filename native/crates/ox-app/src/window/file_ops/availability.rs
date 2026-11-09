@@ -136,7 +136,7 @@ pub(crate) struct SelectionFacts {
     /// (`readonlyLocation`).
     pub(crate) has_read_only: bool,
     /// Some selected item is a row of Recent files, which may be copied,
-    /// not cut, renamed or deleted.
+    /// not cut, duplicated, renamed or deleted.
     pub(crate) has_recent: bool,
 }
 
@@ -198,8 +198,7 @@ impl CommandFacts {
         match command {
             FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
             FileCommand::Copy => can_copy || (self.drive_selected && !self.is_busy),
-            FileCommand::Duplicate => can_copy && !selection.has_read_only,
-            FileCommand::Cut | FileCommand::Rename => {
+            FileCommand::Cut | FileCommand::Duplicate | FileCommand::Rename => {
                 can_copy && !selection.has_read_only && !selection.has_recent
             }
             FileCommand::Delete | FileCommand::DeletePermanently => can_change && !selection.has_recent,
@@ -272,7 +271,11 @@ impl CommandFacts {
             _ if selection.has_inoperable => {
                 ox_core::i18n::gettext_static("Drives, shares and virtual items cannot be changed here.")
             }
-            FileCommand::Cut | FileCommand::Rename | FileCommand::Delete | FileCommand::DeletePermanently
+            FileCommand::Cut
+            | FileCommand::Duplicate
+            | FileCommand::Rename
+            | FileCommand::Delete
+            | FileCommand::DeletePermanently
                 if selection.has_recent =>
             {
                 ox_core::i18n::gettext_static("Items in Recent files can be opened and copied, not changed.")
@@ -314,8 +317,8 @@ fn waits_for_running_jobs(command: FileCommand, clipboard: ClipboardKind, jobs: 
 /// `readonlyLocation` in app.js).
 pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -> SelectionFacts {
     // A row of Recent files that names its file is copied as that file,
-    // whether `GVfs` types it as a file or as a shortcut; its Cut, Rename
-    // and Delete are refused as `has_recent`.
+    // whether `GVfs` types it as a file or as a shortcut; its Cut,
+    // Duplicate, Rename and Delete are refused as `has_recent`.
     let has_inoperable = items.iter().any(|item| {
         let entry = item.entry();
         let stands_for_a_file = entry.meta.recent_target.is_some();
