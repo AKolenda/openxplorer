@@ -262,11 +262,7 @@ fn archive_request(controls: &CreateArchiveControls, uris: &[String]) -> Result<
     if typed.is_empty() {
         return Err(ox_core::i18n::gettext("Enter where to create the archive."));
     }
-    let path = if typed.to_lowercase().ends_with(ending) {
-        typed
-    } else {
-        format!("{typed}{ending}")
-    };
+    let path = with_method_ending(&typed, ending);
     let home = glib::home_dir();
     let uri = normalise_location(&path, None, Path::new(&home)).map_err(|error| error.to_string())?;
     let folder =
@@ -283,14 +279,40 @@ fn archive_request(controls: &CreateArchiveControls, uris: &[String]) -> Result<
     })
 }
 
+/// Whether the file name in `path` ends with the archive ending `known`,
+/// in any case, and is more than that ending: a name such as `.tgz` is
+/// only a name.
+fn has_ending(path: &str, known: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).as_bytes();
+    name.len() > known.len() && name[name.len() - known.len()..].eq_ignore_ascii_case(known.as_bytes())
+}
+
 /// `path` with its archive ending, if any, replaced by `ending`.
 fn with_ending(path: &str, ending: &str) -> String {
-    let lower = path.to_lowercase();
     let stem = KNOWN_ENDINGS
         .iter()
-        .find(|known| lower.ends_with(*known) && lower.len() > known.len())
+        .find(|known| has_ending(path, known))
         .map_or(path, |known| &path[..path.len() - known.len()]);
     format!("{stem}{ending}")
+}
+
+/// The path Create writes for the typed `path` with the chosen method's
+/// `ending`: kept when it already ends so, or in that ending's short
+/// form (`.tgz` for `.tar.gz`, `.tbz2` for `.tar.bz2`), which the
+/// compressor writes the same way; else the ending the format or method
+/// gives, in place of another archive ending, so `Notes.tgz` is never
+/// written as `Notes.tgz.tar.gz`.
+fn with_method_ending(path: &str, ending: &str) -> String {
+    let short = match ending {
+        ".tar.gz" => Some(".tgz"),
+        ".tar.bz2" => Some(".tbz2"),
+        _ => None,
+    };
+    if has_ending(path, ending) || short.is_some_and(|short| has_ending(path, short)) {
+        path.to_owned()
+    } else {
+        with_ending(path, ending)
+    }
 }
 
 /// How the field shows the archive `name` in `folder`: a local path, or
@@ -430,5 +452,17 @@ mod tests {
         assert_eq!(with_ending("/a/Notes 2.TAR.GZ", ".zip"), "/a/Notes 2.zip");
         assert_eq!(with_ending("/a/report.txt", ".tar"), "/a/report.txt.tar");
         assert_eq!(with_ending(".zip", ".tar"), ".zip.tar");
+    }
+
+    /// parity: ARC-023
+    #[test]
+    fn create_keeps_a_typed_ending_of_the_chosen_method() {
+        assert_eq!(with_method_ending("/a/Site.tgz", ".tar.gz"), "/a/Site.tgz");
+        assert_eq!(with_method_ending("/a/Site.TBZ2", ".tar.bz2"), "/a/Site.TBZ2");
+        assert_eq!(with_method_ending("/a/Site.tar.xz", ".tar.xz"), "/a/Site.tar.xz");
+        assert_eq!(with_method_ending("/a/Site.tgz", ".tar.xz"), "/a/Site.tar.xz");
+        assert_eq!(with_method_ending("/a/Site.zip", ".tar"), "/a/Site.tar");
+        assert_eq!(with_method_ending("/a/Site", ".zip"), "/a/Site.zip");
+        assert_eq!(with_method_ending("/a/.tgz", ".tar.gz"), "/a/.tgz.tar.gz");
     }
 }
