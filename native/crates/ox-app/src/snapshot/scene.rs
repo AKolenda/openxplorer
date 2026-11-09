@@ -228,22 +228,7 @@ impl SceneStep {
                 window.zoom_view(*steps);
                 Ok(Duration::ZERO)
             }
-            Self::ScrollToEnd => {
-                let parent: &gtk::Window = window.upcast_ref();
-                let dialog = gtk::Window::list_toplevels()
-                    .into_iter()
-                    .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
-                    .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
-                    .last()
-                    .ok_or_else(|| "no dialog is open".to_owned())?;
-                let scroller = crate::window::widget_tree::descendants::<gtk::ScrolledWindow>(&dialog)
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| "the dialog does not scroll".to_owned())?;
-                let adjustment = scroller.vadjustment();
-                adjustment.set_value(adjustment.upper() - adjustment.page_size());
-                Ok(Duration::ZERO)
-            }
+            Self::ScrollToEnd => scroll_dialog_to_end(window).map(|()| Duration::ZERO),
             Self::Type(text) => {
                 let parent: &gtk::Window = window.upcast_ref();
                 let dialog = gtk::Window::list_toplevels()
@@ -277,6 +262,25 @@ impl SceneStep {
                 .ok_or_else(|| format!("the search list “{list}” has no option “{label}”")),
         }
     }
+}
+
+/// Scrolls the body of the dialog the scene opened last to its end, as
+/// dragging its scroll bar down does.
+fn scroll_dialog_to_end(window: &BrowserWindow) -> Result<(), String> {
+    let parent: &gtk::Window = window.upcast_ref();
+    let dialog = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+        .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
+        .last()
+        .ok_or_else(|| "no dialog is open".to_owned())?;
+    let scroller = crate::window::widget_tree::descendants::<gtk::ScrolledWindow>(&dialog)
+        .into_iter()
+        .next()
+        .ok_or_else(|| "the dialog does not scroll".to_owned())?;
+    let adjustment = scroller.vadjustment();
+    adjustment.set_value(adjustment.upper() - adjustment.page_size());
+    Ok(())
 }
 
 /// Presses `accelerator` where keyboard focus is in `window`, as GTK
