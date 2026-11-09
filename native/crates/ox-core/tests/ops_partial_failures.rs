@@ -430,3 +430,61 @@ fn a_retried_folder_with_a_snapshot_inside_publishes_nothing() {
         Some(FailureCause::AccessDenied)
     );
 }
+
+/// A folder whose name has characters a URI escapes (`#`, `?`) is copied
+/// whole under the app's own previous-versions protection: every location
+/// it is asked about is a proper URI.
+///
+/// parity: XFER-020
+#[test]
+fn a_folder_named_with_a_hash_or_question_mark_copies_under_the_protection() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("Plan #1/notes?.txt"), b"plan");
+    write(&src.join("Plan #1/Sub #2/item.txt"), b"item");
+    let settings = tempfile::tempdir().unwrap();
+    let versions = std::sync::Arc::new(ox_core::versions::PreviousVersions::new(settings.path()));
+    let questions = Questions::default();
+    let context = OperationContext {
+        protection: ox_core::ops::WriteProtection::new(versions.write_guard()),
+        ..questions.context(FailureAnswer::Skip)
+    };
+
+    paste(TransferMode::Copy, &src, &["Plan #1"], &dst, &context);
+
+    assert_eq!(questions.asked(), []);
+    assert_eq!(fs::read(dst.join("Plan #1/notes?.txt")).unwrap(), b"plan");
+    assert_eq!(fs::read(dst.join("Plan #1/Sub #2/item.txt")).unwrap(), b"item");
+}
+
+/// An item deleted before Paste whose name the destination already has
+/// does not stop the check for name conflicts: the others are pasted and
+/// the missing one is asked about.
+///
+/// parity: OPS-047, OPS-026
+#[test]
+fn an_item_missing_before_the_check_does_not_stop_the_paste() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("A.txt"), b"a");
+    write(&dst.join("B.txt"), b"existing");
+    let questions = Questions::default();
+
+    let outcome = paste(
+        TransferMode::Copy,
+        &src,
+        &["A.txt", "B.txt"],
+        &dst,
+        &questions.context(FailureAnswer::Skip),
+    );
+
+    assert_eq!(fs::read(dst.join("A.txt")).unwrap(), b"a");
+    assert_eq!(fs::read(dst.join("B.txt")).unwrap(), b"existing");
+    assert_eq!(questions.asked(), [("B.txt".to_owned(), FailureCause::NotFound)]);
+    assert_eq!(
+        outcome.undo,
+        Some(UndoRecord::Copy {
+            copies: vec![file_uri(&dst.join("A.txt"))]
+        })
+    );
+}

@@ -261,7 +261,19 @@ impl Scanner<'_> {
             self.free(source, folder);
             return Ok(());
         }
-        let incoming = facts(source, cancel)?;
+        // An incoming item that is gone or cannot be read is no conflict
+        // to ask about: it goes in as a free item, and the copy or move
+        // asks about it alone when its turn comes (OPS-047), while the
+        // other items are pasted. Under its free name's Skip policy it
+        // never replaces the item of its name.
+        let incoming = match facts(source, cancel) {
+            Ok(incoming) => incoming,
+            Err(OpsError::NotFound(_) | OpsError::PermissionDenied(_)) => {
+                self.free(source, folder);
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
         let present = facts(&existing, cancel)?;
         // The folder copied into itself or a folder inside it is left to
         // the engine, which refuses it with its own message.

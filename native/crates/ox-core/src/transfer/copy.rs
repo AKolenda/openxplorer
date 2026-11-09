@@ -70,8 +70,9 @@ pub(crate) struct Copier<'a> {
     /// its discarded attempt back from (OPS-021).
     accounting: Option<&'a SharedAccounting>,
     /// Asked about each entry's final location before it is written
-    /// (XFER-020).
-    guard: Option<&'a WriteGuard>,
+    /// (XFER-020), with the URI of the item in staging and of where it is
+    /// published, which turn an entry's staged URI into its final one.
+    guard: Option<(&'a WriteGuard, String, String)>,
     /// The names from the top item down to the entry being copied.
     entry_path: Vec<String>,
     /// Set when a safety rule stopped the copy (the nesting limit, an
@@ -112,9 +113,16 @@ impl<'a> Copier<'a> {
     }
 
     /// Asks `guard` about each entry's final location before it is
-    /// written; a refusal stops the whole item (XFER-020).
-    pub(crate) fn guarded(mut self, guard: Option<&'a WriteGuard>) -> Self {
-        self.guard = guard;
+    /// written, the entry's place below `staged`, the item in staging,
+    /// taken below `published`, where the item is published; a refusal
+    /// stops the whole item (XFER-020).
+    pub(crate) fn guarded(
+        mut self,
+        guard: Option<&'a WriteGuard>,
+        staged: &dyn Node,
+        published: &dyn Node,
+    ) -> Self {
+        self.guard = guard.map(|guard| (guard, staged.uri(), published.uri()));
         self
     }
 
@@ -163,7 +171,7 @@ impl<'a> Copier<'a> {
         // could not prove.
         if source.name() == self.name.stage() {
             self.stopped = true;
-            return Err(TransferError::failed(crate::i18n::gettext(
+            return Err(TransferError::InsideSource(crate::i18n::gettext(
                 "The destination resolves inside the source through an alias. Copy stopped.",
             )));
         }
@@ -342,12 +350,23 @@ impl<'a> Copier<'a> {
     /// Asks the write guard about the final location of `target`, an
     /// entry in staging; a refusal is a safety stop of the whole item.
     fn check_guard(&mut self, target: &dyn Node) -> Result<(), TransferError> {
-        let Some(guard) = self.guard else {
+        let Some((guard, staged, published)) = &self.guard else {
             return Ok(());
         };
-        // Staging sits where the item is published, so the real name in
-        // place of the staging's spells the final location.
-        guard(&self.name.reword(&target.uri())).inspect_err(|_| self.stopped = true)
+        // An entry's URI below the staged item, escaped as URIs escape
+        // names, is its URI below the published item. Anything else is
+        // asked about as it is.
+        let uri = target.uri();
+        let below = uri
+            .strip_prefix(staged.as_str())
+            .filter(|rest| rest.starts_with('/'));
+        let final_uri = match below {
+            Some(rest) => format!("{}{rest}", published.trim_end_matches('/')),
+            None => uri,
+        };
+        let refused = guard(&final_uri);
+        self.stopped |= refused.is_err();
+        refused
     }
 
     /// Removes what a failed entry left in staging under `name` in the
