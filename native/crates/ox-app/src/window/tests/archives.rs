@@ -979,11 +979,17 @@ fn a_new_archive_is_renamed_in_place_and_undo_takes_it_away() {
     assert_eq!(fs::read(fixture.path("Notes 2.tar")).expect("kept"), b"taken");
 }
 
-/// The color and line height GTK draws `frame`'s heading with.
-fn heading_look(frame: &crate::dialog::DialogFrame) -> (String, i32) {
+/// The color, font (size and weight) and line height GTK draws
+/// `frame`'s heading with.
+fn heading_look(frame: &crate::dialog::DialogFrame) -> (String, String, i32) {
     let title = frame.title_label();
     let (_, height, _, _) = title.measure(gtk::Orientation::Vertical, -1);
-    (title.color().to_str().to_string(), height)
+    let font = title
+        .pango_context()
+        .font_description()
+        .map(|font| font.to_str().to_string())
+        .unwrap_or_default();
+    (title.color().to_str().to_string(), font, height)
 }
 
 /// The Create archive window's heading looks like the app's other
