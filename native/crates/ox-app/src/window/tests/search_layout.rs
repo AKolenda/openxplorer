@@ -282,7 +282,7 @@ fn pin_to_quick_access_on_results_saves_the_search() {
     };
     test.activate("pin-folder", None);
     wait_until("the folder to be pinned", || pins(&test) == 1);
-    let more = || menu_of(&test, "More options").row_labels();
+    let more = || menu_of(&test, "See more").row_labels();
     wait_until("Unpin in the folder", || {
         more().contains(&"Unpin from Quick access".to_owned())
     });
@@ -292,7 +292,7 @@ fn pin_to_quick_access_on_results_saves_the_search() {
     wait_until("Pin on the results", || {
         more().contains(&"Pin to Quick access".to_owned())
     });
-    let menu = menu_of(&test, "More options");
+    let menu = menu_of(&test, "See more");
     menu.popup();
     wait_until("the menu", || menu.is_visible());
     menu.click_row("Pin to Quick access");
