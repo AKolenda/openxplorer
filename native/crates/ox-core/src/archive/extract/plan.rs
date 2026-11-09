@@ -291,7 +291,7 @@ fn link_segments(
 
 /// ARC-016: a link at path `segments` may point to `target` only when the
 /// target stays inside the extracted folder however the links in it
-/// resolve. It must be relative plain text; `..` may only come first and
+/// resolve. It must be relative plain text; `.` is skipped; `..` may only come first and
 /// may climb no higher than the extracted folder, through the real
 /// folders that hold the link; then come plain names only, so no `..`
 /// follows a name that could itself be a link. Each link therefore leads
@@ -314,8 +314,11 @@ pub(super) fn check_link_target(name: &str, segments: &[String], target: &str) -
     let mut has_descended = false;
     for component in target.split('/') {
         match component {
+            // `.` stays where it is, so `./libx.so` or `.` is as safe as
+            // the rest of the target.
+            "." => {}
             ".." if !has_descended => climbs += 1,
-            "" | "." | ".." => return Err(refuse()),
+            "" | ".." => return Err(refuse()),
             _ => has_descended = true,
         }
     }

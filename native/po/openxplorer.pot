@@ -472,11 +472,11 @@ msgid "Show extracted files when finished"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Still checking the ZIP. Try again in a moment."
+msgid "Still checking the archive. Try again in a moment."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "The ZIP is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
+msgid "The archive is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
@@ -499,7 +499,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/extraction.rs
-msgid "{error}\n\nThe ZIP is unchanged. Existing files were not overwritten."
+msgid "{error}\n\nThe archive is unchanged. Existing files were not overwritten."
 msgstr ""
 
 #: crates/ox-app/src/devices.rs

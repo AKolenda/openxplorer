@@ -261,7 +261,7 @@ impl ZipExtractor {
             .prepare_destination(&destination_uri, &request.folder_name, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         let name = request.folder_name.clone();
-        self.report("Checking ZIP contents…".to_owned(), 0.0);
+        self.report("Checking the archive…".to_owned(), 0.0);
         let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         // ARC-026: a copy out of the archive checks only what it copies.

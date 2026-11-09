@@ -61,7 +61,7 @@ fn progress_labels_name_the_check_each_file_and_the_result() {
     assert_eq!(
         labels,
         [
-            "Checking ZIP contents…",
+            "Checking the archive…",
             "Extracting Docs/Guide.txt · 1/2 files",
             "Extracting Zero.bin · 2/2 files",
             "Extracted 2 files into Unpacked",

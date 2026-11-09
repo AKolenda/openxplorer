@@ -75,7 +75,8 @@ fn a_relative_link_inside_the_folder_extracts_as_a_link() {
 }
 
 /// Links that climb out of their own folder but stay inside the extracted
-/// folder, links to folders and long targets extract too.
+/// folder, links to folders, targets through `.` and long targets extract
+/// too.
 ///
 /// parity: ARC-016, ARC-024
 #[test]
@@ -89,6 +90,8 @@ fn links_that_stay_inside_through_parent_folders_extract() {
         "d:bin",
         "l:bin/tool:../lib/libx.so.1",
         "l:docs:lib",
+        "l:alias:./lib/libx.so.1",
+        "l:lib/self:.",
         &long_file,
         &long_link,
     ]);
@@ -102,6 +105,11 @@ fn links_that_stay_inside_through_parent_folders_extract() {
         Path::new("lib")
     );
     assert_eq!(fs::read(root.join("lib/far")).expect("followed"), b"far");
+    assert_eq!(fs::read(root.join("alias")).expect("followed"), b"library");
+    assert_eq!(
+        fs::read(root.join("lib/self/libx.so.1")).expect("followed"),
+        b"library"
+    );
 }
 
 /// A link leaving the extracted folder, by `..` or by an absolute path,
@@ -111,7 +119,7 @@ fn links_that_stay_inside_through_parent_folders_extract() {
 /// parity: ARC-016, ARC-024
 #[test]
 fn links_that_leave_the_folder_are_refused_by_name() {
-    let cases: [&[&str]; 5] = [
+    let cases: [&[&str]; 6] = [
         &["f:a.txt:a", "l:outside:../outside"],
         &["f:a.txt:a", "l:passwd:/etc/passwd"],
         &["d:lib", "l:lib/up:../../x"],
@@ -119,8 +127,10 @@ fn links_that_leave_the_folder_are_refused_by_name() {
         // be its parent.
         &["d:d", "l:d/s:..", "l:t:d/s/../x"],
         &["f:a.txt:a", "l:empty:"],
+        // `.` stays put, so `./..` still climbs out.
+        &["f:a.txt:a", "l:dotted:./../x"],
     ];
-    let names = ["outside", "passwd", "lib/up", "t", "empty"];
+    let names = ["outside", "passwd", "lib/up", "t", "empty", "dotted"];
     for (entries, name) in cases.into_iter().zip(names) {
         let fixture = fixture_with(entries);
 
