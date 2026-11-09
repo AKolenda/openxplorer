@@ -122,11 +122,13 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
     }
 }
 
-/// A Replace merge moves single children into the existing folder. Like the
-/// Python app, whose `require_item_uri` refuses the escaped name, it stops
-/// at a Latin-1 name, and the existing file under that name survives.
+/// A Replace merge moves single children into the existing folder, a
+/// Latin-1 name too: it replaces the file of that exact name, as Replace
+/// asks, and leaves the existing folder's other files alone. (Until
+/// 2026-11-08 it stopped there, as the Python app's `require_item_uri`
+/// refused the escaped name; an item already listed is no typed address.)
 #[test]
-fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
+fn replace_merge_replaces_a_latin1_name_and_keeps_the_other_files() {
     let fixture = Fixture::new();
     let album = latin1_album(&fixture.source_folder);
     let existing = fixture.destination_folder.join("album");
@@ -140,11 +142,12 @@ fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
         Request::Copy(ConflictPolicy::Replace),
     );
 
-    assert!(result.done.is_empty(), "{result:?}");
-    assert!(result.errors[0].contains("valid UTF-8"), "{result:?}");
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert_eq!(result.done, [file_uri(&album)]);
     let song = fs::read(existing.join(OsStr::from_bytes(LATIN1_NAME))).expect("read");
-    assert_eq!(song, b"old song");
+    assert_eq!(song, b"song", "replaced by the copied song");
     assert_eq!(read(&existing.join("keep.txt")), "keep");
+    assert_eq!(read(&existing.join("ok.txt")), "ok");
     assert_latin1_album(&album);
     fixture.assert_no_staging();
 }

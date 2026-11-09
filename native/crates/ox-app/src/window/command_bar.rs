@@ -4,7 +4,7 @@
 //! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
 //! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
 //! New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾,
-//! View ▾, More options, then at the right Update while a release waits,
+//! View ▾, See more ("…"), then at the right Update while a release waits,
 //! Settings and the Details toggle; the appearance toggle there is hidden,
 //! as Settings › Appearance chooses the theme. Every control runs a window or application
 //! action. New is disabled where nothing can be created, and Delete is named
@@ -125,7 +125,7 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/command-bar.ui")]
     pub(crate) struct CommandBar {
-        /// New to More options, filled from the tables.
+        /// New to See more, filled from the tables.
         #[template_child]
         pub(super) file_commands: TemplateChild<gtk::Box>,
         /// The appearance toggle (`#theme-toggle`).
@@ -219,7 +219,7 @@ glib::wrapper! {
 }
 
 impl CommandBar {
-    /// New ▾ │ Cut … Delete │ Sort ▾, View ▾ and More options,
+    /// New ▾ │ Cut … Delete │ Sort ▾, View ▾ and See more ("…"),
     /// remembering the commands a compact window hides.
     fn add_file_commands(&self) {
         let imp = self.imp();
@@ -685,12 +685,12 @@ fn more_button() -> (gtk::MenuButton, MenuPopover) {
     let menu = MenuPopover::new(more_menu(&MoreMenuState::default()));
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
-        .tooltip_text(ox_core::i18n::gettext("More options"))
+        .tooltip_text(ox_core::i18n::gettext("See more"))
         .popover(&menu)
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
-    name_menu_button(&button, &ox_core::i18n::gettext("More options"));
+    name_menu_button(&button, &ox_core::i18n::gettext("See more"));
     (button, menu)
 }
 

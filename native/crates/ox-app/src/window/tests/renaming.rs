@@ -746,3 +746,40 @@ fn a_shortcut_renamed_to_a_taken_name_is_numbered_after_its_whole_name() {
     assert!(!fixture.path("Q3 (2).v1").exists());
     assert!(fixture.path("Q3.v1").is_file(), "the other file stays");
 }
+
+/// Erasing the whole name in place, extension included, and pressing
+/// Enter keeps the old name, as Windows 11 does: the field closes, nothing
+/// is renamed, no message shows and Undo has nothing new to undo. In
+/// Details, Tiles and Content alike.
+///
+/// parity: OPS-010
+#[gtk::test]
+fn an_erased_name_keeps_the_old_name() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("file-name-extensions", None);
+    for view in ["details", "tiles", "content"] {
+        test.activate("view", Some(view));
+        select_names(&test, &["Notes 2.txt"]);
+        let undo_before = test
+            .window
+            .lookup_action("undo")
+            .is_some_and(|undo| undo.is_enabled());
+        test.activate("rename", None);
+        let editor = name_editor(&test);
+        editor.set_text("");
+        editor.emit_activate();
+
+        wait_until("the rename to end", || !is_renaming_in_place(&test));
+        assert!(fixture.path("Notes 2.txt").is_file(), "{view}");
+        assert_eq!(test.window.shown_message(), "", "no message in {view}");
+        assert_eq!(test.selected_names(), ["Notes 2.txt"], "{view}");
+        assert_eq!(
+            test.window
+                .lookup_action("undo")
+                .is_some_and(|undo| undo.is_enabled()),
+            undo_before,
+            "no undo entry in {view}"
+        );
+    }
+}

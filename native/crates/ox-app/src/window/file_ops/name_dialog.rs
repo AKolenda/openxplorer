@@ -51,10 +51,11 @@ pub(super) struct NameRequest<'a> {
     pub(super) folder: &'a str,
 }
 
-/// Whether a name dialog takes `typed`, or why not.
-fn check_name(typed: &str) -> Result<(), String> {
+/// The name a name dialog takes for `typed` ([`check_typed_name`]), or
+/// why it takes none.
+fn check_name(typed: &str) -> Result<String, String> {
     check_typed_name(typed)
-        .map(drop)
+        .map(str::to_owned)
         .map_err(|invalid| invalid.to_string())
 }
 
@@ -133,12 +134,13 @@ where
     }
     loop {
         dialog.next_response().await?;
-        let typed = field.text().to_string();
-        if let Err(message) = check_name(&typed) {
-            dialog.show_error(&message);
-            continue;
-        }
-        let name = typed;
+        let name = match check_name(&field.text()) {
+            Ok(name) => name,
+            Err(message) => {
+                dialog.show_error(&message);
+                continue;
+            }
+        };
         let running = Cancellation::new();
         dialog.set_busy(Some(&running));
         let outcome = attempt(name, running).await;

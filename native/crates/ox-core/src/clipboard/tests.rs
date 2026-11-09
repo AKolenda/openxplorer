@@ -632,3 +632,26 @@ fn share_roots_cannot_be_copied_and_keep_the_location_message() {
         "{error}"
     );
 }
+
+/// An item another program named with bytes that are not UTF-8 is copied
+/// to the clipboard with its name escaped as it is, while one whose name
+/// holds a line break is still refused: no payload carries an escaped
+/// control character.
+///
+/// parity: CLIP-005, OPS-035
+#[test]
+fn a_latin1_name_goes_on_the_clipboard_but_a_line_break_does_not() {
+    let latin1 = "file:///tmp/ox-test/Caf%E9%20menu.txt".to_owned();
+    let files = ClipboardFiles::new(ClipboardMode::Copy, std::slice::from_ref(&latin1), &context())
+        .expect("a Latin-1 name");
+    assert_eq!(files.uris(), [latin1]);
+    for uri in [
+        "file:///tmp/ox-test/Line%0Abreak.txt",
+        "file:///tmp/ox-test/Tab%09.txt",
+    ] {
+        assert!(
+            ClipboardFiles::new(ClipboardMode::Copy, &[uri.to_owned()], &context()).is_err(),
+            "{uri}"
+        );
+    }
+}
