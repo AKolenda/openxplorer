@@ -471,17 +471,37 @@ fn home_is_spaced_as_windows_11_home() {
     crate::test_support::harness::wait_for_frames(&test.window, 4);
     let metrics = home_page::metrics(body(&test));
     let page = bounds(&test, body(&test));
+    let misses = std::cell::RefCell::new(Vec::new());
     let near = |what: &str, got: i32, want: i32, slack: i32| {
-        assert!((got - want).abs() <= slack, "{what}: {got}, want {want}±{slack}");
+        if (got - want).abs() > slack {
+            misses
+                .borrow_mut()
+                .push(format!("{what}: {got}, want {want}±{slack}"));
+        }
     };
 
-    near("row pitch", bounds(&test, &metrics.rows[1]).y - bounds(&test, &metrics.rows[0]).y, 36, 0);
+    near(
+        "row pitch",
+        bounds(&test, &metrics.rows[1]).y - bounds(&test, &metrics.rows[0]).y,
+        36,
+        0,
+    );
     let middle = |widget: &gtk::Widget| {
         let place = bounds(&test, widget);
         place.y + place.height / 2
     };
-    near("pills to headers", middle(&metrics.header) - middle(&metrics.pills), 51, 3);
-    near("headers to the first row", middle(&metrics.rows[0]) - middle(&metrics.header), 50, 3);
+    near(
+        "pills to headers",
+        middle(&metrics.header) - middle(&metrics.pills),
+        51,
+        3,
+    );
+    near(
+        "headers to the first row",
+        middle(&metrics.rows[0]) - middle(&metrics.header),
+        50,
+        3,
+    );
     let (name, date, location) = (
         bounds(&test, &metrics.columns[0]).x,
         bounds(&test, &metrics.columns[1]).x,
@@ -491,8 +511,24 @@ fn home_is_spaced_as_windows_11_home() {
     near("Date accessed to File location", location - date, 298, 2);
     near("Name from the pane's edge", name - page.x, 90, 4);
     near("tile height", bounds(&test, &metrics.tiles[0]).height, 60, 0);
-    near("heading to the first tile's name", middle(&metrics.first_tile_name) - middle(&metrics.heading), 37, 4);
+    near(
+        "heading to the first tile's name",
+        middle(&metrics.first_tile_name) - middle(&metrics.heading),
+        37,
+        4,
+    );
     let last_tile = metrics.tiles.last().expect("a tile");
-    near("tiles to the pills", bounds(&test, &metrics.pills).y - bounds(&test, last_tile).bottom(), 45, 4);
-    near("chevron from the pane's edge", bounds(&test, &metrics.chevron).x - page.x, 30, 4);
+    near(
+        "tiles to the pills",
+        bounds(&test, &metrics.pills).y - bounds(&test, last_tile).bottom(),
+        45,
+        4,
+    );
+    near(
+        "chevron from the pane's edge",
+        bounds(&test, &metrics.chevron).x - page.x,
+        30,
+        4,
+    );
+    assert!(misses.borrow().is_empty(), "{:#?}", misses.borrow());
 }
