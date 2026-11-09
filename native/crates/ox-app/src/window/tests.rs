@@ -44,6 +44,7 @@ mod folder_tree;
 mod geometry;
 mod group_by;
 mod history;
+mod home_page;
 mod icons;
 mod input;
 mod item_check_boxes;
