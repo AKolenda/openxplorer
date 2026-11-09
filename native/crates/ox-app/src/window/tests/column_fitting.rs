@@ -265,9 +265,9 @@ fn title_middle(title: &gtk::Widget, header: &gtk::Widget) -> f64 {
 /// Where the pointer first looks for the window.
 const PROBE: (i32, i32) = (8, 8);
 
-/// The titles' menu open on `header`, if any.
-fn open_titles_menu(header: &gtk::Widget) -> Option<MenuPopover> {
-    std::iter::successors(header.first_child(), WidgetExt::next_sibling)
+/// The titles' menu open on `details`, if any.
+fn open_titles_menu(details: &DetailsView) -> Option<MenuPopover> {
+    std::iter::successors(details.first_child(), WidgetExt::next_sibling)
         .filter_map(|child| child.downcast::<MenuPopover>().ok())
         .find(WidgetExt::is_mapped)
 }
@@ -296,8 +296,8 @@ fn a_real_right_click_on_a_title_opens_the_menu_that_sizes_all_columns() {
     pointer.move_to(on_title.0, on_title.1);
     pointer.press(Button::Secondary);
     pointer.release(Button::Secondary);
-    wait_until("the titles' menu", || open_titles_menu(&header).is_some());
-    let menu = open_titles_menu(&header).expect("the titles' menu");
+    wait_until("the titles' menu", || open_titles_menu(&details).is_some());
+    let menu = open_titles_menu(&details).expect("the titles' menu");
     assert_eq!(menu.items()[0].target, Some("size".to_variant()));
     let row = menu.row_list().row_at_index(1).expect("Size All Columns to Fit");
     let middle = (20.0, f64::from(row.height()) / 2.0);
@@ -306,7 +306,7 @@ fn a_real_right_click_on_a_title_opens_the_menu_that_sizes_all_columns() {
     pointer.press(Button::Primary);
     pointer.release(Button::Primary);
 
-    wait_until("the menu to close", || open_titles_menu(&header).is_none());
+    wait_until("the menu to close", || open_titles_menu(&details).is_none());
     assert_all_fitted(&details);
     // Back to the screen's centre, where Xvfb starts the pointer: GTK 4.14
     // crashes in a later test that closes a popover under a pointer left

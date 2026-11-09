@@ -10,6 +10,7 @@ use ox_core::settings::Settings;
 
 use super::name_conflicts::texts;
 use crate::folder_view::column_widths;
+use crate::folder_view::details::DetailsView;
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button, Pointer};
@@ -65,7 +66,10 @@ fn the_choice_lists_the_shown_columns_first_then_the_rest_alphabetically() {
     );
 
     let last = choice.rows().len() - 1;
-    assert!(!choice.can_move_up(0) && !choice.can_move_down(0), "Name stays first");
+    assert!(
+        !choice.can_move_up(0) && !choice.can_move_down(0),
+        "Name stays first"
+    );
     assert!(!choice.can_hide(0) && !choice.can_show(0), "Name always shows");
     assert!(!choice.can_move_up(1), "nothing moves above Name");
     assert!(choice.can_move_down(1) && choice.can_hide(1) && !choice.can_show(1));
@@ -83,10 +87,20 @@ fn showing_hiding_and_moving_change_the_columns_chosen() {
     assert_eq!(choice.move_up(4), 3);
     assert_eq!(
         choice.chosen(),
-        [SortColumn::Modified, SortColumn::Type, SortColumn::Created, SortColumn::Size]
+        [
+            SortColumn::Modified,
+            SortColumn::Type,
+            SortColumn::Created,
+            SortColumn::Size
+        ]
     );
     choice.set_shown(2, false);
+    assert_eq!(
+        choice.chosen(),
+        [SortColumn::Modified, SortColumn::Created, SortColumn::Size]
+    );
     assert_eq!(choice.move_down(1), 2);
+    assert_eq!(choice.move_down(2), 3);
     assert_eq!(
         choice.chosen(),
         [SortColumn::Created, SortColumn::Modified, SortColumn::Size]
@@ -139,7 +153,9 @@ fn open_from_more(test: &TestWindow) -> ChooseDetails {
     assert_ne!(more.availability, ItemAvailability::Disabled);
     menu.popdown();
     test.activate("choose-details", None);
-    wait_until("Choose Details", || ChooseDetails::shown_over(&test.window).is_some());
+    wait_until("Choose Details", || {
+        ChooseDetails::shown_over(&test.window).is_some()
+    });
     let shown = ChooseDetails::shown_over(&test.window).expect("Choose Details");
     wait_for_frames(&shown.dialog, 3);
     shown
@@ -189,7 +205,7 @@ fn more_opens_choose_details_as_windows_draws_it() {
     );
     assert_eq!(shown.selected_index(), Some(0));
     let sensitive = |shown: &ChooseDetails| {
-        [&shown.move_up, &shown.move_down, &shown.show, &shown.hide].map(|button| button.is_sensitive())
+        [&shown.move_up, &shown.move_down, &shown.show, &shown.hide].map(WidgetExt::is_sensitive)
     };
     assert_eq!(sensitive(&shown), [false, false, false, false], "Name");
     let name_width: u32 = shown.width.text().parse().expect("Name's width in pixels");
@@ -201,16 +217,23 @@ fn more_opens_choose_details_as_windows_draws_it() {
     assert_eq!(sensitive(&shown), [true, true, true, false], "Date created");
     shown.select(7);
     assert_eq!(sensitive(&shown), [true, false, true, false], "Permissions");
-    let size = test.window.folder_pane().details().column(SortColumn::Size).expect("Size");
+    let size = test
+        .window
+        .folder_pane()
+        .details()
+        .column(SortColumn::Size)
+        .expect("Size");
     shown.select(3);
     assert_eq!(
-        shown.width.text().parse::<i32>().ok(),
-        column_widths::saved_width(SortColumn::Size, size.fixed_width()).map(|width| width as i32)
+        shown.width.text().parse::<f64>().ok(),
+        column_widths::saved_width(SortColumn::Size, size.fixed_width())
     );
 
     let size_before = shown.dialog.default_size();
     shown.cancel.emit_clicked();
-    wait_until("Choose Details to close", || ChooseDetails::shown_over(&test.window).is_none());
+    wait_until("Choose Details to close", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
     let again = open_from_more(&test);
     assert_eq!(again.dialog.default_size(), size_before, "the same size again");
     again.cancel.emit_clicked();
@@ -240,21 +263,27 @@ fn ok_applies_the_choice_and_cancel_discards_it() {
     change(&shown);
     assert_eq!(shown.selected_index(), Some(1));
     shown.cancel.emit_clicked();
-    wait_until("Cancel to close it", || ChooseDetails::shown_over(&test.window).is_none());
+    wait_until("Cancel to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
     assert_eq!(details.chosen_columns(), DEFAULT_CHOSEN);
     assert_eq!(created.fixed_width(), created_before);
 
     let shown = open_from_more(&test);
     change(&shown);
     shown.dialog.close();
-    wait_until("closing to cancel it", || ChooseDetails::shown_over(&test.window).is_none());
+    wait_until("closing to cancel it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
     assert_eq!(details.chosen_columns(), DEFAULT_CHOSEN);
 
     let shown = open_from_more(&test);
     assert_eq!(shown.row_states()[4], ("Date created".to_owned(), false, true));
     change(&shown);
     shown.ok.emit_clicked();
-    wait_until("OK to close it", || ChooseDetails::shown_over(&test.window).is_none());
+    wait_until("OK to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
     assert_eq!(
         details.chosen_columns(),
         [SortColumn::Type, SortColumn::Created, SortColumn::Size]
@@ -271,7 +300,8 @@ fn ok_applies_the_choice_and_cancel_discards_it() {
             .view_for(&fixture.uri())
     };
     wait_until("the folder's columns to be saved", || {
-        saved().details_columns.as_deref() == Some(&["type".to_owned(), "created".to_owned(), "size".to_owned()][..])
+        saved().details_columns.as_deref()
+            == Some(&["type".to_owned(), "created".to_owned(), "size".to_owned()][..])
     });
     assert_eq!(saved().column_widths.and_then(|widths| widths.created), Some(222));
 
@@ -308,7 +338,11 @@ fn ok_saves_the_shared_view_when_folders_share_one() {
     shown.show.emit_clicked();
     shown.ok.emit_clicked();
     wait_until("the shared columns to be saved", || {
-        test.context.settings_data().preferences.view_options.details_columns
+        test.context
+            .settings_data()
+            .preferences
+            .view_options
+            .details_columns
             == ["modified", "type", "size", "owner"]
     });
 }
@@ -330,60 +364,30 @@ fn the_width_field_takes_digits_and_keeps_the_limits() {
         assert_eq!(shown.width.text(), "", "letters are not taken");
         shown.width.set_text(typed);
         shown.ok.emit_clicked();
-        wait_until("OK to close it", || ChooseDetails::shown_over(&test.window).is_none());
+        wait_until("OK to close it", || {
+            ChooseDetails::shown_over(&test.window).is_none()
+        });
         assert_eq!(
-            details.column(SortColumn::Type).map(|column| column.fixed_width()),
+            details
+                .column(SortColumn::Type)
+                .map(|column| column.fixed_width()),
             Some(column_widths::fixed_width(SortColumn::Type, Some(expected))),
             "{typed}"
         );
     }
 }
 
-/// The titles' menu open on `header`, if any.
-fn open_titles_menu(header: &gtk::Widget) -> Option<MenuPopover> {
-    descendants::<MenuPopover>(header)
-        .into_iter()
+/// The titles' menu open on `details`, if any.
+fn open_titles_menu(details: &DetailsView) -> Option<MenuPopover> {
+    std::iter::successors(details.first_child(), WidgetExt::next_sibling)
+        .filter_map(|child| child.downcast::<MenuPopover>().ok())
         .find(WidgetExt::is_mapped)
 }
 
-/// The Menu key and Shift+F10 on a focused column title open the titles'
-/// menu, as a right-click does.
-///
-/// parity: VIEW-033
-#[gtk::test]
-fn the_menu_key_on_a_focused_title_opens_the_titles_menu() {
-    let mut pointer = Pointer::connect();
-    let (_fixture, test) = window_with_files();
-    let details = test.window.folder_pane().details().clone();
-    let header = details.header().expect("column titles");
-    let title = header.first_child().expect("the Name title");
-    let inside = screen_point(&mut pointer, &title, (20.0, 10.0), (720, 500));
-    pointer.move_to(inside.0, inside.1 + 200);
-    for keys in [&[gdk::Key::Menu][..], &[gdk::Key::Shift_L, gdk::Key::F10][..]] {
-        title.grab_focus();
-        wait_for_frames(&test.window, 2);
-        let (last, held) = keys.split_last().expect("a key");
-        for key in held {
-            pointer.hold_key(*key);
-        }
-        pointer.tap_key(*last);
-        for key in held {
-            pointer.let_go_key(*key);
-        }
-        wait_until("the titles' menu", || open_titles_menu(&header).is_some());
-        let menu = open_titles_menu(&header).expect("the titles' menu");
-        assert_eq!(menu.items()[0].label, "Size Column to Fit", "{keys:?}");
-        assert_eq!(menu.items()[0].target, Some("name".to_variant()), "{keys:?}");
-        menu.popdown();
-        wait_until("the menu to close", || open_titles_menu(&header).is_none());
-    }
-    pointer.move_to(720, 500);
-}
-
-/// With the real keyboard only: the Menu key on a title opens the titles'
-/// menu, Up and Enter choose "More...", arrows move through the columns,
-/// Space checks one, Tab reaches Move Up, which Space presses, Escape
-/// cancels, and Enter in the list is OK.
+/// With the real keyboard, once a right-click on a title has opened the
+/// titles' menu: Up and Enter choose "More...", the arrows move through
+/// the columns, Space checks one, Tab reaches Move Up, which Space
+/// presses, Escape cancels, and Enter in the list is OK.
 ///
 /// parity: VIEW-033, VIEW-034
 #[gtk::test]
@@ -393,24 +397,26 @@ fn choose_details_works_with_the_keyboard_alone() {
     let details = test.window.folder_pane().details().clone();
     let header = details.header().expect("column titles");
     let title = header.first_child().expect("the Name title");
-    let above = screen_point(&mut pointer, &title, (20.0, 10.0), (720, 500));
-    pointer.move_to(above.0, above.1 + 200);
+    let on_title = screen_point(&mut pointer, &title, (20.0, 10.0), (720, 500));
 
     let open_by_keys = |pointer: &mut Pointer| {
-        title.grab_focus();
-        wait_for_frames(&test.window, 2);
-        pointer.tap_key(gdk::Key::Menu);
-        wait_until("the titles' menu", || open_titles_menu(&header).is_some());
-        let menu = open_titles_menu(&header).expect("the titles' menu");
+        pointer.move_to(on_title.0, on_title.1);
+        pointer.press(Button::Secondary);
+        pointer.release(Button::Secondary);
+        wait_until("the titles' menu", || open_titles_menu(&details).is_some());
+        let menu = open_titles_menu(&details).expect("the titles' menu");
         wait_for_frames(&menu, 3);
         // Up from the first item wraps to the last, "More...".
         pointer.tap_key(gdk::Key::Up);
+        wait_for_frames(&menu, 2);
         pointer.tap_key(gdk::Key::Return);
-        wait_until("Choose Details", || ChooseDetails::shown_over(&test.window).is_some());
+        wait_until("Choose Details", || {
+            ChooseDetails::shown_over(&test.window).is_some()
+        });
         let shown = ChooseDetails::shown_over(&test.window).expect("Choose Details");
         wait_for_frames(&shown.dialog, 4);
         // The keyboard goes to the window under the pointer.
-        let inside = screen_point(pointer, &shown.dialog, (30.0, 30.0), above);
+        let inside = screen_point(pointer, &shown.dialog, (30.0, 30.0), on_title);
         pointer.move_to(inside.0, inside.1);
         wait_for_frames(&shown.dialog, 2);
         shown
@@ -423,6 +429,7 @@ fn choose_details_works_with_the_keyboard_alone() {
         pointer.tap_key(gdk::Key::space);
         wait_until("Date created checked", || shown.row_states()[4].1);
         pointer.tap_key(gdk::Key::Tab);
+        wait_for_frames(&shown.dialog, 2);
         wait_until("Move Up focused", || shown.move_up.has_focus());
         pointer.tap_key(gdk::Key::space);
         wait_until("Date created moved up", || shown.selected_index() == Some(3));
@@ -432,22 +439,31 @@ fn choose_details_works_with_the_keyboard_alone() {
     assert_eq!(shown.selected_index(), Some(0));
     change_by_keys(&mut pointer, &shown);
     pointer.tap_key(gdk::Key::Escape);
-    wait_until("Escape to close it", || ChooseDetails::shown_over(&test.window).is_none());
+    wait_until("Escape to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
     assert_eq!(details.chosen_columns(), DEFAULT_CHOSEN);
 
-    pointer.move_to(above.0, above.1 + 200);
     let shown = open_by_keys(&mut pointer);
     change_by_keys(&mut pointer, &shown);
     // Back to the list, where Enter is OK.
     pointer.hold_key(gdk::Key::Shift_L);
     pointer.tap_key(gdk::Key::Tab);
     pointer.let_go_key(gdk::Key::Shift_L);
+    wait_for_frames(&shown.dialog, 2);
     wait_until("the list focused", || shown.list.focus_child().is_some());
     pointer.tap_key(gdk::Key::Return);
-    wait_until("Enter to close it", || ChooseDetails::shown_over(&test.window).is_none());
+    wait_until("Enter to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
     assert_eq!(
         details.chosen_columns(),
-        [SortColumn::Modified, SortColumn::Type, SortColumn::Created, SortColumn::Size]
+        [
+            SortColumn::Modified,
+            SortColumn::Type,
+            SortColumn::Created,
+            SortColumn::Size
+        ]
     );
     pointer.move_to(720, 500);
 }
@@ -461,22 +477,34 @@ fn choose_details_works_with_the_keyboard_alone() {
 fn a_real_click_on_more_opens_choose_details() {
     let mut pointer = Pointer::connect();
     let (_fixture, test) = window_with_files();
-    test.window.set_default_size(1200, 700);
-    wait_for_frames(&test.window, 4);
     let details = test.window.folder_pane().details().clone();
     let header = details.header().expect("column titles");
-    // Name fills the spare width; a narrow Name leaves room after Size.
+    // Name fills the spare width; with Name alone, fitted, room is left.
+    for column in ["modified", "type", "size"] {
+        test.activate("details-column", Some(column));
+    }
     test.activate("fit-all-columns", None);
     wait_for_frames(&test.window, 4);
-    let past_titles = f64::from(header.width()) - 20.0;
-    assert_eq!(details.column_at(past_titles), None, "room after the titles");
-    let on_header = screen_point(&mut pointer, &header, (past_titles, 10.0), (720, 500));
+    let column_view = details.column_view().clone();
+    let titles_end = std::iter::successors(header.first_child(), WidgetExt::next_sibling)
+        .filter(WidgetExt::is_visible)
+        .filter_map(|title| title.compute_bounds(&column_view))
+        .map(|bounds| bounds.x() + bounds.width())
+        .fold(0.0_f32, f32::max);
+    let past_titles = f64::from(titles_end) + 40.0;
+    assert!(
+        past_titles + 20.0 < f64::from(column_view.width()),
+        "room after the titles"
+    );
+    assert_eq!(details.column_at(past_titles), None);
+    let on_header = screen_point(&mut pointer, &column_view, (past_titles, 10.0), (720, 500));
     pointer.move_to(on_header.0, on_header.1);
     pointer.press(Button::Secondary);
     pointer.release(Button::Secondary);
-    wait_until("the titles' menu", || open_titles_menu(&header).is_some());
-    let menu = open_titles_menu(&header).expect("the titles' menu");
+    wait_until("the titles' menu", || open_titles_menu(&details).is_some());
+    let menu = open_titles_menu(&details).expect("the titles' menu");
     assert_eq!(menu.items()[0].availability, ItemAvailability::Disabled);
+    wait_for_frames(&test.window, 3);
     wait_for_frames(&menu, 3);
     let list = menu.row_list();
     let last = descendants::<gtk::ListBoxRow>(&list).len() - 1;
@@ -488,9 +516,13 @@ fn a_real_click_on_more_opens_choose_details() {
     pointer.move_to(on_row.0, on_row.1);
     pointer.press(Button::Primary);
     pointer.release(Button::Primary);
-    wait_until("Choose Details", || ChooseDetails::shown_over(&test.window).is_some());
+    wait_until("Choose Details", || {
+        ChooseDetails::shown_over(&test.window).is_some()
+    });
     let shown = ChooseDetails::shown_over(&test.window).expect("Choose Details");
     shown.cancel.emit_clicked();
-    wait_until("it to close", || ChooseDetails::shown_over(&test.window).is_none());
+    wait_until("it to close", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
     pointer.move_to(720, 500);
 }

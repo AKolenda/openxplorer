@@ -383,6 +383,10 @@ mod imp {
             self.column_view.set_header_factory(None::<&gtk::ListItemFactory>);
             self.column_view.set_model(None::<&gtk::SelectionModel>);
             self.scroller.unparent();
+            // A column titles' menu still open goes with the view.
+            while let Some(child) = self.obj().first_child() {
+                child.unparent();
+            }
         }
     }
 
@@ -399,6 +403,11 @@ mod imp {
         /// to it after this layout.
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.scroller.allocate(width, height, baseline, None);
+            // The column titles' menu is a popover of this view.
+            let children = std::iter::successors(self.obj().first_child(), WidgetExt::next_sibling);
+            for popover in children.filter_map(|child| child.downcast::<gtk::Popover>().ok()) {
+                popover.present();
+            }
             let minimum = self.obj().size_minimum();
             if self.size_minimum.replace(minimum) != minimum {
                 let view = self.obj().downgrade();
