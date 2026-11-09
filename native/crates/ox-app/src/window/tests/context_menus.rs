@@ -1121,7 +1121,7 @@ fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() 
         .iter()
         .filter_map(|entry| match entry {
             MenuEntry::Item(item) => Some(item.label.clone()),
-            _ => None,
+            MenuEntry::Divider => None,
         })
         .collect();
     assert_eq!(labels, ["ZIP File", "TAR File", "Additional options"]);
