@@ -5571,6 +5571,10 @@ msgstr ""
 msgid "The action can't be completed because the folder or a file in it is open in another program"
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "The destination folder is a subfolder of the source folder."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "There is not enough space on {drive}."
