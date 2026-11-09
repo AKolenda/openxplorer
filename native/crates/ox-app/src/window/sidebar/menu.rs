@@ -8,25 +8,30 @@
 //! access, Previous versions and Properties; every item acts on the pin's
 //! location, not on the folder shown. Drives and network locations have
 //! their [`PlaceMenu`](crate::window::place_menus::PlaceMenu), saved
-//! searches theirs. Every row's menu ends with Hide section, and a hidden
+//! searches theirs. This PC's and Network's ([`head_menu`]) list Windows
+//! 11's items in its order, where the app has them: Expand or Collapse,
+//! Open in new tab, Open in new window, Add a network location (This PC
+//! only), Map network drive…, Disconnect network drive and, for This PC,
+//! Properties. Every row's menu ends with Hide section, and a hidden
 //! row's offers Show (SIDE-010). The empty space offers Add entry…
 //! (SIDE-031), Show all entries and the icon sizes (SIDE-012). While the
 //! pane is hidden, the Places button lists the places (SIDE-024).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{is_smb_location, same_location};
+use ox_core::location::{is_smb_location, is_smb_share_root, is_virtual_location, same_location};
 use ox_core::search::Caching;
 
 use crate::icons::{Art, Icon};
 use crate::window::cache_folder::cache_item;
-use crate::window::menu_popover::{MenuEntry, MenuItem};
-use crate::window::place_menus::caching_in;
+use crate::window::command_bar::{disconnect_network_drive, NetworkDrive};
+use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
+use crate::window::place_menus::{caching_in, facts_in, finish_menu, PlaceMenu};
 use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
-use super::entries::{RowLevel, RowTarget, SidebarEntry};
+use super::entries::{drive_menu, local_disk_menu, RowLevel, RowTarget, Section, SidebarEntry};
 use super::{HiddenRow, Sidebar};
 
 /// The menu of the pin that opens `uri`; `caching` says whether it is
@@ -121,14 +126,109 @@ pub(super) fn pin_menu(uri: &str, caching: Option<Caching>, editable: bool) -> V
     entries
 }
 
+/// What This PC's and Network's menus show besides their fixed items.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct HeadMenuState {
+    /// Whether the section is collapsed: Expand, else Collapse.
+    pub collapsed: bool,
+    /// The connected network shares, for Disconnect network drive.
+    pub network_drives: Vec<NetworkDrive>,
+    /// Whether the desktop has a system information app for This PC's
+    /// Properties to open, as "…" > Properties does.
+    pub system_information: bool,
+}
+
+/// The menu of This PC's or Network's row, which opens `uri`, laid out as
+/// Windows 11's navigation pane lays it out. Windows' Pin to Quick access
+/// and Pin to Start are left out: the app cannot pin a page and has no
+/// Start menu. Rename and Delete, greyed out, go in the compact menu's
+/// icon strip and "Show more options" ends it ([`Sidebar::menu_at`]).
+/// Network has no Add a network location, as in Windows, and no
+/// Properties, whose Windows twin is the Network and Sharing Center.
+pub(super) fn head_menu(section: Section, uri: &str, state: &HeadMenuState) -> Vec<MenuEntry> {
+    let mut entries = Vec::new();
+    if let Some((key, _)) = section.hiding() {
+        let (label, glyph) = if state.collapsed {
+            (ox_core::i18n::gettext("Expand"), Icon::ChevronRight16)
+        } else {
+            (ox_core::i18n::gettext("Collapse"), Icon::ChevronDown16)
+        };
+        entries
+            .push(MenuItem::with_text_target(&label, glyph, WindowAction::ToggleSidebarSection, key).into());
+    }
+    entries.extend([
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        )
+        .into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new window"),
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            uri,
+        )
+        .into(),
+    ]);
+    if section == Section::ThisPc {
+        entries.push(
+            MenuItem::new(
+                &ox_core::i18n::gettext("Add a network location"),
+                Icon::AddNetworkLocation24,
+                WindowAction::AddNetworkLocation,
+            )
+            .into(),
+        );
+    }
+    entries.extend([
+        MenuItem::new(
+            &ox_core::i18n::gettext("Map network drive…"),
+            Icon::MapNetworkDrive24,
+            WindowAction::MapNetworkLocation,
+        )
+        .into(),
+        disconnect_network_drive(&state.network_drives).into(),
+    ]);
+    // As "…" > Properties in This PC: left out, not greyed, without a
+    // system information app (the user's decision, 2026-11-04).
+    if section == Section::ThisPc && state.system_information {
+        entries.push(
+            MenuItem::new(
+                &ox_core::i18n::gettext("Properties"),
+                Icon::Info,
+                WindowAction::SystemProperties,
+            )
+            .into(),
+        );
+    }
+    entries
+}
+
 impl Sidebar {
-    /// The menu of the row at `y` in the list: a pin's, or a drive's or a
-    /// network location's; on empty space, "Add entry…" (SIDE-031);
-    /// `None` for a row without one.
+    /// The menu of the row at `y` in the list, in the classic style: a
+    /// pin's, a drive's or a network location's, This PC's or Network's;
+    /// on empty space, "Add entry…" (SIDE-031); `None` for a row without
+    /// one. For tests.
+    #[cfg(test)]
     pub(in crate::window) fn menu_entries_at(&self, y: f64) -> Option<Vec<MenuEntry>> {
+        self.menu_at(y, MenuStyle::Classic).map(|(entries, _)| entries)
+    }
+
+    /// The menu of the row at `y` in `style`, as the file list's
+    /// right-click menu is built: in the compact style the edit commands
+    /// Windows 11 shows for the row go in the icon strip on top and
+    /// "Show more options" ends the menu; in the classic style they are
+    /// rows, drawn as the classic file menu draws its rows.
+    pub(in crate::window) fn menu_at(
+        &self,
+        y: f64,
+        style: MenuStyle,
+    ) -> Option<(Vec<MenuEntry>, Vec<MenuItem>)> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let Some(row) = self.list().row_at_y(y as i32) else {
-            return Some(empty_space_menu(self.imp().anything_hidden.get()));
+            return Some((empty_space_menu(self.imp().anything_hidden.get()), Vec::new()));
         };
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
@@ -140,10 +240,34 @@ impl Sidebar {
             .get(index)
             .copied()
             .unwrap_or_default();
-        let mut menu = match hidden {
-            HiddenRow::Place => return Some(show_place_menu(entry)),
-            HiddenRow::Section => Vec::new(),
-            HiddenRow::Shown => self.row_menu(entry).unwrap_or_default(),
+        let (mut menu, strip) = match hidden {
+            HiddenRow::Place => return Some((show_place_menu(entry), Vec::new())),
+            HiddenRow::Section => (Vec::new(), Vec::new()),
+            HiddenRow::Shown => {
+                let pinned = self.pinned_drive(entry);
+                match entry.menu.as_ref().or(pinned.as_ref()) {
+                    // A drive's menu is the same wherever it opens (This
+                    // PC's tiles and its Quick access pin too), in Windows
+                    // 11's order.
+                    Some(place @ PlaceMenu::Drive { .. }) => place.styled(facts_in(place, self), style),
+                    // A pinned folder's compact menu is Windows 11's own.
+                    _ if entry.pinned && style == MenuStyle::Compact => match &entry.target {
+                        RowTarget::Location(uri) => (self.compact_pin_menu(uri), self.edit_strip(entry)),
+                        _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+                    },
+                    _ => (self.row_menu(entry).unwrap_or_default(), self.edit_strip(entry)),
+                }
+            }
+        };
+        let strip = match style {
+            MenuStyle::Compact => strip,
+            MenuStyle::Classic => {
+                if !strip.is_empty() && !menu.is_empty() {
+                    menu.push(MenuEntry::Divider);
+                }
+                menu.extend(strip.into_iter().map(MenuEntry::from));
+                Vec::new()
+            }
         };
         if let (Some(hide), HiddenRow::Shown) = (hide_place_item(entry), hidden) {
             if !menu.is_empty() {
@@ -151,13 +275,131 @@ impl Sidebar {
             }
             menu.push(hide);
         }
-        if let Some((key, name)) = entry.section.hiding() {
+        // A pinned folder's compact menu is Windows 11's own; hiding the
+        // section stays behind "Show more options".
+        let pinned_compact = entry.pinned && style == MenuStyle::Compact && hidden == HiddenRow::Shown;
+        if let Some((key, name)) = entry.section.hiding().filter(|_| !pinned_compact) {
             if !menu.is_empty() {
                 menu.push(MenuEntry::Divider);
             }
             menu.push(section_item(key, name, hidden == HiddenRow::Section));
         }
-        (!menu.is_empty()).then_some(menu)
+        if menu.is_empty() && strip.is_empty() {
+            return None;
+        }
+        let menu = match style {
+            MenuStyle::Compact if hidden != HiddenRow::Shown => menu,
+            _ => finish_menu(menu, style, WindowAction::SidebarMoreOptions),
+        };
+        Some((menu, strip))
+    }
+
+    /// The icon strip of the row `entry` in the compact style, as Windows
+    /// 11's navigation pane shows one: This PC, Network, Home, Recent
+    /// files, Recent locations and the Recycle Bin have Rename and Delete,
+    /// greyed out as Windows greys This PC's, since none can be renamed
+    /// or deleted; a folder or a network location has the file
+    /// list's Cut, Copy, Paste, Rename and Delete, acting on the row's
+    /// location, each only where it can run, as Windows 11 leaves out what
+    /// a folder does not allow (Paste only while there is something to
+    /// paste). Only a folder the user pinned
+    /// can be cut, renamed or deleted: a drive, a share and the standard
+    /// folders cannot.
+    fn edit_strip(&self, entry: &SidebarEntry) -> Vec<MenuItem> {
+        let RowTarget::Location(uri) = &entry.target else {
+            return Vec::new();
+        };
+        let item = |label: &str, glyph: Icon, action: WindowAction, allowed: bool| {
+            MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+                .disabled_when(!allowed)
+        };
+        let fixed_place = entry.level == RowLevel::Group
+            || matches!(entry.section, Section::Home | Section::RecentAndBin)
+            || is_virtual_location(uri);
+        if fixed_place {
+            return vec![
+                item("Rename", Icon::Rename, WindowAction::RenameFolder, false),
+                item("Delete", Icon::Delete, WindowAction::TrashFolder, false),
+            ];
+        }
+        let window = self.root().and_downcast::<BrowserWindow>();
+        let own_pin = entry.pinned && window.as_ref().is_some_and(|window| is_own_pin(window, uri));
+        let share_root = is_smb_share_root(uri);
+        let changeable = own_pin && !share_root;
+        let can_paste = window.as_ref().is_some_and(|window| window.can_paste_into(uri));
+        // Windows 11 shows only what the folder allows: a standard folder
+        // such as Downloads has Copy alone, and Paste shows only while
+        // there is something to paste.
+        [
+            ("Cut", Icon::Cut, WindowAction::CutFolder, changeable),
+            ("Copy", Icon::Copy, WindowAction::CopyFolder, !share_root),
+            (
+                "Paste",
+                Icon::ClipboardPaste,
+                WindowAction::PasteIntoFolder,
+                can_paste,
+            ),
+            ("Rename", Icon::Rename, WindowAction::RenameFolder, changeable),
+            ("Delete", Icon::Delete, WindowAction::TrashFolder, changeable),
+        ]
+        .into_iter()
+        .filter(|(_, _, _, allowed)| *allowed)
+        .map(|(label, glyph, action, allowed)| item(label, glyph, action, allowed))
+        .collect()
+    }
+
+    /// A pinned folder's compact menu, in Windows 11's order: Open in new
+    /// tab, Open in new window, Unpin from Quick access, Compress to (ZIP
+    /// File, TAR File, Additional options), Copy as path, New (the command bar's New
+    /// menu, run in the folder), Properties, then Open in Terminal. Pin to
+    /// Start is Windows' own. "Show more options" follows
+    /// ([`finish_menu`]).
+    fn compact_pin_menu(&self, uri: &str) -> Vec<MenuEntry> {
+        let window = self.root().and_downcast::<BrowserWindow>();
+        let templates = window
+            .as_ref()
+            .map(|window| {
+                window.refresh_template_menu();
+                window.template_menu_entries()
+            })
+            .unwrap_or_default();
+        let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
+            MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+        };
+        let compress = MenuItem::submenu(
+            ox_core::i18n::gettext_static("Compress to"),
+            Icon::FolderZip,
+            WindowAction::CompressToOf,
+            vec![
+                target("ZIP File", Icon::FolderZip, WindowAction::CompressToZipOf).into(),
+                target("TAR File", Icon::FolderZip, WindowAction::CompressToTarOf).into(),
+                target("Additional options", Icon::FolderZip, WindowAction::CompressToOf).into(),
+            ],
+        );
+        let new = MenuItem::submenu(
+            ox_core::i18n::gettext_static("New"),
+            Icon::Add,
+            WindowAction::NewIn,
+            crate::window::place_commands::new_menu_in(uri, crate::window::command_bar::new_menu(templates)),
+        );
+        vec![
+            target("Open in new tab", Icon::Add, WindowAction::OpenTab).into(),
+            target("Open in new window", Icon::WindowNew, WindowAction::OpenWindow).into(),
+            target("Unpin from Quick access", Icon::Pin, WindowAction::Unpin).into(),
+            compress.into(),
+            target("Copy as path", Icon::Link, WindowAction::CopyPathOf).into(),
+            new.into(),
+            target("Properties", Icon::Info, WindowAction::PropertiesOf)
+                .with_shortcut("Alt+Enter")
+                .into(),
+            MenuEntry::Divider,
+            target(
+                "Open in Terminal",
+                Icon::WindowConsole,
+                WindowAction::OpenInTerminalOf,
+            )
+            .into(),
+        ]
     }
 
     /// The menu of `entry` itself: a saved search's, a pin's, or a drive's
@@ -172,18 +414,55 @@ impl Sidebar {
                 return None;
             };
             let caching = window.as_ref().and_then(|window| window.caching_of(uri));
-            let editable = window.is_some_and(|window| {
-                let quick_access = window.places().quick_access;
-                quick_access
-                    .iter()
-                    .any(|place| place.known_folder.is_none() && same_location(&place.uri, uri))
-            });
+            let editable = window.is_some_and(|window| is_own_pin(&window, uri));
             return Some(pin_menu(uri, caching, editable));
+        }
+        if entry.level == RowLevel::Group {
+            if let RowTarget::Location(uri) = &entry.target {
+                return Some(head_menu(
+                    entry.section,
+                    uri,
+                    &self.head_menu_state(entry.section),
+                ));
+            }
         }
         let place = entry.menu.as_ref()?;
         let place_menu = place.entries(caching_in(place, self));
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
+    }
+
+    /// The drive menu of the drive that the Quick access pin `entry`
+    /// opens, from the window's drives, shown in the pane or not: a pinned
+    /// drive keeps a drive's menu, not a folder's, whose Cut, Rename and
+    /// Delete would act on the whole drive.
+    fn pinned_drive(&self, entry: &SidebarEntry) -> Option<PlaceMenu> {
+        let RowTarget::Location(uri) = &entry.target else {
+            return None;
+        };
+        if !entry.pinned {
+            return None;
+        }
+        let window = self.root().and_downcast::<BrowserWindow>()?;
+        let drives = window.places().drives;
+        std::iter::once(local_disk_menu())
+            .chain(drives.iter().map(drive_menu))
+            .find(|place| matches!(place, PlaceMenu::Drive { uri: drive, .. } if same_location(drive, uri)))
+    }
+
+    /// What This PC's or Network's menu shows for `section` now.
+    fn head_menu_state(&self, section: Section) -> HeadMenuState {
+        let window = self.root().and_downcast::<BrowserWindow>();
+        HeadMenuState {
+            collapsed: self.is_collapsed(section),
+            network_drives: window
+                .as_ref()
+                .map(BrowserWindow::network_drives)
+                .unwrap_or_default(),
+            // Only This PC asks GIO, which lists every application.
+            system_information: section == Section::ThisPc
+                && crate::integration::system_information().is_some(),
+        }
     }
 
     /// The places as menu items, a divider between sections, for the
@@ -208,6 +487,16 @@ impl Sidebar {
         }
         menu
     }
+}
+
+/// Whether `uri` is a Quick access pin of the user's own, not a standard
+/// folder (SIDE-011).
+fn is_own_pin(window: &BrowserWindow, uri: &str) -> bool {
+    window
+        .places()
+        .quick_access
+        .iter()
+        .any(|place| place.known_folder.is_none() && same_location(&place.uri, uri))
 }
 
 /// The menu of the sidebar's empty space: "Add entry…" (SIDE-031), "Show
@@ -354,6 +643,78 @@ mod tests {
             .find(|item| item.label == "Cache this folder for search")
             .expect("a share can be cached");
         assert_eq!(cache.check, ItemCheck::Fixed(true), "the cached pin is checked");
+    }
+
+    /// This PC's menu follows Windows 11's order; Properties opens the
+    /// system information app where there is one, and Disconnect network
+    /// drive lists the connected shares.
+    ///
+    /// parity: SIDE-033, NET-001
+    #[test]
+    fn this_pc_menu_lists_windows_items_with_properties_and_the_drives() {
+        let state = HeadMenuState {
+            collapsed: true,
+            network_drives: vec![NetworkDrive {
+                label: "Backup (S:)".to_owned(),
+                uri: "smb://fileserver/backup".to_owned(),
+            }],
+            system_information: true,
+        };
+
+        let entries = head_menu(Section::ThisPc, "ox:pc", &state);
+
+        assert_eq!(
+            labels(&entries),
+            [
+                "Expand",
+                "Open in new tab",
+                "Open in new window",
+                "Add a network location",
+                "Map network drive…",
+                "Disconnect network drive",
+                "Properties",
+            ]
+        );
+        let item = |label: &str| {
+            entries
+                .iter()
+                .find_map(|entry| match entry {
+                    MenuEntry::Item(item) if item.label == label => Some(item.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{label}"))
+        };
+        assert_eq!(item("Expand").target, Some("thisPc".to_variant()));
+        assert_eq!(item("Disconnect network drive").submenu.len(), 1);
+        assert_eq!(
+            item("Properties").action,
+            crate::window::menu_popover::MenuAction::Window(WindowAction::SystemProperties)
+        );
+    }
+
+    /// Network's menu has no Add a network location, as in Windows, and no
+    /// Properties, whose Windows twin the app does not have.
+    ///
+    /// parity: SIDE-033, NET-001
+    #[test]
+    fn network_menu_has_no_add_a_network_location_or_properties() {
+        let state = HeadMenuState {
+            system_information: true,
+            ..HeadMenuState::default()
+        };
+
+        let entries = labels(&head_menu(Section::Network, "network:///", &state));
+
+        assert_eq!(
+            entries,
+            [
+                "Collapse",
+                "Open in new tab",
+                "Open in new window",
+                "Map network drive…",
+                "Disconnect network drive",
+            ]
+        );
     }
 
     #[test]

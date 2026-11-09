@@ -19,6 +19,12 @@
 //! - Installing needs the user's confirmation and a check for exactly that
 //!   version; the download is private, verified by size, digest and
 //!   `dpkg-deb`, and always deleted ([`Updater::install`]).
+//! - Where the package installed the update helper, the app hands it only
+//!   the version; the helper fetches, verifies and installs that release
+//!   as root under its own polkit action, which lets an administrator at
+//!   the machine update without a password while "Install updates without
+//!   asking for a password" is on, as it is by default
+//!   ([`install_update_command`], [`disable_passwordless`]).
 //! - Only the packaged build installs; Flatpak and other packages update
 //!   through their own package manager ([`Installation`]).
 //! - APT is never interrupted ([`PackageCommand::time_limit`]), and the
@@ -42,6 +48,9 @@
 //! | `installation` | [`Installation`]: how this build was installed | `updater.py` |
 //! | `download` | The private, verified download | `updater.py` |
 //! | `package` | [`PackageCommand`] and what its output must say | `updater.py` |
+//! | `install_helper` | [`install_update_command`]: the root helper | new |
+//! | `helper_report` | [`HelperReport`]: what the helper tells the app | new |
+//! | `passwordless` | [`PasswordlessUpdates`]: the setting, on by default, that skips the password | new |
 //! | `process` | Running package tools and the launcher | `updater.py`, `winspace.py` |
 //! | `updater` | [`Updater`]: one check or installation at a time | `updater.py` |
 //! | `service` | [`UpdateService`]: the application-wide rules | `winspace.py` |
@@ -56,10 +65,13 @@ mod diagnosis;
 mod download;
 mod error;
 mod github;
+mod helper_report;
 mod identity;
+mod install_helper;
 mod installation;
 mod instance;
 mod package;
+mod passwordless;
 mod process;
 mod release;
 mod restart;
@@ -73,10 +85,19 @@ mod version;
 pub use diagnosis::{AssociationStatus, Associations, Diagnosis, ShowInFolder};
 pub use error::{InstanceError, UpdateError};
 pub use github::GitHubReleases;
+pub use helper_report::{HelperFailure, HelperReport};
 pub use identity::{InstalledBuild, RuntimeIdentity, RUNTIME_PROTOCOL};
+pub use install_helper::{
+    install_as_root, install_update_command, RootInstallParts, ENVIRONMENT, INSTALL_HELPER_COMMAND,
+    STAGING_FOLDER,
+};
 pub use installation::Installation;
 pub use instance::{InstanceBus, InstanceGuard, InstanceStatus, LaunchMode, StopTiming};
 pub use package::{CommandOutput, PackageCommand, PackageManager};
+pub use passwordless::{
+    disable_passwordless, enable_passwordless, PasswordlessError, PasswordlessUpdates, RuleFiles,
+    DISABLE_PASSWORDLESS, ENABLE_PASSWORDLESS, PASSWORDLESS_RECORD, PASSWORDLESS_RULE, RULE_TEMPLATE,
+};
 pub use process::SystemPackageManager;
 pub use release::{
     installer_name, parse_release, Installer, Release, Sha256Digest, MAX_INSTALLER_SIZE, MAX_NOTES_CHARS,

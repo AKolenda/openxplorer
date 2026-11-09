@@ -124,8 +124,9 @@ fn switching_views_keeps_the_selection_and_shows_the_active_view() {
     assert_eq!(status_bar.active_view_buttons(), ["Details view"]);
 }
 
-/// The command-bar toggle, View › Details pane and the pane's own close
-/// button all run `win.details-pane`, which is saved.
+/// The command-bar toggle and View › Details pane run
+/// `win.details-pane`, which is saved; like Windows' pane, the pane has
+/// no close button of its own.
 ///
 /// parity: VIEW-027
 #[gtk::test]
@@ -146,10 +147,10 @@ fn the_details_button_shows_whether_the_pane_is_open() {
     });
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
-    let runs_the_toggle = descendants::<gtk::Button>(pane)
+    let closes_itself = descendants::<gtk::Button>(pane)
         .into_iter()
         .any(|button| button.action_name().as_deref() == Some("win.details-pane"));
-    assert!(runs_the_toggle, "the pane's close button runs the same toggle");
+    assert!(!closes_itself, "like Windows' pane, it has no close button");
 }
 
 #[gtk::test]
@@ -157,7 +158,7 @@ fn both_views_show_each_name_with_its_icon() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
@@ -187,7 +188,7 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
     std::fs::set_permissions(fixture.path("Locked.txt"), locked).expect("make it read-only");
     let test = TestWindow::open(&fixture.uri());
     super::support::show_file_name_extensions(&test);
-    for view in ["details", "large"] {
+    for view in ["details", "large", "tiles", "content"] {
         test.activate("view", Some(view));
         let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
@@ -206,18 +207,19 @@ fn listed_links_and_read_only_files_carry_their_emblems() {
 
 /// Regression: after a merge the Documents folder's Type column read
 /// GIO's "Word 2007 document", "Excel 2007 spreadsheet" and "Plain text
-/// document". The files are real, so GIO names their types, the app's
-/// loader lists them and the details view draws the cells read here.
+/// document"; it shows the names Windows 11 gives these types. The files
+/// are real, so GIO names their types, the app's loader lists them and
+/// the details view draws the cells read here.
 ///
 /// parity: VIEW-002
 #[gtk::test]
-fn the_type_column_shows_the_interface_names_for_documents() {
+fn the_type_column_shows_the_windows_names_for_documents() {
     let fixture = Fixture::standard();
     let documents = [
-        ("Meeting notes.docx", "Word document"),
-        ("Project budget.xlsx", "Excel worksheet"),
-        ("Q3 presentation.pptx", "PowerPoint presentation"),
-        ("Website assets.zip", "Compressed folder"),
+        ("Meeting notes.docx", "Microsoft Word Document"),
+        ("Project budget.xlsx", "Microsoft Excel Worksheet"),
+        ("Q3 presentation.pptx", "Microsoft PowerPoint Presentation"),
+        ("Website assets.zip", "Compressed (zipped) Folder"),
     ];
     for (name, _) in documents {
         fixture.write(name);
@@ -230,13 +232,13 @@ fn the_type_column_shows_the_interface_names_for_documents() {
         labels.iter().map(|label| label.text().into()).collect()
     };
     wait_until("the Type cells to be bound", || {
-        shown_texts().iter().any(|text| text == "Word document")
+        shown_texts().iter().any(|text| text == "Microsoft Word Document")
     });
     let texts = shown_texts();
     for (name, type_label) in documents {
         assert!(texts.iter().any(|text| text == type_label), "{name}: {texts:?}");
     }
-    assert!(texts.iter().any(|text| text == "Text document"), "{texts:?}");
+    assert!(texts.iter().any(|text| text == "Text Document"), "{texts:?}");
 }
 
 /// The labels the details view of `test` shows, in its rows and titles.
@@ -642,7 +644,7 @@ fn text_size_keys_work_inside_dialogs() {
     let _theme = ThemeGuard::keep();
     let before = test.window.skin().text_size();
     let rename = crate::dialog::Dialog::new(&test.window, "Rename", "");
-    let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
+    let map = crate::dialogs::map_network_dialog(&test.window, &[], |_, _| {});
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let properties = test.wait_for_properties("Notes 2.txt Properties");

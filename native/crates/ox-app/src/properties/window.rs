@@ -34,6 +34,14 @@ use crate::window::BrowserWindow;
 
 /// The width of a Properties window, as Windows 11 draws it at 100 %.
 const WINDOW_WIDTH: i32 = 400;
+/// The height of every Properties window under its title bar, whatever
+/// it shows: Windows sizes a property sheet once, for its largest page,
+/// and never changes it. This holds the tallest page here, a folder's
+/// Customize, under two rows of tabs (a standard folder's six tabs, or
+/// five in a wider font) at the default text size in Noto Sans; shorter
+/// pages leave room at the bottom, as in Windows, and taller ones (at a
+/// larger text size) scroll.
+const WINDOW_HEIGHT: i32 = 556;
 /// The space around the tabs and their page (`.properties-notebook`).
 const PAGE_MARGIN: i32 = 11;
 /// The size of the item's picture in the title bar.
@@ -59,6 +67,9 @@ pub(crate) trait Pending {
     fn apply(self: Rc<Self>) -> ApplyFuture;
 }
 
+mod tab_rows;
+mod tab_strip;
+
 mod imp {
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -78,8 +89,15 @@ mod imp {
         pub(super) title: gtk::Label,
         /// The title bar's picture.
         pub(super) art: gtk::Box,
-        /// The tabs.
+        /// The tabs' pages; its own tab row stays hidden.
         pub(super) notebook: gtk::Notebook,
+        /// The row of tabs, which wraps onto a second row when the tabs
+        /// are wider than the window, as Windows' property sheets do.
+        pub(super) tab_strip: super::tab_rows::TabRows,
+        /// The tab buttons, in the notebook's page order.
+        pub(super) tab_buttons: RefCell<Vec<gtk::ToggleButton>>,
+        /// Whether a single tab still shows its tab.
+        pub(super) shows_single_tab: Cell<bool>,
         /// Scrolls the tabs when they are taller than the screen.
         pub(super) scroller: gtk::ScrolledWindow,
         /// How tall the window may be, once it is realized on a screen.
@@ -111,6 +129,12 @@ mod imp {
         pub(super) is_closed: Cell<bool>,
         /// True once the window was first shown.
         pub(super) has_shown: Cell<bool>,
+        /// The window's width, when it is not Properties' own
+        /// ([`super::PropertiesWindow::set_window_width`]).
+        pub(super) width: Cell<Option<i32>>,
+        /// True when it shows a mount point as a drive, which has its own
+        /// window beside the folder's (PROP-004).
+        pub(super) shows_drive: Cell<bool>,
     }
 
     impl std::fmt::Debug for PropertiesWindow {
@@ -163,7 +187,7 @@ mod imp {
             self.parent_map();
             // A dialog with one tab hides the tab row, which then takes no
             // focus: OK has it instead.
-            if !self.has_shown.replace(true) && !self.notebook.grab_focus() {
+            if !self.has_shown.replace(true) && !self.obj().focus_selected_tab() {
                 self.ok.grab_focus();
             }
         }
@@ -227,6 +251,47 @@ impl PropertiesWindow {
         dialog
     }
 
+    /// The Properties window's content holder.
+    fn holder(&self) -> Option<super::fixed_width::FixedWidth> {
+        self.child().and_downcast()
+    }
+
+    /// Holds the window at Windows' one size for an item's Properties,
+    /// whatever it shows, on every tab: Windows sizes a property sheet
+    /// once and never changes it. The pages scroll inside it when they
+    /// need more room, as at a larger text size. Other windows built on
+    /// this one, such as Folder Options and the Security tab's dialogs,
+    /// take their content's height, as Windows draws each at its own size.
+    pub(crate) fn hold_sheet_size(&self) {
+        let imp = self.imp();
+        let Some(holder) = self.holder() else {
+            return;
+        };
+        if holder.height() > 0 {
+            return;
+        }
+        let Some(tab_area) = imp.notebook.parent().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        tab_area.remove(&imp.notebook);
+        imp.scroller.set_child(Some(&imp.notebook));
+        tab_area.append(&imp.scroller);
+        let height = imp.tallest.get().map_or(WINDOW_HEIGHT, |tallest| {
+            WINDOW_HEIGHT.min(tallest - self.title_bar_height() - 2)
+        });
+        holder.set_height(height);
+    }
+
+    /// The title bar's height.
+    fn title_bar_height(&self) -> i32 {
+        self.titlebar()
+            .map_or(0, |bar| bar.measure(gtk::Orientation::Vertical, -1).1)
+    }
+
+    /// The width of every Properties window, its border included.
+    #[cfg(test)]
+    pub(crate) const WIDTH: i32 = WINDOW_WIDTH + 2;
+
     fn build(&self) {
         let imp = self.imp();
         self.set_resizable(false);
@@ -239,18 +304,31 @@ impl PropertiesWindow {
         let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
         imp.notebook.add_css_class("properties-notebook");
         imp.notebook.set_scrollable(false);
+        imp.notebook.set_show_tabs(false);
         imp.notebook.set_vexpand(true);
-        // The tabs move into the scroller only once they outgrow the screen
-        // (Self::scroll_tabs): a window that holds a scroller no longer
-        // grows to the rows a tab reads after it shows.
+        let tab_area = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["properties-tab-area"])
+            .vexpand(true)
+            .build();
+        self.build_tab_strip();
+        tab_area.append(&imp.tab_strip);
         imp.scroller.set_hscrollbar_policy(gtk::PolicyType::Never);
         imp.scroller.set_propagate_natural_height(true);
         imp.scroller.set_vexpand(true);
-        column.append(&imp.notebook);
+        // The tabs move into the scroller only once they outgrow the screen
+        // (Self::scroll_tabs), or for an item's Properties, which keep
+        // Windows' one size (Self::hold_sheet_size): a window that holds a
+        // scroller no longer grows to the rows a tab reads after it shows.
+        tab_area.append(&imp.notebook);
+        column.append(&tab_area);
         column.append(&self.footer());
-        self.set_child(Some(&column));
+        // A long name, location or value wraps or ends in "…" instead of
+        // widening the window.
+        self.set_child(Some(&super::fixed_width::FixedWidth::new(&column, WINDOW_WIDTH)));
         self.add_controller(crate::modal::escape_closes());
         self.add_controller(self.refresh_key());
+        self.add_controller(self.tab_keys());
         self.update_relation(&[gtk::accessible::Relation::LabelledBy(&[imp.title.upcast_ref()])]);
     }
 
@@ -297,6 +375,10 @@ impl PropertiesWindow {
         imp.title.set_xalign(0.0);
         imp.title.set_hexpand(true);
         imp.title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        // A long name ends in "…" in the title bar, as in Windows, rather
+        // than widening the window: the label asks for no more than a
+        // character and takes the bar's room.
+        imp.title.set_max_width_chars(1);
         imp.title.add_css_class("properties-title");
         bar.append(&imp.title);
         let close = gtk::Button::builder()
@@ -383,6 +465,17 @@ impl PropertiesWindow {
         self.imp().opener.upgrade()
     }
 
+    /// Marks the window as showing a mount point as a drive, not as the
+    /// folder it is: each has its own window, as in Windows.
+    pub(crate) fn set_shows_drive(&self, shows_drive: bool) {
+        self.imp().shows_drive.set(shows_drive);
+    }
+
+    /// Whether the window shows a mount point as a drive.
+    pub(crate) fn shows_drive(&self) -> bool {
+        self.imp().shows_drive.get()
+    }
+
     /// The Properties window `widget` is in.
     pub(crate) fn of(widget: &impl IsA<gtk::Widget>) -> Option<Self> {
         widget.root().and_downcast::<Self>()
@@ -394,12 +487,27 @@ impl PropertiesWindow {
         page.add_css_class("properties-page");
         // Windows' Properties keep their width; a page's wrapped rows are
         // measured at it, never at the width of a short tab row.
-        page.set_size_request(WINDOW_WIDTH - 2 * PAGE_MARGIN - 2, -1);
+        page.set_size_request(self.window_width() - 2 * PAGE_MARGIN - 2, -1);
         page.set_widget_name(name);
         let tab = gtk::Label::new(Some(label));
         notebook.append_page(page, Some(&tab));
-        notebook.set_show_tabs(notebook.n_pages() > 1);
         notebook.set_show_border(true);
+        self.add_tab_button(label, page.upcast_ref());
+    }
+
+    /// Gives the window `width` instead of Properties' own, for a dialog
+    /// Windows draws narrower, as Folder Options. Call before adding tabs.
+    pub(crate) fn set_window_width(&self, width: i32) {
+        self.imp().width.set(Some(width));
+        self.set_default_width(width);
+        if let Some(holder) = self.child().and_downcast::<super::fixed_width::FixedWidth>() {
+            holder.set_width(width);
+        }
+    }
+
+    /// The window's width.
+    fn window_width(&self) -> i32 {
+        self.imp().width.get().unwrap_or(WINDOW_WIDTH)
     }
 
     /// Keeps the window on the screen beside its parent or opener: tabs
@@ -418,6 +526,11 @@ impl PropertiesWindow {
     /// Lets the window be at most `height` tall: taller tabs scroll.
     pub(crate) fn fit_to_height(&self, height: i32) {
         self.imp().tallest.set(Some(height));
+        // A window of Windows' fixed size is held within the screen too,
+        // its title bar and border included, its tabs scrolling inside it.
+        if let Some(holder) = self.holder().filter(|holder| holder.height() > 0) {
+            holder.set_height(WINDOW_HEIGHT.min(height - self.title_bar_height() - 2));
+        }
     }
 
     /// Holds the window at its tallest, its tabs scrolling inside it.
@@ -431,7 +544,8 @@ impl PropertiesWindow {
         };
         column.remove(&imp.notebook);
         imp.scroller.set_child(Some(&imp.notebook));
-        column.prepend(&imp.scroller);
+        // Under the row of tabs, which stays in place.
+        column.append(&imp.scroller);
         crate::modal::cap_body(self.upcast_ref(), &imp.scroller, tallest);
         imp.scroller
             .set_min_content_height(imp.scroller.max_content_height());
@@ -443,10 +557,22 @@ impl PropertiesWindow {
         self.imp().scroller.clone()
     }
 
+    /// Leaves Apply out, for a dialog that has only OK and Cancel, as
+    /// Windows' Change Icon has.
+    pub(crate) fn hide_apply(&self) {
+        self.imp().apply.set_visible(false);
+    }
+
+    /// Presses OK: makes the changes, then closes the window.
+    pub(crate) fn accept(&self) {
+        self.press_ok();
+    }
+
     /// Shows the tab row although there is one tab, as Windows' Edit...
     /// dialog shows its Security tab.
     pub(crate) fn show_single_tab(&self) {
-        self.imp().notebook.set_show_tabs(true);
+        self.imp().shows_single_tab.set(true);
+        self.update_tab_strip();
     }
 
     /// Shows the tab named `name`, if there is one.
@@ -472,12 +598,18 @@ impl PropertiesWindow {
     /// The tabs' labels, left to right.
     #[cfg(test)]
     pub(crate) fn tab_labels(&self) -> Vec<String> {
-        let notebook = &self.imp().notebook;
-        (0..notebook.n_pages())
-            .filter_map(|page| notebook.nth_page(Some(page)))
-            .filter_map(|page| notebook.tab_label_text(&page))
-            .map(String::from)
+        self.imp()
+            .tab_buttons
+            .borrow()
+            .iter()
+            .filter_map(|button| button.label().map(String::from))
             .collect()
+    }
+
+    /// The tab buttons, left to right, for tests.
+    #[cfg(test)]
+    pub(crate) fn tab_buttons(&self) -> Vec<gtk::ToggleButton> {
+        self.imp().tab_buttons.borrow().clone()
     }
 
     /// The page of the tab named `name`.
@@ -635,12 +767,37 @@ impl PropertiesWindow {
         self.imp().ok.clone()
     }
 
-    /// The footer buttons' labels, for tests.
+    /// Presses the footer button labelled `label`, for tests.
+    #[cfg(test)]
+    pub(crate) fn press(&self, label: &str) {
+        self.footer_button(label).emit_clicked();
+    }
+
+    /// Whether the footer button labelled `label` can be pressed, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn can_press(&self, label: &str) -> bool {
+        self.footer_button(label).is_sensitive()
+    }
+
+    /// The footer button labelled `label`, for tests.
+    #[cfg(test)]
+    fn footer_button(&self, label: &str) -> gtk::Button {
+        let imp = self.imp();
+        [&imp.ok, &imp.cancel, &imp.apply]
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some(label))
+            .cloned()
+            .unwrap_or_else(|| panic!("the window has a {label} button"))
+    }
+
+    /// The labels of the footer buttons shown, for tests.
     #[cfg(test)]
     pub(crate) fn button_labels(&self) -> Vec<String> {
         let imp = self.imp();
         [&imp.ok, &imp.cancel, &imp.apply]
             .iter()
+            .filter(|button| button.is_visible())
             .filter_map(|button| button.label())
             .map(String::from)
             .collect()
@@ -697,6 +854,26 @@ impl Rows {
         value
     }
 
+    /// Adds `name:` and the selectable `value` on one line, ending in "…"
+    /// when it is wider than the window, with the whole value as its
+    /// tooltip: Windows' one-line read-only fields, such as Location and
+    /// Object name, which keep the window's size. Selecting it copies
+    /// the whole value.
+    pub(crate) fn add_line(&self, name: &str, value: &str) -> gtk::Label {
+        let value = gtk::Label::builder()
+            .label(value)
+            .xalign(0.0)
+            .hexpand(true)
+            .selectable(true)
+            .single_line_mode(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .tooltip_text(value)
+            .css_classes(["property-value"])
+            .build();
+        self.add_control(name, &value);
+        value
+    }
+
     /// Adds `name:` before `control`.
     pub(crate) fn add_control(&self, name: &str, control: &impl IsA<gtk::Widget>) -> gtk::Label {
         let line = self.line.get();
@@ -718,7 +895,8 @@ impl Rows {
 }
 
 /// A group box with a title, as Windows' Sharing and Customize tabs draw
-/// them (`.properties-group`).
+/// them (`.properties-group`). The stylesheet lifts the title onto the
+/// box's top line, as Windows draws it, so the frame must not clip it.
 pub(crate) fn group(title: &str) -> (gtk::Frame, gtk::Box) {
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -728,8 +906,24 @@ pub(crate) fn group(title: &str) -> (gtk::Frame, gtk::Box) {
         .label(title)
         .child(&content)
         .css_classes(["properties-group"])
+        .overflow(gtk::Overflow::Visible)
         .build();
     (frame, content)
+}
+
+/// Lets the label of `check` wrap inside the window's width rather than
+/// widen it, as Windows' check boxes wrap in a property sheet; the box
+/// keeps its label for its mnemonic and for screen readers.
+pub(crate) fn wrap_check_label(check: &gtk::CheckButton) {
+    let mut child = check.first_child();
+    while let Some(widget) = child {
+        if let Some(label) = widget.downcast_ref::<gtk::Label>() {
+            label.set_wrap(true);
+            label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+            label.set_xalign(0.0);
+        }
+        child = widget.next_sibling();
+    }
 }
 
 /// A wrapped paragraph of plain text.

@@ -11,8 +11,9 @@
 //! date modified and its size. "Skip N files with the same date and
 //! size" skips those at once. Continue is enabled once every file has a
 //! side; only the incoming side replaces, only the existing side skips,
-//! and both keep both, the copy numbered `report (2).png`. Cancel stops
-//! the whole action.
+//! and both keep both, the copy numbered `report (2).png`. Cancel, the
+//! close button and Escape close only this window, unanswered: the action
+//! asks Replace or Skip Files again, still waiting, as Windows 11 does.
 //!
 //! The window belongs to the progress window: it is its transient child,
 //! modal within a window group of the two alone, so it blocks only the
@@ -83,7 +84,7 @@ mod imp {
     impl WidgetImpl for FileConflictWindow {}
 
     impl WindowImpl for FileConflictWindow {
-        /// Closing the window is Cancel.
+        /// Closing the window is Cancel: back to the question.
         fn close_request(&self) -> glib::Propagation {
             // GTK destroys the window once this returns.
             self.obj().send(None);
@@ -245,7 +246,7 @@ impl FileConflictWindow {
         self.connect_checks();
         self.connect_answers(&continue_button, &cancel_button);
         for (conflict, row) in scan.conflicts.iter().zip(self.imp().rows.borrow().iter()) {
-            load_pictures(conflict, row);
+            load_pictures(conflict, &row.pictures, THUMBNAIL_SIZE);
         }
     }
 
@@ -613,21 +614,21 @@ fn conflict_row(conflict: &NameConflict, source: &str, destination: &str) -> (gt
     )
 }
 
-/// Shows each side's thumbnail when the cache has or can make one, and
+/// Shows each side's thumbnail, `size` pixels square, when the cache has or can make one, and
 /// the type's icon until then or without one.
-fn load_pictures(conflict: &NameConflict, row: &RowChecks) {
+fn load_pictures(conflict: &NameConflict, pictures: &[gtk::Image; 2], size: i32) {
     let sides = [
         (&conflict.incoming_uri, conflict.incoming),
         (&conflict.existing_uri, conflict.existing),
     ];
-    for ((uri, facts), picture) in sides.into_iter().zip(row.pictures.iter()) {
+    for ((uri, facts), picture) in sides.into_iter().zip(pictures.iter()) {
         let name = conflict.name();
         let icon = if facts.is_folder {
             Icon::FileFolder
         } else {
-            FileType::of(&name, None).icon(THUMBNAIL_SIZE)
+            FileType::of(&name, None).icon(size)
         };
-        icons::set_icon(picture, icon, THUMBNAIL_SIZE);
+        icons::set_icon(picture, icon, size);
         if facts.is_folder || !uri.starts_with("file://") {
             continue;
         }
@@ -654,7 +655,11 @@ fn load_pictures(conflict: &NameConflict, row: &RowChecks) {
                 uri,
                 content_type: content_type.to_string(),
                 modified,
-                pixels: THUMBNAIL_SIZE * scale,
+                pixels: size * scale,
+                // The dialog shows the two files it asks about, wherever
+                // they are, as before.
+                local_only: false,
+                target_uri: None,
             };
             if let Some(texture) = preview(request).await {
                 picture.set_paintable(Some(&texture));

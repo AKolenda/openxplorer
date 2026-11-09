@@ -47,7 +47,8 @@ use ox_core::entry::Entry;
 use ox_core::folder_locations::FolderRelocation;
 use ox_core::places::FolderLocations;
 use ox_core::settings::{
-    PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError, ViewProperties, ViewScope,
+    FolderTemplate, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError, ViewProperties,
+    ViewScope,
 };
 use ox_core::versions::PreviousVersions;
 
@@ -137,6 +138,9 @@ mod imp {
         pub(super) folder_relocation: RefCell<Option<Arc<FolderRelocation>>>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
+        /// "Install updates without asking for a password", where this
+        /// build has it, found on first use.
+        pub(super) passwordless_updates: OnceCell<Option<ox_core::update::PasswordlessUpdates>>,
         /// The number of drives being formatted, which file writes wait
         /// for.
         pub(super) drives_formatting: Rc<Cell<u32>>,
@@ -329,6 +333,29 @@ impl AppContext {
             .expect("the test sets the updates before using them");
     }
 
+    /// "Install updates without asking for a password", if this build has
+    /// it: only the stable Debian package with the update helper does.
+    pub(crate) fn passwordless_updates(&self) -> Option<&ox_core::update::PasswordlessUpdates> {
+        self.imp()
+            .passwordless_updates
+            .get_or_init(crate::update::passwordless_for_this_build)
+            .as_ref()
+    }
+
+    /// Uses `setting` instead of this build's, for tests on a fake
+    /// system.
+    ///
+    /// # Panics
+    ///
+    /// When the setting was used already.
+    #[cfg(test)]
+    pub(crate) fn use_passwordless_updates(&self, setting: Option<ox_core::update::PasswordlessUpdates>) {
+        self.imp()
+            .passwordless_updates
+            .set(setting)
+            .expect("the test sets the setting before using it");
+    }
+
     /// The desktop integration, shared by every window.
     pub(crate) fn desktop_integration(&self) -> &DesktopIntegration {
         self.imp()
@@ -427,6 +454,27 @@ impl AppContext {
             settings.remember_view(&uri, properties, scope).map(|_| ())
         });
         self.change_settings(change, reply);
+    }
+
+    /// Optimizes the folder at `uri` for `template`, and its sub-folders
+    /// with `subfolders`, off the main thread (PROP-036), where
+    /// `downloads` is the Downloads folder; `reply` hears
+    /// the outcome, after which every window shows the folders in their
+    /// new style.
+    pub(crate) fn customize_folder(
+        &self,
+        uri: String,
+        downloads: Option<String>,
+        template: FolderTemplate,
+        subfolders: bool,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        let change: Change = Box::new(move |settings: &mut Settings| {
+            settings
+                .customize_folder(&uri, downloads.as_deref(), template, subfolders)
+                .map(|_| ())
+        });
+        self.change_settings(change, self.announcing_folder_views(reply));
     }
 
     /// Forgets every folder's display style and the shared one; `reply`

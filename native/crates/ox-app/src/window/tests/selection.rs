@@ -224,6 +224,78 @@ fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
     );
 }
 
+/// The middle of the name cell of the row at `position` in `view`, and a
+/// point on the same row past the end of its name, in `view`'s
+/// coordinates.
+fn name_and_beside_it(test: &TestWindow, view: &gtk::Widget, position: u32) -> ((f64, f64), (f64, f64)) {
+    let cell = test
+        .window
+        .folder_pane()
+        .owners()
+        .file_cell_at(position, view)
+        .expect("the row is on screen");
+    let bounds = cell.compute_bounds(view).expect("a shown row has bounds");
+    let y = f64::from(bounds.y() + bounds.height() / 2.0);
+    let on_name = (f64::from(bounds.x()) + 40.0, y);
+    let beside = (f64::from(view.width()) - 40.0, y);
+    (on_name, beside)
+}
+
+/// In a folder whose rows fill the details view, the empty part of an
+/// unselected row is blank space for a rubber band, as in Windows
+/// Explorer, but a press there keeps the selection: released without a
+/// drag it selects the row (full-row select). Its icon and name, a
+/// selected row, and the tiles of the icon views stay the item.
+///
+/// parity: SEL-002, SEL-012
+#[gtk::test]
+fn the_empty_part_of_an_unselected_details_row_is_blank_space() {
+    let fixture = Fixture::with_files(LONG_FOLDER);
+    let test = TestWindow::open(&fixture.uri());
+    show_view(&test, "details");
+    let view = test.window.folder_pane().view_widget();
+    let (on_name, beside) = name_and_beside_it(&test, &view, 3);
+    test.window.folder_model().select_only(1);
+
+    let name_is_blank = test.window.is_blank_space(&view, on_name.0, on_name.1);
+    let beside_is_blank = test.window.is_blank_space(&view, beside.0, beside.1);
+    test.window.folder_model().select_only(3);
+    let beside_selected_is_blank = test.window.is_blank_space(&view, beside.0, beside.1);
+    test.window.folder_model().select_only(1);
+    press_at(&test, beside.0, beside.1);
+    let after_press = selected(&test);
+
+    assert!(!name_is_blank, "the name is the item");
+    assert!(beside_is_blank, "beside the name is blank space");
+    assert!(
+        !beside_selected_is_blank,
+        "a selected row is the item across its width"
+    );
+    assert_eq!(
+        after_press,
+        [1],
+        "a press beside a name keeps the selection until it is a click or a band"
+    );
+
+    show_view(&test, "medium");
+    let grid = test.window.folder_pane().view_widget();
+    let tile = test
+        .window
+        .folder_pane()
+        .owners()
+        .widget_at(3)
+        .expect("the tile is on screen");
+    let bounds = tile.compute_bounds(&grid).expect("a shown tile has bounds");
+    let tile_edge = (
+        f64::from(bounds.x() + bounds.width()) - 2.0,
+        f64::from(bounds.y() + bounds.height()) - 2.0,
+    );
+    assert!(
+        !test.window.is_blank_space(&grid, tile_edge.0, tile_edge.1),
+        "a tile is the item to its edge"
+    );
+}
+
 /// parity: SEL-004, SEL-005
 #[gtk::test]
 fn ctrl_a_and_escape_work_outside_the_view_but_not_in_text_fields() {
@@ -377,6 +449,334 @@ fn arrows_move_in_two_dimensions_in_the_icon_grid() {
     assert_eq!(selected(&test), [last], "Down into the short row goes to its end");
     press_key(&test, gdk::Key::Up, none);
     assert_eq!(selected(&test), [above], "Up remembers the column");
+}
+
+/// In Tiles the arrows move across and down the tiles, Down keeping to
+/// the column; in Content, one row per item, Down and Up move a row, and
+/// Home, End and Shift work as in the other views.
+///
+/// parity: VIEW-071, SEL-007, SEL-010
+#[gtk::test]
+fn arrows_move_through_tiles_and_content() {
+    let fixture = Fixture::with_files(PRIME_FOLDER);
+    let test = TestWindow::open(&fixture.uri());
+    let none = gdk::ModifierType::empty();
+    show_view(&test, "tiles");
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::Right, none);
+    assert_eq!(selected(&test), [1]);
+    let columns = test.window.folder_pane().icon_view().grid().max_columns();
+    assert!(columns >= 2, "tiles fill several columns");
+    press_key(&test, gdk::Key::Down, none);
+    assert_eq!(selected(&test), [1 + columns], "Down goes to the next row");
+    press_key(&test, gdk::Key::Up, none);
+    assert_eq!(selected(&test), [1]);
+
+    show_view(&test, "content");
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::Down, none);
+    assert_eq!(selected(&test), [1], "Down goes to the next row");
+    press_key(&test, gdk::Key::Down, gdk::ModifierType::SHIFT_MASK);
+    assert_eq!(selected(&test), [1, 2], "Shift extends");
+    press_key(&test, gdk::Key::End, none);
+    let last = u32::try_from(PRIME_FOLDER).expect("small") - 1;
+    assert_eq!(selected(&test), [last]);
+    press_key(&test, gdk::Key::Home, none);
+    assert_eq!(selected(&test), [0]);
+    test.window.type_text("file 0004");
+    assert_eq!(test.selected_names(), ["file 0004.txt"], "type-ahead selects");
+}
+
+/// In grouped Tiles and Content every key moves between items across
+/// the headings, as in Details: Down from a group's last row rests on the
+/// next group's heading, then goes to its first row, Right from a group's
+/// last item goes to the next group's first, Up comes back to the column,
+/// and Shift and Ctrl work as elsewhere.
+///
+/// parity: VIEW-071, VIEW-022, SEL-007, SEL-009, SEL-010
+#[gtk::test]
+fn arrows_cross_the_group_headings_in_tiles_and_content() {
+    let fixture = Fixture::standard();
+    fixture.write("Plan.md");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let none = gdk::ModifierType::empty();
+    let shift = gdk::ModifierType::SHIFT_MASK;
+    let last = test.window.folder_pane().model().n_items() - 1;
+    for view in ["tiles", "content"] {
+        show_view(&test, view);
+        start_at(&test, 0);
+        press_key(&test, gdk::Key::Down, none);
+        assert!(
+            test.window.focused_heading().is_some(),
+            "{view}: Down rests on the heading"
+        );
+        assert_eq!(
+            selected(&test),
+            [1],
+            "{view}: a heading selects its group's items"
+        );
+        press_key(&test, gdk::Key::Down, none);
+        assert_eq!(selected(&test), [1], "{view}: Down goes on past the heading");
+        press_key(&test, gdk::Key::Up, none);
+        press_key(&test, gdk::Key::Up, none);
+        assert_eq!(selected(&test), [0], "{view}: Up passes it back");
+        press_key(&test, gdk::Key::Right, none);
+        assert_eq!(selected(&test), [1], "{view}: Right into the next group");
+        press_key(&test, gdk::Key::Left, none);
+        assert_eq!(selected(&test), [0]);
+        press_key(&test, gdk::Key::End, none);
+        assert_eq!(selected(&test), [last], "{view}: End");
+        press_key(&test, gdk::Key::Home, shift);
+        assert_eq!(
+            selected(&test),
+            (0..=last).collect::<Vec<u32>>(),
+            "{view}: Shift+Home"
+        );
+        // Down from the first item rests on the next heading first.
+        press_key(&test, gdk::Key::Down, none);
+        press_key(&test, gdk::Key::Down, none);
+        assert_eq!(selected(&test), [1], "{view}: a plain key selects one item");
+        // Past the next group's heading.
+        press_key(&test, gdk::Key::Down, gdk::ModifierType::CONTROL_MASK);
+        press_key(&test, gdk::Key::Down, gdk::ModifierType::CONTROL_MASK);
+        assert_eq!(selected(&test), [1], "{view}: Ctrl moves the focus alone");
+        let focused = test.window.folder_pane().focused_position().expect("focus");
+        assert!(focused > 1, "{view}: the focus moved on");
+        press_key(&test, gdk::Key::Right, shift);
+        let extended: Vec<u32> = (1..=focused + 1).collect();
+        assert_eq!(selected(&test), extended, "{view}: Shift extends from the anchor");
+    }
+}
+
+/// A group collapses under its heading and expands again, in Details,
+/// Tiles and Content, as in Windows 11: with the keyboard on the heading,
+/// Left collapses it, Right expands it, and Space and Enter select its
+/// items. Its items
+/// stay selected while hidden; the arrows, a Shift range and
+/// type-to-select pass them by, and Select all still selects them.
+///
+/// parity: VIEW-022, VIEW-071, SEL-007, SEL-009
+#[gtk::test]
+fn a_group_collapses_under_its_heading_and_its_items_are_passed_by() {
+    let fixture = Fixture::standard();
+    fixture.write("Plan.md");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let none = gdk::ModifierType::empty();
+    let shift = gdk::ModifierType::SHIFT_MASK;
+    let last = test.window.folder_pane().model().n_items() - 1;
+    let shows = |position| {
+        let grouped = test.window.folder_pane().grouped().expect("a grouped view");
+        grouped.layout().expect("laid out").shows(position)
+    };
+    for view in ["details", "tiles", "content"] {
+        show_view(&test, view);
+        start_at(&test, 0);
+        press_key(&test, gdk::Key::Up, none);
+        let heading = test.window.focused_heading().expect("Up rests on the heading");
+        assert_eq!(heading.group_index(), Some(0), "{view}");
+        press_key(&test, gdk::Key::Left, none);
+        assert!(
+            heading.collapsed() && !shows(0),
+            "{view}: Left collapses the group"
+        );
+        assert_eq!(selected(&test), [0], "{view}: a hidden item stays selected");
+        press_key(&test, gdk::Key::Right, none);
+        assert!(!heading.collapsed() && shows(0), "{view}: Right expands it");
+        test.window.folder_pane().model().select_none();
+        press_key(&test, gdk::Key::space, none);
+        assert_eq!(selected(&test), [0], "{view}: Space selects the group's items");
+        test.window.folder_pane().model().select_none();
+        press_key(&test, gdk::Key::Return, none);
+        assert_eq!(selected(&test), [0], "{view}: so does Enter");
+        let grouped = test.window.folder_pane().grouped().expect("a grouped view");
+        let heading_slot = grouped
+            .layout()
+            .and_then(|layout| layout.heading_slot(0))
+            .expect("a heading");
+        assert!(
+            !grouped.is_selected(heading_slot),
+            "{view}: an expanded heading shows no fill"
+        );
+        assert!(!heading.filled(), "{view}: nor by its own state");
+        press_key(&test, gdk::Key::Left, none);
+        assert!(heading.collapsed(), "{view}: Left collapses it again");
+        assert!(
+            grouped.is_selected(heading_slot),
+            "{view}: a collapsed heading whose items are selected is filled"
+        );
+        assert!(
+            heading.filled(),
+            "{view}: filled by the heading's own state, whatever GTK shows as selected"
+        );
+        assert!(
+            test.window.focused_heading().is_some(),
+            "{view}: the heading keeps the keyboard"
+        );
+
+        press_key(&test, gdk::Key::Down, none);
+        press_key(&test, gdk::Key::Down, none);
+        assert_eq!(selected(&test), [1], "{view}: the first item shown");
+        press_key(&test, gdk::Key::End, shift);
+        assert_eq!(
+            selected(&test),
+            (1..=last).collect::<Vec<u32>>(),
+            "{view}: Shift+End"
+        );
+        start_at(&test, last);
+        test.window.reset_typeahead();
+        test.window.type_text("Documents");
+        assert_eq!(
+            selected(&test),
+            [last],
+            "{view}: type-to-select passes a hidden item by"
+        );
+        test.window.reset_typeahead();
+        test.activate("select-all", None);
+        assert_eq!(
+            selected(&test),
+            (0..=last).collect::<Vec<u32>>(),
+            "{view}: Select all selects the hidden items too"
+        );
+        test.activate("expand-all-groups", None);
+        assert!(shows(0), "{view}: Expand all groups");
+        test.activate("collapse-all-groups", None);
+        assert!(
+            (0..=last).all(|position| !shows(position)),
+            "{view}: Collapse all groups"
+        );
+        test.activate("expand-all-groups", None);
+    }
+}
+
+/// Presses the primary button `presses` times at the middle of `widget`,
+/// as far as the visible view's own capture-phase gestures go.
+fn press_on(test: &TestWindow, widget: &gtk::Widget, presses: i32) {
+    let view = test.window.folder_pane().view_widget();
+    #[expect(clippy::cast_precision_loss, reason = "widget sizes are small")]
+    let middle = gtk::graphene::Point::new(widget.width() as f32 / 2.0, widget.height() as f32 / 2.0);
+    let point = widget
+        .compute_point(&view, &middle)
+        .expect("the widget is in the view");
+    let controllers = view.observe_controllers();
+    let gestures = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+        .filter(|gesture| {
+            gesture.propagation_phase() == gtk::PropagationPhase::Capture
+                && gesture.button() == gdk::BUTTON_PRIMARY
+        });
+    for gesture in gestures {
+        gesture.emit_by_name::<()>(
+            "pressed",
+            &[&presses, &f64::from(point.x()), &f64::from(point.y())],
+        );
+    }
+}
+
+/// The chevron, the title and the rest of the row after the title of the
+/// shown heading of the group at `index`.
+fn heading_parts(test: &TestWindow, index: usize) -> (gtk::Widget, gtk::Widget, gtk::Widget) {
+    use crate::folder_view::cells::FileCell;
+    use crate::folder_view::grid::SlotKind;
+    let view = test.window.folder_pane().view_widget();
+    let cell = descendants::<FileCell>(&view)
+        .into_iter()
+        .filter(WidgetExt::is_mapped)
+        .find(|cell| {
+            cell.slot()
+                .is_some_and(|slot| slot.kind() == SlotKind::Heading && slot.group_index() == Some(index))
+        })
+        .expect("the heading is on screen");
+    let chevron = descendants::<gtk::Image>(&cell)
+        .into_iter()
+        .find(|image| image.has_css_class("group-chevron"))
+        .expect("a chevron");
+    let title = descendants::<gtk::Label>(&cell)
+        .into_iter()
+        .find(|label| label.has_css_class("group-title"))
+        .expect("a title");
+    let rest = descendants::<gtk::Box>(&cell)
+        .into_iter()
+        .find(|rest| rest.has_css_class("group-rest"))
+        .expect("the rest of the heading's row");
+    (chevron.upcast(), title.upcast(), rest.upcast())
+}
+
+/// Clicks on a heading act as Windows 11's: the title or the rest of the
+/// row after it selects every item of the group and gives the heading the
+/// keyboard, a double-click collapses or expands the group, and the
+/// chevron collapses or expands it without selecting.
+///
+/// parity: VIEW-022, VIEW-071
+#[gtk::test]
+fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
+    let fixture = Fixture::standard();
+    fixture.write("Plan.md");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let last = test.window.folder_pane().model().n_items() - 1;
+    let group: Vec<u32> = (2..=last).collect();
+    for view in ["details", "tiles", "content"] {
+        show_view(&test, view);
+        start_at(&test, 0);
+        let heading = test
+            .window
+            .folder_pane()
+            .grouped()
+            .and_then(|grouped| grouped.heading(2))
+            .expect("a third group");
+        let (_, title, rest) = heading_parts(&test, 2);
+        press_on(&test, &rest, 1);
+        assert_eq!(
+            selected(&test),
+            group,
+            "{view}: the rest of the row selects the group"
+        );
+        test.window.folder_pane().model().select_only(0);
+        press_on(&test, &title, 1);
+        assert_eq!(selected(&test), group, "{view}: the title selects the group");
+        assert_eq!(
+            test.window
+                .focused_heading()
+                .and_then(|heading| heading.group_index()),
+            Some(2),
+            "{view}: and gives the heading the keyboard"
+        );
+        // GTK may leave the keyboard on the list itself after the click
+        // (KDE Plasma's Wayland session): the heading still takes Left.
+        let list = test.window.folder_pane().view_widget();
+        gtk::prelude::GtkWindowExt::set_focus(&test.window, Some(&list));
+        press_key(&test, gdk::Key::Left, gdk::ModifierType::empty());
+        assert!(
+            heading.collapsed(),
+            "{view}: Left collapses the clicked heading's group"
+        );
+        press_key(&test, gdk::Key::Right, gdk::ModifierType::empty());
+        assert!(!heading.collapsed(), "{view}: Right expands it");
+        // A double-click folds the group and leaves the selection as it
+        // was before it, as in Windows 11.
+        test.window.folder_pane().model().select_only(0);
+        let grouped = test.window.folder_pane().grouped().expect("grouped");
+        grouped.set_anchor(Some(0));
+        let (_, title, _) = heading_parts(&test, 2);
+        press_on(&test, &title, 1);
+        press_on(&test, &title, 2);
+        assert_eq!(
+            grouped.anchor(),
+            Some(0),
+            "{view}: and the Shift anchor where it was (Codex review of #289)"
+        );
+        assert!(heading.collapsed(), "{view}: a double-click collapses the group");
+        assert_eq!(selected(&test), [0], "{view}: and leaves the selection as it was");
+        test.window.folder_pane().model().select_only(0);
+        let (chevron, _, _) = heading_parts(&test, 2);
+        press_on(&test, &chevron, 1);
+        assert!(!heading.collapsed(), "{view}: the chevron expands it");
+        assert_eq!(selected(&test), [0], "{view}: without selecting");
+    }
 }
 
 /// parity: SEL-016

@@ -57,6 +57,47 @@ pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     }
 }
 
+/// The title of a history step at `uri`, as its tab, the window and the
+/// Back and Forward menus name it: the location's title, or for a search
+/// there "Search Results in Documents", as Windows 11 File Explorer names
+/// it.
+pub(super) fn step_title(locations: &LocationContext, uri: &str, is_search: bool) -> String {
+    let place = locations.title_for(uri);
+    if is_search {
+        ox_core::i18n::format_message("Search Results in {place}", &[("place", &place)])
+    } else {
+        place
+    }
+}
+
+/// The title of `tab`'s tab and of the window while it is in front: its
+/// step's title, which in Windows 11's search layout (SRCH-046) names the
+/// query first, "notes - Search Results in Documents", as Windows 11 File
+/// Explorer titles its tab; `names_query` is false while the search filter
+/// bar shows, which keeps "Search Results in Documents".
+pub(super) fn tab_title(locations: &LocationContext, tab: &Tab, names_query: bool) -> String {
+    let uri = tab.uri();
+    let search = tab.history.current_search();
+    let title = step_title(locations, uri, search.is_some());
+    match search {
+        Some(step) if names_query && !step.query.trim().is_empty() => ox_core::i18n::format_message(
+            "{query} - {results}",
+            &[("query", step.query.trim()), ("results", &title)],
+        ),
+        _ => title,
+    }
+}
+
+/// The address-bar icon of a history step at `uri`: the magnifier for a
+/// search, as Windows 11 File Explorer shows it, else [`address_icon`].
+pub(super) fn step_icon(uri: &str, home_uri: &str, is_search: bool) -> Icon {
+    if is_search {
+        Icon::Search
+    } else {
+        address_icon(uri, home_uri)
+    }
+}
+
 /// The crumbs the address bar shows for `uri`, divided as
 /// `renderNavigation` divides them. Inside the home folder they start at
 /// it, as "Home › Documents" in Dolphin and Explorer, unless `full_path`
@@ -82,8 +123,22 @@ pub(super) fn crumb_buttons(locations: &LocationContext, uri: &str, full_path: b
                 .then(|| location::crumb_divider(uri, index + skipped))
                 .flatten(),
             crumb,
+            refreshes: false,
         })
         .collect()
+}
+
+/// The crumb a search of `uri` adds after the folder's, as Windows 11
+/// File Explorer shows "Documents › Search Results in Documents";
+/// clicking it runs the search again, as Refresh does.
+fn search_crumb(locations: &LocationContext, uri: &str) -> CrumbButton {
+    CrumbButton {
+        crumb: ox_core::location::Crumb::new(step_title(locations, uri, true), uri),
+        address: locations.display_location(uri),
+        // Past the first crumbs, which a local path draws without one.
+        divider_before: location::crumb_divider(uri, 2),
+        refreshes: true,
+    }
 }
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on
@@ -115,8 +170,10 @@ fn tab_view(
     session: &Session,
     locations: &LocationContext,
     network: &[NetworkLocation],
+    names_query: bool,
 ) -> TabView {
     let uri = tab.uri();
+    let is_search = tab.history.current_search().is_some();
     let mut tooltip = locations.display_location(uri);
     if locations.is_network_location(uri) {
         tooltip.push_str(" · Network location");
@@ -124,9 +181,13 @@ fn tab_view(
     TabView {
         id: tab.id,
         uri: uri.to_owned(),
-        title: locations.title_for(uri),
+        title: tab_title(locations, tab, names_query),
         tooltip,
-        icon: tab_icon(uri, locations, network),
+        icon: if is_search {
+            Art::Glyph(Icon::Search)
+        } else {
+            tab_icon(uri, locations, network)
+        },
         active: session.is_active(tab.id),
         previous_version: None,
     }
@@ -208,12 +269,30 @@ impl BrowserWindow {
         }));
     }
 
+    /// The connected network shares, one per mount, for the navigation
+    /// pane's Disconnect network drive, as "…" lists them.
+    pub(super) fn network_drives(&self) -> Vec<NetworkDrive> {
+        if self.imp().more_menu_places.borrow().is_none() {
+            let places = self.places();
+            self.remember_more_menu_places(&places);
+        }
+        self.imp()
+            .more_menu_places
+            .borrow()
+            .as_ref()
+            .map(|sources| sources.network_drives.clone())
+            .unwrap_or_default()
+    }
+
     /// Shows in "…" what the location shown allows, as Windows 11's "…"
     /// does: in This PC and Network the network drive commands; in a
     /// folder Undo and Redo while each can run, named for the step, and
     /// Unpin from Quick access while the folder is pinned, else Pin to
-    /// Quick access. It follows the location, every change to Quick access
-    /// or the network shares, and the undo journal.
+    /// Quick access; on search results in Windows 11's search layout
+    /// always Pin to Quick access, which saves the search (SRCH-046), as
+    /// Windows 11's "…" pins a search to Quick access. It follows the
+    /// location, the search, every change to Quick access or the network
+    /// shares, and the undo journal.
     pub(super) fn update_more_menu(&self) {
         let Some(uri) = self.current_uri() else {
             return;
@@ -239,7 +318,10 @@ impl BrowserWindow {
             .quick_access
             .iter()
             .find(|pin| page.is_none() && location::same_location(&pin.uri, &uri));
-        let pin = pinned.map_or(FolderPin::Unpinned, |pin| FolderPin::Pinned(pin.uri.clone()));
+        let pin = match pinned {
+            Some(pin) if !self.pins_search() => FolderPin::Pinned(pin.uri.clone()),
+            _ => FolderPin::Unpinned,
+        };
         let context = self.context();
         let state = MoreMenuState {
             place,
@@ -265,8 +347,16 @@ impl BrowserWindow {
             return;
         };
         let full_path = self.context().settings_data().preferences.full_path_in_title;
+        let is_search = self.shows_search_step();
+        let names_query = !self.shows_search_filter_bar();
         let locations = self.imp().locations.borrow();
-        let place = if full_path && Page::from_uri(&uri).is_none() {
+        let place = if is_search {
+            let session = self.imp().session.borrow();
+            match session.active() {
+                Some(tab) => tab_title(&locations, tab, names_query),
+                None => step_title(&locations, &uri, true),
+            }
+        } else if full_path && Page::from_uri(&uri).is_none() {
             locations.display_location(&uri)
         } else {
             locations.title_for(&uri)
@@ -296,11 +386,16 @@ impl BrowserWindow {
     /// Draws the crumbs and the address of `uri`. The crumb of an opened
     /// archive is a file's name, so it hides a known extension while
     /// names do, as Windows' does for a ZIP folder; folders keep theirs.
+    /// Search results add their own crumb and icon.
     pub(super) fn render_address_of(&self, uri: &str) {
         let full_path = self.shows_full_path();
         let extensions = self.file_name_extensions();
+        let is_search = self.current_uri().as_deref() == Some(uri) && self.shows_search_step();
         let locations = self.imp().locations.borrow();
         let mut crumbs = crumb_buttons(&locations, uri, full_path);
+        if is_search {
+            crumbs.push(search_crumb(&locations, uri));
+        }
         if let Some(archive) = crumbs
             .iter_mut()
             .find(|crumb| is_archive_location(&crumb.crumb.uri))
@@ -309,20 +404,21 @@ impl BrowserWindow {
             archive.crumb.label = shown;
         }
         let address = locations.display_location(uri);
-        let icon = address_icon(uri, &locations.home_uri());
+        let icon = step_icon(uri, &locations.home_uri(), is_search);
         self.address_bar().show_location(&crumbs, &address, icon);
     }
 
     /// Redraws the tab strip.
     pub(super) fn render_tabs(&self) {
         let network = self.network_locations();
+        let names_query = !self.shows_search_filter_bar();
         let mut views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
             let tab_views = session
                 .tabs()
                 .iter()
-                .map(|tab| tab_view(tab, &session, &locations, &network));
+                .map(|tab| tab_view(tab, &session, &locations, &network, names_query));
             tab_views.collect()
         };
         self.mark_snapshot_tabs(&mut views);
@@ -499,7 +595,7 @@ mod tests {
             let mut session = Session::default();
             let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
             let tab = session.tab(id).expect("the tab was added");
-            let view = tab_view(tab, &session, &locations, &[]);
+            let view = tab_view(tab, &session, &locations, &[], true);
             assert_eq!(view.title, case.title, "{}", case.uri);
             assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
             assert!(view.active);

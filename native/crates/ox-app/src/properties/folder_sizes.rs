@@ -17,9 +17,6 @@ use ox_core::sizes::{FolderSize, ScanStatus};
 const SCANNING: &str = crate::i18n::message_id("Scanning…");
 /// The Size text of a folder whose scan failed.
 const UNAVAILABLE: &str = crate::i18n::message_id("Unavailable");
-/// The Size text of a folder never measured, in the details pane and
-/// Properties.
-pub(crate) const NOT_SCANNED: &str = crate::i18n::message_id("Not scanned");
 /// The status word of a failed scan in tooltips (`status:'error'`).
 const ERROR_STATUS: &str = "error";
 /// What a measured size counts, when the scan gave no other reason.

@@ -27,9 +27,13 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::row_tooltip::RowTooltip;
+
+/// How many cells are registered before the ones that went are first
+/// forgotten.
+const MIN_OWNERS_BEFORE_PRUNING: usize = 256;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
-use crate::folder_view::shown_name::{shown_name, Extensions};
+use crate::folder_view::shown_name::{shown_name, shows_whole, Extensions};
 use crate::thumbnails::PreviewPolicy;
 use crate::window::widget_tree::toggle_class;
 
@@ -55,11 +59,29 @@ const DROP_TARGET_CSS_CLASS: &str = "file-drop-active";
 /// content in: a column view's `row` and a grid view's `child`.
 const ITEM_WIDGET_NAMES: [&str; 2] = ["row", "child"];
 
+/// Turns the position a list item shows in its view into the listing's
+/// position, `None` for a slot that shows no item: grouped Tiles and
+/// Content list headings among the items (VIEW-071).
+pub(crate) type PositionMap = Rc<dyn Fn(u32) -> Option<u32>>;
+
 /// A cell's content widget and the list item that shows it.
-#[derive(Debug)]
 struct CellOwner {
     cell: glib::WeakRef<gtk::Widget>,
     list_item: glib::WeakRef<gtk::ListItem>,
+    /// Maps the list item's position, for a view that lists more than
+    /// the items.
+    positions: Option<PositionMap>,
+}
+
+impl std::fmt::Debug for CellOwner {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CellOwner")
+            .field("cell", &self.cell)
+            .field("list_item", &self.list_item)
+            .field("maps_positions", &self.positions.is_some())
+            .finish()
+    }
 }
 
 impl CellOwner {
@@ -83,15 +105,26 @@ impl CellOwner {
 
     /// The cell, while its list item shows `position`.
     fn cell_showing(&self, position: u32) -> Option<gtk::Widget> {
-        let list_item = self.list_item.upgrade()?;
-        if bound_position(&list_item) != Some(position) {
+        if self.bound_position() != Some(position) {
             return None;
         }
         self.cell.upgrade()
     }
+
+    /// The position of the item the list item shows, or `None` while it
+    /// shows none.
+    fn bound_position(&self) -> Option<u32> {
+        let list_item = self.list_item.upgrade()?;
+        let position = bound_position(&list_item)?;
+        match &self.positions {
+            Some(positions) => positions(position),
+            None => Some(position),
+        }
+    }
 }
 
-/// The position `list_item` shows, or `None` while it shows no item.
+/// The position `list_item` shows in its view, or `None` while it shows
+/// nothing.
 fn bound_position(list_item: &gtk::ListItem) -> Option<u32> {
     let position = list_item.position();
     let is_bound = position != gtk::INVALID_LIST_POSITION && list_item.item().is_some();
@@ -109,6 +142,9 @@ fn item_widget(cell: &gtk::Widget) -> Option<gtk::Widget> {
 #[derive(Debug, Default)]
 pub(crate) struct CellOwners {
     owners: RefCell<Vec<CellOwner>>,
+    /// How many owners were left after the cells that went were last
+    /// forgotten; see [`CellOwners::register_mapped`].
+    alive_after_pruning: Cell<usize>,
     /// The URIs of the items a cut put on the clipboard, whose cells are
     /// dimmed until they are pasted or the clipboard changes.
     cut_uris: RefCell<HashSet<String>>,
@@ -119,6 +155,9 @@ pub(crate) struct CellOwners {
     drop_row: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     /// What the rows' tooltips name.
     row_tooltip: Cell<RowTooltip>,
+    /// Items show no infotip (Folder Options' "Show pop-up description
+    /// for folder and desktop items" off).
+    hides_infotips: Cell<bool>,
     /// Which items show previews in the folder shown.
     previews: Cell<PreviewPolicy>,
     /// Folders in the Size column say how many items they hold.
@@ -130,6 +169,8 @@ pub(crate) struct CellOwners {
     item_checks_pass_clicks: Cell<bool>,
     /// Whether names show the extensions of known types (VIEW-069).
     extensions: Cell<Extensions>,
+    /// The words marked in the names, lower-cased (SRCH-046).
+    marked_words: RefCell<Vec<String>>,
 }
 
 impl CellOwners {
@@ -138,14 +179,28 @@ impl CellOwners {
         Rc::new(Self::default())
     }
 
-    /// Records that `cell` is the content widget of `list_item`, and
-    /// forgets cells that are gone.
-    pub(crate) fn register(&self, cell: &impl IsA<gtk::Widget>, list_item: &gtk::ListItem) {
+    /// Records that `cell` is the content widget of `list_item`, whose
+    /// positions `positions` maps to the listing's when the view lists
+    /// more than the items, and forgets cells that are gone.
+    pub(crate) fn register_mapped(
+        &self,
+        cell: &impl IsA<gtk::Widget>,
+        list_item: &gtk::ListItem,
+        positions: Option<PositionMap>,
+    ) {
         let mut owners = self.owners.borrow_mut();
-        owners.retain(CellOwner::is_alive);
+        // Forgetting the cells that went looks at every cell, so it waits
+        // until the list has doubled: a view that makes hundreds of cells
+        // at once, as a search's results replacing a big folder do, would
+        // otherwise look at every cell for each new one.
+        if owners.len() >= (2 * self.alive_after_pruning.get()).max(MIN_OWNERS_BEFORE_PRUNING) {
+            owners.retain(CellOwner::is_alive);
+            self.alive_after_pruning.set(owners.len());
+        }
         owners.push(CellOwner {
             cell: cell.as_ref().downgrade(),
             list_item: list_item.downgrade(),
+            positions,
         });
     }
 
@@ -160,10 +215,21 @@ impl CellOwners {
         self.row_tooltip.set(tooltip);
     }
 
+    /// Whether items show no infotip, only a name cut short.
+    pub(crate) fn hides_infotips(&self) -> bool {
+        self.hides_infotips.get()
+    }
+
+    /// Shows the items' infotips, or only names cut short with `hide`.
+    pub(crate) fn set_hides_infotips(&self, hide: bool) {
+        self.hides_infotips.set(hide);
+    }
+
     /// The item the registered `cell` shows, while it shows one.
     pub(crate) fn item_of(&self, cell: &impl IsA<gtk::Widget>) -> Option<FileItem> {
-        let list_item = self.owner_of(cell.as_ref())?;
-        list_item.item().and_downcast::<FileItem>()
+        let owners = self.owners.borrow();
+        let owner = owners.iter().find(|owner| owner.has_cell(cell.as_ref()))?;
+        owner.list_item.upgrade()?.item().and_downcast::<FileItem>()
     }
 
     /// Styles `cell`, which shows `item`: dimmed while a cut has `item` on
@@ -174,6 +240,13 @@ impl CellOwners {
         toggle_class(cell, CUT_CSS_CLASS, self.cut_uris.borrow().contains(uri));
         toggle_class(cell, DRAGGED_CSS_CLASS, self.dragged_uris.borrow().contains(uri));
         toggle_class(cell, HIDDEN_CSS_CLASS, item.entry().is_hidden);
+    }
+
+    /// Takes an item's styles off `cell`, which shows no item now.
+    pub(crate) fn unstyle_cell(cell: &impl IsA<gtk::Widget>) {
+        for class in [CUT_CSS_CLASS, DRAGGED_CSS_CLASS, HIDDEN_CSS_CLASS] {
+            toggle_class(cell, class, false);
+        }
     }
 
     /// Styles every cell on screen again after the state changed.
@@ -328,25 +401,22 @@ impl CellOwners {
     pub(crate) fn position_at(&self, view: &impl IsA<gtk::Widget>, x: f64, y: f64) -> Option<u32> {
         let view = view.as_ref();
         let picked = view.pick(x, y, gtk::PickFlags::DEFAULT)?;
-        let list_item = self.owner_near(view, picked)?;
-        bound_position(&list_item)
+        self.position_near(view, picked)
     }
 
     /// The position of the item whose row or tile holds `widget`, inside
     /// `view`.
     pub(crate) fn position_holding(&self, view: &impl IsA<gtk::Widget>, widget: gtk::Widget) -> Option<u32> {
-        let list_item = self.owner_near(view.as_ref(), widget)?;
-        bound_position(&list_item)
+        self.position_near(view.as_ref(), widget)
     }
 
     /// The position of the item whose row or tile is, or contains,
     /// `widget`, such as the one with keyboard focus.
     pub(crate) fn position_of(&self, widget: &gtk::Widget) -> Option<u32> {
         // A list's own first child is a row, so the walk stops below it.
-        let list_item = std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+        std::iter::successors(Some(widget.clone()), WidgetExt::parent)
             .take_while(|widget| !widget.is::<gtk::ListBase>())
-            .find_map(|widget| self.owner_within(&widget))?;
-        bound_position(&list_item)
+            .find_map(|widget| self.position_within(&widget))
     }
 
     /// The content widget showing `position`, if it is on screen.
@@ -374,10 +444,7 @@ impl CellOwners {
         let view = view.as_ref();
         let mut shown: Vec<(u32, gtk::Widget)> = Vec::new();
         for owner in self.owners.borrow().iter() {
-            let Some(list_item) = owner.list_item.upgrade() else {
-                continue;
-            };
-            let (Some(position), Some(cell)) = (bound_position(&list_item), owner.cell.upgrade()) else {
+            let (Some(position), Some(cell)) = (owner.bound_position(), owner.cell.upgrade()) else {
                 continue;
             };
             let row = item_widget(&cell).filter(|row| row.is_ancestor(view));
@@ -392,15 +459,34 @@ impl CellOwners {
     /// type's extension while extensions are hidden.
     pub(crate) fn shown_name(&self, item: &FileItem) -> String {
         let entry = item.entry();
-        shown_name(&entry.name, entry.is_dir, self.extensions.get()).to_owned()
+        shown_name(&entry.name, shows_whole(entry), self.extensions.get()).to_owned()
     }
 
     /// Shows names with or without the extensions of known types; a cell
     /// bound later follows when it is bound.
     pub(crate) fn set_extensions(&self, extensions: Extensions) {
-        if self.extensions.replace(extensions) == extensions {
-            return;
+        if self.extensions.replace(extensions) != extensions {
+            self.show_names_again();
         }
+    }
+
+    /// The words a search marks in the names it shows (SRCH-046); none
+    /// while nothing is searched or the search filter bar shows.
+    pub(crate) fn marked_words(&self) -> Vec<String> {
+        self.marked_words.borrow().clone()
+    }
+
+    /// Marks `words` in the names shown, and in those bound later.
+    pub(crate) fn set_marked_words(&self, words: Vec<String>) {
+        if *self.marked_words.borrow() != words {
+            self.marked_words.replace(words);
+            self.show_names_again();
+        }
+    }
+
+    /// Shows the names of the bound cells again, after what they show of
+    /// them changed.
+    fn show_names_again(&self) {
         let bound: Vec<(gtk::ListItem, gtk::Widget, FileItem)> = self
             .owners
             .borrow()
@@ -410,13 +496,14 @@ impl CellOwners {
                 Some((owner.list_item.upgrade()?, cell, item))
             })
             .collect();
+        let words = self.marked_words();
         for (list_item, cell, item) in bound {
             if let Some(cell) = cell.downcast_ref::<FileCell>() {
                 // The name a screen reader reads follows the one shown,
                 // as binding set them together.
                 let name = self.shown_name(&item);
                 list_item.set_accessible_label(&name);
-                cell.show_name(&name);
+                cell.show_name(&name, &words);
             }
         }
     }
@@ -470,31 +557,80 @@ impl CellOwners {
         }
     }
 
-    /// The list item whose content widget is `widget`.
-    fn owner_of(&self, widget: &gtk::Widget) -> Option<gtk::ListItem> {
-        let owners = self.owners.borrow();
-        let owner = owners.iter().find(|owner| owner.has_cell(widget))?;
-        owner.list_item.upgrade()
+    /// The index of the owner whose content widget is `widget`.
+    fn owner_index_of(&self, widget: &gtk::Widget) -> Option<usize> {
+        self.owners
+            .borrow()
+            .iter()
+            .position(|owner| owner.has_cell(widget))
     }
 
-    /// The list item of the nearest widget from `picked` up to, but not
-    /// including, `view` that holds a registered cell.
-    fn owner_near(&self, view: &gtk::Widget, picked: gtk::Widget) -> Option<gtk::ListItem> {
-        std::iter::successors(Some(picked), WidgetExt::parent)
+    /// The position of the item the owner at `index` shows.
+    fn position_at_owner(&self, index: usize) -> Option<u32> {
+        self.owners.borrow().get(index)?.bound_position()
+    }
+
+    /// The position of the item of the nearest widget from `picked` up
+    /// to, but not including, `view` that holds a registered cell.
+    ///
+    /// When none of them does, the row that holds `picked` (the child of a
+    /// list) is searched for a registered cell among all its cells and
+    /// their children: how GTK nests a column view's row, its cells and
+    /// their content differs between GTK releases, and a press anywhere in
+    /// a row is on its item.
+    fn position_near(&self, view: &gtk::Widget, picked: gtk::Widget) -> Option<u32> {
+        let ancestors: Vec<gtk::Widget> = std::iter::successors(Some(picked), WidgetExt::parent)
             .take_while(|widget| widget != view)
-            .find_map(|widget| self.owner_within(&widget))
+            .collect();
+        let index = ancestors
+            .iter()
+            .find_map(|widget| self.owner_index_within(widget))
+            .or_else(|| {
+                let row = ancestors
+                    .iter()
+                    .find(|widget| widget.parent().is_some_and(|parent| parent.is::<gtk::ListBase>()))?;
+                self.owner_index_in_row(row)
+            })?;
+        self.position_at_owner(index)
     }
 
-    /// The list item whose content widget is `widget`, its first child or
-    /// that child's first child. GTK wraps a content widget in a row
-    /// widget, and in a column view in a cell widget too, which a click in
-    /// the padding picks.
-    fn owner_within(&self, widget: &gtk::Widget) -> Option<gtk::ListItem> {
+    /// The index of the owner of the first registered cell inside `row`,
+    /// up to three levels down.
+    fn owner_index_in_row(&self, row: &gtk::Widget) -> Option<usize> {
+        let mut level = vec![row.clone()];
+        for _ in 0..3 {
+            let mut next = Vec::new();
+            for widget in &level {
+                let mut child = widget.first_child();
+                while let Some(current) = child {
+                    if let Some(index) = self.owner_index_of(&current) {
+                        return Some(index);
+                    }
+                    child = current.next_sibling();
+                    next.push(current);
+                }
+            }
+            level = next;
+        }
+        None
+    }
+
+    /// The position of the item whose content widget is `widget`, its
+    /// first child or that child's first child.
+    fn position_within(&self, widget: &gtk::Widget) -> Option<u32> {
+        self.position_at_owner(self.owner_index_within(widget)?)
+    }
+
+    /// The index of the owner whose content widget is `widget`, its first
+    /// child or that child's first child. GTK wraps a content widget in a
+    /// row widget, and in a column view in a cell widget too, which a click
+    /// in the padding picks.
+    fn owner_index_within(&self, widget: &gtk::Widget) -> Option<usize> {
         let first_child = widget.first_child();
         let grandchild = first_child.as_ref().and_then(WidgetExt::first_child);
         [Some(widget.clone()), first_child, grandchild]
             .iter()
             .flatten()
-            .find_map(|candidate| self.owner_of(candidate))
+            .find_map(|candidate| self.owner_index_of(candidate))
     }
 }

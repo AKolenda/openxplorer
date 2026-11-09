@@ -9,18 +9,22 @@
 //! app.js: it is one widget announced as a tab of the "Folder tabs" list
 //! with its selected state; a press or Enter shows it, a double-click
 //! opens a copy of it and a middle-click closes it; a right-click opens
-//! the tab's menu ([`super::tab_menu`]). The close button inside claims
-//! its own clicks. Only the tab in front takes keyboard focus (a roving
-//! tab stop, ACC-008), and the arrow keys, Home and End show another tab
-//! and move focus with it, as GTK's own tab bars do.
+//! the tab's menu ([`super::tab_menu`]), as do the Menu key and Shift+F10
+//! on the focused tab. The close button inside claims its own clicks.
+//! Only the tab in front takes keyboard focus (a roving tab stop,
+//! ACC-008), and the arrow keys, Home and End show another tab and move
+//! focus with it, as GTK's own tab bars do.
 //!
 //! [`TabStrip`] is a widget subclass whose scroller and tab list are the
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
-//! shows while tabs and files are dragged is [`drag_marks`]'s.
+//! shows while tabs and files are dragged is [`drag_marks`]'s, and the
+//! separators between tabs and the curves at the foot of the tab in front,
+//! which a tab cannot show itself, are placed by [`edges`].
 
 mod carried_tab;
 mod drag_marks;
 mod edge_scroll;
+mod edges;
 mod live_drag;
 
 use std::cell::Cell;
@@ -109,6 +113,15 @@ mod imp {
         pub(super) layout: TemplateChild<TabLayout>,
         /// The tabs' context menu, built by `constructed`.
         pub(super) menu: OnceCell<MenuPopover>,
+        /// What had the keyboard when the Menu key or Shift+F10 opened the
+        /// tabs' menu, which takes it back when the menu closes; `None`
+        /// when a right-click opened it.
+        pub(super) menu_opener: glib::WeakRef<gtk::Widget>,
+        /// The list of open windows, shown below the tab in front.
+        pub(super) windows_menu: OnceCell<MenuPopover>,
+        /// The widgets the skin draws the separators and the curves at the
+        /// foot of the tab in front on, built by `constructed`.
+        pub(super) edges: OnceCell<super::edges::Edges>,
         /// Each tab shown and its widget, left to right.
         pub(super) shown: RefCell<Vec<(TabView, gtk::Box)>>,
         /// The tab last grabbed for a drag, and where along it.
@@ -159,18 +172,41 @@ mod imp {
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
+            menu.connect_closed(glib::clone!(
+                #[weak(rename_to = strip)]
+                self.obj(),
+                move |_| strip.give_the_keyboard_back()
+            ));
             self.menu.set(menu).expect("constructed runs once per object");
+            let windows_menu = MenuPopover::new(Vec::new());
+            windows_menu.set_position(gtk::PositionType::Bottom);
+            windows_menu.set_parent(&*self.obj());
+            self.windows_menu
+                .set(windows_menu)
+                .expect("constructed runs once per object");
+            let edges = super::edges::Edges::new(&self.obj());
+            self.edges.set(edges).expect("constructed runs once per object");
         }
 
         fn dispose(&self) {
-            if let Some(menu) = self.menu.get() {
+            for menu in [self.menu.get(), self.windows_menu.get()].into_iter().flatten() {
                 menu.unparent();
+            }
+            if let Some(edges) = self.edges.get() {
+                edges.unparent();
             }
             self.dispose_template();
         }
     }
 
-    impl WidgetImpl for TabStrip {}
+    impl WidgetImpl for TabStrip {
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            // Not the parent's snapshot, which would also draw the edge
+            // widgets at the strip's top left: the tabs, then the edges.
+            self.obj().snapshot_child(&*self.scroller, snapshot);
+            self.obj().draw_edges(snapshot);
+        }
+    }
 }
 
 glib::wrapper! {
@@ -278,6 +314,12 @@ impl TabStrip {
         ));
     }
 
+    /// Puts the keyboard on the tab in front (F6, ACC-015); false when no
+    /// tab is shown.
+    pub(super) fn focus_front_tab(&self) -> bool {
+        self.front_widget().is_some_and(|front| front.grab_focus())
+    }
+
     /// The widget of the tab in front.
     fn front_widget(&self) -> Option<gtk::Box> {
         let shown = self.imp().shown.borrow();
@@ -323,6 +365,17 @@ impl TabStrip {
         })
     }
 
+    /// Gives the keyboard back to what had it when a key opened the tabs'
+    /// menu, as the file list's menu does, when that is still shown: a
+    /// closed or moved tab has nothing to take it back.
+    fn give_the_keyboard_back(&self) {
+        if let Some(opener) = self.imp().menu_opener.upgrade() {
+            if opener.is_drawable() {
+                opener.grab_focus();
+            }
+        }
+    }
+
     /// Opens the tab menu `entries` at `point` in the strip.
     fn show_menu(&self, entries: Vec<MenuEntry>, point: graphene::Point) {
         let Some(menu) = self.imp().menu.get() else {
@@ -331,6 +384,30 @@ impl TabStrip {
         menu.set_entries(entries);
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let target = gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
+        menu.set_pointing_to(Some(&target));
+        menu.popup();
+    }
+
+    /// Opens the list of open windows `entries` below the tab in front,
+    /// or at the start of the strip when no tab is shown.
+    pub(super) fn show_windows_menu(&self, entries: Vec<MenuEntry>) {
+        let Some(menu) = self.imp().windows_menu.get() else {
+            return;
+        };
+        menu.set_entries(entries);
+        let front = self.front_widget().and_then(|front| front.compute_bounds(self));
+        #[expect(clippy::cast_possible_truncation, reason = "tab bounds are small")]
+        let target = front.map_or_else(
+            || gdk::Rectangle::new(0, 0, 1, self.height()),
+            |front| {
+                gdk::Rectangle::new(
+                    front.x() as i32,
+                    front.y() as i32,
+                    front.width() as i32,
+                    front.height() as i32,
+                )
+            },
+        );
         menu.set_pointing_to(Some(&target));
         menu.popup();
     }
@@ -355,6 +432,16 @@ impl TabStrip {
     #[cfg(test)]
     pub(in crate::window) fn tab_list(&self) -> gtk::Box {
         self.imp().tab_list.get()
+    }
+
+    /// The list of open windows, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn windows_menu(&self) -> super::menu_popover::MenuPopover {
+        self.imp()
+            .windows_menu
+            .get()
+            .expect("constructed builds the menu")
+            .clone()
     }
 
     /// The tabs' context menu, for tests.
@@ -420,7 +507,36 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
         run_on(gesture.widget(), WindowAction::CloseTabById, &id);
     }));
     widget.add_controller(menu_on_right_click(tab.id, tab.uri.clone()));
+    widget.add_controller(menu_on_keys(tab.id, &tab.uri));
     widget
+}
+
+/// The Menu key and Shift+F10 on the focused tab `id`, which shows `uri`,
+/// open its menu under it with the keyboard on its first item, and the
+/// keyboard goes back where it was when the menu closes, as Shift+F10
+/// opens the selected item's menu in Windows 11 (support.microsoft.com,
+/// "Keyboard shortcuts in Windows").
+fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
+    let shortcuts = gtk::ShortcutController::new();
+    for key in [
+        super::context_menu::MENU_KEY,
+        super::context_menu::CLASSIC_MENU_KEY,
+    ] {
+        let uri = uri.to_owned();
+        let action = gtk::CallbackAction::new(move |tab, _| {
+            let Some(strip) = tab.ancestor(TabStrip::static_type()).and_downcast::<TabStrip>() else {
+                return glib::Propagation::Proceed;
+            };
+            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let focus = tab.root().and_then(|root| root.focus());
+            strip.imp().menu_opener.set(focus.as_ref());
+            strip.show_menu_under_tab(id, tab_menu(id, &uri, is_only_tab));
+            glib::Propagation::Stop
+        });
+        let trigger = gtk::ShortcutTrigger::parse_string(key);
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
+    }
+    shortcuts
 }
 
 /// A right-click on the tab `id`, which shows `uri`, opens its menu
@@ -440,6 +556,7 @@ fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
         let in_tab = graphene::Point::new(x as f32, y as f32);
         if let Some(point) = tab.compute_point(&strip, &in_tab) {
             let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            strip.imp().menu_opener.set(None);
             strip.show_menu(tab_menu(id, &uri, is_only_tab), point);
         }
     });

@@ -10,6 +10,11 @@
 //!   denied, a special file) is asked about by itself, as Windows Explorer
 //!   asks: Retry copies it again, Skip leaves only it out, and the rest of
 //!   the folder is still copied ([`ItemFailures::entry_failed`]).
+//! - XFER-020: every entry's final location is asked of the write guard
+//!   before it is written, so a protected location the check before the
+//!   copy could not see (inside a folder it could not list, which the user
+//!   then made readable and tried again) stops the whole item, and nothing
+//!   of it is published.
 //! - Nesting deeper than [`MAX_DEPTH`] stops the copy.
 //! - XFER-016: meeting the engine's own staging name inside the source
 //!   means the destination is an alias of a folder inside the source (for
@@ -32,9 +37,12 @@ use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::item_failure::{EntryDecision, ItemFailures};
 use super::labels::copy_label;
-use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
+use super::modes::{
+    is_admin, path_for_unix_modes, secure_local_staging, DirectoryModes, ModeTarget, ADMIN_MODE_MASK,
+    PRIVATE_DIRECTORY_MODE,
+};
 use super::names::child_node;
-use super::node::{Node, NodeInfo, NodeKind};
+use super::node::{Node, NodeInfo, NodeKind, WriteGuard};
 use super::source_removal::CopiedItem;
 use super::staged_name::StagedName;
 use super::staging::clean_staging;
@@ -61,6 +69,10 @@ pub(crate) struct Copier<'a> {
     /// The run's accounting, which a retried entry takes the bytes of
     /// its discarded attempt back from (OPS-021).
     accounting: Option<&'a SharedAccounting>,
+    /// Asked about each entry's final location before it is written
+    /// (XFER-020), with the URI of the item in staging and of where it is
+    /// published, which turn an entry's staged URI into its final one.
+    guard: Option<(&'a WriteGuard, String, String)>,
     /// The names from the top item down to the entry being copied.
     entry_path: Vec<String>,
     /// Set when a safety rule stopped the copy (the nesting limit, an
@@ -87,6 +99,7 @@ impl<'a> Copier<'a> {
             copied: None,
             failures: None,
             accounting: None,
+            guard: None,
             entry_path: Vec::new(),
             stopped: false,
         }
@@ -96,6 +109,20 @@ impl<'a> Copier<'a> {
     /// copied, instead of failing the whole item (OPS-047).
     pub(crate) fn asking(mut self, failures: &'a mut ItemFailures) -> Self {
         self.failures = Some(failures);
+        self
+    }
+
+    /// Asks `guard` about each entry's final location before it is
+    /// written, the entry's place below `staged`, the item in staging,
+    /// taken below `published`, where the item is published; a refusal
+    /// stops the whole item (XFER-020).
+    pub(crate) fn guarded(
+        mut self,
+        guard: Option<&'a WriteGuard>,
+        staged: &dyn Node,
+        published: &dyn Node,
+    ) -> Self {
+        self.guard = guard.map(|guard| (guard, staged.uri(), published.uri()));
         self
     }
 
@@ -144,7 +171,7 @@ impl<'a> Copier<'a> {
         // could not prove.
         if source.name() == self.name.stage() {
             self.stopped = true;
-            return Err(TransferError::failed(crate::i18n::gettext(
+            return Err(TransferError::InsideSource(crate::i18n::gettext(
                 "The destination resolves inside the source through an alias. Copy stopped.",
             )));
         }
@@ -189,7 +216,15 @@ impl<'a> Copier<'a> {
         target.create_directory(Some(self.cancel))?;
         if let Some(path) = path_for_unix_modes(target) {
             let final_mode = self.published_mode(info, target)?;
-            self.modes.record(target.uri(), path, final_mode);
+            self.modes
+                .record(target.uri(), ModeTarget::Local(path), final_mode);
+            secure_local_staging(target)?;
+        } else if is_admin(target) {
+            // OPS-047: owner-only while it is built, like a local folder,
+            // so a folder the source kept private is never published open.
+            let final_mode = self.published_mode(info, target)? & ADMIN_MODE_MASK;
+            self.modes
+                .record(target.uri(), ModeTarget::Admin(target.uri()), final_mode);
             secure_local_staging(target)?;
         }
         self.copy_children(source, target, depth + 1)
@@ -306,9 +341,32 @@ impl<'a> Copier<'a> {
             return Ok(None);
         };
         let child_target = child_node(target, &name)?;
+        self.check_guard(child_target.as_ref())?;
         *made = Some(name);
         self.copy_inspected(child, child_target.as_ref(), &info, depth)?;
         Ok(Some(info))
+    }
+
+    /// Asks the write guard about the final location of `target`, an
+    /// entry in staging; a refusal is a safety stop of the whole item.
+    fn check_guard(&mut self, target: &dyn Node) -> Result<(), TransferError> {
+        let Some((guard, staged, published)) = &self.guard else {
+            return Ok(());
+        };
+        // An entry's URI below the staged item, escaped as URIs escape
+        // names, is its URI below the published item. Anything else is
+        // asked about as it is.
+        let uri = target.uri();
+        let below = uri
+            .strip_prefix(staged.as_str())
+            .filter(|rest| rest.starts_with('/'));
+        let final_uri = match below {
+            Some(rest) => format!("{}{rest}", published.trim_end_matches('/')),
+            None => uri,
+        };
+        let refused = guard(&final_uri);
+        self.stopped |= refused.is_err();
+        refused
     }
 
     /// Removes what a failed entry left in staging under `name` in the

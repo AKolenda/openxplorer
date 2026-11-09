@@ -23,7 +23,18 @@
 //!   such as selecting an item or opening its context menu (see
 //!   [`scene`]); menus they open are drawn over the window in the picture;
 //! - `OPENXPLORER_HOTSPOTS`: writes the rectangles of the picture's
-//!   controls to this JSON file (see [`hotspots`]).
+//!   controls to this JSON file (see [`hotspots`]);
+//! - `OPENXPLORER_PROPERTIES`: once the scene has run, shows this tab
+//!   (`general`, `security`, `customize`, ...) of the Properties window
+//!   the scene opened last and saves that window instead, once it has
+//!   read its item;
+//! - `OPENXPLORER_SAVE_DIALOG=1`: the window is another application's
+//!   Save dialog for `Untitled.txt` in the first tab's folder, which must
+//!   then be an absolute local folder (a share's address is refused), as the
+//!   desktop portal opens one; no application waits for its answer;
+//! - `OPENXPLORER_DIALOG=1`: once the scene has run, saves the dialog
+//!   window it opened last (such as the keyboard shortcuts window) in
+//!   place of the browser window.
 //!
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it
@@ -57,12 +68,15 @@ use crate::window::BrowserWindow;
 
 use render::{open_menus, render_png_with_menus};
 #[cfg(test)]
-pub(crate) use render::{render_png, save_png};
-pub(crate) use request::{SnapshotRequest, WindowSize};
+pub(crate) use render::{render_png, save_png, save_png_with_menus};
+pub(crate) use request::{save_dialog_folder, SnapshotRequest, WindowSize};
 
 /// Frames drawn after the listing, so late layout changes (column widths,
-/// scrolled crumbs, icons) are in the picture.
+/// collapsed crumbs, icons) are in the picture.
 const SETTLE_FRAMES: u32 = 6;
+
+/// How long a Properties window is given to read its item and draw it.
+const PROPERTIES_PATIENCE: Duration = Duration::from_millis(1500);
 
 /// How long the first listing may take before the window is saved anyway.
 const LISTING_PATIENCE: Duration = Duration::from_secs(20);
@@ -123,11 +137,19 @@ pub(crate) fn save_when_listed(
     let milestones = Milestones::default();
     let timing = RefCell::new(SaveTiming::starting_now());
     let done = RefCell::new(Some(done));
+    let properties_shown = Cell::new(false);
+    // After a `search=` step the picture shows the search while it runs, so
+    // the running search no longer holds it back.
+    let pictures_running_search = Cell::new(false);
     window.add_tick_callback(move |window, _| {
         if let Some(size) = request.size {
             fit_content(window.upcast_ref(), size);
         }
-        let listing = Listing::of(window);
+        let listing = if pictures_running_search.get() {
+            Listing::of_folder(window)
+        } else {
+            Listing::of(window)
+        };
         milestones.note_frame(listing);
         // A window that changes its layout as it narrows (Settings does)
         // takes a few frames to reach the size; the frames that settle the
@@ -147,6 +169,7 @@ pub(crate) fn save_when_listed(
         }
         let step = steps.borrow_mut().pop_front();
         let outcome = if let Some(step) = step {
+            pictures_running_search.set(matches!(step, scene::SceneStep::Search(_)));
             match step.run(window) {
                 Ok(pause) => {
                     // The next step, or the picture, waits for the pause
@@ -157,6 +180,31 @@ pub(crate) fn save_when_listed(
                 Err(reason) => Err(SnapshotError::Scene {
                     step: format!("{step:?}"),
                     reason,
+                }),
+            }
+        } else if let Some(tab) = request.properties.as_deref() {
+            match properties_on_tab(window, tab) {
+                Ok(_) if !properties_shown.replace(true) => {
+                    // The window reads its item off the main thread first.
+                    timing.replace(SaveTiming::after(PROPERTIES_PATIENCE));
+                    return glib::ControlFlow::Continue;
+                }
+                Ok(properties) => {
+                    eprintln!("{}", milestones.summary());
+                    save_window(properties.upcast_ref(), &request.png)
+                }
+                Err(reason) => Err(SnapshotError::Scene {
+                    step: format!("OPENXPLORER_PROPERTIES={tab}"),
+                    reason,
+                }),
+            }
+        } else if request.dialog {
+            eprintln!("{}", milestones.summary());
+            match last_dialog(window) {
+                Some(dialog) => save_window(&dialog, &request.png),
+                None => Err(SnapshotError::Scene {
+                    step: "OPENXPLORER_DIALOG=1".to_owned(),
+                    reason: "the scene opened no dialog".to_owned(),
                 }),
             }
         } else {
@@ -190,6 +238,42 @@ fn save_scene(window: &gtk::Window, request: &SnapshotRequest) -> Result<(), Sna
     })
 }
 
+/// The Properties window the scene opened last, showing `tab`.
+fn properties_on_tab(
+    window: &BrowserWindow,
+    tab: &str,
+) -> Result<crate::properties::PropertiesWindow, String> {
+    let properties = window
+        .properties_windows()
+        .pop()
+        .ok_or_else(|| "no Properties window is open".to_owned())?;
+    properties.select_tab(tab);
+    if properties.selected_tab().as_deref() == Some(tab) {
+        Ok(properties)
+    } else {
+        Err(format!("the Properties window has no tab “{tab}”"))
+    }
+}
+
+/// The dialog window over `window` that opened last, if any.
+fn last_dialog(window: &BrowserWindow) -> Option<gtk::Window> {
+    let parent: &gtk::Window = window.upcast_ref();
+    gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|toplevel| toplevel.downcast::<crate::dialog::Dialog>().ok())
+        .filter(|dialog| dialog.is_visible() && dialog.transient_for().as_ref() == Some(parent))
+        .map(Cast::upcast)
+        .last()
+}
+
+/// Saves `window`, a window of its own such as Properties, with the menus
+/// open over it.
+fn save_window(window: &gtk::Window, png: &std::path::Path) -> Result<(), SnapshotError> {
+    let content = content_bounds(window).ok_or(SnapshotError::NotDrawn)?;
+    let menus = open_menus(window);
+    render_png_with_menus(window, &menus, content, png)
+}
+
 /// Where the window's first listing is on a frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Listing {
@@ -204,6 +288,16 @@ impl Listing {
     /// into the window counts as part of it until it shows its results.
     fn of(window: &BrowserWindow) -> Self {
         if window.is_listed() && !window.is_search_running() {
+            Listing::Drawn
+        } else {
+            Listing::Running
+        }
+    }
+
+    /// Where the listing of `window`'s active tab is now, whether or not a
+    /// search typed into the window has shown its results.
+    fn of_folder(window: &BrowserWindow) -> Self {
+        if window.is_listed() {
             Listing::Drawn
         } else {
             Listing::Running

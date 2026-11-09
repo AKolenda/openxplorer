@@ -7,8 +7,8 @@ use std::fs;
 use gtk::prelude::*;
 use ox_core::settings::{ColumnWidths, PreferencesUpdate, Settings};
 
-use super::file_ops_support::{open_dialog, wait_for_no_dialog};
 use crate::folder_view::sorting::SortColumn;
+use crate::properties::PropertiesWindow;
 use crate::test_support::harness::{descendants, settle, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::folder_pane::FolderView;
 use crate::window::session::Direction;
@@ -172,16 +172,27 @@ fn sort_of(pane: &crate::window::folder_pane::FolderPane) -> String {
 }
 
 /// Opens Folder Options from `test`'s window.
-pub(in crate::window) fn open_folder_options(test: &TestWindow) -> crate::dialog::Dialog {
+pub(in crate::window) fn open_folder_options(test: &TestWindow) -> PropertiesWindow {
     test.activate("folder-options", None);
-    let options = open_dialog(test);
+    wait_until("Folder Options to open", || folder_options_over(test).is_some());
+    let options = folder_options_over(test).expect("wait_until returned only once it showed");
     assert_eq!(options.title_text(), "Folder Options");
     options
 }
 
+/// Folder Options over `test`'s window, while it shows.
+pub(in crate::window) fn folder_options_over(test: &TestWindow) -> Option<PropertiesWindow> {
+    gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|window| window.downcast::<PropertiesWindow>().ok())
+        .find(|window| {
+            window.is_visible() && window.transient_for().as_ref() == Some(test.window.upcast_ref())
+        })
+}
+
 /// The button labelled `label` in the body of `options`, such as Apply to
 /// Folders.
-fn options_button(options: &crate::dialog::Dialog, label: &str) -> gtk::Button {
+fn options_button(options: &PropertiesWindow, label: &str) -> gtk::Button {
     descendants::<gtk::Button>(options)
         .into_iter()
         .find(|button| button.label().as_deref() == Some(label))
@@ -189,7 +200,7 @@ fn options_button(options: &crate::dialog::Dialog, label: &str) -> gtk::Button {
 }
 
 /// The question shown over `options`, once it shows.
-fn question_over(options: &crate::dialog::Dialog) -> crate::dialog::Dialog {
+fn question_over(options: &PropertiesWindow) -> crate::dialog::Dialog {
     let find = || {
         gtk::Window::list_toplevels()
             .into_iter()
@@ -205,7 +216,7 @@ fn question_over(options: &crate::dialog::Dialog) -> crate::dialog::Dialog {
 /// Presses `button` in Folder Options' Folder views box and returns the
 /// question it asks.
 pub(in crate::window) fn ask_from_folder_options(
-    options: &crate::dialog::Dialog,
+    options: &PropertiesWindow,
     button: &str,
 ) -> crate::dialog::Dialog {
     options_button(options, button).emit_clicked();
@@ -214,17 +225,13 @@ pub(in crate::window) fn ask_from_folder_options(
 
 /// Presses `button` (OK or Cancel) in `options` and waits until Folder
 /// Options is gone, so no window of it outlives the test.
-pub(in crate::window) fn close_folder_options(
-    test: &TestWindow,
-    options: &crate::dialog::Dialog,
-    button: &str,
-) {
+pub(in crate::window) fn close_folder_options(test: &TestWindow, options: &PropertiesWindow, button: &str) {
     options.press(button);
-    wait_for_no_dialog(test);
+    wait_until("Folder Options to close", || folder_options_over(test).is_none());
 }
 
 /// Waits until the question over `options` is gone.
-fn wait_for_no_question(options: &crate::dialog::Dialog) {
+fn wait_for_no_question(options: &PropertiesWindow) {
     let shown = || {
         gtk::Window::list_toplevels()
             .into_iter()
@@ -260,10 +267,9 @@ fn apply_to_folders_gives_every_folder_and_window_this_folders_view_after_yes() 
     assert_eq!(sort_of(test.window.pane_on(PaneSide::End)), "type");
 
     let options = open_folder_options(&test);
-    assert!(options
-        .texts()
+    assert!(descendants::<gtk::Label>(&options)
         .iter()
-        .any(|text| text == "You can apply this view (such as Details or Icons) to all folders."));
+        .any(|label| label.text() == "You can apply this view (such as Details or Icons) to all folders."));
     let question = ask_from_folder_options(&options, "Apply to Folders");
     assert_eq!(question.title_text(), "Folder Views");
     assert_eq!(
@@ -379,31 +385,6 @@ fn apply_to_folders_is_unavailable_without_a_folder() {
     close_folder_options(&test, &options, "Cancel");
 }
 
-/// Folder Options' General tab has "More settings…", which opens
-/// Settings: Settings left "…" for it, as the rest of the app's options
-/// are there. Choices made first are kept, as OK keeps them, and the
-/// keyboard reaches the button.
-///
-/// parity: VIEW-020, CMD-007
-#[gtk::test]
-fn more_settings_in_folder_options_opens_settings_and_keeps_the_choices() {
-    const FULL_PATH: &str = "Display the full path in the title bar";
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    let options = open_folder_options(&test);
-    option_check(&options, "View", FULL_PATH).set_active(true);
-    let more = tab_button(&options, "General", "More settings…");
-    assert!(more.is_focusable() && more.is_sensitive());
-
-    more.emit_clicked();
-
-    wait_for_no_dialog(&test);
-    wait_until("Settings to open", || test.window.shows_settings());
-    wait_until("the choice to be saved", || {
-        test.context.settings_data().preferences.full_path_in_title
-    });
-}
-
 /// Folder Options' advanced settings that Windows has and the app has
 /// too: a change takes effect with Apply or OK, Cancel drops it, and
 /// Restore Defaults sets the boxes back to their defaults.
@@ -416,7 +397,7 @@ fn folder_options_advanced_settings_apply_with_ok_or_apply() {
     const RESTORE: &str = "Restore previous folder windows at logon";
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let check = |options: &crate::dialog::Dialog, label: &str| option_check(options, "View", label);
+    let check = |options: &PropertiesWindow, label: &str| option_check(options, "View", label);
 
     let options = open_folder_options(&test);
     assert_eq!(options.button_labels(), ["OK", "Cancel", "Apply"]);
@@ -460,7 +441,7 @@ fn folder_options_advanced_settings_apply_with_ok_or_apply() {
 }
 
 /// The page of the Folder Options tab labelled `title`.
-fn options_tab(options: &crate::dialog::Dialog, title: &str) -> gtk::Widget {
+pub(in crate::window) fn options_tab(options: &PropertiesWindow, title: &str) -> gtk::Widget {
     let notebook = descendants::<gtk::Notebook>(options)
         .into_iter()
         .next()
@@ -473,7 +454,7 @@ fn options_tab(options: &crate::dialog::Dialog, title: &str) -> gtk::Widget {
 
 /// The check box labelled `label` on the tab `tab` of `options`.
 pub(in crate::window) fn option_check(
-    options: &crate::dialog::Dialog,
+    options: &PropertiesWindow,
     tab: &str,
     label: &str,
 ) -> gtk::CheckButton {
@@ -484,7 +465,7 @@ pub(in crate::window) fn option_check(
 }
 
 /// The button labelled `label` on the tab `tab` of `options`.
-fn tab_button(options: &crate::dialog::Dialog, tab: &str, label: &str) -> gtk::Button {
+pub(in crate::window) fn tab_button(options: &PropertiesWindow, tab: &str, label: &str) -> gtk::Button {
     descendants::<gtk::Button>(&options_tab(options, tab))
         .into_iter()
         .find(|button| button.label().as_deref() == Some(label))
@@ -497,15 +478,16 @@ fn hidden_state(test: &TestWindow) -> Option<bool> {
 }
 
 const SHOW_HIDDEN: &str = "Show hidden files, folders, and drives";
+const DONT_SHOW_HIDDEN: &str = "Don't show hidden files, folders, or drives";
 const ICONS_ONLY: &str = "Always show icons, never thumbnails";
 const REMEMBER_VIEWS: &str = "Remember each folder's view settings";
 
-/// Folder Options has Windows' General and View tabs, each option on
-/// the tab Windows puts it on.
+/// Folder Options has Windows' General, View and Search tabs, each
+/// option on the tab Windows puts it on, in Windows' order.
 ///
 /// parity: VIEW-020
 #[gtk::test]
-fn folder_options_has_the_general_and_view_tabs_of_windows() {
+fn folder_options_has_the_general_view_and_search_tabs_of_windows() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let options = open_folder_options(&test);
@@ -514,16 +496,16 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
         .filter_map(|index| notebook.nth_page(Some(index)))
         .filter_map(|page| notebook.tab_label_text(&page).map(String::from))
         .collect();
-    assert_eq!(titles, ["General", "View"]);
+    assert_eq!(titles, ["General", "View", "Search"]);
     let general = options_tab(&options, "General");
     assert_eq!(
         descendants::<gtk::DropDown>(&general).len(),
         1,
-        "Open File Explorer to"
+        "Open OpenXplorer to"
     );
     assert!(descendants::<gtk::Label>(&general)
         .iter()
-        .any(|label| label.text() == "Open File Explorer to:"));
+        .any(|label| label.text() == "Open OpenXplorer to:"));
     let view_checks: Vec<String> = descendants::<gtk::CheckButton>(&options_tab(&options, "View"))
         .iter()
         .filter_map(|check| check.label().map(String::from))
@@ -533,27 +515,60 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
         [
             ICONS_ONLY,
             "Display the full path in the title bar",
+            DONT_SHOW_HIDDEN,
+            SHOW_HIDDEN,
             "Hide extensions for known file types",
             REMEMBER_VIEWS,
             "Restore previous folder windows at logon",
-            SHOW_HIDDEN,
+            "Show pop-up description for folder and desktop items",
+            "Show preview handlers in preview pane",
+            "Show status bar",
             "Use check boxes to select items",
+            "Automatically type into the Search Box",
+            "Select the typed item in the view",
         ]
     );
-    // Push buttons drawn as the dialog's own Cancel and Apply, not links.
+    let general_checks: Vec<String> = descendants::<gtk::CheckButton>(&general)
+        .iter()
+        .filter_map(|check| check.label().map(String::from))
+        .collect();
+    assert_eq!(
+        general_checks,
+        [
+            "Open each folder in the same window",
+            "Open each folder in its own window",
+            "Single-click to open an item (point to select)",
+            "Underline icon titles consistent with my browser",
+            "Underline icon titles only when I point at them",
+            "Double-click to open an item (single-click to select)",
+            "Show recently used files",
+            "Show frequently used folders",
+        ]
+    );
+    let search_checks: Vec<String> = descendants::<gtk::CheckButton>(&options_tab(&options, "Search"))
+        .iter()
+        .filter_map(|check| check.label().map(String::from))
+        .collect();
+    assert_eq!(
+        search_checks,
+        ["Always search file names and contents (this might take several minutes)"]
+    );
+    // Windows push buttons, as the Properties window draws them, not links.
     for (tab, label) in [
         ("View", "Apply to Folders"),
         ("View", "Reset Folders"),
         ("View", "Restore Defaults"),
         ("General", "Restore Defaults"),
+        ("General", "Clear"),
+        ("Search", "Restore Defaults"),
     ] {
         let button = tab_button(&options, tab, label);
         assert!(
-            button.has_css_class("bordered") && button.has_css_class("dialog-button"),
-            "{label} is a bordered push button"
+            button.has_css_class("properties-button"),
+            "{label} is a push button"
         );
         assert!(
-            !button.has_css_class("accent"),
+            !button.has_css_class("suggested-action"),
             "{label} is not the default button"
         );
     }
@@ -600,9 +615,8 @@ fn hidden_files_are_one_setting_for_every_folder_and_window() {
     assert_eq!(hidden_state(&beside), Some(true));
 
     let options = open_folder_options(&test);
-    let check = option_check(&options, "View", SHOW_HIDDEN);
-    assert!(check.is_active());
-    check.set_active(false);
+    assert!(option_check(&options, "View", SHOW_HIDDEN).is_active());
+    option_check(&options, "View", DONT_SHOW_HIDDEN).set_active(true);
     close_folder_options(&test, &options, "OK");
     wait_until("hidden files off everywhere", || {
         !test.context.settings_data().preferences.show_hidden
@@ -703,7 +717,7 @@ fn each_folder_remembers_its_view_by_default_until_folder_options_turns_it_off()
     assert!(!saved.data().preferences.per_folder_views, "saved to disk");
 }
 
-/// "Open File Explorer to" offers the start places the app has, Home and
+/// "Open `OpenXplorer` to" offers the start places the app has, Home and
 /// This PC, and keeps a folder chosen in Settings when left alone.
 ///
 /// parity: TAB-055
@@ -711,9 +725,8 @@ fn each_folder_remembers_its_view_by_default_until_folder_options_turns_it_off()
 fn open_file_explorer_to_chooses_where_new_windows_open() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let choice = |options: &crate::dialog::Dialog| {
-        descendants::<gtk::DropDown>(&options_tab(options, "General")).remove(0)
-    };
+    let choice =
+        |options: &PropertiesWindow| descendants::<gtk::DropDown>(&options_tab(options, "General")).remove(0);
     let labels = |drop_down: &gtk::DropDown| {
         let list = drop_down
             .model()
@@ -871,8 +884,8 @@ fn grouping_by_the_sort_key_heads_each_group() {
     test.window.folder_pane().model().select_only(1);
     let selected = test.selected_names();
     test.activate("group-by", Some("sort"));
-    let details = test.window.folder_pane().details().column_view().clone();
-    assert!(details.header_factory().is_some());
+    let details = test.window.folder_pane().details();
+    assert!(details.heads_groups());
     assert_eq!(
         test.selected_names(),
         selected,
@@ -883,7 +896,7 @@ fn grouping_by_the_sort_key_heads_each_group() {
     let first = model.item(0).expect("an item");
     assert_eq!((model.group_titles())(&first).as_deref(), Some("D"), "Documents");
     test.activate("group-by", Some("none"));
-    assert!(details.header_factory().is_none());
+    assert!(!details.heads_groups());
     assert_eq!(test.selected_names(), selected);
 }
 

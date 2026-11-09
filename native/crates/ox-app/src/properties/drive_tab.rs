@@ -112,6 +112,8 @@ fn name_row(uri: &str, mount: &MountFacts, locations: &LocationContext) -> gtk::
     row.set_center_widget(Some(
         &gtk::Label::builder()
             .label(name)
+            // A long volume name ends in "…" inside the window's width.
+            .ellipsize(gtk::pango::EllipsizeMode::End)
             .css_classes(["drive-name"])
             .build(),
     ));

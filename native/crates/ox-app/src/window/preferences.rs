@@ -53,6 +53,9 @@ pub(super) enum Preference {
     DefaultLayout,
     /// The size new windows open at (TAB-054).
     WindowSize(WindowSize),
+    /// The size other applications' Open and Save dialogs open at
+    /// (INT-032).
+    DialogSize(WindowSize),
     /// Crumbs from `/` rather than from the home folder (NAV-024).
     ShowFullPath(bool),
     /// Compact view on or off (VIEW-067).
@@ -89,6 +92,7 @@ impl Preference {
             Preference::TextSize(size) => update.text_size = Some(size.percent()),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::WindowSize(size) => update.window_size = Some(size),
+            Preference::DialogSize(size) => update.dialog_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
             Preference::CompactDensity(compact) => update.compact_density = Some(compact),
             Preference::ItemCheckBoxes(shown) => update.selection_marker = Some(shown),

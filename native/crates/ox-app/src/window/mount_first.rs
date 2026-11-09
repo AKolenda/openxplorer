@@ -62,6 +62,24 @@ impl BrowserWindow {
     }
 }
 
+impl BrowserWindow {
+    /// Runs `read` once the share of each of `uris` that is on a server
+    /// is mounted, one after another, as [`Self::after_mounting`] does
+    /// for one; a failed mount is reported and `read` never runs.
+    pub(super) fn after_mounting_each(
+        &self,
+        mut uris: Vec<String>,
+        read: impl FnOnce(&BrowserWindow) + 'static,
+    ) {
+        uris.retain(|uri| is_server_location(uri));
+        let Some(uri) = uris.pop() else {
+            read(self);
+            return;
+        };
+        self.after_mounting(&uri, move |window| window.after_mounting_each(uris, read));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;

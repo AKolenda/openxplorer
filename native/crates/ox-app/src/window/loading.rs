@@ -31,6 +31,7 @@
 //! - A folder whose drive or share goes away drops its rows and says the
 //!   drive or share was disconnected.
 
+mod denied_folder;
 mod disconnected;
 mod mount_retry;
 mod removed_folder;
@@ -201,6 +202,10 @@ impl BrowserWindow {
 
     fn clear_rows(&self, id: TabId) {
         let Some(store) = self.tab_store(id) else { return };
+        // Another folder, or a failed reload: its groups start expanded.
+        for pane in self.folder_panes() {
+            pane.model().expand_groups_of(&store);
+        }
         self.change_model(|| store.remove_all());
     }
 
@@ -382,6 +387,10 @@ impl BrowserWindow {
             }
             Err(error) if error.needs_mount() && may_mount => {
                 self.mount_and_list_again(run);
+                return;
+            }
+            Err(error @ EntryError::PermissionDenied(_)) if self.may_leave_denied_folder(run) => {
+                self.leave_denied_folder(run, &error);
                 return;
             }
             Err(error) => self.fail_load(id, run.mode, error),

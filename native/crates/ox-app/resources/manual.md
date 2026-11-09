@@ -13,7 +13,7 @@ OpenXplorer shows your folders, drives, phones and network shares in one tabbed 
 - The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.
 - The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.
 - Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.
-- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.
+- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+1 to Ctrl+9, or Alt+1 to Alt+9, show the tab of that number. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.
 - Type the start of a name to select it in the folder.
 
 The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
@@ -34,32 +34,38 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 - View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.
 - View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
 - View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.
-- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.
+- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size column to fit and Size all columns to fit, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
 - Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.
 - Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.
 - As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.
 - F11 shows the window full screen; press it again to get the window back as it was.
-- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size.
+- Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size.
+- While the navigation pane is shown, Ctrl+Shift+E opens it down to the folder you are in and moves to it there. In the navigation pane, the keypad's plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it.
+- Ctrl+F5 refreshes like F5. Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V.
 
 ## Search
 
 - Ctrl+F, Ctrl+E or F3 moves to the search box. Typing there filters the folder you are in.
 - Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
+- A search is a step of the tab's history, as in Windows: the tab reads notes - Search Results in Documents and the address bar Search Results in Documents, Back returns to the folder and Forward to the results, and Back from a folder you opened from the results shows them again. Emptying the search box, Escape or Close search goes back to the folder too.
+- While a search shows, the words you searched for are marked in the names, and the command bar shows Search options and Close search, as in Windows 11. Search options chooses All subfolders or Current folder, a Date modified, Kind or Size, and File contents to look inside files too. On the results, ... > Pin to Quick access saves the search to the navigation pane. You can also type kind:, datemodified: or size: with your words, such as kind:picture or size:large.
+- Settings > Search > Show the search filter bar shows the earlier filter bar above the results instead of Search options.
 
 ## Network locations
 
 - Open Network in the navigation pane to see the computers and servers on your network, as in Windows; open one to see its shared folders. Refresh (F5) looks again. Or type an address such as \\server\share or smb://server/share in the address bar.
 - Network finds only devices that advertise themselves, through the desktop's GVfs network services (DNS-SD through Avahi, Windows computers through WS-Discovery); firewalls and separate networks can hide them. If Network says that network discovery is turned off, those services are missing: install your distribution's GVfs backends (gvfs-backends on Ubuntu and Debian) and Avahi, or type the server's address instead.
-- Map network location, below the navigation pane, or Map network drive in the "…" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.
-- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.
+- Map network drive, on the right-click menu of This PC and Network in the navigation pane or in their "…" menu, connects a share such as \\server\share under a drive letter, as in Windows, offering only the letters still free; Save in the sidebar · reconnect when opened (Windows has Reconnect at sign-in) saves it in the navigation pane. The letter is only part of its name. Its link Connect to a Web site, and Add a network location in that menu, connect SFTP, FTP, WebDAV and NFS folders too. Disconnect network drive there disconnects a connected share.
+- OpenXplorer asks for your user name and password in Enter network credentials when a server needs them, and can keep the password in your desktop's keyring. Connect using different credentials in Map network drive asks even when it knows an account.
 - Right-click a share or server and choose Sign out of server to disconnect and forget a session.
 
 ## Drives and phones
 
 - This PC lists drives, USB sticks and connected phones. Click one to open it; it is mounted when needed.
 - Use Eject or Safely remove on a drive's menu before unplugging it.
+- Copy a drive and paste it into a folder, or drag it there, to make a shortcut to it, such as Local Disk - Shortcut. The drive's files are not copied.
 
 ## Recycle Bin
 
@@ -86,7 +92,8 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Settings and privacy
 
-- Ctrl+, or the gear in the command bar opens Settings, which has its own search box; so does More settings… in Folder Options (… > Options). Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.
+- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.
+- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the license and About this build.
 - OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.
 - When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.
 - Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files.

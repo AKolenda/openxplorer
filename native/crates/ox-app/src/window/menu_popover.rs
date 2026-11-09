@@ -9,9 +9,10 @@
 //! window or application action: a disabled action, or an item disabled
 //! in this menu, greys its row out, and a checked item shows the check
 //! check mark in a column at its left, before its own glyph, as Windows
-//! 11 draws it. The compact style (CMD-008) puts a strip of icon buttons
-//! above the list: Cut, Copy, Paste, Rename and Delete in the context
-//! menus.
+//! 11 draws it. The compact style (CMD-008) puts a strip of buttons, each
+//! an icon with its label under it, above the list: Cut, Copy, Rename,
+//! Share and Delete in the context menus, and Paste on a folder while
+//! there is something to paste.
 //!
 //! An item with a submenu (a chevron at the far right of its row) opens it
 //! beside the menu, as Windows 11's menus do: resting the pointer on the
@@ -19,7 +20,9 @@
 //! once; resting on another row for as long closes it, so moving across
 //! the rows towards an open submenu does not. Its first item is level
 //! with the row, and GTK flips it to the left near the screen's edge.
-//! Left or Escape closes only the open submenu, the innermost one. Choosing an item
+//! The keyboard moving to another row takes over from the pointer: the
+//! submenu it was about to open does not, and one open beside the row it
+//! left closes. Left or Escape closes only the open submenu, the innermost one. Choosing an item
 //! in a submenu closes every menu, then runs it.
 //!
 //! A submenu is a popup of the menu it opens from, without a pointer grab
@@ -36,8 +39,9 @@ mod height;
 #[cfg(test)]
 mod inspection;
 #[cfg(test)]
-pub(crate) use inspection::{row_label, row_tooltip};
+pub(crate) use inspection::row_label;
 mod items;
+mod motion;
 
 use std::time::Duration;
 
@@ -49,6 +53,9 @@ use crate::icons::{self, Icon};
 use crate::integration;
 
 pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
+#[cfg(test)]
+pub(crate) use motion::Slide;
+pub(crate) use motion::OPENING_MOTION;
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
@@ -98,6 +105,7 @@ impl CheckMark {
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
+    use std::time::Instant;
 
     use gtk::glib::SourceId;
 
@@ -110,7 +118,7 @@ mod imp {
     /// Private state of [`super::MenuPopover`].
     #[derive(Debug, Default)]
     pub(crate) struct MenuPopover {
-        /// The compact style's icon buttons, above the list.
+        /// The compact style's labeled buttons, above or below the list.
         pub(super) strip: OnceCell<gtk::Box>,
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
@@ -134,6 +142,18 @@ mod imp {
         /// Whether the menu opens beside its button because GTK cut it
         /// short below it (height.rs).
         pub(super) beside_button: Cell<bool>,
+        /// Which of the two names its opening motion took last
+        /// (motion.rs).
+        pub(super) opening_turn: Cell<bool>,
+        /// When the menu last began to open.
+        pub(super) opening_since: Cell<Option<Instant>>,
+        /// Whether GTK has placed the popup since the menu began to open.
+        pub(super) placed: Cell<bool>,
+        /// Which way the menu slides as it opens.
+        pub(super) slide: Cell<Option<super::motion::Slide>>,
+        /// The timer that lets the contents count as opaque again once
+        /// the menu has faded in.
+        pub(super) opaque_again: RefCell<Option<SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -170,6 +190,8 @@ mod imp {
             content.append(&rows);
             // Once shown, the menu fits the monitor its own popup is on.
             popover.connect_realize(super::MenuPopover::follow_monitor_changes);
+            // It slides in from where GTK places it (motion.rs).
+            popover.connect_realize(super::MenuPopover::follow_placement);
             popover.connect_map(super::MenuPopover::refit_if_shown);
             popover.set_child(Some(&content));
             self.strip.set(strip).expect("constructed runs once per object");
@@ -201,6 +223,11 @@ mod imp {
             // Before GTK places the menu, so it is placed at its full size.
             self.obj().open_below_button_again();
             self.obj().fit_to_monitor();
+            // The strip where it goes for a menu opening downward; GTK's
+            // placement moves it if the menu opens upward (motion.rs).
+            self.obj().place_strip_for(false);
+            // It fades and slides in, as Windows 11's menus open.
+            self.obj().start_opening_motion();
             #[expect(
                 deprecated,
                 reason = "gtk-rs names the show vfunc after gtk_widget_show; the vfunc stays"
@@ -236,7 +263,7 @@ glib::wrapper! {
             gtk::Native, gtk::ShortcutManager;
 }
 
-/// The row of icon buttons of the compact style (`.context-strip`).
+/// The row of labeled buttons of the compact style (`.context-strip`).
 fn strip_box() -> gtk::Box {
     let strip = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
@@ -272,6 +299,7 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
         move |_, row| popover.choose_row(row.index())
     ));
     follow_hover(popover, &list);
+    follow_the_keyboard(popover, &list);
     open_submenus_by_keyboard(popover, &list);
     // Up on the first item and Down on the last wrap around, as `openMenu`
     // moves between enabled items.
@@ -326,6 +354,28 @@ fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
         move |_| popover.rest_on(None)
     ));
     list.add_controller(motion);
+}
+
+/// The keyboard moving between rows, with the arrow keys, Home, End or
+/// Page Up and Down, takes over from the pointer, as in Windows: a submenu
+/// waiting for the pointer to rest no longer opens or closes, and one open
+/// beside the row the keyboard left closes. Runs after the list has moved
+/// the focus, wrapping around included.
+fn follow_the_keyboard(popover: &MenuPopover, list: &gtk::ListBox) {
+    list.connect_local(
+        "move-cursor",
+        true,
+        glib::clone!(
+            #[weak]
+            popover,
+            #[upgrade_or]
+            None,
+            move |_| {
+                popover.keyboard_moved();
+                None
+            }
+        ),
+    );
 }
 
 /// Right, Enter and Space open the focused row's submenu with the keyboard
@@ -557,15 +607,23 @@ impl MenuPopover {
         } else {
             MarkColumn::None
         };
+        // A row without a glyph keeps the glyph's column empty where other
+        // rows have one, as Windows' classic menu lines up text-only rows
+        // with those that show an icon.
+        let glyphs = if items_of(&entries).any(shows_a_glyph) {
+            GlyphColumn::Shown
+        } else {
+            GlyphColumn::None
+        };
         for entry in &entries {
             let MenuEntry::Item(item) = entry else {
                 after_divider = true;
                 continue;
             };
             let can_choose = self.can_choose(item);
-            let row = item_row(item, self.check_mark(item), marks);
+            let row = item_row(item, self.check_mark(item), marks, glyphs);
             row.set_sensitive(can_choose);
-            explain_availability(self, row.upcast_ref(), item, can_choose);
+            describe_unavailable_row(self, &row, item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
@@ -589,16 +647,77 @@ impl MenuPopover {
         if !shows_strip {
             return;
         }
-        for item in items.iter() {
+        let shown = items.iter().filter(|item| {
+            item.availability != ItemAvailability::ShownWhileEnabled
+                || item.action.is_enabled(self.upcast_ref())
+        });
+        for item in shown {
             strip.append(&self.strip_button(item));
         }
     }
 
-    /// An icon button of the strip.
+    /// Where Settings puts the strip ("Buttons in the right-click menu"): the
+    /// pointer's side unless the window's settings say otherwise.
+    fn strip_position(&self) -> ox_core::settings::StripPosition {
+        self.root()
+            .and_downcast::<crate::window::BrowserWindow>()
+            .map(|window| window.context().settings_data().preferences.strip_position)
+            .unwrap_or_default()
+    }
+
+    /// Puts the strip where Settings asks for a menu that opened upward
+    /// (`opened_upward`) or downward.
+    pub(super) fn place_strip_for(&self, opened_upward: bool) {
+        self.place_strip(self.strip_position().at_bottom(opened_upward));
+    }
+
+    /// Puts the strip at the bottom of the menu, `at_bottom` when it opened
+    /// above the pointer, or at its top, as Windows 11 keeps it on the side
+    /// nearest the pointer.
+    pub(super) fn place_strip(&self, at_bottom: bool) {
+        let strip = self.strip();
+        let Some(content) = strip.parent().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        if at_bottom {
+            if content.last_child().as_ref() != Some(strip.upcast_ref()) {
+                content.reorder_child_after(strip, content.last_child().as_ref());
+            }
+            strip.add_css_class("at-bottom");
+        } else {
+            if content.first_child().as_ref() != Some(strip.upcast_ref()) {
+                content.reorder_child_after(strip, None::<&gtk::Widget>);
+            }
+            strip.remove_css_class("at-bottom");
+        }
+    }
+
+    /// Whether the strip sits at the bottom of the menu, for tests.
+    #[cfg(test)]
+    pub(crate) fn strip_at_bottom(&self) -> bool {
+        self.strip().has_css_class("at-bottom")
+    }
+
+    /// A button of the strip: its icon with its label under it, as
+    /// Windows 11 draws Cut, Copy, Rename, Share and Delete.
     fn strip_button(&self, item: &MenuItem) -> gtk::Button {
         let can_choose = self.can_choose(item);
+        let face = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(2)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .build();
+        face.append(&icons::image(item.glyph, ROW_GLYPH));
+        let label = gtk::Label::builder()
+            .label(&item.label)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(9)
+            .css_classes(["strip-label"])
+            .build();
+        face.append(&label);
         let button = gtk::Button::builder()
-            .child(&icons::image(item.glyph, ROW_GLYPH))
+            .child(&face)
             .tooltip_text(item_tooltip(item))
             .sensitive(can_choose)
             .build();
@@ -870,6 +989,10 @@ impl MenuPopover {
                 self,
                 move || {
                     popover.imp().hover.borrow_mut().1 = None;
+                    // Only for the row the pointer still rests on.
+                    if popover.imp().hover.borrow().0 != Some(index) {
+                        return;
+                    }
                     if opens {
                         popover.open_submenu(index, false);
                     } else {
@@ -886,6 +1009,26 @@ impl MenuPopover {
     fn keep_submenu_open(&self) {
         self.cancel_hover();
         self.imp().hover.borrow_mut().0 = self.open_submenu_index();
+    }
+
+    /// The keyboard moved between rows: a submenu the pointer's timer was
+    /// to open or close stays as it is, unless it is open beside a row
+    /// other than the focused one, which closes it. The row the pointer rests on stays
+    /// known, so only the pointer coming onto another row starts a timer
+    /// again.
+    fn keyboard_moved(&self) {
+        self.cancel_hover();
+        let focused = self
+            .list()
+            .focus_child()
+            .and_downcast::<gtk::ListBoxRow>()
+            .and_then(|row| usize::try_from(row.index()).ok());
+        if self
+            .open_submenu_index()
+            .is_some_and(|open| Some(open) != focused)
+        {
+            self.close_submenu();
+        }
     }
 
     /// Stops a submenu from opening or closing on its timer. The row the
@@ -1032,8 +1175,8 @@ fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
     item.action.disabled_reason(menu.upcast_ref()).map(str::to_owned)
 }
 
-/// Adds to the tooltip of `control`, which shows `item` in `menu`, why it
-/// cannot be chosen, and tells screen readers too.
+/// Adds to the tooltip of the strip button `control`, which shows `item`
+/// in `menu`, why it cannot be chosen, and tells screen readers too.
 fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
     let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten();
     let Some(reason) = reason else {
@@ -1041,6 +1184,15 @@ fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuIt
     };
     control.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
     control.update_property(&[gtk::accessible::Property::Description(&reason)]);
+}
+
+/// Tells screen readers why `row`, which shows `item` in `menu`, cannot
+/// be chosen. The row shows no tooltip, as Windows 11's menu rows show
+/// none.
+fn describe_unavailable_row(menu: &MenuPopover, row: &gtk::ListBoxRow, item: &MenuItem, can_choose: bool) {
+    if let Some(reason) = (!can_choose).then(|| disabled_reason(menu, item)).flatten() {
+        row.update_property(&[gtk::accessible::Property::Description(&reason)]);
+    }
 }
 
 /// Whether a menu's rows keep a column for check marks and dots before
@@ -1051,6 +1203,20 @@ enum MarkColumn {
     None,
     /// The menu has one, so every row keeps the column.
     Shown,
+}
+
+/// Whether a menu's rows keep a column for glyphs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GlyphColumn {
+    /// No row has a glyph.
+    None,
+    /// A row has one, so every row keeps the column.
+    Shown,
+}
+
+/// Whether `item`'s row draws a glyph: its own, or its application's icon.
+fn shows_a_glyph(item: &MenuItem) -> bool {
+    item.shows_glyph || item.application_icon.is_some()
 }
 
 /// The mark column of a row: a dot for a chosen choice (or an item that
@@ -1076,7 +1242,7 @@ fn mark_slot(item: &MenuItem, check: CheckMark) -> gtk::Widget {
 /// A row's mark column when the menu has one, its glyph (the
 /// application's own icon for an item that opens one), its label and its
 /// shortcut.
-fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Box {
+fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::Box {
     let application_icon = item
         .application_icon
         .as_deref()
@@ -1099,10 +1265,11 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Bo
     });
     if let Some(glyph) = glyph {
         content.append(&glyph);
-    } else if marks == MarkColumn::None {
+    } else if marks == MarkColumn::None || glyphs == GlyphColumn::Shown {
         // A row without a glyph or a mark column, such as Windows
         // Explorer's text-only right-drag menu's (DND-027), keeps the
-        // glyph's column empty, so its text sits where other menus' does.
+        // glyph's column empty, so its text sits where other menus' does,
+        // as does a text-only row of a menu whose other rows have glyphs.
         let column = gtk::Box::builder()
             .width_request(ROW_GLYPH)
             .height_request(ROW_GLYPH)
@@ -1136,41 +1303,22 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Bo
     content
 }
 
-/// The whole label of `row` while the menu cuts it short, else `None`.
-fn cut_short_label(row: &gtk::ListBoxRow) -> Option<String> {
-    let content = row.child()?;
-    let label = crate::window::widget_tree::children(&content)
-        .find_map(|child| child.downcast::<gtk::Label>().ok())?;
-    label.layout().is_ellipsized().then(|| label.text().to_string())
-}
-
-/// The row for `item`, showing `check` in the menu's `marks` column.
-fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::ListBoxRow {
+/// The row for `item`, showing `check` in the menu's `marks` column, and
+/// its glyph, or an empty slot, in the `glyphs` column.
+fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::ListBoxRow {
     let role = match check {
         CheckMark::NotCheckable => gtk::AccessibleRole::MenuItem,
         CheckMark::Unchecked | CheckMark::Checked => gtk::AccessibleRole::MenuItemCheckbox,
     };
     let row = gtk::ListBoxRow::builder()
-        .child(&item_content(item, check, marks))
+        .child(&item_content(item, check, marks, glyphs))
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // No tooltip that would only repeat the label (`b.title=it.label` in
-    // app.js), as Windows 11's menus show none: only a label the menu cuts
-    // short shows whole, which adds what the row cannot show. A disabled
-    // row's own tooltip, saying why ([`explain_availability`]), comes
-    // first.
-    row.set_has_tooltip(true);
-    row.connect_query_tooltip(|row, _, _, _, tooltip| {
-        if row.tooltip_text().is_some() {
-            return false;
-        }
-        let Some(label) = cut_short_label(row) else {
-            return false;
-        };
-        tooltip.set_text(Some(&label));
-        true
-    });
+    // No tooltip, as Windows 11's menus show none on their rows (not
+    // `b.title=it.label` in app.js): not for a label the menu cuts short,
+    // nor for a disabled row, which tells screen readers why in its
+    // accessible description ([`describe_unavailable_row`]).
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

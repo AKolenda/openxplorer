@@ -118,9 +118,11 @@ pub fn network_key(uri: &str) -> Result<NetworkKey, LocationError> {
     })
 }
 
-/// Merges saved shares, active GIO mounts, stable mounts and visited SMB
-/// locations in that order. Invalid inputs are ignored. Saved labels win,
-/// connection state is combined, and host aliases remain distinct.
+/// Merges saved shares, shares mapped for this session (the visited
+/// bookmarks with a label), active GIO mounts, stable mounts and browsed
+/// SMB locations in that order. Invalid inputs are ignored. Saved labels
+/// win, then mapped ones, connection state is combined, and host aliases
+/// remain distinct.
 ///
 /// Each saved share carries its current connection state, computed by the
 /// caller from its mount snapshot. This function performs no file or
@@ -140,9 +142,16 @@ pub fn merge_network_locations(
         .iter()
         .filter(|mount| mount.is_smb_mount_point())
         .map(Contribution::from_stable_mount);
-    let visited = visited.iter().map(Contribution::from_visited);
+    // A share mapped for this session only names its row, as a saved one
+    // does, so it comes before the mounts; a browsed one is named after
+    // its mount.
+    let (mapped, browsed): (Vec<&Bookmark>, Vec<&Bookmark>) =
+        visited.iter().partition(|bookmark| !bookmark.label.is_empty());
+    let mapped = mapped.into_iter().map(Contribution::from_visited);
+    let browsed = browsed.into_iter().map(Contribution::from_visited);
     let mut merged = NetworkRows::default();
-    for contribution in saved.chain(gio_mounts).chain(stable_mounts).chain(visited) {
+    let contributions = saved.chain(mapped).chain(gio_mounts).chain(stable_mounts);
+    for contribution in contributions.chain(browsed) {
         merged.add(&contribution);
     }
     merged.rows

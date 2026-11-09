@@ -8,12 +8,13 @@
 //! a name whose extension names no type keeps it, so it is never mistaken
 //! for another file. The desktop's register of file types here is the
 //! shared MIME database, which GIO reads: an extension is known when GIO
-//! names a type for it from the name alone, without guessing. Folders
+//! names a type for it from the name alone, also when it is unsure which
+//! of several types sharing the extension it is. Folders
 //! never lose anything, a name that starts with a dot and has no other
 //! (`.bashrc`) keeps it whole, and only the last extension goes, so
 //! `backup.tar.gz` shows as `backup.tar`, as in Windows.
 
-use gtk::gio;
+use ox_core::entry::Entry;
 
 /// Whether names show their extensions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -25,38 +26,27 @@ pub(crate) enum Extensions {
     Shown,
 }
 
+/// Whether `entry`'s name always shows whole: a folder's, or a
+/// shortcut's ([`Entry::is_shortcut`]), whose name is all Windows shows
+/// of it, as Windows hides only a shortcut's `.lnk`, which a link here
+/// does not have. A symbolic link named for a type ("notes.txt") is a
+/// file, as Windows treats one.
+pub(crate) fn shows_whole(entry: &Entry) -> bool {
+    entry.is_dir || entry.is_shortcut()
+}
+
 /// The extension a view hides of `name`, with its dot, or `None` when the
-/// name shows whole.
+/// name shows whole; `is_folder` is true for a name that always shows
+/// whole ([`shows_whole`]). An extension of digits alone ("Notes v2.1",
+/// "Q3.2025") is part of the name, as people number versions that way,
+/// though the desktop knows `.1` as a manual page; the Open and Save
+/// dialog reads such a name the same way.
 pub(crate) fn hidden_extension(name: &str, is_folder: bool, extensions: Extensions) -> Option<&str> {
     if is_folder || extensions == Extensions::Shown {
         return None;
     }
-    let dot = name.rfind('.')?;
-    // ".bashrc" is all name; "draft." has no extension to hide.
-    if dot == 0 || dot + 1 == name.len() {
-        return None;
-    }
-    let extension = &name[dot..];
-    is_known_extension(extension).then_some(extension)
-}
-
-/// Whether `extension`, with its dot, names a file type the desktop
-/// knows: GIO names a type for it from the name alone, sure of it, and
-/// not the type of unknown data. Each extension is asked once.
-fn is_known_extension(extension: &str) -> bool {
-    thread_local! {
-        static KNOWN: std::cell::RefCell<std::collections::HashMap<String, bool>> =
-            std::cell::RefCell::default();
-    }
-    let key = extension.to_lowercase();
-    if let Some(known) = KNOWN.with(|known| known.borrow().get(&key).copied()) {
-        return known;
-    }
-    let sample = format!("name{key}");
-    let (content_type, uncertain) = gio::content_type_guess(Some(sample.as_str()), None::<&[u8]>);
-    let known = !uncertain && !gio::content_type_is_unknown(&content_type);
-    KNOWN.with(|cache| cache.borrow_mut().insert(key, known));
-    known
+    ox_core::entry::known_extension(name)
+        .filter(|extension| !extension[1..].chars().all(|character| character.is_ascii_digit()))
 }
 
 /// The name a view shows for `name`.
@@ -101,5 +91,28 @@ mod tests {
             Some(".txt")
         );
         assert_eq!(hidden_extension("Notes 2.txt", false, Extensions::Shown), None);
+    }
+
+    /// Every file of a type the desktop knows hides its extension, also
+    /// a type GIO is unsure of because more than one type uses the
+    /// extension (`.png`, `.json`, `.html`, `.py`), as Windows hides the
+    /// extension of every registered type. Only the last extension goes,
+    /// and an extension of digits alone is a version, not a type.
+    ///
+    /// parity: VIEW-069
+    #[test]
+    fn every_known_type_hides_its_extension_also_one_gio_is_unsure_of() {
+        fn hidden(name: &str) -> &str {
+            shown_name(name, false, Extensions::Hidden)
+        }
+        assert_eq!(hidden("sunset.png"), "sunset");
+        assert_eq!(hidden("data.json"), "data");
+        assert_eq!(hidden("page.html"), "page");
+        assert_eq!(hidden("script.py"), "script");
+        assert_eq!(hidden("plan.pdf"), "plan");
+        assert_eq!(hidden("Budget 2026.txt"), "Budget 2026");
+        assert_eq!(hidden("Bundle.tar.gz"), "Bundle.tar");
+        assert_eq!(hidden("Notes v2.1"), "Notes v2.1", "a version number");
+        assert_eq!(hidden("Report.txt - Shortcut"), "Report.txt - Shortcut");
     }
 }

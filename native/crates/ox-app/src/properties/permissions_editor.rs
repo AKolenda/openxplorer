@@ -12,6 +12,9 @@
 mod advanced;
 pub(super) mod choices;
 
+use std::cell::{Cell, RefCell};
+use std::future::Future;
+use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -294,7 +297,9 @@ fn apply_button(
     apply.set_sensitive(false);
     let change = Rc::new(EditorChange {
         controls: controls.clone(),
-        uris,
+        uris: RefCell::new(uris),
+        applied: Cell::new(None),
+        rereads: RefCell::new(Vec::new()),
         versions,
         button: apply.downgrade(),
     });
@@ -313,26 +318,57 @@ fn apply_button(
     (apply, change)
 }
 
+/// Reads the items again after the editor changed them.
+type Reread = Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>>>;
+
 /// The editor's change, which Apply permissions and the window's OK and
 /// Apply make (PROP-002).
 pub(super) struct EditorChange {
     controls: Controls,
-    uris: Vec<String>,
+    /// The items' locations, which Hidden on General changes.
+    uris: RefCell<Vec<String>>,
+    /// The request last made, which the window's next OK or Apply does not
+    /// make again over a Read-only applied after it.
+    applied: Cell<Option<PermissionRequest>>,
+    /// Run once each change is made, before the window's next one.
+    rereads: RefCell<Vec<Reread>>,
     versions: Arc<PreviousVersions>,
     /// Apply permissions, greyed while there is nothing to apply.
     button: glib::WeakRef<gtk::Button>,
 }
 
 impl EditorChange {
+    /// Whether the controls hold a change not made yet.
+    fn has_changes(&self) -> bool {
+        self.controls.has_changes() && self.applied.get() != Some(self.controls.request())
+    }
+
     /// Greys Apply permissions, and the window's Apply, or not.
     fn changed(&self) {
-        let has_changes = self.controls.has_changes();
+        let has_changes = self.has_changes();
         if let Some(button) = self.button.upgrade() {
             button.set_sensitive(has_changes);
             if let Some(window) = PropertiesWindow::of(&button) {
                 window.changed();
             }
         }
+    }
+
+    /// Points the change at `to` for the item that was at `from`, once the
+    /// General tab renamed it.
+    pub(super) fn follow_rename(&self, from: &str, to: &str) {
+        for uri in self.uris.borrow_mut().iter_mut().filter(|uri| *uri == from) {
+            to.clone_into(uri);
+        }
+    }
+
+    /// Runs `reread` each time the editor changed the items, even when it
+    /// stopped at an error, and waits for it before Apply permissions
+    /// comes back or the window's next change is made.
+    pub(super) fn connect_applied<F: Future<Output = ()> + 'static>(&self, reread: impl Fn() -> F + 'static) {
+        self.rereads
+            .borrow_mut()
+            .push(Box::new(move || Box::pin(reread())));
     }
 
     /// Applies the controls' change to every item in the background.
@@ -342,8 +378,8 @@ impl EditorChange {
     /// The refusal or the first error, to show in a message.
     async fn apply_now(&self) -> Result<(), String> {
         // Safety rule PROP-024: a previous version is never changed in place.
-        if let Some(refusal) = self
-            .uris
+        let uris = self.uris.borrow().clone();
+        if let Some(refusal) = uris
             .iter()
             .find_map(|uri| self.versions.check_writable(uri).err())
         {
@@ -365,11 +401,19 @@ impl EditorChange {
         }
         let request = self.controls.request();
         let mut result = Ok(());
-        for uri in &self.uris {
-            result = apply_in_background(uri.clone(), request, Cancellation::new()).await;
+        self.applied.set(None);
+        for uri in uris {
+            result = apply_in_background(uri, request, Cancellation::new()).await;
             if result.is_err() {
                 break;
             }
+        }
+        if result.is_ok() {
+            self.applied.set(Some(request));
+        }
+        let rereads: Vec<_> = self.rereads.borrow().iter().map(|reread| reread()).collect();
+        for reread in rereads {
+            reread.await;
         }
         self.changed();
         result.map_err(|error| error.to_string())
@@ -378,7 +422,7 @@ impl EditorChange {
 
 impl Pending for EditorChange {
     fn has_changes(&self) -> bool {
-        self.controls.has_changes()
+        EditorChange::has_changes(self)
     }
 
     fn apply(self: Rc<Self>) -> ApplyFuture {

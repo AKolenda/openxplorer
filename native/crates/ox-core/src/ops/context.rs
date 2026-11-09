@@ -14,8 +14,9 @@ use std::sync::Arc;
 
 use super::error::OpsError;
 use crate::transfer::{
-    check_write_tree, Cancellation, FailedItem, FailureAnswer, MoveByCopyingItem, Node, SourceChange,
-    TransferEngine, TransferError, UnstorableAnswer, UnstorableItem, WriteGuard,
+    check_write_tree, check_write_tree_reading, Cancellation, FailedItem, FailureAnswer, MoveByCopyingItem,
+    Node, SourceChange, TransferEngine, TransferError, Unreadable, UnstorableAnswer, UnstorableItem,
+    WriteGuard,
 };
 
 /// Locations that must never change, such as previous versions
@@ -82,6 +83,37 @@ impl WriteProtection {
         Ok(())
     }
 
+    /// [`check_tree`](Self::check_tree) for a selected item of a paste,
+    /// before any item runs. With [`Unreadable::NotWalked`], what cannot be
+    /// read is left to the transfer engine, which asks about that item
+    /// alone while the others go on (OPS-047), and checks it again before
+    /// changing it.
+    ///
+    /// # Errors
+    ///
+    /// The refusal for the first protected location, the nesting limit or
+    /// cancellation; with [`Unreadable::Fails`], also a failure to read the
+    /// tree.
+    pub(crate) fn check_selected_tree(
+        &self,
+        source: &dyn Node,
+        destination: &dyn Node,
+        cancel: &Cancellation,
+        source_change: SourceChange,
+        unreadable: Unreadable,
+    ) -> Result<(), OpsError> {
+        check_write_tree_reading(
+            self.guard.as_deref(),
+            source,
+            None,
+            Some(destination),
+            cancel,
+            source_change,
+            unreadable,
+        )?;
+        Ok(())
+    }
+
     /// True when some location is protected.
     pub(crate) fn is_restricted(&self) -> bool {
         self.guard.is_some()
@@ -93,7 +125,9 @@ impl WriteProtection {
         match &self.guard {
             Some(guard) => {
                 let guard = Arc::clone(guard);
-                engine.with_write_guard(move |uri: &str| guard(uri))
+                // An `admin://` item is the local item of the same path:
+                // the guard knows protected locations by their `file:` URIs.
+                engine.with_write_guard(move |uri: &str| guard(&crate::admin_copy::as_file_uri(uri)))
             }
             None => engine,
         }
@@ -181,6 +215,24 @@ impl fmt::Debug for MoveByCopyingAsker {
     }
 }
 
+/// What Replace does with the file it replaces.
+///
+/// The app's own choice is the default: the replaced file goes to the
+/// Recycle Bin first, so Undo or a cancelled copy can bring it back.
+/// Windows 11 overwrites it instead, and that is offered as a setting.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ReplacedFiles {
+    /// The replaced file goes to the Recycle Bin, where the desktop's
+    /// Trash works (the default).
+    #[default]
+    RecycleBin,
+    /// The incoming file overwrites the replaced one, which is gone, as in
+    /// Windows 11. The incoming file is first written under a temporary
+    /// name and swapped in at the end, so a cancelled Replace keeps the
+    /// old file.
+    Overwrite,
+}
+
 /// The user's cancellation, the app's write protection and the questions
 /// for one operation.
 #[derive(Debug, Clone, Default)]
@@ -199,6 +251,8 @@ pub struct OperationContext {
     /// Asks what to do about an item that failed; without it the error is
     /// recorded and the next item runs.
     pub item_failure: Option<FailureAsker>,
+    /// What Replace does with the file it replaces.
+    pub replaced_files: ReplacedFiles,
 }
 
 impl OperationContext {
@@ -210,6 +264,7 @@ impl OperationContext {
             unstorable: None,
             move_by_copying: None,
             item_failure: None,
+            replaced_files: ReplacedFiles::default(),
         }
     }
 
@@ -224,7 +279,12 @@ impl OperationContext {
             engine = engine.with_move_by_copying_question(move |item: &MoveByCopyingItem| asker.ask(item));
         }
         if let Some(asker) = self.item_failure.clone() {
-            engine = engine.with_failure_question(move |item: &FailedItem| asker.ask(item));
+            // Continue is only ever answered in that question (OPS-047).
+            engine = engine
+                .with_failure_question(move |item: &FailedItem| asker.ask(item))
+                .with_elevation(crate::admin_copy::elevated_destination)
+                .with_elevated_merge_check(crate::admin_copy::check_elevated_folder)
+                .with_elevated_item(crate::admin_copy::elevated_item);
         }
         engine
     }

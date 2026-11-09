@@ -15,7 +15,12 @@
 //! "More details" / "Fewer details" applies to every action and is
 //! remembered across sessions, as in Windows ("'More details' is sticky
 //! … across sessions", a Windows team reply under that post), in the
-//! `progressDetails` preference.
+//! `progressDetails` preference. While the window's one action asks
+//! Replace or Skip Files, the toggle shows greyed, as Windows shows it,
+//! still worded as it was left, and the details stay hidden: the two
+//! files are compared only in the File Conflict window that "Compare info
+//! for both files" opens. The details come back with the progress once
+//! the question is answered.
 //!
 //! The window shows once an action has run for [`SHOW_DELAY`], so a
 //! quick operation shows nothing, and it does not take the focus (the UX
@@ -24,7 +29,11 @@
 //! each action's Cancel does: finished work stays (OPS-022). It belongs
 //! to no browsing window and sets no position: the desktop places it, as
 //! Wayland requires, and closing a browsing window still asks first
-//! while that window's operations run (TAB-049).
+//! while that window's operations run (TAB-049). While an action started
+//! in a file dialog runs, the window is that dialog's modeless child, as
+//! Windows' common dialog owns the progress of what it started, so the
+//! desktop keeps it above the dialog and lets it be used while the
+//! dialog is modal for its caller.
 
 use std::time::Duration;
 
@@ -176,8 +185,24 @@ impl ProgressWindow {
         }
         action.show_in(Some(self));
         action.show_details(imp.details.get());
+        self.follow_dialog();
         self.refresh();
         self.show_soon();
+    }
+
+    /// Makes the window the child of the file dialog the earliest running
+    /// action was started in, or of no window when none was: a browsing
+    /// window's progress stands alone (OPS-019). GTK moves a child into
+    /// its parent's window group and, once it has no parent, into the
+    /// default one, so the window goes back to its own group each time,
+    /// where its File Conflict window blocks it alone.
+    fn follow_dialog(&self) {
+        let dialog = self.actions().iter().find_map(TransferPanel::dialog);
+        let parent = dialog.as_ref().map(Cast::upcast_ref::<gtk::Window>);
+        if self.transient_for().as_ref() != parent {
+            self.set_transient_for(parent);
+            self.imp().group.add_window(self);
+        }
     }
 
     /// Takes `action`, which has ended, out; the window closes with its
@@ -189,6 +214,7 @@ impl ProgressWindow {
             imp.actions.remove(action);
         }
         if !self.actions().is_empty() {
+            self.follow_dialog();
             self.refresh();
             return;
         }
@@ -217,7 +243,9 @@ impl ProgressWindow {
     }
 
     /// Titles the window for its actions: "44% complete" for one, or
-    /// "Replace or Skip Files" while it asks about taken names, as Windows
+    /// "Replace or Skip Files" while it asks about taken names and "1
+    /// Interrupted Action" while it asks about a full drive or a failed
+    /// item, as Windows
     /// titles it, and "2 Running Actions" for several; its icon is the
     /// first action's.
     pub(crate) fn refresh(&self) {
@@ -227,6 +255,10 @@ impl ProgressWindow {
         }
         let title = match actions.as_slice() {
             [] => return,
+            [action] if action.asks_about_space() || action.asks_about_failure() => {
+                ox_core::i18n::ngettext("{count} Interrupted Action", "{count} Interrupted Actions", 1)
+                    .replace("{count}", "1")
+            }
             [action] if action.is_asking() => ox_core::i18n::gettext("Replace or Skip Files"),
             [action] => action.percent_text(),
             _ => {
@@ -242,6 +274,17 @@ impl ProgressWindow {
         if self.icon_name().as_deref() != Some(icon) {
             self.set_icon_name(Some(icon));
         }
+        let asking = matches!(actions.as_slice(), [action] if action.asks_about_names());
+        self.offer_details(!asking);
+    }
+
+    /// Offers "More details" / "Fewer details", or shows it greyed and
+    /// out of the keyboard's reach while the one action asks Replace or
+    /// Skip Files, as Windows does. Greyed, it keeps the remembered
+    /// wording ("Fewer details" when the details were left open), as
+    /// Windows' greyed toggle does, though the details stay hidden.
+    fn offer_details(&self, offered: bool) {
+        self.imp().details_button.set_sensitive(offered);
     }
 
     /// Shows the window now, without taking the focus, for an action
@@ -359,6 +402,12 @@ impl ProgressWindow {
     #[cfg(test)]
     pub(crate) fn press_details(&self) {
         self.imp().details_button.emit_clicked();
+    }
+
+    /// Whether the toggle can be pressed, for tests.
+    #[cfg(test)]
+    pub(crate) fn offers_details(&self) -> bool {
+        self.imp().details_button.is_sensitive()
     }
 
     /// The toggle's text, for tests.

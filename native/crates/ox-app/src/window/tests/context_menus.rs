@@ -9,7 +9,7 @@ use std::fs;
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
+use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings, StripPosition};
 
 use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
@@ -18,7 +18,7 @@ use super::file_ops_support::{
 use crate::test_support::harness::{
     capture_popover, settle, wait_for_frames, wait_until, Fixture, TestWindow,
 };
-use crate::window::menu_popover::MenuStyle;
+use crate::window::menu_popover::{MenuEntry, MenuStyle, Slide};
 
 /// The position of the item called `name` in `test`'s view.
 pub(super) fn position_of(test: &TestWindow, name: &str) -> u32 {
@@ -41,6 +41,22 @@ pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     test.context.reload_settings();
     wait_until("the window to read the choice", || {
         test.context.settings_data().preferences.context_menu == style
+    });
+}
+
+/// Saves `position` as the Settings choice "Buttons in the right-click menu"
+/// and waits for the window to read it.
+pub(super) fn choose_strip_position(test: &TestWindow, position: StripPosition) {
+    let update = PreferencesUpdate {
+        strip_position: Some(position),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.strip_position == position
     });
 }
 
@@ -99,20 +115,20 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Open containing folder in Terminal",
             "Open with…",
             "-",
+            "Copy as path",
+            "Restore previous versions",
+            "-",
             "Send to",
             "-",
             "Cut",
             "Copy",
-            "Paste",
             "-",
-            "Rename",
-            "Delete",
             "Duplicate",
-            "Copy as path",
-            "Compress to ZIP file",
+            "Delete",
+            "Rename",
+            "-",
             "Compress to…",
             "-",
-            "Previous versions",
             "Properties",
             "Configure service actions…",
         ]
@@ -122,6 +138,53 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
         menu.row("Open with…").is_sensitive(),
         "Open with works for one item"
     );
+}
+
+/// The classic menu is drawn as Windows 11 draws "Show more options":
+/// no row shows shortcut text, Open is in bold, and a row Windows draws
+/// as text alone, such as Open or Cut, keeps the glyph's column empty, so
+/// its text lines up with the rows that keep a glyph, such as Properties.
+///
+/// parity: LOOK-019, CMD-008
+#[gtk::test]
+fn the_classic_menu_shows_no_shortcut_text_bolds_open_and_lines_up_text_only_rows() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win10);
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    assert_eq!(menu.style(), MenuStyle::Classic);
+    let label_of = |row: &gtk::ListBoxRow| {
+        crate::window::widget_tree::descendants::<gtk::Label>(row)
+            .into_iter()
+            .next()
+            .expect("a label")
+    };
+    let shortcuts: Vec<String> = menu
+        .rows()
+        .iter()
+        .flat_map(crate::window::widget_tree::descendants::<gtk::Label>)
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect();
+    assert_eq!(shortcuts, Vec::<String>::new(), "no shortcut text");
+    assert_eq!(menu.emphasised_labels(), ["Open"]);
+    let images = |label: &str| crate::window::widget_tree::descendants::<gtk::Image>(&menu.row(label)).len();
+    assert_eq!(images("Open"), 0, "Open is text alone");
+    assert_eq!(images("Cut"), 0, "Cut is text alone");
+    assert_eq!(images("Properties"), 1, "Properties keeps its glyph");
+    let left = |label: &str| {
+        let row = menu.row(label);
+        let text = label_of(&row);
+        text.compute_point(&row, &gtk::graphene::Point::zero())
+            .map(|point| point.x())
+    };
+    wait_until("the rows laid out", || {
+        menu.row("Open").width() > 0 && left("Open").is_some_and(|x| x > 0.0)
+    });
+    assert_eq!(left("Open"), left("Properties"), "the text lines up");
+    assert_eq!(left("Cut"), left("Properties"));
+    menu.popdown();
 }
 
 /// Windows 11's compact menu is the default: the edit commands in its
@@ -204,12 +267,13 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    assert!(!menu.row("Previous versions").is_sensitive());
-    // CMD-031: a disabled item says why.
-    let tooltip = menu.row("Previous versions").tooltip_text().unwrap_or_default();
+    assert!(!menu.row("Restore previous versions").is_sensitive());
+    // CMD-031: a disabled item tells screen readers why, with no tooltip,
+    // as Windows 11's menu rows show none.
+    assert_eq!(menu.row("Restore previous versions").tooltip_text(), None);
     assert_eq!(
-        tooltip,
-        "Previous versions\nSelect only one item for this command."
+        menu.disabled_reason_of("Restore previous versions").as_deref(),
+        Some("Select only one item for this command.")
     );
     // Open opens each of them (OPEN-003); Rename gives them one numbered
     // name (OPS-050) and Rename items… opens the batch rename (OPS-014);
@@ -299,10 +363,16 @@ fn the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one() 
     let menu = test.window.context_menu();
 
     assert_eq!(menu.style(), MenuStyle::Compact);
-    assert_eq!(
-        menu.strip_labels(),
-        ["Cut", "Copy", "Paste into folder", "Rename", "Delete"]
-    );
+    // Windows 11 shows Paste on a folder only while there is something to
+    // paste, and Share only for files.
+    assert_eq!(menu.strip_labels(), ["Cut", "Copy", "Rename", "Delete"]);
+    menu.popdown();
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    test.window.right_click(Some(position_of(&test, "Documents")));
+    assert_eq!(menu.strip_labels(), ["Cut", "Copy", "Paste", "Rename", "Delete"]);
+    // Each button shows its label under its icon, as in Windows 11.
+    assert_eq!(menu.strip_texts(), ["Cut", "Copy", "Paste", "Rename", "Delete"]);
     assert!(!menu.row_labels().contains(&"Cut".to_owned()));
     menu.row("Show more options").emit_activate();
     wait_until("the classic menu", || {
@@ -390,9 +460,9 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_beside_it() {
 
 /// In a folder the user may not write to (no write permission, on a
 /// writable drive), the folder menu's New and Paste stay on, empty
-/// folder or not, as in Windows Explorer: the user tries, and the
-/// system's error says why. Paste asks about the item that failed, New
-/// says why in the toast, and nothing is made. Tests run as a normal
+/// folder or not, as in Windows Explorer: the user tries, and is told
+/// why. Paste asks Windows' "Destination Folder Access Denied", New says
+/// the system's error in the toast, and nothing is made. Tests run as a normal
 /// user: root ignores the permission.
 ///
 /// parity: CMD-011, CMD-031, OPS-001, OPS-047
@@ -445,21 +515,44 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
     }
 
     test.activate("paste", None);
-    let dialog = open_dialog(&test);
+    // Windows asks in the progress window, in place of the action's
+    // progress.
+    let window = crate::window::progress_window::ProgressWindow::of(&test.context);
+    wait_until("the action to ask", || {
+        window
+            .actions()
+            .iter()
+            .any(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+    });
+    let panel = window
+        .actions()
+        .into_iter()
+        .find(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+        .expect("the asking action");
     assert_eq!(
-        dialog.title().unwrap_or_default(),
-        "Error while copying “Notes 2.txt”"
+        panel.caption_shown(),
+        "Destination Folder Access Denied",
+        "Windows' question about a folder that may not be written to"
+    );
+    let texts = panel.failure_texts();
+    assert!(
+        texts
+            .iter()
+            .any(|text| text == "You'll need to provide administrator permission to copy to this folder"),
+        "{texts:?}"
     );
     assert!(
-        dialog.message_text().contains("Permission denied"),
-        "the system's error: {}",
-        dialog.message_text()
+        texts.iter().any(|text| text == "Locked"),
+        "it names the folder: {texts:?}"
     );
-    dialog.press("Cancel");
+    assert_eq!(panel.failure_button_labels(), ["Continue", "Skip", "Cancel"]);
+    assert!(panel.failure_shows_shield());
+    assert!(dialog_over(&test).is_none(), "no dialog over the window");
+    panel.press_failure("Cancel");
     // Whether a result follows Cancel is not this test's concern: one that
     // shows is closed.
     wait_until("the paste to end", || {
-        is_enabled(&test, "new-folder") || dialog_over(&test).is_some_and(|report| report != dialog)
+        is_enabled(&test, "new-folder") || dialog_over(&test).is_some()
     });
     if let Some(report) = dialog_over(&test) {
         report.press("OK");
@@ -657,11 +750,17 @@ fn right_clicking_a_pin_opens_its_menu() {
     // Until then the click lands on empty space, whose menu differs.
     wait_until("the pin's menu", || {
         let menu = test.window.sidebar().right_click_row("Pinned menu");
-        menu.is_visible() && menu.row_labels().first().is_some_and(|label| label == "Open")
+        menu.is_visible()
+            && menu
+                .row_labels()
+                .first()
+                .is_some_and(|label| label == "Open in new tab")
     });
     let menu = test.window.sidebar().right_click_row("Pinned menu");
 
-    assert_eq!(menu.row_labels()[0], "Open");
+    // Windows 11's compact menu of a pinned folder starts with Open in new
+    // tab; a click opens the folder.
+    assert_eq!(menu.row_labels()[0], "Open in new tab");
     assert!(menu.row("Unpin from Quick access").is_sensitive());
     assert!(
         menu.row("Properties").is_sensitive(),
@@ -716,6 +815,75 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert!(!test.window.is_action_enabled("back"), "the history stays behind");
+}
+
+/// The Menu key and Shift+F10 on the focused tab open that tab's menu
+/// under it, with the keyboard on its first item, and closing it gives
+/// the keyboard back to the tab, as Shift+F10 opens
+/// "the context menu for the selected item" in Windows 11 and arrow keys
+/// move along the tab row
+/// (support.microsoft.com, "Keyboard shortcuts in Windows").
+///
+/// parity: TAB-012
+#[gtk::test]
+fn the_menu_key_and_shift_f10_open_the_focused_tabs_menu() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let tab = test
+        .window
+        .tab_strip()
+        .tab_list()
+        .first_child()
+        .expect("the window has a tab");
+    let keys: Vec<gtk::Shortcut> = tab
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let shortcut_for = |key: gtk::gdk::Key, modifiers: gtk::gdk::ModifierType| {
+        keys.iter()
+            .find(|shortcut| {
+                shortcut
+                    .trigger()
+                    .and_downcast::<gtk::KeyvalTrigger>()
+                    .is_some_and(|trigger| trigger.keyval() == key && trigger.modifiers() == modifiers)
+            })
+            .and_then(gtk::Shortcut::action)
+    };
+
+    for (key, modifiers) in [
+        (gtk::gdk::Key::Menu, gtk::gdk::ModifierType::empty()),
+        (gtk::gdk::Key::F10, gtk::gdk::ModifierType::SHIFT_MASK),
+    ] {
+        let action = shortcut_for(key, modifiers).unwrap_or_else(|| panic!("a focused tab takes {key:?}"));
+        assert!(tab.grab_focus(), "the tab in front takes the keyboard");
+        assert!(action.activate(gtk::ShortcutActionFlags::empty(), &tab, None));
+        let menu = test.window.tab_strip().menu();
+        assert!(menu.is_visible(), "{key:?} opens the tab menu");
+        assert_eq!(menu.row_labels()[0], "Move tab to new window");
+        assert!(
+            !menu.row("Close other tabs").is_sensitive(),
+            "the only tab has no others to close"
+        );
+        assert!(
+            !test.window.context_menu().is_visible(),
+            "the file list's menu stays shut"
+        );
+        menu.popdown();
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&test.window),
+            Some(tab.clone()),
+            "Escape gives the keyboard back to the tab"
+        );
+    }
 }
 
 /// Mount disk image and Analyse disk usage start their tool on the
@@ -868,4 +1036,240 @@ fn copy_as_path_in_the_menu_copies_the_items_path() {
     let copied = copied.ok().flatten().map(|text| text.to_string());
     let expected = format!("\"{}\"", fixture.path("Notes 2.txt").display());
     assert_eq!(copied, Some(expected));
+}
+
+/// A pinned folder's compact menu, as Windows 11's: Open in new tab, Open
+/// in new window, Unpin from Quick access, Compress to, Copy as path, New,
+/// Properties, Open in Terminal and Show more options; a standard folder
+/// such as Downloads has only Copy in its strip, and the user's own pin
+/// has Cut, Copy, Rename and Delete. The strip is on the side nearest the
+/// pointer: at the top of a menu opening downward and at the bottom of
+/// one opening upward, as Windows 11 draws it, unless Settings puts it
+/// always at the top or always at the bottom. With
+/// `OX_NATIVE_CAPTURE_DIR` set, the menus are saved there as
+/// `context-menu-match-strip-{pointer,top,bottom}-{down,up}-{light,dark}.png`
+/// and `context-menu-match-pinned-{down,up}-{light,dark}.png`.
+///
+/// parity: SIDE-014, CMD-010
+#[gtk::test]
+fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() {
+    let _theme = crate::test_support::harness::ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let names = [
+        "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliett", "Kilo",
+        "Lima", "Mike", "November",
+    ];
+    for name in names {
+        fs::create_dir(fixture.path(name)).expect("fixture subfolder");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(960, 980);
+    wait_until("the taller window", || test.window.height() >= 940);
+    for name in names {
+        test.window.navigate(&fixture.uri_of(name)).expect("a folder");
+        test.wait_for_listing(name);
+        test.activate("pin-folder", None);
+        wait_until("the pin", || {
+            test.window.sidebar().labels().contains(&name.to_owned())
+        });
+    }
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    let open_menu = |label: &str| {
+        wait_until("the pin's menu", || {
+            let menu = test.window.sidebar().right_click_row(label);
+            let shown = menu.is_visible()
+                && menu
+                    .row_labels()
+                    .first()
+                    .is_some_and(|first| first == "Open in new tab");
+            if !shown {
+                menu.popdown();
+            }
+            shown
+        });
+        let menu = test.window.sidebar().right_click_row(label);
+        crate::test_support::harness::wait_for_frames(&test.window, 3);
+        menu
+    };
+
+    let menu = open_menu("Downloads");
+    assert_eq!(
+        menu.row_labels(),
+        [
+            "Open in new tab",
+            "Open in new window",
+            "Unpin from Quick access",
+            "Compress to",
+            "Copy as path",
+            "New",
+            "Properties",
+            "-",
+            "Open in Terminal",
+            "-",
+            "Show more options",
+        ]
+    );
+    assert_eq!(menu.strip_labels(), ["Copy"]);
+    let compress = menu
+        .items()
+        .into_iter()
+        .find(|item| item.label == "Compress to")
+        .expect("Compress to");
+    let labels: Vec<String> = compress
+        .submenu
+        .iter()
+        .filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item.label.clone()),
+            MenuEntry::Divider => None,
+        })
+        .collect();
+    assert_eq!(labels, ["ZIP File", "TAR File", "Additional options"]);
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+
+    let menu = open_menu("Alpha");
+    assert_eq!(menu.strip_labels(), ["Cut", "Copy", "Rename", "Delete"]);
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        for position in StripPosition::ALL {
+            choose_strip_position(&test, position);
+            // Alpha, high in the pane, opens its menu downward; Downloads,
+            // below the user's pins, opens it upward.
+            for (label, slide, direction) in [("Alpha", Slide::Down, "down"), ("Downloads", Slide::Up, "up")]
+            {
+                let menu = open_menu(label);
+                wait_until("the menu placed", || menu.slide() == Some(slide));
+                let expected = position.at_bottom(slide == Slide::Up);
+                assert_eq!(
+                    menu.strip_at_bottom(),
+                    expected,
+                    "{position:?}, opening {direction}"
+                );
+                let name = position.as_str();
+                crate::test_support::harness::capture_with_menus(
+                    &test.window,
+                    &format!("context-menu-match-strip-{name}-{direction}-{theme}.png"),
+                );
+                if position == StripPosition::Pointer {
+                    let pinned = if direction == "down" {
+                        "pinned-down"
+                    } else {
+                        "pinned-up"
+                    };
+                    crate::test_support::harness::capture_with_menus(
+                        &test.window,
+                        &format!("context-menu-match-{pinned}-{theme}.png"),
+                    );
+                }
+                menu.popdown();
+                wait_until("the menu to close", || !menu.is_mapped());
+            }
+        }
+    }
+}
+
+/// A pinned folder's Copy as path, Compress to › ZIP File and TAR File
+/// and New › Folder act on that folder, not on the file list's selection:
+/// the path is copied in quotes, the ZIP and TAR are made beside the
+/// folder, and New opens
+/// the folder and makes the new folder there.
+///
+/// parity: SIDE-014, CLIP-013, ARC-023
+#[gtk::test]
+fn a_pinned_folder_menu_copies_compresses_and_creates_in_that_folder() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Pinned work")).expect("fixture subfolder");
+    let pinned = fixture.uri_of("Pinned work");
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_model().select_only(0);
+
+    test.activate("copy-path-of", Some(&pinned));
+    let clipboard = test.window.clipboard();
+    let copied = gtk::glib::MainContext::default().block_on(clipboard.read_text_future());
+    let copied = copied.ok().flatten().map(|text| text.to_string());
+    assert_eq!(
+        copied,
+        Some(format!("\"{}\"", fixture.path("Pinned work").display()))
+    );
+
+    test.activate("compress-to-zip-of", Some(&pinned));
+    wait_until("the ZIP beside the folder", || {
+        fixture.path("Pinned work.zip").exists()
+    });
+    test.wait_for_listing("the folder listed again");
+    test.activate("compress-to-tar-of", Some(&pinned));
+    wait_until("the TAR beside the folder", || {
+        fs::read(fixture.path("Pinned work.tar"))
+            .is_ok_and(|bytes| bytes.get(257..262) == Some(b"ustar".as_slice()))
+    });
+    test.wait_for_listing("the folder listed again");
+
+    let new_folder =
+        crate::window::place_commands::new_menu_in(&pinned, crate::window::command_bar::new_menu(Vec::new()));
+    let MenuEntry::Item(folder_item) = &new_folder[0] else {
+        panic!("New › Folder is an item");
+    };
+    assert_eq!(folder_item.label, "Folder");
+    let target = folder_item
+        .target
+        .as_ref()
+        .and_then(|target| target.str().map(str::to_owned))
+        .expect("a text target");
+    test.activate("new-in", Some(&target));
+    wait_until("the pinned folder to open", || {
+        test.window.current_uri().as_deref() == Some(pinned.as_str())
+    });
+    wait_until("the new folder inside it", || {
+        fixture.path("Pinned work/New folder").is_dir()
+    });
+}
+
+/// New in a pinned folder's menu still makes the item while a search
+/// shows: one in that folder, or one kept from another folder ("Keep
+/// search when changing folders"). The search ends first, as New is off
+/// during a search.
+///
+/// parity: SIDE-014
+#[gtk::test]
+fn new_in_a_pinned_folder_ends_a_search_first() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Pinned work")).expect("fixture subfolder");
+    fs::write(fixture.path("Pinned work/plan.txt"), "plan").expect("fixture file");
+    let pinned = fixture.uri_of("Pinned work");
+    let new_folder_in = |uri: &str| {
+        let new_menu =
+            crate::window::place_commands::new_menu_in(uri, crate::window::command_bar::new_menu(Vec::new()));
+        let MenuEntry::Item(folder_item) = &new_menu[0] else {
+            panic!("New › Folder is an item");
+        };
+        folder_item
+            .target
+            .as_ref()
+            .and_then(|target| target.str().map(str::to_owned))
+            .expect("a text target")
+    };
+
+    let test = TestWindow::open(&pinned);
+    test.search_for("plan");
+    assert!(test.window.is_searching());
+    test.activate("new-in", Some(&new_folder_in(&pinned)));
+    wait_until("the new folder inside it", || {
+        fixture.path("Pinned work/New folder").is_dir()
+    });
+    assert!(!test.window.is_searching());
+
+    test.activate("go-to", Some(&fixture.uri()));
+    test.wait_for_listing("the first folder");
+    test.search_for("notes");
+    test.window.search_strip().set_keeps_search(true);
+    test.activate("new-in", Some(&new_folder_in(&pinned)));
+    wait_until("a second new folder in the pinned one", || {
+        fixture.path("Pinned work/New folder (2)").is_dir()
+    });
+    assert_eq!(test.window.current_uri().as_deref(), Some(pinned.as_str()));
+    test.window.search_strip().set_keeps_search(false);
 }

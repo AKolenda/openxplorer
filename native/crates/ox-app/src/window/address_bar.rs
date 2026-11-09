@@ -4,10 +4,12 @@
 //! Ports `renderNavigation`, `editAddress` and `finishAddress` in
 //! `v2.0.0:desktop/ui/app.js`: the location's icon, then crumbs divided by `/`
 //! (`\` on SMB, none after the `/` root) as the current app draws them.
-//! The crumbs scroll sideways (a plain mouse wheel scrolls them) and stay
-//! scrolled to the current folder, so a deep path never widens the
-//! window. Clicking blank space or pressing Ctrl+L edits the address;
-//! leaving the entry returns to the breadcrumbs.
+//! As in Windows 11 File Explorer, a chevron after the icon lists the
+//! top-level places, and crumbs that do not fit collapse into a « button
+//! in its place, so the current folder always shows and a deep path never
+//! widens the window ([`crumb_strip`]). Clicking the icon or blank space,
+//! or pressing Ctrl+L, edits the address; leaving the entry returns to
+//! the breadcrumbs.
 //!
 //! Each crumb activates `win.go-to`, names itself "Go to …" for screen
 //! readers, shows its full address as a tooltip and opens in a background
@@ -23,6 +25,7 @@
 //! [`AddressBar::connect_cancelled`], never through the entry itself.
 
 mod crumb_input;
+mod crumb_strip;
 mod suggestions;
 
 use gtk::prelude::*;
@@ -34,17 +37,15 @@ use crate::icons::{self, Icon};
 
 use super::crumb_menus;
 use super::gestures;
-use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
+use super::BrowserWindow;
+use crumb_strip::{CrumbStrip, CRUMB_CLASS, DIVIDER_CLASS};
 
 /// The location icon: 16 pixels (ui-spec.md §4.2; the web app's was 17).
 const ICON_SIZE: i32 = 16;
 
 /// The glyph of the edit chevron.
 const CHEVRON_GLYPH: i32 = 12;
-
-/// The CSS class of a crumb button.
-const CRUMB_CLASS: &str = "crumb";
 
 /// The CSS class of the crumb a drop would go into (DND-011).
 const CRUMB_DROP_CLASS: &str = "file-drop-active";
@@ -78,6 +79,9 @@ pub(super) struct CrumbButton {
     /// The `/` or `\\` drawn before the crumb, if any
     /// ([`ox_core::location::crumb_divider`]).
     pub divider_before: Option<&'static str>,
+    /// The crumb of search results, which runs the search again rather
+    /// than opening its folder.
+    pub refreshes: bool,
 }
 
 mod imp {
@@ -97,12 +101,9 @@ mod imp {
         /// The breadcrumbs or the entry ([`super::AddressMode`]).
         #[template_child]
         pub(super) stack: TemplateChild<gtk::Stack>,
-        /// Scrolls the crumbs sideways.
+        /// The chevron or «, the crumb buttons and their dividers.
         #[template_child]
-        pub(super) crumb_scroll: TemplateChild<gtk::ScrolledWindow>,
-        /// The crumb buttons and their dividers.
-        #[template_child]
-        pub(super) crumbs: TemplateChild<gtk::Box>,
+        pub(super) crumbs: TemplateChild<super::CrumbStrip>,
         /// The editable address.
         #[template_child]
         pub(super) entry: TemplateChild<gtk::Entry>,
@@ -120,6 +121,13 @@ mod imp {
         pub(super) typed_history: RefCell<Vec<String>>,
         /// The entry's text is being set from the list, not typed.
         pub(super) quiet_change: Cell<bool>,
+        /// The entry's text as last typed or set, not taken from the
+        /// list, which the entry shows again when the selection moves off
+        /// the list or Escape closes it.
+        pub(super) text_typed: RefCell<String>,
+        /// Escape closed the list, and no edit has come since: completions
+        /// that arrive late, for the text as it was, stay closed.
+        pub(super) list_dismissed: Cell<bool>,
         /// The protocols offered under the empty entry (NET-029).
         pub(super) protocols: OnceCell<gtk::Popover>,
     }
@@ -131,6 +139,7 @@ mod imp {
         type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
+            super::CrumbStrip::ensure_type();
             klass.bind_template();
         }
 
@@ -169,16 +178,15 @@ glib::wrapper! {
 }
 
 impl AddressBar {
-    /// Adds what the template cannot express: the glyphs, the chevron's
-    /// action, and the crumbs' scrolling and click handling.
+    /// Adds what the template cannot express: the glyphs, the chevrons'
+    /// actions, and the crumbs' click handling.
     fn finish_template(&self) {
         let imp = self.imp();
         icons::set_icon(&imp.icon, Icon::FileFolder, ICON_SIZE);
         let chevron = icons::image(Icon::ChevronDown16, CHEVRON_GLYPH);
         imp.edit_button.set_child(Some(&chevron));
         WindowAction::AddressHistory.assign_to(&*imp.edit_button);
-        self.keep_current_folder_visible();
-        gestures::scroll_sideways_with_wheel(&imp.crumb_scroll);
+        self.add_strip_menus();
         self.edit_on_blank_click();
         self.show_crumbs_when_focus_leaves();
         self.move_between_crumbs_with_arrows();
@@ -191,20 +199,44 @@ impl AddressBar {
             .expect("the template is finished once");
     }
 
-    /// Scrolls to the last crumb whenever the crumbs or the width change,
-    /// as `crumbs.scrollLeft = crumbs.scrollWidth` in app.js. `changed`
-    /// fires for new bounds only, so the user can still scroll back.
-    fn keep_current_folder_visible(&self) {
-        self.imp()
-            .crumb_scroll
-            .hadjustment()
-            .connect_changed(|adjustment| {
-                adjustment.set_value(adjustment.upper() - adjustment.page_size());
-            });
+    /// The chevron after the icon lists the top-level places, and the «
+    /// in its place the crumbs it hides, then those places, as Windows 11
+    /// File Explorer's address bar does.
+    fn add_strip_menus(&self) {
+        let strip = &*self.imp().crumbs;
+        strip
+            .root_button()
+            .update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                "Show locations",
+            ))]);
+        strip.root_button().connect_clicked(glib::clone!(
+            #[weak(rename_to = bar)]
+            self,
+            move |button| {
+                if let Some(window) = bar.root().and_downcast::<BrowserWindow>() {
+                    window.show_places_menu(button.upcast_ref());
+                }
+            }
+        ));
+        strip
+            .overflow_button()
+            .update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                "Show earlier folders",
+            ))]);
+        strip.overflow_button().connect_clicked(glib::clone!(
+            #[weak(rename_to = bar)]
+            self,
+            move |button| {
+                if let Some(window) = bar.root().and_downcast::<BrowserWindow>() {
+                    window.show_hidden_crumbs_menu(button.upcast_ref(), &bar.hidden_crumbs());
+                }
+            }
+        ));
     }
 
-    /// A click on blank space around the crumbs starts editing. Crumb
-    /// buttons claim their own clicks, so only blank space gets here.
+    /// A click on the location icon or on blank space around the crumbs
+    /// starts editing. Crumb buttons and dividers claim their own clicks,
+    /// so only the icon and blank space get here.
     fn edit_on_blank_click(&self) {
         let click = gtk::GestureClick::new();
         click.set_button(gdk::BUTTON_PRIMARY);
@@ -219,7 +251,7 @@ impl AddressBar {
                 gesture.set_state(gtk::EventSequenceState::Claimed);
             }
         ));
-        self.imp().crumb_scroll.add_controller(click);
+        self.add_controller(click);
     }
 
     /// Leaving the entry, for another widget or another window, returns to
@@ -291,7 +323,7 @@ impl AddressBar {
     /// location (`aria-current` in app.js).
     fn show_crumb_buttons(&self, crumbs: &[CrumbButton]) {
         let crumb_box = &*self.imp().crumbs;
-        remove_children(crumb_box);
+        crumb_box.clear();
         let last = crumbs.len().saturating_sub(1);
         for (index, crumb) in crumbs.iter().enumerate() {
             let next = crumbs.get(index + 1).map(|next| next.crumb.uri.as_str());
@@ -303,7 +335,9 @@ impl AddressBar {
                 crumb_box.append(&label);
             }
             let button = crumb_button(crumb);
-            crumb_menus::open_subfolders_on_down(&button, &crumb.crumb.uri, next);
+            if !crumb.refreshes {
+                crumb_menus::open_subfolders_on_down(&button, &crumb.crumb.uri, next);
+            }
             if index == last {
                 button.update_property(&[gtk::accessible::Property::Description(&ox_core::i18n::gettext(
                     "Current location",
@@ -401,9 +435,7 @@ impl AddressBar {
     /// Highlights the crumb of `folder` as where a drop would go, or none
     /// (DND-011).
     pub(super) fn highlight_crumb(&self, folder: Option<&str>) {
-        let buttons = super::widget_tree::children(&*self.imp().crumbs)
-            .filter_map(|widget| widget.downcast::<gtk::Button>().ok());
-        for button in buttons {
+        for button in self.crumb_buttons() {
             let target = button.action_target_value();
             let is_target = folder.is_some() && target.as_ref().and_then(glib::Variant::str) == folder;
             if is_target {
@@ -414,17 +446,28 @@ impl AddressBar {
         }
     }
 
-    /// The crumb buttons shown, first to last.
+    /// Every crumb button, first to last, those the « hides included.
     pub(super) fn crumb_buttons(&self) -> Vec<gtk::Button> {
-        super::widget_tree::children(&*self.imp().crumbs)
-            .filter_map(|child| child.downcast::<gtk::Button>().ok())
+        self.imp()
+            .crumbs
+            .items()
+            .into_iter()
+            .filter(|item| item.has_css_class(CRUMB_CLASS))
+            .filter_map(|item| item.downcast::<gtk::Button>().ok())
             .collect()
     }
 
-    /// The crumbs' horizontal scroll position, for tests.
+    /// The crumbs the « hides because the bar is too narrow for them,
+    /// first to last.
+    pub(super) fn hidden_crumbs(&self) -> Vec<gtk::Button> {
+        self.imp().crumbs.hidden_crumbs()
+    }
+
+    /// The chevron after the icon and the « shown in its place, for tests.
     #[cfg(test)]
-    pub(super) fn crumb_adjustment(&self) -> gtk::Adjustment {
-        self.imp().crumb_scroll.hadjustment()
+    pub(super) fn strip_buttons(&self) -> (gtk::Button, gtk::Button) {
+        let strip = &*self.imp().crumbs;
+        (strip.root_button().clone(), strip.overflow_button().clone())
     }
 }
 
@@ -447,13 +490,22 @@ fn address_options_menu() -> gio::Menu {
 fn divider_label() -> gtk::Label {
     gtk::Label::builder()
         .accessible_role(gtk::AccessibleRole::Presentation)
-        .css_classes(["crumb-divider"])
+        .css_classes([DIVIDER_CLASS])
         .build()
 }
 
-/// A crumb that opens its folder, named "Go to …" for screen readers.
+/// A crumb that opens its folder, named "Go to …" for screen readers; the
+/// crumb of search results runs the search again.
 fn crumb_button(crumb: &CrumbButton) -> gtk::Button {
     let uri = crumb.crumb.uri.as_str();
+    if crumb.refreshes {
+        return gtk::Button::builder()
+            .label(&crumb.crumb.label)
+            .tooltip_text(&crumb.address)
+            .action_name(WindowAction::Refresh.detailed_name())
+            .css_classes([CRUMB_CLASS])
+            .build();
+    }
     let button = gtk::Button::builder()
         .label(&crumb.crumb.label)
         .tooltip_text(&crumb.address)

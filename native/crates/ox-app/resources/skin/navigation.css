@@ -64,7 +64,7 @@
   transition: background-color 83ms linear, border-color 83ms linear;
 }
 .address button.crumb:hover { background-color: @ox_hover; border-color: @ox_border; }
-.address button.crumb:focus-visible { background-color: @ox_hover; border-color: @ox_focus_outer; outline: none; }
+.address button.crumb:focus-visible { background-color: @ox_hover; outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
 /* C12: the web's dividers were the muted colour at 70% opacity. */
 /* The crumb whose folder a drop would go into (DND-011). */
 .address button.crumb.file-drop-active {
@@ -87,6 +87,24 @@
 .address .crumb-divider:dir(rtl) { background-image: -gtk-icontheme("ox-chevron-left-16-symbolic"); }
 /* A divider opens the subfolder menu of the crumb before it (NAV-020). */
 .address .crumb-divider:hover { background-color: @ox_hover; }
+/* As in Windows 11 Explorer, a chevron follows the location icon and
+   lists the top-level places, and while the first crumbs do not fit a «
+   takes its place and lists them (NAV-017, NAV-023). Drawn as the
+   dividers are; the base button look adds the hover and pressed fills. */
+.address button.crumb-root, .address button.crumb-overflow {
+  min-width: 20px;
+  min-height: 24px;
+  color: @ox_muted;
+  background-image: -gtk-icontheme("ox-chevron-right-16-symbolic");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+}
+.address button.crumb-overflow { background-image: -gtk-icontheme("ox-chevron-double-left-16-symbolic"); }
+.address button.crumb-root:dir(rtl) { background-image: -gtk-icontheme("ox-chevron-left-16-symbolic"); }
+.address button.crumb-overflow:dir(rtl) {
+  background-image: -gtk-icontheme("ox-chevron-double-right-16-symbolic");
+}
 .address button.address-chevron { min-width: 22px; min-height: 24px; }
 .address entry {
   border: none;

@@ -21,7 +21,7 @@ use std::path::Path;
 
 use ox_core::ops::{
     changed_copies, reverse, run_answered_items, run_free_items, run_resolved_transfer, scan_name_conflicts,
-    ConflictScan, OperationContext, OpsError, PlannedKind, Resolution, UndoRecord,
+    ConflictScan, OperationContext, OpsError, PlannedKind, ReplacedFiles, Resolution, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, TransferMode, MAX_ITEMS};
 
@@ -209,6 +209,66 @@ fn a_check_needs_a_folder_and_reports_a_cancellation() {
     assert_eq!(check(&one, &destination, &cancelled), Err(OpsError::Cancelled));
 }
 
+/// A folder opened through a symbolic link is a folder for a paste: the
+/// items land in it, the scan reads the link's own listings, and the
+/// destination that stays planned is the link's address, the one the
+/// interface shows.
+///
+/// parity: OPS-027
+#[test]
+fn a_destination_through_a_symbolic_link_is_a_folder() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    let alias = dst.with_file_name("alias");
+    symlink(&dst, &alias).unwrap();
+    write(&src.join("free.txt"), b"incoming");
+    write(&src.join("taken.txt"), b"incoming too");
+    write(&dst.join("taken.txt"), b"existing");
+
+    let scan = scan(TransferMode::Copy, &src, &["free.txt", "taken.txt"], &alias);
+
+    assert_eq!(scan.destination_folder, file_uri(&alias));
+    assert_eq!(conflict_names(&scan, &src), ["taken.txt"]);
+    run(&scan, &[Resolution::Skip]);
+    assert_eq!(fs::read(dst.join("free.txt")).unwrap(), b"incoming");
+    assert_eq!(fs::read(dst.join("taken.txt")).unwrap(), b"existing");
+}
+
+/// The folder's own address reached through a symbolic link is the folder:
+/// a cut item pasted into it stays where it is, without asking and without
+/// its folder being removed as a merge that emptied it, and a copy is kept
+/// as "name - Copy" instead of meeting itself as a name conflict. The two
+/// addresses are the same folder, whatever the URI says.
+///
+/// parity: OPS-027
+#[test]
+fn a_link_to_the_item_s_own_folder_is_its_own_folder() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("a.txt"), b"only copy");
+    write(&src.join("Folder/inside.txt"), b"inside");
+    fs::create_dir(src.join("Empty")).unwrap();
+    let alias = dst.with_file_name("alias");
+    symlink(&src, &alias).unwrap();
+
+    let moved = scan(TransferMode::Move, &src, &["a.txt", "Folder", "Empty"], &alias);
+
+    assert!(moved.conflicts.is_empty());
+    assert!(moved.items.is_empty());
+    assert!(moved.merged_folders.is_empty());
+    run(&moved, &[]);
+    assert_eq!(fs::read(src.join("a.txt")).unwrap(), b"only copy");
+    assert_eq!(fs::read(src.join("Folder/inside.txt")).unwrap(), b"inside");
+    assert!(src.join("Empty").is_dir(), "the folder stays");
+
+    let copied = scan(TransferMode::Copy, &src, &["Folder"], &alias);
+
+    assert!(copied.conflicts.is_empty());
+    assert_eq!(copied.items[0].kind, PlannedKind::OwnFolderCopy);
+    run(&copied, &[]);
+    assert_eq!(fs::read(src.join("Folder - Copy/inside.txt")).unwrap(), b"inside");
+}
+
 /// "Skip N files with the same date and size" counts the conflicts whose
 /// two files have the same size and modification time.
 ///
@@ -333,6 +393,42 @@ fn undo_brings_back_a_replaced_file_and_redo_replaces_it_again() {
     );
     assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"existing");
     assert_eq!(fs::read(src.join("report.png")).unwrap(), b"incoming");
+}
+
+/// Cancel while the incoming file is being copied keeps the replaced file:
+/// it comes back from the Recycle Bin at once, although the operation's
+/// own cancellation is spent, and nothing is left to restore by hand.
+///
+/// parity: OPS-028
+#[test]
+fn cancelling_a_replacing_copy_brings_the_replaced_file_back() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+    let context = OperationContext::default();
+    let cancel = context.cancel.clone();
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    // The press of Cancel as the copy of the incoming file starts, after
+    // the existing one went to the Recycle Bin.
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &context,
+        move |progress| {
+            if progress.name.as_deref() == Some("report.png") {
+                cancel.cancel();
+            }
+        },
+    ))
+    .expect("an accepted transfer");
+
+    assert!(outcome.result.cancelled, "{:?}", outcome.result);
+    assert!(outcome.result.recovery.is_empty(), "{:?}", outcome.result);
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"existing");
 }
 
 /// A move merges its folder: the answered files move or stay, the folder
@@ -612,4 +708,199 @@ fn a_redone_replacing_copy_still_reports_its_edited_copy() {
 
     assert_eq!(again.undo_label(), "Undo Copy");
     assert_eq!(block_on(changed_copies(&again, since)), ["report.png"]);
+}
+
+/// The Recycle Bin items that came from `path`, as listed now.
+fn recycled_now(path: &Path) -> usize {
+    block_on(ox_core::ops::list_recycle_bin(&Cancellation::new()))
+        .expect("a readable Recycle Bin")
+        .iter()
+        .filter(|item| item.original_path.as_deref() == Some(path))
+        .count()
+}
+
+/// A context whose Replace overwrites the replaced file, as Windows does
+/// (Settings > Files & folders, "When replacing a file, move the old one
+/// to the Recycle Bin" off).
+fn overwriting() -> OperationContext {
+    OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::default()
+    }
+}
+
+/// The names in `folder` that the engine's private staging leaves.
+fn staging_left_in(folder: &Path) -> Vec<String> {
+    fs::read_dir(folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with(".winspace-"))
+        .collect()
+}
+
+/// With the switch off, a copy's Replace overwrites the old file as
+/// Windows 11 does: the incoming file takes its place, nothing goes to
+/// the Recycle Bin, and Undo leaves the replacement where it is, since
+/// the old file is gone.
+///
+/// parity: OPS-028
+#[test]
+fn replace_overwrites_without_the_recycle_bin_when_chosen() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    assert_eq!(fs::read(src.join("report.png")).unwrap(), b"incoming");
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
+    assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
+    assert!(
+        !matches!(outcome.undo, Some(UndoRecord::Replace { .. })),
+        "no replaced file to bring back: {:?}",
+        outcome.undo
+    );
+}
+
+/// The default is unchanged: Replace sends the old file to the Recycle
+/// Bin, as the owner chose.
+///
+/// parity: OPS-028
+#[test]
+fn replace_recycles_the_old_file_by_default() {
+    require_private_trash();
+    assert_eq!(
+        OperationContext::default().replaced_files,
+        ReplacedFiles::RecycleBin
+    );
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    let outcome = run(&scan, &[Resolution::Replace]);
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    // The backend may list a trashed item late.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while recycled_now(&dst.join("report.png")) == 0 && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert_eq!(
+        recycled_now(&dst.join("report.png")),
+        1,
+        "the old file is in the Recycle Bin"
+    );
+}
+
+/// With the switch off, a move's Replace renames the incoming file over
+/// the old one: the old file is gone, not recycled.
+///
+/// parity: OPS-028
+#[test]
+fn a_moves_replace_overwrites_without_the_recycle_bin_when_chosen() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+
+    let scan = scan(TransferMode::Move, &src, &["report.png"], &dst);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    assert!(!src.join("report.png").exists());
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
+}
+
+/// With the switch off, Cancel in the middle of the incoming file's copy
+/// keeps the old file as it was: the copy is written under a private
+/// staging name and only swapped in at the end, so the old file is never
+/// overwritten, never recycled, and no staging is left behind.
+///
+/// parity: OPS-028
+#[test]
+fn cancelling_an_overwriting_copy_midway_keeps_the_old_file() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    // Large enough for several progress reports while it is copied.
+    let incoming = vec![b'n'; 32 * 1024 * 1024];
+    write(&src.join("report.png"), &incoming);
+    write(&dst.join("report.png"), b"existing");
+    let context = overwriting();
+    let cancel = context.cancel.clone();
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    // The press of Cancel once part of the incoming file is written.
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &context,
+        move |progress| {
+            let written = progress.bytes.map_or(0, |bytes| bytes.batch_written);
+            if written > 0 {
+                cancel.cancel();
+            }
+        },
+    ))
+    .expect("an accepted transfer");
+
+    assert!(outcome.result.cancelled, "{:?}", outcome.result);
+    assert!(outcome.result.recovery.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"existing");
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
+    assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
+}
+
+/// With the switch off, a move onto another name of the same file (a
+/// hard link) moves it: the source name goes and the destination keeps
+/// the contents. A rename between two names of one file changes nothing
+/// on its own, so the move is not reported done while its source stays.
+///
+/// parity: OPS-028
+#[test]
+fn an_overwriting_move_onto_a_hard_link_of_itself_removes_the_source_name() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"one file, two names");
+    fs::hard_link(src.join("report.png"), dst.join("report.png")).unwrap();
+
+    let scan = scan(TransferMode::Move, &src, &["report.png"], &dst);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert!(
+        !src.join("report.png").exists(),
+        "the source name goes, as a move does"
+    );
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"one file, two names");
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
 }

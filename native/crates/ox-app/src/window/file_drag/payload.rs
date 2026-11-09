@@ -5,13 +5,14 @@
 //!
 //! Ports `file_uri` and `prepare_files` of `v2.0.0:desktop/native_file_drag.py`
 //! and `fileDragEntry` of `v2.0.0:desktop/ui/app.js`. Only real local and SMB
-//! files, folders and links can leave, 1 to 200 of them, and one item that
-//! may not refuses the whole drag with the Python app's message.
+//! files, folders and links can leave, as many as one transfer takes
+//! (100,000), and one item that may not refuses the whole drag.
 //!
 //! Safety rule (DND-004): only an SMB item consults the mount resolver,
 //! which finds a share that is already mounted and never mounts, downloads
 //! or signs in during the gesture. A local file is its own path.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use gtk::prelude::*;
@@ -20,11 +21,16 @@ use ox_core::entry::{Entry, EntryKind};
 use ox_core::location::{file_uri, is_smb_location, is_smb_server, normalise};
 use ox_core::ops::is_recycle_bin_item;
 
-/// The most items one drag carries (`MAX_ITEMS`).
-pub(super) const MAX_DRAGGED_ITEMS: usize = 200;
+/// The most items one drag carries: as many as one transfer takes, so a
+/// drop never brings more than it can copy or move. Windows Explorer sets
+/// no limit of its own.
+pub(super) const MAX_DRAGGED_ITEMS: usize = ox_core::transfer::MAX_ITEMS;
 
-/// The most bytes of addresses and paths one drag carries (`MAX_BYTES`).
-const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+/// The most bytes of addresses and paths one drag carries: each item's own
+/// address, the address other apps get and its path, about 330 bytes each
+/// for [`MAX_DRAGGED_ITEMS`] items, as the clipboard allows
+/// ([`ox_core::clipboard::MAX_BYTES`]).
+const MAX_PAYLOAD_BYTES: usize = 3 * ox_core::clipboard::MAX_BYTES;
 
 /// KDE's list of the items' own addresses. Dolphin prefers it to
 /// `text/uri-list`, so it gets `smb://` addresses rather than mount paths,
@@ -38,16 +44,17 @@ const KDE_URI_LIST: &str = "application/x-kde4-urilist";
 #[boxed_type(name = "OxDraggedItems")]
 pub(crate) struct DraggedItems(pub(crate) Vec<String>);
 
-/// Why items cannot be dragged out, in the Python app's words.
+/// Why items cannot be dragged out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum DragRefusal {
-    /// No items, more than [`MAX_DRAGGED_ITEMS`], or an item that may not
-    /// leave: a ZIP member, a share listing, a server, a special file.
+    /// No items, or more than [`MAX_DRAGGED_ITEMS`], in a transfer's words.
+    #[error("{}", ox_core::i18n::gettext("Select between 1 and 100,000 items."))]
+    ItemCount,
+    /// An item that may not leave: a ZIP member, a share listing, a
+    /// server, a special file.
     #[error(
         "{}",
-        ox_core::i18n::gettext(
-            "Select up to 200 files or folders. Extract ZIP contents before dragging them."
-        )
+        ox_core::i18n::gettext("Extract the archive before dragging items out of it.")
     )]
     NotDraggable,
     /// The addresses and paths are over [`MAX_PAYLOAD_BYTES`].
@@ -83,37 +90,47 @@ pub(crate) fn is_draggable_location(uri: &str) -> bool {
 /// local or SMB file, folder or link, not a share listing or a shortcut,
 /// whose address passes the location rules, which refuse a password or a
 /// control character (`file_uri`); or an item directly in the Recycle
-/// Bin, which a drop into a folder moves there (OPS-046).
+/// Bin, which a drop into a folder moves there (OPS-046). A row of Recent
+/// files leaves as the file it stands for, whether `GVfs` types the row as
+/// a file or as a shortcut.
 pub(super) fn is_draggable(entry: &Entry) -> bool {
     let is_plain_item = matches!(
         entry.kind,
         EntryKind::File | EntryKind::Directory | EntryKind::Symlink
-    );
-    let is_valid_address = normalise(&entry.uri).is_ok();
-    let may_leave =
-        (is_valid_address && is_draggable_location(&entry.uri)) || is_recycle_bin_item(&entry.uri);
-    is_plain_item && !entry.is_virtual && may_leave
+    ) && !entry.is_virtual;
+    let is_recent_file = entry.meta.recent_target.is_some()
+        && matches!(
+            entry.kind,
+            EntryKind::File | EntryKind::Shortcut | EntryKind::Symlink
+        );
+    let uri = entry.item_uri();
+    let is_valid_address = normalise(uri).is_ok();
+    let may_leave = (is_valid_address && is_draggable_location(uri)) || is_recycle_bin_item(uri);
+    (is_plain_item || is_recent_file) && may_leave
 }
 
 /// The URIs a drag of `entries` carries: every one, in order, without
-/// duplicates.
+/// duplicates; a row of Recent files carries the file it stands for.
 ///
 /// # Errors
 ///
-/// [`DragRefusal::NotDraggable`] for no entries, more than
-/// [`MAX_DRAGGED_ITEMS`], or any entry that may not leave the app: the
-/// whole drag is refused.
+/// [`DragRefusal::ItemCount`] for no entries or more than
+/// [`MAX_DRAGGED_ITEMS`], and [`DragRefusal::NotDraggable`] when any entry
+/// may not leave the app: the whole drag is refused.
 pub(super) fn dragged_uris(entries: &[&Entry]) -> Result<Vec<String>, DragRefusal> {
-    let within_limit = (1..=MAX_DRAGGED_ITEMS).contains(&entries.len());
-    if !within_limit || !entries.iter().all(|entry| is_draggable(entry)) {
+    if !(1..=MAX_DRAGGED_ITEMS).contains(&entries.len()) {
+        return Err(DragRefusal::ItemCount);
+    }
+    if !entries.iter().all(|entry| is_draggable(entry)) {
         return Err(DragRefusal::NotDraggable);
     }
-    let mut uris: Vec<String> = Vec::with_capacity(entries.len());
-    for entry in entries {
-        if !uris.contains(&entry.uri) {
-            uris.push(entry.uri.clone());
-        }
-    }
+    let mut seen: HashSet<&str> = HashSet::with_capacity(entries.len());
+    let uris = entries
+        .iter()
+        .map(|entry| entry.item_uri())
+        .filter(|uri| seen.insert(uri))
+        .map(str::to_owned)
+        .collect();
     Ok(uris)
 }
 
@@ -161,7 +178,7 @@ impl DragPayload {
     /// # Errors
     ///
     /// [`DragRefusal::TooLarge`] when the addresses and paths are over
-    /// 1 MiB together.
+    /// [`MAX_PAYLOAD_BYTES`] together.
     pub(crate) fn new(
         uris: Vec<String>,
         mount_path: impl Fn(&str) -> Option<PathBuf>,
@@ -235,11 +252,19 @@ mod tests {
         let mut with_password = file_entry("a");
         with_password.uri = "smb://ada:secret@nas/Projects/a".to_owned();
         assert_eq!(dragged_uris(&[&with_password]), Err(DragRefusal::NotDraggable));
-        assert_eq!(dragged_uris(&[]), Err(DragRefusal::NotDraggable));
-        assert_eq!(dragged_uris(&many_refs), Err(DragRefusal::NotDraggable));
+        assert_eq!(dragged_uris(&[]), Err(DragRefusal::ItemCount));
+        assert_eq!(dragged_uris(&many_refs), Err(DragRefusal::ItemCount));
+        assert_eq!(
+            dragged_uris(&many_refs[1..]).map(|uris| uris.len()),
+            Ok(MAX_DRAGGED_ITEMS)
+        );
         assert_eq!(
             DragRefusal::NotDraggable.to_string(),
-            "Select up to 200 files or folders. Extract ZIP contents before dragging them."
+            "Extract the archive before dragging items out of it."
+        );
+        assert_eq!(
+            DragRefusal::ItemCount.to_string(),
+            "Select between 1 and 100,000 items."
         );
     }
 
@@ -303,9 +328,11 @@ mod tests {
     ///
     /// parity: DND-003
     #[test]
-    fn a_selection_over_one_mebibyte_of_addresses_is_refused() {
+    fn a_selection_over_the_size_limit_of_addresses_is_refused() {
         let long_name = "x".repeat(4000);
-        let uris: Vec<String> = (0..MAX_DRAGGED_ITEMS)
+        // Each item's address, exported address and text line are its own.
+        let count = MAX_PAYLOAD_BYTES / (3 * long_name.len()) + 1;
+        let uris: Vec<String> = (0..count)
             .map(|number| format!("smb://nas/share/{long_name}{number}"))
             .collect();
 

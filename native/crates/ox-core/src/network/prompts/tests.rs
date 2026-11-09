@@ -161,6 +161,30 @@ fn another_share_reuses_the_account_without_a_dialog() {
     });
 }
 
+/// Map network drive's "Connect using different credentials" shows the
+/// sign-in dialog even for a server whose account is known, and keeps
+/// the account typed there.
+///
+/// parity: NET-001, NET-011
+#[test]
+fn different_credentials_ask_even_when_the_account_is_known() {
+    with_prompts(|fixture| {
+        fixture.credentials.accept_memory("smb://nas/a", &sam("test"));
+        let operation = fixture
+            .prompts
+            .create_with("smb://nas/other", CredentialChoice::Different)
+            .expect("a valid SMB location");
+
+        ask_password(&operation, SIGN_IN_FLAGS);
+        fixture.wait_until("the sign-in dialog", || fixture.prompter.shown_count() == 1);
+
+        assert_eq!(operation.password(), None, "no known account was given");
+        let id = fixture.prompter.last_shown().id;
+        answer_as_sam(fixture, id, "other", CredentialScope::Session);
+        assert_eq!(operation.password().as_deref(), Some("other"));
+    });
+}
+
 /// A credential saved in the keyring by an earlier session is reused too,
 /// read off the main thread.
 ///

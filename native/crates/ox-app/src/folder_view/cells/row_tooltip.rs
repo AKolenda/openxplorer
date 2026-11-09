@@ -31,6 +31,10 @@ pub(crate) enum RowTooltip {
     /// The item's full display path, while the window searches, so a
     /// result is told apart from others of the same name.
     FullPath,
+    /// Nothing but a name cut short, while a folder is listed with Folder
+    /// Options' "Show pop-up description for folder and desktop items"
+    /// off.
+    NameOnly,
 }
 
 impl RowTooltip {
@@ -39,6 +43,7 @@ impl RowTooltip {
         match self {
             RowTooltip::Name => infotip(item),
             RowTooltip::FullPath => Some(display_path(&item.entry().uri)),
+            RowTooltip::NameOnly => None,
         }
     }
 }
@@ -59,7 +64,7 @@ fn infotip(item: &FileItem) -> Option<String> {
             lines.push(format_message("Type: {type}", &[("type", &entry.type_label)]));
         }
         if let Some(size) = item.file_size() {
-            let size = format::size_text(Some(size));
+            let size = format::short_size(size);
             lines.push(format_message("Size: {size}", &[("size", &size)]));
         }
         if entry.modified.is_some() {
@@ -100,8 +105,11 @@ pub(crate) fn show_row_tooltip(
             return false;
         };
         let cut_short = cut_short_text(cell.upcast_ref(), &owners.shown_name(&item));
-        let Some(text) = tooltip_text(owners.row_tooltip(), kind, &item, own_tooltip(&item), cut_short)
-        else {
+        let row = match owners.row_tooltip() {
+            RowTooltip::Name if owners.hides_infotips() => RowTooltip::NameOnly,
+            row => row,
+        };
+        let Some(text) = tooltip_text(row, kind, &item, own_tooltip(&item), cut_short) else {
             return false;
         };
         tooltip.set_text(Some(&text));
@@ -125,12 +133,12 @@ fn tooltip_text(
     }
     match (row, kind) {
         (RowTooltip::FullPath, _) => row.text(item),
-        (RowTooltip::Name, TooltipCell::Item) => match (cut_short, row.text(item)) {
+        (RowTooltip::Name | RowTooltip::NameOnly, TooltipCell::Item) => match (cut_short, row.text(item)) {
             (Some(name), Some(tip)) => Some(format!("{name}\n{tip}")),
             (name, None) => name,
             (None, tip) => tip,
         },
-        (RowTooltip::Name, TooltipCell::Column) => cut_short,
+        (RowTooltip::Name | RowTooltip::NameOnly, TooltipCell::Column) => cut_short,
     }
 }
 
@@ -149,6 +157,28 @@ mod tests {
     use super::*;
     use crate::test_support::{file_entry, folder_entry};
 
+    /// The infotip writes a size as the status bar and the details pane
+    /// do, "4.38 KB" for 4,486 bytes, and one byte in the singular.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn the_infotip_size_reads_as_the_status_bar_writes_it() {
+        let size_line = |bytes| {
+            let mut entry = file_entry("Notes 2.txt");
+            entry.size = Some(bytes);
+            let tooltip = RowTooltip::default()
+                .text(&FileItem::new(entry))
+                .unwrap_or_default();
+            tooltip
+                .lines()
+                .find(|line| line.starts_with("Size:"))
+                .map(str::to_owned)
+        };
+        assert_eq!(size_line(4_486).as_deref(), Some("Size: 4.38 KB"));
+        assert_eq!(size_line(1).as_deref(), Some("Size: 1 byte"));
+        assert_eq!(size_line(912).as_deref(), Some("Size: 912 bytes"));
+    }
+
     /// An item's tooltip is Explorer's infotip, with only what is known,
     /// or its full path while searching.
     ///
@@ -164,7 +194,7 @@ mod tests {
             RowTooltip::default().text(&item),
             Some(format!(
                 "Type: Text document\nSize: {}\nDate modified: {}",
-                format::size_text(Some(2_048)),
+                format::short_size(2_048),
                 format::date_short_time_text(Some(1_789_378_200))
             ))
         );
@@ -205,6 +235,45 @@ mod tests {
         assert_eq!(
             tooltip_text(RowTooltip::Name, TooltipCell::Item, &unknown, None, None),
             None
+        );
+    }
+
+    /// With Folder Options' "Show pop-up description for folder and
+    /// desktop items" off, an item shows no infotip, only its name when
+    /// that is cut short, and a column its own tooltip as before.
+    ///
+    /// parity: VIEW-042
+    #[test]
+    fn pop_up_descriptions_off_leave_only_a_name_cut_short() {
+        let mut entry = file_entry("Notes 2.txt");
+        entry.type_label = "Text document".to_owned();
+        entry.size = Some(2_048);
+        let file = FileItem::new(entry);
+        assert!(RowTooltip::Name.text(&file).is_some(), "an infotip by default");
+        assert_eq!(RowTooltip::NameOnly.text(&file), None);
+        assert_eq!(
+            tooltip_text(RowTooltip::NameOnly, TooltipCell::Item, &file, None, None),
+            None
+        );
+        assert_eq!(
+            tooltip_text(
+                RowTooltip::NameOnly,
+                TooltipCell::Item,
+                &file,
+                None,
+                Some("Notes 2.txt".to_owned())
+            ),
+            Some("Notes 2.txt".to_owned())
+        );
+        assert_eq!(
+            tooltip_text(
+                RowTooltip::NameOnly,
+                TooltipCell::Column,
+                &file,
+                Some("Own".to_owned()),
+                None
+            ),
+            Some("Own".to_owned())
         );
     }
 

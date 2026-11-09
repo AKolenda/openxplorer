@@ -28,6 +28,7 @@
 //! the secondary button selects the item, and the context menu opens only
 //! when it is released without dragging.
 
+mod label;
 mod payload;
 
 use std::collections::HashSet;
@@ -46,6 +47,9 @@ use crate::icons::{Art, ArtImage};
 use super::zip_copies::ZipDragContent;
 use super::BrowserWindow;
 
+pub(crate) use label::{show_drag_label, DragLabel, DragVerb};
+#[cfg(test)]
+pub(crate) use label::{shown_drag_glyph, shown_drag_label};
 use payload::dragged_uris;
 pub(crate) use payload::{is_draggable_location, DragPayload, DragRefusal, DraggedItems};
 
@@ -140,6 +144,11 @@ pub(crate) fn is_being_dragged(uri: &str) -> bool {
     DRAGGED.with(|dragged| dragged.borrow().contains(uri))
 }
 
+/// The items this process drags now, from any of its windows.
+pub(crate) fn dragged_now() -> Vec<String> {
+    DRAGGED.with(|dragged| dragged.borrow().iter().cloned().collect())
+}
+
 /// The button `drag`, a drag of this process, was made with.
 pub(crate) fn drag_button(drag: &gdk::Drag) -> DragButton {
     let is_secondary = SECONDARY_DRAG.with(|secondary| secondary.borrow().upgrade().as_ref() == Some(drag));
@@ -201,18 +210,26 @@ pub(super) fn drag_actions(
 }
 
 /// The icon that follows the pointer: the first item's art, with the
-/// number of items beside it when there are several.
+/// number of items beside it when there are several, and under them the
+/// label that says what a release would do ([`label`]).
 fn drag_icon(art: Art, count: usize) -> gtk::Widget {
-    let icon = gtk::Box::builder().spacing(4).css_classes(["drag-icon"]).build();
-    icon.append(&ArtImage::new(art, DRAG_ICON_SIZE));
+    let pictures = gtk::Box::builder().spacing(4).build();
+    pictures.append(&ArtImage::new(art, DRAG_ICON_SIZE));
     if count > 1 {
         let badge = gtk::Label::builder()
             .label(ox_core::format::group_digits(count as u64))
             .valign(gtk::Align::Start)
             .css_classes(["drag-count"])
             .build();
-        icon.append(&badge);
+        pictures.append(&badge);
     }
+    let icon = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(4)
+        .css_classes(["drag-icon"])
+        .build();
+    icon.append(&pictures);
+    icon.append(&label::drag_label());
     icon.upcast()
 }
 
@@ -223,6 +240,58 @@ fn file_drag_source() -> gtk::DragSource {
     let source = gtk::DragSource::new();
     source.set_button(0);
     source
+}
+
+/// What a drag of a drive offers, from This PC or the sidebar: a link
+/// alone, as a drive's drop effect in Windows Explorer is a link. Another
+/// app is never offered a copy or a move of a whole drive; this app's own
+/// right-button drag still asks with its drop menu, which offers drives
+/// "Create shortcuts here" alone.
+pub(super) const DRIVE_DRAG_ACTIONS: gdk::DragAction = gdk::DragAction::LINK;
+
+/// Lets the drive tiles of This PC, drawn in `page`, be dragged, as
+/// Windows Explorer lets a drive be dragged into a folder to make a
+/// shortcut to it there ("Create link in Documents"). `drive_at` names
+/// the drive whose tile is at a point of `page`; a press anywhere else
+/// drags nothing, so the tile box's rubber band starts there. The source
+/// is on the page, in the capture phase, so it sees a drag before the
+/// tile box, whose own rubber band would take a drag that starts on a
+/// tile. The page finds its window when the drag starts.
+pub(super) fn attach_drive_tile_drag(
+    page: &gtk::Box,
+    drive_at: impl Fn(&gtk::Box, f64, f64) -> Option<String> + 'static,
+) {
+    let source = file_drag_source();
+    source.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let window_of = |source: &gtk::DragSource| {
+        source
+            .widget()
+            .and_then(|widget| widget.root())
+            .and_downcast::<BrowserWindow>()
+    };
+    source.connect_prepare(move |source, x, y| {
+        let page = source.widget().and_downcast::<gtk::Box>()?;
+        let uri = drive_at(&page, x, y)?;
+        pressed_button(source)?;
+        let content = window_of(source)?.drive_tile_drag_content(uri)?;
+        source.set_actions(DRIVE_DRAG_ACTIONS);
+        Some(content)
+    });
+    source.connect_drag_begin(move |source, drag| {
+        mark_drag_button(drag);
+        if let Some(window) = window_of(source) {
+            window.begin_file_drag(drag);
+        }
+    });
+    source.connect_drag_end(move |source, drag, _| {
+        super::drag_surface::keep_finished_drag(drag);
+        SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
+        label::forget_drag_label();
+        if let Some(window) = window_of(source) {
+            window.end_file_drag();
+        }
+    });
+    page.add_controller(source);
 }
 
 /// True when a menu or other popover inside `widget` is open.
@@ -254,6 +323,11 @@ impl BrowserWindow {
             None,
             move |source, x, y| {
                 let button = pressed_button(source)?;
+                // The empty part of a details row is no item to drag: a
+                // primary press there draws a rubber band (SEL-012).
+                if button == DragButton::Primary && window.is_blank_space(&view, x, y) {
+                    return None;
+                }
                 let position = window.folder_pane().owners().position_at(&view, x, y)?;
                 let content = window.drag_content_for(position)?;
                 source.set_actions(drag_actions(&content, button, source.current_event_state()));
@@ -276,13 +350,33 @@ impl BrowserWindow {
             move |source, _, y| {
                 let button = pressed_button(source)?;
                 let uri = window.sidebar().location_at(y)?;
+                let is_drive = window.are_all_drives(std::slice::from_ref(&uri));
                 let content = window.sidebar_drag_content(uri)?;
-                source.set_actions(offered_actions(button, source.current_event_state()));
+                // A drive is only ever linked to, by this app or another.
+                let actions = if is_drive {
+                    DRIVE_DRAG_ACTIONS
+                } else {
+                    offered_actions(button, source.current_event_state())
+                };
+                source.set_actions(actions);
                 Some(content)
             }
         ));
         self.follow_file_drag(&source);
         self.sidebar().list().add_controller(source);
+    }
+
+    /// What dragging This PC's tile of the drive at `uri` offers: the
+    /// drive, which a drop into a folder makes a shortcut to
+    /// ([`super::drive_shortcuts`]); `None` while an operation runs.
+    fn drive_tile_drag_content(&self, uri: String) -> Option<gdk::ContentProvider> {
+        if !(is_draggable_location(&uri) && self.may_start_drag()) {
+            return None;
+        }
+        self.offer_drag(
+            DragPayload::new(vec![uri], local_path),
+            Art::Glyph(crate::icons::Icon::HardDrive),
+        )
     }
 
     /// Shows the feedback of `source`'s drags as they start and end.
@@ -301,6 +395,7 @@ impl BrowserWindow {
             move |_, drag, _| {
                 super::drag_surface::keep_finished_drag(drag);
                 SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
+                label::forget_drag_label();
                 window.end_file_drag();
             }
         ));
@@ -349,7 +444,14 @@ impl BrowserWindow {
         if !may_leave {
             return None;
         }
-        self.offer_drag(DragPayload::new(vec![uri], local_path), Art::Folder)
+        // A drive is dragged as a drive, as This PC's tiles drag it.
+        let is_drive = !self.split_drives(std::slice::from_ref(&uri)).drives.is_empty();
+        let art = if is_drive {
+            Art::Glyph(crate::icons::Icon::HardDrive)
+        } else {
+            Art::Folder
+        };
+        self.offer_drag(DragPayload::new(vec![uri], local_path), art)
     }
 
     /// True while nothing holds drags back: no file operation runs or is

@@ -16,11 +16,17 @@
 //! | N | The destination has N files with the same names | Replace the files in the destination · Skip these files · Let me decide for each file |
 //!
 //! A file meeting a folder of its name says "a folder named". The last row
-//! opens the File Conflict window ([`FileConflictWindow`]), whose Cancel
-//! stops the action, as in Windows. The action's Cancel stays beside the
-//! question, and stops it too; nothing has changed then. Each row is a
+//! opens the File Conflict window ([`FileConflictWindow`]). Its Cancel,
+//! close button and Escape close only that window, and the same question
+//! shows again, unanswered, as in Windows 11. The action's Cancel stays
+//! beside the question and stops the action; nothing has changed then. Each row is a
 //! button named by its text, reachable with Tab, with the glyph Windows
 //! shows: a check mark, a turning arrow and two documents.
+//!
+//! While it asks, the window's "More details" / "Fewer details" toggle
+//! shows greyed, still worded as it was left, and the details stay
+//! hidden, as in Windows: the files are compared only in the File
+//! Conflict window.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -84,10 +90,34 @@ pub(super) fn question_texts(scan: &ConflictScan) -> [String; 4] {
     ]
 }
 
+/// What the action says when the destination's drive is full, in
+/// Windows' words.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SpaceTexts {
+    /// "There is not enough space on USB Drive."
+    pub(crate) summary: String,
+    /// "4.4 GB is needed to copy this item. Delete or move files so you
+    /// have enough space."
+    pub(crate) needed: String,
+    /// "Space free: 3.8 GB" and "Total size: 7.5 GB", each when known.
+    pub(crate) drive: Vec<String>,
+}
+
 impl TransferPanel {
     /// Sets the rows' glyphs and buttons; called once the template is
     /// built.
     pub(super) fn connect_question(&self) {
+        let imp = self.imp();
+        for (button, retry) in [
+            (&*imp.space_retry_button, true),
+            (&*imp.space_cancel_button, false),
+        ] {
+            button.connect_clicked(glib::clone!(
+                #[weak(rename_to = panel)]
+                self,
+                move |_| panel.answer_space(retry)
+            ));
+        }
         let imp = self.imp();
         icons::set_icon(&imp.replace_icon, Icon::Checkmark, ROW_GLYPH_SIZE);
         icons::set_icon(&imp.skip_icon, Icon::ArrowUndo, ROW_GLYPH_SIZE);
@@ -109,18 +139,30 @@ impl TransferPanel {
     /// an answer per conflict, or `None` when the user cancelled.
     pub(crate) async fn ask_about_conflicts(&self, scan: &ConflictScan) -> Option<Vec<Resolution>> {
         let count = scan.conflicts.len();
-        let answers = match self.ask_row(scan).await {
-            None => None,
-            Some(Row::Replace) => Some(vec![Resolution::Replace; count]),
-            Some(Row::Skip) => Some(vec![Resolution::Skip; count]),
-            Some(Row::Decide) => self.decide_each(scan).await,
+        let answers = loop {
+            match self.ask_row(scan).await {
+                None => break None,
+                Some(Row::Replace) => break Some(vec![Resolution::Replace; count]),
+                Some(Row::Skip) => break Some(vec![Resolution::Skip; count]),
+                Some(Row::Decide) => {
+                    if let Some(answers) = self.decide_each(scan).await {
+                        break Some(answers);
+                    }
+                    if self.is_cancelled_now() {
+                        break None;
+                    }
+                    // Closed unanswered: the same question asks again.
+                }
+            }
         };
         self.end_question();
         answers
     }
 
-    /// Opens the File Conflict window and waits for its answers; Cancel
-    /// there stops the whole action, as in Windows.
+    /// Opens the File Conflict window and waits for its answers. Its
+    /// Cancel, close button and Escape close only that window, unanswered
+    /// (`None`), and the action goes back to its question, as in Windows
+    /// 11, still waiting.
     async fn decide_each(&self, scan: &ConflictScan) -> Option<Vec<Resolution>> {
         let window = self.imp().window.upgrade()?;
         let source = self.source_folder();
@@ -128,32 +170,121 @@ impl TransferPanel {
         self.imp().conflict_window.set(Some(&conflicts));
         let answers = conflicts.answers().await;
         self.imp().conflict_window.set(None);
-        if answers.is_none() {
-            self.cancel();
-        }
         answers
     }
 
-    /// True while the action asks.
+    /// Whether the action was cancelled, by its Cancel or the progress
+    /// window's close button.
+    fn is_cancelled_now(&self) -> bool {
+        self.imp()
+            .cancel
+            .borrow()
+            .as_ref()
+            .is_some_and(ox_core::transfer::Cancellation::is_cancelled)
+    }
+
+    /// Asks, in place of the progress, about a drive too full for what
+    /// the action writes, and waits: true for Try Again, false for Cancel
+    /// or once the action was cancelled.
+    pub(crate) async fn ask_about_space(&self, texts: &SpaceTexts) -> bool {
+        let imp = self.imp();
+        self.show_asking(&texts.summary);
+        imp.space_label.set_text(&texts.needed);
+        let drive = texts.drive.join("\n");
+        imp.space_drive_label.set_text(&drive);
+        imp.space_drive_label.set_visible(!drive.is_empty());
+        imp.space_question.set_visible(true);
+        let (sender, receiver) = async_channel::bounded(1);
+        imp.space_answer.replace(Some(sender));
+        if imp
+            .cancel
+            .borrow()
+            .as_ref()
+            .is_some_and(ox_core::transfer::Cancellation::is_cancelled)
+        {
+            self.answer_space(false);
+        }
+        if let Some(window) = imp.window.upgrade() {
+            window.show_question();
+        }
+        let retry = receiver.recv().await.unwrap_or(false);
+        self.end_question();
+        retry
+    }
+
+    /// Answers the question about a full drive, if one waits.
+    fn answer_space(&self, retry: bool) {
+        if let Some(sender) = self.imp().space_answer.take() {
+            // The receiver waits for exactly one answer.
+            let _ = sender.try_send(retry);
+        }
+    }
+
+    /// True while the action asks about taken names or a full drive.
     pub(crate) fn is_asking(&self) -> bool {
+        let imp = self.imp();
+        imp.question.get_visible() || imp.space_question.get_visible() || self.asks_about_failure()
+    }
+
+    /// What the action says about a full drive, for tests.
+    #[cfg(test)]
+    pub(crate) fn space_texts_shown(&self) -> (String, String) {
+        let imp = self.imp();
+        (imp.percent_label.text().into(), imp.space_label.text().into())
+    }
+
+    /// Presses Try Again (true) or Cancel in the question about a full
+    /// drive, for tests.
+    #[cfg(test)]
+    pub(crate) fn press_space_answer(&self, retry: bool) {
+        let imp = self.imp();
+        let button = if retry {
+            &imp.space_retry_button
+        } else {
+            &imp.space_cancel_button
+        };
+        button.emit_clicked();
+    }
+
+    /// True while the action asks Replace or Skip Files.
+    pub(crate) fn asks_about_names(&self) -> bool {
         self.imp().question.get_visible()
+    }
+
+    /// True while a row of Replace or Skip Files answers, for tests.
+    #[cfg(test)]
+    pub(crate) fn waits_for_a_row(&self) -> bool {
+        self.asks_about_names() && self.imp().question_answer.borrow().is_some()
+    }
+
+    /// True while the action asks about a full drive.
+    pub(crate) fn asks_about_space(&self) -> bool {
+        self.imp().space_question.get_visible()
+    }
+
+    /// Says `summary` in the percentage's place, wrapping, and hides the
+    /// bar, the details and Pause, as the action does while it asks.
+    pub(super) fn show_asking(&self, summary: &str) {
+        let imp = self.imp();
+        imp.percent_label.set_text(summary);
+        imp.percent_label.set_wrap(true);
+        imp.percent_label.set_ellipsize(gtk::pango::EllipsizeMode::None);
+        imp.pause_button.set_visible(false);
+        imp.progress_bar.set_visible(false);
+        imp.details.set_visible(false);
+        self.add_css_class("asking");
     }
 
     /// Shows the question and waits for a row; `None` once cancelled.
     async fn ask_row(&self, scan: &ConflictScan) -> Option<Row> {
         let imp = self.imp();
         let [summary, replace, skip, decide] = question_texts(scan);
-        imp.percent_label.set_text(&summary);
-        imp.percent_label.set_wrap(true);
-        imp.percent_label.set_ellipsize(gtk::pango::EllipsizeMode::None);
+        self.show_asking(&summary);
         imp.replace_label.set_text(&replace);
         imp.skip_label.set_text(&skip);
         imp.decide_label.set_text(&decide);
-        imp.pause_button.set_visible(false);
-        imp.progress_bar.set_visible(false);
-        imp.details.set_visible(false);
+        // The details stay hidden, and the window greys its toggle.
         imp.question.set_visible(true);
-        self.add_css_class("asking");
         let (sender, receiver) = async_channel::bounded(1);
         imp.question_answer.replace(Some(sender));
         if imp
@@ -185,11 +316,14 @@ impl TransferPanel {
     }
 
     /// The question ends: the progress shows again.
-    fn end_question(&self) {
+    pub(super) fn end_question(&self) {
+        self.remove_failure_question();
         let imp = self.imp();
         imp.cancel_button.set_visible(true);
         imp.question_answer.replace(None);
+        imp.space_answer.replace(None);
         imp.question.set_visible(false);
+        imp.space_question.set_visible(false);
         self.remove_css_class("asking");
         imp.percent_label.set_wrap(false);
         imp.percent_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
@@ -197,6 +331,7 @@ impl TransferPanel {
             .set_visible(imp.kind.get() == Some(super::TransferKind::Files));
         let details = imp.window.upgrade().is_some_and(|window| window.shows_details());
         self.show_details(details);
+        self.show_details_text();
         self.show_percent();
         self.refresh_window();
     }
@@ -205,6 +340,8 @@ impl TransferPanel {
     /// the File Conflict window it opened, close unanswered.
     pub(super) fn stop_asking(&self) {
         self.answer(None);
+        self.answer_space(false);
+        self.answer_failure(super::failure::FailureChoice::Cancel);
         if let Some(conflicts) = self.imp().conflict_window.upgrade() {
             conflicts.cancel();
         }

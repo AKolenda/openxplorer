@@ -86,9 +86,12 @@ impl From<TransferError> for OpsError {
             TransferError::NotSupported(message) | TransferError::ReplaceUnsupported(message) => {
                 OpsError::NotSupported(message)
             }
-            TransferError::RecoveryRequired(message) | TransferError::Failed(message) => {
-                OpsError::Failed(message)
-            }
+            TransferError::PermissionDenied(message) => OpsError::PermissionDenied(message),
+            TransferError::RecoveryRequired(message)
+            | TransferError::NoSpace(message)
+            | TransferError::Busy(message)
+            | TransferError::InsideSource(message)
+            | TransferError::Failed(message) => OpsError::Failed(message),
         }
     }
 }

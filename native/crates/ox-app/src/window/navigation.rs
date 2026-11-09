@@ -6,7 +6,8 @@
 //! scroll position; moving to another location forgets the selection and
 //! the scroll position, and showing another tab puts its own back. As in
 //! Dolphin, Back and Forward return to where the view was, and going up
-//! selects the folder just left.
+//! selects the folder just left. Search results are a step of the
+//! history too ([`super::search_steps`]).
 //! [`super::location_view`] draws the result into the frame.
 
 use gtk::prelude::*;
@@ -16,10 +17,11 @@ use ox_core::location::{
     self, normalise_navigation, parent_location, ArchiveLocation, LocationError, VirtualPlace,
 };
 
-use crate::history::LeftView;
+use crate::history::{LeftView, SearchStep};
 use crate::locations::{self, Page};
 
 use super::loading::LoadMode;
+use super::search_steps::ResultsView;
 use super::session::{Direction, PaneSide, TabId, TabPlacement, TabPosition};
 use super::BrowserWindow;
 
@@ -32,6 +34,15 @@ pub(super) enum FocusOnShow {
     /// Nowhere: a click or a focus change in a split tab's other pane made
     /// it active, and focus is going there already.
     Keep,
+}
+
+/// What leaving a location does to the search shown there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LeftSearch {
+    /// It ends, unless the strip's pin keeps it (SRCH-005).
+    MayKeep,
+    /// It ends.
+    End,
 }
 
 /// What a tab needs to be put back on screen.
@@ -56,8 +67,9 @@ struct SavedTabView {
 impl BrowserWindow {
     /// The canonical location for an address: the home folder for its
     /// legacy page names, a landing page by URI, the home folder or a
-    /// landing page by title, the Recycle Bin or a folder in it, else a
-    /// folder relative to the current one (see [`Self::resolve_relative`]).
+    /// landing page by title, the Recycle Bin or Recent or a location in
+    /// them, else a folder relative to the current one (see
+    /// [`Self::resolve_relative`]).
     ///
     /// # Errors
     ///
@@ -79,8 +91,8 @@ impl BrowserWindow {
         if let Some(place) = self.place_titled(typed) {
             return Ok(place);
         }
-        if let Some(recycle_bin) = recycle_bin_location(typed)? {
-            return Ok(recycle_bin);
+        if let Some(listed) = gio_folder_location(typed)? {
+            return Ok(listed);
         }
         if let Some(inside) = ArchiveLocation::parse(typed)? {
             return Ok(inside.uri());
@@ -169,6 +181,33 @@ impl BrowserWindow {
         placement: TabPlacement,
         position: TabPosition,
     ) -> Result<(), LocationError> {
+        self.add_tab_showing(address, placement, position, None)
+    }
+
+    /// Adds a tab opened from the active one on the results of `search`
+    /// in `address`, a step after the folder, as if searched there
+    /// (SRCH-042): a middle-click on Back to "Search Results in Documents".
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open; nothing changes.
+    pub(super) fn open_search_tab(
+        &self,
+        address: &str,
+        placement: TabPlacement,
+        search: SearchStep,
+    ) -> Result<(), LocationError> {
+        self.add_tab_showing(address, placement, self.opened_tab_position(), Some(search))
+    }
+
+    /// Adds a tab for `address` at `position`, showing `search` there.
+    fn add_tab_showing(
+        &self,
+        address: &str,
+        placement: TabPlacement,
+        position: TabPosition,
+        search: Option<SearchStep>,
+    ) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
         // A file dialog keeps one tab and no Settings (INT-032): a new tab
         // goes to the location in the one there is.
@@ -180,6 +219,11 @@ impl BrowserWindow {
         }
         self.save_tab_view();
         let id = self.imp().session.borrow_mut().add_at(&uri, placement, position);
+        if let Some(search) = search {
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.history.push_search(search);
+            }
+        }
         if self.imp().session.borrow().is_active(id) {
             self.show_tab(id);
         } else {
@@ -214,7 +258,7 @@ impl BrowserWindow {
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
         };
-        self.leave_location();
+        self.leave_location(LeftSearch::MayKeep);
         self.render_navigation();
         if let Some(child) = left.as_deref().and_then(|left| child_toward(&uri, left)) {
             self.reveal_when_listed(id, child);
@@ -264,7 +308,7 @@ impl BrowserWindow {
 
     /// Where the view is in the active tab's folder: what Back or Forward
     /// returns to; `None` on a landing page, which does not scroll.
-    fn left_view(&self) -> Option<LeftView> {
+    pub(super) fn left_view(&self) -> Option<LeftView> {
         let uri = self.current_uri()?;
         if Page::drawn_at(&uri).is_some() {
             return None;
@@ -288,12 +332,18 @@ impl BrowserWindow {
     }
 
     /// Clears what belonged to the folder the active tab leaves: the
-    /// filter, the selection and the type-to-select prefix.
-    fn leave_location(&self) {
+    /// filter, the selection and the type-to-select prefix. A search the
+    /// strip's pin keeps goes on in the folder opened, unless `search`
+    /// ends it: Back and Forward show each step's own search (SRCH-042).
+    fn leave_location(&self, search: LeftSearch) {
         self.change_model(|| {
-            self.leave_search();
+            match search {
+                LeftSearch::MayKeep => self.leave_search(),
+                LeftSearch::End => self.end_search(),
+            }
             self.folder_pane().model().select_none();
         });
+        self.forget_results_view();
         self.reset_typeahead();
     }
 
@@ -301,6 +351,19 @@ impl BrowserWindow {
     /// including an inactive pane scrolled without receiving focus.
     pub(super) fn save_tab_view(&self) {
         self.save_beside_view();
+        // Search results still being found again: the tab keeps where it
+        // was in them.
+        let results_view = self.imp().results_view.borrow().clone();
+        if let Some(view) = results_view {
+            if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
+                if tab.id == view.tab {
+                    tab.selected = view.selected;
+                    tab.focused = view.focused;
+                    tab.scroll = view.scroll;
+                    return;
+                }
+            }
+        }
         self.save_selection();
         let pane = self.folder_pane();
         let scroll = pane.scroll_position();
@@ -350,7 +413,7 @@ impl BrowserWindow {
         }
         self.change_model(|| {
             let model = self.folder_pane().model();
-            self.search_box().clear();
+            self.clear_search_box_quietly();
             model.set_query("");
             model.set_store(Some(&view.store));
             model.select_uris(&view.selected);
@@ -364,10 +427,18 @@ impl BrowserWindow {
         pane.restore_scroll_position(view.scroll);
         if had_focus {
             pane.focus_view();
-            if let Some(uri) = view.focused {
+            if let Some(uri) = view.focused.clone() {
                 pane.focus_item_later(uri);
             }
         }
+        // A tab on search results shows them again (SRCH-042), and where
+        // it was in them once they are found.
+        self.show_step_search_restoring(Some(ResultsView {
+            tab: id,
+            selected: view.selected,
+            focused: view.focused,
+            scroll: view.scroll,
+        }));
         if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);
         } else if view.changed_while_hidden {
@@ -494,9 +565,11 @@ impl BrowserWindow {
         let Some(id) = self.step_history(steps) else {
             return;
         };
-        self.leave_location();
+        self.leave_location(LeftSearch::End);
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
+        // Search results the step showed run again there (SRCH-042).
+        self.show_step_search();
         self.focus_files_after_navigation();
     }
 
@@ -579,7 +652,7 @@ fn child_toward(ancestor: &str, descendant: &str) -> Option<String> {
 }
 
 /// The location inside a ZIP that the local path `uri` runs through: the
-/// first ancestor that is a ZIP file, then the folders after it. `None`
+/// first ancestor that is a ZIP or TAR file, then the folders after it. `None`
 /// when no ancestor is a ZIP, or for anything but a local path (a share
 /// would answer slowly here, on the main thread).
 fn path_through_zip(uri: &str) -> Option<String> {
@@ -593,7 +666,7 @@ fn path_through_zip(uri: &str) -> Option<String> {
         let is_zip_name = ancestor
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.to_lowercase().ends_with(".zip"));
+            .is_some_and(|name| ox_core::archive::is_supported_archive(name, None));
         is_zip_name && ancestor.is_file()
     })?;
     let rest = path.strip_prefix(zip).ok()?;
@@ -606,22 +679,21 @@ fn path_through_zip(uri: &str) -> Option<String> {
     ox_core::archive::is_safe_member_name(&member).then(|| root.member(&member).uri())
 }
 
-/// The Recycle Bin by its title or URI, or a folder in it, for `typed`;
-/// `None` for any other address. The Python app could not show the Trash;
-/// the native app lists it like a folder (OPS-040).
+/// The Recycle Bin or Recent by its title or URI, or a location in it,
+/// for `typed`; `None` for any other address. The Python app could show
+/// neither; the native app lists both like folders, as GIO's `trash:` and
+/// `recent:` (OPS-040, SIDE-026).
 ///
 /// # Errors
 ///
-/// A `trash:` address that is not a canonical location.
-fn recycle_bin_location(typed: &str) -> Result<Option<String>, LocationError> {
-    let is_titled = VirtualPlace::from_title(typed) == Some(VirtualPlace::RecycleBin);
-    if !is_titled && !typed.starts_with("trash:") {
-        return Ok(None);
-    }
-    let address = if is_titled {
-        VirtualPlace::RecycleBin.uri()
-    } else {
-        typed
+/// A `trash:` or `recent:` address that is not a canonical location.
+fn gio_folder_location(typed: &str) -> Result<Option<String>, LocationError> {
+    let titled = VirtualPlace::from_title(typed)
+        .filter(|place| matches!(place, VirtualPlace::RecycleBin | VirtualPlace::Recent));
+    let address = match titled {
+        Some(place) => place.uri(),
+        None if typed.starts_with("trash:") || typed.starts_with("recent:") => typed,
+        None => return Ok(None),
     };
     normalise_navigation(address, None, &glib::home_dir()).map(Some)
 }

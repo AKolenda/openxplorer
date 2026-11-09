@@ -10,14 +10,11 @@ use std::os::unix::net::UnixListener;
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, URI_LIST};
+use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, TEXT, URI_LIST};
 use ox_core::settings::ContextMenu;
 
 use super::context_menus::choose_menu_style;
-use super::file_ops_support::{
-    answer_conflicts, is_enabled, open_dialog, press_shortcut, select_names, wait_for_no_dialog,
-    ConflictAnswer,
-};
+use super::file_ops_support::{answer_conflicts, is_enabled, press_shortcut, select_names, ConflictAnswer};
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 
 /// The modifier of Ctrl+C, Ctrl+X and Ctrl+V.
@@ -94,7 +91,8 @@ fn paste_into_folder_pastes_into_the_selected_folder() {
         .right_click(Some(super::context_menus::position_of(&test, "Documents")));
     let menu = test.window.context_menu();
 
-    menu.row("Paste into folder").emit_activate();
+    // Windows names the folder's row Paste; it pastes into that folder.
+    menu.row("Paste").emit_activate();
 
     wait_until("the copy in Documents", || {
         fixture.path("Documents/Notes 2.txt").is_file()
@@ -326,6 +324,7 @@ fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
         "application/x-winspace-files",
         "x-special/gnome-copied-files",
         "text/uri-list",
+        "text/plain;charset=utf-8",
         "application/x-kde-cutselection",
     ] {
         assert!(formats.contain_mime_type(mime_type), "{mime_type}");
@@ -334,6 +333,32 @@ fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
     assert_eq!(clipboard_bytes(&test, KDE_CUT), b"1");
     let gnome = String::from_utf8(clipboard_bytes(&test, "x-special/gnome-copied-files")).expect("UTF-8");
     assert_eq!(gnome, format!("cut\n{}", fixture.uri_of("Notes 2.txt")));
+    // The text is the item's path unquoted, as Nautilus publishes it, so a
+    // terminal pastes a path a shell reads as one argument.
+    let text = String::from_utf8(clipboard_bytes(&test, TEXT)).expect("UTF-8");
+    let path = fixture.path("Notes 2.txt").to_string_lossy().into_owned();
+    assert_eq!(text, path);
+}
+
+/// Several items are one path per line in the text format, without quotes
+/// and without a trailing newline.
+///
+/// parity: CLIP-004
+#[gtk::test]
+fn a_copy_of_several_items_publishes_their_paths_one_per_line() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let names = ["Notes 2.txt", "Résumé.txt"];
+    select_names(&test, &names);
+
+    test.activate("copy", None);
+
+    let text = String::from_utf8(clipboard_bytes(&test, TEXT)).expect("UTF-8");
+    let paths: Vec<String> = names
+        .iter()
+        .map(|name| fixture.path(name).to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(text, paths.join("\n"));
 }
 
 /// parity: CLIP-005, CLIP-006, CLIP-007
@@ -480,17 +505,20 @@ fn every_published_format_is_offered_for_a_clipboard_manager_to_keep() {
     assert!(clipboard.is_local(), "the window owns the clipboard");
     let content = clipboard.content().expect("a local clipboard has content");
     let storable = content.storable_formats();
-    for mime_type in [CUSTOM, GNOME, URI_LIST, KDE_CUT] {
+    for mime_type in [CUSTOM, GNOME, URI_LIST, TEXT, KDE_CUT] {
         assert!(storable.contain_mime_type(mime_type), "{mime_type}");
     }
 }
 
 /// Copies `Alpha.txt` and `Beta.txt` of the fixture's folder, the file
 /// called `unreadable` without read permission, and starts pasting them
-/// into Documents: the copy stops at that file with the failed-item
-/// dialog, which this returns. Tests run as a normal user: root reads the
-/// file anyway.
-fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWindow, crate::dialog::Dialog) {
+/// into Documents: the copy stops at that file and asks about it in the
+/// progress window, in place of the action's progress; this returns that
+/// action. Tests run as a normal user: root reads the file anyway.
+fn paste_with_an_unreadable_file(
+    fixture: &Fixture,
+    unreadable: &str,
+) -> (TestWindow, crate::window::transfer_panel::TransferPanel) {
     use std::os::unix::fs::PermissionsExt;
 
     fixture.write("Alpha.txt");
@@ -499,10 +527,18 @@ fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWi
         .expect("take read permission away");
     let test = clipboard_then_documents(fixture, "copy", &["Alpha.txt", "Beta.txt"]);
     test.activate("paste", None);
-    let failed = open_dialog(&test);
+    let window = crate::window::progress_window::ProgressWindow::of(&test.context);
+    let asking = || {
+        window
+            .actions()
+            .into_iter()
+            .find(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+    };
+    wait_until("the action to ask", || asking().is_some());
+    let failed = asking().expect("the asking action");
     assert!(
-        failed.button_labels().contains(&"Retry".to_owned()),
-        "the failed-item dialog"
+        failed.failure_button_labels().contains(&"Try Again".to_owned()),
+        "the failed-item question"
     );
     (test, failed)
 }
@@ -518,7 +554,7 @@ fn cancel_in_the_failed_item_dialog_just_stops_and_undo_takes_back_what_was_copi
     let fixture = Fixture::standard();
     let (test, failed) = paste_with_an_unreadable_file(&fixture, "Beta.txt");
 
-    failed.press("Cancel");
+    failed.press_failure("Cancel");
     wait_until("the finished copy to be selected", || {
         test.selected_names() == ["Alpha.txt"]
     });
@@ -535,8 +571,8 @@ fn cancel_in_the_failed_item_dialog_just_stops_and_undo_takes_back_what_was_copi
     assert!(fixture.path("Alpha.txt").is_file(), "the original stays");
 }
 
-/// The progress panel's Cancel stops a copy without a report, also after
-/// an item was skipped.
+/// Cancelling the operation while its action asks about a failed item
+/// answers the question and stops the copy without a report.
 ///
 /// parity: OPS-019, OPS-023
 #[gtk::test]
@@ -545,8 +581,7 @@ fn the_panels_cancel_stops_a_copy_without_a_report() {
     let (test, failed) = paste_with_an_unreadable_file(&fixture, "Alpha.txt");
 
     test.activate("cancel-operation", None);
-    failed.press("Skip");
-    wait_for_no_dialog(&test);
+    wait_until("the question to close", || !failed.asks_about_failure());
     wait_until("the copy to end", || !test.window.is_writing_files());
     crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
 
@@ -555,4 +590,33 @@ fn the_panels_cancel_stops_a_copy_without_a_report() {
         "nothing is reported after Cancel"
     );
     assert!(!fixture.path("Documents/Beta.txt").exists(), "the copy stopped");
+}
+
+/// A file another program named with bytes that are not UTF-8 is copied
+/// and pasted under its exact name, with no message.
+///
+/// parity: CLIP-001, OPS-035
+#[gtk::test]
+fn a_name_that_is_not_utf8_is_copied_and_pasted() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let fixture = Fixture::standard();
+    let name = OsStr::from_bytes(b"Caf\xe9 menu.txt");
+    fs::write(fixture.root().join(name), b"menu").expect("a Latin-1 name");
+    let test = TestWindow::open(&fixture.uri());
+    let shown = test
+        .names()
+        .into_iter()
+        .find(|shown| shown.starts_with("Caf"))
+        .expect("the file is listed");
+    select_names(&test, &[shown.as_str()]);
+
+    test.activate("copy", None);
+    show_documents(&test, &fixture);
+    test.activate("paste", None);
+
+    wait_until("the copy", || {
+        fixture.root().join("Documents").join(name).is_file()
+    });
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }

@@ -186,3 +186,28 @@ pub(super) fn install_test_application(desktop_id: &str) -> TestApplication {
         desktop_id: desktop_id.to_owned(),
     }
 }
+
+/// The group headings `titles` the visible view draws, each with its
+/// group's item count from the grouped layout ("Today (2)"), so tests
+/// still check the counts Windows 11 no longer shows beside a heading.
+pub(super) fn with_group_counts(test: &TestWindow, titles: Vec<String>) -> Vec<String> {
+    let layout = test
+        .window
+        .folder_pane()
+        .grouped()
+        .and_then(|grouped| grouped.layout());
+    let Some(layout) = layout else {
+        return titles;
+    };
+    titles
+        .into_iter()
+        .map(|title| {
+            let group = layout
+                .groups()
+                .iter()
+                .find(|group| group.title == title)
+                .unwrap_or_else(|| panic!("a heading shows its group's title alone, not {title}"));
+            format!("{title} ({})", group.len())
+        })
+        .collect()
+}

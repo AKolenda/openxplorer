@@ -10,18 +10,18 @@
 //! operation ends, the panel hides, the folder is listed again with the
 //! items the operation created selected (the Python app cleared the
 //! selection) and Undo remembers how to reverse it. As in Windows
-//! Explorer, nothing more is said when every item succeeded; otherwise
-//! the "Operation result" dialog says what happened.
+//! Explorer, nothing more is said: every item that failed was asked about
+//! in the progress window while it ran (OPS-047).
 
 use std::time::Duration;
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::ops::{
-    run_transfer, starting_label, summarize, OperationContext, OperationSummary, OpsError, TransferOutcome,
-    TransferRequest, UndoRecord, RESULT_TITLE, STOPPED_TITLE,
+    run_transfer, starting_label, OperationContext, OpsError, ReplacedFiles, TransferOutcome,
+    TransferRequest, UndoRecord, STOPPED_TITLE,
 };
-use ox_core::transfer::{Cancellation, Progress, TransferMode};
+use ox_core::transfer::{Cancellation, Progress};
 
 use crate::app_context::WriteHold;
 
@@ -50,8 +50,6 @@ const FORMATTING_A_DRIVE: &str =
 /// What a finished operation leaves behind.
 #[derive(Debug)]
 pub(super) struct FinishedOperation {
-    /// What happened, for the report.
-    pub(super) summary: OperationSummary,
     /// How Undo reverses it, when it can.
     pub(super) undo: Option<UndoRecord>,
     /// The items to select once the folder is listed again: where its new
@@ -61,10 +59,9 @@ pub(super) struct FinishedOperation {
 }
 
 impl FinishedOperation {
-    /// What a finished `mode` run of the transfer engine leaves behind.
-    pub(super) fn of_transfer(mode: TransferMode, outcome: TransferOutcome) -> Self {
+    /// What a finished run of the transfer engine leaves behind.
+    pub(super) fn of_transfer(outcome: TransferOutcome) -> Self {
         Self {
-            summary: summarize(mode, &outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
         }
@@ -131,6 +128,18 @@ impl BrowserWindow {
         Ok((OperationContext::new(self.context().write_protection()), hold))
     }
 
+    /// What Replace does with the file it replaces: by default it goes to
+    /// the Recycle Bin; with Settings > Files & folders' "When replacing a
+    /// file, move the old one to the Recycle Bin" off, it is overwritten,
+    /// as in Windows 11.
+    pub(crate) fn replaced_files(&self) -> ReplacedFiles {
+        if self.context().settings_data().preferences.recycle_replaced_files {
+            ReplacedFiles::RecycleBin
+        } else {
+            ReplacedFiles::Overwrite
+        }
+    }
+
     /// Starts an exclusive operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
@@ -152,7 +161,8 @@ impl BrowserWindow {
         context.move_by_copying = Some(self.move_by_copying_asker());
         // OPS-047: an item that fails asks whether to retry, skip or
         // cancel.
-        context.item_failure = Some(self.failure_asker());
+        context.item_failure = Some(self.failure_asker(&context.cancel));
+        context.replaced_files = self.replaced_files();
         if !self.claim_transfer_panel(TransferKind::Files, label, &context.cancel) {
             return None;
         }
@@ -314,15 +324,15 @@ impl BrowserWindow {
         };
         let finished = outcome.map(|outcome| FinishedOperation {
             select_after: next.map(str::to_owned).into_iter().collect(),
-            ..FinishedOperation::of_transfer(request.mode, outcome)
+            ..FinishedOperation::of_transfer(outcome)
         });
         self.conclude_operation_in(finished, origin.as_deref()).await;
     }
 
-    /// Concludes an ended operation: Undo remembers it, the folder is
-    /// listed again with its items selected, and the user is told what
-    /// went wrong, if anything ("Operation stopped" for a request refused
-    /// before it started).
+    /// Concludes an ended operation: Undo remembers it and the folder is
+    /// listed again with its items selected. Nothing more is said, as in
+    /// Windows Explorer, except "Operation stopped" for a request refused
+    /// before it started.
     pub(super) async fn conclude_operation(&self, outcome: Result<FinishedOperation, OpsError>) {
         let origin = self.current_uri();
         self.conclude_operation_in(outcome, origin.as_deref()).await;
@@ -343,7 +353,6 @@ impl BrowserWindow {
                 if still_here {
                     self.reload_selecting(finished.select_after);
                 }
-                self.report(finished.summary).await;
             }
             Err(error) => {
                 if still_here {
@@ -361,14 +370,6 @@ impl BrowserWindow {
                 )
                 .await;
             }
-        }
-    }
-
-    /// Shows the "Operation result" dialog unless every item succeeded,
-    /// which Windows Explorer does not mention, or the user cancelled.
-    pub(super) async fn report(&self, summary: OperationSummary) {
-        if let OperationSummary::Report(text) = summary {
-            dialog::show_message(self, ox_core::i18n::gettext_static(RESULT_TITLE), &text).await;
         }
     }
 

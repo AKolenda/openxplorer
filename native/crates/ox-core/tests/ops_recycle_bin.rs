@@ -17,20 +17,37 @@ mod snapshots;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
-    restore_from_recycle_bin, run_transfer, summarize_restore, undo, OperationContext, OperationSummary,
-    RecycledItem, TransferRequest, UndoRecord, WriteProtection,
+    restore_from_recycle_bin, run_transfer, undo, FailureAsker, OperationContext, RecycledItem,
+    TransferRequest, UndoRecord, WriteProtection,
 };
-use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
+use ox_core::transfer::{
+    Cancellation, ConflictPolicy, FailedItem, FailureAnswer, FailureCause, TransferMode,
+};
 
 use ops_support::{block_on, file_uri};
 use private_trash::require_private_trash;
 use snapshots::{snapshot_protection, READ_ONLY};
+
+/// A context whose question about failed items answers `answer` and
+/// keeps every question it was asked.
+fn asking_context(answer: FailureAnswer) -> (OperationContext, Arc<Mutex<Vec<FailedItem>>>) {
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&asked);
+    let context = OperationContext {
+        item_failure: Some(FailureAsker::new(move |item: &FailedItem| {
+            log.lock().expect("question log").push(item.clone());
+            answer
+        })),
+        ..OperationContext::default()
+    };
+    (context, asked)
+}
 
 /// Lets one test at a time use the shared Recycle Bin.
 static RECYCLE_BIN: Mutex<()> = Mutex::new(());
@@ -197,12 +214,13 @@ fn restoring_a_folder_that_holds_a_protected_backup_is_refused() {
     assert_eq!(recycled_from(&project).name, "project");
 }
 
-/// Cancel after a failed item still reports that failure: Restore shows no
-/// dialog per item, so the report is the only place the user learns it.
+/// A restore asks about an item that fails while it runs, in the progress
+/// window, as Windows does, so a later Cancel hides nothing and nothing
+/// is said once it ends.
 ///
-/// parity: OPS-023
+/// parity: OPS-023, OPS-047
 #[test]
-fn a_cancelled_restore_still_reports_an_earlier_failure() {
+fn a_restore_asks_about_a_failed_item_while_it_runs() {
     let _recycle_bin = use_recycle_bin();
     let temp = tempfile::tempdir().unwrap();
     let notes = temp.path().join("notes.txt");
@@ -225,8 +243,10 @@ fn a_cancelled_restore_still_reports_an_earlier_failure() {
             Ok(())
         }
     };
+    let (asking, asked) = asking_context(FailureAnswer::Skip);
     let context = OperationContext {
         cancel,
+        item_failure: asking.item_failure,
         ..OperationContext::new(WriteProtection::new(cancel_at_plan))
     };
     let outcome = block_on(restore_from_recycle_bin(&items, &context)).unwrap();
@@ -235,11 +255,49 @@ fn a_cancelled_restore_still_reports_an_earlier_failure() {
                    It was left in the Recycle Bin.";
     assert!(outcome.result.cancelled);
     assert_eq!(outcome.result.errors, [refusal]);
-    assert_eq!(
-        summarize_restore(&outcome.result),
-        OperationSummary::Report(refusal.into())
-    );
+    assert_eq!(outcome.result.presented, [refusal], "asked while it ran");
+    let asked = asked.lock().expect("question log");
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_eq!(asked[0].name, "notes.txt");
+    assert_eq!(asked[0].mode, TransferMode::Move);
     assert!(!plan.exists(), "the cancelled item stays in the Recycle Bin");
+}
+
+/// Deleting an item that left the Recycle Bin meanwhile asks "Item Not
+/// Found" about it, as Windows does: Try Again, Skip or Cancel, here
+/// Skip; the other items are still deleted.
+///
+/// parity: OPS-043, OPS-047, OPS-023
+#[test]
+fn deleting_an_item_gone_from_the_recycle_bin_asks_about_it() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let (gone, kept) = (temp.path().join("gone.txt"), temp.path().join("chosen.txt"));
+    fs::write(&gone, b"gone").unwrap();
+    fs::write(&kept, b"chosen").unwrap();
+    trash(&[&gone, &kept]);
+    let (gone_item, chosen_item) = (recycled_from(&gone), recycled_from(&kept));
+    // Another program empties the item out of the Recycle Bin first.
+    block_on(delete_from_recycle_bin(
+        std::slice::from_ref(&gone_item.uri),
+        &OperationContext::default(),
+    ))
+    .unwrap();
+    let (context, asked) = asking_context(FailureAnswer::Skip);
+
+    let uris = [gone_item.uri.clone(), chosen_item.uri.clone()];
+    let result = block_on(delete_from_recycle_bin(&uris, &context)).unwrap();
+
+    let asked = asked.lock().expect("question log");
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_eq!(asked[0].cause, FailureCause::NotFound);
+    assert_eq!(asked[0].mode, TransferMode::Delete);
+    assert_eq!(asked[0].uri, gone_item.uri);
+    assert!(asked[0].more_items, "Do this for all current items");
+    assert_eq!(result.done, [chosen_item.uri]);
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert_eq!(result.presented, result.errors, "the user answered it");
+    assert!(!result.cancelled);
 }
 
 #[test]
@@ -254,7 +312,7 @@ fn deleting_from_the_recycle_bin_removes_only_the_chosen_items() {
     let item = recycled_from(&chosen);
     let result = block_on(delete_from_recycle_bin(
         std::slice::from_ref(&item.uri),
-        &Cancellation::new(),
+        &OperationContext::default(),
     ))
     .unwrap();
 
@@ -281,7 +339,11 @@ fn an_item_trashed_after_deleting_one_with_the_same_name_is_listed() {
     trash(&[&draft]);
     let first = recycled_from(&draft);
 
-    let deleted = block_on(delete_from_recycle_bin(&[first.uri], &Cancellation::new())).unwrap();
+    let deleted = block_on(delete_from_recycle_bin(
+        &[first.uri],
+        &OperationContext::default(),
+    ))
+    .unwrap();
     let trash_files = fs::File::open(glib::user_data_dir().join("Trash/files")).unwrap();
     let after_delete = trash_files.metadata().unwrap().modified().unwrap();
     fs::write(&draft, b"second").unwrap();
@@ -318,7 +380,7 @@ fn emptying_the_recycle_bin_deletes_everything_in_it_folders_included() {
         "the Recycle Bin holds items these tests did not trash: {before:?}"
     );
 
-    let result = block_on(empty_recycle_bin(&Cancellation::new())).unwrap();
+    let result = block_on(empty_recycle_bin(&OperationContext::default())).unwrap();
     let count = block_on(recycle_bin_item_count(&Cancellation::new())).unwrap();
 
     assert!(result.errors.is_empty(), "{:?}", result.errors);
@@ -344,7 +406,7 @@ fn only_whole_items_in_the_recycle_bin_are_restored_or_deleted() {
     .unwrap();
     let deleted = block_on(delete_from_recycle_bin(
         &["trash:///folder/inside.txt".into()],
-        &Cancellation::new(),
+        &OperationContext::default(),
     ));
 
     let refusal = "Only whole items in the Recycle Bin can be restored or deleted there.";

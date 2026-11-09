@@ -11,7 +11,7 @@ use std::ops::RangeInclusive;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::choices::{ContextMenu, Theme, View, ZipOpening};
+use super::choices::{ContextMenu, StripPosition, Theme, View, ZipOpening};
 use super::pane_options::DetailsPaneOptions;
 use super::tree_options::FolderTreeOptions;
 use super::view_options::ViewOptions;
@@ -254,6 +254,13 @@ pub struct Preferences {
     pub auto_index: bool,
     /// Classic (Windows 10) or compact (Windows 11) context menus.
     pub context_menu: ContextMenu,
+    /// Where the compact menu's strip sits; stored only when it is not
+    /// the pointer's side.
+    #[serde(
+        rename = "menuStripPosition",
+        skip_serializing_if = "StripPosition::is_pointer"
+    )]
+    pub strip_position: StripPosition,
     /// Folder item counts were turned on in this app. Files of older
     /// releases store `viewOptions.countFolderItems: true`, then the
     /// default, whenever any view option changed, so without this mark
@@ -281,6 +288,11 @@ pub struct Preferences {
     /// The last window's size, once a window was resized.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_size: Option<WindowSize>,
+    /// The size other applications' Open and Save dialogs open at, once
+    /// one was resized (INT-032), kept apart from the windows' size as
+    /// Windows keeps its common file dialog's. Never maximized.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dialog_size: Option<WindowSize>,
     /// The address bar's crumbs start at `/` instead of the closest place
     /// (Dolphin's `ShowFullPath`). Stored only when on, as are the next
     /// two, so the Python app's file keeps its layout.
@@ -342,6 +354,14 @@ pub struct Preferences {
     /// was last left, across sessions; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub progress_details: bool,
+    /// Replace (a copy, move, paste, drag or Recycle Bin restore onto a
+    /// taken name) moves the file it replaces to the Recycle Bin first,
+    /// so Undo and a cancelled copy can bring it back. On by default, the
+    /// owner's choice; off, the incoming file overwrites the old one, as
+    /// in Windows 11, and the old file is gone. Stored as
+    /// `recycleReplacedFiles`, only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub recycle_replaced_files: bool,
     /// Explicitly enabled installed service actions, keyed by definition digest.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub enabled_service_actions: Vec<String>,
@@ -446,6 +466,49 @@ pub struct Preferences {
     /// `show_details_pane` is.
     #[serde(rename = "previewPane", skip_serializing_if = "std::ops::Not::not")]
     pub preview_pane: bool,
+    /// A folder opened from the file list opens in a window of its own
+    /// (Folder Options' "Open each folder in its own window"). Off by
+    /// default, as in Windows. Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub open_folders_in_own_window: bool,
+    /// Items show no infotip on hover (Folder Options' "Show pop-up
+    /// description for folder and desktop items" off). Stored only when
+    /// on, as are the next four.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_infotips: bool,
+    /// The status bar is hidden (Folder Options' "Show status bar" off).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_status_bar: bool,
+    /// The Preview pane shows the item's icon rather than its contents
+    /// (Folder Options' "Show preview handlers in preview pane" off).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_preview_handlers: bool,
+    /// Text typed in the file list goes to the search box rather than
+    /// selecting the item it names (Folder Options' "When typing into
+    /// list view").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub type_into_search_box: bool,
+    /// Searches start with "Names and contents" rather than "File names"
+    /// (Folder Options' "Always search file names and contents").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub search_contents: bool,
+    /// A search shows the search filter bar above the results, as before,
+    /// in place of Windows 11's Search options and Close search in the
+    /// command bar (Settings > Search > "Show the search filter bar").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub show_search_filter_bar: bool,
+    /// Paste in a folder writes a picture on the clipboard, such as a
+    /// screenshot, as a new image file (CLIP-015). On by default; stored
+    /// only when off, which leaves Paste unavailable for a picture, as in
+    /// Windows 11 File Explorer.
+    #[serde(skip_serializing_if = "is_true")]
+    pub paste_pictures_as_files: bool,
+    /// Copy and Cut also put the items' paths on the clipboard as plain
+    /// text (CLIP-004). On by default; stored only when off, which copies
+    /// only the files, as Windows 11 File Explorer does, leaving paths to
+    /// Copy as path.
+    #[serde(skip_serializing_if = "is_true")]
+    pub copy_paths_as_text: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -512,6 +575,7 @@ impl Default for Preferences {
             show_hidden: false,
             auto_index: true,
             context_menu: ContextMenu::default(),
+            strip_position: StripPosition::Pointer,
             classic_menu_chosen: false,
             item_counts_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
@@ -519,6 +583,7 @@ impl Default for Preferences {
             sidebar_width: None,
             column_widths: None,
             window_size: None,
+            dialog_size: None,
             show_full_path: false,
             editable_location: false,
             external_folders_in_new_window: false,
@@ -533,6 +598,7 @@ impl Default for Preferences {
             confirm_close_tabs: false,
             ask_to_run_programs: false,
             progress_details: false,
+            recycle_replaced_files: true,
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
@@ -554,6 +620,15 @@ impl Default for Preferences {
             compact_density: false,
             show_extensions: false,
             preview_pane: false,
+            open_folders_in_own_window: false,
+            hide_infotips: false,
+            hide_status_bar: false,
+            hide_preview_handlers: false,
+            type_into_search_box: false,
+            show_search_filter_bar: false,
+            search_contents: false,
+            paste_pictures_as_files: true,
+            copy_paths_as_text: true,
             view_defaults: None,
             folder_views: Vec::new(),
             downloads_group_by: None,
@@ -586,10 +661,35 @@ impl Preferences {
         replace_if_some(&mut self.preview_pane, update.preview_pane);
     }
 
+    /// Folder Options' choices that only it sets: how folders open, the
+    /// infotips, the status bar, the Preview pane's contents, typing in the
+    /// file list and what searches look at.
+    fn apply_folder_options(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(
+            &mut self.open_folders_in_own_window,
+            update.open_folders_in_own_window,
+        );
+        replace_if_some(&mut self.hide_infotips, update.hide_infotips);
+        replace_if_some(&mut self.hide_status_bar, update.hide_status_bar);
+        replace_if_some(&mut self.hide_preview_handlers, update.hide_preview_handlers);
+        replace_if_some(&mut self.type_into_search_box, update.type_into_search_box);
+        replace_if_some(&mut self.search_contents, update.search_contents);
+        replace_if_some(&mut self.show_search_filter_bar, update.show_search_filter_bar);
+    }
+
+    /// The clipboard's extras beyond Windows, which can be turned off: a
+    /// picture pasted as a file (CLIP-015) and the paths copied as text
+    /// (CLIP-004).
+    fn apply_clipboard_options(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.paste_pictures_as_files, update.paste_pictures_as_files);
+        replace_if_some(&mut self.copy_paths_as_text, update.copy_paths_as_text);
+    }
+
     fn apply_confirmations(&mut self, update: &PreferencesUpdate) {
         replace_if_some(&mut self.confirm_trash, update.confirm_trash);
         replace_if_some(&mut self.confirm_delete, update.confirm_delete);
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
+        replace_if_some(&mut self.recycle_replaced_files, update.recycle_replaced_files);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
     }
@@ -686,8 +786,15 @@ impl Preferences {
         if let Some(size) = update.window_size.filter(|size| size.is_valid()) {
             self.window_size = Some(size);
         }
+        if let Some(size) = update.dialog_size.filter(|size| size.is_valid()) {
+            self.dialog_size = Some(WindowSize {
+                maximized: false,
+                ..size
+            });
+        }
         replace_if_some(&mut self.browse_archives, update.browse_archives);
         replace_if_some(&mut self.zip_opening, update.zip_opening);
+        replace_if_some(&mut self.strip_position, update.strip_position);
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
@@ -713,6 +820,8 @@ impl Preferences {
         replace_if_some(&mut self.item_checks_on_ctrl, update.item_checks_on_ctrl);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
         self.apply_names_and_panes(update);
+        self.apply_folder_options(update);
+        self.apply_clipboard_options(update);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
@@ -817,10 +926,14 @@ pub struct PreferencesUpdate {
     pub column_widths: Option<Vec<ColumnWidth>>,
     /// New context menu style.
     pub context_menu: Option<ContextMenu>,
+    /// Where the compact menu's strip sits.
+    pub strip_position: Option<StripPosition>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
     /// The size new windows open at.
     pub window_size: Option<WindowSize>,
+    /// The size Open and Save dialogs open at.
+    pub dialog_size: Option<WindowSize>,
     /// Show the full path in the address bar, or start at the closest place.
     pub show_full_path: Option<bool>,
     /// Open new windows with an editable address.
@@ -843,6 +956,8 @@ pub struct PreferencesUpdate {
     pub confirm_delete: Option<bool>,
     /// Ask before emptying the Recycle Bin.
     pub confirm_empty_trash: Option<bool>,
+    /// See [`Preferences::recycle_replaced_files`].
+    pub recycle_replaced_files: Option<bool>,
     /// Ask before closing a window with several tabs.
     pub confirm_close_tabs: Option<bool>,
     /// Ask whether to run a program or script that is opened.
@@ -895,6 +1010,24 @@ pub struct PreferencesUpdate {
     pub show_extensions: Option<bool>,
     /// See [`Preferences::preview_pane`].
     pub preview_pane: Option<bool>,
+    /// See [`Preferences::open_folders_in_own_window`].
+    pub open_folders_in_own_window: Option<bool>,
+    /// See [`Preferences::hide_infotips`].
+    pub hide_infotips: Option<bool>,
+    /// See [`Preferences::hide_status_bar`].
+    pub hide_status_bar: Option<bool>,
+    /// See [`Preferences::hide_preview_handlers`].
+    pub hide_preview_handlers: Option<bool>,
+    /// See [`Preferences::type_into_search_box`].
+    pub type_into_search_box: Option<bool>,
+    /// See [`Preferences::search_contents`].
+    pub search_contents: Option<bool>,
+    /// See [`Preferences::show_search_filter_bar`].
+    pub show_search_filter_bar: Option<bool>,
+    /// See [`Preferences::paste_pictures_as_files`].
+    pub paste_pictures_as_files: Option<bool>,
+    /// See [`Preferences::copy_paths_as_text`].
+    pub copy_paths_as_text: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
@@ -939,8 +1072,10 @@ impl PreferencesUpdate {
             sidebar_width: values.get("sidebarWidth").and_then(Value::as_f64),
             column_widths: values.get("columnWidths").and_then(read_column_widths),
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
+            strip_position: text("menuStripPosition").and_then(StripPosition::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
+            dialog_size: values.get("dialogSize").and_then(WindowSize::from_json),
             show_full_path: flag("showFullPath"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
@@ -954,6 +1089,7 @@ impl PreferencesUpdate {
             confirm_trash: flag("confirmTrash"),
             confirm_delete: flag("confirmDelete"),
             confirm_empty_trash: flag("confirmEmptyTrash"),
+            recycle_replaced_files: flag("recycleReplacedFiles"),
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
             progress_details: flag("progressDetails"),
@@ -981,6 +1117,15 @@ impl PreferencesUpdate {
             compact_density: flag("compactView"),
             show_extensions: flag("showExtensions"),
             preview_pane: flag("previewPane"),
+            open_folders_in_own_window: flag("openFoldersInOwnWindow"),
+            hide_infotips: flag("hideInfotips"),
+            hide_status_bar: flag("hideStatusBar"),
+            hide_preview_handlers: flag("hidePreviewHandlers"),
+            type_into_search_box: flag("typeIntoSearchBox"),
+            show_search_filter_bar: flag("showSearchFilterBar"),
+            search_contents: flag("searchContents"),
+            paste_pictures_as_files: flag("pastePicturesAsFiles"),
+            copy_paths_as_text: flag("copyPathsAsText"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
             downloads_group_by: values
@@ -1126,7 +1271,8 @@ mod tests {
         per_folder.folder_views.push(FolderView {
             uri: DOWNLOADS.to_owned(),
             properties: own,
-            subfolders: false,
+            subfolders: None,
+            template: None,
         });
         assert_eq!(per_folder.view_in(DOWNLOADS, downloads).grouping(), GroupBy::Type);
     }
@@ -1210,7 +1356,7 @@ mod tests {
         assert_eq!(bounded_width(f64::INFINITY, SIDEBAR_WIDTHS), None);
     }
 
-    /// parity: TAB-054
+    /// parity: TAB-054, INT-032
     #[test]
     fn the_window_size_is_kept_only_within_the_window_limits() {
         let read = |value| PreferencesUpdate::from_json(&json!({ "windowSize": value })).unwrap();
@@ -1238,6 +1384,27 @@ mod tests {
         );
         assert_eq!(read(json!({"width": 1000.5, "height": 700})).window_size, None);
         assert_eq!(read(json!("big")).window_size, None);
+
+        // An Open or Save dialog's size is kept apart, the same way, and
+        // never maximized (INT-032).
+        let dialog = PreferencesUpdate::from_json(&json!({
+            "dialogSize": {"width": 1100, "height": 720, "maximized": true}
+        }))
+        .unwrap();
+        preferences.apply(&dialog);
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(
+            stored["dialogSize"],
+            json!({"width": 1100, "height": 720, "maximized": false})
+        );
+        assert_eq!(
+            preferences.window_size.map(|size| size.width),
+            Some(1000),
+            "the windows' own"
+        );
+        let small =
+            PreferencesUpdate::from_json(&json!({"dialogSize": {"width": 300, "height": 200}})).unwrap();
+        assert_eq!(small.dialog_size, None, "below the minimum");
     }
 
     /// parity: VIEW-028
@@ -1391,6 +1558,40 @@ mod tests {
         assert!(stored.get("compactView").is_none(), "off again, not stored");
     }
 
+    /// The search filter bar is off by default, so a search shows Windows
+    /// 11's Search options and Close search in the command bar; turned on
+    /// it is saved as `showSearchFilterBar`, and turned off it leaves the
+    /// file again.
+    ///
+    /// parity: SRCH-046
+    #[test]
+    fn the_search_filter_bar_is_off_by_default_and_stored_only_when_on() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.show_search_filter_bar);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(
+            stored.get("showSearchFilterBar").is_none(),
+            "not stored while off"
+        );
+
+        let on = PreferencesUpdate::from_json(&json!({ "showSearchFilterBar": true }))
+            .expect("a valid preference");
+        preferences.apply(&on);
+        assert!(preferences.show_search_filter_bar);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["showSearchFilterBar"], json!(true));
+
+        preferences.apply(&PreferencesUpdate {
+            show_search_filter_bar: Some(false),
+            ..PreferencesUpdate::default()
+        });
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(
+            stored.get("showSearchFilterBar").is_none(),
+            "off again, not stored"
+        );
+    }
+
     /// File name extensions are hidden by default for known types, as in
     /// Windows, and not stored then; once shown they are saved as
     /// `showExtensions` and read back, and hiding them again takes the key
@@ -1419,6 +1620,45 @@ mod tests {
         });
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         assert!(stored.get("showExtensions").is_none(), "hidden again, not stored");
+    }
+
+    /// Folder Options' own choices start as Windows' defaults and are not
+    /// stored then; each one changed is saved under its key and read
+    /// back, and set back to the default it leaves the file again.
+    ///
+    /// parity: VIEW-020
+    #[test]
+    fn folder_options_choices_are_stored_only_when_changed() {
+        let keys = [
+            "openFoldersInOwnWindow",
+            "hideInfotips",
+            "hideStatusBar",
+            "hidePreviewHandlers",
+            "typeIntoSearchBox",
+            "searchContents",
+        ];
+        let mut preferences = Preferences::default();
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert!(stored.get(key).is_none(), "{key} is not stored by default");
+        }
+        let all = |on: bool| {
+            let values = keys.iter().map(|key| ((*key).to_owned(), json!(on))).collect();
+            PreferencesUpdate::from_json(&Value::Object(values)).expect("valid preferences")
+        };
+        preferences.apply(&all(true));
+        assert!(preferences.open_folders_in_own_window && preferences.hide_infotips);
+        assert!(preferences.hide_status_bar && preferences.hide_preview_handlers);
+        assert!(preferences.type_into_search_box && preferences.search_contents);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert_eq!(stored[key], json!(true), "{key} is stored once on");
+        }
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
+        assert_eq!(read, preferences, "read back as saved");
+        preferences.apply(&all(false));
+        assert_eq!(preferences, Preferences::default());
     }
 
     /// The item check boxes wait for Ctrl by default and the choice is not
@@ -1460,5 +1700,37 @@ mod tests {
         assert_eq!(stored["hideExpandArrows"], json!(true));
         let read = PreferencesUpdate::from_json(&stored).expect("read back");
         assert_eq!(read.hide_expand_arrows, Some(true));
+    }
+
+    /// The clipboard's extras beyond Windows start on, as they were before
+    /// they could be turned off, and are not stored then; each one turned
+    /// off, as Windows 11 File Explorer behaves, is saved under its key and
+    /// read back, and turned on again leaves the file.
+    ///
+    /// parity: CLIP-004, CLIP-015
+    #[test]
+    fn clipboard_extras_are_on_by_default_and_stored_only_when_off() {
+        let keys = ["pastePicturesAsFiles", "copyPathsAsText"];
+        let mut preferences = Preferences::default();
+        assert!(preferences.paste_pictures_as_files && preferences.copy_paths_as_text);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert!(stored.get(key).is_none(), "{key} is not stored by default");
+        }
+        let all = |on: bool| {
+            let values = keys.iter().map(|key| ((*key).to_owned(), json!(on))).collect();
+            PreferencesUpdate::from_json(&Value::Object(values)).expect("valid preferences")
+        };
+        preferences.apply(&all(false));
+        assert!(!preferences.paste_pictures_as_files && !preferences.copy_paths_as_text);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert_eq!(stored[key], json!(false), "{key} is stored once off");
+        }
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
+        assert_eq!(read, preferences, "read back as saved");
+        preferences.apply(&all(true));
+        assert_eq!(preferences, Preferences::default());
     }
 }

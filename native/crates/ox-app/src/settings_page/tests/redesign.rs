@@ -20,11 +20,15 @@ use crate::test_support::harness::{descendants, wait_until};
 /// then, and the row that offers it now, then the rows added since and the
 /// rows of the commands that came from the command bar's "…" menu
 /// (CMD-007), by their menu labels.
-const MOVED_ROWS: [(&str, &str); 68] = [
+const MOVED_ROWS: [(&str, &str); 73] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
     ("Right-click menu", "Right-click menu"),
+    (
+        "Buttons in the right-click menu",
+        "Buttons in the right-click menu",
+    ),
     ("Show previews", "Show previews"),
     ("Show previews in network folders", "Also in network folders"),
     ("Skip previews of large files", "Skip very large files"),
@@ -61,6 +65,10 @@ const MOVED_ROWS: [(&str, &str); 68] = [
         "Check network and unwatched folders every",
     ),
     ("Calculate folder sizes", "Calculate folder sizes"),
+    (
+        "When replacing a file, move the old one to the Recycle Bin",
+        "When replacing a file, move the old one to the Recycle Bin",
+    ),
     ("How sizes are counted", "How sizes are counted"),
     ("Include Show in folder", "Also handle “Show in folder”"),
     (
@@ -132,12 +140,15 @@ const MOVED_ROWS: [(&str, &str); 68] = [
         "Brave saves to my Linux Downloads folder",
     ),
     ("Check for updates", "Check for updates"),
+    ("Paste pictures as new files", "Paste pictures as new files"),
+    ("Also copy paths as text", "Also copy paths as text"),
     (
         "Check for updates automatically",
         "Check for updates automatically",
     ),
     ("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ("Cache this folder for search", "Cache this folder for search"),
+    ("Show the search filter bar", "Show the search filter bar"),
     ("Keyboard shortcuts", "Keyboard shortcuts"),
     ("Help", "Help"),
 ];
@@ -173,7 +184,7 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// The pages are the mockup's, and every setting row of the earlier
 /// layout is on one of them, found by its earlier name too: none was
 /// left out, and the only rows added are those of the commands that left
-/// the "…" menu.
+/// the "…" menu, and Search's "Show the search filter bar" (SRCH-046).
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -572,7 +583,11 @@ fn the_search_finds_settings_by_the_words_people_use() {
         ("magnify", &["Text size"]),
         (
             "wastebasket",
-            &["Moving items to the Recycle Bin", "Emptying the Recycle Bin"],
+            &[
+                "When replacing a file, move the old one to the Recycle Bin",
+                "Moving items to the Recycle Bin",
+                "Emptying the Recycle Bin",
+            ],
         ),
         ("monitor", &["Watch folders for changes"]),
         (

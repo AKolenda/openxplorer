@@ -168,10 +168,9 @@ fn sidebar_folders_take_drops_and_quick_access_pins_only_between_pins() {
 
 /// As in Windows Explorer's navigation pane, a drag held over a sidebar
 /// folder never opens it in the folder view, and one held over a
-/// collapsed This PC expands it; a drag held over a folder in the folder
-/// view still opens it (DND-021).
+/// collapsed This PC expands it.
 ///
-/// parity: DND-021, DND-027, SIDE-033
+/// parity: DND-027, SIDE-033
 #[gtk::test]
 fn a_drag_held_over_the_sidebar_never_navigates_and_expands_a_collapsed_section() {
     let fixture = Fixture::standard();
@@ -190,7 +189,6 @@ fn a_drag_held_over_the_sidebar_never_navigates_and_expands_a_collapsed_section(
     let shown_after_hover = test.window.current_uri();
     let expanded = sidebar.labels_shown().contains(&"Local Disk".to_owned());
     test.window.leave_drop_zone(DropZone::Sidebar);
-    let on_item = test.window.folder_view_spot(Some(test.position_of("Documents")));
 
     assert!(collapsed, "This PC starts collapsed");
     assert_eq!(
@@ -199,15 +197,6 @@ fn a_drag_held_over_the_sidebar_never_navigates_and_expands_a_collapsed_section(
         "the sidebar never navigates"
     );
     assert!(expanded, "a collapsed section held under the drag expands");
-    assert_eq!(
-        on_item.as_ref().and_then(super::spring::folder_to_open),
-        Some(fixture.uri_of("Documents").as_str()),
-        "a folder in the folder view still opens"
-    );
-    assert_eq!(
-        on_documents.as_ref().and_then(super::spring::folder_to_open),
-        None
-    );
 }
 
 /// A drop on a pinned folder copies or moves into it as on any folder,
@@ -410,6 +399,9 @@ fn a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab() {
     let (x, y) = middle_of(&second_tab, strip);
 
     let spot = test.window.drop_spot(DropZone::Tabs, strip.upcast_ref(), x, y);
+    // GTK marks the strip, which holds the drop target, as a drop's target
+    // while a drag is over it.
+    strip.set_state_flags(gtk::StateFlags::DROP_ACTIVE, false);
     test.window.show_drop_spot(DropZone::Tabs, spot.as_ref());
     let is_highlighted = second_tab.has_css_class("file-drop-active");
     let before_the_delay = test.window.current_uri();
@@ -417,6 +409,11 @@ fn a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab() {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
     });
     test.window.leave_drop_zone(DropZone::Tabs);
+    let strip = test.window.tab_strip();
+    let tabs = strip.tab_list();
+    let highlights_left = std::iter::successors(tabs.first_child(), gtk::Widget::next_sibling)
+        .filter(|tab| tab.has_css_class("file-drop-active"))
+        .count();
 
     assert_eq!(
         spot.map(|spot| spot.destination()),
@@ -427,6 +424,11 @@ fn a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab() {
         before_the_delay,
         Some(fixture.uri()),
         "a tab shows only after the hover delay"
+    );
+    assert_eq!(highlights_left, 0, "no tab stays highlighted");
+    assert!(
+        !strip.state_flags().contains(gtk::StateFlags::DROP_ACTIVE),
+        "GTK's drop outline does not stay on the strip once the drag is gone"
     );
 }
 
@@ -582,45 +584,44 @@ fn the_drop_highlights_the_program_hint_and_the_drop_menu_are_captured() {
     }
 }
 
-/// parity: DND-021
+/// As in Windows Explorer, a drag held over a folder in the file list
+/// never opens it: the folder stays highlighted as the drop's target, and
+/// the folder shown stays where it is.
+///
+/// parity: DND-011
 #[gtk::test]
-fn a_drag_that_stays_over_a_folder_opens_it() {
+fn a_drag_held_over_a_folder_never_opens_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let documents = test
         .window
         .folder_view_spot(Some(test.position_of("Documents")))
         .expect("a folder takes drops");
-    let blank = test
+
+    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
+    wait_for(Duration::from_millis(1500));
+    let shown_after_hover = test.window.current_uri();
+    let highlighted = test
         .window
-        .folder_view_spot(None)
-        .expect("the folder shown takes drops");
-    assert_eq!(
-        super::spring::folder_to_open(&blank),
-        None,
-        "the folder shown is open already"
-    );
+        .folder_pane()
+        .owners()
+        .is_shown_drop_target(test.position_of("Documents"));
+    test.window.leave_drop_zone(DropZone::FolderView);
 
-    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
-    test.window.show_drop_spot(DropZone::FolderView, None);
-    wait_for(Duration::from_millis(900));
     assert_eq!(
-        test.window.current_uri(),
-        Some(fixture.uri()),
-        "leaving stops the wait"
+        documents.destination(),
+        DropDestination::Folder(fixture.uri_of("Documents")),
+        "Documents takes the drop"
     );
-
-    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
-    wait_until("the hovered folder to open", || {
-        test.window.current_uri() == Some(fixture.uri_of("Documents"))
-    });
+    assert_eq!(highlighted, Some(true), "Documents stays highlighted");
+    assert_eq!(shown_after_hover, Some(fixture.uri()), "the folder shown stays");
 }
 
 /// A drag held still near the bottom of the file list scrolls it, and
 /// the folder that was under the pointer does not open meanwhile;
 /// leaving stops the scroll.
 ///
-/// parity: DND-025, DND-021
+/// parity: DND-025
 #[gtk::test]
 fn a_drag_near_the_bottom_edge_scrolls_without_opening_the_folder_under_it() {
     let fixture = Fixture::standard();

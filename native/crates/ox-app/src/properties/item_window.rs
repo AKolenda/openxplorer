@@ -5,10 +5,15 @@
 //! on this computer adds Sharing (where Samba user shares can be used)
 //! and Customize, and a standard folder Location, in Windows 11's order:
 //! General, Sharing, Security, Location, Details, Previous Versions,
-//! Customize. A drive, a folder the kernel mounts a file system at, has
-//! Windows' drive General tab instead of a folder's, and a Hardware tab
-//! after it ([`super::drive_tab`]). The item's properties are read once,
-//! off the main thread, when the window opens; the versions and a file's
+//! Customize. A drive, a folder the kernel mounts a file system at that
+//! This PC lists or the root, has Windows' drive General tab instead of a
+//! folder's, and a Hardware tab after it ([`super::drive_tab`]); as in
+//! Windows 11, the system drive, the root, has no Customize, and another
+//! drive has it where its choice can be kept ([`drive_keeps_customization`]).
+//! Any other mount point is a Mounted Volume, a folder whose General tab
+//! names the volume, as Windows shows a drive mounted in a folder. The
+//! item's properties are read once, off the main thread, when the window
+//! opens; the versions and a file's
 //! media details are read the first time their tab is shown, and a
 //! folder's size is counted from the start, never a drive's.
 
@@ -31,7 +36,7 @@ use super::drive_tab::{drive_general_tab, hardware_rows, DRIVE_ART};
 use super::folder_count::{count_folders, Totals};
 use super::general_tab::{general_tab, GeneralEdits, GeneralRights};
 use super::location_panel::LocationPanel;
-use super::metadata::{is_mount_point, read_properties, ItemProperties};
+use super::metadata::{drive_keeps_customization, is_mount_point, read_properties, ItemProperties};
 use super::security_tab::{fill_security, SecurityContext, SecurityFacts};
 use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
@@ -92,14 +97,16 @@ pub(crate) fn open_item_properties(
     initial: PropertiesTab,
 ) -> PropertiesWindow {
     let local_folder = local_folder(&target);
-    let is_drive = local_folder.is_some() && is_mount_point(&target.uri);
+    let is_drive = target.as_drive && local_folder.is_some() && is_mount_point(&target.uri);
     let art = if is_drive {
         Some(DRIVE_ART)
     } else {
         (target.kind == ItemKind::Folder).then_some(Art::Folder)
     };
     let window = PropertiesWindow::new(&target.dialog_title(), art, Some(opener));
+    window.hold_sheet_size();
     window.set_widget_name(&target.uri);
+    window.set_shows_drive(target.as_drive);
     let general = page();
     general.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
     window.add_tab(
@@ -142,7 +149,10 @@ pub(crate) fn open_item_properties(
     );
     let is_read_only =
         context.locations.is_snapshot_location(&target.uri) || is_conventional_snapshot(&target.uri);
-    let customize = (local_folder.is_some() && !is_read_only).then(|| {
+    // As in Windows 11, the system drive has no Customize tab; another
+    // drive has one where its choice can be kept.
+    let can_customize = !is_drive || drive_keeps_customization(&target.uri);
+    let customize = (local_folder.is_some() && !is_read_only && can_customize).then(|| {
         let customize = page();
         window.add_tab(
             PropertiesTab::Customize.page_name(),
@@ -350,7 +360,7 @@ impl ItemPages {
             }
             return;
         }
-        if let Some(mount) = &properties.mount {
+        if let Some(mount) = properties.mount.as_ref().filter(|_| self.target.as_drive) {
             window.set_art(DRIVE_ART);
             clear(&self.general);
             let general = drive_general_tab(&properties.entry.uri, mount, &self.context.locations);
@@ -408,16 +418,23 @@ impl ItemPages {
     /// Whether the name can be edited: an item in a local or shared folder,
     /// not a standard folder, a share or server, or inside a previous version.
     fn can_rename(&self, properties: &ItemProperties) -> bool {
-        let uri = &properties.entry.uri;
-        let is_share = is_smb_server(uri) || is_smb_share_root(uri);
-        let is_read_only = self.context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
-        let is_renamable_place = uri.starts_with("file:") || is_smb_location(uri);
-        self.target.known_folder.is_none()
-            && properties.parent_uri.is_some()
-            && !is_share
-            && !is_read_only
-            && is_renamable_place
+        can_rename(properties, &self.context, self.target.known_folder.is_some())
     }
+}
+
+/// Whether the item `properties` describes can be renamed, and so hidden
+/// (PROP-005): not a standard folder, a share, a page or anything inside a
+/// previous version.
+pub(super) fn can_rename(
+    properties: &ItemProperties,
+    context: &PropertiesContext,
+    is_standard_folder: bool,
+) -> bool {
+    let uri = &properties.entry.uri;
+    let is_share = is_smb_server(uri) || is_smb_share_root(uri);
+    let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+    let is_renamable_place = uri.starts_with("file:") || is_smb_location(uri);
+    !is_standard_folder && properties.parent_uri.is_some() && !is_share && !is_read_only && is_renamable_place
 }
 
 /// Reads the file type's default application again each time the window

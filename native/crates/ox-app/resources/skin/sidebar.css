@@ -6,13 +6,14 @@
    navigation pane rows (owner decision 2026-11-06; the web's were 35px
    with 1px margins that collapse to one pixel between rows and into the
    separators' 12px). GTK margins do not collapse, so rows keep only the
-   top one and separators give back a pixel below. Quick access rows sit in a box of their own, inset 4px
-   (3px margin, 1px border) with no row margins and 4px below the last.
-   The pane keeps the web's 13px 7px padding: the spec's 12px 8px (§4.4)
-   would move every row a pixel, off the current app's pixels. */
+   top one and separators give back a pixel below. The pinned folders
+   are rows like every other, full width and on the same 32px pitch, as
+   in Windows 11's navigation pane (the web's Quick access box, inset
+   4px, is gone). The pane keeps the web's 13px 7px padding: the spec's
+   12px 8px (§4.4) would move every row a pixel. */
 .sidebar { background-color: @ox_sidebar; }
-.sidebar list { background: none; padding: 13px 7px 0 7px; color: @ox_text; }
-.sidebar list > row {
+.sidebar list.places { background: none; padding: 13px 7px 0 7px; color: @ox_text; }
+.sidebar list.places > row {
   min-height: 31px;
   border-radius: 4px;
   margin: 1px 0 0 0;
@@ -21,43 +22,55 @@
   outline: none;
   transition: background-color 83ms linear;
 }
-.sidebar list > row.quick-access { margin: 0 4px; }
-.sidebar list > row.quick-access.section-start { margin-top: 2px; }
-.sidebar list > row.quick-access.section-end { margin-bottom: 5px; }
-.sidebar list > row:hover { background-color: @ox_hover; }
-.sidebar list > row:active { background-color: @ox_pressed; }
-.sidebar list > row:selected { background-color: @ox_selected; color: @ox_text; }
-.sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+/* The file list's item colours and focus ring (folder-views.css), as
+   Windows 11 File Explorer's navigation pane shares them. */
+.sidebar list.places > row:hover { background-color: @ox_item_hover; }
+.sidebar list.places > row:active { background-color: @ox_item_selected; }
+.sidebar list.places > row:selected { background-color: @ox_item_selected; color: @ox_text; }
+.sidebar list.places > row:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 /* A place whose folder a drop would go into (DND-011), and the accent line
    where folders dropped on Quick access would be pinned: above the row
    they would go before, or under the last pin (`.drop-before::after`,
    `.quick-drop-tail.drop-end`, DND-014). */
-.sidebar list > row.file-drop-active {
+.sidebar list.places > row.file-drop-active {
   background-color: @ox_selected;
   box-shadow: inset 0 0 0 2px @ox_accent;
 }
-.sidebar list > row.drop-before { box-shadow: inset 0 2px @ox_accent; }
-.sidebar list > row.drop-end { box-shadow: inset 0 -2px @ox_accent; }
+.sidebar list.places > row.drop-before { box-shadow: inset 0 2px @ox_accent; }
+.sidebar list.places > row.drop-end { box-shadow: inset 0 -2px @ox_accent; }
 /* An empty Quick access keeps a dashed "Pin to Quick access" row that
    takes dropped folders (`.quick-empty .quick-drop-tail`). */
-.sidebar list > row.quick-drop-tail {
+.sidebar list.places > row.quick-drop-tail {
   min-height: 30px;
   margin: 3px 6px 0;
   border: 1px dashed @ox_border;
   border-radius: 4px;
   color: @ox_accent;
 }
-.sidebar list > row.quick-drop-tail:hover { background-color: transparent; }
+.sidebar list.places > row.quick-drop-tail:hover { background-color: transparent; }
 /* The row's parts sit 12px apart (`gap:12px`), as margins because the
    web row pulls its chevron into the padding with negative margins,
    which a GTK box cannot do. Glyphs and art are 16px, as Windows 11's
    navigation pane icons (owner decision 2026-11-06; the web's were 18px
-   and 19px in a 20px box), and the names keep their place. */
-.sidebar .side-entry { padding: 0 11px; }
+   and 19px in a 20px box).
+   As in Windows 11's navigation pane, every top-level row keeps the
+   room of an expander before its icon, so Home, the pinned folders,
+   This PC and Network line their icons up in one column (28px in from
+   the pane) and only This PC and Network draw a chevron there. Rows
+   inside This PC and Network sit one 16px level further in. */
+.sidebar .side-entry { padding: 0 11px 0 19px; }
 /* Rows inside This PC and Network (.side-entry.indent). */
-.sidebar list > row.indent .side-entry { padding-left: 32px; }
-/* This PC and Network: the 9px chevron starts 5px in and the icon 19px. */
-.sidebar list > row.group .side-entry { padding-left: 5px; }
+.sidebar list.places > row.indent .side-entry { padding-left: 35px; }
+/* The dashed tail of an empty Quick access sits 7px further in (6px
+   margin, 1px border), so its glyph takes the same column. */
+.sidebar list.places > row.quick-drop-tail .side-entry { padding-left: 12px; }
+/* This PC and Network: the 9px chevron starts 5px in and the icon 19px
+   after it, in the column of the other top-level icons. */
+.sidebar list.places > row.group .side-entry { padding-left: 5px; }
 /* The chevron of This PC and Network (SIDE-033): a 17px button of its
    own around the 9px glyph, which stays where it was (5px in, 5px before
    the icon), with its own highlight, a step past the row's, as the eject
@@ -80,6 +93,10 @@ window.ox .sidebar button.side-expander:hover { background-color: @ox_pressed; }
    at the row's end, as GNOME's places sidebar shows it. */
 window.ox .sidebar button.side-eject { min-width: 24px; min-height: 24px; margin-left: 6px; color: @ox_muted; }
 window.ox .sidebar button.side-eject:hover { background-color: @ox_pressed; color: @ox_text; }
+/* In Compact view (VIEW-067) the button is 20px tall, its 16px glyph
+   with 2px above and below, so a drive's row is no taller than the
+   23px rows round it. */
+window.ox.compact-density .sidebar button.side-eject { min-height: 20px; }
 /* The accent bar of the selected row: 3 x 16 with 2px corners, centred
    on the row (§4.4; the web's .side-entry.selected:before is 3 x 15) by
    a top margin that follows the row's height (theme/fonts.rs). Windows 11
@@ -87,12 +104,6 @@ window.ox .sidebar button.side-eject:hover { background-color: @ox_pressed; colo
    alone, so the bar keeps its room but stays clear. */
 .sidebar .pill { min-width: 3px; min-height: 16px; border-radius: 2px; }
 .sidebar .side-separator { min-height: 1px; background-color: @ox_border; margin: 12px 13px 11px 13px; }
-
-/* ---- Map network location ---- */
-.sidebar-bottom { border-top: 1px solid @ox_border; margin: 0 7px; padding: 9px 0 11px 0; }
-window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
-/* The 17px glyph is centred on a half pixel as above. */
-.sidebar-bottom image { color: @ox_accent; margin-top: 1px; }
 
 /* ---- Folder tree (SIDE-028) ----
    Explorer's navigation-pane tree: 30px rows with the places' hover,
@@ -110,9 +121,13 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
 }
 /* Compact view (VIEW-067, window/compact_density.rs): closer folder tree rows. */
 window.compact-density .folder-tree listview > row { min-height: 24px; }
-.folder-tree listview > row:hover { background-color: @ox_hover; }
-.folder-tree listview > row:selected { background-color: @ox_selected; color: @ox_text; }
-.folder-tree listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+.folder-tree listview > row:hover { background-color: @ox_item_hover; }
+.folder-tree listview > row:selected { background-color: @ox_item_selected; color: @ox_text; }
+.folder-tree listview > row:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+}
 .folder-tree treeexpander expander {
   min-width: 16px;
   min-height: 16px;
@@ -124,7 +139,7 @@ window.compact-density .folder-tree listview > row { min-height: 24px; }
 
 /* A hidden place or section listed by "Show all entries" (SIDE-010), half
    see-through as in Dolphin's Places panel. */
-.sidebar list > row.hidden-place .side-entry { opacity: 0.5; }
+.sidebar list.places > row.hidden-place .side-entry { opacity: 0.5; }
 
 /* A drive's 3px capacity bar under its name (SIDE-018), red when nearly
    full as on This PC's cards. */

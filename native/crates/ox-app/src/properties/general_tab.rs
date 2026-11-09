@@ -13,6 +13,12 @@
 //! while the folder is measured off the main thread
 //! ([`super::folder_count`]); closing the window stops the count.
 //!
+//! A folder a file system is mounted at, when it is not shown as a drive,
+//! is a Mounted Volume as Windows shows a drive mounted in a folder: Type
+//! says so, and in place of the sizes Target names the volume, with
+//! Properties beside it opening the drive's own window; nothing is
+//! counted.
+//!
 //! The name, Read-only and Hidden are held until OK or Apply
 //! ([`GeneralEdits`]). Hidden is a leading dot in the name, so ticking it
 //! renames `notes.txt` to `.notes.txt`, with the normal refusal when that
@@ -35,7 +41,7 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
 use super::folder_count::FolderCountRows;
-use super::metadata::ItemProperties;
+use super::metadata::{ItemProperties, MountFacts};
 use super::window::{divider, push_button, ApplyFuture, Pending, PropertiesWindow, Rows};
 use crate::icons::{Art, ArtImage};
 
@@ -89,7 +95,12 @@ pub(super) fn general_tab(
 
     let kind = Rows::new();
     let mut opens_with = None;
-    if is_folder {
+    if properties.mount.is_some() {
+        kind.add(
+            &ox_core::i18n::gettext("Type"),
+            &ox_core::i18n::gettext("Mounted Volume"),
+        );
+    } else if is_folder {
         kind.add(&ox_core::i18n::gettext("Type"), &entry.type_label);
     } else {
         kind.add(&ox_core::i18n::gettext("Type of file"), &type_of_file(entry));
@@ -102,14 +113,17 @@ pub(super) fn general_tab(
 
     let place = Rows::new();
     let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-    place.add(
+    place.add_line(
         &ox_core::i18n::gettext("Location"),
         &locations.display_location(container),
     );
     if let Some(target) = &properties.link_target {
-        place.add(&ox_core::i18n::gettext("Target"), target);
+        place.add_line(&ox_core::i18n::gettext("Target"), target);
     }
-    let folder_rows = if is_folder {
+    let folder_rows = if let Some(mount) = &properties.mount {
+        place.add_control(&ox_core::i18n::gettext("Target"), &volume_row(mount, uri));
+        None
+    } else if is_folder {
         let size = place.add(&ox_core::i18n::gettext("Size"), "");
         let on_disk = place.add(&ox_core::i18n::gettext("Size on disk"), "");
         let contains = place.add(&ox_core::i18n::gettext("Contains"), "");
@@ -161,8 +175,13 @@ pub(super) fn general_tab(
     }
 }
 
-/// `PNG image (.png)`: the type and, when the name has one, its extension.
+/// `PNG File (.png)`: the type and, when the name has one, its extension.
+/// A shortcut is just "Shortcut": its name has no extension, and the
+/// `.lnk` Windows shows there does not exist here ([`Entry::is_shortcut`]).
 fn type_of_file(entry: &Entry) -> String {
+    if entry.is_shortcut() {
+        return entry.type_label.clone();
+    }
     let extension = std::path::Path::new(&entry.name)
         .extension()
         .and_then(|extension| extension.to_str())
@@ -219,6 +238,43 @@ fn opens_with_row(
     (row, value)
 }
 
+/// A Mounted Volume's Target: the volume's label, else its type, and
+/// Properties, which opens the drive's own Properties window, titled
+/// with that name.
+fn volume_row(mount: &MountFacts, uri: &Rc<RefCell<String>>) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let name = if mount.label.is_empty() {
+        mount.drive_type.label()
+    } else {
+        mount.label.clone()
+    };
+    row.append(
+        &gtk::Label::builder()
+            .label(&name)
+            .xalign(0.0)
+            .hexpand(true)
+            .selectable(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .css_classes(["property-value"])
+            .build(),
+    );
+    let properties = push_button(&ox_core::i18n::gettext("Properties"));
+    properties.set_valign(gtk::Align::Center);
+    properties.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "Properties of the mounted volume",
+    ))]);
+    // The folder's location now: a rename on this tab changes it.
+    let uri = Rc::clone(uri);
+    properties.connect_clicked(move |button| {
+        let opener = PropertiesWindow::of(button).and_then(|window| window.opener());
+        if let Some(opener) = opener {
+            opener.open_drive_properties(&uri.borrow(), &name);
+        }
+    });
+    row.append(&properties);
+    row
+}
+
 /// The item's picture and its name: a field when it can be renamed,
 /// where Enter presses OK.
 fn header(properties: &ItemProperties, edits: &GeneralEdits) -> gtk::Box {
@@ -253,6 +309,10 @@ pub(super) struct GeneralEdits {
     /// Renaming asks about a changed extension, except for a link to a
     /// folder, whose name has none (OPS-049).
     links_to_folder: bool,
+    /// A symbolic link: while its name has no known type's extension it
+    /// is a shortcut, whose name has none either, as Windows keeps a
+    /// shortcut's hidden `.lnk` and never asks ([`Entry::is_shortcut`]).
+    is_link: bool,
     name: gtk::Entry,
     read_only: gtk::CheckButton,
     /// Whether the item is read-only now; `None` for a folder, whose box
@@ -296,6 +356,8 @@ impl GeneralEdits {
         read_only.set_inconsistent(entry.is_dir);
         read_only.set_sensitive(rights.can_change_permissions);
         let hidden = gtk::CheckButton::with_mnemonic(&ox_core::i18n::gettext("Hidden"));
+        super::window::wrap_check_label(&read_only);
+        super::window::wrap_check_label(&hidden);
         hidden.set_active(entry.name.starts_with('.'));
         hidden.set_sensitive(rights.can_rename);
         let edits = Rc::new(Self {
@@ -304,6 +366,7 @@ impl GeneralEdits {
             original_name: RefCell::new(entry.name.clone()),
             is_folder: entry.is_dir,
             links_to_folder: properties.links_to_folder,
+            is_link: entry.is_symlink,
             name,
             read_only,
             read_only_now: Cell::new(read_only_now),
@@ -363,16 +426,21 @@ impl GeneralEdits {
     }
 
     /// After Security changed the item's permissions, a file's Read-only
-    /// shows its mode `mode` again, unless it holds a change not applied.
+    /// compares with its mode `mode`, and shows it unless the box holds a
+    /// change not applied, which stays.
     pub(super) fn follow_mode(&self, mode: Option<u32>) {
-        if self.is_folder || self.read_only_change().is_some() {
+        if self.is_folder {
             return;
         }
+        let has_choice = self.read_only_change().is_some();
         let read_only = mode.is_some_and(|mode| mode & 0o200 == 0);
         self.read_only_now.set(Some(read_only));
-        self.is_updating.set(true);
-        self.read_only.set_active(read_only);
-        self.is_updating.set(false);
+        if !has_choice {
+            self.is_updating.set(true);
+            self.read_only.set_active(read_only);
+            self.is_updating.set(false);
+        }
+        self.notify_changed();
     }
 
     fn notify_changed(&self) {
@@ -472,7 +540,11 @@ impl GeneralEdits {
                 ));
             };
             let uri = self.uri.borrow().clone();
-            let is_folder = self.is_folder || self.links_to_folder;
+            // Asked of the current name: a rename can give a link a known
+            // type's extension, or take it away.
+            let has_no_extension = self.is_folder
+                || self.links_to_folder
+                || (self.is_link && ox_core::entry::known_extension(&original).is_none());
             let parent = window.as_ref().map_or_else(
                 || opener.clone().upcast::<gtk::Window>(),
                 |window| window.clone().upcast(),
@@ -483,7 +555,7 @@ impl GeneralEdits {
             self.name.set_editable(false);
             self.hidden.set_sensitive(false);
             let renaming = opener
-                .rename_item_at(&parent, &uri, &original, &wanted, is_folder)
+                .rename_item_at(&parent, &uri, &original, &wanted, has_no_extension)
                 .await;
             self.name.set_editable(editable);
             self.hidden.set_sensitive(can_hide);

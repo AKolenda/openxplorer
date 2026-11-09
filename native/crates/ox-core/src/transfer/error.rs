@@ -38,6 +38,21 @@ pub enum TransferError {
     /// when cancellation arrived during the commit.
     #[error("{0}")]
     RecoveryRequired(String),
+    /// The item, or the folder it goes into, may not be read or written
+    /// (`G_IO_ERROR_PERMISSION_DENIED`, `EACCES`, `EPERM`).
+    #[error("{0}")]
+    PermissionDenied(String),
+    /// The destination's drive is full (`G_IO_ERROR_NO_SPACE`, `ENOSPC`).
+    #[error("{0}")]
+    NoSpace(String),
+    /// Something else holds the item (`G_IO_ERROR_BUSY`, `EBUSY`,
+    /// `ETXTBSY`).
+    #[error("{0}")]
+    Busy(String),
+    /// A folder would go into itself or a folder inside it (XFER-016):
+    /// refused before anything changes, and never worth trying again.
+    #[error("{0}")]
+    InsideSource(String),
     /// Any other backend or validation failure.
     #[error("{0}")]
     Failed(String),
@@ -64,7 +79,8 @@ impl TransferError {
 /// `v2.0.0:desktop/operations.py` interpret them: `NOT_FOUND` is a definite absence
 /// (see `is_not_found` in `operations.py`), `EXISTS` a taken name,
 /// `NOT_MOUNTED` a location to mount first and `NOT_SUPPORTED` an
-/// unsupported operation. Operation-specific meanings (for example
+/// unsupported operation. `PERMISSION_DENIED`, `NO_SPACE` and `BUSY` keep
+/// their meaning for the questions about a failed item (OPS-047). Operation-specific meanings (for example
 /// `WOULD_RECURSE` on a move) are mapped by the caller before falling back
 /// to this conversion.
 ///
@@ -81,19 +97,27 @@ impl From<glib::Error> for TransferError {
             Some(gio::IOErrorEnum::Exists) => Self::Exists(message),
             Some(gio::IOErrorEnum::NotMounted) => Self::NotMounted(message),
             Some(gio::IOErrorEnum::NotSupported) => Self::NotSupported(message),
+            Some(gio::IOErrorEnum::PermissionDenied) => Self::PermissionDenied(message),
+            Some(gio::IOErrorEnum::NoSpace) => Self::NoSpace(message),
+            Some(gio::IOErrorEnum::Busy) => Self::Busy(message),
             _ => Self::Failed(message),
         }
     }
 }
 
 /// Maps local I/O errors: `ENOENT` is a definite absence and `EEXIST` a
-/// taken name, exactly like `FileNotFoundError`/`FileExistsError` in Python.
+/// taken name, exactly like `FileNotFoundError`/`FileExistsError` in Python;
+/// a denied permission, a full drive and a busy item keep their meaning as
+/// GIO's do.
 impl From<std::io::Error> for TransferError {
     fn from(error: std::io::Error) -> Self {
         let message = error.to_string();
         match error.kind() {
             std::io::ErrorKind::NotFound => Self::NotFound(message),
             std::io::ErrorKind::AlreadyExists => Self::Exists(message),
+            std::io::ErrorKind::PermissionDenied => Self::PermissionDenied(message),
+            std::io::ErrorKind::StorageFull => Self::NoSpace(message),
+            std::io::ErrorKind::ResourceBusy | std::io::ErrorKind::ExecutableFileBusy => Self::Busy(message),
             _ => Self::Failed(message),
         }
     }
@@ -150,6 +174,18 @@ mod tests {
             },
             GlibCase {
                 code: gio::IOErrorEnum::PermissionDenied,
+                expected: TransferError::PermissionDenied("m".into()),
+            },
+            GlibCase {
+                code: gio::IOErrorEnum::NoSpace,
+                expected: TransferError::NoSpace("m".into()),
+            },
+            GlibCase {
+                code: gio::IOErrorEnum::Busy,
+                expected: TransferError::Busy("m".into()),
+            },
+            GlibCase {
+                code: gio::IOErrorEnum::Failed,
                 expected: TransferError::Failed("m".into()),
             },
         ];
@@ -167,7 +203,14 @@ mod tests {
         let taken = std::io::Error::from(std::io::ErrorKind::AlreadyExists);
         assert!(matches!(TransferError::from(taken), TransferError::Exists(_)));
         let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
-        assert!(matches!(TransferError::from(denied), TransferError::Failed(_)));
+        assert!(matches!(
+            TransferError::from(denied),
+            TransferError::PermissionDenied(_)
+        ));
+        let full = std::io::Error::from_raw_os_error(28);
+        assert!(matches!(TransferError::from(full), TransferError::NoSpace(_)));
+        let busy = std::io::Error::from_raw_os_error(16);
+        assert!(matches!(TransferError::from(busy), TransferError::Busy(_)));
     }
 
     #[test]

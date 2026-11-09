@@ -102,9 +102,12 @@ impl BrowserWindow {
                 // The address being opened goes with the edit (VIEW-068).
                 window.cancel_typed_opening();
                 window.finish_address();
+                // Esc is a key, so the list shows where the keyboard is.
+                window.folder_pane().focus_an_item();
             }
         ));
         self.install_focus_regions();
+        self.install_tab_order();
         super::menu_popover::close_menus_on_press(self);
     }
 
@@ -247,15 +250,32 @@ impl BrowserWindow {
     /// several is never opened.
     pub(super) fn connect_view_activation(&self) {
         for pane in self.folder_panes() {
-            pane.details().column_view().connect_activate(glib::clone!(
+            let details = pane.details();
+            details.column_view().connect_activate(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, position| window.activate_from_view(position)
+                #[weak]
+                details,
+                move |_, row| {
+                    // Grouped, the rows list headings among the items.
+                    if let Some(position) = details.item_at(row) {
+                        window.activate_from_view(position);
+                    }
+                }
             ));
-            pane.icon_view().grid().connect_activate(glib::clone!(
+            let icons = pane.icon_view();
+            icons.grid().connect_activate(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, position| window.activate_from_view(position)
+                #[weak]
+                icons,
+                move |_, slot| {
+                    // Grouped Tiles and Content list headings among the
+                    // items (VIEW-071).
+                    if let Some(position) = icons.item_at(slot) {
+                        window.activate_from_view(position);
+                    }
+                }
             ));
         }
     }
@@ -263,7 +283,10 @@ impl BrowserWindow {
     /// Opens the item at `position` of the active pane, which Enter or a
     /// double-click activated. A folder opened with Ctrl goes to a new tab
     /// behind, with Ctrl+Shift to a new tab in front and with Shift to a
-    /// new window, whatever is selected, as in Dolphin (TAB-026).
+    /// new window, whatever is selected, as in Dolphin (TAB-026). With
+    /// Folder Options' "Open each folder in its own window", a folder
+    /// opened alone goes to a new window too, as in Windows
+    /// ([`BrowserWindow::activate_item`]).
     pub(super) fn activate_from_view(&self, position: u32) {
         // DND-007: the press or release of a drag never opens an item.
         if self.are_item_clicks_paused() {
@@ -280,7 +303,8 @@ impl BrowserWindow {
             return;
         }
         let selected = self.folder_pane().model().selected_positions();
-        if selected.is_empty() || selected == [position] {
+        let alone = selected.is_empty() || selected == [position];
+        if alone {
             self.activate_item(position);
         } else if selected.contains(&position) {
             self.open_selection();
@@ -316,6 +340,7 @@ impl BrowserWindow {
         self.attach_file_drag(view);
         self.attach_details_hover(view);
         self.attach_file_drop_zone(view, DropZone::FolderView);
+        view.add_controller(keyboard_marker(view));
     }
 
     /// Gives the empty page's whole area in `pane` what an empty folder takes in
@@ -456,6 +481,13 @@ impl BrowserWindow {
         if is_plain_tab(key, modifiers) && self.tab_to_other_pane() {
             return glib::Propagation::Stop;
         }
+        if let Some(handled) = self.group_heading_key(key, modifiers) {
+            return handled;
+        }
+        self.select_heading_after_key(key, modifiers);
+        if let Some(handled) = self.grouped_grid_key(key, modifiers) {
+            return handled;
+        }
         let shortcut =
             gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK;
         if modifiers.intersects(shortcut) {
@@ -541,10 +573,13 @@ impl BrowserWindow {
     }
 
     /// A primary press on blank space in `view`, below the rows or between
-    /// the tiles, clears the selection and keeps keyboard focus on the view,
-    /// as in Windows Explorer and Dolphin; with Ctrl or Shift held the
-    /// selection stays. A drag from there draws a rubber band
-    /// ([`super::rubber_band`]).
+    /// the tiles, clears the selection and keeps keyboard focus on the
+    /// view, as in Windows Explorer and Dolphin; with Ctrl or Shift held
+    /// the selection stays. A drag from there draws a rubber band
+    /// ([`super::rubber_band`]). A press on the empty part of an unselected
+    /// details row keeps the selection: released there, the row's own click
+    /// selects the row (Ctrl toggles it, Shift extends to it), and dragged
+    /// from there, the band replaces the selection as it moves.
     fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
@@ -554,9 +589,17 @@ impl BrowserWindow {
             self,
             #[weak]
             view,
-            move |press, _, x, y| {
+            move |press, presses, x, y| {
                 window.imp().view_modifiers.set(Some(press.current_event_state()));
+                if !window.are_item_clicks_paused()
+                    && window.press_heading(&view, x, y, presses, press.current_event_state())
+                {
+                    return;
+                }
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
+                    return;
+                }
+                if window.is_beside_item(&view, x, y) {
                     return;
                 }
                 if !press_keeps_selection(press.current_event_state()) {
@@ -569,15 +612,53 @@ impl BrowserWindow {
     }
 
     /// Whether (`x`, `y`) in `view` is its blank space: inside the list,
-    /// not on an item, and not on the column titles.
+    /// not on an item or a group's heading, and not on the column titles. The empty part of an
+    /// unselected details row is blank space too ([`Self::is_beside_item`]).
     pub(super) fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
-        if self.folder_pane().owners().position_at(view, x, y).is_some() {
+        // A group's heading collapses its group on a click (VIEW-022).
+        if super::group_headings::heading_at(view, x, y).is_some() {
             return false;
         }
+        if self.folder_pane().owners().position_at(view, x, y).is_some() {
+            return self.is_beside_item(view, x, y);
+        }
         // The details view's rows are an inner list view; its titles are
-        // not inside it. The icon grid is the list itself.
-        view.pick(x, y, gtk::PickFlags::DEFAULT)
-            .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
+        // not inside it. The icon grid is the list itself, and a group's
+        // heading row in grouped Tiles and Content is blank space too.
+        view.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
+            &picked == view
+                || picked.ancestor(gtk::ListView::static_type()).is_some()
+                || crate::folder_view::cells::is_in_group_slot(&picked)
+        })
+    }
+
+    /// Whether (`x`, `y`) in `view` is on the empty part of an unselected
+    /// details row: past the end of its name, or in its other columns. As
+    /// in Windows Explorer, only the icon and the name (with the check box
+    /// and the expand arrow before them) are the item to drag there, so a
+    /// drag from the rest of the row draws a rubber band, even in a folder
+    /// whose rows fill the view. A click there still selects the row, as
+    /// Windows' full-row select does. A selected row stays the item across
+    /// its width, and so does every tile of the icon views. A drop still
+    /// goes into the folder of the whole row.
+    pub(super) fn is_beside_item(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
+        if !view.is::<gtk::ColumnView>() {
+            return false;
+        }
+        let pane = self.folder_pane();
+        let Some(position) = pane.owners().position_at(view, x, y) else {
+            return false;
+        };
+        if pane.model().selection().is_selected(position) {
+            return false;
+        }
+        let Some(cell) = pane.owners().file_cell_at(position, view) else {
+            return false;
+        };
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let in_view = gtk::graphene::Point::new(x as f32, y as f32);
+        view.compute_point(&cell, &in_view)
+            .is_some_and(|point| cell.is_past_name(point))
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;
@@ -612,13 +693,38 @@ impl BrowserWindow {
 
     /// The location of the folder at `position` of the active pane, if a
     /// folder is there.
-    fn folder_in_view(&self, position: u32) -> Option<String> {
+    pub(super) fn folder_in_view(&self, position: u32) -> Option<String> {
         let item = self.folder_pane().model().item(position)?;
         match activation_for(item.entry()) {
             Activation::Folder(uri) => Some(uri),
             Activation::File | Activation::Archive | Activation::Refused(_) => None,
         }
     }
+}
+
+/// The class a folder view has while the keyboard is in it, which its
+/// focused row or tile outlines (folder-views.css).
+pub(super) const KEYBOARD_IN_CLASS: &str = "keyboard-in";
+
+/// Marks `view` with [`KEYBOARD_IN_CLASS`] while the window's keyboard
+/// focus is inside it, and only then: as in Windows 11 File Explorer, the
+/// focused item draws its outline only while the list has the keyboard,
+/// whatever state GTK leaves on the row it last focused once the
+/// keyboard moves to the navigation pane or the address bar.
+fn keyboard_marker(view: &gtk::Widget) -> gtk::EventControllerFocus {
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_contains_focus_notify(glib::clone!(
+        #[weak]
+        view,
+        move |focus| {
+            if focus.contains_focus() {
+                view.add_css_class(KEYBOARD_IN_CLASS);
+            } else {
+                view.remove_css_class(KEYBOARD_IN_CLASS);
+            }
+        }
+    ));
+    focus
 }
 
 #[cfg(test)]

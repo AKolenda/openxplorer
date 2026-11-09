@@ -7,16 +7,26 @@
 //! window's `win.about`; "Check for updates" runs
 //! `win.check-updates`, the Software updates dialog, and its row says what
 //! the last check in any window found. "Check for updates automatically"
-//! turns the daily check at launch on or off. "Read license & source
+//! turns the daily check at launch on or off. "Install updates without
+//! asking for a password", on by default and shown only in the stable
+//! Debian package, has the update helper remove or add the polkit rule
+//! that lets an administrator at the machine update without a password;
+//! turning it on asks for an administrator's password (turning it off
+//! does not, for an administrator at the machine, whom the rule already
+//! lets through), and it shows whether the rule is there. "Read license & source
 //! information" runs `win.license`, the licence dialog. "Keyboard
 //! shortcuts" and "Help" run `win.keyboard-shortcuts` (Ctrl+?) and
 //! `win.help` (F1): they, the licence and the build left the command
 //! bar's "…" menu for this page (CMD-007), as Windows 11 File Explorer's
 //! "…" has none of them.
 
+use std::rc::Rc;
+
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::PreferencesUpdate;
+use ox_core::update::PasswordlessUpdates;
 
 use super::bindings::PreferenceBinding;
 use super::group::SettingsGroup;
@@ -29,7 +39,7 @@ use super::status_card::{StatusCard, StatusText};
 use super::{SettingsPage, SharedHandler};
 use crate::config::BUILD_NAME;
 use crate::icons::Icon;
-use crate::update::Updates;
+use crate::update::{PasswordlessChange, Updates};
 use crate::window::{ButtonStyle, WindowAction};
 
 /// A group of one row whose button runs a window action.
@@ -62,12 +72,20 @@ const AUTOMATIC_CHECKS: RowText = RowText {
     keywords: "automatic update check daily launch startup notify notification network github privacy",
 };
 
+const PASSWORDLESS_UPDATES: RowText = RowText {
+    title: "Install updates without asking for a password",
+    description: "Administrators at this computer install OpenXplorer updates without typing their \
+                  password. Turning it on asks for an administrator's password.",
+    keywords: "password prompt administrator admin sudo polkit pkexec authentication install update \
+               without password passwordless",
+};
+
 const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
     heading: crate::i18n::message_id("License & source"),
     text: RowText {
         title: "OpenXplorer · License & source",
         description: "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty.",
-        keywords: "licence agpl source code copyright mit notice. Original component notices are \
+        keywords: "license licence agpl source code copyright mit notice. Original component notices are \
                    preserved.",
     },
     button: crate::i18n::message_id("Read license & source information"),
@@ -111,6 +129,9 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     about.append_card(&build_card());
     let (updates, updates_row) = action_group(&UPDATES);
     updates.add_row(&automatic_checks_row(page));
+    if let Some(setting) = page.context().passwordless_updates() {
+        updates.add_row(&passwordless_row(page, setting.clone()));
+    }
     about.append_group(&updates);
     follow_updates(page, &updates_row);
     about.append_group(&help_group());
@@ -132,7 +153,7 @@ fn build_card() -> StatusCard {
     let about_build = parts::button(&ox_core::i18n::gettext("About this build"), ButtonStyle::Bordered);
     WindowAction::About.assign_to(&about_build);
     let text = ox_core::i18n::gettext(
-        "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs.",
+        "An independent Windows 11–inspired file manager for Linux. Desktop: GTK 4 + GIO/GVfs.",
     );
     let status = StatusText {
         glyph: Icon::Info,
@@ -155,6 +176,74 @@ fn automatic_checks_row(page: &SettingsPage) -> SettingRow {
     };
     row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
     row
+}
+
+/// "Install updates without asking for a password": its switch is on
+/// only while the polkit rule is there. Flipping it runs the update helper
+/// through `pkexec`, which asks for an administrator's password; while it
+/// runs the switch waits, and afterwards it shows the rule as it is, so a
+/// cancelled prompt or a failure puts it back.
+fn passwordless_row(page: &SettingsPage, setting: PasswordlessUpdates) -> SettingRow {
+    let row = SettingRow::new(PASSWORDLESS_UPDATES);
+    let switch = parts::switch();
+    let setting = Rc::new(setting);
+    show_passwordless(page, &switch, &setting);
+    page.when_opened(glib::clone!(
+        #[weak]
+        page,
+        #[weak]
+        switch,
+        #[strong]
+        setting,
+        move || {
+            if switch.is_sensitive() {
+                show_passwordless(&page, &switch, &setting);
+            }
+        }
+    ));
+    switch.connect_active_notify(glib::clone!(
+        #[weak]
+        page,
+        move |switch| {
+            if page.is_user_change() && switch.is_sensitive() {
+                change_passwordless_from(&page, switch, &setting);
+            }
+        }
+    ));
+    row.add_control(&switch, ControlName::RowTitle);
+    row
+}
+
+/// Shows on `switch` whether the rule is there now.
+fn show_passwordless(page: &SettingsPage, switch: &gtk::Switch, setting: &PasswordlessUpdates) {
+    let is_on = setting.is_on();
+    page.while_showing_preferences(|| switch.set_active(is_on));
+}
+
+/// Turns the setting as `switch` now shows, then shows what happened.
+fn change_passwordless_from(page: &SettingsPage, switch: &gtk::Switch, setting: &Rc<PasswordlessUpdates>) {
+    let on = switch.is_active();
+    let had_focus = switch.has_focus();
+    switch.set_sensitive(false);
+    let page = page.downgrade();
+    let switch = switch.downgrade();
+    let setting = Rc::clone(setting);
+    glib::spawn_future_local(async move {
+        let change = crate::update::change_passwordless(&setting, on).await;
+        let (Some(page), Some(switch)) = (page.upgrade(), switch.upgrade()) else {
+            return;
+        };
+        switch.set_sensitive(true);
+        show_passwordless(&page, &switch, &setting);
+        if had_focus {
+            switch.grab_focus();
+        }
+        if change == PasswordlessChange::Failed {
+            page.report(&ox_core::i18n::gettext(
+                "Install updates without asking for a password could not be changed.",
+            ));
+        }
+    });
 }
 
 /// The group `spec` describes, and its row.

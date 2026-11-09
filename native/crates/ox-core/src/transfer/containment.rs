@@ -29,12 +29,12 @@ pub(crate) fn guard_destination(
     destination_folder: &dyn Node,
 ) -> Result<(), TransferError> {
     if resolved_paths_nest(source, destination_folder) {
-        return Err(TransferError::failed(crate::i18n::gettext(
+        return Err(TransferError::InsideSource(crate::i18n::gettext(
             "Cannot place a folder inside itself (including through a symlink).",
         )));
     }
     if uris_nest(source, destination_folder)? {
-        return Err(TransferError::failed(crate::i18n::gettext(
+        return Err(TransferError::InsideSource(crate::i18n::gettext(
             "Cannot place a folder inside itself.",
         )));
     }

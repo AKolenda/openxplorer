@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Network shares and devices in the window: Network's discovered
-//! computers and info bar, Map network location, Sign out of server, Keep in
+//! computers and info bar, Map network drive, Sign out of server, Keep in
 //! Network and Remove saved location, This PC's network and drive cards,
 //! and connecting and removing drives, against `renderNetwork`,
 //! `connectDialog`, `signOut`, `networkLocationMenu`, `mountVolume` and
@@ -32,6 +32,7 @@ use crate::test_support::harness::{
 };
 use crate::window::activation::{activation_for, Activation};
 use crate::window::folder_pane::PanePage;
+use crate::window::landing;
 use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
 use crate::window::Dialog;
@@ -230,7 +231,7 @@ fn network_says_when_discovery_is_turned_off() {
     assert!(!bar.is_visible(), "the bar belongs to Network");
 }
 
-/// Map network location opens from every place that offers it; an
+/// Map network drive opens from every place that offers it; an
 /// address that is not a share is refused inside the dialog, which stays
 /// open for another try, and Cancel closes it.
 ///
@@ -251,7 +252,7 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
     wait_until("the error", || dialog.error_text().is_some());
 
     assert!(dialog.is_visible());
-    assert!(dialog.can_press("Connect"), "Connect can be pressed again");
+    assert!(dialog.can_press("Finish"), "Finish can be pressed again");
     dialog.press("Cancel");
     wait_until("Cancel to close the dialog", || !dialog.is_visible());
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
@@ -260,22 +261,24 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
 /// "…" > Add a network location opens the connect dialog under Windows'
 /// title, at a web address type (Windows' wizard adds websites and FTP
 /// sites), and saves what it connects under Network locations; Map
-/// network drive opens it at a Windows share.
+/// network drive opens Windows' dialog at drive Z:, saving the share.
 ///
 /// parity: NET-001, NET-002, CMD-007
 #[gtk::test]
 fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
     let test = TestWindow::open(Page::ThisPc.uri());
-    for (action, title, kind) in [
+    for (action, title, first, keep) in [
         (
             "add-network-location",
             "Add a network location",
             "Secure WebDAV (HTTPS)",
+            "Save in the sidebar · reconnect when opened",
         ),
         (
             "map-network-location",
-            "Map network location",
-            "Windows share (SMB)",
+            "Map network drive",
+            "Z:",
+            "Save in the sidebar · reconnect when opened",
         ),
     ] {
         test.activate(action, None);
@@ -286,14 +289,10 @@ fn add_a_network_location_opens_the_connect_dialog_at_a_web_address() {
             .and_then(gtk::DropDown::selected_item)
             .and_downcast::<gtk::StringObject>()
             .map(|chosen| chosen.string().to_string());
-        assert_eq!(chosen.as_deref(), Some(kind), "{action}");
+        assert_eq!(chosen.as_deref(), Some(first), "{action}");
         let save = descendants::<gtk::CheckButton>(&dialog)
             .into_iter()
-            .find(|check| {
-                check
-                    .label()
-                    .is_some_and(|label| label.starts_with("Save in the sidebar"))
-            })
+            .find(|check| check.label().is_some_and(|label| label == keep))
             .expect("the dialog saves the location");
         assert!(save.is_active(), "{action} saves it under Network locations");
         dialog.press("Cancel");
@@ -623,32 +622,32 @@ fn open_in_new_window_shows_the_place_in_another_window() {
     opened[0].close();
 }
 
-/// This PC lists saved locations with their state, or says how to add
-/// one.
+/// This PC lists saved locations as tiles in their own group, which it
+/// leaves out while none is saved, as Windows 11 leaves out an empty
+/// group; Map network drive is in "..." (CMD-007).
 ///
 /// parity: HOME-005
 #[gtk::test]
-fn this_pc_lists_saved_locations_or_says_how_to_map_one() {
+fn this_pc_lists_saved_locations_in_their_own_group() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
-    let empty =
-        "No network locations saved. Use “Map network location” to connect to a share and add it to the \
-                 sidebar.";
-    assert!(shows(landing, empty));
-    assert!(shows(landing, "Map network location"));
+    assert_eq!(landing::section_titles(landing), ["Devices and drives"]);
 
     test.save_share("smb://fileserver/backup", "Backup (S:)");
     // Named as Windows 11 names a mapped drive: its label, its server and
-    // its letter; the full address is the card's tooltip.
+    // its letter; the full address is the tile's tooltip.
     let name = "Backup (\\\\fileserver) (S:)";
-    wait_until("the saved share's card", || shows(landing, name));
+    wait_until("the saved share's tile", || shows(landing, name));
+    assert_eq!(
+        landing::section_titles(landing),
+        ["Devices and drives", "Network locations"]
+    );
     assert!(shows(landing, "Connect on open"), "{:?}", texts_in(landing));
-    let card = descendants::<gtk::Button>(landing)
+    let tile = descendants::<gtk::FlowBoxChild>(landing)
         .into_iter()
-        .find(|card| card.has_css_class("drive-card") && shows(card, name))
-        .expect("the share's card");
-    assert_eq!(card.tooltip_text().as_deref(), Some("\\\\fileserver\\backup"));
-    assert!(!shows(landing, empty));
+        .find(|tile| shows(tile, name))
+        .expect("the share's tile");
+    assert_eq!(tile.tooltip_text().as_deref(), Some("\\\\fileserver\\backup"));
 }
 
 /// A share's card name, as Windows 11 writes a mapped drive: "Backup
@@ -677,11 +676,11 @@ fn a_share_card_is_named_with_its_server_and_letter_as_windows_does() {
     );
 }
 
-/// Local Disk's card shows how full it is once GIO has measured it.
+/// Local Disk's tile shows how full it is once GIO has measured it.
 ///
 /// parity: HOME-003, HOME-004
 #[gtk::test]
-fn the_local_disk_card_shows_its_capacity() {
+fn the_local_disk_tile_shows_its_capacity() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
 

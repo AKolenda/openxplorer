@@ -21,6 +21,7 @@ pub(crate) mod column_widths;
 pub(crate) mod details;
 pub(crate) mod filter;
 pub(crate) mod grid;
+pub(crate) mod group_slots;
 pub(crate) mod groups;
 pub(crate) mod icon_size;
 pub(crate) mod item;
@@ -35,4 +36,4 @@ pub(crate) mod sorting;
 pub(crate) mod tree;
 pub(crate) mod watch;
 
-pub(crate) use cells::CUSTOM_ICON;
+pub(crate) use cells::{icon_texture, FolderPicture, CUSTOM_ICON, FOLDER_PICTURE};

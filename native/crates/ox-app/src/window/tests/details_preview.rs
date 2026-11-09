@@ -37,10 +37,15 @@ fn recordings_get_a_player_that_starts_only_with_auto_play() {
     let pane = test.window.details_pane();
 
     test.select_named("Clip.mp4");
+    // The player opens once its file's path is checked off the main thread.
+    wait_until("a video player", || !descendants::<gtk::Video>(pane).is_empty());
     let video = descendants::<gtk::Video>(pane).pop().expect("a video player");
     let stream = video.media_stream().expect("the video's stream");
     assert!(!stream.is_playing(), "a video never starts on its own");
     test.select_named("Song.mp3");
+    wait_until("audio controls", || {
+        !descendants::<gtk::MediaControls>(pane).is_empty()
+    });
     let controls = descendants::<gtk::MediaControls>(pane)
         .pop()
         .expect("audio controls");
@@ -51,6 +56,9 @@ fn recordings_get_a_player_that_starts_only_with_auto_play() {
     options.auto_play = true;
     pane.set_options(options);
     test.select_named("Clip.mp4");
+    wait_until("the video player again", || {
+        !descendants::<gtk::Video>(pane).is_empty()
+    });
     let video = descendants::<gtk::Video>(pane).pop().expect("a video player");
     assert!(plays_or_cannot(
         &video.media_stream().expect("the video's stream")

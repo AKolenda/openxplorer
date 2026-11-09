@@ -24,7 +24,7 @@ use ox_core::places::KnownFolder;
 /// picks by size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Icon {
-    /// `add_20_regular`: New, the new-tab "+", Map network location and
+    /// `add_20_regular`: New, the new-tab "+", Map network drive and
     /// Larger text.
     Add,
     /// Add a network location in This PC's "…": an original icon
@@ -33,6 +33,8 @@ pub(crate) enum Icon {
     AddNetworkLocation24,
     /// `apps_20_regular`: the Default apps settings.
     Apps,
+    /// `apps_list_detail_20_regular`: View > Tiles.
+    AppsListDetail,
     /// `arrow_autofit_height_20_regular`: View > Show > Compact view, as Windows 11 draws it.
     ArrowAutofitHeight,
     /// `arrow_clockwise_20_regular`: Refresh, Check for updates, and the
@@ -83,6 +85,15 @@ pub(crate) enum Icon {
     Checkmark,
     /// `chevron_down_20_regular`: the menu carets of New, Sort and View.
     ChevronDown,
+    /// `chevron_double_left_16_regular`: the address bar's « button, which
+    /// lists the crumbs a long path hides (named by
+    /// `resources/skin/navigation.css`).
+    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
+    ChevronDoubleLeft16,
+    /// `chevron_double_right_16_regular`: the same button in a
+    /// right-to-left language.
+    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
+    ChevronDoubleRight16,
     /// `chevron_down_16_regular`: the small carets (the address bar's edit
     /// chevron, a column title's sort arrow, the sidebar's expanders and a
     /// settings drop-down).
@@ -111,6 +122,8 @@ pub(crate) enum Icon {
     /// `code_24_color`: code, HTML and JSON files at larger sizes, the
     /// largest design of this picture.
     CodeColor24,
+    /// `content_view_20_regular`: View > Content.
+    ContentView,
     /// `copy_20_regular`: Copy, and the details pane's picture of several
     /// selected items.
     Copy,
@@ -120,8 +133,8 @@ pub(crate) enum Icon {
     Delete,
     /// `delete_dismiss_20_regular`: Empty Recycle Bin.
     DeleteDismiss,
-    /// `desktop_20_regular`: the Desktop folder, the open-windows button and
-    /// its windows, Use system appearance, Discovered servers and Settings'
+    /// `desktop_20_regular`: the Desktop folder, the open-windows menu's
+    /// windows, Use system appearance, Discovered servers and Settings'
     /// Open windows….
     Desktop,
     /// Disconnect network drive in This PC's "…": an original icon
@@ -255,6 +268,9 @@ pub(crate) enum Icon {
     /// Select items matching, the settings search and the Search &
     /// indexing settings.
     Search,
+    /// Search options in the command bar while searching, as Windows 11
+    /// File Explorer shows it (SRCH-046).
+    SearchSettings,
     /// Select all in the "…" menu: an original icon
     /// made for `OpenXplorer` to match Windows 11's command-bar glyph
     /// (`native/icon-sources`).
@@ -335,6 +351,7 @@ impl Icon {
             Icon::Add => "ox-add-20-symbolic",
             Icon::AddNetworkLocation24 => "ox-add-network-location-24-symbolic",
             Icon::Apps => "ox-apps-20-symbolic",
+            Icon::AppsListDetail => "ox-apps-list-detail-20-symbolic",
             Icon::ArrowAutofitHeight => "ox-arrow-autofit-height-20-symbolic",
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
             Icon::ArrowCounterclockwise => "ox-arrow-counterclockwise-20-symbolic",
@@ -355,6 +372,8 @@ impl Icon {
             Icon::Checkmark => "ox-checkmark-20-symbolic",
             Icon::ChevronDown => "ox-chevron-down-20-symbolic",
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
+            Icon::ChevronDoubleLeft16 => "ox-chevron-double-left-16-symbolic",
+            Icon::ChevronDoubleRight16 => "ox-chevron-double-right-16-symbolic",
             Icon::ChevronLeft16 => "ox-chevron-left-16-symbolic",
             Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
             Icon::ChevronUp16 => "ox-chevron-up-16-symbolic",
@@ -364,6 +383,7 @@ impl Icon {
             Icon::Code => "ox-code-20-symbolic",
             Icon::CodeColor20 => "ox-code-20-color",
             Icon::CodeColor24 => "ox-code-24-color",
+            Icon::ContentView => "ox-content-view-20-symbolic",
             Icon::Copy => "ox-copy-20-symbolic",
             Icon::Cut => "ox-cut-20-symbolic",
             Icon::Delete => "ox-delete-20-symbolic",
@@ -423,6 +443,7 @@ impl Icon {
             Icon::RectangleLandscape => "ox-rectangle-landscape-20-symbolic",
             Icon::Rename => "ox-rename-20-symbolic",
             Icon::Search => "ox-search-20-symbolic",
+            Icon::SearchSettings => "ox-search-settings-20-symbolic",
             Icon::SelectAll24 => "ox-select-all-24-symbolic",
             Icon::SelectAllOff => "ox-select-all-off-20-symbolic",
             Icon::SelectAllOn => "ox-select-all-on-20-symbolic",
@@ -473,10 +494,11 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 119] = [
+pub(crate) const ALL_ICONS: [Icon; 124] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
+    Icon::AppsListDetail,
     Icon::ArrowAutofitHeight,
     Icon::ArrowClockwise,
     Icon::ArrowCounterclockwise,
@@ -496,6 +518,8 @@ pub(crate) const ALL_ICONS: [Icon; 119] = [
     Icon::CheckboxChecked,
     Icon::Checkmark,
     Icon::ChevronDown,
+    Icon::ChevronDoubleLeft16,
+    Icon::ChevronDoubleRight16,
     Icon::ChevronDown16,
     Icon::ChevronLeft16,
     Icon::ChevronRight16,
@@ -506,6 +530,7 @@ pub(crate) const ALL_ICONS: [Icon; 119] = [
     Icon::Code,
     Icon::CodeColor20,
     Icon::CodeColor24,
+    Icon::ContentView,
     Icon::Copy,
     Icon::Cut,
     Icon::Delete,
@@ -565,6 +590,7 @@ pub(crate) const ALL_ICONS: [Icon; 119] = [
     Icon::RectangleLandscape,
     Icon::Rename,
     Icon::Search,
+    Icon::SearchSettings,
     Icon::SelectAll24,
     Icon::SelectAllOff,
     Icon::SelectAllOn,

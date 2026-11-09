@@ -20,18 +20,21 @@
 //! | `window` | [`PropertiesWindow`]: the window, its tabs and OK, Cancel and Apply |
 //! | `item_window` | The Properties window of one item |
 //! | `selection_view` | Properties of several items |
+//! | `selection_attributes` | Read-only and Hidden of several items |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_tab` | The General tab: name, type, sizes, dates and attributes |
 //! | `drive_tab` | A drive's General and Hardware tabs |
 //! | `drive_facts` | A drive's label, type and file system |
 //! | `space_ring` | [`SpaceRing`](space_ring::SpaceRing): the ring of a drive's used and free space |
+//! | `fixed_width` | [`FixedWidth`](fixed_width::FixedWidth): the window's content at Windows' width |
 //! | `folder_count` | A folder's size and content, counting up |
 //! | `security_tab` | The Security tab and its Edit and Advanced dialogs |
 //! | `security_model` | Windows' permission names over Linux bits |
 //! | `details_tab` | The Details tab of a file: its list, keys and reader |
 //! | `details_rows` | The Details tab's headings, rows and value wording |
 //! | `permissions_editor` | Changing several items' permissions together |
-//! | `custom_icon` | The Customize tab: Change Icon... |
+//! | `custom_icon` | The Customize tab: Change Icon... and Restore Default |
+//! | `change_icon` | The Change Icon dialog: the theme's folder icons and Browse... |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `sharing_panel` | The Sharing tab: Samba user shares of a local folder |
@@ -43,11 +46,13 @@
 //! | `folder_sizes` | [`FolderSizeState`] and [`FolderSizes`]: measured sizes and their text |
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
+mod change_icon;
 mod custom_icon;
 mod details_rows;
 mod details_tab;
 mod drive_facts;
 mod drive_tab;
+mod fixed_width;
 mod folder_count;
 mod folder_sizes;
 mod general_tab;
@@ -59,6 +64,7 @@ mod permissions_editor;
 mod restore;
 mod security_model;
 mod security_tab;
+mod selection_attributes;
 mod selection_view;
 mod sharing_panel;
 mod size_scan_strip;
@@ -77,11 +83,14 @@ const READING: &str = crate::i18n::message_id("Reading file properties…");
 
 #[cfg(test)]
 pub(crate) use custom_icon::set_custom_icon;
+pub(crate) use details_rows::pane_media_rows;
 pub(crate) use details_tab::focus_detail_row;
-pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNED};
+pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes};
 pub(crate) use item_window::{open_item_properties, PropertiesContext};
 #[cfg(test)]
 pub(crate) use location_panel::LocationPanel;
+#[cfg(test)]
+pub(crate) use metadata::is_mount_point;
 pub(crate) use restore::RestoreRequest;
 pub(crate) use selection_view::open_selection_properties;
 pub(crate) use sharing_panel::system_usershares;
@@ -92,7 +101,7 @@ pub(crate) use space_ring::SpaceRing;
 pub(crate) use version_row::SnapshotTarget;
 #[cfg(test)]
 pub(crate) use versions_panel::VersionsPanel;
-pub(crate) use window::PropertiesWindow;
+pub(crate) use window::{group, page, push_button, ApplyFuture, Pending, PropertiesWindow};
 
 /// The item a Properties dialog describes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,6 +117,10 @@ pub(crate) struct PropertiesTarget {
     pub kind: ItemKind,
     /// The standard folder the item is, which adds the Location tab.
     pub known_folder: Option<KnownFolder>,
+    /// Whether a mount point shows as a drive (General with its space,
+    /// and Hardware), as Windows shows a volume of This PC; else it shows
+    /// as the folder it is, as when reached in a folder's listing.
+    pub as_drive: bool,
 }
 
 impl PropertiesTarget {

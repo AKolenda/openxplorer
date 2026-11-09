@@ -126,6 +126,60 @@ impl ContextMenu {
     }
 }
 
+/// Where the compact menu's strip of Cut, Copy, Rename, Share and Delete
+/// sits (`preferences.menuStripPosition`, CMD-008).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StripPosition {
+    /// On the side nearest the pointer, as Windows 11 draws it: at the
+    /// top of a menu that opens downward, at the bottom of one that opens
+    /// upward.
+    #[default]
+    Pointer,
+    /// Always at the top.
+    Top,
+    /// Always at the bottom.
+    Bottom,
+}
+
+impl StripPosition {
+    /// Every choice.
+    pub const ALL: [StripPosition; 3] = [StripPosition::Pointer, StripPosition::Top, StripPosition::Bottom];
+
+    /// The value stored in `settings.json`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            StripPosition::Pointer => "pointer",
+            StripPosition::Top => "top",
+            StripPosition::Bottom => "bottom",
+        }
+    }
+
+    /// The choice stored as `key`, or `None` for anything else.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|choice| choice.as_str() == key)
+    }
+
+    /// Whether the strip goes at the bottom of a menu that opened upward
+    /// (`opened_upward`) or downward.
+    pub const fn at_bottom(self, opened_upward: bool) -> bool {
+        match self {
+            StripPosition::Pointer => opened_upward,
+            StripPosition::Top => false,
+            StripPosition::Bottom => true,
+        }
+    }
+
+    /// True for the pointer's side, the default, which is not stored.
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde passes the field by reference"
+    )]
+    pub(super) fn is_pointer(&self) -> bool {
+        *self == StripPosition::Pointer
+    }
+}
+
 /// How a ZIP opens when the app opens archives itself
 /// (`preferences.zipOpening`, ARC-026).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize)]

@@ -39,11 +39,11 @@ const FOLDERS_ONLY: &str =
 ///
 /// # Errors
 ///
-/// [`DropRefusal::ItemCount`] for no items or more than 200, and
+/// [`DropRefusal::PinCount`] for no items or more than 200, and
 /// [`DropRefusal::NotPinnable`] for anything else (`receiveFileDrop`).
 fn pinnable_uris(uris: &[String]) -> Result<Vec<String>, DropRefusal> {
     if !(1..=MAX_DROPPED_PINS).contains(&uris.len()) {
-        return Err(DropRefusal::ItemCount);
+        return Err(DropRefusal::PinCount);
     }
     let mut pins: Vec<String> = Vec::with_capacity(uris.len());
     for uri in uris {
@@ -104,13 +104,35 @@ impl BrowserWindow {
         self.show_message(message);
     }
 
-    /// Pins the folder the tab shows (`pinCurrent`).
+    /// Pins the folder the tab shows (`pinCurrent`); on search results in
+    /// Windows 11's search layout, saves the search to the navigation pane
+    /// instead (SRCH-046), as Windows 11's "…" > Pin to Quick access pins
+    /// the search.
     pub(super) fn pin_folder(&self) {
+        if self.pins_search() {
+            self.save_search();
+            return;
+        }
         let Some(uri) = self.current_uri().filter(|uri| Page::from_uri(uri).is_none()) else {
             return;
         };
         let label = self.imp().locations.borrow().title_for(&uri);
         self.pin(uri, label);
+    }
+
+    /// Pins the location `uri` to Quick access, named as the window names
+    /// it: a drive's Pin to Quick access.
+    pub(super) fn pin_location(&self, uri: &str) {
+        let label = self.imp().locations.borrow().title_for(uri);
+        self.pin(uri.to_owned(), label);
+    }
+
+    /// Whether `uri` is pinned to Quick access.
+    pub(super) fn is_pinned(&self, uri: &str) -> bool {
+        self.places()
+            .quick_access
+            .iter()
+            .any(|place| same_location(&place.uri, uri))
     }
 
     /// Adds a Quick access pin; as in Windows Explorer, only a failure

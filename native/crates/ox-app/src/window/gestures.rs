@@ -26,7 +26,7 @@ const FORWARD_BUTTON: u32 = 9;
 /// What `GtkGestureSingle` takes as "listen to every button".
 pub(super) const EVERY_BUTTON: u32 = 0;
 
-/// The smallest distance a wheel notch scrolls the crumbs or the tabs.
+/// The smallest distance a wheel notch scrolls the tabs.
 const MIN_WHEEL_STEP: f64 = 40.0;
 
 /// The way through history a mouse button goes, if it is a side button.

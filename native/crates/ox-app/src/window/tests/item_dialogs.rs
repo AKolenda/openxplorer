@@ -13,6 +13,7 @@ use std::os::unix::fs::PermissionsExt;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
+use ox_core::settings::FolderTemplate;
 
 use super::icons::{assert_same_colour, css_colour, painted_colour, TRANSITION_TIME};
 use crate::dialog::{Dialog, DialogFrame};
@@ -294,7 +295,7 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
     let general = general(&window);
     assert_eq!(
         value_after(&general, "Type of file:").as_deref(),
-        Some("Text document (.txt)")
+        Some("Text Document (.txt)")
     );
     assert!(value_after(&general, "Opens with:").is_some());
     assert!(button(&general, "Change...").is_visible());
@@ -487,8 +488,10 @@ fn tabs_taller_than_the_screen_scroll_inside_the_window() {
     test.activate("properties", None);
     let filled = test.wait_for_properties("Notes 2.txt Properties");
     general(&filled);
+    wait_for_frames(&filled, 4);
+    let fitting = filled.scroller().vadjustment();
     assert!(
-        filled.scroller().parent().is_none(),
+        fitting.upper() <= fitting.page_size() + 1.0,
         "tabs that fit do not scroll"
     );
     filled.close();
@@ -548,6 +551,47 @@ fn read_only_follows_a_change_made_in_edit() {
 
     wait_until("Read-only to follow", || read_only.is_active());
     assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    read_only.set_active(false);
+    assert!(window.apply_button().is_sensitive(), "clearing it is a change");
+    press(&window, "Apply");
+    wait_until("Write back", || mode_of(&path) & 0o200 != 0);
+}
+
+/// A Read-only choice on General not applied yet stays when Edit...
+/// makes the file read-only, and clearing it then is still a change
+/// against what the file has now, which gives Write back.
+///
+/// parity: PROP-003, PROP-007
+#[gtk::test]
+fn read_only_chosen_before_a_change_in_edit_compares_with_it() {
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let read_only = check(&general(&window), "Read-only");
+    read_only.set_active(true);
+    assert!(window.apply_button().is_sensitive(), "ticking it is a change");
+
+    window.select_tab("security");
+    let security = tab(&window, "security");
+    press(&security, "Edit...");
+    let edit = sub_dialog(&window, "Permissions for Notes 2.txt");
+    let names = descendants::<gtk::ListBox>(&edit).remove(0);
+    names.select_row(names.row_at_index(0).as_ref());
+    let write = descendants::<gtk::CheckButton>(&edit)
+        .into_iter()
+        .filter(WidgetExt::is_sensitive)
+        .nth(4)
+        .expect("Allow Write");
+    write.set_active(false);
+    edit.ok_button().emit_clicked();
+    wait_until("the change", || mode_of(&path) == 0o444);
+
+    wait_until("nothing left to apply", || !window.apply_button().is_sensitive());
+    assert!(read_only.is_active(), "the choice stays");
     read_only.set_active(false);
     assert!(window.apply_button().is_sensitive(), "clearing it is a change");
     press(&window, "Apply");
@@ -1099,6 +1143,43 @@ fn a_link_to_a_folder_is_renamed_in_properties_without_the_extension_question() 
     wait_until("the window to close", || window.is_closed());
 }
 
+/// A shortcut (a symbolic link named as Explorer names one) is of type
+/// "Shortcut" in the list and in Properties, as in Windows, and renaming
+/// it in Properties never asks about its extension: Windows keeps a
+/// shortcut's hidden `.lnk`.
+///
+/// parity: PROP-005, OPS-049, VIEW-002
+#[gtk::test]
+fn a_shortcut_is_typed_shortcut_and_renamed_in_properties_without_the_extension_question() {
+    let fixture = Fixture::standard();
+    fixture.write("Report.txt");
+    std::os::unix::fs::symlink(fixture.path("Report.txt"), fixture.path("Report.txt - Shortcut"))
+        .expect("the shortcut is made");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Report.txt - Shortcut");
+    let model = test.window.folder_model();
+    let listed = model
+        .item(model.first_selected().expect("the shortcut is selected"))
+        .expect("the shortcut is listed")
+        .entry()
+        .type_label
+        .clone();
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Report.txt - Shortcut Properties");
+    let type_of_file = value_after(&general(&window), "Type of file:");
+
+    name_field(&window).set_text("Q3 figures");
+    window.ok_button().emit_clicked();
+    wait_until("the rename", || {
+        fixture.path("Q3 figures").is_symlink() || extension_questions(&window) > 0
+    });
+
+    assert_eq!(listed, "Shortcut");
+    assert_eq!(type_of_file.as_deref(), Some("Shortcut"));
+    assert_eq!(extension_questions(&window), 0, "no extension question");
+    wait_until("the window to close", || window.is_closed());
+}
+
 /// The Security tab names the owner, the group and others, shows what the
 /// one selected may do in Windows' words, and Edit... and Advanced change
 /// the Linux permissions behind them.
@@ -1173,7 +1254,7 @@ fn size_on_disk_of_several_items_follows_links_as_size_does() {
     let test = TestWindow::open(&fixture.uri());
     super::file_ops_support::select_names(&test, &["Big.bin", "Big link.bin"]);
     test.activate("properties", None);
-    let window = test.wait_for_properties("2 items Properties");
+    let window = test.wait_for_properties("Big link.bin, Big.bin Properties");
     let both = [fixture.path("Big.bin"), fixture.path("Big link.bin")];
 
     wait_until("the space on disk", || {
@@ -1204,9 +1285,15 @@ fn properties_of_several_items_total_them_and_change_them_together() {
     let test = TestWindow::open(&fixture.uri());
     super::file_ops_support::select_names(&test, &["Documents", "Notes 2.txt", "Notes 10.txt"]);
     test.activate("properties", None);
-    let window = test.wait_for_properties("3 items Properties");
+    let window = test.wait_for_properties("Documents, Notes 2.txt, ... Properties");
 
     assert_eq!(window.tab_labels(), ["General", "Security"]);
+    let read_only = check(&window, "Read-only (Only applies to files in folder)");
+    wait_until("the items read", || read_only.is_sensitive());
+    assert!(
+        read_only.is_inconsistent(),
+        "a folder's files keep what they have"
+    );
     wait_until("the folders measured", || {
         value_after(&window, "Contains:").as_deref() == Some("3 Files, 1 Folders")
     });
@@ -1248,6 +1335,264 @@ fn properties_of_several_items_total_them_and_change_them_together() {
         "the private program stays private and runnable"
     );
     assert_eq!(mode_of(&fixture.path("Documents")), 0o750);
+}
+
+/// Several items' Read-only and Hidden are half ticked where the items
+/// differ, and OK or Apply gives every item the state chosen: Read-only
+/// takes write from every file, and Hidden adds a leading dot to each
+/// name, as one item's do, and the title follows the new names.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn several_items_attributes_show_mixed_and_apply_to_every_item() {
+    let fixture = Fixture::standard();
+    fs::set_permissions(fixture.path("Notes 2.txt"), fs::Permissions::from_mode(0o444))
+        .expect("a read-only file");
+    fs::set_permissions(fixture.path("Notes 10.txt"), fs::Permissions::from_mode(0o644))
+        .expect("a writable file");
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt, Notes 10.txt Properties");
+    let general = tab(&window, "general");
+    assert_eq!(
+        value_after(&general, "Type:").as_deref(),
+        Some("All of type Text Document")
+    );
+    let (read_only, hidden) = (check(&general, "Read-only"), check(&general, "Hidden"));
+    wait_until("the items read", || {
+        read_only.is_sensitive() && hidden.is_sensitive()
+    });
+    assert!(read_only.is_inconsistent(), "one file is read-only, one is not");
+    assert!(
+        !hidden.is_inconsistent() && !hidden.is_active(),
+        "neither is hidden"
+    );
+    assert!(!window.apply_button().is_sensitive());
+
+    read_only.set_active(!read_only.is_active());
+    assert!(
+        read_only.is_active() && !read_only.is_inconsistent(),
+        "half ticked, then ticked"
+    );
+    hidden.set_active(true);
+    press(&window, "Apply");
+
+    wait_until("every name hidden", || {
+        fixture.path(".Notes 2.txt").exists() && fixture.path(".Notes 10.txt").exists()
+    });
+    wait_until("the new title", || {
+        window.title_text() == ".Notes 2.txt, .Notes 10.txt Properties"
+    });
+    for name in [".Notes 2.txt", ".Notes 10.txt"] {
+        assert_eq!(mode_of(&fixture.path(name)) & 0o222, 0, "{name} is read-only");
+    }
+    assert!(!fixture.path("Notes 2.txt").exists() && !fixture.path("Notes 10.txt").exists());
+    assert!(hidden.is_active() && read_only.is_active());
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    window.close();
+}
+
+/// A folder that happens to be a mount point, such as a `tmpfs` at
+/// `/tmp`, is a Mounted Volume when it is reached in a folder's listing,
+/// and also from the navigation pane when This PC does not list it as a
+/// drive, as Windows shows a drive mounted in a folder: Type says so,
+/// Target names the volume in place of the sizes, and Properties beside
+/// it opens the drive's own window, with its Hardware tab, apart from the
+/// folder's. Only This PC's drives and the root open as a drive straight
+/// away. The harness cannot mount anything, so this uses a mount point the
+/// machine has, and says so when it has none.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_mount_point_reached_as_a_folder_is_a_mounted_volume() {
+    let Some(name) = ["dev", "proc", "sys", "run"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let uri = format!("file:///{name}");
+    let shows_mounted_volume = |window: &PropertiesWindow| {
+        let general = general(window);
+        assert_eq!(value_after(&general, "Type:").as_deref(), Some("Mounted Volume"));
+        assert!(value_after(&general, "Target:").is_some_and(|target| !target.is_empty()));
+        for row in ["Size:", "Size on disk:", "Contains:"] {
+            assert!(value_after(&general, row).is_none(), "no {row} row");
+        }
+        assert!(!window.shows_drive());
+        assert!(
+            window.tab_page("hardware").is_none(),
+            "no Hardware tab for a folder"
+        );
+        general
+    };
+    let test = TestWindow::open("file:///");
+    test.select_named(name);
+    test.activate("properties", None);
+    let window = test.wait_for_properties(&format!("{name} Properties"));
+    let general = shows_mounted_volume(&window);
+    let volume = value_after(&general, "Target:").expect("a target");
+    press(&general, "Properties");
+    let drive = test.wait_for_properties(&format!("{volume} Properties"));
+    assert!(drive.shows_drive());
+    assert!(drive.tab_page("hardware").is_some(), "the drive's Hardware tab");
+    assert_eq!(test.window.properties_windows().len(), 2, "a window of its own");
+    drive.close();
+    window.close();
+
+    test.activate("properties-of", Some(&uri));
+    let window = test.wait_for_properties(&format!("{name} Properties"));
+    shows_mounted_volume(&window);
+    window.close();
+}
+
+/// The same mounted volume opened from its folder's listing and from
+/// This PC has two Properties windows, one as the folder (Mounted
+/// Volume) and one as the drive, in either order; opening it again the
+/// same way brings that one back, as Windows brings back an item's open
+/// Properties rather than opening another.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_volume_has_one_properties_window_as_a_folder_and_one_as_a_drive() {
+    use glib::subclass::types::ObjectSubclassIsExt;
+
+    let Some(name) = ["dev", "proc", "sys", "run"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let uri = format!("file:///{name}");
+    let test = TestWindow::open("file:///");
+    // This PC lists the volume, as the volume monitor would.
+    test.window
+        .imp()
+        .volumes
+        .replace(vec![crate::test_support::mounted_volume(
+            name,
+            &uri,
+            crate::volumes::VolumeKind::Drive,
+        )]);
+    let windows = || test.window.properties_windows();
+    let open_as = |as_drive: bool| -> PropertiesWindow {
+        if as_drive {
+            test.activate("properties-of", Some(&uri));
+        } else {
+            test.select_named(name);
+            test.activate("properties", None);
+        }
+        wait_until("the Properties window", || {
+            windows().iter().any(|window| window.shows_drive() == as_drive)
+        });
+        let window = windows()
+            .into_iter()
+            .find(|window| window.shows_drive() == as_drive)
+            .expect("it is open");
+        wait_until("the item to be read", || {
+            value_after(&tab(&window, "general"), "Type:").is_some()
+        });
+        window
+    };
+    let is_drive_page = |window: &PropertiesWindow| window.tab_page("hardware").is_some();
+
+    for drive_first in [false, true] {
+        let first = open_as(drive_first);
+        let second = open_as(!drive_first);
+        assert_eq!(windows().len(), 2, "a window as the folder and one as the drive");
+        let (folder, drive) = if drive_first {
+            (second, first)
+        } else {
+            (first, second)
+        };
+        assert!(!is_drive_page(&folder), "the folder's window has no Hardware tab");
+        assert_eq!(
+            value_after(&tab(&folder, "general"), "Type:").as_deref(),
+            Some("Mounted Volume")
+        );
+        assert!(is_drive_page(&drive), "the drive's window has its Hardware tab");
+
+        // Opening each again brings its own window back.
+        assert_eq!(open_as(true), drive);
+        assert_eq!(open_as(false), folder);
+        assert_eq!(windows().len(), 2, "no third window");
+        folder.close();
+        drive.close();
+        wait_until("both to close", || windows().is_empty());
+    }
+}
+
+/// A mount point reached as a folder and the root reached as a drive,
+/// light and dark, for review with `OX_NATIVE_CAPTURE_DIR` (and
+/// `GDK_SCALE=2`): `mount-point-{folder,drive}-{light,dark}.png`.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn a_mount_point_and_a_drive_are_captured() {
+    let _theme = ThemeGuard::keep();
+    let Some(name) = ["dev", "proc"]
+        .into_iter()
+        .find(|name| crate::properties::is_mount_point(&format!("file:///{name}")))
+    else {
+        eprintln!("skipped: no mount point under / to open");
+        return;
+    };
+    let test = TestWindow::open("file:///");
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.select_named(name);
+        test.activate("properties", None);
+        let folder = test.wait_for_properties(&format!("{name} Properties"));
+        general(&folder);
+        capture_dialog(&folder, &format!("mount-point-folder-{theme}.png"));
+        folder.close();
+        test.activate("properties-of", Some("file:///"));
+        let drive = test.wait_for_properties("Local Disk Properties");
+        let page = tab(&drive, "general");
+        wait_until("the drive's details", || value_after(&page, "Type:").is_some());
+        capture_dialog(&drive, &format!("mount-point-drive-{theme}.png"));
+        drive.close();
+    }
+}
+
+/// Several files' Read-only follows a change made on the Security tab:
+/// taking the owner's write ticks it, and clearing it then gives every
+/// file write again.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn several_items_read_only_follows_a_change_made_on_security() {
+    let fixture = Fixture::standard();
+    for name in ["Notes 2.txt", "Notes 10.txt"] {
+        fs::set_permissions(fixture.path(name), fs::Permissions::from_mode(0o644)).expect("a writable file");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt, Notes 10.txt Properties");
+    let read_only = check(&tab(&window, "general"), "Read-only");
+    wait_until("the items read", || read_only.is_sensitive());
+    assert!(!read_only.is_active() && !read_only.is_inconsistent());
+
+    let security = tab(&window, "security");
+    wait_until("the editor", || {
+        !descendants::<gtk::DropDown>(&security).is_empty()
+    });
+    descendants::<gtk::DropDown>(&security)[0].set_selected(1);
+    press(&window, "Apply");
+    let modes = || ["Notes 2.txt", "Notes 10.txt"].map(|name| mode_of(&fixture.path(name)));
+    wait_until("the change", || modes() == [0o444, 0o444]);
+
+    wait_until("Read-only to follow", || read_only.is_active());
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    read_only.set_active(false);
+    assert!(window.apply_button().is_sensitive(), "clearing it is a change");
+    press(&window, "Apply");
+    wait_until("write back", || modes().iter().all(|mode| mode & 0o200 != 0));
+    window.close();
 }
 
 /// A link says where it points. A drive, the root among them, has
@@ -1824,9 +2169,9 @@ fn a_custom_icon_shows_in_the_view_until_the_default_is_restored() {
     test.select_named("Album");
     test.activate("properties", None);
     let window = test.wait_for_properties("Album Properties");
-    let customize = tab(&window, "customize");
+    let customize = group_box(&tab(&window, "customize"), "Folder icons");
     wait_until("the icon buttons", || {
-        texts(&customize).contains(&"Restore Default".to_owned())
+        button(&customize, "Restore Default").is_visible()
     });
     assert!(button(&customize, "Change Icon...").is_sensitive());
     press(&customize, "Restore Default");
@@ -1843,6 +2188,380 @@ fn a_custom_icon_shows_in_the_view_until_the_default_is_restored() {
         .expect("metadata")
         .attribute_string("metadata::custom-icon");
     assert_eq!(stored, None);
+}
+
+/// The group box of the Customize tab titled `title`.
+fn group_box(page: &gtk::Widget, title: &str) -> gtk::Widget {
+    descendants::<gtk::Frame>(page)
+        .into_iter()
+        .find(|frame| frame.label().as_deref() == Some(title))
+        .unwrap_or_else(|| panic!("a {title} group"))
+        .upcast()
+}
+
+/// Stores `picture` as the folder picture of `folder`, as OK does.
+fn put_folder_picture(folder: &str, picture: &str) {
+    let done = std::rc::Rc::new(std::cell::Cell::new(false));
+    let finished = std::rc::Rc::clone(&done);
+    let (folder, picture) = (folder.to_owned(), picture.to_owned());
+    glib::spawn_future_local(async move {
+        let info = gtk::gio::FileInfo::new();
+        info.set_attribute_string(crate::folder_view::FOLDER_PICTURE, &picture);
+        gtk::gio::File::for_uri(&folder)
+            .set_attributes_future(&info, gtk::gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
+            .await
+            .expect("the metadata is stored");
+        finished.set(true);
+    });
+    wait_until("the folder picture to be stored", || done.get());
+}
+
+/// The Customize tab has Windows 11's three groups in its order. A
+/// template chosen under "What kind of folder do you want?" and applied
+/// with "Also apply this template to all subfolders" shows the folder and
+/// its sub-folders in the template's view (Pictures: Large icons) and is
+/// there when the window opens again; nothing is written into the folder.
+///
+/// parity: PROP-036
+#[gtk::test]
+fn a_template_optimizes_a_folder_and_its_subfolders() {
+    use crate::window::FolderView;
+
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Holiday/Beach")).expect("folders");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Holiday");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Holiday Properties");
+    let page = tab(&window, "customize");
+    let titles: Vec<String> = descendants::<gtk::Frame>(&page)
+        .iter()
+        .filter_map(|frame| frame.label().map(|label| label.to_string()))
+        .collect();
+    assert_eq!(
+        titles,
+        [
+            "What kind of folder do you want?",
+            "Folder pictures",
+            "Folder icons"
+        ]
+    );
+    let kind = group_box(&page, "What kind of folder do you want?");
+    let list = descendants::<gtk::DropDown>(&kind)
+        .into_iter()
+        .next()
+        .expect("the template list");
+    assert_eq!(list.selected(), 0, "General items");
+    let names: Vec<String> = (0..5)
+        .filter_map(|at| list.model()?.item(at)?.downcast::<gtk::StringObject>().ok())
+        .map(|name| name.string().to_string())
+        .collect();
+    assert_eq!(
+        names,
+        ["General items", "Documents", "Pictures", "Music", "Videos"]
+    );
+    assert!(!window.apply_button().is_sensitive());
+    list.set_selected(2);
+    check(&kind, "Also apply this template to all subfolders").set_active(true);
+    assert!(window.apply_button().is_sensitive());
+    window.ok_button().emit_clicked();
+
+    let holiday = fixture.uri_of("Holiday");
+    let beach = format!("{holiday}/Beach");
+    wait_until("the template to be saved", || {
+        test.window.folder_template(&beach) == Some(FolderTemplate::Pictures)
+    });
+    test.show(&beach);
+    test.wait_for_listing("Beach");
+    wait_until("Large icons", || {
+        test.window.folder_pane().view() == FolderView::Icons(crate::folder_view::grid::IconSize::LARGE)
+    });
+    let written: Vec<_> = fs::read_dir(fixture.path("Holiday"))
+        .expect("the folder")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name())
+        .collect();
+    assert_eq!(written, ["Beach"], "nothing is written into the folder");
+
+    test.show(&fixture.uri());
+    test.wait_for_listing("the fixture");
+    test.select_named("Holiday");
+    test.activate("properties", None);
+    let again = test.wait_for_properties("Holiday Properties");
+    let kind = group_box(&tab(&again, "customize"), "What kind of folder do you want?");
+    let list = descendants::<gtk::DropDown>(&kind)
+        .into_iter()
+        .next()
+        .expect("the template list");
+    assert_eq!(list.selected(), 2, "Pictures, as applied");
+    assert!(!check(&kind, "Also apply this template to all subfolders").is_active());
+    again.close();
+}
+
+/// Apply on the Customize tab restyles at once, without a reload, every
+/// open window showing the folder and, with "Also apply this template to
+/// all subfolders", every one showing a sub-folder, keeping its selection.
+///
+/// parity: PROP-036
+#[gtk::test]
+fn applying_a_template_restyles_open_windows_at_once() {
+    use crate::folder_view::grid::IconSize;
+    use crate::window::FolderView;
+
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Holiday/Beach")).expect("folders");
+    fs::write(fixture.path("Holiday/Notes.txt"), "fictional").expect("a file");
+    let holiday = fixture.uri_of("Holiday");
+    let beach = format!("{holiday}/Beach");
+    let test = TestWindow::open(&fixture.uri());
+    let on_holiday = test.open_beside(&holiday);
+    let on_beach = test.open_beside(&beach);
+    on_holiday.select_named("Notes.txt");
+    let large = FolderView::Icons(IconSize::LARGE);
+    assert_eq!(on_holiday.window.folder_pane().view(), FolderView::Details);
+
+    test.select_named("Holiday");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Holiday Properties");
+    let kind = group_box(&tab(&window, "customize"), "What kind of folder do you want?");
+    let list = descendants::<gtk::DropDown>(&kind)
+        .into_iter()
+        .next()
+        .expect("the template list");
+    list.set_selected(2);
+    window.apply_button().emit_clicked();
+    wait_until("the folder's window in Large icons", || {
+        on_holiday.window.folder_pane().view() == large
+    });
+    assert_eq!(on_holiday.selected_names(), ["Notes.txt"], "the selection stays");
+    wait_for(std::time::Duration::from_millis(300));
+    assert_eq!(
+        on_beach.window.folder_pane().view(),
+        FolderView::Details,
+        "a sub-folder keeps its view without the box"
+    );
+    assert_eq!(
+        test.window.folder_pane().view(),
+        FolderView::Details,
+        "the parent keeps its view"
+    );
+
+    list.set_selected(4);
+    check(&kind, "Also apply this template to all subfolders").set_active(true);
+    window.ok_button().emit_clicked();
+    wait_until("the sub-folder's window in Large icons", || {
+        on_beach.window.folder_pane().view() == large
+    });
+    assert_eq!(on_holiday.window.folder_pane().view(), large);
+    assert_eq!(test.window.folder_pane().view(), FolderView::Details);
+}
+
+/// A folder's picture shows on its icon at Large icons and in the small
+/// icon's place in Details, in every open window at once on OK, as in
+/// Windows; the Customize tab previews it, and Restore Default with OK
+/// takes it off again everywhere. The details pane's hook reads it.
+///
+/// parity: PROP-037
+#[gtk::test]
+fn a_folder_picture_shows_in_every_window_until_restored() {
+    use crate::folder_view::cells::FileCell;
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Holiday")).expect("a folder");
+    let pixels = glib::Bytes::from_owned(vec![0x60_u8; 4 * 3 * 4]);
+    let picture = gtk::gdk::MemoryTexture::new(4, 3, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 16);
+    picture
+        .save_to_png(fixture.path("Harbour.png"))
+        .expect("a picture");
+    let holiday = fixture.uri_of("Holiday");
+    put_folder_picture(&holiday, &fixture.uri_of("Harbour.png"));
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("large"));
+    let in_details = test.open_beside(&fixture.uri());
+    let holiday_cells = |window: &TestWindow| -> Vec<FileCell> {
+        descendants::<FileCell>(&window.window)
+            .into_iter()
+            .filter(|cell| cell.name() == "Holiday")
+            .collect()
+    };
+    let on_tile = |shown: bool| {
+        let cells = holiday_cells(&test);
+        !cells.is_empty() && cells.iter().all(|cell| cell.shows_folder_picture() == shown)
+    };
+    let in_row = |shown: bool| {
+        let cells = holiday_cells(&in_details);
+        !cells.is_empty()
+            && cells
+                .iter()
+                .all(|cell| cell.shows_custom_icon() == shown && !cell.shows_folder_picture())
+    };
+    wait_until("the picture on the folder at Large icons", || on_tile(true));
+    wait_until("the picture as the row's icon in Details", || in_row(true));
+
+    let mut found = None;
+    let hook = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let heard = std::rc::Rc::clone(&hook);
+    let asked = holiday.clone();
+    glib::spawn_future_local(async move {
+        heard.replace(Some(crate::folder_view::cells::folder_picture_of(&asked).await));
+    });
+    wait_until("the details pane's hook", || hook.borrow().is_some());
+    found.clone_from(&*hook.borrow());
+    assert_eq!(found, Some(Some(fixture.uri_of("Harbour.png"))));
+
+    test.select_named("Holiday");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Holiday Properties");
+    let pictures = group_box(&tab(&window, "customize"), "Folder pictures");
+    assert!(texts(&pictures).contains(&"Choose a file to show on this folder icon.".to_owned()));
+    assert!(button(&pictures, "Choose File...").is_sensitive());
+    wait_until("the folder's picture", || {
+        button(&pictures, "Restore Default").is_sensitive()
+    });
+    press(&pictures, "Restore Default");
+    assert!(!button(&pictures, "Restore Default").is_sensitive());
+    assert!(window.apply_button().is_sensitive());
+    wait_for(std::time::Duration::from_millis(200));
+    assert!(on_tile(true), "nothing changes before OK or Apply");
+    window.ok_button().emit_clicked();
+
+    wait_until("the plain folder at Large icons", || on_tile(false));
+    wait_until("the plain folder in the other window's row", || in_row(false));
+    let stored = gtk::gio::File::for_uri(&holiday)
+        .query_info(
+            crate::folder_view::FOLDER_PICTURE,
+            gtk::gio::FileQueryInfoFlags::NONE,
+            gtk::gio::Cancellable::NONE,
+        )
+        .expect("metadata")
+        .attribute_string(crate::folder_view::FOLDER_PICTURE);
+    assert_eq!(stored, None);
+}
+
+/// Before and after pictures of an open window as OK on the Customize
+/// tab applies the Pictures template and a folder picture, in both
+/// themes, for review with `OX_NATIVE_CAPTURE_DIR` (and `GDK_SCALE=2`):
+/// `customize-apply-{before,after}-{light,dark}.png`. Without it, they
+/// only prove the window follows OK at once in both themes.
+///
+/// parity: PROP-036, PROP-037
+#[gtk::test]
+fn applying_the_customize_tab_is_captured_before_and_after() {
+    use crate::folder_view::grid::IconSize;
+    use crate::window::FolderView;
+
+    let _theme = ThemeGuard::keep();
+    for theme in ["light", "dark"] {
+        let fixture = Fixture::empty();
+        let holiday = fixture.path("Holiday 2025");
+        fs::create_dir_all(holiday.join("Beach day")).expect("folders");
+        fs::create_dir_all(holiday.join("Old town")).expect("folders");
+        for (name, shade) in [
+            ("Harbour.png", 0x40_u8),
+            ("Sunset.png", 0xb0),
+            ("Market.png", 0x70),
+        ] {
+            let pixels = glib::Bytes::from_owned(
+                (0..48 * 32)
+                    .flat_map(|at: u32| {
+                        let fade = u8::try_from(at / 48 * 4).unwrap_or(u8::MAX);
+                        [shade, fade, 0xff - fade, 0xff]
+                    })
+                    .collect::<Vec<u8>>(),
+            );
+            gtk::gdk::MemoryTexture::new(48, 32, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 48 * 4)
+                .save_to_png(holiday.join(name))
+                .expect("a picture");
+        }
+        let uri = fixture.uri_of("Holiday 2025");
+        let test = TestWindow::open(&uri);
+        test.activate("theme", Some(theme));
+        test.window.set_default_size(900, 560);
+        wait_for_frames(&test.window, 4);
+        capture(&test.window, &format!("customize-apply-before-{theme}.png"));
+        test.activate("properties", None);
+        let window = test.wait_for_properties("Holiday 2025 Properties");
+        let page = tab(&window, "customize");
+        let kind = group_box(&page, "What kind of folder do you want?");
+        let list = descendants::<gtk::DropDown>(&kind)
+            .into_iter()
+            .next()
+            .expect("the template list");
+        list.set_selected(2);
+        check(&kind, "Also apply this template to all subfolders").set_active(true);
+        window.ok_button().emit_clicked();
+        wait_until("Large icons at once", || {
+            test.window.folder_pane().view() == FolderView::Icons(IconSize::LARGE)
+        });
+        put_folder_picture(&format!("{uri}/Beach%20day"), &format!("{uri}/Harbour.png"));
+        test.window.announce_item_icon(&format!("{uri}/Beach%20day"));
+        wait_until("the picture on Beach day", || {
+            descendants::<crate::folder_view::cells::FileCell>(&test.window)
+                .iter()
+                .any(|cell| cell.name() == "Beach day" && cell.shows_folder_picture())
+        });
+        capture(&test.window, &format!("customize-apply-after-{theme}.png"));
+    }
+}
+
+/// Change Icon... opens Windows' "Change Icon for <folder> Folder", which
+/// lists the icon theme's folder icons, never its glyphs, with Browse...,
+/// OK and Cancel; the icon chosen shows on the Customize tab on OK and
+/// waits there for the tab's own OK or Apply.
+///
+/// parity: PROP-016
+#[gtk::test]
+fn change_icon_lists_the_themes_folder_icons() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Album")).expect("a folder");
+    let theme = tempfile::tempdir().expect("an icon folder");
+    let pixels = glib::Bytes::from_owned(vec![0x80_u8; 2 * 2 * 4]);
+    let picture = gtk::gdk::MemoryTexture::new(2, 2, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 8);
+    for name in ["folder-oxtest.png", "folder-oxtest-symbolic.png"] {
+        picture
+            .save_to_png(theme.path().join(name))
+            .expect("an icon picture");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    gtk::IconTheme::for_display(&WidgetExt::display(&test.window)).add_search_path(theme.path());
+    test.select_named("Album");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Album Properties");
+    let customize = group_box(&tab(&window, "customize"), "Folder icons");
+    wait_until("the icon buttons", || {
+        texts(&customize).contains(&"Change Icon...".to_owned())
+    });
+    assert!(!button(&customize, "Restore Default").is_visible());
+
+    press(&customize, "Change Icon...");
+    let dialog = sub_dialog(&window, "Change Icon for Album Folder");
+    assert_eq!(dialog.button_labels(), ["OK", "Cancel"]);
+    assert!(button(&dialog, "Browse...").is_sensitive());
+    let tiles = descendants::<gtk::FlowBoxChild>(&dialog);
+    let names: Vec<String> = tiles
+        .iter()
+        .filter_map(|tile| tile.tooltip_text().map(String::from))
+        .collect();
+    assert!(names.iter().any(|name| name == "folder-oxtest"), "{names:?}");
+    assert!(!names.iter().any(|name| name.ends_with("-symbolic")), "{names:?}");
+    let tile = tiles
+        .iter()
+        .find(|tile| tile.tooltip_text().as_deref() == Some("folder-oxtest"))
+        .expect("the theme's folder icon");
+    descendants::<gtk::FlowBox>(&dialog)
+        .into_iter()
+        .find(|grid| grid.has_css_class("properties-icon-grid"))
+        .expect("the grid of icons")
+        .select_child(tile);
+    dialog.ok_button().emit_clicked();
+
+    wait_until("Change Icon to close", || dialog.is_closed());
+    assert!(
+        button(&customize, "Restore Default").is_visible(),
+        "the icon is chosen"
+    );
+    assert!(window.apply_button().is_sensitive(), "it waits for OK or Apply");
+    window.close();
 }
 
 /// OK pressed while Apply's change is still being made closes the window

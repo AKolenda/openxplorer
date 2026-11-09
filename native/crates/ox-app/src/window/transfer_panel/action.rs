@@ -22,6 +22,9 @@ pub(crate) enum Verb {
     Copying,
     /// Moving into a folder.
     Moving,
+    /// Moving out of the Recycle Bin into the folders the items were
+    /// deleted from, as Windows restores them.
+    Restoring,
     /// Moving to the Trash.
     Recycling,
     /// Deleting permanently.
@@ -65,6 +68,18 @@ impl Action {
         })
     }
 
+    /// The move of `uris`, the items an extraction built in its private
+    /// folder, into `destination`, described as extracting them from
+    /// `archive`: "Extracting 2 items from Bundle.zip to Backup".
+    pub(crate) fn extracted_items(archive: &str, uris: &[String], destination: &str) -> Self {
+        Self {
+            verb: Verb::Extracting,
+            count: Some(u64::try_from(uris.len()).unwrap_or(u64::MAX)),
+            source: archive.to_owned(),
+            destination: Some(destination.to_owned()),
+        }
+    }
+
     /// The text, with each location a link to it, as Pango markup.
     pub(crate) fn markup(&self) -> String {
         let link = |uri: &str| {
@@ -103,6 +118,16 @@ impl Action {
                 "Moving {count} items from {source} to {destination}",
                 count,
             ),
+            (Verb::Restoring, Some(count)) if goes => ngettext(
+                "Moving {count} item to {destination}",
+                "Moving {count} items to {destination}",
+                count,
+            ),
+            (Verb::Restoring, Some(count)) => ngettext(
+                "Moving {count} item to its original folder",
+                "Moving {count} items to their original folders",
+                count,
+            ),
             (Verb::Recycling, Some(count)) => ngettext(
                 "Recycling {count} item from {source}",
                 "Recycling {count} items from {source}",
@@ -116,6 +141,14 @@ impl Action {
             (Verb::Compressing, Some(count)) => ngettext(
                 "Compressing {count} item from {source}",
                 "Compressing {count} items from {source}",
+                count,
+            ),
+            // The items of an extraction into an existing folder, moved
+            // in from its private folder: named as extracted from the
+            // archive, which is what the user asked for.
+            (Verb::Extracting, Some(count)) if goes => ngettext(
+                "Extracting {count} item from {source} to {destination}",
+                "Extracting {count} items from {source} to {destination}",
                 count,
             ),
             (Verb::Extracting, _) if goes => gettext("Extracting {source} to {destination}"),
@@ -139,7 +172,7 @@ impl Verb {
     const fn alone(self) -> &'static str {
         match self {
             Verb::Copying => crate::i18n::message_id("Copying from {source}"),
-            Verb::Moving => crate::i18n::message_id("Moving from {source}"),
+            Verb::Moving | Verb::Restoring => crate::i18n::message_id("Moving from {source}"),
             Verb::Recycling => crate::i18n::message_id("Recycling from {source}"),
             Verb::Deleting => crate::i18n::message_id("Deleting from {source}"),
             Verb::Extracting => crate::i18n::message_id("Extracting {source}"),
@@ -152,6 +185,9 @@ impl Verb {
 /// such as a share, its URI.
 pub(crate) fn location_name(uri: &str) -> String {
     let file = gio::File::for_uri(uri);
+    if file.has_uri_scheme("trash") && file.parent().is_none() {
+        return ox_core::i18n::gettext("Recycle Bin");
+    }
     file.basename()
         .filter(|name| file.parent().is_some() && !name.as_os_str().is_empty())
         .map_or_else(
@@ -239,6 +275,15 @@ mod tests {
             "Extracting Holiday photos.zip to Pictures"
         );
         assert_eq!(text(&compress.markup()), "Compressing 3 items from Downloads");
+        let moved_in = Action::extracted_items(
+            &format!("{downloads}/Holiday photos.zip"),
+            &uris(downloads, 2),
+            "file:///home/sample/Pictures",
+        );
+        assert_eq!(
+            text(&moved_in.markup()),
+            "Extracting 2 items from Holiday photos.zip to Pictures"
+        );
         assert!(copy
             .markup()
             .contains(&format!("<a href=\"{downloads}\">Downloads</a>")));

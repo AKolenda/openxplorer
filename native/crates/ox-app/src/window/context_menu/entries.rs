@@ -17,7 +17,7 @@ use ox_core::search::Caching;
 use crate::icons::Icon;
 use crate::integration::{ApplicationChoice, EditorShortcut};
 use crate::window::cache_folder::cache_item;
-use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
+use crate::window::menu_popover::{MenuAction, MenuEntry, MenuItem, MenuStyle};
 use crate::window::window_action::WindowAction;
 
 /// What the right-clicked item is, as far as its menu cares.
@@ -70,8 +70,9 @@ pub(crate) struct ItemFacts {
     /// At most one item is selected (`state.selection.size<=1`).
     pub(crate) is_single: bool,
     /// It is a search result, listed away from its folder
-    /// (`state.query`).
-    pub(crate) is_search_result: bool,
+    /// (`state.query`), or a Recent row, which stands for a file
+    /// elsewhere.
+    pub(crate) has_file_location: bool,
     /// It is a symbolic link, whose target "Show target" opens (CMD-030).
     pub(crate) is_symlink: bool,
     /// Whether the selection can be compared (Dolphin's Compare Files).
@@ -92,6 +93,11 @@ pub(crate) struct ItemFacts {
     pub(crate) disk_tool: Option<DiskTool>,
     /// Where Send to can send the selection (CMD-038).
     pub(crate) send_to: SendToTargets,
+    /// The desktop can share files, so the menus offer Share (CMD-037).
+    pub(crate) can_share: bool,
+    /// It is a row of Recent files, which may be copied and shared, not
+    /// cut, renamed or deleted.
+    pub(crate) is_recent: bool,
 }
 
 /// A drive or network location Send to copies to, named as This PC
@@ -141,8 +147,8 @@ pub(crate) struct SendToTargets {
 pub(crate) struct ContextMenu {
     /// The rows, dividers included.
     pub(crate) entries: Vec<MenuEntry>,
-    /// Cut, Copy, Paste, Rename and Delete in the compact style; empty in
-    /// the classic one, which lists them.
+    /// Cut, Copy, Rename, Share and Delete (and Paste on a folder) in the
+    /// compact style; empty in the classic one, which lists them.
     pub(crate) strip: Vec<MenuItem>,
 }
 
@@ -173,70 +179,78 @@ fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> Menu
     )
 }
 
-/// The Open group: Open, the extraction commands, the applications, for
-/// folders Open in new tab (Open in new tabs for several, TAB-027), Open
-/// in new window (TAB-028) and Pin to Quick access, and for a search
-/// result Open file location (SRCH-015), also in a new tab or window
-/// (SRCH-016).
-fn open_group(facts: &ItemFacts, style: MenuStyle) -> Vec<MenuEntry> {
-    let is_folder = facts.shape == ItemShape::Folder;
-    let open = item(
+/// Open, the command Enter and a double-click run.
+fn open_item(facts: &ItemFacts) -> MenuEntry {
+    item(
         ox_core::i18n::gettext_static("Open"),
         Icon::Folder,
         WindowAction::Open,
     )
     .with_shortcut("Enter")
     .disabled_because(
-        !is_folder && facts.is_read_only,
+        facts.shape != ItemShape::Folder && facts.is_read_only,
         ox_core::i18n::gettext_static(READ_ONLY_VERSION),
-    );
-    let mut entries: Vec<MenuEntry> = vec![open.into()];
-    if facts.shape == ItemShape::ZipArchive {
-        entries.extend(extraction_items(facts));
-    }
-    match style {
-        MenuStyle::Classic => entries.extend(application_items(facts)),
-        MenuStyle::Compact => entries.extend(compact_application_items(facts)),
-    }
-    if facts.disk_tool == Some(DiskTool::MountImage) {
+    )
+    .into()
+}
+
+/// Mount disk image, for a local disk image where the tool is installed
+/// (Windows' Mount).
+fn mount_item(facts: &ItemFacts) -> Option<MenuEntry> {
+    (facts.disk_tool == Some(DiskTool::MountImage)).then(|| {
         let mount = MenuItem::with_text_target(
             &ox_core::i18n::gettext("Mount disk image"),
             Icon::HardDrive,
             WindowAction::MountDiskImage,
             &facts.navigation_uri,
         );
-        entries.push(for_one_item(mount, facts, false).into());
+        for_one_item(mount, facts, false).into()
+    })
+}
+
+/// A folder's Open in new tab (Open in new tabs for several, TAB-027),
+/// Open in new window (TAB-028) and Pin to Quick access, in Windows 11's
+/// order; nothing for a file.
+fn folder_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    if facts.shape != ItemShape::Folder {
+        return Vec::new();
     }
-    if is_folder {
-        let new_tab = if facts.is_single {
-            MenuItem::with_text_target(
-                &ox_core::i18n::gettext("Open in new tab"),
-                Icon::Add,
-                WindowAction::OpenTab,
-                &facts.navigation_uri,
-            )
-        } else {
-            item(
-                ox_core::i18n::gettext_static("Open in new tabs"),
-                Icon::Add,
-                WindowAction::OpenSelectionInTabs,
-            )
-        };
-        let new_window = MenuItem::with_text_target(
-            &ox_core::i18n::gettext("Open in new window"),
-            Icon::WindowNew,
-            WindowAction::OpenWindow,
+    let new_tab = if facts.is_single {
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
             &facts.navigation_uri,
-        );
-        let pin = item(
-            ox_core::i18n::gettext_static("Pin to Quick access"),
-            Icon::Pin,
-            WindowAction::PinSelected,
-        );
-        entries.push(new_tab.into());
-        entries.push(for_one_item(new_window, facts, false).into());
-        entries.push(for_one_item(pin, facts, false).into());
-    }
+        )
+    } else {
+        item(
+            ox_core::i18n::gettext_static("Open in new tabs"),
+            Icon::Add,
+            WindowAction::OpenSelectionInTabs,
+        )
+    };
+    let new_window = MenuItem::with_text_target(
+        &ox_core::i18n::gettext("Open in new window"),
+        Icon::WindowNew,
+        WindowAction::OpenWindow,
+        &facts.navigation_uri,
+    );
+    let pin = item(
+        ox_core::i18n::gettext_static("Pin to Quick access"),
+        Icon::Pin,
+        WindowAction::PinSelected,
+    );
+    vec![
+        new_tab.into(),
+        for_one_item(new_window, facts, false).into(),
+        for_one_item(pin, facts, false).into(),
+    ]
+}
+
+/// The app's own commands beside Open, which Windows does not have:
+/// Compare files for two files and Show target for a link (CMD-030).
+fn other_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let mut entries = Vec::new();
     if facts.comparison == Comparison::TwoFiles {
         entries.push(
             item(
@@ -255,7 +269,15 @@ fn open_group(facts: &ItemFacts, style: MenuStyle) -> Vec<MenuEntry> {
         );
         entries.push(for_one_item(show_target, facts, false).into());
     }
-    if facts.is_search_result {
+    entries
+}
+
+/// Open file location for a search result or a Recent row, which stand for
+/// a file elsewhere (SRCH-015), also in a new tab or window (SRCH-016):
+/// right after Open, where Windows lists it.
+fn file_location_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let mut entries = Vec::new();
+    if facts.has_file_location {
         let locations = [
             ("Open file location", Icon::Folder, WindowAction::OpenFileLocation),
             (
@@ -277,7 +299,10 @@ fn open_group(facts: &ItemFacts, style: MenuStyle) -> Vec<MenuEntry> {
 }
 
 /// Extract all… and, beyond the Python app, Dolphin's Extract here.
-fn extraction_items(facts: &ItemFacts) -> [MenuEntry; 2] {
+fn extraction_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    if facts.shape != ItemShape::ZipArchive {
+        return Vec::new();
+    }
     let extract_all = item(
         ox_core::i18n::gettext_static("Extract all…"),
         Icon::FolderZip,
@@ -288,88 +313,174 @@ fn extraction_items(facts: &ItemFacts) -> [MenuEntry; 2] {
         Icon::FolderZip,
         WindowAction::ExtractHere,
     );
-    [
+    vec![
         for_one_item(extract_all, facts, false).into(),
         for_one_item(extract_here, facts, false).into(),
     ]
 }
 
-/// The Terminal entry (`terminalMenuItem`), Open with and one "Open in
-/// <editor>" per installed code editor (`uniqueEditors`, with the
-/// editor's own icon), all for one item outside a previous version.
-fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let is_folder = facts.shape == ItemShape::Folder;
-    let terminal_label = if is_folder {
+/// One "Open in <editor>" per installed code editor (`uniqueEditors`,
+/// with the editor's own icon), as Windows lists "Edit in Notepad" for a
+/// file and an editor's own "Open with Code" for a folder: one item at a
+/// time, outside a previous version.
+fn editor_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    facts
+        .editors
+        .iter()
+        .map(|editor| {
+            let label = ox_core::i18n::format_message("Open in {name}", &[("name", &editor.name)]);
+            let open_in_editor =
+                MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
+                    .with_application_icon(editor.icon.as_deref());
+            for_one_item(open_in_editor, facts, true).into()
+        })
+        .collect()
+}
+
+/// The Terminal entry (`terminalMenuItem`): Open in Terminal for a
+/// folder, Open containing folder in Terminal for a file.
+fn terminal_item(facts: &ItemFacts) -> MenuEntry {
+    let label = if facts.shape == ItemShape::Folder {
         ox_core::i18n::gettext_static("Open in Terminal")
     } else {
         ox_core::i18n::gettext_static("Open containing folder in Terminal")
     };
-    let open_with_label = if is_folder {
+    for_one_item(
+        item(label, Icon::WindowConsole, WindowAction::OpenInTerminal),
+        facts,
+        true,
+    )
+    .into()
+}
+
+/// "Open with…", the chooser, named for a folder or a file.
+fn open_with_chooser(facts: &ItemFacts) -> MenuItem {
+    let label = if facts.shape == ItemShape::Folder {
         ox_core::i18n::gettext_static("Open folder with…")
     } else {
         ox_core::i18n::gettext_static("Open with…")
     };
-    let terminal = item(terminal_label, Icon::WindowConsole, WindowAction::OpenInTerminal);
-    let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);
-    let mut entries: Vec<MenuEntry> = vec![for_one_item(terminal, facts, true).into()];
-    for application in &facts.applications {
-        entries.push(for_one_item(open_with_application(application), facts, true).into());
-    }
-    entries.push(for_one_item(open_with, facts, true).into());
-    for editor in &facts.editors {
-        let label = ox_core::i18n::format_message("Open in {name}", &[("name", &editor.name)]);
-        let open_in_editor =
-            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
-                .with_application_icon(editor.icon.as_deref());
-        entries.push(for_one_item(open_in_editor, facts, true).into());
-    }
+    for_one_item(item(label, Icon::Apps, WindowAction::OpenWith), facts, true)
+}
+
+/// The classic menu's applications: one "Open with <app>" each, then
+/// Open with…, as Windows 10 lists them (OPEN-013).
+fn classic_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let mut entries: Vec<MenuEntry> = facts
+        .applications
+        .iter()
+        .map(|application| for_one_item(open_with_application(application), facts, true).into())
+        .collect();
+    entries.push(open_with_chooser(facts).into());
     entries
 }
 
-/// The compact menu's applications, as Windows 11 Explorer's: one "Open
-/// with" submenu holding the item's applications and editors and "Choose
-/// another app" (Open with…), or "Open with…" alone when there are none.
-/// A folder's "Open in Terminal" sits above "Show more options"
-/// ([`compact_item_menu`]); a file's "Open containing folder in Terminal"
-/// is in the classic menu.
-fn compact_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let is_folder = facts.shape == ItemShape::Folder;
-    let mut entries = Vec::new();
+/// The compact menu's "Open with" submenu, as Windows 11 Explorer's: the
+/// item's applications and "Choose another app" (Open with…), or "Open
+/// with…" alone when there are none. Windows 11's compact menu has no
+/// Open with on a folder; the classic menu keeps it.
+fn compact_open_with(facts: &ItemFacts) -> Option<MenuEntry> {
+    if facts.shape == ItemShape::Folder {
+        return None;
+    }
     let mut choices: Vec<MenuEntry> = facts
         .applications
         .iter()
         .map(|application| for_one_item(open_with_application(application), facts, true).into())
         .collect();
-    for editor in &facts.editors {
-        let label = ox_core::i18n::format_message("Open in {name}", &[("name", &editor.name)]);
-        let open_in_editor =
-            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
-                .with_application_icon(editor.icon.as_deref());
-        choices.push(for_one_item(open_in_editor, facts, true).into());
-    }
     if choices.is_empty() {
-        let label = if is_folder {
-            ox_core::i18n::gettext_static("Open folder with…")
-        } else {
-            ox_core::i18n::gettext_static("Open with…")
-        };
-        entries.push(for_one_item(item(label, Icon::Apps, WindowAction::OpenWith), facts, true).into());
-    } else {
-        let another = item(
-            ox_core::i18n::gettext_static("Choose another app"),
-            Icon::Apps,
-            WindowAction::OpenWith,
-        );
-        choices.extend([MenuEntry::Divider, for_one_item(another, facts, true).into()]);
-        let open_with = MenuItem::submenu(
-            ox_core::i18n::gettext_static("Open with"),
-            Icon::Apps,
-            WindowAction::OpenWith,
-            choices,
-        );
-        entries.push(for_one_item(open_with, facts, true).into());
+        return Some(open_with_chooser(facts).into());
     }
-    entries
+    let another = item(
+        ox_core::i18n::gettext_static("Choose another app"),
+        Icon::Apps,
+        WindowAction::OpenWith,
+    );
+    choices.extend([MenuEntry::Divider, for_one_item(another, facts, true).into()]);
+    let open_with = MenuItem::submenu(
+        ox_core::i18n::gettext_static("Open with"),
+        Icon::Apps,
+        WindowAction::OpenWith,
+        choices,
+    );
+    Some(for_one_item(open_with, facts, true).into())
+}
+
+/// Share, the desktop's email share (CMD-037): offered where the desktop
+/// can share and on files only, as Windows offers it for what it can
+/// share. Its action decides when it is enabled.
+fn share_item(facts: &ItemFacts) -> Option<MenuItem> {
+    (facts.can_share && facts.shape != ItemShape::Folder).then(|| {
+        item(
+            ox_core::i18n::gettext_static("Share"),
+            Icon::Share,
+            WindowAction::Share,
+        )
+    })
+}
+
+/// "Share with", Windows 11's submenu of the ways to share a file: here
+/// the computer's own, Bluetooth device and Mail recipient, where it has
+/// them; none on a folder or where the computer has neither.
+fn share_with_item(facts: &ItemFacts) -> Option<MenuEntry> {
+    if facts.shape == ItemShape::Folder {
+        return None;
+    }
+    let mut entries: Vec<MenuEntry> = Vec::new();
+    if facts.send_to.bluetooth {
+        entries.push(
+            item(
+                ox_core::i18n::gettext_static("Bluetooth device"),
+                Icon::Bluetooth,
+                WindowAction::SendToBluetooth,
+            )
+            .into(),
+        );
+    }
+    if facts.send_to.mail {
+        entries.push(
+            item(
+                ox_core::i18n::gettext_static("Mail recipient"),
+                Icon::MailColor20,
+                WindowAction::Share,
+            )
+            .into(),
+        );
+    }
+    if entries.is_empty() {
+        return None;
+    }
+    Some(
+        MenuItem::submenu(
+            ox_core::i18n::gettext_static("Share with"),
+            Icon::Share,
+            WindowAction::SendTo,
+            entries,
+        )
+        .into(),
+    )
+}
+
+/// The compact menu's strip, as Windows 11 lays it out: Cut, Copy, Paste
+/// (into a folder, only while there is something to paste), Rename,
+/// Share (where offered, for files) and Delete, each with its label under
+/// its icon; their actions decide when they are enabled. A row of Recent
+/// files has only Copy and Share there.
+fn strip_items(facts: &ItemFacts) -> Vec<MenuItem> {
+    let [cut, copy, paste, rename, delete] = edit_items(facts);
+    if facts.is_recent {
+        let mut strip = vec![copy];
+        strip.extend(share_item(facts));
+        return strip;
+    }
+    let mut strip = vec![cut, copy];
+    if facts.shape == ItemShape::Folder && facts.is_single {
+        strip.push(paste.shown_while_enabled());
+    }
+    strip.push(rename);
+    strip.extend(share_item(facts));
+    strip.push(delete);
+    strip
 }
 
 /// Cut, Copy, Paste, Rename and Delete, with their shortcuts; their
@@ -378,7 +489,7 @@ fn compact_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 fn edit_items(facts: &ItemFacts) -> [MenuItem; 5] {
     let paste = if facts.shape == ItemShape::Folder && facts.is_single {
         MenuItem::with_text_target(
-            &ox_core::i18n::gettext("Paste into folder"),
+            &ox_core::i18n::gettext("Paste"),
             Icon::ClipboardPaste,
             WindowAction::PasteInto,
             &facts.navigation_uri,
@@ -410,7 +521,8 @@ fn edit_items(facts: &ItemFacts) -> [MenuItem; 5] {
     ]
 }
 
-/// Duplicate, which the Python app did not have.
+/// Duplicate, which the Python app did not have, where Windows lists
+/// Create shortcut.
 fn duplicate_item() -> MenuEntry {
     item(
         ox_core::i18n::gettext_static("Duplicate"),
@@ -432,29 +544,69 @@ fn copy_path_item() -> MenuEntry {
     .into()
 }
 
-/// Compress to ZIP file, which the Python app did not have (Windows 11's
-/// "Compress to ZIP file").
-fn compress_item() -> MenuEntry {
-    item(
-        ox_core::i18n::gettext_static("Compress to ZIP file"),
+/// "Compress to…", the dialog that asks for the archive's name and
+/// format (ARC-023).
+fn compress_to_dialog_item(label: &str) -> MenuEntry {
+    item(label, Icon::FolderZip, WindowAction::CompressTo).into()
+}
+
+/// "Compress to", Windows 11's submenu: ZIP File, TAR File (a plain
+/// TAR, as Windows 11 creates TAR archives besides ZIP), and Additional
+/// options, the app's Compress dialog, which also writes TAR.XZ.
+fn compress_submenu() -> MenuEntry {
+    let entries = vec![
+        item(
+            ox_core::i18n::gettext_static("ZIP File"),
+            Icon::FolderZip,
+            WindowAction::CompressToZip,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("TAR File"),
+            Icon::FolderZip,
+            WindowAction::CompressToTar,
+        )
+        .into(),
+        compress_to_dialog_item(ox_core::i18n::gettext_static("Additional options")),
+    ];
+    MenuItem::submenu(
+        ox_core::i18n::gettext_static("Compress to"),
         Icon::FolderZip,
-        WindowAction::CompressToZip,
+        WindowAction::CompressTo,
+        entries,
     )
     .into()
 }
 
-/// The end of both styles: Calculate folder size for folders, Previous
-/// versions and Properties.
-fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let mut entries = Vec::new();
+/// "Restore previous versions", the item's earlier versions from the
+/// file system's snapshots (Windows' wording for its Previous Versions).
+fn previous_versions_item(facts: &ItemFacts) -> MenuEntry {
+    let versions = item(
+        ox_core::i18n::gettext_static("Restore previous versions"),
+        Icon::History,
+        WindowAction::PreviousVersions,
+    );
+    for_one_item(versions, facts, false).into()
+}
+
+/// The app's own tools for the item, which Windows does not have, in the
+/// classic menu above Properties: Compress to…, Calculate folder size and
+/// Analyse disk usage for a folder, the folder's cache entry and an SMB
+/// item's Sign out (CMD-009).
+fn tool_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let mut entries = vec![compress_to_dialog_item(ox_core::i18n::gettext_static(
+        "Compress to…",
+    ))];
     let is_measurable = facts.location != ItemLocation::SmbServer;
     if facts.shape == ItemShape::Folder && is_measurable {
-        let size = item(
-            ox_core::i18n::gettext_static("Calculate folder size"),
-            Icon::HardDrive,
-            WindowAction::CalculateFolderSize,
+        entries.push(
+            item(
+                ox_core::i18n::gettext_static("Calculate folder size"),
+                Icon::HardDrive,
+                WindowAction::CalculateFolderSize,
+            )
+            .into(),
         );
-        entries.push(size.into());
     }
     if facts.disk_tool == Some(DiskTool::AnalyseUsage) {
         let analyse = MenuItem::with_text_target(
@@ -465,14 +617,18 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         entries.push(for_one_item(analyse, facts, false).into());
     }
-    let versions = item(
-        ox_core::i18n::gettext_static("Previous versions"),
-        Icon::History,
-        WindowAction::PreviousVersions,
-    );
-    entries.push(for_one_item(versions, facts, false).into());
-    // Properties describe several items together (PROP-002).
-    entries.push(properties_item());
+    if let Some(caching) = facts.caching {
+        entries.push(cache_item(&facts.navigation_uri, caching).into());
+    }
+    if facts.location != ItemLocation::Local {
+        let sign_out = MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Sign out of server…"),
+            Icon::ArrowEject,
+            WindowAction::SignOut,
+            &facts.navigation_uri,
+        );
+        entries.push(sign_out.into());
+    }
     entries
 }
 
@@ -591,13 +747,107 @@ fn properties_item() -> MenuEntry {
 /// "Show more options", the compact menu's last item, which opens the
 /// classic menu in its place (Shift+F10).
 fn show_more_options_item() -> MenuEntry {
+    more_options_item(WindowAction::ShowMoreOptions)
+}
+
+/// "Show more options" that runs `action`, which opens its menu's classic
+/// style in its place: the file list's, or the navigation pane's.
+pub(crate) fn more_options_item(action: WindowAction) -> MenuEntry {
     item(
         ox_core::i18n::gettext_static("Show more options"),
         Icon::MoreHorizontal,
-        WindowAction::ShowMoreOptions,
+        action,
     )
     .with_shortcut("Shift+F10")
     .into()
+}
+
+/// Windows' own commands that its classic menu ("Show more options",
+/// Shift+F10) draws as text alone: Open, Open in new tab and window, Pin
+/// to Quick access, Cut, Copy, Paste, Rename, Delete, Copy as path,
+/// Restore previous versions, Extract All…, Mount, View, Sort by, Group
+/// by, New, Refresh, Undo, Redo, Open file location (and the app's Open
+/// file location in a new tab or window, as Open in new tab and window)
+/// and the Recycle Bin's Restore and Empty Recycle Bin. The rows Windows draws with an icon keep
+/// their glyph: Open in Terminal, Open with and the applications' own
+/// icons, Send to, Properties and Open as administrator's shield; so do
+/// the app's own commands, which Windows does not have.
+const TEXT_ONLY_IN_CLASSIC: [WindowAction; 33] = [
+    WindowAction::Open,
+    WindowAction::OpenTab,
+    WindowAction::OpenSelectionInTabs,
+    WindowAction::OpenWindow,
+    WindowAction::PinSelected,
+    WindowAction::PinFolder,
+    WindowAction::Cut,
+    WindowAction::Copy,
+    WindowAction::Paste,
+    WindowAction::PasteInto,
+    WindowAction::Rename,
+    WindowAction::Trash,
+    WindowAction::CopyPath,
+    WindowAction::PreviousVersions,
+    WindowAction::ExtractAll,
+    WindowAction::MountDiskImage,
+    WindowAction::ShowViewMenu,
+    WindowAction::ShowSortMenu,
+    WindowAction::GroupBy,
+    WindowAction::ShowNewMenu,
+    WindowAction::Refresh,
+    WindowAction::Undo,
+    WindowAction::Redo,
+    WindowAction::OpenFileLocation,
+    WindowAction::OpenFileLocationInTab,
+    WindowAction::OpenFileLocationInWindow,
+    WindowAction::Restore,
+    // The same commands on a navigation-pane row's location.
+    WindowAction::CutFolder,
+    WindowAction::CopyFolder,
+    WindowAction::PasteIntoFolder,
+    WindowAction::RenameFolder,
+    WindowAction::TrashFolder,
+    WindowAction::EmptyRecycleBin,
+];
+
+/// `entries` as Windows 11 draws its classic menu: no row shows shortcut
+/// text, in its submenus either (the keys still work); Open, the command
+/// Enter and a double-click run, is in bold, as Windows marks the default
+/// command; and only the rows Windows draws with an icon show a glyph
+/// ([`TEXT_ONLY_IN_CLASSIC`]). The submenus keep their glyphs, as the
+/// command bar's menus and Windows' Send to and New draw them.
+pub(crate) fn classic_look(entries: Vec<MenuEntry>) -> Vec<MenuEntry> {
+    entries
+        .into_iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(item) => {
+                let text_only = matches!(item.action, MenuAction::Window(action) if TEXT_ONLY_IN_CLASSIC.contains(&action));
+                let is_default = item.action == MenuAction::Window(WindowAction::Open);
+                MenuEntry::Item(MenuItem {
+                    shows_glyph: item.shows_glyph && !text_only,
+                    emphasised: item.emphasised || is_default,
+                    ..without_shortcut(item)
+                })
+            }
+            MenuEntry::Divider => MenuEntry::Divider,
+        })
+        .collect()
+}
+
+/// `item` without shortcut text, nor its submenu's rows.
+fn without_shortcut(item: MenuItem) -> MenuItem {
+    let submenu = item
+        .submenu
+        .into_iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(inner) => MenuEntry::Item(without_shortcut(inner)),
+            MenuEntry::Divider => MenuEntry::Divider,
+        })
+        .collect();
+    MenuItem {
+        shortcut: None,
+        submenu,
+        ..item
+    }
 }
 
 /// The submenus of the folder's compact menu: the command bar's View,
@@ -707,33 +957,41 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
     }
 }
 
-/// The Windows 11 style: the edit commands in the strip, the Open group,
-/// Compress, Copy as path, Properties and "Show more options" (CMD-010),
-/// as Explorer's compact menu lists them. Duplicate, Calculate folder
-/// size, Analyse disk usage and Previous versions are in the classic menu
-/// behind it.
+/// The Windows 11 style, in the order of Explorer's compact menu on a
+/// file: Cut, Copy, Rename, Share and Delete in the strip (and Paste on a
+/// folder while there is something to paste), then Open, Open with,
+/// Share with, Compress to, Copy as path and Properties; the applications'
+/// own commands (Windows' "Edit in Notepad", here "Open in <editor>", and
+/// a folder's Open in Terminal); then "Show more options" (CMD-010). A
+/// folder lists Open in new tab, Open in new window and Pin to Quick
+/// access after Open, as Windows does. The app's other commands are in
+/// the classic menu behind "Show more options".
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
-    let mut entries = open_group(facts, MenuStyle::Compact);
-    entries.push(compress_item());
+    let mut entries = vec![open_item(facts)];
+    entries.extend(file_location_items(facts));
+    entries.extend(extraction_items(facts));
+    entries.extend(mount_item(facts));
+    entries.extend(compact_open_with(facts));
+    entries.extend(folder_open_items(facts));
+    entries.extend(other_open_items(facts));
+    entries.extend(share_with_item(facts));
+    entries.push(compress_submenu());
     entries.push(copy_path_item());
-    entries.push(MenuEntry::Divider);
     // Properties describe several items together (PROP-002).
     entries.push(properties_item());
-    entries.push(MenuEntry::Divider);
-    // A folder's Terminal sits where the folder's own compact menu has it.
+    let mut own: Vec<MenuEntry> = editor_items(facts);
     if facts.shape == ItemShape::Folder {
-        let terminal = item(
-            ox_core::i18n::gettext_static("Open in Terminal"),
-            Icon::WindowConsole,
-            WindowAction::OpenInTerminal,
-        );
-        entries.push(for_one_item(terminal, facts, true).into());
-        entries.push(MenuEntry::Divider);
+        own.push(terminal_item(facts));
     }
+    if !own.is_empty() {
+        entries.push(MenuEntry::Divider);
+        entries.extend(own);
+    }
+    entries.push(MenuEntry::Divider);
     entries.push(show_more_options_item());
     ContextMenu {
         entries,
-        strip: edit_items(facts).to_vec(),
+        strip: strip_items(facts),
     }
 }
 
@@ -756,44 +1014,41 @@ fn rename_items_item(facts: &ItemFacts) -> Option<MenuEntry> {
     Some(rename_items.into())
 }
 
-/// The Windows 10 style: every command as a row, with Send to (CMD-038),
-/// the folder's cache entry and an SMB item's Sign out (CMD-009), and
-/// Rename items… for several items (OPS-014).
+/// The Windows 10 style ("Show more options", Shift+F10), in the order of
+/// Explorer's classic menu: Open (in bold), the editors (as "Edit in
+/// Notepad"), a folder's tab, window and pin commands, Open in Terminal
+/// and Open with; Copy as path, Share and Restore previous versions; Send
+/// to (CMD-038); Cut, Copy and Paste; Duplicate (where Windows has Create
+/// shortcut), Delete, Rename and Rename items… for several (OPS-014); the
+/// app's own tools; and Properties.
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
-    let mut entries = open_group(facts, MenuStyle::Classic);
-    // Explorer's classic menu puts Send to in a group of its own above
-    // Cut and Copy.
-    entries.extend([MenuEntry::Divider, send_to_item(facts), MenuEntry::Divider]);
-    entries.extend([cut.into(), copy.into(), paste.into(), MenuEntry::Divider]);
-    entries.push(rename.into());
-    entries.extend(rename_items_item(facts));
-    entries.extend([
-        delete.into(),
-        duplicate_item(),
-        copy_path_item(),
-        compress_item(),
-        item(
-            ox_core::i18n::gettext_static("Compress to…"),
-            Icon::FolderZip,
-            WindowAction::CompressTo,
-        )
-        .into(),
-    ]);
-    if let Some(caching) = facts.caching {
-        entries.push(cache_item(&facts.navigation_uri, caching).into());
-    }
-    if facts.location != ItemLocation::Local {
-        let sign_out = MenuItem::with_text_target(
-            &ox_core::i18n::gettext("Sign out of server…"),
-            Icon::ArrowEject,
-            WindowAction::SignOut,
-            &facts.navigation_uri,
-        );
-        entries.push(sign_out.into());
-    }
+    let mut entries = vec![open_item(facts)];
+    entries.extend(file_location_items(facts));
+    entries.extend(extraction_items(facts));
+    entries.extend(mount_item(facts));
+    entries.extend(editor_items(facts));
+    entries.extend(folder_open_items(facts));
+    entries.push(terminal_item(facts));
+    entries.extend(classic_application_items(facts));
+    entries.extend(other_open_items(facts));
     entries.push(MenuEntry::Divider);
-    entries.extend(details_group(facts));
+    entries.push(copy_path_item());
+    entries.extend(share_item(facts).map(MenuEntry::from));
+    entries.push(previous_versions_item(facts));
+    entries.extend([MenuEntry::Divider, send_to_item(facts), MenuEntry::Divider]);
+    entries.extend([cut.into(), copy.into()]);
+    // Windows lists Paste on a folder, which pastes into it.
+    if facts.shape == ItemShape::Folder && facts.is_single {
+        entries.push(paste.into());
+    }
+    entries.extend([MenuEntry::Divider, duplicate_item(), delete.into(), rename.into()]);
+    entries.extend(rename_items_item(facts));
+    entries.push(MenuEntry::Divider);
+    entries.extend(tool_items(facts));
+    entries.push(MenuEntry::Divider);
+    // Properties describe several items together (PROP-002).
+    entries.push(properties_item());
     ContextMenu {
         entries,
         strip: Vec::new(),
@@ -1028,7 +1283,7 @@ mod tests {
             location: ItemLocation::Local,
             is_read_only: false,
             is_single: true,
-            is_search_result: false,
+            has_file_location: false,
             is_symlink: false,
             comparison: Comparison::Unavailable,
             editors: Vec::new(),
@@ -1037,6 +1292,8 @@ mod tests {
             delete_label: "Delete",
             disk_tool: None,
             send_to: SendToTargets::default(),
+            can_share: false,
+            is_recent: false,
         }
     }
 
@@ -1342,35 +1599,36 @@ mod tests {
 
     /// parity: CMD-009, CMD-016, TAB-028, CMD-038
     #[test]
-    fn a_folder_classic_menu_keeps_the_python_order_and_shortcuts() {
+    fn a_folder_classic_menu_follows_windows_order_and_keeps_its_shortcuts() {
         let menu = item_menu(&folder(), MenuStyle::Classic);
 
         assert_eq!(
             labels(&menu.entries),
             [
                 "Open",
-                "Open in Terminal",
-                "Open folder with…",
                 "Open in new tab",
                 "Open in new window",
                 "Pin to Quick access",
+                "Open in Terminal",
+                "Open folder with…",
+                "-",
+                "Copy as path",
+                "Restore previous versions",
                 "-",
                 "Send to",
                 "-",
                 "Cut",
                 "Copy",
-                "Paste into folder",
+                "Paste",
                 "-",
-                "Rename",
-                "Delete",
                 "Duplicate",
-                "Copy as path",
-                "Compress to ZIP file",
+                "Delete",
+                "Rename",
+                "-",
                 "Compress to…",
+                "Calculate folder size",
                 "Cache this folder for search",
                 "-",
-                "Calculate folder size",
-                "Previous versions",
                 "Properties",
             ]
         );
@@ -1385,13 +1643,13 @@ mod tests {
             .collect();
         let expected = [
             ("Open", "Enter"),
+            // A gain: the Python app had no key for Copy path.
+            ("Copy as path", "Ctrl+Shift+C"),
             ("Cut", "Ctrl+X"),
             ("Copy", "Ctrl+C"),
             // CMD-019: Paste on one folder pastes into it, without a key.
-            ("Rename", "F2"),
             ("Delete", "Delete"),
-            // A gain: the Python app had no key for Copy path.
-            ("Copy as path", "Ctrl+Shift+C"),
+            ("Rename", "F2"),
             ("Properties", "Alt+Enter"),
         ];
         let expected: Vec<(String, &str)> = expected
@@ -1399,6 +1657,71 @@ mod tests {
             .map(|(label, keys)| (label.to_owned(), keys))
             .collect();
         assert_eq!(shortcuts, expected);
+    }
+
+    /// As Windows 11 draws its classic menu: no shortcut text, in the
+    /// submenus either; Open, the default command, in bold; a glyph only
+    /// on the rows Windows draws with an icon (and the app's own), Send
+    /// to's destinations keeping theirs. The compact menu is not changed.
+    ///
+    /// parity: LOOK-019, CMD-038
+    #[test]
+    fn the_classic_look_drops_shortcut_text_bolds_open_and_keeps_windows_icons() {
+        let entries = classic_look(item_menu(&folder(), MenuStyle::Classic).entries);
+        let items: Vec<&MenuItem> = items_of(&entries).collect();
+        assert!(
+            items.iter().all(|item| item.shortcut.is_none()),
+            "no shortcut text"
+        );
+        let bold: Vec<&str> = items
+            .iter()
+            .filter(|item| item.emphasised)
+            .map(|item| item.label.as_str())
+            .collect();
+        assert_eq!(bold, ["Open"]);
+        let glyphs: Vec<&str> = items
+            .iter()
+            .filter(|item| item.shows_glyph)
+            .map(|item| item.label.as_str())
+            .collect();
+        assert_eq!(
+            glyphs,
+            [
+                "Open in Terminal",
+                "Open folder with…",
+                "Send to",
+                "Duplicate",
+                "Compress to…",
+                "Calculate folder size",
+                "Cache this folder for search",
+                "Properties",
+            ]
+        );
+        let send_to = items
+            .iter()
+            .find(|item| item.label == "Send to")
+            .expect("Send to");
+        assert!(items_of(&send_to.submenu).all(|item| item.shows_glyph));
+
+        let new_folder =
+            item("Folder", Icon::FolderAdd, WindowAction::NewFolder).with_shortcut("Ctrl+Shift+N");
+        let submenus = BackgroundSubmenus {
+            new: vec![new_folder.into()],
+            ..submenus()
+        };
+        let background = classic_look(background_menu("Undo", "Redo", &[], submenus));
+        let new = items_of(&background)
+            .find(|item| item.label == "New")
+            .expect("New");
+        assert!(!new.shows_glyph, "New is text alone");
+        assert!(
+            items_of(&new.submenu).all(|item| item.shortcut.is_none() && item.shows_glyph),
+            "its rows keep their glyphs, without shortcut text"
+        );
+
+        let compact = item_menu(&folder(), MenuStyle::Compact).entries;
+        let open = items_of(&compact).next().expect("Open");
+        assert!(open.shows_glyph && !open.emphasised && open.shortcut == Some("Enter"));
     }
 
     /// parity: CMD-009
@@ -1442,7 +1765,10 @@ mod tests {
         let image_menu = labels(&item_menu(&image, MenuStyle::Classic).entries);
         let folder_menu = labels(&item_menu(&folder, MenuStyle::Classic).entries);
 
-        assert_eq!(image_menu[3], "Mount disk image");
+        assert_eq!(
+            image_menu[1], "Mount disk image",
+            "after Open, as Windows lists Mount"
+        );
         let size = folder_menu
             .iter()
             .position(|label| label == "Calculate folder size");
@@ -1468,18 +1794,18 @@ mod tests {
         assert_eq!(
             disabled(&menu.entries),
             [
-                "Open in Terminal",
-                "Open folder with…",
                 "Open in new window",
                 "Pin to Quick access",
-                "Previous versions",
+                "Open in Terminal",
+                "Open folder with…",
+                "Restore previous versions",
             ]
         );
     }
 
     /// parity: OPEN-015, OPEN-017
     #[test]
-    fn each_code_editor_is_offered_after_open_with_for_one_item() {
+    fn each_code_editor_is_offered_after_open_for_one_item_as_edit_in_notepad() {
         let code = EditorShortcut {
             id: "code.desktop".to_owned(),
             name: "Visual Studio Code".to_owned(),
@@ -1496,19 +1822,33 @@ mod tests {
 
         let entries = item_menu(&facts, MenuStyle::Classic).entries;
 
-        assert_eq!(labels(&entries)[3], "Open in Visual Studio Code");
-        let MenuEntry::Item(editor) = &entries[3] else {
+        assert_eq!(labels(&entries)[1], "Open in Visual Studio Code");
+        let MenuEntry::Item(editor) = &entries[1] else {
             panic!("an editor is an item");
         };
         assert_eq!(editor.action, WindowAction::OpenInEditor.into());
         assert_eq!(editor.target, Some("code.desktop".to_variant()));
         let disabled_for_several = disabled(&item_menu(&several, MenuStyle::Classic).entries);
         assert!(disabled_for_several.contains(&"Open in Visual Studio Code".to_owned()));
+        // A folder opens in the editor too, as a project, in either style.
+        let folder = ItemFacts {
+            editors: facts.editors.clone(),
+            ..folder()
+        };
+        for style in [MenuStyle::Classic, MenuStyle::Compact] {
+            let names = labels(&item_menu(&folder, style).entries);
+            assert!(
+                names.contains(&"Open in Visual Studio Code".to_owned()),
+                "{names:?}"
+            );
+        }
     }
 
-    /// In the compact menu the applications and editors go into one "Open
-    /// with" submenu ending with "Choose another app", as Windows 11
-    /// Explorer's, and a file's Terminal entry stays in the classic menu.
+    /// In the compact menu the applications go into one "Open with"
+    /// submenu ending with "Choose another app", as Windows 11 Explorer's;
+    /// the editors sit above "Show more options", where Windows lists
+    /// "Edit in Notepad", and a file's Terminal entry stays in the classic
+    /// menu.
     ///
     /// parity: CMD-010, OPEN-013
     #[test]
@@ -1518,21 +1858,42 @@ mod tests {
             name: "Visual Studio Code".to_owned(),
             icon: None,
         };
+        let viewer = ApplicationChoice {
+            id: "org.gnome.Papers.desktop".to_owned(),
+            name: "Papers".to_owned(),
+            is_default: false,
+            is_recommended: true,
+            is_available: true,
+            icon: None,
+        };
         let facts = ItemFacts {
             editors: vec![code],
+            applications: vec![viewer],
             ..file()
         };
         let entries = item_menu(&facts, MenuStyle::Compact).entries;
         let names = labels(&entries);
         assert_eq!(names[..2], ["Open", "Open with"], "{names:?}");
         assert!(!names.iter().any(|name| name.contains("Terminal")), "{names:?}");
+        assert_eq!(
+            names[names.len() - 4..],
+            [
+                "Properties",
+                "-",
+                "Open in Visual Studio Code",
+                "-",
+                "Show more options"
+            ][1..]
+        );
         let MenuEntry::Item(open_with) = &entries[1] else {
             panic!("Open with is an item");
         };
         assert_eq!(
             labels(&open_with.submenu),
-            ["Open in Visual Studio Code", "-", "Choose another app"]
+            ["Open with Papers", "-", "Choose another app"]
         );
+        let without_applications = labels(&item_menu(&file(), MenuStyle::Compact).entries);
+        assert_eq!(without_applications[1], "Open with…");
     }
 
     /// An editor's item carries the editor's desktop ID for its icon, and
@@ -1565,7 +1926,7 @@ mod tests {
             items.map(|item| (item.label, item.disabled_reason)).collect()
         };
 
-        let editor = item_menu(&in_version, MenuStyle::Classic).entries[3].clone();
+        let editor = item_menu(&in_version, MenuStyle::Classic).entries[1].clone();
         let MenuEntry::Item(editor) = editor else {
             panic!("an editor is an item");
         };
@@ -1621,54 +1982,168 @@ mod tests {
         );
     }
 
+    /// A search result or a Recent row lists Open file location right
+    /// after Open, where Windows lists it, in both styles.
+    ///
     /// parity: SRCH-015
     #[test]
-    fn a_search_result_offers_open_file_location_after_the_open_group() {
+    fn a_search_result_offers_open_file_location_right_after_open() {
         let facts = ItemFacts {
-            is_search_result: true,
+            has_file_location: true,
             ..file()
         };
 
-        let entries = labels(&item_menu(&facts, MenuStyle::Classic).entries);
-
-        assert_eq!(
-            entries[..6],
-            [
-                "Open",
-                "Open containing folder in Terminal",
-                "Open with…",
-                "Open file location",
-                "Open file location in new tab",
-                "Open file location in new window"
-            ]
-        );
+        let locations = [
+            "Open file location",
+            "Open file location in new tab",
+            "Open file location in new window",
+        ];
+        for style in [MenuStyle::Classic, MenuStyle::Compact] {
+            let entries = labels(&item_menu(&facts, style).entries);
+            assert_eq!(entries[0], "Open", "{style:?}");
+            assert_eq!(entries[1..4], locations, "{style:?}");
+        }
         assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries)
             .contains(&"Open file location".to_owned()));
     }
 
+    /// A folder's compact menu, as Windows 11's: Cut, Copy, Paste (shown
+    /// only while there is something to paste), Rename and Delete in the
+    /// strip, with no Share, then Open, Open in new tab, Open in new
+    /// window, Pin to Quick access, Compress to, Copy as path, Properties,
+    /// Open in Terminal and "Show more options".
+    ///
     /// parity: CMD-008, CMD-010
     #[test]
     fn the_compact_menu_puts_the_edit_commands_in_its_strip() {
-        let menu = item_menu(&folder(), MenuStyle::Compact);
+        let facts = ItemFacts {
+            can_share: true,
+            ..folder()
+        };
+        let menu = item_menu(&facts, MenuStyle::Compact);
 
         let strip: Vec<&str> = menu.strip.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(strip, ["Cut", "Copy", "Paste into folder", "Rename", "Delete"]);
+        assert_eq!(strip, ["Cut", "Copy", "Paste", "Rename", "Delete"]);
+        assert_eq!(menu.strip[2].availability, ItemAvailability::ShownWhileEnabled);
         assert_eq!(
             labels(&menu.entries),
             [
                 "Open",
-                "Open folder with…",
                 "Open in new tab",
                 "Open in new window",
                 "Pin to Quick access",
-                "Compress to ZIP file",
+                "Compress to",
                 "Copy as path",
-                "-",
                 "Properties",
                 "-",
                 "Open in Terminal",
                 "-",
                 "Show more options",
+            ]
+        );
+    }
+
+    /// A file's compact menu, in the order of Windows 11's on a text file:
+    /// Cut, Copy, Rename, Share and Delete in the strip, with their labels;
+    /// then Open, Open with, Share with, Compress to (ZIP File and
+    /// Additional options), Copy as path and Properties, the editors, and
+    /// "Show more options". Several files keep the same strip, without
+    /// Paste.
+    ///
+    /// parity: CMD-008, CMD-010
+    #[test]
+    fn a_file_compact_menu_follows_windows_11() {
+        let facts = ItemFacts {
+            can_share: true,
+            send_to: SendToTargets {
+                bluetooth: true,
+                mail: true,
+                ..SendToTargets::default()
+            },
+            ..file()
+        };
+        let menu = item_menu(&facts, MenuStyle::Compact);
+
+        let strip: Vec<&str> = menu.strip.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(strip, ["Cut", "Copy", "Rename", "Share", "Delete"]);
+        assert_eq!(
+            labels(&menu.entries),
+            [
+                "Open",
+                "Open with…",
+                "Share with",
+                "Compress to",
+                "Copy as path",
+                "Properties",
+                "-",
+                "Show more options",
+            ]
+        );
+        let submenu = |label: &str| {
+            menu.entries
+                .iter()
+                .find_map(|entry| match entry {
+                    MenuEntry::Item(item) if item.label == label => Some(labels(&item.submenu)),
+                    _ => None,
+                })
+                .expect("the submenu is listed")
+        };
+        assert_eq!(submenu("Share with"), ["Bluetooth device", "Mail recipient"]);
+        assert_eq!(
+            submenu("Compress to"),
+            ["ZIP File", "TAR File", "Additional options"]
+        );
+        let several = ItemFacts {
+            is_single: false,
+            ..facts.clone()
+        };
+        let strip: Vec<String> = item_menu(&several, MenuStyle::Compact)
+            .strip
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+        assert_eq!(strip, ["Cut", "Copy", "Rename", "Share", "Delete"]);
+        let unshared = labels(&item_menu(&file(), MenuStyle::Compact).entries);
+        assert!(!unshared.contains(&"Share with".to_owned()), "{unshared:?}");
+    }
+
+    /// A file's classic menu, in the order of Windows 11's "Show more
+    /// options" on a text file, without what is Windows' own: Open, Open
+    /// with; Copy as path, Share and Restore previous versions; Send to;
+    /// Cut and Copy; Delete and Rename; Properties.
+    ///
+    /// parity: CMD-009, CMD-038
+    #[test]
+    fn a_file_classic_menu_follows_windows_11() {
+        let facts = ItemFacts {
+            can_share: true,
+            ..file()
+        };
+        let menu = item_menu(&facts, MenuStyle::Classic);
+
+        assert_eq!(
+            labels(&menu.entries),
+            [
+                "Open",
+                "Open containing folder in Terminal",
+                "Open with…",
+                "-",
+                "Copy as path",
+                "Share",
+                "Restore previous versions",
+                "-",
+                "Send to",
+                "-",
+                "Cut",
+                "Copy",
+                "-",
+                "Duplicate",
+                "Delete",
+                "Rename",
+                "-",
+                "Compress to…",
+                "-",
+                "Properties",
             ]
         );
     }

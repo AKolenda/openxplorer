@@ -19,6 +19,24 @@ window.ox.ox-dialog.solid-csd {
   box-shadow: inset 0 0 0 3px @ox_border;
 }
 window.ox.ox-dialog .dialog-content { padding: 24px 24px 18px 24px; }
+/* A dialog window with a title bar of its own (Dialog::with_title_bar):
+   Format and Map network drive, as Windows draws them,
+   with the title and a full-height close button on the dialog's colour,
+   like the Properties window's. Its content starts under the bar. */
+window.ox.ox-dialog.titled .dialog-titlebar {
+  min-height: 32px;
+  padding-left: 12px;
+  background-color: @ox_bg;
+  border-radius: 8px 8px 0 0;
+}
+window.ox.ox-dialog.titled.solid-csd .dialog-titlebar { border-radius: 0; }
+window.ox.ox-dialog.titled:backdrop .dialog-titlebar { background-color: @ox_bg; color: @ox_text_tertiary; }
+window.ox.ox-dialog.titled .dialog-titlebar button.caption {
+  min-width: 46px;
+  min-height: 32px;
+  border-radius: 0 8px 0 0;
+}
+window.ox.ox-dialog.titled .dialog-content { padding-top: 12px; }
 window.ox.ox-dialog .dialog-title {
   font-size: 20px;
   font-weight: 600;
@@ -26,6 +44,7 @@ window.ox.ox-dialog .dialog-title {
 }
 window.ox.ox-dialog .dialog-message { color: @ox_muted; margin-bottom: 12px; }
 window.ox.ox-dialog .field-label { color: @ox_text; margin: 8px 0 4px 0; }
+
 /* A text input: 35 high, 4px corners, the chrome fill and the stronger
    bottom edge that turns into a 2px accent line on focus. */
 window.ox.ox-dialog entry {
@@ -138,6 +157,15 @@ speedgraph .speed-label { font-size: 11px; }
    question.rs). Hover changes the row's fill at once, with no fade. */
 .progress-action.asking .progress-percent { font-size: 16px; }
 .progress-action.asking .conflict-question { margin-top: 6px; }
+.progress-action.asking .space-question { margin-top: 2px; }
+/* A question about a failed item in place of the progress, as Windows'
+   "1 Interrupted Action" (src/window/transfer_panel/failure.rs): its words,
+   the item, the progress window's More details (where the item is and
+   where it was going), Do this for all current items and the buttons. */
+.progress-action.asking .failure-question { margin-top: 2px; }
+.progress-action .failure-question grid.failure-details { border-spacing: 16px 4px; }
+.progress-action .failure-question grid.failure-details .property-name { color: @ox_muted; }
+.progress-action .space-drive { color: @ox_muted; }
 window.ox button.conflict-command { min-height: 32px; padding: 3px 8px 3px 16px; border-radius: 4px; }
 window.ox button.conflict-command label { font-size: 15px; }
 button.conflict-command.replace image { color: @ox_success; }
@@ -171,11 +199,26 @@ popover.ox-menu.compact list > row {
   border-radius: 4px;
 }
 popover.ox-menu.compact list > separator { margin: 1px 0; }
-/* Five 34-high icon buttons, 20% of the width each, 2px apart. */
+/* Windows 11's labeled strip: up to six buttons of equal width, each an
+   icon with its label under it, set apart by thin lines. */
 popover.ox-menu .context-strip { padding: 2px; border-bottom: 1px solid @ox_border; margin-bottom: 2px; }
 window.ox popover.ox-menu .context-strip button,
 popover.ox-menu .context-strip button {
-  min-height: 34px;
+  min-height: 44px;
+  padding: 3px 2px;
   margin: 0 1px;
   border-radius: 4px;
+}
+window.ox popover.ox-menu .context-strip button:not(:first-child),
+popover.ox-menu .context-strip button:not(:first-child) {
+  border-left: 1px solid alpha(@ox_border, 0.7);
+}
+popover.ox-menu .context-strip .strip-label { font-size: 0.85em; }
+/* Below the rows when the menu opened above the pointer, as Windows 11
+   keeps the strip on the side nearest the pointer. */
+popover.ox-menu .context-strip.at-bottom {
+  border-bottom: none;
+  margin-bottom: 0;
+  border-top: 1px solid @ox_border;
+  margin-top: 2px;
 }

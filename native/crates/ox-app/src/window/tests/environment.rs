@@ -66,14 +66,13 @@ fn the_home_row_is_selected_in_the_home_folder() {
     assert_eq!(selected.map(|row| row.index()), Some(0), "Home is the first row");
 }
 
+/// Quick access stays in the navigation pane; This PC lists the drives,
+/// and network locations once one is saved (owner decision 2026-11-06).
 #[gtk::test]
-fn this_pc_lists_quick_access_devices_and_network_locations() {
+fn this_pc_lists_devices_and_drives_and_no_quick_access() {
     let test = TestWindow::open(Page::ThisPc.uri());
     let landing = test.window.folder_pane().landing();
-    assert_eq!(
-        landing::section_titles(landing),
-        ["Quick access", "Devices and drives", "Network locations"]
-    );
+    assert_eq!(landing::section_titles(landing), ["Devices and drives"]);
 }
 
 /// The status bar reads as Windows 11 Explorer's: "4 items", then, past
@@ -177,35 +176,38 @@ fn settle_layout(test: &TestWindow) {
     wait_for(Duration::from_millis(100));
 }
 
+/// Nothing selected, the pane counts the folder's items, as Windows'
+/// pane does; one file shows Windows 11's Details rows.
+///
+/// parity: PROP-009
 #[gtk::test]
 fn the_details_pane_lists_a_file_and_the_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.open_details_pane();
     let pane = test.window.details_pane();
-    let folder = pane.shown_properties();
     // The Python backend lists hidden items only while they are shown
     // (`enumerate_folder(uri, showHidden)`), and app.js counts that list.
-    assert_eq!(
-        property(&folder, "Items"),
-        Some("4"),
+    assert!(
+        pane.shown_name().ends_with(" (4 items)"),
         "hidden items are not listed"
     );
-    assert_eq!(property(&folder, "Storage"), Some("This computer"));
+    let folder_address = fixture.root().display().to_string();
     test.activate("hidden", None);
-    let with_hidden = pane.shown_properties();
-    assert_eq!(
-        property(&with_hidden, "Items"),
-        Some("5"),
+    assert!(
+        pane.shown_name().ends_with(" (5 items)"),
         "shown hidden items count"
     );
     test.activate("hidden", None);
     test.window.folder_model().select_only(1);
     let file = pane.shown_properties();
     let names: Vec<&str> = file.iter().map(|property| property.name.as_str()).collect();
-    assert_eq!(names, ["Type", "Size", "Modified", "Location"]);
-    let folder_address = fixture.root().display().to_string();
-    assert_eq!(property(&file, "Location"), Some(folder_address.as_str()));
+    assert_eq!(
+        names[..4],
+        ["Type", "Size", "File location", "Date modified"],
+        "then Date created, where the file system keeps it"
+    );
+    assert_eq!(property(&file, "File location"), Some(folder_address.as_str()));
 }
 
 /// One selected image shows its picture and dimensions in the details
@@ -228,22 +230,46 @@ fn the_details_pane_previews_an_image_and_names_its_dimensions() {
     test.select_named("Beach.png");
 
     wait_until("the picture", || !descendants::<gtk::Picture>(pane).is_empty());
+    // The metadata reader's wording, as Properties' Details tab says it.
     wait_until("the dimensions", || {
-        property(&pane.shown_properties(), "Dimensions") == Some("4 × 3 pixels")
+        property(&pane.shown_properties(), "Dimensions") == Some("4 x 3")
     });
     // A redraw for another reason, such as a size scan's progress, keeps
     // the picture and its dimensions instead of reading them again.
     let picture = descendants::<gtk::Picture>(pane).remove(0);
     test.window.update_details_pane();
     assert_eq!(descendants::<gtk::Picture>(pane), [picture]);
-    assert_eq!(
-        property(&pane.shown_properties(), "Dimensions"),
-        Some("4 × 3 pixels")
-    );
+    assert_eq!(property(&pane.shown_properties(), "Dimensions"), Some("4 x 3"));
     test.window.folder_model().select_none();
     wait_until("the folder's art again", || {
         descendants::<gtk::Picture>(pane).is_empty()
     });
+}
+
+/// A picture too large to decode (30,000 × 30,000 pixels, refused from
+/// its header) keeps its type icon in the details pane instead of
+/// holding the window up, and still lists its dimensions, as Windows'
+/// details pane does.
+///
+/// parity: PROP-011, PROP-013
+#[gtk::test]
+fn a_picture_too_large_to_preview_keeps_its_icon_and_lists_its_dimensions() {
+    let fixture = Fixture::standard();
+    crate::picture_guard::huge_png(&fixture.path("Huge poster.png"));
+    let test = TestWindow::open(&fixture.uri());
+    if !test.window.details_pane().is_visible() {
+        test.activate("details-pane", None);
+    }
+    let pane = test.window.details_pane();
+    test.select_named("Huge poster.png");
+
+    wait_until("the dimensions", || {
+        property(&pane.shown_properties(), "Dimensions").is_some_and(|size| size.contains("30000"))
+    });
+    assert!(
+        descendants::<gtk::Picture>(pane).is_empty(),
+        "no preview: the type icon stays"
+    );
 }
 
 /// The pane's menu makes it follow the pointer and drop a field, and
@@ -290,10 +316,7 @@ fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
     assert!(property(&shown, "Type").is_some());
     assert!(property(&shown, "Size").is_none(), "Size is turned off");
     test.window.pointer_over_items(&view, None);
-    assert!(
-        property(&pane.shown_properties(), "Items").is_some(),
-        "the folder again"
-    );
+    assert!(pane.shown_name().ends_with(" items)"), "the folder again");
     wait_until("the options saved", || {
         let saved = Settings::open(test.settings_directory())
             .data()
