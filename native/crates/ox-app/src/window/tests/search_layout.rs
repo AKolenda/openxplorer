@@ -108,20 +108,15 @@ fn the_search_options_menu_lists_windows_items_in_order() {
             "This week",
             "Last week",
             "This month",
-            "This year"
+            "Last month",
+            "This year",
+            "Last year"
         ]
     );
     let kinds = menu.open_submenu_of("Kind").row_labels();
     assert_eq!(
         kinds,
-        [
-            "Any kind",
-            "Folders",
-            "Documents",
-            "Images",
-            "Audio files",
-            "Videos"
-        ]
+        ["Any kind", "Document", "Folder", "Music", "Picture", "Video"]
     );
     let sizes = menu.open_submenu_of("Size").row_labels();
     assert_eq!(sizes[0], "Any size");
@@ -160,7 +155,7 @@ fn each_search_option_changes_the_results() {
     wait_until("the subfolders again", || test.names() == all);
 
     open();
-    menu.open_submenu_of("Kind").click_row("Images");
+    menu.open_submenu_of("Kind").click_row("Picture");
     wait_until("the pictures", || test.names() == ["notes.png"]);
     open();
     menu.open_submenu_of("Kind").click_row("Any kind");
@@ -233,6 +228,50 @@ fn the_words_searched_for_are_marked_in_the_names() {
     show_filter_bar(&test, true);
     test.search_for("notes 2");
     assert!(marks("Notes 2.txt").is_empty(), "the filter bar's look");
+}
+
+/// On results, "…" offers Pin to Quick access even in a pinned folder,
+/// and it saves the search to the navigation pane, as Windows 11's "…"
+/// pins a search; once the search ends, "…" unpins the folder again.
+///
+/// parity: SRCH-046, SRCH-038
+#[gtk::test]
+fn pin_to_quick_access_on_results_saves_the_search() {
+    let fixture = Fixture::standard();
+    let test = window_with_notes(&fixture);
+    let root = root_title(&fixture);
+    let pins = |test: &TestWindow| {
+        let places = test.window.places();
+        let pinned = places.quick_access.iter();
+        pinned.filter(|place| place.uri == fixture.uri()).count()
+    };
+    test.activate("pin-folder", None);
+    wait_until("the folder to be pinned", || pins(&test) == 1);
+    let more = || menu_of(&test, "More options").row_labels();
+    wait_until("Unpin in the folder", || {
+        more().contains(&"Unpin from Quick access".to_owned())
+    });
+
+    test.search_for("notes");
+
+    wait_until("Pin on the results", || {
+        more().contains(&"Pin to Quick access".to_owned())
+    });
+    let menu = menu_of(&test, "More options");
+    menu.popup();
+    wait_until("the menu", || menu.is_visible());
+    menu.click_row("Pin to Quick access");
+    let label = format!("Search for notes in {root}");
+    wait_until("the saved search row", || {
+        test.window.sidebar().labels().contains(&label)
+    });
+    assert_eq!(pins(&test), 1, "the folder's pin is left as it was");
+
+    test.window.search_box().clear();
+
+    wait_until("Unpin in the folder again", || {
+        more().contains(&"Unpin from Quick access".to_owned())
+    });
 }
 
 /// A grouped folder's results are grouped the same way.

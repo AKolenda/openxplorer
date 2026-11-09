@@ -87,6 +87,14 @@ impl BrowserWindow {
         self.context().settings_data().preferences.show_search_filter_bar
     }
 
+    /// Whether "…" > Pin to Quick access saves the search shown rather
+    /// than pinning its folder: on results in Windows 11's search layout,
+    /// where Windows 11 File Explorer's "…" pins the search to Quick
+    /// access and no filter bar offers Save search.
+    pub(super) fn pins_search(&self) -> bool {
+        self.is_searching() && !self.shows_search_filter_bar()
+    }
+
     /// Follows Settings > Search > "Show the search filter bar": a search
     /// shown swaps its options and titles at once.
     pub(super) fn follow_search_filter_bar(&self, shown: bool) {
@@ -165,6 +173,7 @@ impl BrowserWindow {
             self.search_strip().set_visible(false);
         }
         self.command_bar().show_search_commands(windows_layout);
+        self.update_more_menu();
         self.set_action_state(WindowAction::SearchDepth, &depth.to_variant());
         let date = key_of(&DateFacet::ALL, &facets.date);
         self.set_action_state(WindowAction::SearchDate, &date.to_variant());

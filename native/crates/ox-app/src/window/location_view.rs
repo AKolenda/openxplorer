@@ -288,8 +288,11 @@ impl BrowserWindow {
     /// does: in This PC and Network the network drive commands; in a
     /// folder Undo and Redo while each can run, named for the step, and
     /// Unpin from Quick access while the folder is pinned, else Pin to
-    /// Quick access. It follows the location, every change to Quick access
-    /// or the network shares, and the undo journal.
+    /// Quick access; on search results in Windows 11's search layout
+    /// always Pin to Quick access, which saves the search (SRCH-046), as
+    /// Windows 11's "…" pins a search to Quick access. It follows the
+    /// location, the search, every change to Quick access or the network
+    /// shares, and the undo journal.
     pub(super) fn update_more_menu(&self) {
         let Some(uri) = self.current_uri() else {
             return;
@@ -315,7 +318,10 @@ impl BrowserWindow {
             .quick_access
             .iter()
             .find(|pin| page.is_none() && location::same_location(&pin.uri, &uri));
-        let pin = pinned.map_or(FolderPin::Unpinned, |pin| FolderPin::Pinned(pin.uri.clone()));
+        let pin = match pinned {
+            Some(pin) if !self.pins_search() => FolderPin::Pinned(pin.uri.clone()),
+            _ => FolderPin::Unpinned,
+        };
         let context = self.context();
         let state = MoreMenuState {
             place,

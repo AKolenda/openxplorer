@@ -9,14 +9,16 @@
 //! (<https://learn.microsoft.com/en-us/windows/win32/lwef/-search-2x-wds-aqsreference>:
 //! "Date modified | datemodified or modified | modified:last week",
 //! "date:today", "date:yesterday", "date:this week", "date:last week",
+//! and the same for "Week/Month/Year",
 //! "kind:docs", "kind:pics", "kind:videos", "kind:folders", "kind:music",
 //! "size:>500", "size:<500") and the `System.Kind` values
 //! (<https://learn.microsoft.com/en-us/windows/win32/properties/props-system-kind>:
 //! document, folder, picture, music, video) and `System.Size` groups
 //! (<https://learn.microsoft.com/en-us/windows/win32/properties/props-system-size>:
-//! Empty, Tiny, Small, Medium, Large, Huge, Gigantic). Only these values
-//! are read: a value Microsoft does not document for them, such as `this
-//! month`, stays a word to search for, as does every other `name:value`.
+//! Empty, Tiny, Small, Medium, Large, Huge, Gigantic). Only the values the
+//! Search options lists offer are read: any other value, such as `next
+//! month` or a date, stays a word to search for, as does every other
+//! `name:value`.
 
 use super::facets::{DateFacet, KindFacet, SearchFacets, SizeFacet};
 
@@ -118,6 +120,10 @@ fn date(value: &str) -> Option<DateFacet> {
         "yesterday" => DateFacet::Yesterday,
         "this week" => DateFacet::ThisWeek,
         "last week" => DateFacet::LastWeek,
+        "this month" => DateFacet::ThisMonth,
+        "last month" => DateFacet::LastMonth,
+        "this year" => DateFacet::ThisYear,
+        "last year" => DateFacet::LastYear,
         _ => return None,
     })
 }
@@ -195,6 +201,10 @@ mod tests {
         );
         assert_eq!(parsed("modified:last week").1, date(DateFacet::LastWeek));
         assert_eq!(parsed("datemodified:\"last week\"").1, date(DateFacet::LastWeek));
+        assert_eq!(parsed("datemodified:this month").1, date(DateFacet::ThisMonth));
+        assert_eq!(parsed("modified:last month").1, date(DateFacet::LastMonth));
+        assert_eq!(parsed("datemodified:this year").1, date(DateFacet::ThisYear));
+        assert_eq!(parsed("datemodified:\"last year\"").1, date(DateFacet::LastYear));
 
         let size = |size| SearchFacets {
             size,
@@ -238,9 +248,9 @@ mod tests {
             ("size:>lots datemodified:this".to_owned(), SearchFacets::default())
         );
         assert_eq!(
-            parsed("datemodified:this month"),
-            ("datemodified:this month".to_owned(), SearchFacets::default()),
-            "only the values Microsoft documents are read"
+            parsed("datemodified:next month"),
+            ("datemodified:next month".to_owned(), SearchFacets::default()),
+            "only the values the lists offer are read"
         );
         assert_eq!(parsed("notes"), ("notes".to_owned(), SearchFacets::default()));
         assert!(TypedQuery::parse("notes").facets.is_empty());

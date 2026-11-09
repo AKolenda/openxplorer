@@ -10,7 +10,8 @@
 //! video), size", <https://support.microsoft.com/en-us/office/foundations-experiences/find-what-you-need-with-microsoft-search>).
 //! A kind is decided from the item's MIME type, as Dolphin's are from
 //! Baloo's types; a date range is counted in local time from the start of
-//! today, the week (Monday), the month or the year; the size groups are
+//! today, the week (Monday), the month or the year, or over the day,
+//! week, month or year before; the size groups are
 //! those Microsoft documents for `System.Size` on Windows 10, version 1809
 //! and later
 //! (<https://learn.microsoft.com/en-us/windows/win32/properties/props-system-size>).
@@ -53,13 +54,16 @@ const DOCUMENT_TYPES: [&str; 9] = [
 ];
 
 impl KindFacet {
-    /// Every kind, in the order the search options list them.
+    /// Every kind, in the order the search options list them: after Any
+    /// kind, alphabetically and in the singular, as Windows 11 File
+    /// Explorer's Kind list names its `System.Kind` values (Document,
+    /// Folder, Music, Picture, Video).
     pub const ALL: [KindFacet; 6] = [
         KindFacet::Any,
-        KindFacet::Folders,
         KindFacet::Documents,
-        KindFacet::Images,
+        KindFacet::Folders,
         KindFacet::Audio,
+        KindFacet::Images,
         KindFacet::Videos,
     ];
 
@@ -67,11 +71,11 @@ impl KindFacet {
     pub fn label(self) -> &'static str {
         match self {
             KindFacet::Any => crate::i18n::gettext_static("Any kind"),
-            KindFacet::Folders => crate::i18n::gettext_static("Folders"),
-            KindFacet::Documents => crate::i18n::gettext_static("Documents"),
-            KindFacet::Images => crate::i18n::gettext_static("Images"),
-            KindFacet::Audio => crate::i18n::gettext_static("Audio files"),
-            KindFacet::Videos => crate::i18n::gettext_static("Videos"),
+            KindFacet::Folders => crate::i18n::gettext_static("Folder"),
+            KindFacet::Documents => crate::i18n::gettext_static("Document"),
+            KindFacet::Images => crate::i18n::gettext_static("Picture"),
+            KindFacet::Audio => crate::i18n::gettext_static("Music"),
+            KindFacet::Videos => crate::i18n::gettext_static("Video"),
         }
     }
 
@@ -123,20 +127,28 @@ pub enum DateFacet {
     LastWeek,
     /// Since the first of the month.
     ThisMonth,
+    /// During the month before this one.
+    LastMonth,
     /// Since the first of January.
     ThisYear,
+    /// During the year before this one.
+    LastYear,
 }
 
 impl DateFacet {
-    /// Every range, in the order the search options list them.
-    pub const ALL: [DateFacet; 7] = [
+    /// Every range, in the order the search options list them: Windows
+    /// 11 File Explorer's Date modified list, from Today "all the way to
+    /// Last year", after Any date.
+    pub const ALL: [DateFacet; 9] = [
         DateFacet::Any,
         DateFacet::Today,
         DateFacet::Yesterday,
         DateFacet::ThisWeek,
         DateFacet::LastWeek,
         DateFacet::ThisMonth,
+        DateFacet::LastMonth,
         DateFacet::ThisYear,
+        DateFacet::LastYear,
     ];
 
     /// What the search options show.
@@ -148,7 +160,9 @@ impl DateFacet {
             DateFacet::ThisWeek => crate::i18n::gettext_static("This week"),
             DateFacet::LastWeek => crate::i18n::gettext_static("Last week"),
             DateFacet::ThisMonth => crate::i18n::gettext_static("This month"),
+            DateFacet::LastMonth => crate::i18n::gettext_static("Last month"),
             DateFacet::ThisYear => crate::i18n::gettext_static("This year"),
+            DateFacet::LastYear => crate::i18n::gettext_static("Last year"),
         }
     }
 
@@ -180,7 +194,15 @@ impl DateFacet {
                 return Some((before.to_unix(), monday.to_unix()));
             }
             DateFacet::ThisMonth => today.add_days(1 - now.day_of_month()).ok()?,
+            DateFacet::LastMonth => {
+                let first = today.add_days(1 - now.day_of_month()).ok()?;
+                return Some((first.add_months(-1).ok()?.to_unix(), first.to_unix()));
+            }
             DateFacet::ThisYear => today.add_days(1 - now.day_of_year()).ok()?,
+            DateFacet::LastYear => {
+                let first = today.add_days(1 - now.day_of_year()).ok()?;
+                return Some((first.add_years(-1).ok()?.to_unix(), first.to_unix()));
+            }
         };
         Some((from.to_unix(), i64::MAX))
     }
@@ -197,15 +219,15 @@ pub enum SizeFacet {
     Any,
     /// 0 bytes.
     Empty,
-    /// From 1 byte: "Tiny (0 - 16 KB)".
+    /// From 1 byte: "Tiny (0 – 16 KB)".
     Tiny,
-    /// From 16,383 bytes: "Small (16 - 1 MB)".
+    /// From 16,383 bytes: "Small (16 KB – 1 MB)".
     Small,
-    /// From 1,048,577 bytes: "Medium (1 - 128 MB)".
+    /// From 1,048,577 bytes: "Medium (1 – 128 MB)".
     Medium,
-    /// From 134,217,729 bytes: "Large (128 MB - 1 GB)".
+    /// From 134,217,729 bytes: "Large (128 MB – 1 GB)".
     Large,
-    /// From 1,073,741,825 bytes: "Huge (1 - 4 GB)".
+    /// From 1,073,741,825 bytes: "Huge (1 – 4 GB)".
     Huge,
     /// From 4,294,967,297 bytes: "Gigantic (>4 GB)".
     Gigantic,
@@ -236,11 +258,11 @@ impl SizeFacet {
         match self {
             SizeFacet::Any => crate::i18n::gettext_static("Any size"),
             SizeFacet::Empty => crate::i18n::gettext_static("Empty (0 KB)"),
-            SizeFacet::Tiny => crate::i18n::gettext_static("Tiny (0 - 16 KB)"),
-            SizeFacet::Small => crate::i18n::gettext_static("Small (16 KB - 1 MB)"),
-            SizeFacet::Medium => crate::i18n::gettext_static("Medium (1 - 128 MB)"),
-            SizeFacet::Large => crate::i18n::gettext_static("Large (128 MB - 1 GB)"),
-            SizeFacet::Huge => crate::i18n::gettext_static("Huge (1 - 4 GB)"),
+            SizeFacet::Tiny => crate::i18n::gettext_static("Tiny (0 – 16 KB)"),
+            SizeFacet::Small => crate::i18n::gettext_static("Small (16 KB – 1 MB)"),
+            SizeFacet::Medium => crate::i18n::gettext_static("Medium (1 – 128 MB)"),
+            SizeFacet::Large => crate::i18n::gettext_static("Large (128 MB – 1 GB)"),
+            SizeFacet::Huge => crate::i18n::gettext_static("Huge (1 – 4 GB)"),
             SizeFacet::Gigantic => crate::i18n::gettext_static("Gigantic (> 4 GB)"),
             SizeFacet::Larger(_) | SizeFacet::Smaller(_) => crate::i18n::gettext_static("Size"),
         }
@@ -499,17 +521,19 @@ mod tests {
             [
                 "Any size",
                 "Empty (0 KB)",
-                "Tiny (0 - 16 KB)",
-                "Small (16 KB - 1 MB)",
-                "Medium (1 - 128 MB)",
-                "Large (128 MB - 1 GB)",
-                "Huge (1 - 4 GB)",
+                "Tiny (0 – 16 KB)",
+                "Small (16 KB – 1 MB)",
+                "Medium (1 – 128 MB)",
+                "Large (128 MB – 1 GB)",
+                "Huge (1 – 4 GB)",
                 "Gigantic (> 4 GB)",
             ]
         );
     }
 
-    /// Last week runs from the Monday before this week's to this week's.
+    /// Last week runs from the Monday before this week's to this week's,
+    /// last month and last year over the whole month and year before this
+    /// one, and the list reads as Windows 11's Date modified list.
     ///
     /// parity: SRCH-043
     #[test]
@@ -519,8 +543,31 @@ mod tests {
         let (from, until) = DateFacet::LastWeek.range(&now).expect("a range");
         assert_eq!(from, local(2026, 9, 7, 0).to_unix());
         assert_eq!(until, local(2026, 9, 14, 0).to_unix());
-        assert!(DateFacet::ALL.contains(&DateFacet::LastWeek));
-        assert_eq!(DateFacet::LastWeek.label(), "Last week");
+        let (from, until) = DateFacet::LastMonth.range(&now).expect("a range");
+        assert_eq!(from, local(2026, 8, 1, 0).to_unix());
+        assert_eq!(until, local(2026, 9, 1, 0).to_unix());
+        let (from, until) = DateFacet::LastYear.range(&now).expect("a range");
+        assert_eq!(from, local(2025, 1, 1, 0).to_unix());
+        assert_eq!(until, local(2026, 1, 1, 0).to_unix());
+        // In January, last month is December of the year before.
+        let january = local(2026, 1, 20, 12);
+        let (from, until) = DateFacet::LastMonth.range(&january).expect("a range");
+        assert_eq!(from, local(2025, 12, 1, 0).to_unix());
+        assert_eq!(until, local(2026, 1, 1, 0).to_unix());
+        assert_eq!(
+            DateFacet::ALL.map(DateFacet::label),
+            [
+                "Any date",
+                "Today",
+                "Yesterday",
+                "This week",
+                "Last week",
+                "This month",
+                "Last month",
+                "This year",
+                "Last year",
+            ]
+        );
     }
 
     /// Options typed into the box and options chosen from the lists

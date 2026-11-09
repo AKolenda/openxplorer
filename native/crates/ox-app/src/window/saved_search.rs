@@ -85,8 +85,10 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Saves the search shown to the sidebar, named after the folder.
-    fn save_search(&self) {
+    /// Saves the search shown to the sidebar, named after the folder: the
+    /// filter bar's Save search, or "…" > Pin to Quick access on results
+    /// in Windows 11's search layout.
+    pub(super) fn save_search(&self) {
         let Some(folder) = self.current_uri() else {
             return;
         };
