@@ -173,7 +173,7 @@ impl BrowserWindow {
         } else {
             ItemKind::File
         };
-        self.named_target(entry.navigation_uri().to_owned(), entry.name.clone(), kind)
+        self.named_target(entry.opened_uri().to_owned(), entry.name.clone(), kind)
     }
 
     /// Whether `uri` is a standard folder (Documents, Downloads and the
@@ -210,8 +210,14 @@ impl BrowserWindow {
     pub(super) fn open_properties(&self, tab: PropertiesTab) {
         let selected = self.folder_pane().model().selected_items();
         if selected.len() > 1 && tab != PropertiesTab::PreviousVersions {
-            let entries = selected.iter().map(|item| item.entry().clone()).collect();
-            self.show_selection_properties(entries, tab);
+            // Rows of Recent files are described as the files they stand
+            // for, whose shares are mounted first, as one item's are.
+            let entries: Vec<ox_core::entry::Entry> =
+                selected.iter().map(|item| item.entry().as_item()).collect();
+            let uris = entries.iter().map(|entry| entry.uri.clone()).collect();
+            self.after_mounting_each(uris, move |window| {
+                window.show_selection_properties(entries, tab);
+            });
             return;
         }
         if let Some(target) = self.properties_target() {

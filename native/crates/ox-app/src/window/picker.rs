@@ -960,7 +960,12 @@ impl BrowserWindow {
         }
         let mut paths = Vec::with_capacity(files.len());
         for entry in files {
-            paths.push(self.local_path_now(&entry.uri).await.ok_or_else(not_local)?);
+            // A row of Recent files is chosen as the file it stands for.
+            paths.push(
+                self.local_path_now(entry.opened_uri())
+                    .await
+                    .ok_or_else(not_local)?,
+            );
         }
         Ok(paths)
     }

@@ -397,7 +397,7 @@ mod tests {
     /// A Recently used files row keeps the file it stands for, which `GVfs`
     /// names only in `standard::target-uri` (the row's own name is a
     /// hash of it). Only a real location is kept, and only for `recent:`
-    /// rows; opening the row is unchanged.
+    /// rows; opening the row and the commands on it act on that file.
     ///
     /// parity: CMD-037
     #[test]
@@ -406,7 +406,21 @@ mod tests {
         let regular = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
         let row = entry_for_uri(row_uri, &with_target(regular, "file:///srv/notes.txt"));
         assert_eq!(row.meta.recent_target.as_deref(), Some("file:///srv/notes.txt"));
-        assert_eq!(row.navigation_uri(), row_uri, "opening is unchanged");
+        assert_eq!(row.navigation_uri(), row_uri);
+        assert_eq!(
+            row.opened_uri(),
+            "file:///srv/notes.txt",
+            "opening opens the file"
+        );
+        assert_eq!(
+            row.item_uri(),
+            "file:///srv/notes.txt",
+            "commands act on the file"
+        );
+        let item = row.as_item();
+        assert_eq!(item.uri, "file:///srv/notes.txt", "described as the file");
+        assert_eq!(item.meta.recent_target, None);
+        assert_eq!(item.name, row.name);
 
         let shortcut = file_info(gio::FileType::Shortcut, "plan.txt", Some("text/plain"));
         let shortcut_row = entry_for_uri(
@@ -417,6 +431,7 @@ mod tests {
             shortcut_row.meta.recent_target.as_deref(),
             Some("smb://studio-nas/projects/plan.txt")
         );
+        assert_eq!(shortcut_row.opened_uri(), "smb://studio-nas/projects/plan.txt");
 
         let not_utf8 = file_info(gio::FileType::Regular, "bad", None);
         let not_utf8_row = entry_for_uri(row_uri, &with_target(not_utf8, "file:///tmp/bad%FF"));
@@ -435,6 +450,12 @@ mod tests {
         let script = file_info(gio::FileType::Regular, "x", None);
         let unsafe_row = entry_for_uri(row_uri, &with_target(script, "javascript:alert(1)"));
         assert_eq!(unsafe_row.meta.recent_target, None, "not a location");
+        assert_eq!(
+            unsafe_row.opened_uri(),
+            row_uri,
+            "a row that names no file stays itself"
+        );
+        assert_eq!(unsafe_row.item_uri(), row_uri);
 
         let elsewhere = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
         let plain = entry_for_uri(
@@ -442,6 +463,8 @@ mod tests {
             &with_target(elsewhere, "file:///srv/other.txt"),
         );
         assert_eq!(plain.meta.recent_target, None, "only Recent rows");
+        assert_eq!(plain.item_uri(), "file:///srv/notes.txt");
+        assert_eq!(plain.as_item().uri, plain.uri, "anything else stays itself");
     }
 
     #[test]

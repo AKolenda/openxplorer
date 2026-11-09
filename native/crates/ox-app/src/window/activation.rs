@@ -44,6 +44,9 @@ enum Resolved {
     Archive(Box<Entry>),
     /// The file opened in its application.
     Opened,
+    /// The file a Recent row stands for is no longer there: "Item Not
+    /// Found" says so.
+    Gone,
 }
 
 /// What activating an item does.
@@ -95,7 +98,7 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
         EntryKind::File | EntryKind::Special | EntryKind::Symlink
     );
     if entry.kind == EntryKind::Directory || (not_a_file && entry.is_dir) {
-        return Activation::Folder(entry.navigation_uri().to_owned());
+        return Activation::Folder(entry.opened_uri().to_owned());
     }
     if matches!(
         entry.kind,
@@ -182,7 +185,43 @@ struct AddressRequest<'a> {
     source: AddressSource,
 }
 
+/// Why an item could not be read again before it is opened.
+#[derive(Debug)]
+pub(super) enum ReadAgain {
+    /// Nothing is there any more.
+    Gone(EntryError),
+    /// Its share could not be mounted, or it could not be read.
+    Failed(String),
+}
+
+impl std::fmt::Display for ReadAgain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Gone(error) => error.fmt(f),
+            Self::Failed(reason) => f.write_str(reason),
+        }
+    }
+}
+
 impl BrowserWindow {
+    /// Reads the item at `uri` again, as opening it does: a share that
+    /// was unmounted since it was listed is mounted once and read again
+    /// (NET-004).
+    pub(super) async fn read_again(&self, uri: &str) -> Result<Entry, ReadAgain> {
+        let mut queried = query_entry(uri).await;
+        if matches!(queried, Err(EntryError::NotMounted(_))) {
+            self.network()
+                .mount(uri)
+                .await
+                .map_err(|error| ReadAgain::Failed(error.to_string()))?;
+            queried = query_entry(uri).await;
+        }
+        queried.map_err(|error| match error {
+            EntryError::NotFound(_) => ReadAgain::Gone(error),
+            other => ReadAgain::Failed(other.to_string()),
+        })
+    }
+
     /// Drops the lookup tab `id` has running: it navigated.
     pub(super) fn supersede_activations(&self, id: TabId) {
         self.imp().activations.borrow_mut().newest.remove(&id);
@@ -295,20 +334,17 @@ impl BrowserWindow {
     }
 
     /// Reads `entry` again, mounting its share first when it has to, and
-    /// opens a file at once; says what else to do.
+    /// opens a file at once; says what else to do. A row of Recent files
+    /// is read and opened as the file it stands for, so it opens as that
+    /// file does from its folder, and is [`Resolved::Gone`] when the file
+    /// is not there any more.
     async fn resolve_activation(&self, entry: &Entry) -> Result<Resolved, String> {
-        let uri = entry.navigation_uri();
-        let mut queried = query_entry(uri).await;
-        // A share may have been unmounted since it was listed: it is
-        // mounted once and read again (NET-004).
-        if matches!(queried, Err(EntryError::NotMounted(_))) {
-            self.network()
-                .mount(uri)
-                .await
-                .map_err(|error| error.to_string())?;
-            queried = query_entry(uri).await;
-        }
-        let fresh = queried.map_err(|error| error.to_string())?;
+        let stands_for_a_file = entry.meta.recent_target.is_some();
+        let fresh = match self.read_again(entry.opened_uri()).await {
+            Ok(fresh) => fresh,
+            Err(ReadAgain::Gone(_)) if stands_for_a_file => return Ok(Resolved::Gone),
+            Err(failure) => return Err(failure.to_string()),
+        };
         // In a file dialog, activating a file chooses it (INT-032).
         if self.is_picking() && matches!(activation_for(&fresh), Activation::File | Activation::Archive) {
             self.pick_activated(&fresh);
@@ -367,7 +403,7 @@ impl BrowserWindow {
                 };
                 match outcome {
                     Ok(Resolved::Folder(uri)) => window.open_tab_or_report(&uri, TabPlacement::Background),
-                    Ok(Resolved::Archive(_) | Resolved::Opened) => {}
+                    Ok(Resolved::Archive(_) | Resolved::Opened | Resolved::Gone) => {}
                     Err(reason) => window.report_open_failure(&reason, &entry),
                 }
             }
