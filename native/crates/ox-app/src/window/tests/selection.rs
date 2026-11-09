@@ -698,11 +698,11 @@ fn heading_parts(test: &TestWindow, index: usize) -> (gtk::Widget, gtk::Widget, 
         .into_iter()
         .find(|label| label.has_css_class("group-title"))
         .expect("a title");
-    let line = descendants::<gtk::Box>(&cell)
+    let rest = descendants::<gtk::Box>(&cell)
         .into_iter()
         .find(|rest| rest.has_css_class("group-rest"))
         .expect("the rest of the heading's row");
-    (chevron.upcast(), title.upcast(), line.upcast())
+    (chevron.upcast(), title.upcast(), rest.upcast())
 }
 
 /// Clicks on a heading act as Windows 11's: the title or the rest of the
@@ -728,8 +728,8 @@ fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
             .grouped()
             .and_then(|grouped| grouped.heading(2))
             .expect("a third group");
-        let (_, title, line) = heading_parts(&test, 2);
-        press_on(&test, &line, 1);
+        let (_, title, rest) = heading_parts(&test, 2);
+        press_on(&test, &rest, 1);
         assert_eq!(
             selected(&test),
             group,

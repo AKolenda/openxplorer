@@ -169,9 +169,10 @@ fn heading_box(test: &TestWindow, view: FolderView) -> (gtk::Widget, gtk::Label)
 }
 
 /// In every view, normal and compact, a heading's box leaves room round
-/// its title as an item's box does round its name: at least 3 pixels of
-/// the box above and below the title's line, the title in its middle, and
-/// the chevron at least 8 pixels in from the box's left edge.
+/// its title as an item's box does round its name: at least 2.5 pixels of
+/// the box above and below the title's line (Windows 11's 25-pixel box in
+/// compact Tiles round a 20-pixel line of 15-pixel text), the title in its
+/// middle, and the chevron at least 8 pixels in from the box's left edge.
 ///
 /// parity: VIEW-022, VIEW-067
 #[gtk::test]
@@ -194,7 +195,7 @@ fn a_heading_s_box_leaves_room_round_its_title() {
             #[expect(clippy::cast_precision_loss, reason = "heights are small")]
             let room = (outer.height() - line as f32) / 2.0;
             assert!(
-                room >= 3.0 && (middle - outer.height() / 2.0).abs() <= 1.0,
+                room >= 2.5 && (middle - outer.height() / 2.0).abs() <= 1.0,
                 "{view:?}, compact {compact}: a {}-pixel box round a {line}-pixel title, its middle at {middle}",
                 outer.height()
             );

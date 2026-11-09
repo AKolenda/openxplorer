@@ -8,9 +8,10 @@
 
 use crate::folder_view::grid::{self, IconSize};
 use crate::folder_view::icon_size::{
-    compact_density_details_row, compact_density_heading_row, compact_density_tiles_row, compact_row,
-    content_row, group_heading_row, tiles_cell, COMPACT_CONTENT_HEADING_CHROME, COMPACT_TILES_CHROME,
-    COMPACT_TILES_HEADING_CHROME, CONTENT_CHROME, HEADING_CHROME, TILES_CHROME,
+    compact_density_details_row, compact_density_heading_row, compact_density_line,
+    compact_density_tiles_row, compact_row, content_row, group_heading_row, tiles_cell,
+    COMPACT_CONTENT_HEADING_CHROME, COMPACT_TILES_CHROME, COMPACT_TILES_HEADING_CHROME, CONTENT_CHROME,
+    HEADING_CHROME, TILES_CHROME,
 };
 use crate::text_size::{self, TextSize};
 
@@ -21,6 +22,7 @@ pub(crate) fn css_for_text_size(text_size: TextSize) -> String {
     let scale = metrics.scale;
     let mut rules: Vec<String> = Vec::new();
     rules.extend(FONT_SIZES.iter().map(|font| font.rule(scale)));
+    rules.push(group_title_rule(scale));
     rules.extend(SCALED_HEIGHTS.iter().map(|height| height.rule(scale)));
     rules.push(solid_frame_rule(scale));
     rules.push(details_row_rule(metrics.detail_row));
@@ -232,6 +234,22 @@ const COMPACT_COLUMN_TITLES: ScaledHeight = grows(
     1.0,
 );
 
+/// A group heading's title (VIEW-022): its 15-pixel text on a line 20
+/// pixels tall at 100%, growing with the text, whatever the font's and
+/// GTK's own line height (21 pixels with Noto Sans on GTK 4.14, 20 on
+/// 4.18, 17 with the distribution checks' fallback font). The line
+/// overhangs the title's allocation above and below by its difference
+/// from the items' 16-pixel line, so a heading's row keeps the height the
+/// items' text sets, with the title centred on it.
+fn group_title_rule(scale: f64) -> String {
+    let line = text_size::ceil_pixels(20.0 * scale);
+    let overhang = (line - text_size::ceil_pixels(16.0 * scale)) / 2;
+    format!(
+        "columnview.files .group-slot .group-title, gridview.files .group-slot .group-title \
+         {{ line-height: {line}px; margin: -{overhang}px 0; }}"
+    )
+}
+
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
 /// commands, the column titles (`#column-head`), the status bar and the
@@ -311,7 +329,9 @@ fn details_row_rule(detail_row: i32) -> String {
 /// its line, the first heading's title 14 under it; the sidebar's rows 24
 /// apart; rows of Tiles 57 apart, a heading 26 tall; Content's items as
 /// usual (Windows 11 spaces them 48 apart in both views) under a heading
-/// 32 tall, their lines 18 apart. The window class makes these rules win
+/// 32 tall, their lines 18 apart. Tiles' and Content's lines are each
+/// [`compact_density_line`] tall, so those distances hold whatever the
+/// font's own line height. The window class makes these rules win
 /// over the usual ones. The folder tree's rows are in `skin/sidebar.css`,
 /// as their usual height is.
 fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
@@ -323,6 +343,7 @@ fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
     let tile = compact_density_tiles_row(text_size) - COMPACT_TILES_CHROME;
     let tiles_heading = compact_density_heading_row(text_size, false) - COMPACT_TILES_HEADING_CHROME;
     let content_heading = compact_density_heading_row(text_size, true) - COMPACT_CONTENT_HEADING_CHROME;
+    let line = compact_density_line(text_size);
     vec![
         format!("window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}"),
         format!(
@@ -339,16 +360,25 @@ fn compact_density_rules(scale: f64, text_size: TextSize) -> Vec<String> {
             "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) \
              {{ min-height: {tile}px; padding-top: 4px; padding-bottom: 4px; margin: 0 4px 1px 4px; }}"
         ),
-        "window.compact-density gridview.files.tiles > child .item-lines { border-spacing: 2px; }".to_owned(),
+        // The tiles' lines 16 pixels apart, each as tall whatever the
+        // font's own line height.
+        format!(
+            "window.compact-density gridview.files.tiles > child .item-lines {{ border-spacing: 0; }}\n\
+             window.compact-density gridview.files.tiles > child .item-lines label {{ line-height: {line}px; }}"
+        ),
         format!(
             "window.compact-density gridview.files.tiles > child > .item-cell.group-slot.heading-row \
              {{ min-height: {tiles_heading}px; margin-top: 0; margin-bottom: 1px; padding: 4px 0; }}"
         ),
         // Content's lines 18 pixels apart, the name's and the date's and
         // size's, as in Windows 11's Compact view.
-        "window.compact-density gridview.files.content > child .item-lines, \
-         window.compact-density gridview.files.content > child .item-properties { border-spacing: 4px; }"
-            .to_owned(),
+        format!(
+            "window.compact-density gridview.files.content > child .item-lines, \
+             window.compact-density gridview.files.content > child .item-properties {{ border-spacing: 2px; }}\n\
+             window.compact-density gridview.files.content > child .item-lines label, \
+             window.compact-density gridview.files.content > child .item-properties label \
+             {{ line-height: {line}px; }}"
+        ),
         format!(
             "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
              {{ min-height: {content_heading}px; margin: 2px 0 3px 0; padding: 5px 0; }}"
@@ -476,6 +506,8 @@ mod tests {
              { min-height: 17px; margin-top: 0; margin-bottom: 1px; padding: 4px 0; }",
             "window.compact-density gridview.files.content > child > .item-cell.group-slot.heading-row \
              { min-height: 17px; margin: 2px 0 3px 0; padding: 5px 0; }",
+            "window.compact-density gridview.files.tiles > child .item-lines label { line-height: 16px; }",
+            "window.compact-density gridview.files.content > child .item-properties label { line-height: 16px; }",
         ] {
             assert!(css.contains(rule), "{rule}");
         }
@@ -491,6 +523,9 @@ mod tests {
         }
         assert!(larger.contains(
             "window.compact-density gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 72px;"
+        ));
+        assert!(larger.contains(
+            "window.compact-density gridview.files.tiles > child .item-lines label { line-height: 24px; }"
         ));
     }
 
@@ -512,6 +547,8 @@ mod tests {
             "gridview.files.tiles > child > .item-cell:not(.group-slot) { min-height: 53px; }",
             "gridview.files.content > child > .item-cell:not(.group-slot) { min-height: 35px; }",
             "gridview.files > child > .item-cell.group-slot.heading-row { min-height: 17px; }",
+            "columnview.files .group-slot .group-title, gridview.files .group-slot .group-title \
+             { line-height: 20px; margin: -2px 0; }",
         ] {
             assert!(css.contains(rule), "{rule}");
         }

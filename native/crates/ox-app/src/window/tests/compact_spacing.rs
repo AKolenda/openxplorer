@@ -157,6 +157,25 @@ fn second_line_distance(test: &TestWindow, name: &str, second: &str) -> i32 {
     super::geometry::pixels(middle(test, &line) - middle(test, &name_label(test, name)))
 }
 
+/// How far below the bottom of the item `name`'s name the top of its next
+/// line (its type) starts.
+fn second_line_gap(test: &TestWindow, name: &str, second: &str) -> i32 {
+    let view = test.window.folder_pane().view_widget();
+    let first = name_label(test, name)
+        .compute_bounds(&view)
+        .expect("the name is laid out");
+    let cell = descendants::<FileCell>(&view)
+        .into_iter()
+        .find(|cell| cell.is_mapped() && cell.group_heading().is_none() && cell.name() == name)
+        .unwrap_or_else(|| panic!("an item shows {name}"));
+    let next = descendants::<gtk::Label>(&cell)
+        .into_iter()
+        .find(|label| label.is_mapped() && label.text() == second)
+        .and_then(|label| label.compute_bounds(&view))
+        .unwrap_or_else(|| panic!("{name} shows {second}"));
+    super::geometry::pixels(next.y() - (first.y() + first.height()))
+}
+
 /// The places' rows of the navigation pane top to bottom, each with its
 /// top and whether a separator stands above it.
 fn navigation_rows(test: &TestWindow) -> Vec<(i32, bool)> {
@@ -283,7 +302,9 @@ fn compact_view_spaces_details_and_the_navigation_pane_as_windows() {
 /// row with the gap under it, as measured between headings), a heading
 /// over one row of tiles 83 from the next heading; Content's items are 48
 /// apart, a heading 32 above its first item's name and 49 below the last name before it
-/// (Windows: 31 to 32, and 48 to 49), an item's lines 18 apart.
+/// (Windows: 31 to 32, and 48 to 49), an item's lines 18 apart. The
+/// lines are as tall whatever the font, so these hold with Noto Sans and
+/// with the distribution checks' fallback font alike.
 ///
 /// parity: VIEW-067, VIEW-071
 #[gtk::test]
@@ -321,8 +342,11 @@ fn compact_view_spaces_tiles_and_content_as_windows() {
 /// below the row before it and 32 above its first row, the column header
 /// 32 tall with its line, the navigation pane's rows 32 apart and 56
 /// across a separator; Tiles' rows 75 apart and a heading over one row 110 from the
-/// next; Content's items 48 apart, their lines 14.5 apart, a heading 29.5
-/// above its first item and 53.5 below the last before it.
+/// next; Content's items 48 apart, their lines a pixel apart, a heading
+/// about 29 above its first item and 54 below the last before it. The
+/// usual view's lines keep the font's own height, so Content's distances
+/// to a name move by a pixel with the font and GTK's version (Noto Sans
+/// on GTK 4.14 or 4.18, or the distribution checks' fallback font).
 ///
 /// parity: VIEW-067
 #[gtk::test]
@@ -353,14 +377,16 @@ fn the_usual_view_keeps_its_spacing() {
         48,
         "items"
     );
-    // 29.5 and 53.5 pixels, which the display scale rounds either way.
+    // As the font and the display scale round them.
     let below = text_distance(&test, Line::Heading("Text Document"), Line::Name("Notes 1"));
-    assert!((29..=30).contains(&below), "heading to first item: {below}");
+    assert!((28..=30).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
-    assert!((53..=54).contains(&above), "last item to heading: {above}");
-    // 14.5 pixels, which the display scale rounds either way.
-    let second = second_line_distance(&test, "Notes 1", "Text Document");
-    assert!((14..=15).contains(&second), "a name to its type: {second}");
+    assert!((53..=55).contains(&above), "last item to heading: {above}");
+    assert_eq!(
+        second_line_gap(&test, "Notes 1", "Text Document"),
+        1,
+        "a name to its type"
+    );
 }
 
 /// In Compact view a removable drive's row, with its eject button, is as

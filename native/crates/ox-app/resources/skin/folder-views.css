@@ -215,12 +215,12 @@ columnview.files > listview > row.heading-row:focus-within > cell > .group-slot 
   box-shadow: inset 0 0 0 1px @ox_item_focus_outer;
 }
 /* The title as Windows 11 draws it: regular weight, a quarter larger
-   than the items' names (src/theme/fonts.rs), and no line after it. Its
-   taller line overhangs 2px above and below, so a heading's row keeps
-   the height the items' text sets, with the title centred on it, in
-   every view and in Compact view. */
+   than the items' names, and no line after it. src/theme/fonts.rs sets
+   its size and its line's height, which overhangs its allocation above
+   and below, so a heading's row keeps the height the items' text sets,
+   with the title centred on it, in every view and in Compact view. */
 columnview.files .group-slot .group-title,
-gridview.files .group-slot .group-title { font-weight: normal; color: @ox_text; margin: -2px 0; }
+gridview.files .group-slot .group-title { font-weight: normal; color: @ox_text; }
 /* Another column's cell in a heading's row: the gap and the height alone,
    as the Name cell's heading is drawn over it. */
 columnview.files .group-rule {
