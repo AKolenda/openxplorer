@@ -362,3 +362,50 @@ fn the_usual_view_keeps_its_spacing() {
     let second = second_line_distance(&test, "Notes 1", "Text Document");
     assert!((14..=15).contains(&second), "a name to its type: {second}");
 }
+
+/// In Compact view a removable drive's row, with its eject button, is as
+/// tall as every other row of the navigation pane, 23 pixels at 100% and
+/// 24 apart, so drives compact too.
+///
+/// parity: VIEW-067, DEV-007
+#[gtk::test]
+fn a_drive_with_an_eject_button_compacts_as_the_other_rows() {
+    use crate::devices::Removal;
+    use crate::icons::{Art, Icon};
+    use crate::window::sidebar::entries::{EjectButton, RowLevel, RowTarget, Section, SidebarEntry};
+
+    let fixture = fixture();
+    let test = grouped_window(&fixture, true);
+    let drive = |label: &str, eject: bool| SidebarEntry {
+        section: Section::ThisPc,
+        level: RowLevel::Child,
+        label: label.into(),
+        icon: Art::Glyph(Icon::HardDrive),
+        target: RowTarget::MountVolume(label.into()),
+        tooltip: label.into(),
+        pinned: false,
+        menu: None,
+        eject: eject.then(|| EjectButton {
+            removal: Removal::Eject,
+            uri: "file:///media/demo/USB".into(),
+            label: "Eject",
+        }),
+    };
+    let sidebar = test.window.sidebar();
+    sidebar.set_entries(vec![
+        drive("Backup", false),
+        drive("USB", true),
+        drive("Archive", false),
+    ]);
+    let row = |index| sidebar.list().row_at_index(index).expect("a drive's row");
+    wait_until("the drives' rows", || (0..3).all(|index| row(index).is_mapped()));
+    wait_for_frames(&test.window, 3);
+    // The least height each row asks for with its 1-pixel margin above:
+    // what its parts need, which is what it takes once GTK lays it out
+    // again.
+    let rows: Vec<i32> = (0..3)
+        .map(|index| row(index).measure(gtk::Orientation::Vertical, -1).0)
+        .collect();
+    assert_eq!(rows, [24, 24, 24], "(plain, with an eject button, plain)");
+    assert_eq!(navigation_pitches(&test).0, vec![24], "rows 24 apart");
+}
