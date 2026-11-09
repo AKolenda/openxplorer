@@ -273,3 +273,113 @@ fn shift_f10_on_a_tab_opens_its_menu() {
     );
     pointer.move_to(720, 500);
 }
+
+/// Saves "Shift+F10 opens the classic menu" as `on` and waits for the
+/// window to read it.
+fn choose_shift_f10_classic(test: &TestWindow, on: bool) {
+    let update = ox_core::settings::PreferencesUpdate {
+        shift_f10_classic: Some(on),
+        ..ox_core::settings::PreferencesUpdate::default()
+    };
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.shift_f10_classic == on
+    });
+}
+
+/// With "Shift+F10 opens the classic menu" on, Shift+F10 opens the
+/// classic menu again, on the file list and on a navigation pane row,
+/// pointing at the item, while the Menu key keeps the right-click menu;
+/// turned off, Shift+F10 opens the right-click menu again.
+///
+/// parity: CMD-013, CMD-014
+#[gtk::test]
+fn the_setting_makes_shift_f10_open_the_classic_menu() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win11);
+    choose_shift_f10_classic(&test, true);
+    wait_for_frames(&test.window, 3);
+
+    for (case, selected) in [
+        ("one file", vec!["Notes 2.txt"]),
+        ("one folder", vec!["Documents"]),
+        ("several items", vec!["Documents", "Résumé.txt"]),
+        ("blank space", Vec::new()),
+    ] {
+        select_names(&test, &selected);
+        test.window.folder_pane().focus_view();
+        park_pointer(&mut pointer, &test);
+        let menu = menu_after_shift_f10(&mut pointer, &test);
+        assert_eq!(menu.style(), MenuStyle::Classic, "{case}: the classic menu");
+        if let Some(first) = selected.first() {
+            assert_points_at_item(&test, &menu, test.position_of(first), case);
+        }
+        escape_closes(&mut pointer, &test, &menu, case);
+    }
+    let menu = sidebar_menu_after_shift_f10(&mut pointer, &test, "This PC");
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Classic,
+        "a navigation pane row: the classic menu"
+    );
+    pointer.tap_key(gdk::Key::Escape);
+    wait_until("Escape to close the row's menu", || !menu.is_visible());
+
+    // The Menu key keeps the right-click menu.
+    select_names(&test, &["Notes 2.txt"]);
+    test.window.folder_pane().focus_view();
+    park_pointer(&mut pointer, &test);
+    pointer.tap_key(gdk::Key::Menu);
+    wait_until("the Menu key to open the menu", || {
+        test.window.context_menu().is_visible()
+    });
+    let menu = test.window.context_menu();
+    assert_eq!(menu.style(), MenuStyle::Compact, "the Menu key is unchanged");
+    escape_closes(&mut pointer, &test, &menu, "the Menu key");
+
+    choose_shift_f10_classic(&test, false);
+    let menu = menu_after_shift_f10(&mut pointer, &test);
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Compact,
+        "off again: the right-click menu"
+    );
+    escape_closes(&mut pointer, &test, &menu, "off again");
+    pointer.move_to(720, 500);
+}
+
+/// Shift+right-click still opens the classic menu, the setting off or on,
+/// as in Windows 11.
+///
+/// parity: CMD-008
+#[gtk::test]
+fn shift_right_click_still_opens_the_classic_menu() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win11);
+    wait_for_frames(&test.window, 3);
+    for on in [false, true] {
+        choose_shift_f10_classic(&test, on);
+        let at = super::right_drag::item_on_screen(&mut pointer, &test, "Notes 2.txt");
+        pointer.move_to(at.0, at.1);
+        pointer.hold_key(gdk::Key::Shift_L);
+        pointer.press(crate::test_support::pointer::Button::Secondary);
+        pointer.release(crate::test_support::pointer::Button::Secondary);
+        pointer.let_go_key(gdk::Key::Shift_L);
+        wait_until("Shift+right-click to open the menu", || {
+            test.window.context_menu().is_visible()
+        });
+        let menu = test.window.context_menu();
+        assert_eq!(menu.style(), MenuStyle::Classic, "setting {on}: the classic menu");
+        pointer.tap_key(gdk::Key::Escape);
+        wait_until("Escape to close the menu", || !menu.is_visible());
+        wait_for(SETTLE);
+    }
+    pointer.move_to(720, 500);
+}
