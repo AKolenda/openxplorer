@@ -133,3 +133,11 @@
 @define-color ox_caution_badge_bg #fff2d6;         /* C35 snapshot tab badge */
 @define-color ox_caution_badge_text #714a08;
 @define-color ox_caution_edge #c48c2f;             /* C35 snapshot tab top */
+/* The Preview pane's text preview and document pages: black on white in
+   both appearances, as Windows 11's text preview and PDF pages stay when
+   Explorer is dark, with the system's blue text selection. */
+@define-color ox_text_preview_bg #ffffff;
+@define-color ox_text_preview_fg #000000;
+@define-color ox_text_preview_selection_bg #0078d4;
+@define-color ox_text_preview_selection_fg #ffffff;
+@define-color ox_document_page #ffffff;

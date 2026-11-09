@@ -5,8 +5,8 @@
 The Debian package, the RPM, the Arch package and the Flatpak all install
 through this tool, so the program, the desktop entry, the AppStream
 metainfo, the icon, the D-Bus service file, the licences, the mount helper
-program and the permanent-delete helper with its polkit action land in the
-same places with the same modes whichever format builds them. It ports the file layout of v2.0.0:desktop/tools/build_deb.py;
+program, the permanent-delete helper with its polkit action and the update
+helper with its polkit action and rule template land in the same places with the same modes whichever format builds them. It ports the file layout of v2.0.0:desktop/tools/build_deb.py;
 native/packaging/README.md explains each decision.
 """
 from __future__ import annotations
@@ -57,6 +57,39 @@ ADMIN_DELETE_COMMAND = 'openxplorer-admin-delete'
 # own helper path, so an authorisation of one never covers the other.
 ADMIN_DELETE_POLICY_TEMPLATE = PACKAGING_DATA / 'admin-delete.policy.in'
 ADMIN_DELETE_ACTION_SUFFIX = 'admin-delete'
+
+# The update helper, a fourth Rust program
+# (crates/ox-core/src/bin/openxplorer-install-update.rs). The app starts it
+# through pkexec to install the latest release as root. Only the stable
+# Debian package installs it, because only that package updates itself
+# (Installation::detect in crates/ox-core/src/update/installation.rs); the
+# app finds it at /opt/openxplorer/libexec (Installation::install_helper).
+INSTALL_UPDATE_COMMAND = 'openxplorer-install-update'
+# Its polkit action, whose defaults ask for an administrator, and the
+# polkit rule that lets an administrator in an active local session run it
+# without a password. build_policy_file and build_rules_file fill in their
+# placeholders.
+INSTALL_UPDATE_POLICY_TEMPLATE = PACKAGING_DATA / 'install-update.policy.in'
+INSTALL_UPDATE_RULES_TEMPLATE = PACKAGING_DATA / 'install-update.rules.in'
+INSTALL_UPDATE_ACTION_SUFFIX = 'install-update'
+# The package installs the filled-in rule as this data file, outside the
+# folders polkit reads (POLKIT_RULES_FOLDERS), so that the setting "Install
+# updates without asking for a password", which is on by default, can turn
+# it off. The stable postinst copies it to PASSWORDLESS_RULE and writes
+# PASSWORDLESS_RECORD, which users can read where they cannot read
+# /etc/polkit-1/rules.d, unless the record says the user turned it off; the
+# helper deletes or copies it as the setting changes
+# (crates/ox-core/src/update/passwordless.rs); the stable postrm deletes
+# both on remove and purge.
+INSTALL_UPDATE_RULE_TEMPLATE_NAME = 'install-update.rules'
+POLKIT_RULES_FOLDERS = (PurePosixPath('/usr/share/polkit-1/rules.d'),
+                        PurePosixPath('/etc/polkit-1/rules.d'))
+PASSWORDLESS_RULE = PurePosixPath('/etc/polkit-1/rules.d',
+                                  '60-io.winspace.Development.install-update.rules')
+PASSWORDLESS_RECORD = PurePosixPath('/var/lib/openxplorer/install-updates-without-password')
+# The groups whose members are administrators: sudo on Debian and Ubuntu,
+# admin on older Ubuntu releases, wheel elsewhere.
+ADMINISTRATOR_GROUPS = ('sudo', 'admin', 'wheel')
 
 # The Python package's older command names, which the stable package keeps.
 # /usr/bin/winspace is also the Exec line of the opt-in "Show in folder"
@@ -147,6 +180,12 @@ class InstalledPaths:
     # says so instead (helper_path in admin_delete/elevation.rs).
     admin_delete: PurePosixPath | None
     admin_delete_policy: PurePosixPath | None
+    # The update helper, its polkit action file and its polkit rule
+    # template, which only the stable Debian package installs: no other
+    # package updates itself. The template is not an active rule.
+    install_update: PurePosixPath | None = None
+    install_update_policy: PurePosixPath | None = None
+    install_update_rule_template: PurePosixPath | None = None
 
 
 def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
@@ -166,6 +205,8 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
     policy = PurePosixPath('/usr/share/polkit-1/actions', f'{channel.app_id}.policy')
     if layout is Layout.DEBIAN:
         home = PurePosixPath('/opt', package)
+        updates_itself = channel is Channel.STABLE
+        update_action = install_update_action(channel)
         return InstalledPaths(
             program=home / 'bin' / package,
             commands=PurePosixPath('/usr/bin'),
@@ -174,7 +215,14 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
             licences=PurePosixPath('/usr/share/doc', package),
             mount_helper=home / 'bin' / MOUNT_HELPER_COMMAND if has_helper else None,
             admin_delete=home / 'libexec' / ADMIN_DELETE_COMMAND,
-            admin_delete_policy=policy)
+            admin_delete_policy=policy,
+            install_update=home / 'libexec' / INSTALL_UPDATE_COMMAND if updates_itself else None,
+            install_update_policy=(
+                PurePosixPath('/usr/share/polkit-1/actions', f'{update_action}.policy')
+                if updates_itself else None),
+            install_update_rule_template=(
+                PurePosixPath('/usr/share', package, INSTALL_UPDATE_RULE_TEMPLATE_NAME)
+                if updates_itself else None))
     return InstalledPaths(
         program=PurePosixPath('/usr/bin', package),
         commands=PurePosixPath('/usr/bin'),
@@ -191,10 +239,22 @@ def admin_delete_action(channel: Channel) -> str:
     return f'{channel.app_id}.{ADMIN_DELETE_ACTION_SUFFIX}'
 
 
-def build_policy_file(action: str, helper: PurePosixPath) -> str:
+def install_update_action(channel: Channel) -> str:
+    """Return the polkit action ID pkexec checks before running the update helper."""
+    return f'{channel.app_id}.{INSTALL_UPDATE_ACTION_SUFFIX}'
+
+
+def build_policy_file(action: str, helper: PurePosixPath,
+                      template_path: Path = ADMIN_DELETE_POLICY_TEMPLATE) -> str:
     """Return the polkit action file that lets pkexec run helper."""
-    template = ADMIN_DELETE_POLICY_TEMPLATE.read_text(encoding='utf-8')
+    template = template_path.read_text(encoding='utf-8')
     return template.replace('@ACTION_ID@', action).replace('@HELPER_PATH@', str(helper))
+
+
+def build_rules_file(action: str) -> str:
+    """Return the polkit rule that lets a local, active administrator run action."""
+    template = INSTALL_UPDATE_RULES_TEMPLATE.read_text(encoding='utf-8')
+    return template.replace('@ACTION_ID@', action)
 
 
 @dataclass(frozen=True)
@@ -255,6 +315,9 @@ class InstallRequest:
     # (target/release/openxplorer-admin-delete); required where the layout
     # installs it (InstalledPaths.admin_delete).
     admin_delete: Path | None = None
+    # The update helper Cargo built (target/release/openxplorer-install-update);
+    # required where the layout installs it (InstalledPaths.install_update).
+    install_update: Path | None = None
 
 
 def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
@@ -273,6 +336,7 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     install_licences(staging, paths.licences)
     install_crate_licences(staging, paths.licences / 'rust-crates', crates)
     install_admin_delete(staging, request, paths)
+    install_update_helper(staging, request, paths)
     if paths.mount_helper is not None:
         if request.mount_helper is None:
             raise RuntimeError(f'This package installs {MOUNT_HELPER_COMMAND}; pass --mount-helper.')
@@ -294,6 +358,26 @@ def install_admin_delete(staging: Staging, request: InstallRequest,
     staging.copy(request.admin_delete, paths.admin_delete, PROGRAM_MODE)
     policy = build_policy_file(admin_delete_action(request.channel), paths.admin_delete)
     staging.write(policy, paths.admin_delete_policy, DATA_MODE)
+
+
+def install_update_helper(staging: Staging, request: InstallRequest,
+                          paths: InstalledPaths) -> None:
+    """Install the update helper, its polkit action file and its rule template.
+
+    Like the permanent-delete helper it goes in libexec, with no link on
+    PATH: only the app starts it, and only through pkexec. The rule goes
+    only where polkit does not read it; the user's setting activates it.
+    """
+    if (paths.install_update is None or paths.install_update_policy is None
+            or paths.install_update_rule_template is None):
+        return
+    if request.install_update is None:
+        raise RuntimeError(f'This package installs {INSTALL_UPDATE_COMMAND}; pass --install-update.')
+    action = install_update_action(request.channel)
+    staging.copy(request.install_update, paths.install_update, PROGRAM_MODE)
+    policy = build_policy_file(action, paths.install_update, INSTALL_UPDATE_POLICY_TEMPLATE)
+    staging.write(policy, paths.install_update_policy, DATA_MODE)
+    staging.write(build_rules_file(action), paths.install_update_rule_template, DATA_MODE)
 
 
 def install_program(staging: Staging, program: Path, paths: InstalledPaths) -> None:
@@ -498,6 +582,9 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument('--admin-delete', type=Path,
                         help='the openxplorer-admin-delete executable Cargo built; required '
                              'for the debian and fhs layouts, which install it')
+    parser.add_argument('--install-update', type=Path,
+                        help='the openxplorer-install-update executable Cargo built; required '
+                             'for the stable debian layout, which installs it')
     parser.add_argument('--destdir', required=True, type=Path,
                         help='the staging folder that stands for / (use / inside Flatpak)')
     return parser.parse_args(argv)
@@ -509,7 +596,8 @@ def main(argv: list[str] | None = None) -> int:
     request = InstallRequest(channel=Channel(arguments.app_id), layout=Layout(arguments.layout),
                              program=arguments.program, staging=arguments.destdir,
                              mount_helper=arguments.mount_helper,
-                             admin_delete=arguments.admin_delete)
+                             admin_delete=arguments.admin_delete,
+                             install_update=arguments.install_update)
     try:
         install(request, linked_crates())
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:

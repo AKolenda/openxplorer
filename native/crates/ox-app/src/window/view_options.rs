@@ -200,7 +200,7 @@ impl BrowserWindow {
 
     /// Whether `uri` is reached over a network or a device link: a
     /// server, a share mounted by the kernel, a phone or camera.
-    fn is_remote_folder(&self, uri: &str) -> bool {
+    pub(super) fn is_remote_folder(&self, uri: &str) -> bool {
         match location_kind(uri) {
             LocationKind::Local => self.imp().locations.borrow().is_network_location(uri),
             LocationKind::Smb | LocationKind::Remote | LocationKind::Device => true,

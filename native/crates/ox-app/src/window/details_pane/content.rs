@@ -26,6 +26,8 @@ use crate::i18n::message_id;
 use crate::icons::Art;
 use crate::media_details::MediaKind;
 
+use super::preview_page::{preview_page, PreviewPage, PreviewRules, NO_PREVIEW};
+
 /// The keys of the rows the pane's menu can turn off (PROP-010), which
 /// are also the names the settings keep them under.
 pub(in crate::window) mod keys {
@@ -67,9 +69,18 @@ impl Preview {
 pub(in crate::window) enum MediaPreview {
     /// A local image, decoded and scaled; `size` is its size in bytes.
     Image { path: PathBuf, size: u64 },
-    /// A local audio (`is_video` false) or video file, with a player;
-    /// audio keeps the item's `art` above its controls.
-    Recording { path: PathBuf, is_video: bool, art: Art },
+    /// An audio (`is_video` false) or video file, with a player; audio
+    /// keeps the item's `art` above its controls. `uri` is the file the
+    /// item stands for (a Recent files row's target), on this computer
+    /// or an SMB share; its path is found, and with `local_only`
+    /// (network previews off) checked to be on no network file system,
+    /// off the main thread before the player opens it.
+    Recording {
+        uri: String,
+        local_only: bool,
+        is_video: bool,
+        art: Art,
+    },
     /// Another local document, shown by its cached thumbnail if it has
     /// one.
     Document { uri: String },
@@ -82,16 +93,24 @@ impl MediaPreview {
     /// Whether this is the preview of the item at `uri`.
     pub(in crate::window) fn is_of(&self, uri: &str) -> bool {
         match self {
-            Self::Image { path, .. } | Self::Recording { path, .. } => gio::File::for_path(path).uri() == uri,
-            Self::Document { uri: shown } | Self::Folder { uri: shown } => shown == uri,
+            Self::Image { path, .. } => gio::File::for_path(path).uri() == uri,
+            Self::Recording { uri: shown, .. }
+            | Self::Document { uri: shown }
+            | Self::Folder { uri: shown } => shown == uri,
         }
     }
 
-    /// The preview of `item`: only a local file or folder has one.
-    fn of(item: &FileItem) -> Option<Self> {
+    /// The preview of `item` under the network `rules`: a local file or
+    /// folder has one, and a recording on a share or behind a Recent
+    /// files row too ([`Self::recording`]).
+    fn of(item: &FileItem, rules: PreviewRules) -> Option<Self> {
         let entry = item.entry();
         if entry.is_virtual {
             return None;
+        }
+        let content_type = entry.content_type.as_deref().unwrap_or_default();
+        if !entry.is_dir && matches!(content_type.split('/').next(), Some("audio" | "video")) {
+            return Self::recording(item, rules);
         }
         if entry.is_dir {
             return entry.uri.starts_with("file:").then(|| Self::Folder {
@@ -108,14 +127,36 @@ impl MediaPreview {
                 path,
                 size: entry.size.unwrap_or_default(),
             },
-            "audio" | "video" => Self::Recording {
-                path,
-                is_video: media == "video",
-                art: item.art(),
-            },
             _ => Self::Document {
                 uri: entry.uri.clone(),
             },
+        })
+    }
+}
+
+impl MediaPreview {
+    /// The player of the audio or video `item`, as the Preview pane's
+    /// pages treat a file: the file a Recent files row stands for; with
+    /// network previews off, none for a remote folder, item or SMB file
+    /// (and the player checks the file system itself, `local_only`); and
+    /// none for a location without a path of this computer's or an SMB
+    /// share's (an archive's member, a phone's file).
+    fn recording(item: &FileItem, rules: PreviewRules) -> Option<Self> {
+        let entry = item.entry();
+        let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);
+        let remote = rules.remote || is_smb_location(uri);
+        if remote && !rules.remote_previews {
+            return None;
+        }
+        if gio::File::for_uri(uri).path().is_none() && !is_smb_location(uri) {
+            return None;
+        }
+        let content_type = entry.content_type.as_deref().unwrap_or_default();
+        Some(Self::Recording {
+            uri: uri.to_owned(),
+            local_only: !rules.remote_previews,
+            is_video: content_type.starts_with("video/"),
+            art: item.art(),
         })
     }
 }
@@ -208,6 +249,8 @@ pub(in crate::window) struct PaneContent {
     pub media: Option<MediaPreview>,
     /// The file whose own details are read and added to the rows.
     pub metadata: Option<MetadataRequest>,
+    /// What the Preview pane shows (VIEW-070).
+    pub page: PreviewPage,
 }
 
 /// What [`pane_content`] reads.
@@ -226,15 +269,19 @@ pub(in crate::window) struct PaneFacts<'a> {
     pub network: &'a [NetworkLocation],
     /// Dates show the day only; else the time too (PROP-010).
     pub condensed_dates: bool,
+    /// Whether the Preview pane may read the folder's files.
+    pub preview_rules: PreviewRules,
 }
 
 /// What the pane shows for the selection in a folder.
 pub(in crate::window) fn pane_content(facts: &PaneFacts<'_>) -> PaneContent {
-    match facts.selection {
+    let mut content = match facts.selection {
         [] => folder_content(facts),
         [item] => item_content(item, facts),
         several => several_content(several, facts),
-    }
+    };
+    content.page = preview_page(facts.selection, facts.preview_rules);
+    content
 }
 
 fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
@@ -274,8 +321,9 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
         // Items inside a ZIP have no file of their own to describe.
         has_properties: !ox_core::location::is_archive_location(facts.folder_uri),
         properties,
-        media: MediaPreview::of(item),
+        media: MediaPreview::of(item, facts.preview_rules),
         metadata: MetadataRequest::of(item),
+        page: PreviewPage::Message(NO_PREVIEW),
     }
 }
 
@@ -298,6 +346,7 @@ fn several_content(items: &[FileItem], facts: &PaneFacts<'_>) -> PaneContent {
         properties,
         media: None,
         metadata: None,
+        page: PreviewPage::Message(NO_PREVIEW),
     }
 }
 
@@ -323,6 +372,7 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
         properties: Vec::new(),
         media: None,
         metadata: None,
+        page: PreviewPage::Message(NO_PREVIEW),
     }
 }
 
@@ -398,7 +448,77 @@ mod tests {
             locations: &locations,
             network: &network,
             condensed_dates: false,
+            preview_rules: PreviewRules {
+                remote: false,
+                remote_previews: false,
+            },
         })
+    }
+
+    /// A folder on this computer, with network previews off.
+    const NO_NETWORK_PREVIEWS: PreviewRules = PreviewRules {
+        remote: false,
+        remote_previews: false,
+    };
+
+    fn content_with(selection: &[FileItem], folder_uri: &str, rules: PreviewRules) -> PaneContent {
+        let locations = context();
+        pane_content(&PaneFacts {
+            selection,
+            folder_uri,
+            folder_item_count: 7,
+            locations: &locations,
+            network: &[],
+            condensed_dates: false,
+            preview_rules: rules,
+        })
+    }
+
+    /// A recording is played from the file it stands for, under the same
+    /// network rule as the other previews: one on a share plays with
+    /// network previews on, a Recent files row plays its target, and
+    /// nothing remote plays with them off.
+    ///
+    /// parity: VIEW-070, PROP-011
+    #[test]
+    fn a_recording_follows_the_files_location_and_the_network_rule() {
+        let song = |uri: &str| {
+            let mut entry = file_entry("Song.mp3");
+            entry.uri = uri.to_owned();
+            entry.content_type = Some("audio/mpeg".to_owned());
+            entry
+        };
+        let on = PreviewRules {
+            remote: true,
+            remote_previews: true,
+        };
+        let off = PreviewRules {
+            remote: true,
+            remote_previews: false,
+        };
+        let share = "smb://studio-nas/projects/Song.mp3";
+        let content = content_with(&[FileItem::new(song(share))], "smb://studio-nas/projects", on);
+        let media = content.media.expect("a player for the share's song");
+        assert!(matches!(media, MediaPreview::Recording { .. }) && media.is_of(share));
+
+        let content = content_with(&[FileItem::new(song(share))], "smb://studio-nas/projects", off);
+        assert_eq!(content.media, None, "no player with network previews off");
+        let local = "file:///mnt/nas/Song.mp3";
+        let content = content_with(&[FileItem::new(song(local))], "file:///mnt/nas", off);
+        assert_eq!(content.media, None, "nor for a share's file mounted here");
+
+        let mut recent = song("recent:///5b2d");
+        recent.meta.recent_target = Some("file:///tmp/ox-test/Song.mp3".to_owned());
+        let content = content_with(
+            &[FileItem::new(recent)],
+            "recent:///",
+            PreviewRules {
+                remote: false,
+                remote_previews: false,
+            },
+        );
+        let media = content.media.expect("a player for the Recent row's song");
+        assert!(media.is_of("file:///tmp/ox-test/Song.mp3"), "{media:?}");
     }
 
     fn property<'a>(content: &'a PaneContent, key: &str) -> Option<&'a str> {
@@ -517,14 +637,14 @@ mod tests {
         );
         photo.content_type = Some("video/mp4".to_owned());
         assert!(matches!(
-            MediaPreview::of(&FileItem::new(photo.clone())),
+            MediaPreview::of(&FileItem::new(photo.clone()), NO_NETWORK_PREVIEWS),
             Some(MediaPreview::Recording { is_video: true, .. })
         ));
         photo.uri = "smb://nas/media/Beach.png".to_owned();
         assert_eq!(
-            MediaPreview::of(&FileItem::new(photo)),
+            MediaPreview::of(&FileItem::new(photo), NO_NETWORK_PREVIEWS),
             None,
-            "shares are not read for a preview"
+            "shares are not read for a preview with network previews off"
         );
         assert_eq!(content_for(&[], "file:///tmp/ox-test").media, None);
     }

@@ -169,8 +169,179 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
 
                 verify_deb.check_maintainer_scripts(report, channel, control)
 
-                self.assertIn('postinst and postrm only refresh caches', report.passed)
+                self.assertIn("postinst and postrm refresh caches and change only the update "
+                              "setting's files", report.passed)
                 shutil.rmtree(control)
+
+    RULE = 'etc/polkit-1/rules.d/60-io.winspace.Development.install-update.rules'
+    RECORD = 'var/lib/openxplorer/install-updates-without-password'
+    TEMPLATE_TEXT = 'polkit.addRule(function (action, subject) {});\n'
+
+    def run_postinst(self, control: Path, root: Path,
+                     *arguments: str) -> subprocess.CompletedProcess[str]:
+        """Run the postinst with arguments, as dpkg --root=root would."""
+        environment = dict(os.environ, DPKG_ROOT=str(root))
+        return subprocess.run(['sh', str(control / 'postinst'), *arguments], capture_output=True,
+                              text=True, env=environment)
+
+    def system_with_template(self, name: str) -> Path:
+        """Return a root with the package's rule template and polkit's rules folder."""
+        root = self.folder / name
+        template = root / 'usr/share/openxplorer/install-update.rules'
+        template.parent.mkdir(parents=True)
+        template.write_text(self.TEMPLATE_TEXT, encoding='utf-8')
+        (root / self.RULE).parent.mkdir(parents=True)
+        return root
+
+    # parity: UPD-003
+    def test_installing_the_stable_package_turns_the_setting_on(self) -> None:
+        """On by default: a fresh installation, and an upgrade from a
+        version that had no record, install the rule and record "on"."""
+        control = self.write_scripts(Channel.STABLE)
+        for name, arguments in (('fresh', ('configure',)),
+                                ('upgrade', ('configure', '2.0.13'))):
+            with self.subTest(name=name):
+                root = self.system_with_template(name)
+
+                result = self.run_postinst(control, root, *arguments)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                rule, record = root / self.RULE, root / self.RECORD
+                self.assertEqual(rule.read_text(encoding='utf-8'), self.TEMPLATE_TEXT)
+                self.assertEqual(record.read_text(encoding='utf-8'), 'on\n')
+                self.assertEqual(rule.stat().st_mode & 0o777, 0o644)
+                self.assertEqual(record.stat().st_mode & 0o777, 0o644)
+                self.assertEqual(sorted(path.name for path in rule.parent.iterdir()), [rule.name])
+
+    # parity: UPD-003
+    def test_an_upgrade_keeps_the_setting_off(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        root = self.system_with_template('off')
+        record = root / self.RECORD
+        record.parent.mkdir(parents=True)
+        record.write_text('off\n', encoding='utf-8')
+
+        result = self.run_postinst(control, root, 'configure', '2.0.14')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((root / self.RULE).exists())
+        self.assertEqual(record.read_text(encoding='utf-8'), 'off\n')
+
+    def test_an_upgrade_with_the_setting_on_installs_this_versions_rule(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        root = self.system_with_template('on')
+        rule, record = root / self.RULE, root / self.RECORD
+        rule.write_text('// the last version\'s rule\n', encoding='utf-8')
+        record.parent.mkdir(parents=True)
+        record.write_text('on\n', encoding='utf-8')
+
+        result = self.run_postinst(control, root, 'configure', '2.0.14')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(rule.read_text(encoding='utf-8'), self.TEMPLATE_TEXT)
+
+    def test_installing_never_writes_through_a_link_at_the_rule(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        root = self.system_with_template('link')
+        elsewhere = self.folder / 'elsewhere'
+        elsewhere.write_text('kept\n', encoding='utf-8')
+        (root / self.RULE).symlink_to(elsewhere)
+
+        result = self.run_postinst(control, root, 'configure')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((root / self.RULE).is_symlink())
+        self.assertEqual((root / self.RULE).read_text(encoding='utf-8'), self.TEMPLATE_TEXT)
+        self.assertEqual(elsewhere.read_text(encoding='utf-8'), 'kept\n')
+
+    def test_installing_without_polkits_rules_folder_still_succeeds(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        root = self.system_with_template('no-polkit')
+        (root / self.RULE).parent.rmdir()
+
+        result = self.run_postinst(control, root, 'configure')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((root / self.RULE).parent.exists())
+
+    def test_the_preview_postinst_installs_no_rule(self) -> None:
+        control = self.write_scripts(Channel.PREVIEW)
+        root = self.system_with_template('preview')
+
+        result = self.run_postinst(control, root, 'configure')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((root / self.RULE).exists())
+        self.assertFalse((root / self.RECORD).exists())
+
+    def run_postrm(self, control: Path, action: str, root: Path) -> subprocess.CompletedProcess[str]:
+        """Run the postrm for action, as dpkg --root=root would."""
+        environment = dict(os.environ, DPKG_ROOT=str(root))
+        return subprocess.run(['sh', str(control / 'postrm'), action], capture_output=True,
+                              text=True, env=environment)
+
+    def turned_on(self, root: Path) -> tuple[Path, Path]:
+        """Write what "Install updates without asking for a password" leaves under root."""
+        rule = root / 'etc/polkit-1/rules.d/60-io.winspace.Development.install-update.rules'
+        record = root / 'var/lib/openxplorer/install-updates-without-password'
+        for path in (rule, record):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n', encoding='utf-8')
+        return rule, record
+
+    # parity: UPD-003
+    def test_removing_the_stable_package_removes_the_passwordless_rule(self) -> None:
+        """Uninstalling never leaves updates without a password behind,
+        and an upgrade keeps the user's choice."""
+        control = self.write_scripts(Channel.STABLE)
+        for action, kept in (('remove', False), ('purge', False), ('upgrade', True),
+                             ('failed-upgrade', True)):
+            with self.subTest(action=action):
+                root = self.folder / f'root-{action}'
+                rule, record = self.turned_on(root)
+
+                result = self.run_postrm(control, action, root)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(rule.exists(), kept)
+                self.assertEqual(record.exists(), kept)
+                self.assertTrue(rule.parent.is_dir())
+                if not kept:
+                    self.assertFalse(record.parent.exists())
+
+    def test_removing_the_stable_package_with_the_setting_off_succeeds(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        for action in ('remove', 'purge'):
+            with self.subTest(action=action):
+                result = self.run_postrm(control, action, self.folder / f'empty-{action}')
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_removing_the_stable_package_never_follows_a_link_at_the_rule(self) -> None:
+        control = self.write_scripts(Channel.STABLE)
+        root = self.folder / 'root'
+        rule, _record = self.turned_on(root)
+        elsewhere = self.folder / 'elsewhere.rules'
+        elsewhere.write_text('kept\n', encoding='utf-8')
+        rule.unlink()
+        rule.symlink_to(elsewhere)
+
+        result = self.run_postrm(control, 'purge', root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(rule.is_symlink())
+        self.assertEqual(elsewhere.read_text(encoding='utf-8'), 'kept\n')
+
+    def test_the_preview_postrm_leaves_the_stable_setting_alone(self) -> None:
+        control = self.write_scripts(Channel.PREVIEW)
+        root = self.folder / 'root'
+        rule, record = self.turned_on(root)
+
+        result = self.run_postrm(control, 'purge', root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(rule.exists())
+        self.assertTrue(record.exists())
 
     def test_the_stable_preinst_refuses_a_foreign_processor(self) -> None:
         control = self.write_scripts(Channel.STABLE)

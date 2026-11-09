@@ -187,6 +187,38 @@ fn f6_moves_focus_round_the_regions_and_back_to_the_same_item() {
     assert_eq!(test.window.folder_pane().model().selected_items().len(), selected);
 }
 
+/// F6 into the tab row puts the keyboard on the tab in front, not on the
+/// first tab's close button, so the Menu key and Shift+F10 open the menu
+/// of the tab shown. Windows 11 includes the tab row in F6's cycle and
+/// moves along it with the arrow keys (blogs.windows.com, Windows 11
+/// Insider Preview Build 22621.290).
+///
+/// parity: ACC-015, TAB-012
+#[gtk::test]
+fn f6_into_the_tab_row_focuses_the_tab_in_front() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the second tab");
+    wait_for_frames(&test.window, 3);
+    test.window.folder_pane().focus_view();
+
+    let mut region = None;
+    for _ in 0..7 {
+        region = test.window.focus_next_region(false);
+        if region == Some(Region::Tabs) {
+            break;
+        }
+    }
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window).expect("a tab has focus");
+    let front = test.window.tab_strip().tab_list().last_child().expect("two tabs");
+
+    assert_eq!(region, Some(Region::Tabs));
+    assert_eq!(focus, front, "the tab in front, not a close button");
+}
+
 /// parity: ACC-004
 #[gtk::test]
 fn a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button() {

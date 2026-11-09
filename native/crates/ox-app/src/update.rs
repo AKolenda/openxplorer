@@ -10,7 +10,9 @@
 //! installing are ox-core's port of `v2.0.0:desktop/updater.py`
 //! ([`ox_core::update`]): the same GitHub endpoints (the original
 //! repository and the openxplorer organisation), the same installer name,
-//! size and SHA-256 checks and the same `pkexec apt-get` installation.
+//! size and SHA-256 checks and the same `pkexec apt-get` installation, or,
+//! where the package installed it, the update helper that does the same as
+//! root without asking an administrator at the machine for a password.
 //! This module adds only what the interface needs, so there is one update
 //! mechanism.
 //!
@@ -28,6 +30,7 @@
 
 mod dialog;
 mod launch_guard;
+mod passwordless;
 mod report;
 mod service;
 mod state;
@@ -47,6 +50,7 @@ use ox_core::update::{
 
 pub(crate) use dialog::UpdateDialog;
 pub(crate) use launch_guard::{LaunchCheck, RuntimeInfo, LAUNCHER_OPTIONS};
+pub(crate) use passwordless::{change_passwordless, passwordless_for_this_build, PasswordlessChange};
 pub(crate) use state::{AvailableUpdate, UpdateState};
 
 /// Emitted whenever [`Updates::state`] changes.
