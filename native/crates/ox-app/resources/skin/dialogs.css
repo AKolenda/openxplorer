@@ -77,6 +77,8 @@ window.ox.ox-dialog .rename-file-detail { color: @ox_muted; }
 window.ox.ox-dialog .scrolled-text { font-family: monospace; font-size: 12px; }
 window.ox.ox-dialog .dialog-check { margin-top: 12px; }
 window.ox.ox-dialog .dialog-error { color: @ox_critical_fill; margin-top: 12px; }
+/* Windows' error sign beside a message: a red cross in a circle. */
+window.ox.ox-dialog .dialog-error-sign { color: @ox_critical_fill; }
 /* The footer of every dialog: a 1px line above the buttons on the chrome
    fill (P3). */
 window.ox.ox-dialog .dialog-actions {

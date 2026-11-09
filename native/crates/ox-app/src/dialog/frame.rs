@@ -21,6 +21,9 @@ use gtk::subclass::prelude::*;
 
 use crate::window::ButtonStyle;
 
+/// The size of the error sign beside a message, Windows' 32 pixels.
+const ERROR_SIGN_SIZE: i32 = 32;
+
 /// Emitted once when the dialog is dismissed for good.
 const CLOSED: &str = "closed";
 
@@ -200,6 +203,33 @@ impl DialogFrame {
         let label = &self.imp().message_label;
         label.set_text(message);
         label.set_visible(!message.is_empty());
+    }
+
+    /// Shows Windows' error sign, a red cross in a circle, beside the
+    /// message, as a Windows message box shows it beside its text. The
+    /// sign is decoration: the message says everything.
+    pub(crate) fn set_error_sign(&self) {
+        let label = self.imp().message_label.get();
+        let Some(parent) = label.parent().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        // A grid, as a horizontal box measures a wrapped label's height
+        // for one width and draws it at another.
+        let row = gtk::Grid::builder()
+            .column_spacing(12)
+            .css_classes(["dialog-message-row"])
+            .build();
+        parent.insert_child_after(&row, Some(&label));
+        parent.remove(&label);
+        let sign = gtk::Image::builder()
+            .accessible_role(gtk::AccessibleRole::Presentation)
+            .valign(gtk::Align::Start)
+            .css_classes(["dialog-error-sign"])
+            .build();
+        crate::icons::set_icon(&sign, crate::icons::Icon::DismissCircleFilled, ERROR_SIGN_SIZE);
+        row.attach(&sign, 0, 0, 1, 1);
+        label.set_hexpand(true);
+        row.attach(&label, 1, 0, 1, 1);
     }
 
     /// The box the dialog's fields, notes and lists go in.

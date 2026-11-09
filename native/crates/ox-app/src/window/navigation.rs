@@ -114,11 +114,18 @@ impl BrowserWindow {
         }
     }
 
-    /// The home folder or landing page whose title is `typed` ("Home",
-    /// "This PC", "Network"), as the address bar shows them.
+    /// The home folder, landing page or Recycle Bin whose title is `typed`
+    /// ("Home", "This PC", "Network", "Recycle Bin"), as the address bar
+    /// shows them. Typing "Recycle Bin" and pressing Enter opens it, as in
+    /// Windows 11 File Explorer; a folder of that name in the current
+    /// folder still comes first, as for the other titles.
     pub(super) fn place_titled(&self, typed: &str) -> Option<String> {
         if typed.trim().eq_ignore_ascii_case("home") {
             return Some(self.imp().locations.borrow().home_uri());
+        }
+        let recycle_bin = VirtualPlace::RecycleBin;
+        if VirtualPlace::from_title(typed) == Some(recycle_bin) {
+            return Some(recycle_bin.uri().to_owned());
         }
         Page::from_title(typed).map(|page| page.uri().to_owned())
     }
@@ -538,6 +545,7 @@ impl BrowserWindow {
             // show may be mounted now (Try again, NET-004).
             if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
                 tab.waits_to_mount = false;
+                tab.refresh_asked = true;
             }
             self.load_tab(id, LoadMode::Reload);
         }

@@ -278,6 +278,12 @@ impl Dialog {
         self.append_field(widget);
     }
 
+    /// Shows the error sign beside the message, as a Windows message box
+    /// does.
+    pub(crate) fn set_error_sign(&self) {
+        self.imp().frame.set_error_sign();
+    }
+
     /// Adds a boxed note in muted text (`.modal-note`).
     pub(crate) fn add_note(&self, text: &str) {
         self.add_text_line(text, "dialog-note");
