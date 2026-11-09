@@ -510,6 +510,20 @@ fn home_is_spaced_as_windows_11_home() {
     near("Name to Date accessed", date - name, 484, 2);
     near("Date accessed to File location", location - date, 298, 2);
     near("Name from the pane's edge", name - page.x, 90, 4);
+    let cells = home_page::row_cell_widgets(body(&test), "plan.txt");
+    near("a row's name under Name", bounds(&test, &cells[0]).x, name, 1);
+    near(
+        "a row's date under Date accessed",
+        bounds(&test, &cells[1]).x,
+        date,
+        1,
+    );
+    near(
+        "a row's location under File location",
+        bounds(&test, &cells[2]).x,
+        location,
+        1,
+    );
     near("tile height", bounds(&test, &metrics.tiles[0]).height, 60, 0);
     near(
         "heading to the first tile's name",

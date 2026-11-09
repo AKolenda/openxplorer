@@ -434,8 +434,12 @@ impl Columns {
         row.set_size_request(-1, ROW_PITCH);
         row.set_margin_top(HEADER_BELOW_PILLS);
         row.set_margin_bottom(ROWS_BELOW_HEADER);
+        // Room for the rows' indent and icon: a spacer, as a size group
+        // counts a cell's margins.
+        let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        spacer.set_size_request(ROW_INDENT + ROW_ICON + ICON_GAP, -1);
+        row.append(&spacer);
         let name = label(ox_core::i18n::gettext_static("Name"), "home-column");
-        name.set_margin_start(ROW_INDENT + ROW_ICON + ICON_GAP);
         name.set_size_request(NAME_WIDTH, -1);
         let date = label(ox_core::i18n::gettext_static("Date accessed"), "home-column");
         date.set_size_request(DATE_WIDTH, -1);
@@ -1744,6 +1748,22 @@ pub(crate) fn row_cells(page: &gtk::Box, name: &str) -> Vec<String> {
     descendants_of_type::<gtk::Label>(&row)
         .iter()
         .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// The name, date and location cells of the row named `name` in the
+/// list shown, for tests.
+#[cfg(test)]
+pub(crate) fn row_cell_widgets(page: &gtk::Box, name: &str) -> Vec<gtk::Widget> {
+    let tab = shown_tab(page);
+    let row = descendants_with_class(page, tab.list_class())
+        .iter()
+        .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
+        .find(|child| item_name(child).as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("the list has a row named {name}"));
+    descendants_of_type::<gtk::Label>(&row)
+        .into_iter()
+        .map(gtk::Label::upcast)
         .collect()
 }
 
