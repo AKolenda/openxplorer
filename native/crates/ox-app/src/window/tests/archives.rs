@@ -978,3 +978,41 @@ fn a_new_archive_is_renamed_in_place_and_undo_takes_it_away() {
     }
     assert_eq!(fs::read(fixture.path("Notes 2.tar")).expect("kept"), b"taken");
 }
+
+/// The color and line height GTK draws `frame`'s heading with.
+fn heading_look(frame: &crate::dialog::DialogFrame) -> (String, i32) {
+    let title = frame.title_label();
+    let (_, height, _, _) = title.measure(gtk::Orientation::Vertical, -1);
+    (title.color().to_str().to_string(), height)
+}
+
+/// The Create archive window's heading looks like the app's other
+/// dialog headings, such as the Extract dialog's, in both themes: the
+/// same color, size and weight, with its own text.
+///
+/// parity: ARC-023
+#[gtk::test]
+fn the_create_archive_heading_looks_like_other_dialog_headings() {
+    let _theme = ThemeGuard::keep();
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        test.wait_for_listing("the folder");
+        test.select_named("Bundle.zip");
+        test.activate("extract-all", None);
+        let extract = test.wait_for_dialog("the Extract dialog");
+        crate::test_support::harness::wait_for_frames(&extract, 2);
+        let expected = heading_look(&extract);
+        extract.close();
+        wait_until("the Extract dialog to close", || test.shown_dialog().is_none());
+
+        let (frame, _field, _format, _method) = create_archive_dialog(&test, "Notes 2.txt");
+        crate::test_support::harness::wait_for_frames(&frame, 2);
+
+        assert_eq!(heading_look(&frame), expected, "{theme}");
+        assert_eq!(frame.title(), "Select a destination and create archive");
+        frame.close();
+        wait_until("the dialog to close", || test.shown_dialog().is_none());
+    }
+}
