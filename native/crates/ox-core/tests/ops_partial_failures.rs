@@ -13,6 +13,8 @@
 #[path = "ops_support/folders.rs"]
 mod folders;
 mod ops_support;
+#[path = "ops_support/private_trash.rs"]
+mod private_trash;
 #[path = "ops_support/snapshots.rs"]
 mod snapshots;
 
@@ -29,6 +31,7 @@ use ox_core::transfer::{Cancellation, FailedItem, FailureAnswer, FailureCause, T
 
 use folders::Folders;
 use ops_support::{block_on, file_uri};
+use private_trash::require_private_trash;
 use snapshots::{snapshot_protection, READ_ONLY};
 
 /// Writes `contents` at `path`, making its folders.
@@ -521,6 +524,37 @@ fn an_item_back_before_its_turn_keeps_its_conflict() {
 
     assert_eq!(fs::read(dst.join("B.txt")).unwrap(), b"restored");
     assert_eq!(questions.asked(), []);
+}
+
+/// An item missing during the check whose name is taken by a file, and
+/// back as a folder by its turn, is never put in place of that file by
+/// way of the Recycle Bin: Replace leaves it to the engine, which refuses
+/// a folder over a file, and the file stays.
+///
+/// parity: OPS-028, XFER-009
+#[test]
+fn an_item_back_as_a_folder_never_recycles_the_file_it_would_replace() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&dst.join("B"), b"existing");
+    let scan = scan_of(TransferMode::Copy, &src, &["B"], &dst);
+    assert_eq!(scan.conflicts.len(), 1, "{scan:?}");
+    write(&src.join("B/Inside.txt"), b"inside");
+    let questions = Questions::default();
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::RecycleBin,
+        ..questions.context(FailureAnswer::Skip)
+    };
+
+    let _ = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &context,
+        |_| {},
+    ));
+
+    assert_eq!(fs::read(dst.join("B")).unwrap(), b"existing");
 }
 
 /// The plan of pasting `names` of `from` into `into` as `mode`.

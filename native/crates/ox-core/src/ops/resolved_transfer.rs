@@ -522,11 +522,13 @@ impl<'a> Run<'a> {
         let cancel = &self.context.cancel;
         let existing = GioNode::new(&conflict.existing_uri);
         let path = existing.path();
+        // Both are asked again: an incoming item missing during the scan
+        // has unknown facts, and may be back as a folder (XFER-009).
+        let is_file = |node: &GioNode| node.is_directory(Some(cancel)).is_ok_and(|is_folder| !is_folder);
         let both_files = !conflict.incoming.is_folder
             && !conflict.existing.is_folder
-            && existing
-                .is_directory(Some(cancel))
-                .is_ok_and(|is_folder| !is_folder);
+            && is_file(&existing)
+            && is_file(&GioNode::new(&item.uri));
         let recycles = self.context.replaced_files == ReplacedFiles::RecycleBin;
         let keepable =
             recycles && both_files && path.is_some() && existing.can_trash(Some(cancel)).unwrap_or(false);
