@@ -135,10 +135,9 @@ window.ox ox-dialog-layer .ox-dialog .dialog-actions menubutton.extract-info > b
 }
 window.ox .size-scan button { min-height: 25px; min-width: 82px; }
 
-/* The Create archive dialog (Compress to › Additional options), laid out
-   as Windows 11's: its heading larger and in the accent colour, and the
-   level slider's "Faster" and "Smaller" in the muted colour. */
-ox-dialog-layer .ox-dialog.create-archive .dialog-title { color: @ox_accent; font-size: 1.25em; font-weight: 400; }
+/* The Create archive dialog (Compress to › Additional options): its
+   heading is drawn as every dialog heading above, and the level slider's
+   "Faster" and "Smaller" in the muted colour. */
 ox-dialog-layer .ox-dialog.create-archive .quiet-level { color: @ox_muted; }
 /* Its drop-downs as Windows' combo boxes: a push button's frame around
    the choice and its chevron, as Properties draws them. */
