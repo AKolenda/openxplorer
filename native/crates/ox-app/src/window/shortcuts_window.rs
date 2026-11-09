@@ -419,14 +419,25 @@ fn shortcut_grid(group: Group, rows: &[&ShortcutRow]) -> (gtk::Grid, Vec<Shortcu
 fn search_words(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.to_lowercase().chars().collect();
     let is_separator = |character: char| matches!(character, '+' | '-');
+    // For each character, whether any character that is not a space comes
+    // after it, found in one pass from the end so a long pasted run of
+    // spaces costs no more than its length.
+    let mut key_after = vec![false; chars.len()];
+    let mut seen = false;
+    for (index, &character) in chars.iter().enumerate().rev() {
+        key_after[index] = seen;
+        seen |= !character.is_whitespace();
+    }
+    let mut before: Option<char> = None;
     let mut spaced = String::new();
     for (index, &character) in chars.iter().enumerate() {
-        // The nearest characters before and after that are not spaces: a
-        // "+" or "-" joins two keys, spaces or not, when a key comes before
-        // it (not another separator) and one comes after it.
-        let before = chars[..index].iter().rev().find(|other| !other.is_whitespace());
-        let after = chars[index + 1..].iter().find(|other| !other.is_whitespace());
-        let joins_keys = before.is_some_and(|other| !is_separator(*other)) && after.is_some();
+        // `before` is the nearest character before this one that is not a
+        // space: a "+" or "-" joins two keys, spaces or not, when a key comes
+        // before it (not another separator) and one comes after it.
+        let joins_keys = before.is_some_and(|other| !is_separator(other)) && key_after[index];
+        if !character.is_whitespace() {
+            before = Some(character);
+        }
         match character {
             '+' | '-' if joins_keys => spaced.push(' '),
             '+' => spaced.push_str(" plus "),
