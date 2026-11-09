@@ -452,7 +452,8 @@ fn search_words(text: &str) -> Vec<String> {
 /// Whether the search `query` finds the shortcut named `label` in the
 /// section `section`, whose key combinations, as the window shows them,
 /// are `combinations`: when the query's text is in its name, section or
-/// keys, or when each word of the query is a key of one of the
+/// keys (unless the query is only symbols, such as "+", which then stands
+/// for its key alone), or when each word of the query is a key of one of the
 /// combinations, in any order, or begins a word of its name or section.
 /// A one-letter word must be a key, so "shift e" finds Ctrl+Shift+E and
 /// not every Shift key whose name has a word starting with "e".
@@ -461,8 +462,12 @@ fn query_matches(query: &str, label: &str, section: &str, combinations: &[String
     if query.is_empty() {
         return true;
     }
+    // A query with no letter or digit, such as "+", is a key's symbol:
+    // as text it would match the "+" between the keys of every Ctrl and
+    // Alt shortcut, so only its key is looked for.
+    let symbol_only = !query.chars().any(char::is_alphanumeric);
     let text = format!("{label} {section} {}", combinations.join(", ")).to_lowercase();
-    if text.contains(&query) {
+    if !symbol_only && text.contains(&query) {
         return true;
     }
     let words = search_words(&query);
