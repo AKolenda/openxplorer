@@ -34,6 +34,26 @@ use super::window_action::WindowAction;
 /// The size of a folder's icon in the tree.
 const FOLDER_ICON_SIZE: i32 = 16;
 
+/// The keypad's keys in the tree, under the names the keyboard shortcuts
+/// window knows them by (CMD-032, CMD-039); the places of the navigation
+/// pane take them too ([`super::sidebar`]).
+const TREE_KEYS: [(&str, &str); 3] = [
+    ("tree-open", "KP_Add"),
+    ("tree-close", "KP_Subtract"),
+    ("tree-open-all", "KP_Multiply"),
+];
+
+/// [`TREE_KEYS`] for the keyboard shortcuts window.
+pub(super) fn tree_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    TREE_KEYS.into_iter().map(|(name, keys)| (name.to_owned(), keys))
+}
+
+/// The most folders the keypad's asterisk opens at once.
+const OPEN_ALL_LIMIT: usize = 1000;
+
+/// The most levels below the selected folder the asterisk opens.
+const OPEN_ALL_DEPTH: u32 = 32;
+
 /// A shown row and the tree row it draws.
 #[derive(Debug)]
 struct BoundRow {
@@ -281,7 +301,9 @@ impl FolderTree {
 
     /// Right opens the focused folder's subfolders, or moves to the first
     /// one; Left closes them, or moves to the folder above, as in
-    /// Explorer's and Dolphin's trees.
+    /// Explorer's and Dolphin's trees. The keypad's plus opens the
+    /// selected folder, its minus closes it and its asterisk opens every
+    /// folder below it, as Num Lock with them does in Windows.
     fn open_and_close_with_arrow_keys(&self, view: &gtk::ListView) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -291,12 +313,35 @@ impl FolderTree {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
-                if !modifiers.is_empty() {
+                // Caps Lock and Num Lock do not make it another key, as in
+                // the picker and the Properties tabs (CMD-039).
+                let held = gdk::ModifierType::CONTROL_MASK
+                    | gdk::ModifierType::SHIFT_MASK
+                    | gdk::ModifierType::ALT_MASK
+                    | gdk::ModifierType::SUPER_MASK
+                    | gdk::ModifierType::HYPER_MASK
+                    | gdk::ModifierType::META_MASK;
+                if modifiers.intersects(held) {
                     return glib::Propagation::Proceed;
                 }
                 let moved = match key {
                     gdk::Key::Right | gdk::Key::KP_Right => tree.step_in(),
                     gdk::Key::Left | gdk::Key::KP_Left => tree.step_out(),
+                    // The keypad's keys, as with Num Lock in Windows'
+                    // navigation pane; they stay in the tree either way
+                    // (CMD-039).
+                    gdk::Key::KP_Add => {
+                        tree.open_selected(true);
+                        true
+                    }
+                    gdk::Key::KP_Subtract => {
+                        tree.open_selected(false);
+                        true
+                    }
+                    gdk::Key::KP_Multiply => {
+                        tree.open_all_below_selected();
+                        true
+                    }
                     _ => return glib::Propagation::Proceed,
                 };
                 if moved {
@@ -321,6 +366,57 @@ impl FolderTree {
             model::load_children(&row);
         }
         true
+    }
+
+    /// Opens the selected folder's subfolders, or closes them.
+    fn open_selected(&self, open: bool) {
+        let Some((_, row)) = self.selected_row() else {
+            return;
+        };
+        row.set_expanded(open);
+        if open {
+            model::load_children(&row);
+        }
+    }
+
+    /// Opens every folder below the selected one, as far as
+    /// [`OPEN_ALL_LIMIT`] folders and [`OPEN_ALL_DEPTH`] levels, so a
+    /// huge tree or a link that leads back up cannot run away.
+    fn open_all_below_selected(&self) {
+        let Some((_, top)) = self.selected_row() else {
+            return;
+        };
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = tree)]
+            self,
+            async move { tree.open_all_below(top).await }
+        ));
+    }
+
+    /// Opens `top` and every folder below it, reading each as it goes.
+    async fn open_all_below(&self, top: gtk::TreeListRow) {
+        let base = top.depth();
+        let mut waiting = vec![top];
+        let mut opened = 0;
+        while let Some(row) = waiting.pop() {
+            if opened >= OPEN_ALL_LIMIT {
+                break;
+            }
+            row.set_expanded(true);
+            if let Some(listing) = model::load_children(&row) {
+                model::loaded(&listing).await;
+            }
+            opened += 1;
+            if row.depth().saturating_sub(base) >= OPEN_ALL_DEPTH {
+                continue;
+            }
+            let count = row.children().map_or(0, |children| children.n_items());
+            for index in (0..count).rev() {
+                if let Some(child) = row.child_row(index) {
+                    waiting.push(child);
+                }
+            }
+        }
     }
 
     /// Left on the selected row; false where there is none.

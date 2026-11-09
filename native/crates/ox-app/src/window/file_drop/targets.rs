@@ -158,7 +158,10 @@ impl BrowserWindow {
             DropZone::Breadcrumbs => self.leave_crumbs_during_drag(),
             DropZone::CrumbMenu => self.close_drag_crumb_menu(),
             DropZone::Sidebar => self.hover_sidebar_during_drag(None),
-            DropZone::Tabs => {}
+            // GTK can leave its own drop outline on the strip after a drop,
+            // a thin line behind every tab but the one in front. The tab
+            // under the drag has the strip's own highlight instead.
+            DropZone::Tabs => self.tab_strip().unset_state_flags(gtk::StateFlags::DROP_ACTIVE),
         }
     }
 

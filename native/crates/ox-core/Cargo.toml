@@ -20,6 +20,13 @@ path = "src/bin/openxplorer-mount-share.rs"
 name = "openxplorer-admin-delete"
 path = "src/bin/openxplorer-admin-delete.rs"
 
+# The root helper that installs an update (update::install_helper), which
+# only the stable Debian package installs, for pkexec to start under its
+# own polkit action.
+[[bin]]
+name = "openxplorer-install-update"
+path = "src/bin/openxplorer-install-update.rs"
+
 [dependencies]
 gio.workspace = true
 glib.workspace = true

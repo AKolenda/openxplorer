@@ -399,6 +399,9 @@ fn a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab() {
     let (x, y) = middle_of(&second_tab, strip);
 
     let spot = test.window.drop_spot(DropZone::Tabs, strip.upcast_ref(), x, y);
+    // GTK marks the strip, which holds the drop target, as a drop's target
+    // while a drag is over it.
+    strip.set_state_flags(gtk::StateFlags::DROP_ACTIVE, false);
     test.window.show_drop_spot(DropZone::Tabs, spot.as_ref());
     let is_highlighted = second_tab.has_css_class("file-drop-active");
     let before_the_delay = test.window.current_uri();
@@ -406,6 +409,11 @@ fn a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab() {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
     });
     test.window.leave_drop_zone(DropZone::Tabs);
+    let strip = test.window.tab_strip();
+    let tabs = strip.tab_list();
+    let highlights_left = std::iter::successors(tabs.first_child(), gtk::Widget::next_sibling)
+        .filter(|tab| tab.has_css_class("file-drop-active"))
+        .count();
 
     assert_eq!(
         spot.map(|spot| spot.destination()),
@@ -416,6 +424,11 @@ fn a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab() {
         before_the_delay,
         Some(fixture.uri()),
         "a tab shows only after the hover delay"
+    );
+    assert_eq!(highlights_left, 0, "no tab stays highlighted");
+    assert!(
+        !strip.state_flags().contains(gtk::StateFlags::DROP_ACTIVE),
+        "GTK's drop outline does not stay on the strip once the drag is gone"
     );
 }
 

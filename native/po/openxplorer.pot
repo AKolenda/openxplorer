@@ -50,7 +50,7 @@ msgid "- This PC lists drives, USB sticks and connected phones. Click one to ope
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size column to fit and Size all columns to fit, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size."
+msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size column to fit and Size all columns to fit, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size.\n- While the navigation pane is shown, Ctrl+Shift+E opens it down to the folder you are in and moves to it there. In the navigation pane, the keypad's plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it.\n- Ctrl+F5 refreshes like F5. Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -74,7 +74,7 @@ msgid "Getting help"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nThe full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?)."
+msgid "OpenXplorer shows your folders, drives, phones and network shares in one tabbed window.\n\n- The navigation pane on the left lists Quick access, This PC, Network and the Recycle Bin. Choose Pin to Quick access on a folder's menu to keep it there.\n- The address bar shows where you are. Click a part of the path to go there, or click the empty space beside it (or press Ctrl+L) to type an address such as a folder path or smb://server/share.\n- Back, Forward and Up are beside the address bar (Alt+Left, Alt+Right, Alt+Up). Press F5 to refresh.\n- Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+1 to Ctrl+9, or Alt+1 to Alt+9, show the tab of that number. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.\n- Type the start of a name to select it in the folder.\n\nThe full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?)."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -2757,6 +2757,10 @@ msgid "About this build"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Administrators at this computer install OpenXplorer updates without typing their password. Turning it on asks for an administrator's password."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs."
 msgstr ""
 
@@ -2778,6 +2782,14 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Help"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Install updates without asking for a password"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Install updates without asking for a password could not be changed."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -2834,6 +2846,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "licence agpl source code copyright mit notice. Original component notices are preserved."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "password prompt administrator admin sudo polkit pkexec authentication install update without password passwordless"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -5081,7 +5097,7 @@ msgstr[1] ""
 msgid "{selected} items selected"
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/media.rs
+#: crates/ox-app/src/window/details_pane/contents.rs crates/ox-app/src/window/details_pane/media.rs
 msgid "Preview"
 msgstr ""
 
@@ -5100,6 +5116,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/details_pane/options_menu.rs
 msgid "Show the item under the pointer"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/preview_page.rs
+msgid "No preview available."
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/preview_page.rs
+msgid "Select a file to preview."
 msgstr ""
 
 #: crates/ox-app/src/window/disabled_reasons.rs
@@ -6523,11 +6547,23 @@ msgid "Close tab"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Collapse the selected folder in the navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Context menu"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Ctrl+Plus (numeric keypad)"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Expand every folder under the selected one"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Expand the selected folder in the navigation pane"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -6563,12 +6599,21 @@ msgstr ""
 msgid "Next tab"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Num {key}"
+msgstr ""
+
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Open Terminal"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Open Terminal here"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Open the navigation pane to the current folder, while it is shown"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs

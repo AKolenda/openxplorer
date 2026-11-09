@@ -43,6 +43,24 @@ impl BrowserWindow {
         self.apply_folder_tree(options);
     }
 
+    /// Ctrl+Shift+E (CMD-039): opens the navigation pane down to the
+    /// folder shown and puts keyboard focus on it there: in the folder
+    /// tree when it is shown, else on the place's row, its collapsed
+    /// section expanded. The pane stays as it is when it is hidden.
+    pub(in crate::window) fn reveal_in_navigation_pane(&self) {
+        let sidebar = self.sidebar();
+        if !sidebar.is_mapped() {
+            return;
+        }
+        let in_folder = self
+            .current_uri()
+            .is_some_and(|uri| Page::from_uri(&uri).is_none());
+        if in_folder && self.folder_tree().reveal_shown() {
+            return;
+        }
+        sidebar.reveal_location();
+    }
+
     /// Applies and saves the tree's `options`.
     fn change_folder_tree(&self, options: FolderTreeOptions) {
         self.apply_folder_tree(options);

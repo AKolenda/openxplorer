@@ -174,6 +174,7 @@ mod type_applications;
 mod type_to_select;
 mod update_notice;
 mod version_restore;
+mod view_keys;
 mod view_options;
 mod view_style;
 mod view_zoom;

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<!--
+  The polkit action of openxplorer-install-update, the helper that
+  installs the latest official OpenXplorer release when the user updates
+  the app. The app starts this one program through pkexec, and pkexec
+  matches it by the exec.path annotation below. The helper takes only a
+  version: it downloads that release itself, checks it is the latest
+  release and newer than the installed package, verifies its size,
+  SHA-256 digest and package identity, and installs it with apt-get
+  (crates/ox-core/src/update/install_helper.rs documents the threat
+  model).
+
+  Only the stable Debian package installs it, because only that package
+  updates itself; the other packages update through their own package
+  manager.
+
+  The defaults ask for an administrator, and allow_active remembers the
+  answer for a few minutes. The rule in install-update.rules.in lets an
+  administrator in an active local session through without a password, as
+  Ubuntu's Software lets them install system updates, while "Install
+  updates without asking for a password" is on, as it is by default: the
+  package installs that rule as a template, its postinst copies it to
+  /etc/polkit-1/rules.d, and turning the setting off deletes the copy.
+
+  The same action covers turning that setting on and off: the helper's
+  only two other arguments, enable-passwordless and disable-passwordless
+  (each after two hyphens), take nothing with them and write only the
+  package's fixed rule.
+
+  There is no exec.allow_gui annotation: the helper opens no window, so
+  pkexec passes it neither DISPLAY nor XAUTHORITY.
+-->
+<policyconfig>
+  <vendor>OpenXplorer</vendor>
+  <vendor_url>https://openxplorer.app</vendor_url>
+  <action id="@ACTION_ID@">
+    <description>Install an OpenXplorer update</description>
+    <message>Authentication is required to install the latest OpenXplorer release.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@HELPER_PATH@</annotate>
+  </action>
+</policyconfig>
