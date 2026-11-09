@@ -259,23 +259,121 @@ fn a_superseded_listing_cannot_fill_the_tab() {
     assert_eq!(test.names(), STANDARD_NAMES);
 }
 
+/// Every dialog showing over `test`'s window.
+fn dialogs_over(test: &TestWindow) -> usize {
+    gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|window| window.downcast::<crate::dialog::Dialog>().ok())
+        .filter(|dialog| {
+            dialog.is_visible() && dialog.transient_for().as_ref() == Some(test.window.upcast_ref())
+        })
+        .count()
+}
+
+/// As in Windows 11 File Explorer, a folder that another program renames
+/// or deletes while it is shown keeps its tab and address: nothing moves
+/// to the folder above it. F5 then says "Location is not available" with
+/// the folder's path, once, and the tab still shows the old address.
+///
 /// parity: NAV-039
 #[gtk::test]
-fn a_folder_removed_while_shown_gives_way_to_the_nearest_existing_folder() {
+fn a_folder_removed_while_shown_keeps_its_tab_until_f5_says_it_is_not_available() {
     let fixture = Fixture::standard();
     fs::create_dir_all(fixture.path("Documents/Letters/2026")).expect("fixture subfolders");
-    let test = TestWindow::open(&fixture.uri_of("Documents/Letters/2026"));
+    fs::write(fixture.path("Documents/Letters/2026/plan.txt"), b"x").expect("fixture file");
+    let shown = fixture.uri_of("Documents/Letters/2026");
+    let test = TestWindow::open(&shown);
+    test.wait_for_listing("the folder");
+    let id = test.active_tab().expect("one tab");
 
-    fs::remove_dir_all(fixture.path("Documents/Letters")).expect("the fixture folder is removable");
+    fs::rename(
+        fixture.path("Documents/Letters"),
+        fixture.path("Documents/Old letters"),
+    )
+    .expect("the fixture folder is renamed");
+    test.window.folder_changed(id);
+    test.wait_for_listing("the watch's reload");
+    settle();
+
+    assert_eq!(
+        test.window.current_uri(),
+        Some(shown.clone()),
+        "no jump to the parent"
+    );
+    assert_eq!(test.window.shown_message().as_str(), "", "nothing is said yet");
+    assert_eq!(dialogs_over(&test), 0, "no box before F5");
+
     test.activate("refresh", None);
+    let dialog = super::file_ops_support::open_dialog(&test);
+    let path = fixture.path("Documents/Letters/2026").display().to_string();
+    assert_eq!(dialog.title_text(), "Location is not available");
+    assert_eq!(
+        dialog.message_text().as_str(),
+        format!(
+            "{path} is unavailable. If the location is on this PC, make sure the device or \
+             drive is connected or the disc is inserted, and then try again. If the location is on \
+             a network, make sure you're connected to the network or Internet, and then try again. \
+             If the location still can't be found, it might have been moved or deleted."
+        )
+    );
+    assert_eq!(dialog.button_labels(), ["OK"]);
+    test.activate("refresh", None);
+    settle();
+    assert_eq!(dialogs_over(&test), 1, "F5 again opens no second box");
+    dialog.press("OK");
+    super::file_ops_support::wait_for_no_dialog(&test);
+    test.wait_for_listing("the failed reload");
+    assert_eq!(test.window.current_uri(), Some(shown), "the old address stays");
+    assert_eq!(dialogs_over(&test), 0);
+}
 
-    wait_until("the nearest existing folder", || {
-        test.window.current_uri() == Some(fixture.uri_of("Documents")) && !test.window.is_loading()
+/// A tab in the background, or the other side of a split view, whose
+/// folder is deleted keeps its address too, and says nothing.
+///
+/// parity: NAV-039
+#[gtk::test]
+fn a_background_tab_whose_folder_is_deleted_keeps_its_address() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Trip")).expect("fixture subfolder");
+    let gone = fixture.uri_of("Documents/Trip");
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first tab");
+    test.window
+        .open_tab(&gone, TabPlacement::Background)
+        .expect("a valid folder");
+    let background = {
+        let session = test.window.imp().session.borrow();
+        session
+            .tabs()
+            .iter()
+            .map(|tab| tab.id)
+            .find(|id| !session.is_active(*id))
+            .expect("the background tab")
+    };
+    let first = test.active_tab().expect("the first tab");
+    // A background tab is listed once it has been shown.
+    test.window.switch_tab(background);
+    test.wait_for_listing("the second tab");
+    test.window.switch_tab(first);
+    test.wait_for_listing("the first tab again");
+
+    fs::remove_dir(fixture.path("Documents/Trip")).expect("the fixture folder is removed");
+    test.window.folder_changed(background);
+    wait_until("the background reload", || {
+        let session = test.window.imp().session.borrow();
+        session
+            .tab(background)
+            .is_some_and(|tab| tab.listing_state == ListingState::Listed)
     });
-    let removed = fixture.path("Documents/Letters/2026").display().to_string();
-    let warning = format!("Current location changed, {removed} is no longer accessible.");
-    assert_eq!(test.window.shown_message().as_str(), warning);
-    assert_eq!(test.window.load_error(), None);
+    settle();
+
+    let session = test.window.imp().session.borrow();
+    let tab = session.tab(background).expect("the background tab stays open");
+    assert_eq!(tab.uri(), gone, "no jump to the parent");
+    drop(session);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    assert_eq!(test.window.shown_message().as_str(), "");
+    assert_eq!(dialogs_over(&test), 0);
 }
 
 /// parity: NAV-035, VIEW-047
