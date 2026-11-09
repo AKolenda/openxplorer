@@ -102,3 +102,41 @@ fn a_copy_into_its_own_subfolder_under_another_host_name_stops_at_its_staging() 
     assert!(list(&nested).is_empty(), "{:?}", list(&nested));
     assert_eq!(read(&tree.join("original")), "untouched");
 }
+
+/// The same refusal found late, at the copy's own staging, is a folder
+/// pasted into itself, asked about as such: Skip and Cancel, never an
+/// unexpected error with Try Again.
+///
+/// parity: XFER-016
+#[test]
+fn the_late_staging_alias_refusal_is_asked_about_as_inside_the_source() {
+    let fixture = Fixture::new();
+    let tree = fixture.source_folder.join("tree");
+    let nested = tree.join("nested");
+    fs::create_dir_all(&nested).unwrap();
+    write(&tree.join("original"), "untouched");
+    let share = Arc::new(ShareUnderTwoNames {
+        second_name_root: nested.clone(),
+    });
+    let causes = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = Arc::clone(&causes);
+    let mut engine =
+        fixture
+            .engine(share)
+            .with_failure_question(move |item: &ox_core::transfer::FailedItem| {
+                seen.lock().unwrap().push(item.cause);
+                ox_core::transfer::FailureAnswer::Skip
+            });
+
+    fixture.run(
+        &mut engine,
+        &[&tree],
+        Request::CopyInto(&nested, ConflictPolicy::Skip),
+    );
+
+    assert_eq!(
+        *causes.lock().unwrap(),
+        [ox_core::transfer::FailureCause::InsideSource]
+    );
+    assert!(list(&nested).is_empty(), "{:?}", list(&nested));
+}

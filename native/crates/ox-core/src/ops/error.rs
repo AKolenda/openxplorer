@@ -90,6 +90,7 @@ impl From<TransferError> for OpsError {
             TransferError::RecoveryRequired(message)
             | TransferError::NoSpace(message)
             | TransferError::Busy(message)
+            | TransferError::InsideSource(message)
             | TransferError::Failed(message) => OpsError::Failed(message),
         }
     }
