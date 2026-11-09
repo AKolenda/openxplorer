@@ -38,6 +38,9 @@ pub(crate) struct SearchRun {
     pub coverage: SearchSource,
     /// Whether the text of files is searched too (SRCH-036).
     pub search_in: SearchIn,
+    /// Whether a walk of the folder enters its subfolders; not for
+    /// Search options > Current folder (SRCH-046).
+    pub subfolders: bool,
     /// Whether the run only brings the shown rows up to date after the
     /// cache or the listing changed, so it keeps them, their selection and
     /// the strip as they are rather than starting over.
@@ -139,7 +142,13 @@ impl FolderSearch {
             SearchSource::choose(roots, folder, self.scope)
         };
         if self.current_folder_only && self.scope == SearchScope::ThisFolder {
-            return SearchSource::CurrentFolderOnly;
+            // Names are found in the listing; the files' text only by
+            // reading them, which a walk of the folder alone does.
+            return if reads_contents && walks_subfolders(folder) {
+                SearchSource::CurrentFolder
+            } else {
+                SearchSource::CurrentFolderOnly
+            };
         }
         if source == SearchSource::CurrentFolder && !walks_subfolders(folder) {
             SearchSource::CurrentFolderOnly
@@ -300,6 +309,7 @@ impl FolderSearch {
             source,
             coverage,
             search_in: self.search_in,
+            subfolders: !self.current_folder_only,
             refreshes,
             cancellable,
         }

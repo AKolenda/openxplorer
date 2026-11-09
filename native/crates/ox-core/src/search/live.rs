@@ -57,6 +57,9 @@ pub struct LiveSearch {
     /// The search options a match must pass too, such as those typed
     /// into the box (SRCH-044), so the limit counts only items shown.
     pub filter: FacetMatcher,
+    /// Whether subfolders are walked too; false reads the folder itself
+    /// only, as Search options > Current folder asks (SRCH-046).
+    pub subfolders: bool,
 }
 
 /// Whether `entry` matches `pattern` by its name and its text together,
@@ -166,7 +169,7 @@ impl Walk<'_> {
                 continue;
             }
             let entry = entry_from_info(&enumerator.child(&info), &info);
-            if self.enters(&entry) && folder.depth < MAX_DEPTH {
+            if self.search.subfolders && self.enters(&entry) && folder.depth < MAX_DEPTH {
                 subfolders.push(PendingFolder {
                     uri: entry.uri.clone(),
                     depth: folder.depth + 1,
@@ -245,6 +248,7 @@ mod tests {
             limit,
             search_in: SearchIn::Names,
             filter: FacetMatcher::default(),
+            subfolders: true,
         }
     }
 

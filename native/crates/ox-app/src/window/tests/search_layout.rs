@@ -181,6 +181,41 @@ fn each_search_option_changes_the_results() {
         SearchIn::NamesAndContents,
         "File contents is Names and contents"
     );
+
+    // Current folder with File contents still reads the folder's own
+    // files, not its subfolders'.
+    open();
+    menu.click_row("Current folder");
+    wait_until("the folder's own matches by name and text", || {
+        test.names() == ["minutes.txt", "Notes 2.txt", "Notes 10.txt", "notes.png"]
+    });
+}
+
+/// Current folder is part of the results' step: Back to the folder and
+/// Forward to the results searches the folder alone again.
+///
+/// parity: SRCH-046, SRCH-042
+#[gtk::test]
+fn current_folder_is_kept_by_back_and_forward() {
+    let fixture = Fixture::standard();
+    let test = window_with_notes(&fixture);
+    test.search_for("notes");
+    let menu = menu_of(&test, "Search options");
+    menu.popup();
+    wait_until("the menu", || menu.is_visible());
+    menu.click_row("Current folder");
+    let own = ["Notes 2.txt", "Notes 10.txt"];
+    wait_until("the folder's own matches", || test.names() == own);
+
+    test.activate("back", None);
+    wait_until("the folder", || test.names() == STANDARD_NAMES);
+    test.activate("forward", None);
+
+    wait_until("the folder's own matches again", || test.names() == own);
+    menu.popup();
+    wait_until("the menu", || menu.is_visible());
+    assert_eq!(menu.checked_labels(), ["Current folder"]);
+    menu.popdown();
 }
 
 /// Close search ends the search and shows the folder again, as Back and

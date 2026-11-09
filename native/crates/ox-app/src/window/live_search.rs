@@ -98,6 +98,7 @@ impl BrowserWindow {
             limit: RESULT_LIMIT,
             search_in: run.search_in,
             filter,
+            subfolders: run.subfolders,
         };
         let (sender, batches) = async_channel::unbounded::<Vec<Entry>>();
         let cancellable = run.cancellable.clone();
