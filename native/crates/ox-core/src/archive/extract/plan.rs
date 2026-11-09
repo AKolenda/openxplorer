@@ -53,6 +53,9 @@ pub struct ExtractionSummary {
     /// out because the archive browser hides them: links, special files
     /// and names that are not safe (ARC-026).
     pub left_out: usize,
+    /// The symbolic links extracted (a TAR's, ARC-016); an output with
+    /// any is never lifted (ARC-025).
+    pub link_count: usize,
 }
 
 /// Whether a path is a file or a folder.
@@ -134,6 +137,9 @@ pub(super) fn plan(
         }
         if kind != PathKind::Folder {
             count_file(&mut summary, member.size, limits)?;
+        }
+        if kind == PathKind::Link {
+            summary.link_count += 1;
         }
         planned.push(PlannedMember {
             index,
