@@ -1247,6 +1247,93 @@ native = "done"
 native_note = "Recording ported: native/crates/ox-app/src/app_context.rs (open_file records each opened file); native/crates/ox-core/src/settings/mutate.rs (remember_open_keeps_thirty_newest_unique_files) and the settings round trips with the Python app. Decision: the native app shows what 1.1.4 shows, which is no recent-files page, because 'home:' always resolved to the home folder and the 'Recently opened' table was unreachable. Showing recent files (a Recent place as in GNOME's recent:/// or Dolphin's Recent Files) would be a new feature for the owner to schedule."
 
 [[feature]]
+id = "HOME-012"
+area = "HOME"
+title = "Home laid out as Windows 11's Home, behind an option"
+behaviour = "Settings > General > Start up > 'Show Quick access, Recent and Favorites on Home' (homeSections, off by default and stored only when on). Off, Home opens the home folder as before (NAV-038). On, the navigation pane's Home row, Alt+Home, the HomePage key, a new tab, a new window with no startup folder and a typed 'home:' open the Home page (ox:home), titled Home with the house icon: a 'Quick access' section, then a Recent / Favorites switcher with Recent shown first. Back and Forward step to and from it as to any location; F5 draws it again."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://support.microsoft.com/en-us/windows/file-explorer-in-windows-ef370130-1cca-9dc5-e0df-2f7416fe1cb1",
+  "https://blogs.windows.com/windows-insider/2023/06/07/announcing-windows-11-insider-preview-build-23475/",
+  "https://blogs.windows.com/windows-insider/2024/07/12/announcing-windows-11-insider-preview-build-22635-3930-beta-channel/",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-app/src/locations.rs (Page::Home); BrowserWindow::home_location in native/crates/ox-app/src/window/navigation.rs. Tested in native/crates/ox-app/src/window/tests/home_page.rs (the_option_turns_home_into_quick_access_recent_and_favorites). Microsoft names the sections Quick access, Favorites and Recent (build 23475) and shows tabs for Recent, Favorites and Shared (build 22635.3930); Shared needs a Microsoft account and is left out. Layout, sizes, order of the tabs on screen and which tab opens first are not documented: check them in Windows."
+
+[[feature]]
+id = "HOME-013"
+area = "HOME"
+title = "Home: Quick access tiles are the navigation pane's pins"
+behaviour = "Quick access on Home lists the navigation pane's Quick access places (known folders and pins, one list) as tiles of the Tiles view. Pin to Quick access anywhere adds a tile, Unpin from Quick access removes it. A double-click or Enter opens the folder in the tab, a middle-click in a background tab; a right-click, the Menu key or Shift+F10 opens the pin's own menu (Open, Open in new tab, Open in new window, Open in Terminal, Open folder with…, Edit… for the user's own pins, Unpin from Quick access, Previous versions, Properties); Alt+Enter opens Properties. With nothing pinned the section says 'Folders you pin to Quick access show here.'"
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://support.microsoft.com/en-us/windows/file-explorer-in-windows-ef370130-1cca-9dc5-e0df-2f7416fe1cb1",
+  "https://blogs.windows.com/windows-insider/2026/08/17/improving-file-explorer-context-menu-faster-simpler-and-more-customizable/",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/home_page.rs (folder_tile, reusing pin_menu of native/crates/ox-app/src/window/sidebar/menu.rs). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_pinned_folder_has_a_tile_that_opens_it_until_it_is_unpinned). Microsoft: known folders are pinned 'in Quick access in both File Explorer Home and the left navigation pane' and Pin to Quick access / Unpin from Quick access (support article); middle-click on Home folders opens a new tab (2026-08-17). Frequent folders are documented for Windows 10 only, so they are not shown. Tile look, whether a single click opens and the empty wording are not documented."
+
+[[feature]]
+id = "HOME-014"
+area = "HOME"
+title = "Home: Favorites, with Add to Favorites and Remove from Favorites"
+behaviour = "A file's right-click menu (compact and classic) offers 'Add to Favorites' while the Home option is on, or 'Remove from Favorites' for a favorite; so do the rows of Recent. Favorites lists those files in the order added (favorites in the settings file, up to 500 locations, the name read from the location so no drive or share is read to draw Home). A double-click or Enter opens the real file in its default application; the menu has Open, Open file location, Remove from Favorites, Copy as path and Properties. Empty, it says 'Files you add to Favorites show here.'"
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://blogs.windows.com/windows-insider/2022/02/16/announcing-windows-11-insider-preview-build-22557/",
+  "https://blogs.windows.com/windows-insider/2022/04/06/announcing-windows-11-insider-preview-build-22593/",
+  "https://blogs.windows.com/windows-insider/2023/06/07/announcing-windows-11-insider-preview-build-23475/",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-core/src/settings.rs (Settings::set_favorite); native/crates/ox-app/src/window/context_menu/entries.rs (favorite_item). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_favorite_file_is_listed_opened_and_removed, a_files_menu_adds_it_to_favorites_only_with_the_option). Microsoft: Pin to Quick access was extended to files (build 22557) and pinned files became Favorites (build 22593). The wording 'Add to Favorites' and 'Remove from Favorites' is not on an official page; the app's Pin to Quick access still takes folders only (the folders-only rule of pinEntries), so Favorites has its own commands."
+
+[[feature]]
+id = "HOME-015"
+area = "HOME"
+title = "Home: Recent lists the desktop's recently used files"
+behaviour = "Recent lists the files GVfs lists at recent:/// (the desktop's recently used list, as the navigation pane's Recent files), newest first, up to 50, folders and rows without a real file left out; it follows the list as it changes. A row shows the file's icon and name, with its path as the tooltip. A double-click or Enter opens the real file (the row's recent target), Open file location opens its folder with it selected; the menu also has Add to Favorites, Copy as path and Properties. Empty, it says 'Files you open recently show here.' Nothing is sent anywhere."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://blogs.windows.com/windows-insider/2025/10/21/releasing-windows-11-builds-26100-7015-and-26200-7015-to-the-release-preview-channel/",
+  "https://blogs.windows.com/windows-insider/2022/04/06/announcing-windows-11-insider-preview-build-22593/",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/home_page.rs (recent_files, watch_recent_files). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_recent_file_opens_the_real_file_and_its_location). Microsoft: Home's files offer 'Open file location' (Release Preview 26100.7015). Columns, how many files, 'Remove from list' and the empty wording are not documented, so no columns and no Remove from list are drawn."
+
+[[feature]]
+id = "HOME-016"
+area = "HOME"
+title = "Home: sections fold, by click and keyboard, and stay folded"
+behaviour = "Quick access's heading (a chevron, the title and a line) and the switcher's chevron fold and unfold their section on a click, Enter or Space, Left folds and Right unfolds; the state is announced as expanded or collapsed and saved (homeFolded), so Home opens as it was left, also after F5 or a restart. Keyboard: Tab moves between the heading, the tiles, the chevron, the shown tab and the list; the arrows move within tiles and rows, Up from a first row reaches its heading or tab, Down from Quick access's last row the shown tab; Left and Right on the tabs switch lists. Focus is visible; the focus comes back after Home is drawn again. Compact view draws the rows and tiles closer. GTK skips the 83 ms hover fades when animations are off."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://blogs.windows.com/windows-insider/2026/08/17/improving-file-explorer-context-menu-faster-simpler-and-more-customizable/",
+  "https://blogs.windows.com/windows-insider/2023/06/07/announcing-windows-11-insider-preview-build-23475/",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/home_page.rs (set_folded, connect_fold_keys, connect_tab_keys, connect_edge_keys, KeptFocus); native/crates/ox-app/resources/skin/landing.css. Tested in native/crates/ox-app/src/window/tests/home_page.rs (each_section_folds_by_click_and_by_keyboard). Microsoft: 'Home now preserves whether sections are expanded or collapsed' (2026-08-17). Chevrons, counts and keyboard order are not documented."
+
+[[feature]]
 id = "TAB-001"
 area = "TAB"
 title = "New tab via '+' button and Ctrl+T"

@@ -398,6 +398,20 @@ pub struct Preferences {
     /// after the current tab (Dolphin's `OpenNewTabAfterLastTab`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub open_tabs_at_end: bool,
+    /// Home shows Quick access and the Recent and Favorites lists, as
+    /// Windows 11 File Explorer's Home does, instead of the home folder's
+    /// contents (HOME-012). Off by default; stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub home_sections: bool,
+    /// The files added to Favorites, by location, in the order they were
+    /// added (HOME-014). Stored only when there is one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub favorites: Vec<String>,
+    /// The sections of Home the user folded, by the keys the app gives
+    /// them, so Home opens as it was left (HOME-016). Stored only when one
+    /// is folded.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub home_folded: Vec<String>,
     /// A start without locations reopens the tabs of the last window
     /// closed (Dolphin's `RememberOpenedTabs`, Explorer's "Restore
     /// previous folder windows at logon"); off, as in Explorer.
@@ -547,6 +561,8 @@ const MAX_SECTION_KEY: usize = 32;
 /// The most sidebar places that may be hidden one by one, and the longest
 /// location.
 const MAX_HIDDEN_PLACES: usize = 64;
+/// The most files Favorites keeps.
+const MAX_FAVORITES: usize = 500;
 const MAX_PLACE_LOCATION: usize = 4096;
 
 /// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
@@ -602,6 +618,9 @@ impl Default for Preferences {
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
             open_tabs_at_end: false,
+            home_sections: false,
+            favorites: Vec::new(),
+            home_folded: Vec::new(),
             restore_session: false,
             startup_folder: None,
             begin_in_split_view: false,
@@ -710,6 +729,26 @@ impl Preferences {
         if let Some(places) = places {
             self.hidden_sidebar_places.clone_from(places);
         }
+        let favorites = update.favorites.as_ref().filter(|favorites| {
+            favorites.len() <= MAX_FAVORITES
+                && favorites.iter().all(|uri| {
+                    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
+                })
+        });
+        if let Some(favorites) = favorites {
+            self.favorites.clone_from(favorites);
+        }
+        let folded = update.home_folded.as_ref().filter(|keys| {
+            keys.len() <= MAX_HIDDEN_SECTIONS
+                && keys.iter().all(|key| {
+                    !key.is_empty()
+                        && key.len() <= MAX_SECTION_KEY
+                        && key.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+        });
+        if let Some(folded) = folded {
+            self.home_folded.clone_from(folded);
+        }
     }
 
     /// The daily update check: whether it runs, when it last did, and the
@@ -793,6 +832,7 @@ impl Preferences {
         }
         let columns_changed = self.apply_view_options(update);
         replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
+        replace_if_some(&mut self.home_sections, update.home_sections);
         replace_if_some(&mut self.restore_session, update.restore_session);
         replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
         replace_if_some(
@@ -976,6 +1016,13 @@ pub struct PreferencesUpdate {
     pub hidden_sidebar_places: Option<Vec<String>>,
     /// Open tabs from a folder at the end, or after the current tab.
     pub open_tabs_at_end: Option<bool>,
+    /// Show Quick access, Recent and Favorites on Home.
+    pub home_sections: Option<bool>,
+    /// Replaces the Favorites; up to 500 locations, else ignored.
+    pub favorites: Option<Vec<String>>,
+    /// Replaces Home's folded sections; up to 16 short ASCII keys, else
+    /// ignored.
+    pub home_folded: Option<Vec<String>>,
     /// Reopen the last window's tabs on a start without locations.
     pub restore_session: Option<bool>,
     /// Where new windows open; empty for Home. A location the location
@@ -1095,6 +1142,9 @@ impl PreferencesUpdate {
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
             open_tabs_at_end: flag("openTabsAtEnd"),
+            home_sections: flag("homeSections"),
+            favorites: values.get("favorites").and_then(read_keys),
+            home_folded: values.get("homeFolded").and_then(read_keys),
             restore_session: flag("restoreSession"),
             startup_folder: text("startupFolder").map(str::to_owned),
             begin_in_split_view: flag("beginInSplitView"),

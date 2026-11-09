@@ -179,7 +179,12 @@ impl BrowserWindow {
     pub(super) fn render_places(&self) {
         let places = self.places();
         let searches = self.context().saved_searches();
-        let mut entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
+        let mut entries = sidebar::sidebar_entries(
+            &places,
+            &searches,
+            &self.imp().locations.borrow(),
+            self.context().settings_data().preferences.home_sections,
+        );
         // Recent files hides while the desktop remembers no history
         // (SAFE-022), as in Nautilus.
         let remembers = self.context().recent_policy().remember;
@@ -230,6 +235,13 @@ impl BrowserWindow {
             return;
         };
         let body = self.pane_on(side).landing();
+        if page == Page::Home {
+            body.remove_css_class("this-pc");
+            let preferences = self.context().settings_data().preferences;
+            super::home_page::render(body, places, &preferences, self.skin().drawn_text_size());
+            return;
+        }
+        super::home_page::leave(body);
         let locations = self.imp().locations.borrow();
         landing::render(body, page, places, &locations, self.skin().drawn_text_size());
     }

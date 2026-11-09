@@ -4132,6 +4132,10 @@ msgid "Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
+msgid "Home shows your pinned folders, the files you opened lately and your favorite files, instead of the home folder's contents. Off by default."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
 msgid "New windows open at"
 msgstr ""
 
@@ -4141,6 +4145,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
 msgid "Settings cannot be the startup folder."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Show Quick access, Recent and Favorites on Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -4161,6 +4169,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
 msgid "Use current location"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "home page quick access recent files favorites favourites pinned folders windows 11 start page landing"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -6076,6 +6088,39 @@ msgstr ""
 msgid "Topic"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/home_page.rs
+msgid "Could not save Favorites: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Favorites"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Files you add to Favorites show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Files you open recently show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Folders you pin to Quick access show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/sidebar/entries.rs
+msgid "Quick access"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Recent"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Recent and Favorites"
+msgstr ""
+
 #: crates/ox-app/src/window/imp.rs
 msgid "Wait until the files are written, or cancel that, before closing this dialog."
 msgstr ""
@@ -6674,10 +6719,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Opened this session"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/entries.rs
-msgid "Quick access"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
@@ -8397,10 +8438,6 @@ msgstr ""
 
 #: crates/ox-core/src/location/text.rs
 msgid "Percent-encoded text in the address must be valid UTF-8."
-msgstr ""
-
-#: crates/ox-core/src/location/virtual_place.rs
-msgid "Recent"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

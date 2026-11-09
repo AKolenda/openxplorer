@@ -317,7 +317,22 @@ impl BrowserWindow {
             disk_tool: disk_tool_of(entry),
             send_to: self.send_to_targets(),
             can_share: self.share_portal().is_some(),
+            favorite: self.favorite_fact(entry, is_single),
         }
+    }
+
+    /// What a file's menu says of Favorites while Home shows them
+    /// (HOME-014): the real file, a Recent row's included, and whether it
+    /// is one already.
+    fn favorite_fact(&self, entry: &Entry, is_single: bool) -> Option<(String, bool)> {
+        if !is_single || entry.is_dir || !self.context().settings_data().preferences.home_sections {
+            return None;
+        }
+        let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);
+        if ox_core::location::is_virtual_location(uri) {
+            return None;
+        }
+        Some((uri.to_owned(), self.is_favorite(uri)))
     }
 
     /// Opens the classic menu from Shift+F10, pointing at the first

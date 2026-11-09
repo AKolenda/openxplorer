@@ -390,9 +390,16 @@ fn startup_location(context: &AppContext) -> String {
         // its listing asks for.
         file.path().is_none_or(|path| path.is_dir())
     };
-    chosen
-        .filter(exists)
-        .unwrap_or_else(|| file_uri(&glib::home_dir()))
+    // With Home laid out as Windows 11's, an unset startup folder opens
+    // it, as "Open File Explorer to: Home" does (HOME-012).
+    let home = || {
+        if context.settings_data().preferences.home_sections {
+            VirtualPlace::Home.uri().to_owned()
+        } else {
+            file_uri(&glib::home_dir())
+        }
+    };
+    chosen.filter(exists).unwrap_or_else(home)
 }
 
 /// A window whose first tab shows `start`, or the startup folder, not

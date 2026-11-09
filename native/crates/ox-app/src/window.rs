@@ -100,6 +100,7 @@ mod group_day;
 mod group_headings;
 mod help;
 mod history_menu;
+mod home_page;
 mod imp;
 mod input;
 mod integration_actions;

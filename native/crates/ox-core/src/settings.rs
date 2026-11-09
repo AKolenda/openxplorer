@@ -255,6 +255,52 @@ impl Settings {
         })
     }
 
+    /// Adds the file at `uri` to Favorites, at the end, or removes it
+    /// (HOME-014), changing only that entry of `favorites` as the file now
+    /// holds it. Returns the resulting preferences.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn set_favorite(&mut self, uri: &str, favorite: bool) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let mut favorites = data.preferences.favorites.clone();
+            favorites.retain(|kept| !same_location(kept, uri));
+            if favorite {
+                favorites.push(uri.to_owned());
+            }
+            let update = PreferencesUpdate {
+                favorites: Some(favorites),
+                ..PreferencesUpdate::default()
+            };
+            data.preferences.apply(&update);
+            Ok(data.preferences.clone())
+        })
+    }
+
+    /// Folds or unfolds the section of Home with the key `key`
+    /// (HOME-016), changing only that key of `homeFolded`. Returns the
+    /// resulting preferences.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn set_home_folded(&mut self, key: &str, folded: bool) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let mut keys = data.preferences.home_folded.clone();
+            keys.retain(|kept| kept != key);
+            if folded {
+                keys.push(key.to_owned());
+            }
+            let update = PreferencesUpdate {
+                home_folded: Some(keys),
+                ..PreferencesUpdate::default()
+            };
+            data.preferences.apply(&update);
+            Ok(data.preferences.clone())
+        })
+    }
+
     /// Adds or removes a Quick access pin or a mapped share. Removing a pin
     /// hides it from Quick access, which also works for known folders;
     /// adding it shows it again. Removing ignores the requested label.

@@ -98,7 +98,7 @@ fn the_option_turns_home_into_quick_access_recent_and_favorites() {
         home_page::section_titles(body(&test)),
         ["Quick access", "Recent", "Favorites"]
     );
-    assert_eq!(home_page::shown_tab(body(&test)).as_deref(), Some("Recent"));
+    assert_eq!(home_page::shown_tab_title(body(&test)).as_deref(), Some("Recent"));
     test.activate("new-tab", None);
     wait_until("a new tab on Home", || {
         test.window.tab_count() == 2 && test.window.current_uri().as_deref() == Some(HOME_PAGE)
@@ -114,20 +114,24 @@ fn the_option_turns_home_into_quick_access_recent_and_favorites() {
 #[gtk::test]
 fn a_pinned_folder_has_a_tile_that_opens_it_until_it_is_unpinned() {
     let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
     let test = home_window(&fixture);
-    let documents = fixture.uri_of("Documents");
-    assert!(!home_page::tile_names(body(&test)).contains(&"Documents".to_owned()));
+    let documents = fixture.uri_of("Projects");
+    assert!(!home_page::tile_names(body(&test)).contains(&"Projects".to_owned()));
 
     test.activate("pin-location", Some(&documents));
-    wait_until("the Documents tile", || {
-        home_page::tile_names(body(&test)).contains(&"Documents".to_owned())
+    wait_until("the Projects tile", || {
+        home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
     });
-    let labels = home_page::menu_labels(body(&test), "Documents");
+    let labels = home_page::menu_labels(body(&test), "Projects");
     assert!(labels.contains(&"Open".to_owned()), "{labels:?}");
-    assert!(labels.contains(&"Unpin from Quick access".to_owned()), "{labels:?}");
+    assert!(
+        labels.contains(&"Unpin from Quick access".to_owned()),
+        "{labels:?}"
+    );
 
-    home_page::open_item(body(&test), "Documents");
-    test.wait_for_listing("Documents");
+    home_page::open_item(body(&test), "Projects");
+    test.wait_for_listing("Projects");
     assert_eq!(test.window.current_uri(), Some(documents.clone()));
     test.activate("back", None);
     wait_until("Back to Home", || {
@@ -136,7 +140,7 @@ fn a_pinned_folder_has_a_tile_that_opens_it_until_it_is_unpinned() {
 
     test.activate("unpin", Some(&documents));
     wait_until("the tile to go", || {
-        !home_page::tile_names(body(&test)).contains(&"Documents".to_owned())
+        !home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
     });
 }
 
@@ -150,14 +154,20 @@ fn a_favorite_file_is_listed_opened_and_removed() {
     let test = home_window(&fixture);
     home_page::choose_tab(body(&test), "Favorites");
     assert!(home_page::list_names(body(&test)).is_empty());
-    assert!(home_page::empty_text(body(&test)).is_some(), "an empty Favorites says so");
+    assert!(
+        home_page::empty_text(body(&test)).is_some(),
+        "an empty Favorites says so"
+    );
 
     let notes = fixture.uri_of("Notes 2.txt");
     test.activate("add-to-favorites", Some(&notes));
     wait_until("the favorite", || {
         home_page::list_names(body(&test)) == ["Notes 2.txt"]
     });
-    assert_eq!(test.context.settings_data().preferences.favorites, [notes.clone()]);
+    assert_eq!(
+        test.context.settings_data().preferences.favorites,
+        [notes.clone()]
+    );
     let labels = home_page::menu_labels(body(&test), "Notes 2.txt");
     assert!(labels.contains(&"Open file location".to_owned()), "{labels:?}");
     assert!(labels.contains(&"Remove from Favorites".to_owned()), "{labels:?}");
@@ -184,8 +194,7 @@ fn a_files_menu_adds_it_to_favorites_only_with_the_option() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let labels = |test: &TestWindow| {
-        test.window
-            .right_click(Some(position_of(test, "Notes 2.txt")));
+        test.window.right_click(Some(position_of(test, "Notes 2.txt")));
         let menu = test.window.context_menu();
         let labels = menu.row_labels();
         menu.popdown();
@@ -260,7 +269,10 @@ fn each_section_folds_by_click_and_by_keyboard() {
         fold.emit_clicked();
         assert!(home_page::is_folded(body(&test), index), "a click folds {index}");
         fold.emit_clicked();
-        assert!(!home_page::is_folded(body(&test), index), "a click unfolds {index}");
+        assert!(
+            !home_page::is_folded(body(&test), index),
+            "a click unfolds {index}"
+        );
         assert!(press_key(fold, gtk::gdk::Key::Left), "Left on {index}");
         assert!(home_page::is_folded(body(&test), index), "Left folds {index}");
         assert!(press_key(fold, gtk::gdk::Key::Right), "Right on {index}");
@@ -272,5 +284,8 @@ fn each_section_folds_by_click_and_by_keyboard() {
     wait_until("the page drawn again", || {
         home_page::fold_buttons(body(&test)).len() == 2
     });
-    assert!(home_page::is_folded(body(&test), 0), "F5 keeps Quick access folded");
+    assert!(
+        home_page::is_folded(body(&test), 0),
+        "F5 keeps Quick access folded"
+    );
 }

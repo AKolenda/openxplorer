@@ -95,6 +95,10 @@ pub(crate) struct ItemFacts {
     pub(crate) send_to: SendToTargets,
     /// The desktop can share files, so the menus offer Share (CMD-037).
     pub(crate) can_share: bool,
+    /// For one file while Home shows Favorites (HOME-014): the file it
+    /// adds or removes and whether it is a favorite already; `None`
+    /// offers neither.
+    pub(crate) favorite: Option<(String, bool)>,
 }
 
 /// A drive or network location Send to copies to, named as This PC
@@ -242,6 +246,22 @@ fn folder_open_items(facts: &ItemFacts) -> Vec<MenuEntry> {
         for_one_item(new_window, facts, false).into(),
         for_one_item(pin, facts, false).into(),
     ]
+}
+
+/// Add to Favorites, or Remove from Favorites for a favorite, while Home
+/// shows Favorites (HOME-014).
+fn favorite_item(facts: &ItemFacts) -> Option<MenuEntry> {
+    let (uri, is_favorite) = facts.favorite.as_ref()?;
+    let (label, glyph, action) = if *is_favorite {
+        (
+            "Remove from Favorites",
+            Icon::StarFilled,
+            WindowAction::RemoveFromFavorites,
+        )
+    } else {
+        ("Add to Favorites", Icon::Star, WindowAction::AddToFavorites)
+    };
+    Some(MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri).into())
 }
 
 /// The app's own commands beside Open, which Windows does not have:
@@ -957,6 +977,7 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     entries.extend(mount_item(facts));
     entries.extend(compact_open_with(facts));
     entries.extend(folder_open_items(facts));
+    entries.extend(favorite_item(facts));
     entries.extend(other_open_items(facts));
     entries.extend(share_with_item(facts));
     entries.push(compress_submenu());
@@ -1013,6 +1034,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     entries.extend(mount_item(facts));
     entries.extend(editor_items(facts));
     entries.extend(folder_open_items(facts));
+    entries.extend(favorite_item(facts));
     entries.push(terminal_item(facts));
     entries.extend(classic_application_items(facts));
     entries.extend(other_open_items(facts));
@@ -1277,6 +1299,7 @@ mod tests {
             disk_tool: None,
             send_to: SendToTargets::default(),
             can_share: false,
+            favorite: None,
         }
     }
 

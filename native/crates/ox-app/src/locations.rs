@@ -23,14 +23,19 @@ use crate::volumes::{VolumeKind, VolumeRow};
 /// search or Properties applies to it.
 ///
 /// Only these of ox-core's [`VirtualPlace`]s are pages; the Recycle Bin
-/// and the recent lists are listed folders. The legacy Home page is not
-/// one of them: as in the Python app, `home:` opens the home folder. This
+/// and the recent lists are listed folders. Home is one only while
+/// "Show Quick access, Recent and Favorites on Home" is on (HOME-012);
+/// otherwise, as in the Python app, `home:` opens the home folder
+/// (NAV-038, [`is_home_alias`]). This
 /// PC is a landing page in the folder pane; Settings takes the place of
 /// the whole browsing area, as `.settings-open` does in
 /// `v2.0.0:desktop/ui/style.css`. Network lists the computers found on the
 /// network like a folder, as Windows 11 does ([`Page::draws_itself`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Page {
+    /// Quick access and the Recent and Favorites lists, as Windows 11's
+    /// Home, while its option is on.
+    Home,
     /// Quick access, devices and drives, and saved network locations.
     ThisPc,
     /// The computers found on the network, listed like a folder.
@@ -41,11 +46,12 @@ pub(crate) enum Page {
 
 impl Page {
     /// Every page, in sidebar order, then Settings.
-    pub(crate) const ALL: [Page; 3] = [Page::ThisPc, Page::Network, Page::Settings];
+    pub(crate) const ALL: [Page; 4] = [Page::Home, Page::ThisPc, Page::Network, Page::Settings];
 
     /// The ox-core place the page draws.
     const fn place(self) -> VirtualPlace {
         match self {
+            Page::Home => VirtualPlace::Home,
             Page::ThisPc => VirtualPlace::ThisPc,
             Page::Network => VirtualPlace::Network,
             Page::Settings => VirtualPlace::Settings,
@@ -85,8 +91,10 @@ impl Page {
     /// Settings is never typed by title: the address bar is hidden on it,
     /// and a folder called Settings must still open when its name is typed.
     pub(crate) fn from_title(text: &str) -> Option<Page> {
+        // Nor is Home: "home" names the home folder unless the window
+        // says otherwise (`resolve_address`).
         let page = VirtualPlace::from_title(text).and_then(Self::from_place);
-        page.filter(|page| *page != Page::Settings)
+        page.filter(|page| !matches!(page, Page::Settings | Page::Home))
     }
 
     /// Heading, tab title and breadcrumb label.
@@ -99,7 +107,7 @@ impl Page {
     /// heading.
     pub(crate) fn subtitle(self) -> &'static str {
         match self {
-            Page::ThisPc | Page::Network => "",
+            Page::Home | Page::ThisPc | Page::Network => "",
             Page::Settings => ox_core::i18n::gettext_static("Your explorer, your way."),
         }
     }
@@ -108,6 +116,7 @@ impl Page {
     /// This PC, connected nodes for Network and the gear for Settings.
     pub(crate) const fn icon(self) -> Icon {
         match self {
+            Page::Home => Icon::Home,
             Page::ThisPc => Icon::Laptop,
             Page::Network => Icon::Organization,
             Page::Settings => Icon::Settings,

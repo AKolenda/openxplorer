@@ -77,7 +77,7 @@ impl BrowserWindow {
     pub(super) fn resolve_address(&self, address: &str) -> Result<String, LocationError> {
         let typed = address.trim();
         if locations::is_home_alias(typed) {
-            return Ok(self.imp().locations.borrow().home_uri());
+            return Ok(self.home_location());
         }
         if let Some(page) = Page::from_uri(typed) {
             return Ok(page.uri().to_owned());
@@ -630,11 +630,21 @@ impl BrowserWindow {
         }
     }
 
-    /// Opens the home folder in the active tab (Alt+Home), as the sidebar's
-    /// Home does.
+    /// Opens Home in the active tab (Alt+Home), as the sidebar's Home
+    /// does.
     pub(super) fn go_home(&self) {
-        let home = self.imp().locations.borrow().home_uri();
+        let home = self.home_location();
         self.navigate_or_report(&home);
+    }
+
+    /// Where Home leads: the Home page with Quick access, Recent and
+    /// Favorites while its option is on (HOME-012), else the home folder,
+    /// as in the Python app (NAV-038).
+    pub(super) fn home_location(&self) -> String {
+        if self.context().settings_data().preferences.home_sections {
+            return Page::Home.uri().to_owned();
+        }
+        self.imp().locations.borrow().home_uri()
     }
 }
 

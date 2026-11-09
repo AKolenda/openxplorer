@@ -72,3 +72,30 @@ flowbox.drive-tiles > flowboxchild:focus-visible {
    Sans at 11px, 17px at 12px), so `line-height:1.7` at 12px is 1.2 and
    1.65 at 11px is 1.13 (as in the details pane's note). R10: 4px corners. */
 .landing .notice { color: @ox_muted; border: 1px solid @ox_border; border-radius: 4px; padding: 15px; line-height: 1.2; }
+
+/* ---- Home (HOME-012 to HOME-016), while its option is on ---- */
+.landing .page.home-page { padding: 4px 12px 8px 8px; }
+.landing .home-switcher { margin: 10px 0 2px 0; }
+window.ox .landing .home-switcher button.group-header { padding: 4px 6px; margin: 0; }
+window.ox .landing button.home-tab {
+  padding: 3px 12px;
+  min-height: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  box-shadow: none;
+  color: @ox_text;
+}
+window.ox .landing button.home-tab:hover { background-color: @ox_item_hover; }
+window.ox .landing button.home-tab:checked { background-color: @ox_item_selected; font-weight: 600; }
+window.ox .landing button.home-tab:focus-visible {
+  outline: 2px solid @ox_item_focus_outer;
+  outline-offset: -2px;
+}
+/* A row of Recent and Favorites: a Details row's 32 px pitch. */
+flowbox.home-rows > flowboxchild { padding: 7px 8px; }
+.landing .home-rows .home-row-name { color: @ox_text; }
+.landing .home-empty { padding: 8px 12px; }
+/* Compact view draws the rows and tiles closer, as it does in folders. */
+window.ox.compact-density flowbox.home-rows > flowboxchild { padding: 3px 8px; }
+window.ox.compact-density flowbox.home-tiles > flowboxchild { padding: 4px 8px; }
