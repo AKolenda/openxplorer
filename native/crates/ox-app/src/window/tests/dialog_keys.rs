@@ -2,7 +2,7 @@
 //! The file keys while a dialog is in front, as in Windows Explorer: Delete,
 //! Shift+Delete, F2, the clipboard keys, Ctrl+A and the other file keys do
 //! nothing to the items behind an open dialog, whether it is shown inside
-//! the window (Compress) or in a window of its own (a confirmation), and
+//! the window (Create archive) or in a window of its own (a confirmation), and
 //! neither does Alt+Enter. Inside the dialog, a text field keeps its own
 //! Delete, and Escape still closes the dialog. Once it closes, the keys
 //! work again. Properties is no dialog of the window: as in Windows, it is
@@ -155,8 +155,10 @@ fn the_file_keys_keep_working_beside_a_properties_window() {
     assert!(!window.is_closed(), "Properties stays open");
 }
 
-/// Another dialog inside the window, Compress, keeps the file keys from
-/// the items behind it too, and its name field keeps Delete.
+/// Another dialog inside the window, Create archive (Compress to ›
+/// Additional options), keeps the file keys from the items behind it
+/// too, and its path field, which holds the archive's whole path as
+/// Windows 11's does, keeps Delete.
 ///
 /// parity: CMD-017
 #[gtk::test]
@@ -165,17 +167,18 @@ fn the_file_keys_leave_the_items_behind_another_in_window_dialog_alone() {
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
     test.activate("compress-to", None);
-    let frame = test.wait_for_dialog("the Compress dialog");
+    let frame = test.wait_for_dialog("the Create archive dialog");
     focus_button(&test, &frame, "Cancel");
 
-    assert_window_ignores_file_keys(&test, "Compress");
-    let field = focused_field(&frame, "Notes 2");
+    assert_window_ignores_file_keys(&test, "Create archive");
+    let path = format!("{}/Notes 2.zip", fixture.root().display());
+    let field = focused_field(&frame, &path);
     let taker = route_key(&test, gdk::Key::Delete, gdk::ModifierType::empty());
     assert!(
         taker.is_some_and(|taker| taker.is::<gtk::Text>()),
         "the field takes Delete"
     );
-    assert_eq!(field.text(), "otes 2");
+    assert_eq!(field.text(), path[1..]);
     assert!(dialog_over(&test).is_none(), "nothing asks to delete");
     assert!(fixture.path("Notes 2.txt").is_file());
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
@@ -184,7 +187,7 @@ fn the_file_keys_leave_the_items_behind_another_in_window_dialog_alone() {
     assert_eq!(
         test.shown_dialog(),
         Some(frame.clone()),
-        "Alt+Enter leaves Compress in front"
+        "Alt+Enter leaves Create archive in front"
     );
     assert!(
         test.window.properties_windows().is_empty(),
@@ -192,7 +195,7 @@ fn the_file_keys_leave_the_items_behind_another_in_window_dialog_alone() {
     );
 
     press(&frame, "Cancel");
-    wait_until("Compress to close", || test.shown_dialog().is_none());
+    wait_until("Create archive to close", || test.shown_dialog().is_none());
     assert!(
         test.window.file_keys_apply(),
         "the keys work again once it closed"
