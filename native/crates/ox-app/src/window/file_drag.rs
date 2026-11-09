@@ -12,6 +12,13 @@
 //! after its end, so the gesture never opens or reselects an item. Screen
 //! readers hear the drag start, with what it carries, and end (ACC-002).
 //!
+//! Escape while the button is still held calls the drag off, as in
+//! Windows 11 File Explorer, so the release that follows drops nothing
+//! (DND-029). GTK's X11 drag does not see that Escape, which reaches the
+//! window with the keyboard instead, so every window of the app takes it
+//! for the drag in progress, from whichever window it started in, and
+//! cancels it as GTK cancels a drag on Escape.
+//!
 //! Safety rule "a drag out never deletes" (DND-008): a drag started
 //! without a modifier offers Copy (and Ask, the drop menu) only, so no app
 //! moves the items unasked; holding Shift or Ctrl+Shift as it starts adds
@@ -133,10 +140,30 @@ thread_local! {
 }
 
 thread_local! {
+    /// The file drag of this process in progress, from any of its
+    /// windows, while it lasts; Escape calls it off.
+    static FILE_DRAG: std::cell::RefCell<glib::WeakRef<gdk::Drag>> =
+        std::cell::RefCell::new(glib::WeakRef::new());
+}
+
+thread_local! {
     /// The items this process drags now, from any of its windows. They
     /// take no drop while they are dragged, as in Windows Explorer: a drop
     /// on one of them goes to the folder shown.
     static DRAGGED: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+}
+
+/// Calls off the file drag in progress, as GTK calls a drag off on
+/// Escape: its `cancel` signal, which lets the pointer go and tells the
+/// drop target it left, and the drag source ends the drag without a drop.
+/// False when no file drag is in progress.
+fn cancel_file_drag() -> bool {
+    let Some(drag) = FILE_DRAG.with(|now| now.borrow().upgrade()) else {
+        return false;
+    };
+    FILE_DRAG.with(|now| now.borrow().set(None));
+    drag.emit_by_name::<()>("cancel", &[&gdk::DragCancelReason::UserCancelled]);
+    true
 }
 
 /// True while the item at `uri` is being dragged by this process.
@@ -386,6 +413,7 @@ impl BrowserWindow {
             self,
             move |_, drag| {
                 mark_drag_button(drag);
+                FILE_DRAG.with(|now| now.borrow().set(Some(drag)));
                 window.begin_file_drag(drag);
             }
         ));
@@ -395,10 +423,26 @@ impl BrowserWindow {
             move |_, drag, _| {
                 super::drag_surface::keep_finished_drag(drag);
                 SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
+                FILE_DRAG.with(|now| now.borrow().set(None));
                 label::forget_drag_label();
                 window.end_file_drag();
             }
         ));
+    }
+
+    /// Escape in this window, while a file drag of the app is in
+    /// progress with its button held, calls the drag off (DND-029).
+    pub(super) fn install_drag_escape(&self) {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(|_, key, _, _| {
+            if key == gdk::Key::Escape && cancel_file_drag() {
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+        self.add_controller(keys);
     }
 
     /// What dragging the item at `position` offers, selecting only it

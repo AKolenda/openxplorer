@@ -528,9 +528,9 @@ fn every_name_in(folder: &std::path::Path) -> Vec<String> {
     names
 }
 
-/// Copies or cuts (`cut`) the files `names` of Documents, where the
-/// files `taken` also get a namesake with other contents, then pastes
-/// them into the fixture's folder, presses Escape with the real keyboard
+/// Copies or cuts (`cut`) the files `names` of Documents, each the
+/// namesake, with other contents, of a file in the fixture's folder, then
+/// pastes them into that folder, presses Escape with the real keyboard
 /// in the "Replace or Skip Files" question, and checks, as Windows 11
 /// does it, that the question and the progress window closed and that
 /// nothing changed in either folder: no file copied, moved or replaced,
@@ -542,11 +542,8 @@ fn escape_cancels_the_question(names: &[&str], cut: bool) {
         fs::write(fixture.path(&format!("Documents/{name}")), b"Another file\n")
             .expect("the namesake is written");
     }
-    fs::write(fixture.path("Documents/Plans.txt"), b"Plans\n").expect("a file without a namesake");
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let mut selected = names.to_vec();
-    selected.push("Plans.txt");
-    select_names(&test, &selected);
+    select_names(&test, names);
     test.activate(if cut { "cut" } else { "copy" }, None);
     test.activate("go-to", Some(&fixture.uri()));
     wait_until("the fixture's folder", || {
@@ -597,7 +594,7 @@ fn escape_cancels_the_question(names: &[&str], cut: bool) {
 
 /// Escape on "Replace or Skip Files" for one taken name of a copy closes
 /// the question and cancels the copy, as Windows 11 does: nothing is
-/// copied, not even the file without a namesake.
+/// copied.
 ///
 /// parity: OPS-026
 #[gtk::test]

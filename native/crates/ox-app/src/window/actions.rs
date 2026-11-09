@@ -130,6 +130,7 @@ impl BrowserWindow {
         self.install_tab_commands();
         self.install_closing_actions();
         self.install_window_keys();
+        self.install_drag_escape();
         self.install_view_keys();
         self.install_tab_move_actions();
         self.install_navigation_actions();

@@ -20,7 +20,9 @@
 //! still worded as it was left, and the details stay hidden: the two
 //! files are compared only in the File Conflict window that "Compare info
 //! for both files" opens. The details come back with the progress once
-//! the question is answered.
+//! the question is answered. Escape closes the question and cancels that
+//! action, as Windows 11 closes its Replace or Skip Files dialog on
+//! Escape and copies nothing: nothing has been written while it asks.
 //!
 //! The window shows once an action has run for [`SHOW_DELAY`], so a
 //! quick operation shows nothing, and it does not take the focus (the UX
@@ -123,6 +125,21 @@ mod imp {
                 window,
                 move |_| window.toggle_details()
             ));
+            let escape = gtk::EventControllerKey::new();
+            escape.connect_key_pressed(glib::clone!(
+                #[weak]
+                window,
+                #[upgrade_or]
+                glib::Propagation::Proceed,
+                move |_, key, _, _| {
+                    if key == gtk::gdk::Key::Escape && window.cancel_name_question() {
+                        glib::Propagation::Stop
+                    } else {
+                        glib::Propagation::Proceed
+                    }
+                }
+            ));
+            window.add_controller(escape);
         }
 
         fn dispose(&self) {
@@ -227,6 +244,26 @@ impl ProgressWindow {
             }
         }
         self.destroy();
+    }
+
+    /// Escape in the window: the action asking Replace or Skip Files, the
+    /// one with the keyboard when several ask, stops, as its Cancel
+    /// would, and the question closes with it; false when none asks.
+    fn cancel_name_question(&self) -> bool {
+        let asking: Vec<TransferPanel> = self
+            .actions()
+            .into_iter()
+            .filter(TransferPanel::asks_about_names)
+            .collect();
+        let focus = GtkWindowExt::focus(self);
+        let with_keyboard = asking
+            .iter()
+            .find(|action| focus.as_ref().is_some_and(|focus| focus.is_ancestor(*action)));
+        let Some(action) = with_keyboard.or_else(|| asking.first()) else {
+            return false;
+        };
+        action.cancel();
+        true
     }
 
     /// The running actions, in the order they started.

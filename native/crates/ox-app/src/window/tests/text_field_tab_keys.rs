@@ -4,7 +4,7 @@
 //! opens a new tab and Ctrl+W closes the tab, or the window with its last
 //! tab. Ctrl+N does nothing in those fields, as in Windows, and the
 //! field's text is left as it was. The keys are pressed with check.py's
-//! private display's real keyboard (CMD-017, TAB-005).
+//! private display's real keyboard (CMD-017, TAB-001, TAB-002).
 
 use gtk::gdk;
 use gtk::prelude::*;
@@ -200,44 +200,44 @@ fn ctrl_n_does_nothing_in(field: Field) {
     }
 }
 
-/// parity: CMD-017, TAB-005
+/// parity: CMD-017, TAB-001
 #[gtk::test]
 fn ctrl_t_opens_a_tab_from_the_address_bar() {
     ctrl_t_opens_a_tab_from(Field::Address);
 }
 
-/// parity: CMD-017, TAB-005
+/// parity: CMD-017, TAB-001
 #[gtk::test]
 fn ctrl_t_opens_a_tab_from_the_empty_search_box() {
     ctrl_t_opens_a_tab_from(Field::EmptySearch);
 }
 
-/// parity: CMD-017, TAB-005
+/// parity: CMD-017, TAB-001
 #[gtk::test]
 fn ctrl_t_opens_a_tab_from_the_search_box_with_text() {
     ctrl_t_opens_a_tab_from(Field::SearchWithText);
 }
 
-/// parity: CMD-017, TAB-005
+/// parity: CMD-017, TAB-002
 #[gtk::test]
 fn ctrl_w_closes_the_tab_from_the_address_bar() {
     ctrl_w_closes_the_tab_from(Field::Address);
 }
 
-/// parity: CMD-017, TAB-005
+/// parity: CMD-017, TAB-002
 #[gtk::test]
 fn ctrl_w_closes_the_tab_from_the_search_box() {
     ctrl_w_closes_the_tab_from(Field::EmptySearch);
     ctrl_w_closes_the_tab_from(Field::SearchWithText);
 }
 
-/// parity: CMD-017, TAB-005
+/// parity: CMD-017, TAB-002
 #[gtk::test]
 fn ctrl_w_on_the_last_tab_closes_the_window_from_the_address_bar() {
     ctrl_w_closes_the_window_from(Field::Address);
 }
 
-/// parity: CMD-017, TAB-005
+/// parity: CMD-017, TAB-002
 #[gtk::test]
 fn ctrl_w_on_the_last_tab_closes_the_window_from_the_search_box() {
     ctrl_w_closes_the_window_from(Field::SearchWithText);

@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
+use super::context_menu::{MENU_KEY, SHIFT_F10_KEY};
 use super::file_ops::file_key_bindings;
 use super::focus_regions::region_key_bindings;
 use super::folder_tree::tree_key_bindings;
@@ -152,12 +152,10 @@ fn describe(name: &str) -> Option<(Group, String)> {
             Group::Selection,
             ox_core::i18n::gettext_static("Clear the selection"),
         ),
-        // The Menu key, which runs no action of its own.
-        "menu-key" => (Group::Selection, ox_core::i18n::gettext_static("Context menu")),
-        "win.context-menu" => (
-            Group::Selection,
-            ox_core::i18n::gettext_static("Show more options"),
-        ),
+        // The Menu key, which runs no action of its own, and Shift+F10,
+        // which opens the same menu, as in Windows 11, unless the Settings
+        // choice gives it the classic menu.
+        "menu-key" | "win.context-menu" => (Group::Selection, ox_core::i18n::gettext_static("Context menu")),
         "win.cut" => (Group::Files, ox_core::i18n::gettext_static("Cut")),
         "win.copy" => (Group::Files, ox_core::i18n::gettext_static("Copy")),
         "win.paste" => (Group::Files, ox_core::i18n::gettext_static("Paste")),
@@ -254,7 +252,7 @@ fn bindings(app: &gtk::Application) -> Vec<(String, String)> {
         .chain(tree_key_bindings())
         .chain([
             ("menu-key".to_owned(), MENU_KEY),
-            ("win.context-menu".to_owned(), CLASSIC_MENU_KEY),
+            ("win.context-menu".to_owned(), SHIFT_F10_KEY),
         ]);
     bindings.extend(tables.map(|(name, keys)| (name, keys.to_owned())));
     bindings
