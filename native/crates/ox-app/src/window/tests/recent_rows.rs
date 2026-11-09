@@ -572,3 +572,90 @@ fn properties_of_several_recent_rows_are_those_of_their_files() {
     );
     window.close();
 }
+
+/// Duplicate is greyed out for a Recent row, as Cut, Rename and Delete
+/// are: the row is not a file to copy beside itself.
+///
+/// parity: SIDE-026
+#[gtk::test]
+fn duplicate_is_greyed_out_for_a_recent_row() {
+    use crate::window::window_action::WindowAction;
+
+    let (_fixture, test, _) = selected_recent_file();
+
+    assert!(!test.window.is_action_enabled(WindowAction::Duplicate.name()));
+}
+
+/// Properties of several Recent rows whose files are on a share that is
+/// not mounted mounts the share first, as Properties of one does; a
+/// failed mount opens no Properties.
+///
+/// parity: SIDE-026, NET-004, PROP-002
+#[gtk::test]
+fn properties_of_several_recent_files_on_an_unmounted_share_mounts_it_first() {
+    let (_fixture, test, _) = selected_recent_file();
+    let rows = vec![
+        recent_row(
+            "sharerow1",
+            "Plan.txt",
+            "text/plain",
+            SHARE_FILE,
+            gtk::gio::FileType::Regular,
+        ),
+        recent_row(
+            "sharerow2",
+            "Notes.txt",
+            "text/plain",
+            "smb://example.invalid/share/Notes.txt",
+            gtk::gio::FileType::Regular,
+        ),
+    ];
+    list_recent_rows(&test, rows);
+    select_names(&test, &["Plan.txt", "Notes.txt"]);
+    let mounts = count_mounts(&test);
+
+    test.activate("properties", None);
+
+    wait_until("the mount before Properties", || mounts.get() >= 1);
+    wait_until("the failed mount's message", || {
+        test.window.shown_message().as_str() == "This location is not a folder."
+    });
+    assert!(
+        test.window.properties_windows().is_empty(),
+        "no Properties after a failed mount"
+    );
+}
+
+/// Several Recent rows standing for folders open in tabs in the order of
+/// the view, also when the first one is slower to read than the next.
+///
+/// parity: SIDE-026, TAB-027
+#[gtk::test]
+fn several_recent_folders_open_in_view_order_when_the_first_is_slow() {
+    use crate::test_support::held;
+
+    let (fixture, test, _) = selected_recent_file();
+    fs::create_dir(fixture.path("Alpha")).expect("a folder");
+    fs::create_dir(fixture.path("Beta")).expect("a folder");
+    let (alpha, beta) = (fixture.uri_of("Alpha"), fixture.uri_of("Beta"));
+    let folder = gtk::gio::FileType::Directory;
+    let rows = vec![
+        recent_row("alpharow", "Alpha", "inode/directory", &alpha, folder),
+        recent_row("betarow", "Beta", "inode/directory", &beta, folder),
+    ];
+    list_recent_rows(&test, rows);
+    select_names(&test, &["Alpha", "Beta"]);
+    let slow = held::hold(&held::lookup_key(&alpha));
+
+    test.activate("open", None);
+    wait_for(std::time::Duration::from_millis(300));
+    drop(slow);
+
+    wait_until("both folders in tabs", || {
+        let tabs = tab_uris(&test);
+        tabs.contains(&alpha) && tabs.contains(&beta)
+    });
+    let tabs = tab_uris(&test);
+    let place = |uri: &String| tabs.iter().position(|tab| tab == uri);
+    assert!(place(&alpha) < place(&beta), "view order: {tabs:?}");
+}
