@@ -716,6 +716,43 @@ mod tests {
         dialog.finish();
     }
 
+    /// A "+" or "-" with spaces around it still joins two keys, so
+    /// "ctrl + shift + e" is Ctrl+Shift+E; one after the last key, or after
+    /// another separator, is the key itself.
+    ///
+    /// parity: CMD-032
+    #[test]
+    fn separators_with_spaces_join_keys() {
+        assert_eq!(search_words("ctrl + shift + e"), ["ctrl", "shift", "e"]);
+        assert_eq!(search_words("ctrl+ shift+e"), ["ctrl", "shift", "e"]);
+        assert_eq!(search_words("ctrl - shift - e"), ["ctrl", "shift", "e"]);
+        assert_eq!(search_words("ctrl + +"), ["ctrl", "plus"]);
+        assert_eq!(search_words("num +"), ["num", "plus"]);
+        let keys = ["Shift+Ctrl+E".to_owned()];
+        for query in ["ctrl + shift + e", "ctrl+ shift+e", "Ctrl + Shift + E"] {
+            assert!(
+                query_matches(query, "Open the navigation pane", "Navigation", &keys),
+                "{query:?}"
+            );
+        }
+    }
+
+    /// A query that leaves no word to look for, such as a bracket alone,
+    /// finds nothing rather than everything.
+    ///
+    /// parity: CMD-032
+    #[test]
+    fn a_query_with_no_words_finds_nothing() {
+        let copy = ["Ctrl+C".to_owned()];
+        for query in ["(", ")", "( )"] {
+            assert!(!query_matches(query, "Copy", "Files", &copy), "{query:?}");
+        }
+        assert!(
+            query_matches("", "Copy", "Files", &copy),
+            "an empty search shows all"
+        );
+    }
+
     /// The labels the search leaves shown after typing `query`.
     fn shown_after(dialog: &Dialog, query: &str) -> Vec<String> {
         let search = descendants::<gtk::Entry>(dialog).remove(0);
