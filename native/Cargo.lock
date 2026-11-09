@@ -1418,6 +1418,7 @@ dependencies = [
  "kamadak-exif",
  "ox-core",
  "rustix",
+ "ruzstd",
  "serde",
  "serde_json",
  "tempfile",

@@ -64,9 +64,21 @@ impl<'a> Unpacking<'a> {
         for member in &plan.members {
             self.cancel.check()?;
             folders.create_folders(member, self.cancel)?;
-            if member.kind == PathKind::File {
-                let file = folders.file(&member.segments);
-                self.write_file(archive, member.index, file.as_ref())?;
+            match (member.kind, &member.link_target) {
+                (PathKind::File, _) => {
+                    let file = folders.file(&member.segments);
+                    self.write_file(archive, member.index, file.as_ref())?;
+                }
+                // ARC-016: a checked relative link, created new; nothing is
+                // ever written through it.
+                (PathKind::Link, Some(target)) => {
+                    let link = folders.file(&member.segments);
+                    self.extractor
+                        .output
+                        .create_link(link.as_ref(), target, self.cancel)?;
+                    self.files_done += 1;
+                }
+                _ => {}
             }
         }
         self.cancel.check()?;
@@ -166,7 +178,7 @@ impl<'a> StagedFolders<'a> {
         let segments = &member.segments;
         let folder_depth = match member.kind {
             PathKind::Folder => segments.len(),
-            PathKind::File => segments.len() - 1,
+            PathKind::File | PathKind::Link => segments.len() - 1,
         };
         for depth in 1..=folder_depth {
             let key = segments[..depth].join("/");

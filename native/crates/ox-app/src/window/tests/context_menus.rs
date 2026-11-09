@@ -1111,6 +1111,20 @@ fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() 
         ]
     );
     assert_eq!(menu.strip_labels(), ["Copy"]);
+    let compress = menu
+        .items()
+        .into_iter()
+        .find(|item| item.label == "Compress to")
+        .expect("Compress to");
+    let labels: Vec<String> = compress
+        .submenu
+        .iter()
+        .filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item.label.clone()),
+            MenuEntry::Divider => None,
+        })
+        .collect();
+    assert_eq!(labels, ["ZIP File", "TAR File", "Additional options"]);
     menu.popdown();
     wait_until("the menu to close", || !menu.is_mapped());
 
@@ -1158,9 +1172,10 @@ fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() 
     }
 }
 
-/// A pinned folder's Copy as path, Compress to › ZIP File and New ›
-/// Folder act on that folder, not on the file list's selection: the path
-/// is copied in quotes, the ZIP is made beside the folder, and New opens
+/// A pinned folder's Copy as path, Compress to › ZIP File and TAR File
+/// and New › Folder act on that folder, not on the file list's selection:
+/// the path is copied in quotes, the ZIP and TAR are made beside the
+/// folder, and New opens
 /// the folder and makes the new folder there.
 ///
 /// parity: SIDE-014, CLIP-013, ARC-023
@@ -1184,6 +1199,12 @@ fn a_pinned_folder_menu_copies_compresses_and_creates_in_that_folder() {
     test.activate("compress-to-zip-of", Some(&pinned));
     wait_until("the ZIP beside the folder", || {
         fixture.path("Pinned work.zip").exists()
+    });
+    test.wait_for_listing("the folder listed again");
+    test.activate("compress-to-tar-of", Some(&pinned));
+    wait_until("the TAR beside the folder", || {
+        fs::read(fixture.path("Pinned work.tar"))
+            .is_ok_and(|bytes| bytes.get(257..262) == Some(b"ustar".as_slice()))
     });
     test.wait_for_listing("the folder listed again");
 

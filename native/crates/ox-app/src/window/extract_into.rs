@@ -215,11 +215,14 @@ impl BrowserWindow {
         };
         let moved = uris.is_empty()
             || self
-                .transfer_without_undo(IncomingItems {
-                    mode: TransferMode::Move,
-                    uris,
-                    destination_folder: target.clone(),
-                })
+                .move_extracted_items(
+                    IncomingItems {
+                        mode: TransferMode::Move,
+                        uris,
+                        destination_folder: target.clone(),
+                    },
+                    &archive.uri,
+                )
                 .await
                 .is_some_and(|outcome| !outcome.result.cancelled);
         self.discard_private_folder(staging).await;

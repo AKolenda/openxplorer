@@ -14,6 +14,7 @@ mod header;
 mod zstd;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::rc::Rc;
 
@@ -21,7 +22,7 @@ use super::source::ArchiveStream;
 use super::zip::{CompressionMethod, DosDateTime, ZipMember};
 use super::ArchiveError;
 use crate::transfer::Cancellation;
-use header::{is_end, parse, pax_path_and_size, HeaderKind, BLOCK};
+use header::{is_end, parse, pax_records, HeaderKind, BLOCK};
 
 /// The most bytes of a GNU long name or pax record set.
 const MAX_METADATA_BYTES: u64 = 1024 * 1024;
@@ -147,6 +148,9 @@ pub(crate) struct TarArchive {
     source: SharedStream,
     compression: TarCompression,
     members: Vec<ZipMember>,
+    /// The targets of the members that are symbolic links, by index;
+    /// hard links, devices and FIFOs have none and are never extracted.
+    link_targets: HashMap<usize, String>,
     /// Where each member's data starts in the decompressed stream.
     data_offsets: Vec<u64>,
     /// The decompressed stream and how far it has been read.
@@ -186,6 +190,7 @@ impl TarArchive {
             source,
             compression,
             members: Vec::new(),
+            link_targets: HashMap::new(),
             data_offsets: Vec::new(),
             reader,
             position: 0,
@@ -199,6 +204,11 @@ impl TarArchive {
     /// Every member, in archive order.
     pub(crate) fn members(&self) -> &[ZipMember] {
         &self.members
+    }
+
+    /// The targets of the symbolic links among the members, by index.
+    pub(crate) fn link_targets(&self) -> &HashMap<usize, String> {
+        &self.link_targets
     }
 
     /// Starts reading the data of the member at `index`.
@@ -250,6 +260,7 @@ impl TarArchive {
     /// Reads every header, recording the members and where their data is.
     fn read_headers(&mut self, max_members: usize) -> Result<(), ArchiveError> {
         let mut long_name: Option<String> = None;
+        let mut long_link: Option<String> = None;
         let mut pax_size: Option<u64> = None;
         let mut name_bytes = 0usize;
         loop {
@@ -274,27 +285,46 @@ impl TarArchive {
                     if header.kind == HeaderKind::LongName {
                         long_name = Some(header::text(&data));
                     } else {
-                        let (path, size) = pax_path_and_size(&data);
-                        long_name = path.or(long_name);
-                        pax_size = size;
+                        let records = pax_records(&data);
+                        long_name = records.path.or(long_name);
+                        long_link = records.link.or(long_link);
+                        pax_size = records.size;
                     }
                     continue;
                 }
-                HeaderKind::LongLink | HeaderKind::GlobalPax => {
+                HeaderKind::LongLink => {
+                    if header.size > MAX_METADATA_BYTES {
+                        return Err(ArchiveError::DamagedArchive);
+                    }
+                    let data = self.read_data(metadata_blocks, header.size)?;
+                    long_link = Some(header::text(&data));
+                    continue;
+                }
+                HeaderKind::GlobalPax => {
                     self.skip(metadata_blocks)?;
                     continue;
                 }
-                HeaderKind::File | HeaderKind::Folder | HeaderKind::Special => {}
+                HeaderKind::File | HeaderKind::Folder | HeaderKind::SymbolicLink | HeaderKind::Special => {}
             }
             let size = pax_size.take().unwrap_or(header.size);
             let name = long_name.take().unwrap_or(header.name);
+            let link = long_link.take().unwrap_or(header.link);
             if let Some(member) = member(&name, header.kind, header.mode, size, header.modified) {
                 if self.members.len() >= max_members {
                     return Err(ArchiveError::TooManyMembers);
                 }
-                name_bytes = name_bytes.saturating_add(member.name.len());
+                // ARC-005: link targets are kept too, so they count with
+                // the names.
+                let kept_link = (header.kind == HeaderKind::SymbolicLink).then_some(link);
+                let link_bytes = kept_link.as_ref().map_or(0, String::len);
+                name_bytes = name_bytes
+                    .saturating_add(member.name.len())
+                    .saturating_add(link_bytes);
                 if name_bytes > MAX_NAME_BYTES {
                     return Err(ArchiveError::TarNamesTooLarge);
+                }
+                if let Some(target) = kept_link {
+                    self.link_targets.insert(self.members.len(), target);
                 }
                 self.members.push(member);
                 self.data_offsets.push(self.position);

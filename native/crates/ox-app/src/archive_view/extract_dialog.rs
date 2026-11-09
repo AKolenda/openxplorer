@@ -40,7 +40,7 @@ use crate::window::ButtonStyle;
 
 /// What the dialog promises, in the information bubble.
 const EXTRACT_MESSAGE: &str = crate::i18n::message_id(
-    "The ZIP is kept unchanged. A folder that does not exist yet is created; \
+    "The archive is kept unchanged. A folder that does not exist yet is created; \
                                in an existing folder you are asked before any file is replaced.",
 );
 /// The field's label, as Explorer words it.
@@ -55,7 +55,7 @@ const EXTRACT_HINT: &str = crate::i18n::message_id(
                             Password-protected ZIPs need an external archive manager.",
 );
 /// Extract before the check finished.
-const WAIT_FOR_CHECK: &str = crate::i18n::message_id("Still checking the ZIP. Try again in a moment.");
+const WAIT_FOR_CHECK: &str = crate::i18n::message_id("Still checking the archive. Try again in a moment.");
 /// A ZIP the check refused because a member is encrypted.
 const HAS_PASSWORD: &str = crate::i18n::message_id(
     "This ZIP has a password, so OpenXplorer cannot extract it. \
@@ -443,6 +443,7 @@ mod tests {
             unpacked_bytes: 912,
             entry_count: 2,
             left_out: 0,
+            link_count: 0,
         };
         let several = ExtractionSummary {
             file_count: 3,
@@ -450,6 +451,7 @@ mod tests {
             unpacked_bytes: 1280,
             entry_count: 3,
             left_out: 0,
+            link_count: 0,
         };
 
         assert_eq!(summary_text(&one_each), "1 file · 1 folder · 912 bytes unpacked");

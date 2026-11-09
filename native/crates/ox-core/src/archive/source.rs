@@ -99,6 +99,16 @@ impl OpenedArchive {
         }
     }
 
+    /// The targets of the members that are symbolic links, by index: a
+    /// TAR's, which may be extracted (ARC-016); `None` for a ZIP, whose
+    /// links are all refused.
+    pub(super) fn link_targets(&self) -> Option<&std::collections::HashMap<usize, String>> {
+        match self {
+            Self::Zip(_) => None,
+            Self::Tar(archive) => Some(archive.link_targets()),
+        }
+    }
+
     /// Starts reading the data of the member at `index`.
     ///
     /// # Errors

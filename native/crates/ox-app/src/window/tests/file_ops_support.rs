@@ -249,7 +249,7 @@ pub(in crate::window) enum ConflictAnswer {
 
 /// The progress window of `test`'s application, once an action asks
 /// "Replace or Skip Files".
-fn asking_window(test: &TestWindow) -> crate::window::progress_window::ProgressWindow {
+pub(in crate::window) fn asking_window(test: &TestWindow) -> crate::window::progress_window::ProgressWindow {
     wait_until("the Replace or Skip Files question", || {
         test.context.progress_window().is_some_and(|window| {
             window.is_visible()

@@ -13,11 +13,14 @@ pub(super) enum HeaderKind {
     File,
     /// A folder.
     Folder,
-    /// A link, device, FIFO or anything else: never extracted.
+    /// A symbolic link: extracted only when its target is relative and
+    /// stays inside the extracted folder (ARC-016).
+    SymbolicLink,
+    /// A hard link, device, FIFO or anything else: never extracted.
     Special,
     /// The next header's long name (GNU `L`).
     LongName,
-    /// The next header's long link target (GNU `K`), which is ignored.
+    /// The next header's long link target (GNU `K`).
     LongLink,
     /// The next header's pax records (`x`).
     Pax,
@@ -37,6 +40,8 @@ pub(super) struct Header {
     pub(super) size: u64,
     /// Seconds since the Unix epoch.
     pub(super) modified: u64,
+    /// A link's target, as the header records it.
+    pub(super) link: String,
 }
 
 /// Why a header could not be read.
@@ -68,6 +73,7 @@ pub(super) fn parse(block: &[u8; BLOCK]) -> Result<Header, BadHeader> {
     let kind = match block[156] {
         b'0' | 0 | b'7' => HeaderKind::File,
         b'5' => HeaderKind::Folder,
+        b'2' => HeaderKind::SymbolicLink,
         b'L' => HeaderKind::LongName,
         b'K' => HeaderKind::LongLink,
         b'x' => HeaderKind::Pax,
@@ -86,13 +92,23 @@ pub(super) fn parse(block: &[u8; BLOCK]) -> Result<Header, BadHeader> {
         mode: u32::try_from(octal(&block[100..108]).unwrap_or(0) & 0o7777).unwrap_or(0),
         size: number(&block[124..136]).ok_or(BadHeader)?,
         modified: number(&block[136..148]).unwrap_or(0),
+        link: text(&block[157..257]),
     })
 }
 
-/// The `path` and `size` of a pax record set (`<length> <key>=<value>\n`
-/// lines).
-pub(super) fn pax_path_and_size(records: &[u8]) -> (Option<String>, Option<u64>) {
-    let (mut path, mut size) = (None, None);
+/// What a pax record set (`<length> <key>=<value>\n` lines) says about
+/// the next member.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct PaxRecords {
+    pub(super) path: Option<String>,
+    pub(super) size: Option<u64>,
+    /// A link's target (`linkpath`).
+    pub(super) link: Option<String>,
+}
+
+/// The `path`, `size` and `linkpath` of a pax record set.
+pub(super) fn pax_records(records: &[u8]) -> PaxRecords {
+    let (mut path, mut size, mut link) = (None, None, None);
     let mut rest = records;
     while let Some(space) = rest.iter().position(|&byte| byte == b' ') {
         let Some(length) = std::str::from_utf8(&rest[..space])
@@ -107,6 +123,8 @@ pub(super) fn pax_path_and_size(records: &[u8]) -> (Option<String>, Option<u64>)
         let record = &rest[space + 1..length - 1];
         if let Some(value) = record.strip_prefix(b"path=") {
             path = Some(String::from_utf8_lossy(value).into_owned());
+        } else if let Some(value) = record.strip_prefix(b"linkpath=") {
+            link = Some(String::from_utf8_lossy(value).into_owned());
         } else if let Some(value) = record.strip_prefix(b"size=") {
             size = std::str::from_utf8(value)
                 .ok()
@@ -114,7 +132,7 @@ pub(super) fn pax_path_and_size(records: &[u8]) -> (Option<String>, Option<u64>)
         }
         rest = &rest[length..];
     }
-    (path, size)
+    PaxRecords { path, size, link }
 }
 
 /// A NUL-terminated field as text.
@@ -181,10 +199,14 @@ mod tests {
 
     #[test]
     fn pax_records_give_long_paths_and_sizes() {
-        let records = b"29 path=a/very/long/name.txt\n17 size=99999999\n";
+        let records = b"29 path=a/very/long/name.txt\n17 size=99999999\n24 linkpath=../lib/x.so\n";
         assert_eq!(
-            pax_path_and_size(records),
-            (Some("a/very/long/name.txt".to_owned()), Some(99_999_999))
+            pax_records(records),
+            PaxRecords {
+                path: Some("a/very/long/name.txt".to_owned()),
+                size: Some(99_999_999),
+                link: Some("../lib/x.so".to_owned()),
+            }
         );
     }
 }

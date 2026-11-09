@@ -52,7 +52,10 @@ pub(crate) enum DragRefusal {
     ItemCount,
     /// An item that may not leave: a ZIP member, a share listing, a
     /// server, a special file.
-    #[error("{}", ox_core::i18n::gettext("Extract ZIP contents before dragging them."))]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Extract the archive before dragging items out of it.")
+    )]
     NotDraggable,
     /// The addresses and paths are over [`MAX_PAYLOAD_BYTES`].
     #[error("{}", ox_core::i18n::gettext("This file selection is too large to drag."))]
@@ -257,7 +260,7 @@ mod tests {
         );
         assert_eq!(
             DragRefusal::NotDraggable.to_string(),
-            "Extract ZIP contents before dragging them."
+            "Extract the archive before dragging items out of it."
         );
         assert_eq!(
             DragRefusal::ItemCount.to_string(),
