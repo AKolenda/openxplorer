@@ -124,12 +124,14 @@ impl BrowserWindow {
             left,
             move |keys, key, _, modifiers| {
                 let is_alt = matches!(key, gdk::Key::Alt_L | gdk::Key::Alt_R);
+                // Only the modifiers that make a shortcut count; Caps Lock
+                // and Num Lock do not.
                 let others = gdk::ModifierType::SHIFT_MASK
                     | gdk::ModifierType::CONTROL_MASK
                     | gdk::ModifierType::SUPER_MASK
                     | gdk::ModifierType::META_MASK;
                 alone.set(is_alt && !modifiers.intersects(others));
-                if key != gdk::Key::Escape || !modifiers.is_empty() {
+                if key != gdk::Key::Escape || modifiers.intersects(others | gdk::ModifierType::ALT_MASK) {
                     return glib::Propagation::Proceed;
                 }
                 let Some(window) = keys.widget().and_downcast::<BrowserWindow>() else {
@@ -178,8 +180,23 @@ impl BrowserWindow {
         let clicks = gtk::GestureClick::new();
         clicks.set_button(0);
         clicks.set_propagation_phase(gtk::PropagationPhase::Capture);
-        clicks.connect_pressed(move |_, _, _, _| alone.set(false));
+        clicks.connect_pressed(glib::clone!(
+            #[strong]
+            alone,
+            move |_, _, _, _| alone.set(false)
+        ));
         self.add_controller(clicks);
+        // Leaving the window (Alt+Tab) ends an Alt, so its release seen on
+        // coming back does not count as Alt alone.
+        self.connect_is_active_notify(move |_| alone.set(false));
+        // Escape gives the keyboard back only while it is still in the
+        // command bar Alt moved it to: once it leaves (F6, a click, Tab),
+        // Escape there is Escape again.
+        self.connect_notify_local(Some("focus-widget"), move |window, _| {
+            if window.focused_region() != Some(Region::Commands) {
+                left.replace(glib::WeakRef::new());
+            }
+        });
     }
 
     /// Moves keyboard focus to the next region that can take it, or the

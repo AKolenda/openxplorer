@@ -3671,8 +3671,8 @@ msgid "Extract all files from this archive"
 msgstr "从此压缩包中解压所有文件"
 
 #: crates/ox-app/src/window/command_bar.rs
-msgid "More options"
-msgstr "更多选项"
+msgid "See more"
+msgstr "查看更多"
 
 #: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
 msgid "New"

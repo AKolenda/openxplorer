@@ -612,6 +612,30 @@ fn alt_alone_moves_the_keyboard_to_the_command_bar_and_escape_brings_it_back() {
         Some(Region::Address),
         "Alt with another key does not move the keyboard to the command bar"
     );
+
+    // Once the keyboard has left the command bar Alt moved it to, Escape
+    // there no longer jumps back to the address bar Alt took it from.
+    pointer.tap_key(gdk::Key::Alt_L);
+    wait_until("Alt to move the keyboard to the command bar again", || {
+        test.window.focused_region() == Some(Region::Commands)
+    });
+    pointer.tap_key(gdk::Key::F6);
+    wait_until("F6 to leave the command bar", || {
+        test.window.focused_region() != Some(Region::Commands)
+    });
+    pointer.hold_key(gdk::Key::Shift_L);
+    pointer.tap_key(gdk::Key::F6);
+    pointer.let_go_key(gdk::Key::Shift_L);
+    wait_until("Shift+F6 to come back to the command bar", || {
+        test.window.focused_region() == Some(Region::Commands)
+    });
+    pointer.tap_key(gdk::Key::Escape);
+    wait_for(std::time::Duration::from_millis(200));
+    assert_ne!(
+        test.window.focused_region(),
+        Some(Region::Address),
+        "Escape gives the keyboard back only straight after Alt"
+    );
     // Back to the screen's middle, as the other real-pointer tests end.
     pointer.move_to(720, 500);
 }

@@ -191,15 +191,19 @@ pub fn normalise_item(uri: &str) -> Result<String, LocationError> {
 /// device part still goes through [`normalise`], and the path must be the
 /// absolute, already normal path GIO lists an item with (no `.` or `..`,
 /// no empty segment, no query or fragment), so nothing here can reach
-/// outside the item. The name keeps its exact bytes, escaped as
-/// [`normalise`] escapes every path.
+/// outside the item. No name holds a NUL or a slash, so an escaped one
+/// (`%00`, `%2F`) is refused too. The name keeps its exact bytes, escaped
+/// as [`normalise`] escapes every path.
 fn listed_item_uri(uri: &str) -> Option<String> {
     let (scheme, rest) = uri.split_once("://")?;
     let (authority, escaped_path) = rest.split_at(rest.find('/')?);
-    if escaped_path.contains(['?', '#']) {
+    if escaped_path.contains(['?', '#']) || escaped_path.to_ascii_lowercase().contains("%2f") {
         return None;
     }
     let path: Vec<u8> = percent_encoding::percent_decode_str(escaped_path).collect();
+    if path.contains(&0) {
+        return None;
+    }
     let typed_would_be_refused = std::str::from_utf8(&path).map_or(true, has_control_character);
     let segments = path[1..].split(|byte| *byte == b'/');
     let is_listed_path = segments
@@ -833,6 +837,11 @@ mod tests {
             "not a listed item's URI"
         );
         assert!(require_item_uri("file:///tmp/a%0Ab?x").is_err());
+        assert!(require_item_uri("file:///tmp/ox-test/a%00b").is_err(), "no name holds a NUL");
+        assert!(
+            require_item_uri("file:///tmp/ox-test/a%2F..%2Fb%0A").is_err(),
+            "no name holds a slash"
+        );
         assert!(canonical("smb://nas/a%00b").is_err(), "a typed address");
         assert!(canonical("file:///tmp/a%0Ab").is_err(), "a typed address");
     }
