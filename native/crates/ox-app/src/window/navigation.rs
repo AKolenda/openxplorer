@@ -114,13 +114,16 @@ impl BrowserWindow {
         }
     }
 
-    /// The home folder or landing page whose title is `typed` ("Home",
-    /// "This PC", "Network"), as the address bar shows them.
+    /// The home folder, landing page or listed place whose title is
+    /// `typed` ("Home", "This PC", "Network", "Recycle Bin", "Recent",
+    /// "Recent locations"), as the address bar shows them.
     pub(super) fn place_titled(&self, typed: &str) -> Option<String> {
         if typed.trim().eq_ignore_ascii_case("home") {
             return Some(self.imp().locations.borrow().home_uri());
         }
-        Page::from_title(typed).map(|page| page.uri().to_owned())
+        Page::from_title(typed)
+            .map(|page| page.uri().to_owned())
+            .or_else(|| listed_place(VirtualPlace::from_title(typed)))
     }
 
     /// `address` as a location, relative to the current folder, or to the
@@ -677,6 +680,20 @@ fn path_through_zip(uri: &str) -> Option<String> {
     }
     let root = ArchiveLocation::root(&ox_core::location::file_uri(zip));
     ox_core::archive::is_safe_member_name(&member).then(|| root.member(&member).uri())
+}
+
+/// The URI of `place` when it is one the app lists like a folder and the
+/// navigation pane may leave out (SIDE-034): the Recycle Bin, Recent or
+/// Recent locations.
+pub(super) fn listed_place(place: Option<VirtualPlace>) -> Option<String> {
+    place
+        .filter(|place| {
+            matches!(
+                place,
+                VirtualPlace::RecycleBin | VirtualPlace::Recent | VirtualPlace::RecentLocations
+            )
+        })
+        .map(|place| place.uri().to_owned())
 }
 
 /// The Recycle Bin or Recent by its title or URI, or a location in it,

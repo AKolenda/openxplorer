@@ -18,6 +18,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryError, EntryKind};
 use ox_core::integration;
+use ox_core::location::VirtualPlace;
 
 use crate::folder_view::loader::Listing;
 use crate::locations::{self, Page};
@@ -517,7 +518,11 @@ impl BrowserWindow {
         let current = self.current_uri();
         let place = self.place_titled(typed);
         let unchanged_page = place.is_some() && place == current;
-        let is_page_uri = locations::is_home_alias(typed) || Page::from_uri(typed).is_some();
+        // The Recycle Bin's, Recent's and Recent locations' own addresses
+        // open them as the pages' do (SIDE-034).
+        let is_page_uri = locations::is_home_alias(typed)
+            || Page::from_uri(typed).is_some()
+            || super::navigation::listed_place(VirtualPlace::from_uri(typed)).is_some();
         if unchanged_page || is_page_uri {
             self.accept_address(typed, source);
             self.navigate_or_report(typed);
