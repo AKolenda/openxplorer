@@ -3352,7 +3352,7 @@ mod tests {
         let types = picker.types.clone().expect("a type list");
         assert_eq!(name.text(), "report", "the new file's name without .txt");
         assert_eq!(name.selection_bounds(), Some((0, 6)), "all of it selected");
-        capture(window, "picker-save-extensions-hidden.png");
+        crate::test_support::harness::capture_in_both_themes(window, "save-dialog-extensions-hidden");
 
         window
             .folder_model()
@@ -3429,7 +3429,7 @@ mod tests {
         let picker = window.picker().expect("a picker");
         let name = picker.name.clone().expect("a name box");
         assert_eq!(name.text(), "report.txt");
-        capture(window, "picker-save-extensions-shown.png");
+        crate::test_support::harness::capture_in_both_themes(window, "save-dialog-extensions-shown");
         window
             .folder_model()
             .selection()
@@ -3495,7 +3495,7 @@ mod tests {
         let (width, height) = (gtk::prelude::WidgetExt::width(&question), question.height());
         assert!(width < 420, "sized to its words, not 510 pixels: {width}");
         assert!(height < 200, "no empty room: {height}");
-        capture(window, "confirm-save-as-short.png");
+        crate::test_support::harness::capture_in_both_themes(window, "confirm-save-as-short");
 
         press_in(&question, "No");
         wait_until("the question to close", || {
@@ -3561,7 +3561,7 @@ mod tests {
             "the box wraps the name instead of widening: {width}"
         );
         assert!(height < 260, "no empty room under the words: {height}");
-        capture(window, "confirm-save-as-long.png");
+        crate::test_support::harness::capture_in_both_themes(window, "confirm-save-as-long");
         press_in(&question, "No");
         window.cancel_picking();
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);

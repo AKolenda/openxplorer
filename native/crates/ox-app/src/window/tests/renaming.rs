@@ -345,7 +345,7 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     field.emit_activate();
     let question = open_dialog(&test);
     super::file_ops_support::assert_windows_extension_question(&question);
-    crate::test_support::harness::capture_dialog(&question, "rename-extension-question.png");
+    crate::test_support::harness::capture_in_both_themes(&question, "rename-question");
     question.press("No");
     wait_for_no_dialog(&test);
     wait_until("the field to come back", || field.is_sensitive());
