@@ -199,6 +199,7 @@ impl BrowserWindow {
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
+        self.folder_pane().set_styled_location(uri);
         if preferences.per_folder_views {
             self.apply_style(&style);
             return;
@@ -223,6 +224,7 @@ impl BrowserWindow {
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
+        pane.set_styled_location(uri);
         if preferences.per_folder_views {
             self.apply_style_to(pane, &style);
             return;

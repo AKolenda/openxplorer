@@ -311,11 +311,15 @@ impl BrowserWindow {
         self.show_split_layout(beside.is_some());
         let Some(beside) = beside else { return };
         let pane = self.pane_on(self.imp().active_side.get().other());
-        // A pane that shows this tab already, as the one just left when the
-        // other pane becomes active or the pane a split opened from, keeps
-        // the style it shows: a choice made there a moment ago may not be
-        // saved yet, and the saved style would undo it.
-        let shows_it_already = pane.model().shows_store(&beside.store);
+        // A pane that shows this tab at its location already, as the one
+        // just left when the other pane becomes active or the pane a split
+        // opened from, keeps the style it shows: a choice made there a
+        // moment ago may not be saved yet, and the saved style would undo
+        // it. A tab moved elsewhere in the background keeps its store, so
+        // the location counts too.
+        let location = self.beside_location();
+        let shows_it_already = pane.model().shows_store(&beside.store)
+            && location.as_deref().is_some_and(|uri| pane.is_styled_for(uri));
         self.change_model(|| {
             let model = pane.model();
             model.set_query("");
@@ -326,7 +330,7 @@ impl BrowserWindow {
         // Another tab's pane shows its folder's style, with the groups of
         // Downloads (VIEW-022).
         if !shows_it_already {
-            if let Some(uri) = self.beside_location() {
+            if let Some(uri) = location {
                 self.follow_folder_style_in(pane, &uri);
             }
         }

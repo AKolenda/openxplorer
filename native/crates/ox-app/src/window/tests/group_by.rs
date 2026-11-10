@@ -1378,3 +1378,52 @@ fn a_group_by_not_saved_yet_stays_in_the_pane_just_left() {
         assert_eq!(left, Some(GroupBy::Type), "one style for all folders: {shared}");
     }
 }
+
+/// The pane beside the active one, moved to another folder by an open
+/// that resolves after the user went to the other pane, shows that
+/// folder's style, not the one it showed before: Downloads there is
+/// grouped by date although the folder it left was not.
+///
+/// parity: VIEW-022, VIEW-059
+#[gtk::test]
+fn the_pane_beside_moved_to_downloads_shows_its_groups() {
+    use gtk::subclass::prelude::*;
+
+    use crate::window::session::PaneSide;
+
+    for shared in [false, true] {
+        let home = TestHome::new();
+        let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+        if shared {
+            test.share_one_view();
+        }
+        test.activate("split-view", None);
+        test.wait_for_listing("the second pane");
+        test.window.activate_pane(PaneSide::Start);
+        let beside = test
+            .window
+            .imp()
+            .session
+            .borrow()
+            .beside_active()
+            .expect("the pane beside");
+
+        test.window.navigate_background_tab(beside, &home.downloads());
+        wait_until("Downloads listed beside", || {
+            test.window.beside_uri() == Some(home.downloads())
+                && test.window.pane_on(PaneSide::End).model().n_items() == 3
+        });
+
+        let grouping = test
+            .window
+            .pane_on(PaneSide::End)
+            .model()
+            .grouping()
+            .map(|grouping| grouping.by);
+        assert_eq!(
+            grouping,
+            Some(GroupBy::Modified),
+            "one style for all folders: {shared}"
+        );
+    }
+}

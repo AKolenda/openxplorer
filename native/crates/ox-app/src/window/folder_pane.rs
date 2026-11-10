@@ -62,7 +62,7 @@ impl PanePage {
 }
 
 mod imp {
-    use std::cell::OnceCell;
+    use std::cell::{OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
@@ -75,6 +75,8 @@ mod imp {
     pub(crate) struct FolderPane {
         /// The widgets and the folder model, built by `constructed`.
         pub(super) parts: OnceCell<PaneParts>,
+        /// The location whose folder style the pane shows.
+        pub(super) styled_location: RefCell<Option<String>>,
     }
 
     #[glib::object_subclass]
@@ -122,6 +124,20 @@ glib::wrapper! {
 const KEYBOARD_ON_EMPTY_LIST: &str = "keyboard-on-empty-list";
 
 impl FolderPane {
+    /// Notes that the pane shows the folder style of `uri`.
+    pub(crate) fn set_styled_location(&self, uri: &str) {
+        self.imp().styled_location.replace(Some(uri.to_owned()));
+    }
+
+    /// Whether the pane shows the folder style of `uri`.
+    pub(crate) fn is_styled_for(&self, uri: &str) -> bool {
+        self.imp()
+            .styled_location
+            .borrow()
+            .as_deref()
+            .is_some_and(|styled| ox_core::location::same_location(styled, uri))
+    }
+
     /// Builds the pages, empty and in the details view.
     fn build_parts(&self) {
         let parts = PaneParts::new();
