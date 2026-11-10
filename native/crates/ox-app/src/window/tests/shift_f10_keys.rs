@@ -383,3 +383,60 @@ fn shift_right_click_still_opens_the_classic_menu() {
     }
     pointer.move_to(720, 500);
 }
+
+/// The key text the row labelled `label` of `menu` shows, if any.
+fn shortcut_text_of(menu: &MenuPopover, label: &str) -> Option<String> {
+    crate::test_support::harness::descendants::<gtk::Label>(&menu.row(label))
+        .into_iter()
+        .find(|text| text.has_css_class("shortcut"))
+        .map(|text| text.text().to_string())
+}
+
+/// Windows 11's menu shows no key beside "Show more options" (checked on
+/// a Windows 11 VM), and Shift+F10 opens this same menu as it comes, so
+/// the row shows no key on the file list or the navigation pane. With
+/// "Shift+F10 opens the classic menu" on, Shift+F10 is the key that opens
+/// what the row opens, and the row shows "Shift+F10".
+///
+/// parity: CMD-008, CMD-013
+#[gtk::test]
+fn show_more_options_shows_shift_f10_only_when_it_opens_the_classic_menu() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win11);
+    for on in [false, true] {
+        choose_shift_f10_classic(&test, on);
+        let expected = on.then(|| "Shift+F10".to_owned());
+
+        test.window.right_click(Some(test.position_of("Notes 2.txt")));
+        let menu = test.window.context_menu();
+        wait_until("the item's menu", || menu.is_visible());
+        assert_eq!(
+            shortcut_text_of(&menu, "Show more options"),
+            expected,
+            "an item, setting {on}"
+        );
+        menu.popdown();
+
+        test.window.right_click(None);
+        let menu = test.window.context_menu();
+        wait_until("the folder's menu", || menu.is_visible());
+        assert_eq!(
+            shortcut_text_of(&menu, "Show more options"),
+            expected,
+            "the folder, setting {on}"
+        );
+        menu.popdown();
+
+        let menu = test.window.sidebar().right_click_row("This PC");
+        menu.popup();
+        wait_until("the row's menu", || menu.is_visible());
+        assert_eq!(
+            shortcut_text_of(&menu, "Show more options"),
+            expected,
+            "This PC's row, setting {on}"
+        );
+        menu.popdown();
+    }
+    choose_shift_f10_classic(&test, false);
+}

@@ -232,3 +232,70 @@ fn escape_during_a_drag_onto_another_window_moves_nothing() {
     });
     pointer.move_to(720, 500);
 }
+
+/// Opens `test`'s window on This PC, with `pinned` (a folder of the
+/// fixture) pinned to the navigation pane, and returns where the Local
+/// Disk tile and the pinned row are on the screen.
+fn this_pc_with_a_pinned_folder(
+    pointer: &mut Pointer,
+    test: &TestWindow,
+    fixture: &Fixture,
+    pinned: &str,
+) -> ((i32, i32), (i32, i32)) {
+    test.window.navigate(&fixture.uri_of(pinned)).expect("the folder");
+    test.wait_for_listing("the pinned folder");
+    test.activate("pin-folder", None);
+    wait_until("the pin", || {
+        test.window.sidebar().labels().contains(&pinned.to_owned())
+    });
+    test.window
+        .navigate(crate::locations::Page::ThisPc.uri())
+        .expect("This PC");
+    wait_until("This PC's tiles", || {
+        !crate::window::landing::tile_groups(test.window.folder_pane().landing()).is_empty()
+    });
+    wait_for_frames(&test.window, 3);
+    let tile = crate::window::landing::tile_groups(test.window.folder_pane().landing())
+        .into_iter()
+        .flat_map(|(_, tiles)| tiles)
+        .find(|tile| {
+            crate::test_support::harness::descendants::<gtk::Label>(tile)
+                .first()
+                .is_some_and(|label| label.text() == "Local Disk")
+        })
+        .expect("This PC shows Local Disk");
+    let from = middle_on_screen(pointer, &tile);
+    let sidebar = test.window.sidebar();
+    let list = sidebar.list().clone();
+    let row_y = sidebar.middle_of(pinned);
+    let onto = crate::test_support::pointer::screen_point(pointer, &list, (60.0, row_y), PROBE);
+    (from, onto)
+}
+
+/// Escape during a real drag of a drive tile of This PC onto a pinned
+/// folder calls the drag off: the release over the folder makes no
+/// shortcut to the drive. A drag without Escape still makes one.
+///
+/// parity: DND-029, DND-019
+#[gtk::test]
+fn escape_during_a_drag_of_a_drive_tile_makes_no_shortcut() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Drive drops")).expect("a folder");
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    let shortcut = fixture.path("Drive drops/Local Disk - Shortcut");
+    let (from, onto) = this_pc_with_a_pinned_folder(&mut pointer, &test, &fixture, "Drive drops");
+
+    drag_escape_and_release(&mut pointer, &test, from, onto, None);
+    wait_for(HOLD);
+    assert!(
+        std::fs::symlink_metadata(&shortcut).is_err(),
+        "Escape called the drag off: no shortcut was made"
+    );
+
+    drag_and_release(&mut pointer, &test, from, onto, None);
+    wait_until("a drag without Escape to make the shortcut", || {
+        std::fs::symlink_metadata(&shortcut).is_ok()
+    });
+    pointer.move_to(720, 500);
+}
