@@ -629,8 +629,10 @@ fn a_rename_reaches_every_tab() {
     );
 }
 
-/// Closing Properties while OK applies waits for the change: a refused
-/// change keeps the window open with its message, and a made one closes it.
+/// Closing Properties while OK applies waits for the change: No to the
+/// extension question keeps the old name, with no message, and the window
+/// then closes, as it does once a change is made. (A refused change keeps
+/// it open with its message: the_name_in_properties_renames_the_item.)
 ///
 /// parity: PROP-001
 #[gtk::test]
@@ -648,11 +650,16 @@ fn closing_during_ok_waits_for_the_change() {
     let question = message_over(&window);
     window.close();
     assert!(!window.is_closed(), "the window waits for the change");
+    // No keeps the old name without a message, so the close goes ahead.
     question.press("No");
-    refusal_over(&window).press("OK");
-    assert!(!window.is_closed(), "a refused change keeps the window");
+    wait_until("the window to close after No", || window.is_closed());
+    assert!(fixture.path("Notes 2.txt").is_file(), "No keeps the old name");
+    assert!(!fixture.path("Notes 2.md").exists());
 
-    wait_until("no message", || dialog_over_properties(&window).is_none());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    name_field(&window).set_text("Notes 2.md");
     window.ok_button().emit_clicked();
     wait_until("the question again", || extension_questions(&window) == 1);
     let question = message_over(&window);
