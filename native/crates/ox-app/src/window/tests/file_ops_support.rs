@@ -74,6 +74,26 @@ pub(in crate::window) fn assert_windows_extension_question(dialog: &Dialog) {
     assert!(dialog.height() < 240, "no empty room: {}", dialog.height());
 }
 
+/// The keys that press a message box's buttons, as GTK writes them
+/// (`<Alt>y`).
+pub(in crate::window) fn mnemonic_triggers(frame: &crate::dialog::DialogFrame) -> Vec<String> {
+    frame
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .filter_map(|shortcut| shortcut.trigger())
+                .map(|trigger| trigger.to_str().to_string())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
 /// Checks the parts every Windows message box of the app shares, inside
 /// `widget`: its caption with the title, the warning icon beside the
 /// words, and Alt with the first letter of each button pressing it.
@@ -95,21 +115,7 @@ pub(in crate::window) fn assert_windows_message_box(widget: &gtk::Widget, defaul
         .filter_map(|button| button.label().map(String::from))
         .collect();
     assert_eq!(accent, [default], "the default button is drawn as the default");
-    let triggers: Vec<String> = frame
-        .observe_controllers()
-        .iter::<glib::Object>()
-        .filter_map(Result::ok)
-        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
-        .flat_map(|controller| {
-            controller
-                .iter::<glib::Object>()
-                .filter_map(Result::ok)
-                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
-                .filter_map(|shortcut| shortcut.trigger())
-                .map(|trigger| trigger.to_str().to_string())
-                .collect::<Vec<_>>()
-        })
-        .collect();
+    let triggers = mnemonic_triggers(&frame);
     for key in ["<Alt>y", "<Alt>n"] {
         assert!(
             triggers.iter().any(|trigger| trigger == key),

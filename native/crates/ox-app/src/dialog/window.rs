@@ -387,6 +387,14 @@ impl Dialog {
         answer
     }
 
+    /// Lets Alt with `letter` press `answer`'s button too, as Windows'
+    /// translated message boxes keep the English key ("是(Y)").
+    pub(crate) fn also_press_with(&self, answer: DialogButton, letter: char) {
+        if let Some(button) = self.imp().buttons.borrow().get(answer.0) {
+            self.imp().frame.also_press_with(button, letter);
+        }
+    }
+
     /// A button appended to the actions and remembered.
     fn new_button(&self, label: &str, style: ButtonStyle) -> gtk::Button {
         let button = self.imp().frame.add_button(label, style);

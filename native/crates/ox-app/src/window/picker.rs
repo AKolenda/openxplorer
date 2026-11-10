@@ -3442,6 +3442,77 @@ mod tests {
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
+    /// With extensions hidden and no type list, a new name typed over
+    /// the name shown keeps the extension File name hides, as the stem
+    /// selection left it outside before: "report" (report.txt) edited to
+    /// "summary" saves summary.txt. A name typed with an extension of its
+    /// own is saved as typed.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_hidden_an_edited_name_keeps_the_hidden_extension() {
+        for (suggested, shown, typed, saved) in [
+            ("report.txt", "report", "summary", "summary.txt"),
+            ("backup.tar.gz", "backup.tar", "archive.tar", "archive.tar.gz"),
+            ("report.txt", "report", "summary.md", "summary.md"),
+        ] {
+            let fixture = Fixture::empty();
+            let portal = Portal::hiding_extensions();
+            let answer = dialog_on(
+                &portal,
+                &fixture,
+                "SaveFile",
+                vec![("current_name", suggested.to_variant())],
+            );
+            let picker = portal.test.window.picker().expect("a picker");
+            let name = picker.name.clone().expect("a name box");
+            assert_eq!(name.text(), shown);
+            name.set_text(typed);
+            enter(&name);
+            let (response, uris) = Portal::finish(&answer);
+            assert_eq!(response, RESPONSE_SUCCESS);
+            assert_eq!(uris, [fixture.uri_of(saved)], "{typed} over {shown}");
+        }
+    }
+
+    /// Turning file name extensions on or off while a Save dialog is open
+    /// redraws File name in the new way, as the file list is, and Save
+    /// still writes the whole name.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn file_name_follows_the_extension_setting_while_the_dialog_is_open() {
+        let fixture = Fixture::empty();
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let name = test
+            .window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        assert_eq!(name.text(), "report");
+
+        test.activate("file-name-extensions", None);
+        assert_eq!(name.text(), "report.txt", "shown: the whole name");
+        test.activate("file-name-extensions", None);
+        assert_eq!(name.text(), "report", "hidden again");
+        enter(&name);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("report.txt")]);
+    }
+
     /// Two types, "Text" (*.txt) and "Markdown" (*.md).
     fn two_text_types() -> glib::Variant {
         let types: Vec<glib::Variant> = [("Text", "*.txt"), ("Markdown", "*.md")]

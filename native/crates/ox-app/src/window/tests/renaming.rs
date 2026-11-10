@@ -418,6 +418,36 @@ fn the_rename_question_and_confirm_save_as_share_one_message_box_style() {
     }
 }
 
+/// A message box keeps its Alt keys where Yes and No are translated to
+/// words that do not start with a Latin letter, as zh_CN's 是 and 否:
+/// Alt with the translated label's first character, and Alt+Y and Alt+N,
+/// as Windows writes them there ("是(Y)").
+///
+/// parity: OPS-049
+#[gtk::test]
+fn a_translated_message_box_keeps_its_alt_keys() {
+    use crate::dialog::{DialogFrame, DialogWidth};
+    use crate::window::ButtonStyle;
+    let _test = TestWindow::open(&Fixture::standard().uri());
+    let frame = DialogFrame::new("重命名", DialogWidth::MessageBox);
+    frame.make_message_box(crate::icons::Icon::WarningColor32);
+    let yes = frame.add_button("是", ButtonStyle::Accent);
+    frame.also_press_with(&yes, 'y');
+    let no = frame.add_button("否", ButtonStyle::Bordered);
+    frame.also_press_with(&no, 'n');
+
+    let triggers = super::file_ops_support::mnemonic_triggers(&frame);
+    let alt = |character: char| {
+        let key = crate::dialog::alt_key(character).expect("a key for the character");
+        gtk::KeyvalTrigger::new(key, gtk::gdk::ModifierType::ALT_MASK)
+            .to_str()
+            .to_string()
+    };
+    for key in [alt('是'), alt('否'), "<Alt>y".to_owned(), "<Alt>n".to_owned()] {
+        assert!(triggers.contains(&key), "{key} presses a button: {triggers:?}");
+    }
+}
+
 /// Escape answers the extension question No, as closing it does: the old
 /// name stays. Enter presses Yes, the focused default button.
 ///

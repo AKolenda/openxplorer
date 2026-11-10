@@ -168,6 +168,15 @@ mod imp {
     impl WidgetImpl for DialogFrame {}
 }
 
+/// The key that types `character` in lower case, for any script: GDK's
+/// keyval for its Unicode code point, read through a `GValue` as GDK keeps
+/// keyvals, so no unchecked conversion is needed.
+pub(crate) fn alt_key(character: char) -> Option<gtk::gdk::Key> {
+    let lower = character.to_lowercase().next()?;
+    let keyval = gtk::gdk::unicode_to_keyval(u32::from(lower));
+    keyval.to_value().get::<gtk::gdk::Key>().ok()
+}
+
 glib::wrapper! {
     /// One in-window dialog.
     pub(crate) struct DialogFrame(ObjectSubclass<imp::DialogFrame>)
@@ -266,23 +275,40 @@ impl DialogFrame {
         }
     }
 
-    /// Lets Alt with the first letter of `button`'s label press it, in a
-    /// message box.
+    /// Lets Alt with the first character of `button`'s label press it, in
+    /// a message box: Alt+Y for Yes, and in a translation whose label does
+    /// not start with a Latin letter, such as zh_CN's 是, Alt with that
+    /// character ([`Self::also_press_with`] adds Windows' Latin key there).
     fn add_mnemonic(&self, button: &gtk::Button) {
+        let first = button.label().and_then(|label| label.chars().next());
+        if let Some(character) = first.filter(char::is_ascii_alphanumeric) {
+            self.add_mnemonic_key(button, character);
+        }
+    }
+
+    /// Lets Alt with `letter` press `button` too, in a message box, as
+    /// Windows' translated message boxes keep "是(Y)" and "否(N)": the
+    /// English mnemonic of the button's message id.
+    pub(crate) fn also_press_with(&self, button: &gtk::Button, letter: char) {
+        self.add_mnemonic_key(button, letter);
+    }
+
+    /// Lets Alt with `character` press `button`, once.
+    fn add_mnemonic_key(&self, button: &gtk::Button, character: char) {
         let Some(mnemonics) = self.imp().mnemonics.borrow().clone() else {
             return;
         };
-        let Some(letter) = button
-            .label()
-            .and_then(|label| label.chars().next())
-            .filter(char::is_ascii_alphanumeric)
-        else {
-            return;
-        };
-        let Some(key) = gtk::gdk::Key::from_name(letter.to_ascii_lowercase().to_string()) else {
+        let Some(key) = alt_key(character) else {
             return;
         };
         let trigger = gtk::KeyvalTrigger::new(key, gtk::gdk::ModifierType::ALT_MASK);
+        let taken = (0..mnemonics.n_items())
+            .filter_map(|position| mnemonics.item(position).and_downcast::<gtk::Shortcut>())
+            .filter_map(|shortcut| shortcut.trigger())
+            .any(|existing| existing.equal(&trigger));
+        if taken {
+            return;
+        }
         let action = gtk::CallbackAction::new(glib::clone!(
             #[weak]
             button,

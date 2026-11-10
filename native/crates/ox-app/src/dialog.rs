@@ -36,6 +36,6 @@ mod layer;
 mod window;
 
 pub(crate) use fields::{check_row, labelled_entry, note, quiet_text, PropertyGrid};
-pub(crate) use frame::{DialogFrame, DialogWidth};
+pub(crate) use frame::{alt_key, DialogFrame, DialogWidth};
 pub(crate) use layer::DialogLayer;
 pub(crate) use window::{show_message, Dialog, DialogButton};
