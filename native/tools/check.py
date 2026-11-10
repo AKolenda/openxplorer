@@ -148,7 +148,12 @@ DRAWN_ICON_PATTERNS = (
     re.compile(r'\bPath::parse\s*\('),
     re.compile(r'\bgsk::(?:\{[^}]*\b)?Path(?:Builder)?\b'),
     re.compile(r'\bPathBuilder\b'),
-    re.compile(r'\bcairo::|::cairo\b'),
+    # Cairo, except its Region and RectangleInt: GDK takes a surface's input
+    # region (where presses reach a window, resize_edges.rs) only as those,
+    # and they draw nothing. Cairo imported under another name, also inside
+    # braces, is still found.
+    re.compile(r'\bcairo::(?!(?:Region|RectangleInt)\b)|::cairo\b(?!::(?:Region|RectangleInt)\b)'),
+    re.compile(r'\bcairo\s+as\b'),
     re.compile(r'DrawingArea\b|\bset_draw_func\b'),
     re.compile(r'\.append_(?:fill|stroke|color|border|(?:repeating_)?(?:linear|radial|conic)_gradient)\s*\('),
     # Pictures embedded in code: a data: URI, or an image file compiled in.

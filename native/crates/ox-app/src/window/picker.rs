@@ -160,6 +160,10 @@ pub(crate) struct Picker {
     /// The calling application, whose last folder the dialog remembers;
     /// `None` when it could not be named, and nothing is remembered.
     caller: Option<String>,
+    /// While a Save dialog's File name shows a name without the extension
+    /// it hides, as the window hides known types' extensions: the text
+    /// shown and that extension, with its dot (`extra_2`, ".txt").
+    hidden_extension: RefCell<Option<(String, String)>>,
 }
 
 impl Picker {
@@ -201,6 +205,50 @@ impl Picker {
     /// The `(id, value)` pairs of the extra choices.
     fn choice_values(&self) -> Vec<(String, String)> {
         self.choices.iter().map(ChoiceControl::value).collect()
+    }
+
+    /// The name File name stands for when it holds `text`: the text, with
+    /// the extension it hides given back while the text is still the name
+    /// shown without it.
+    ///
+    /// An edit that only changes the name before the hidden extension
+    /// keeps it, as the stem selection left it outside when the whole name
+    /// showed: "summary" over "report" (report.txt) is summary.txt, and
+    /// "archive.tar" or "archive" over "backup.tar" (backup.tar.gz)
+    /// archive.tar.gz or archive.gz. A name typed with another extension
+    /// of its own ("summary.md") or with the hidden extension itself, as
+    /// Windows lets a typed extension win ("summary.txt.txt" over
+    /// "report.txt", for report.txt.txt, is summary.txt.txt), a path, `~`
+    /// or a `file:` address, a hidden file's name or a name ending in a
+    /// dot is taken as typed.
+    fn named(&self, text: &str) -> String {
+        let hidden = self.hidden_extension.borrow();
+        let Some((shown, extension)) = hidden.as_ref() else {
+            return text.to_owned();
+        };
+        let own_extension = |name: &str| {
+            crate::folder_view::shown_name::hidden_extension(
+                name,
+                false,
+                crate::folder_view::shown_name::Extensions::Hidden,
+            )
+            .map(str::to_lowercase)
+        };
+        let typed_extension = own_extension(text);
+        let names_the_hidden_extension = typed_extension.as_deref() == Some(&*extension.to_lowercase());
+        let only_the_stem = !text.trim().is_empty()
+            && !names_the_hidden_extension
+            && !text.contains('/')
+            && text != "~"
+            && !text.starts_with("file:")
+            && !text.starts_with('.')
+            && !text.ends_with('.')
+            && (typed_extension.is_none() || typed_extension == own_extension(shown));
+        if text == shown || only_the_stem {
+            format!("{text}{extension}")
+        } else {
+            text.to_owned()
+        }
     }
 }
 
@@ -494,12 +542,15 @@ impl BrowserWindow {
         self.remember_dialog_size();
         match &picker.name {
             Some(name) => {
+                if let ChooserMode::Save { name: suggested } = &picker.request.mode {
+                    self.show_in_name_box(&picker, name, suggested);
+                }
                 // A new window gives its file list the keyboard once the
                 // first folder is listed, which ends after this: the name
                 // box keeps it instead, so typing replaces the name.
                 self.imp().file_list_awaits_focus.set(false);
                 name.grab_focus();
-                select_stem(name);
+                select_name(&picker, name);
             }
             None => self.focus_new_file_list(),
         }
@@ -599,7 +650,7 @@ impl BrowserWindow {
             let opens = matches!(picker.request.mode, ChooserMode::Open { .. });
             if !self.imp().changing_model.get() {
                 match (selected.as_slice(), files.as_slice()) {
-                    ([entry], [_]) => name.set_text(&entry.name),
+                    ([entry], [_]) => self.show_in_name_box(&picker, name, &entry.name),
                     // Several files: every one, in quotes, as Windows'
                     // dialog lists them, so the box never holds only the
                     // first and wins over the others.
@@ -693,10 +744,56 @@ impl BrowserWindow {
         let (Some(from), Some(to)) = (filters.get(previous), filters.get(chosen)) else {
             return;
         };
-        if let Some(renamed) = renamed_for_type(&name.text(), from, to) {
-            name.set_text(&renamed);
-            select_stem(name);
+        if let Some(renamed) = renamed_for_type(&picker.named(&name.text()), from, to) {
+            self.show_in_name_box(&picker, name, &renamed);
+            select_name(&picker, name);
         }
+    }
+
+    /// Shows a Save dialog's File name again as names are shown now, after
+    /// file name extensions were turned on or off: the name it stands for,
+    /// with or without its known extension, and its remembered extension
+    /// with it, so the box changes as the file list does.
+    pub(super) fn show_picker_name_again(&self) {
+        let Some(picker) = self.picker() else {
+            return;
+        };
+        let (ChooserMode::Save { .. }, Some(name_box)) = (&picker.request.mode, &picker.name) else {
+            return;
+        };
+        let whole = picker.named(&name_box.text());
+        if whole.is_empty() {
+            // Nothing to show again, and no extension to keep hiding: a
+            // name typed next is taken as the new setting shows it.
+            picker.hidden_extension.replace(None);
+            return;
+        }
+        let selected = name_box.selection_bounds().is_some();
+        self.show_in_name_box(&picker, name_box, &whole);
+        if selected {
+            select_name(&picker, name_box);
+        }
+    }
+
+    /// Puts the file name `name` into a Save dialog's File name as the
+    /// window shows names, as Windows 11's dialog does: while extensions
+    /// of known types are hidden, without its extension (`extra_2` for
+    /// `extra_2.txt`), which is remembered and saved with the name unless
+    /// another is typed; while they are shown, whole. An Open dialog shows
+    /// the name whole.
+    fn show_in_name_box(&self, picker: &Picker, name_box: &gtk::Entry, name: &str) {
+        let hidden = match picker.request.mode {
+            ChooserMode::Save { .. } => {
+                crate::folder_view::shown_name::hidden_extension(name, false, self.file_name_extensions())
+            }
+            ChooserMode::Open { .. } | ChooserMode::SaveFiles { .. } => None,
+        };
+        let shown = &name[..name.len() - hidden.map_or(0, str::len)];
+        // Remembered first: the text changing is a change of the name.
+        picker
+            .hidden_extension
+            .replace(hidden.map(|extension| (shown.to_owned(), extension.to_owned())));
+        name_box.set_text(shown);
     }
 
     /// The entries selected in the folder.
@@ -864,7 +961,7 @@ impl BrowserWindow {
             ChooserMode::Save { .. } => {
                 let path = self.local_path_now(&entry.uri).await.ok_or_else(not_local)?;
                 if let Some(name) = &picker.name {
-                    name.set_text(&entry.name);
+                    self.show_in_name_box(picker, name, &entry.name);
                 }
                 // The file's real name, bytes and all; the name shown
                 // (Entry::name, a display name) is only for what the
@@ -1014,7 +1111,8 @@ impl BrowserWindow {
         let Some(name_box) = &picker.name else {
             return Ok(Vec::new());
         };
-        let typed = name_box.text();
+        // The name with the extension File name hides, while it hides one.
+        let typed = picker.named(&name_box.text());
         // Enter with no name does what the Save button, off then, does.
         if typed.trim().is_empty() {
             return Ok(Vec::new());
@@ -1116,28 +1214,52 @@ impl BrowserWindow {
     /// key from the dialog, so when it opened behind the dialog or on
     /// another screen, Save, Cancel, Escape and the close button all did
     /// nothing, and the dialog could only be ended by stopping `OpenXplorer`.
+    ///
+    /// It is a compact message box, as Windows 11 asks: "Confirm Save As",
+    /// the warning icon, "`extra_2.txt` already exists." and "Do you want to
+    /// replace it?" on the next line, and Yes and No, with No focused, so
+    /// Enter replaces nothing. No, Escape and the close button go back to
+    /// the dialog with its name kept.
     fn confirm_replace(&self, picker: &Rc<Picker>, locations: Vec<PathBuf>, names: &[String]) {
         picker.asking.set(true);
         self.update_picker();
-        let (title, question) = match names {
+        // Windows' Confirm Save As focuses No; the question for several
+        // files keeps Replace first and focused, as before.
+        let (title, question, labels, keep_focused) = match names {
             [name] => (
-                "Confirm Save As",
-                format!("“{name}” already exists. Do you want to replace it?"),
+                ox_core::i18n::gettext("Confirm Save As"),
+                ox_core::i18n::format_message(
+                    "{name} already exists.\nDo you want to replace it?",
+                    &[("name", name)],
+                ),
+                (ox_core::i18n::gettext("Yes"), ox_core::i18n::gettext("No")),
+                true,
             ),
             _ => (
-                "Confirm Save",
-                format!(
-                    "{} files already exist in this folder. Replace them?",
-                    names.len()
+                ox_core::i18n::gettext("Confirm Save"),
+                ox_core::i18n::format_message(
+                    "{count} files already exist in this folder. Replace them?",
+                    &[("count", &names.len().to_string())],
                 ),
+                (
+                    ox_core::i18n::gettext("Replace"),
+                    ox_core::i18n::gettext("Cancel"),
+                ),
+                false,
             ),
         };
-        let frame = DialogFrame::new(title, DialogWidth::Standard);
+        let frame = DialogFrame::new(&title, DialogWidth::MessageBox);
+        frame.make_message_box(crate::icons::Icon::WarningColor32);
         frame.set_message(&question);
         let locations = Rc::new(locations);
+        let (replace_style, keep_style) = if keep_focused {
+            (ButtonStyle::Bordered, ButtonStyle::Accent)
+        } else {
+            (ButtonStyle::Accent, ButtonStyle::Bordered)
+        };
         let replace = frame.add_closing_button(
-            "Replace",
-            ButtonStyle::Accent,
+            &labels.0,
+            replace_style,
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
@@ -1146,7 +1268,12 @@ impl BrowserWindow {
                 move || window.finish_picking(&picker, locations.as_ref().clone())
             ),
         );
-        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        let keep = frame.add_closing_button(&labels.1, keep_style, || {});
+        // The English keys in every language, as Windows keeps them
+        // ("是(Y)"): Y and N, or R and C.
+        let (replace_key, keep_key) = if keep_focused { ('y', 'n') } else { ('r', 'c') };
+        frame.also_press_with(&replace, replace_key);
+        frame.also_press_with(&keep, keep_key);
         // However the question ends: a button, Escape, or the dialog
         // closing under it.
         frame.connect_closed(glib::clone!(
@@ -1160,7 +1287,11 @@ impl BrowserWindow {
             }
         ));
         self.present_window_dialog(&frame);
-        replace.grab_focus();
+        if keep_focused {
+            keep.grab_focus();
+        } else {
+            replace.grab_focus();
+        }
     }
 
     /// What the File name box of an Open dialog chooses, when it names
@@ -1476,6 +1607,7 @@ impl BrowserWindow {
             single: RefCell::new(None),
             attached_to_caller: Rc::default(),
             caller: None,
+            hidden_extension: RefCell::new(None),
         }
     }
 
@@ -1663,6 +1795,16 @@ fn parse_quoted_names(text: &str) -> Option<Vec<String>> {
     (!names.is_empty()).then_some(names)
 }
 
+/// Selects the name in File name as Windows does: all of it while it
+/// hides an extension, else the name without its extension.
+fn select_name(picker: &Picker, entry: &gtk::Entry) {
+    if picker.hidden_extension.borrow().is_some() {
+        entry.select_region(0, -1);
+    } else {
+        select_stem(entry);
+    }
+}
+
 /// Selects the name without its extension, as Windows does, so typing
 /// replaces the name and keeps the type.
 fn select_stem(entry: &gtk::Entry) {
@@ -1792,9 +1934,25 @@ mod tests {
     }
 
     impl Portal {
+        /// A portal whose dialogs show names with their extensions, as
+        /// most of these tests type and read whole names.
         fn new() -> Self {
+            Self::showing_extensions(true)
+        }
+
+        /// A portal whose dialogs hide the extensions of known file
+        /// types, as Windows and the app do by default (VIEW-069).
+        fn hiding_extensions() -> Self {
+            Self::showing_extensions(false)
+        }
+
+        /// A portal whose dialogs show extensions when `shown`.
+        fn showing_extensions(shown: bool) -> Self {
             let bus = PrivateBus::start();
             let test = TestWindow::without_tabs();
+            if shown {
+                test.activate("file-name-extensions", None);
+            }
             let connection = bus.connect();
             let backend_name = connection.unique_name().expect("a bus name").to_string();
             let window = test.window.downgrade();
@@ -2483,7 +2641,7 @@ mod tests {
 
         test.window.activate_item(test.position_of(&shown));
         let question = replace_question(test);
-        press_in(&question, "Replace");
+        press_in(&question, "Yes");
 
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
@@ -2513,13 +2671,13 @@ mod tests {
         let question = replace_question(&portal.test);
         assert_eq!(
             question.message().as_str(),
-            "“two.txt” already exists. Do you want to replace it?"
+            "two.txt already exists.\nDo you want to replace it?"
         );
         assert!(
             answer.borrow().is_none(),
             "nothing is answered before the user says so"
         );
-        press_in(&question, "Cancel");
+        press_in(&question, "No");
         window.cancel_picking();
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
@@ -2584,7 +2742,7 @@ mod tests {
             fs::read_to_string(&target).expect("the other program's file"),
             "written by another program"
         );
-        press_in(&question, "Cancel");
+        press_in(&question, "No");
         window.cancel_picking();
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
@@ -3228,6 +3386,334 @@ mod tests {
         window.cancel_picking();
         let (response, _) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_CANCELLED);
+    }
+
+    /// The Save dialog's File name box shows a name as the window shows
+    /// names, as in Windows 11: with extensions hidden (the default),
+    /// `extra_2.txt` reads `extra_2`, for the caller's name, a file
+    /// selected and a file double-clicked; Save still writes the name with
+    /// its extension, also after another type is chosen.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_hidden_file_name_leaves_out_the_extension() {
+        let fixture = Fixture::empty();
+        fixture.write("extra_2.txt");
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(name.text(), "report", "the new file's name without .txt");
+        assert_eq!(name.selection_bounds(), Some((0, 6)), "all of it selected");
+        crate::test_support::harness::capture_in_both_themes(window, "save-dialog-extensions-hidden");
+
+        window
+            .folder_model()
+            .selection()
+            .select_item(test.position_of("extra_2.txt"), true);
+        settle();
+        assert_eq!(name.text(), "extra_2", "a file selected, without .txt");
+
+        types.set_selected(1);
+        assert_eq!(name.text(), "extra_2", "another type keeps hiding it");
+        types.set_selected(0);
+        assert_eq!(name.text(), "extra_2");
+
+        name.set_text("summary");
+        enter(&name);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("summary.txt")], "Save adds the extension");
+    }
+
+    /// With extensions hidden, a file selected keeps its own extension
+    /// when saved, and choosing another type gives it that type's.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_hidden_a_selected_file_is_saved_with_the_types_extension() {
+        let fixture = Fixture::empty();
+        fixture.write("extra_2.txt");
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        assert_eq!(name.text(), "report");
+
+        types.set_selected(1);
+        assert_eq!(name.text(), "report", "the extension stays hidden");
+        enter(&name);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("report.md")], "the new type's extension");
+    }
+
+    /// With extensions shown, File name holds the whole name, as Windows
+    /// shows it then (`extra_2.txt`).
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_shown_file_name_holds_the_whole_name() {
+        let fixture = Fixture::empty();
+        fixture.write("extra_2.txt");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        assert_eq!(name.text(), "report.txt");
+        crate::test_support::harness::capture_in_both_themes(window, "save-dialog-extensions-shown");
+        window
+            .folder_model()
+            .selection()
+            .select_item(test.position_of("extra_2.txt"), true);
+        settle();
+        assert_eq!(name.text(), "extra_2.txt");
+        picker.types.clone().expect("a type list").set_selected(1);
+        assert_eq!(name.text(), "extra_2.md");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// With extensions hidden and no type list, a new name typed over
+    /// the name shown keeps the extension File name hides, as the stem
+    /// selection left it outside before: "report" (report.txt) edited to
+    /// "summary" saves summary.txt. A name typed with an extension of its
+    /// own is saved as typed.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn with_extensions_hidden_an_edited_name_keeps_the_hidden_extension() {
+        for (suggested, shown, typed, saved) in [
+            ("report.txt", "report", "summary", "summary.txt"),
+            ("backup.tar.gz", "backup.tar", "archive.tar", "archive.tar.gz"),
+            ("backup.tar.gz", "backup.tar", "archive", "archive.gz"),
+            ("report.txt", "report", "summary.md", "summary.md"),
+            // A typed extension wins, also the one File name hides.
+            ("report.txt", "report", "summary.txt", "summary.txt"),
+            (
+                "report.txt.txt",
+                "report.txt",
+                "summary.txt.txt",
+                "summary.txt.txt",
+            ),
+            ("report.txt.txt", "report.txt", "report.txt", "report.txt.txt"),
+        ] {
+            let fixture = Fixture::empty();
+            let portal = Portal::hiding_extensions();
+            let answer = dialog_on(
+                &portal,
+                &fixture,
+                "SaveFile",
+                vec![("current_name", suggested.to_variant())],
+            );
+            let picker = portal.test.window.picker().expect("a picker");
+            let name = picker.name.clone().expect("a name box");
+            assert_eq!(name.text(), shown);
+            name.set_text(typed);
+            enter(&name);
+            let (response, uris) = Portal::finish(&answer);
+            assert_eq!(response, RESPONSE_SUCCESS);
+            assert_eq!(uris, [fixture.uri_of(saved)], "{typed} over {shown}");
+        }
+    }
+
+    /// Turning file name extensions on or off while a Save dialog is open
+    /// redraws File name in the new way, as the file list is, and Save
+    /// still writes the whole name.
+    ///
+    /// parity: INT-032, VIEW-069
+    #[gtk::test]
+    fn file_name_follows_the_extension_setting_while_the_dialog_is_open() {
+        let fixture = Fixture::empty();
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "report.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let test = &portal.test;
+        let name = test
+            .window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        assert_eq!(name.text(), "report");
+
+        test.activate("file-name-extensions", None);
+        assert_eq!(name.text(), "report.txt", "shown: the whole name");
+        test.activate("file-name-extensions", None);
+        assert_eq!(name.text(), "report", "hidden again");
+        enter(&name);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("report.txt")]);
+    }
+
+    /// Two types, "Text" (*.txt) and "Markdown" (*.md).
+    fn two_text_types() -> glib::Variant {
+        let types: Vec<glib::Variant> = [("Text", "*.txt"), ("Markdown", "*.md")]
+            .iter()
+            .map(|(name, glob)| ((*name).to_owned(), vec![(0_u32, (*glob).to_owned())]).to_variant())
+            .collect();
+        glib::Variant::array_from_iter_with_type(types[0].type_(), types.clone())
+    }
+
+    /// Saving over a file asks as Windows 11 does: a compact message box
+    /// titled "Confirm Save As" with the warning icon, "`extra_2.txt`
+    /// already exists." and "Do you want to replace it?" on the next line,
+    /// and Yes and No, with No focused so Enter replaces nothing. No goes
+    /// back to the dialog with the name kept; Yes replaces the file.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn saving_over_a_file_asks_in_windows_confirm_save_as_box() {
+        let fixture = Fixture::empty();
+        fs::write(fixture.path("extra_2.txt"), "old").expect("a file");
+        let portal = Portal::hiding_extensions();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "extra_2.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        enter(&name);
+
+        let question = replace_question(&portal.test);
+        assert_eq!(question.title().as_str(), "Confirm Save As");
+        assert_eq!(
+            question.message().as_str(),
+            "extra_2.txt already exists.\nDo you want to replace it?"
+        );
+        assert_eq!(question.button_labels(), ["Yes", "No"]);
+        crate::window::tests::file_ops_support::assert_windows_message_box(question.upcast_ref(), "No");
+        let focus = gtk::prelude::GtkWindowExt::focus(window).and_downcast::<gtk::Button>();
+        assert_eq!(
+            focus.and_then(|button| button.label()).as_deref(),
+            Some("No"),
+            "No has the keyboard, so Enter replaces nothing"
+        );
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let words = crate::window::tests::file_ops_support::assert_sized_to_its_words(&question);
+        assert_eq!(words.lines, 2, "the name and the question, each on a line");
+        let height = question.height();
+        assert!(height < 200, "no empty room: {height}");
+        crate::test_support::harness::capture_in_both_themes(window, "confirm-save-as-short");
+
+        press_in(&question, "No");
+        wait_until("the question to close", || {
+            window.dialog_layer().shown().is_none()
+        });
+        assert!(answer.borrow().is_none(), "No keeps the dialog open");
+        assert_eq!(name.text(), "extra_2", "with the name kept");
+        assert_eq!(
+            fs::read_to_string(fixture.path("extra_2.txt")).expect("kept"),
+            "old"
+        );
+
+        enter(&name);
+        let question = replace_question(&portal.test);
+        question.close();
+        wait_until("Escape to answer No", || window.dialog_layer().shown().is_none());
+        assert!(answer.borrow().is_none(), "Escape keeps the dialog open");
+
+        enter(&name);
+        let question = replace_question(&portal.test);
+        press_in(&question, "Yes");
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("extra_2.txt")]);
+    }
+
+    /// A long name wraps in Confirm Save As, which stays a compact box
+    /// rather than growing to the dialog's width.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn confirm_save_as_wraps_a_long_name_in_a_compact_box() {
+        let fixture = Fixture::empty();
+        let long = format!(
+            "{} final.txt",
+            "Quarterly planning notes for the garden club".repeat(3)
+        );
+        fs::write(fixture.path(&long), "old").expect("a file");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", long.to_variant())],
+        );
+        let window = &portal.test.window;
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        enter(&name);
+        let question = replace_question(&portal.test);
+        assert_eq!(
+            question.message().as_str(),
+            format!("{long} already exists.\nDo you want to replace it?")
+        );
+        crate::test_support::harness::wait_for_frames(window, 3);
+        // The box stops at the width its words wrap at, in any font.
+        let words = crate::window::tests::file_ops_support::assert_sized_to_its_words(&question);
+        assert!(
+            words.widest_line > words.wrap_width && words.lines > 2,
+            "the box wraps the name instead of widening: {} lines",
+            words.lines
+        );
+        let height = question.height();
+        assert!(height < 260, "no empty room under the words: {height}");
+        crate::test_support::harness::capture_in_both_themes(window, "confirm-save-as-long");
+        press_in(&question, "No");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
     /// A folder dialog lists only folders and answers the selected one.
@@ -4627,11 +5113,11 @@ mod tests {
         let question = replace_question(test);
         assert_eq!(
             question.message().as_str(),
-            "“README” already exists. Do you want to replace it?",
+            "README already exists.\nDo you want to replace it?",
             "README itself, not a new README.txt"
         );
         assert_eq!(name.text(), "README");
-        press_in(&question, "Cancel");
+        press_in(&question, "No");
         wait_until("the question to close", || {
             window.dialog_layer().shown().is_none()
         });
@@ -4640,7 +5126,7 @@ mod tests {
         window.submit_address(&fixture.path("Drafts/plan.txt").display().to_string());
         let question = replace_question(test);
         assert_eq!(name.text(), "plan.txt");
-        press_in(&question, "Replace");
+        press_in(&question, "Yes");
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(
@@ -5746,6 +6232,143 @@ mod tests {
             let kept = cached.upgrade();
             assert!(kept.is_some(), "{key:?} is still loaded");
             assert_eq!(Some(looked_up(key)), kept, "the theme hands out the kept {key:?}");
+        }
+    }
+
+    /// A Save dialog shows Downloads in the style Downloads keeps, grouped
+    /// by date modified, as Windows' dialog shows a folder as Explorer
+    /// does: opened at the folder the application last used, at the
+    /// folder it passes or at its file, and still grouped with a file
+    /// selected, after another file type, Back and Forward, and Downloads
+    /// in the navigation pane.
+    ///
+    /// parity: INT-032, VIEW-022
+    #[gtk::test]
+    fn a_save_dialog_shows_downloads_grouped_as_it_keeps_it() {
+        use ox_core::grouping::GroupBy;
+        use ox_core::settings::{ViewProperties, ViewScope};
+
+        let downloads = glib::home_dir().join("Downloads");
+        fs::create_dir_all(&downloads).expect("a Downloads folder");
+        for number in 0..6 {
+            fs::write(downloads.join(format!("scan {number:02}.png")), "x").expect("a file");
+            fs::write(downloads.join(format!("receipt {number:02}.pdf")), "x").expect("a file");
+        }
+        let uri = gio::File::for_path(&downloads).uri().to_string();
+        for start in ["last folder", "folder", "file"] {
+            let portal = Portal::new();
+            let mut style = ViewProperties {
+                folders_first: false,
+                ..ViewProperties::default()
+            };
+            style.set_grouping(GroupBy::Modified);
+            portal
+                .test
+                .context
+                .remember_view(uri.clone(), style, ViewScope::Folder, |result| {
+                    result.expect("the style is saved");
+                });
+            wait_until("Downloads' own style", || {
+                let preferences = portal.test.context.settings_data().preferences;
+                ox_core::settings::saved_style_for(&preferences.folder_views, &uri).is_some()
+            });
+            let filters = [
+                ("Images".to_owned(), vec![(0_u32, "*.png".to_owned())]).to_variant(),
+                ("PDF".to_owned(), vec![(0_u32, "*.pdf".to_owned())]).to_variant(),
+            ];
+            let mut entries = vec![
+                ("current_name", "scan new.png".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(filters[0].type_(), filters.clone()),
+                ),
+            ];
+            match start {
+                "last folder" => {
+                    ox_core::integration::DialogFolders::open(portal.test.settings_directory())
+                        .remember("org.example.Scanner", None, &uri)
+                        .expect("the memory is written");
+                }
+                "folder" => entries.push(("current_folder", path_variant(&downloads.display().to_string()))),
+                _ => entries.push((
+                    "current_file",
+                    path_variant(&downloads.join("scan 03.png").display().to_string()),
+                )),
+            }
+            let answer = portal.call_as("org.example.Scanner", "", "SaveFile", &entries);
+            let test = &portal.test;
+            let window = &test.window;
+            test.wait_for_listing("Downloads in the dialog");
+            assert_eq!(
+                shown_folder(window).as_deref(),
+                Some(downloads.as_path()),
+                "{start}"
+            );
+            let grouping = || {
+                window
+                    .folder_pane()
+                    .model()
+                    .grouping()
+                    .map(|grouping| grouping.by)
+            };
+            assert_eq!(grouping(), Some(GroupBy::Modified), "opened at its {start}");
+            assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+
+            assert!(window.select_named("scan 02.png"));
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(400));
+            assert_eq!(
+                grouping(),
+                Some(GroupBy::Modified),
+                "with a file selected, {start}"
+            );
+            let types = window
+                .picker()
+                .expect("a picker")
+                .types
+                .clone()
+                .expect("a type list");
+            types.set_selected(1);
+            wait_until("the PDF files", || test.names().len() == 6);
+            assert_eq!(grouping(), Some(GroupBy::Modified), "after another type, {start}");
+
+            window
+                .navigate(&gio::File::for_path(glib::home_dir()).uri())
+                .expect("the home folder");
+            test.wait_for_listing("the home folder");
+            test.activate("back", None);
+            test.wait_for_listing("Downloads after Back");
+            assert_eq!(grouping(), Some(GroupBy::Modified), "after Back, {start}");
+            test.activate("forward", None);
+            test.wait_for_listing("the home folder after Forward");
+            test.activate("back", None);
+            test.wait_for_listing("Downloads after Forward and Back");
+            assert_eq!(
+                grouping(),
+                Some(GroupBy::Modified),
+                "after Forward and Back, {start}"
+            );
+
+            window
+                .navigate(&gio::File::for_path(glib::home_dir()).uri())
+                .expect("the home folder");
+            test.wait_for_listing("the home folder");
+            let labels = window.sidebar().labels();
+            let row = labels
+                .iter()
+                .position(|label| label == "Downloads")
+                .and_then(|index| i32::try_from(index).ok())
+                .and_then(|index| window.sidebar().list().row_at_index(index))
+                .expect("Downloads in the navigation pane");
+            assert!(row.activate());
+            test.wait_for_listing("Downloads from the navigation pane");
+            assert_eq!(
+                grouping(),
+                Some(GroupBy::Modified),
+                "from the navigation pane, {start}"
+            );
+
+            window.cancel_picking();
+            Portal::finish(&answer);
         }
     }
 }

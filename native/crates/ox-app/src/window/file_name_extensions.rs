@@ -59,6 +59,8 @@ impl BrowserWindow {
         if let Some(uri) = self.current_uri() {
             self.render_address_of(&uri);
         }
+        // A Save dialog's File name shows its name the same way.
+        self.show_picker_name_again();
     }
 
     /// Takes up a choice that Folder Options, Settings or another window

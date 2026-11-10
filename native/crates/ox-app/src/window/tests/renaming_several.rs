@@ -151,8 +151,8 @@ fn a_file_without_an_extension_gaining_one_asks_first() {
     field.set_text("Plan.v1.txt");
     field.emit_activate();
     let question = open_dialog(&test);
-    assert_eq!(question.title_text(), "Change the extension?");
-    question.press("Cancel");
+    super::file_ops_support::assert_windows_extension_question(&question);
+    question.press("No");
     wait_for_no_dialog(&test);
     wait_until("the field to come back", || field.is_sensitive());
     assert!(is_renaming_in_place(&test), "editing goes on");
@@ -161,7 +161,7 @@ fn a_file_without_an_extension_gaining_one_asks_first() {
     assert!(fixture.path("Notes 2.txt").is_file());
 
     field.emit_activate();
-    open_dialog(&test).press("Change extension");
+    open_dialog(&test).press("Yes");
     wait_until("the rename", || fixture.path("Plan.v1 (2)").is_file());
     assert!(fixture.path("Plan.v1 (1).txt").is_file());
 }

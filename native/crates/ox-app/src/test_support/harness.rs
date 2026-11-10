@@ -595,6 +595,23 @@ pub(crate) fn capture_dialog(dialog: &impl IsA<gtk::Window>, filename: &str) {
     });
 }
 
+/// Saves `window` in the light and then the dark theme, as
+/// `<stem>-light.png` and `<stem>-dark.png`, into
+/// `$OX_NATIVE_CAPTURE_DIR`, when set, for review of both palettes; the
+/// theme chosen before is kept.
+pub(crate) fn capture_in_both_themes(window: &impl IsA<gtk::Window>, stem: &str) {
+    if capture_directory().is_none() {
+        return;
+    }
+    let _theme = ThemeGuard::keep();
+    for (theme, name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
+        skin().set_theme(theme);
+        // Buttons fade to the new palette's colours.
+        wait_for(Duration::from_millis(600));
+        capture_dialog(window, &format!("{stem}-{name}.png"));
+    }
+}
+
 /// Waits until `window` has drawn `count` frames, so a capture shows the
 /// finished layout.
 pub(crate) fn wait_for_frames(window: &impl IsA<gtk::Widget>, count: u32) {

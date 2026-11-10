@@ -39,21 +39,39 @@
               </object>
             </child>
             <child>
-              <!-- The message keeps its line breaks, as `white-space:
-                   pre-wrap` did, and can be selected and copied with the
-                   pointer. It takes no keyboard focus, which would select
-                   all of it when the dialog opens. -->
-              <object class="GtkLabel" id="message_label">
-                <property name="xalign">0</property>
-                <property name="wrap">true</property>
-                <property name="wrap-mode">word-char</property>
-                <property name="max-width-chars">60</property>
-                <property name="selectable">true</property>
-                <property name="focusable">false</property>
-                <property name="visible">false</property>
-                <style>
-                  <class name="dialog-message"/>
-                </style>
+              <!-- The message, with an icon at its left that only a message
+                   box shows (src/dialog/frame.rs, make_message_box), which
+                   then makes room for it with the message's margin. The
+                   overlay is measured by the message alone. -->
+              <object class="GtkOverlay" id="message_row">
+                <property name="child">
+                  <!-- The message keeps its line breaks, as `white-space:
+                       pre-wrap` did, and can be selected and copied with the
+                       pointer. It takes no keyboard focus, which would select
+                       all of it when the dialog opens. -->
+                  <object class="GtkLabel" id="message_label">
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                    <property name="max-width-chars">60</property>
+                    <property name="selectable">true</property>
+                    <property name="focusable">false</property>
+                    <property name="visible">false</property>
+                    <style>
+                      <class name="dialog-message"/>
+                    </style>
+                  </object>
+                </property>
+                <child type="overlay">
+                  <object class="GtkImage" id="message_icon">
+                    <property name="visible">false</property>
+                    <property name="halign">start</property>
+                    <property name="valign">start</property>
+                    <style>
+                      <class name="message-box-icon"/>
+                    </style>
+                  </object>
+                </child>
               </object>
             </child>
             <child>

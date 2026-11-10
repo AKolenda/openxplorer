@@ -284,7 +284,7 @@ fn the_rename_dialog_refuses_a_name_too_long_before_the_extension_question() {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<Dialog>().ok())
-            .any(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+            .any(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(&shown))
     };
 
     text_field(&dialog).set_text(&format!("{}.md", "f".repeat(260)));
@@ -361,7 +361,7 @@ fn rename_items_names_a_shortcut_whole_without_the_extension_question() {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<Dialog>().ok())
-            .any(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+            .any(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(&shown))
     };
     wait_until("the renamed items", || {
         question() || test.selected_names().len() == 2 && fixture.path("Q3.2").exists()
@@ -398,10 +398,10 @@ fn a_batch_error_goes_once_a_name_is_accepted() {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<Dialog>().ok())
-            .find(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+            .find(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(shown))
     };
     wait_until("the extension question", || question().is_some());
-    question().expect("it shows").press("Cancel");
+    question().expect("it shows").press("No");
     wait_until("the question to close", || question().is_none());
 
     assert_eq!(dialog.error_text(), None, "no stale error");
@@ -430,10 +430,10 @@ fn a_batch_name_that_adds_an_extension_asks_first() {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<Dialog>().ok())
-            .find(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+            .find(|shown| shown.is_visible() && super::file_ops_support::is_extension_question(shown))
     };
     wait_until("the extension question", || question().is_some());
-    question().expect("it shows").press("Cancel");
+    question().expect("it shows").press("No");
     wait_until("the question to close", || question().is_none());
     assert!(dialog.is_visible(), "the batch dialog stays");
     assert_eq!(field.text(), "Plan.md");
@@ -441,7 +441,7 @@ fn a_batch_name_that_adds_an_extension_asks_first() {
 
     dialog.press("Rename");
     wait_until("the extension question", || question().is_some());
-    question().expect("it shows").press("Change extension");
+    question().expect("it shows").press("Yes");
 
     wait_until("the batch", || {
         fixture.path("Plan.md").is_file() && fixture.path("Plan.md.txt").is_file()

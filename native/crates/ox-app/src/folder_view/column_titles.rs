@@ -21,13 +21,24 @@ use ox_core::LOG_DOMAIN;
 
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 
+/// The class of Name's title, which keeps Name's minimum width wherever
+/// Choose Details moves it.
+const NAME_TITLE_CLASS: &str = "name-title";
+
 /// The titles, in column order, for [`show_sort_caret`] to mark, or none,
-/// after a warning, if GTK built the titles differently.
+/// after a warning, if GTK built the titles differently. Name's title is
+/// marked by its own class: a title keeps its widget as its column moves,
+/// so the class follows Name when Choose Details moves it down.
 pub(crate) fn style_titles(view: &gtk::ColumnView) -> Vec<gtk::Widget> {
     let titles = title_buttons(view);
     if titles.len() != SortColumn::ALL.len() || title_boxes(view).len() != titles.len() {
         glib::g_warning!(LOG_DOMAIN, "The column titles have an unexpected structure");
         return Vec::new();
+    }
+    for (column, title) in SortColumn::ALL.into_iter().zip(&titles) {
+        if column == SortColumn::Name {
+            title.add_css_class(NAME_TITLE_CLASS);
+        }
     }
     titles
 }
