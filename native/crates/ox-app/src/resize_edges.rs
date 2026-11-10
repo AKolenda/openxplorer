@@ -34,7 +34,10 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{cairo, gdk, glib};
+// `input_shape` is Cairo's region and rectangle, the only types GDK takes a
+// surface's input region in. Nothing here draws: the region says where
+// presses reach the window (`widen_input_region`).
+use gtk::{cairo as input_shape, gdk, glib};
 
 /// The width of the band just inside each edge that resizes the window.
 pub(crate) const INSIDE_EDGE: i32 = 4;
@@ -399,8 +402,8 @@ fn widen_input_region(window: &gtk::Window) {
     let y = whole_pixels(offset_y + f64::from(bounds.y())) - OUTSIDE;
     let width = whole_pixels(f64::from(bounds.width())) + 2 * OUTSIDE;
     let height = whole_pixels(f64::from(bounds.height())) + 2 * OUTSIDE;
-    let rectangle = cairo::RectangleInt::new(x, y, width, height);
-    surface.set_input_region(Some(&cairo::Region::create_rectangle(&rectangle)));
+    let rectangle = input_shape::RectangleInt::new(x, y, width, height);
+    surface.set_input_region(Some(&input_shape::Region::create_rectangle(&rectangle)));
 }
 
 /// `value` rounded to whole pixels.
