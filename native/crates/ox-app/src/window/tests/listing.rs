@@ -356,6 +356,41 @@ fn a_refresh_asked_while_the_box_is_open_opens_no_box_after_ok() {
     assert_eq!(test.window.current_uri(), Some(shown), "the old address stays");
 }
 
+/// F5 on a search shown in a folder that another program removed ends
+/// the search and lists the folder, so it says "Location is not
+/// available" rather than running the search again; the tab keeps the
+/// folder's address.
+///
+/// parity: NAV-039
+#[gtk::test]
+fn f5_on_a_search_in_a_removed_folder_says_it_is_not_available() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Letters")).expect("fixture subfolder");
+    fs::write(fixture.path("Documents/Letters/plan.txt"), b"x").expect("fixture file");
+    let shown = fixture.uri_of("Documents/Letters");
+    let test = TestWindow::open(&shown);
+    test.wait_for_listing("the folder");
+    let id = test.active_tab().expect("one tab");
+    test.search_for("plan");
+    assert!(test.window.is_searching());
+
+    fs::remove_dir_all(fixture.path("Documents/Letters")).expect("the fixture folder is removed");
+    test.window.folder_changed(id);
+    test.wait_for_listing("the watch's reload");
+    settle();
+    assert_eq!(dialogs_over(&test), 0, "no box before F5");
+
+    test.activate("refresh", None);
+    let dialog = super::file_ops_support::open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Location is not available");
+    assert!(!test.window.is_searching(), "F5 ended the search");
+    dialog.press("OK");
+    super::file_ops_support::wait_for_no_dialog(&test);
+    test.wait_for_listing("the failed reload");
+    assert_eq!(test.window.current_uri(), Some(shown), "the old address stays");
+    assert_eq!(dialogs_over(&test), 0);
+}
+
 /// A tab in the background, or the other side of a split view, whose
 /// folder is deleted keeps its address too, and says nothing.
 ///
