@@ -632,7 +632,7 @@ fn a_rename_reaches_every_tab() {
 /// Closing Properties while OK applies waits for the change: No to the
 /// extension question keeps the old name, with no message, and the window
 /// then closes, as it does once a change is made. (A refused change keeps
-/// it open with its message: the_name_in_properties_renames_the_item.)
+/// it open with its message: `the_name_in_properties_renames_the_item`.)
 ///
 /// parity: PROP-001
 #[gtk::test]
