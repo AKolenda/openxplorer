@@ -351,7 +351,7 @@ impl BrowserWindow {
         let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);
         // Only a file Favorites can keep: not one inside an archive, on a
         // web address or in a virtual place.
-        ox_core::settings::favorite_location(uri)?;
+        ox_core::settings::favorite_key(uri)?;
         Some((uri.to_owned(), self.is_favorite(uri)))
     }
 

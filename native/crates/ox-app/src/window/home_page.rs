@@ -37,9 +37,9 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry};
-use ox_core::location::{same_location, LocationContext, RECENT_URI};
+use ox_core::location::{LocationContext, RECENT_URI};
 use ox_core::places::Place;
-use ox_core::settings::{favorite_location, Preferences, SettingsError};
+use ox_core::settings::{Preferences, SettingsError};
 
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
@@ -74,6 +74,9 @@ const TILE_EMBLEM: i32 = 20;
 /// A Quick access tile's room inside its padding: Windows 11's Home puts
 /// tiles about 284 pixels apart across and 60 down.
 const TILE_CONTENT: (i32, i32) = (284, 60);
+/// A tile's height in Compact view, which draws the tiles closer as it
+/// does the list's rows: the folder and its three lines still fit.
+const COMPACT_TILE_HEIGHT: i32 = 48;
 /// Pixels of the pin glyph under a pinned folder's location.
 const PIN_GLYPH: i32 = 12;
 /// Most tiles a row of Quick access holds; the pane's width decides.
@@ -286,8 +289,13 @@ fn folder_location(uri: &str, locations: &LocationContext) -> String {
 
 /// A Quick access tile as Windows 11's Home draws it: a 48-pixel folder
 /// (a standard folder's glyph on it), then three lines: the name, where
-/// the folder is, and the pin glyph.
-fn folder_tile(place: &Place, window: Option<&BrowserWindow>, locations: &LocationContext) -> Item {
+/// the folder is, and the pin glyph; 60 pixels high, 48 in Compact view.
+fn folder_tile(
+    place: &Place,
+    window: Option<&BrowserWindow>,
+    locations: &LocationContext,
+    compact: bool,
+) -> Item {
     let art = if place.is_shared {
         ArtImage::new(
             Art::for_quick_access(place.known_folder, Storage::Network),
@@ -327,7 +335,12 @@ fn folder_tile(place: &Place, window: Option<&BrowserWindow>, locations: &Locati
     content.set_margin_start(8);
     content.append(&icon);
     content.append(&lines);
-    content.set_size_request(TILE_CONTENT.0 - 8, TILE_CONTENT.1);
+    let height = if compact {
+        COMPACT_TILE_HEIGHT
+    } else {
+        TILE_CONTENT.1
+    };
+    content.set_size_request(TILE_CONTENT.0 - 8, height);
     let child = gtk::FlowBoxChild::builder()
         .child(&content)
         .name(&place.uri)
@@ -575,7 +588,8 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     row.append(&location);
     let child = gtk::FlowBoxChild::builder().child(&row).name(uri).build();
     child.update_property(&[gtk::accessible::Property::Label(name)]);
-    let is_favorite = favorites.iter().any(|favorite| same_location(favorite, uri));
+    // Compared by the canonical form Favorites keeps (HOME-014).
+    let is_favorite = ox_core::settings::favorite_key(uri).is_some_and(|key| favorites.contains(&key));
     Item {
         child,
         open: (WindowAction::OpenItemAt, uri.to_owned()),
@@ -1244,7 +1258,7 @@ pub(super) fn render(
     let tiles: Vec<Item> = places
         .quick_access
         .iter()
-        .map(|place| folder_tile(place, window.as_ref(), locations))
+        .map(|place| folder_tile(place, window.as_ref(), locations, is_compact(page)))
         .collect();
     if tiles.is_empty() {
         quick_body.append(&empty_label(ox_core::i18n::gettext_static(
@@ -1269,7 +1283,7 @@ pub(super) fn render(
     files_body.append(&recent);
     files_body.append(&favorites);
     page.append(&files_body);
-    list_favorites(page, &favorites, preferences.favorites.clone());
+    list_favorites(page, &favorites, &preferences.favorites);
     list_recent(page, &recent, preferences.favorites.clone());
     watch_recent_files(page);
 
@@ -1446,59 +1460,81 @@ fn is_compact(page: &gtk::Box) -> bool {
         .is_some_and(|root| root.has_css_class("compact-density"))
 }
 
-/// When each of `favorites` was last opened (`time::access`), read off
-/// the main thread; `None` for a file that cannot be read now, or one on
-/// a share or device, which drawing Home never reads (HOME-014).
-async fn favorite_times(favorites: &[String]) -> Vec<Option<u64>> {
-    let mut times = Vec::with_capacity(favorites.len());
-    for uri in favorites {
-        let file = gio::File::for_uri(uri);
-        if !file.is_native() {
-            times.push(None);
-            continue;
-        }
-        let info = file
-            .query_info_future(
-                "time::access",
-                gio::FileQueryInfoFlags::NONE,
-                glib::Priority::DEFAULT,
-            )
-            .await;
-        let accessed = info.ok().and_then(|info| {
-            info.has_attribute("time::access")
-                .then(|| info.attribute_uint64("time::access"))
-        });
-        times.push(accessed);
-    }
-    times
+#[cfg(test)]
+thread_local! {
+    /// How many Favorites dates were asked for, for tests.
+    static FAVORITE_DATE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Lists `favorites` into `list` once their dates are read, if `page`
-/// still shows this drawing of Home then.
-fn list_favorites(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
-    let page = page.downgrade();
-    let list = list.downgrade();
-    glib::spawn_future_local(async move {
-        let times = favorite_times(&favorites).await;
-        let (Some(page), Some(list)) = (page.upgrade(), list.upgrade()) else {
-            return;
-        };
-        if list.parent().is_none() || !page.has_css_class(HOME_CLASS) {
-            return;
+/// How many Favorites dates have been asked for so far, for tests.
+#[cfg(test)]
+pub(crate) fn favorite_date_reads() -> usize {
+    FAVORITE_DATE_READS.get()
+}
+
+/// Shows in `date` when the file at `uri` was last opened
+/// (`time::access`), read off the main thread; nothing once `cancellable`
+/// is cancelled or the row is gone, "—" for a file that cannot be read.
+fn read_favorite_time(uri: &str, date: glib::WeakRef<gtk::Label>, cancellable: &gio::Cancellable) {
+    #[cfg(test)]
+    FAVORITE_DATE_READS.set(FAVORITE_DATE_READS.get() + 1);
+    gio::File::for_uri(uri).query_info_async(
+        "time::access",
+        gio::FileQueryInfoFlags::NONE,
+        glib::Priority::DEFAULT,
+        Some(cancellable),
+        move |result| {
+            if matches!(&result, Err(error) if error.matches(gio::IOErrorEnum::Cancelled)) {
+                return;
+            }
+            let accessed = result.ok().and_then(|info| {
+                info.has_attribute("time::access")
+                    .then(|| info.attribute_uint64("time::access"))
+            });
+            if let Some(date) = date.upgrade() {
+                date.set_text(&ox_core::format::date_short_time_text(accessed));
+            }
+        },
+    );
+}
+
+/// Lists `favorites` into `list` at once, from their addresses alone:
+/// their dates are read only once the list is shown, each on its own so
+/// one slow share delays only its own row, and no longer once Home is
+/// drawn again or left.
+fn list_favorites(page: &gtk::Box, list: &gtk::Box, favorites: &[String]) {
+    let columns = Columns::new(glib::home_dir(), is_compact(page));
+    let rows: Vec<Item> = favorites
+        .iter()
+        .map(|uri| file_row(&favorite_name(uri), uri, None, favorites, &columns))
+        .collect();
+    let dates: Vec<(String, glib::WeakRef<gtk::Label>)> = rows
+        .iter()
+        .filter_map(|row| {
+            let date = descendants_with_class(&row.child, "home-row-detail")
+                .into_iter()
+                .next()
+                .and_downcast::<gtk::Label>()?;
+            date.set_text("");
+            Some((row.properties.clone(), date.downgrade()))
+        })
+        .collect();
+    fill_list(page, list, rows, Tab::Favorites, &columns);
+    let cancellable = gio::Cancellable::new();
+    let reading = std::cell::Cell::new(false);
+    list.connect_map(glib::clone!(
+        #[strong]
+        cancellable,
+        move |_| {
+            if reading.replace(true) {
+                return;
+            }
+            for (uri, date) in &dates {
+                read_favorite_time(uri, date.clone(), &cancellable);
+            }
         }
-        let kept = KeptFocus::read(&page);
-        let columns = Columns::new(glib::home_dir(), is_compact(&page));
-        let rows = favorites
-            .iter()
-            .zip(times)
-            .map(|(uri, accessed)| file_row(&favorite_name(uri), uri, accessed, &favorites, &columns))
-            .collect();
-        fill_list(&page, &list, rows, Tab::Favorites, &columns);
-        list.set_visible(shown_tab(&page) == Tab::Favorites);
-        if let Some(kept) = kept {
-            kept.restore(&page);
-        }
-    });
+    ));
+    list.connect_destroy(move |_| cancellable.cancel());
 }
 
 /// Lists the recent files into `list` once `GVfs` has read them, if `page`
@@ -1567,17 +1603,9 @@ impl BrowserWindow {
         );
     }
 
-    /// Whether the file at `uri` is among the Favorites, which hold it
-    /// as [`favorite_location`] writes it (a remote one without its user
-    /// name).
+    /// Whether the file at `uri` is among the Favorites.
     pub(super) fn is_favorite(&self, uri: &str) -> bool {
-        let Some(location) = favorite_location(uri) else {
-            return false;
-        };
-        let favorites = self.context().settings_data().preferences.favorites;
-        favorites
-            .iter()
-            .any(|favorite| same_location(favorite, &location))
+        self.context().settings_data().preferences.is_favorite(uri)
     }
 
     /// Saves that `section` of Home is folded or not, without drawing
@@ -1822,7 +1850,7 @@ pub(crate) fn is_folded(page: &gtk::Box, index: usize) -> bool {
 
 /// The tile named `name` in Quick access, for tests.
 #[cfg(test)]
-fn tile_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
+pub(crate) fn tile_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
     descendants_with_class(page, "home-tiles")
         .iter()
         .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
