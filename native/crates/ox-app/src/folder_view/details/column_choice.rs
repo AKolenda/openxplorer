@@ -4,7 +4,8 @@
 //! The header's menu shows and hides columns, as in Dolphin and Windows
 //! Explorer, and titles are dragged to move their columns. Name stays
 //! first unless Choose Details moved it down, as Windows lets it; Folder
-//! path follows it in a search. Only a Name that is not first is listed
+//! path follows it in a search, and Original location and Date deleted in
+//! the Recycle Bin, wherever it is. Only a Name that is not first is listed
 //! among the chosen columns (and saved as `name`), so the columns saved
 //! for a Name in front are the keys they always were. The view reports
 //! the order the user dragged the columns into ([`COLUMNS_CHOSEN`]) so the
@@ -43,18 +44,28 @@ pub(crate) fn without_leading_name(mut chosen: Vec<SortColumn>) -> Vec<SortColum
     chosen
 }
 
+/// The columns a listing always shows right after Name: Folder path in a
+/// search, Original location and Date deleted in the Recycle Bin, as
+/// Windows File Explorer shows them.
+pub(crate) const FOLLOWING_NAME: [SortColumn; 3] = [
+    SortColumn::FolderPath,
+    SortColumn::OriginalLocation,
+    SortColumn::Deleted,
+];
+
 /// Every column in the order the view lays them out: Name (first unless
-/// `chosen` places it) with Folder path after it, the `chosen` ones, then
-/// the hidden ones.
+/// `chosen` places it) with the listings' own columns after it, the
+/// `chosen` ones, then the hidden ones.
 fn column_layout(chosen: &[SortColumn]) -> Vec<SortColumn> {
     let mut layout = Vec::new();
     if !chosen.contains(&SortColumn::Name) {
-        layout.extend([SortColumn::Name, SortColumn::FolderPath]);
+        layout.push(SortColumn::Name);
+        layout.extend(FOLLOWING_NAME);
     }
     for column in chosen {
         layout.push(*column);
         if *column == SortColumn::Name {
-            layout.push(SortColumn::FolderPath);
+            layout.extend(FOLLOWING_NAME);
         }
     }
     let rest = SortColumn::ALL
@@ -193,8 +204,14 @@ mod tests {
         let expected = [SortColumn::Size, SortColumn::Modified, SortColumn::Type];
         assert_eq!(reported.borrow().as_deref(), Some(&expected[..]));
         assert_eq!(
-            view.column_order()[..3],
-            [SortColumn::Name, SortColumn::FolderPath, SortColumn::Size]
+            view.column_order()[..5],
+            [
+                SortColumn::Name,
+                SortColumn::FolderPath,
+                SortColumn::OriginalLocation,
+                SortColumn::Deleted,
+                SortColumn::Size
+            ]
         );
     }
 }

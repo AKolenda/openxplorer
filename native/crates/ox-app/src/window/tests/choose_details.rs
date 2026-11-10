@@ -10,7 +10,7 @@ use ox_core::settings::Settings;
 
 use super::name_conflicts::texts;
 use crate::folder_view::column_widths;
-use crate::folder_view::details::DetailsView;
+use crate::folder_view::details::{DetailsListing, DetailsView};
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button, Pointer};
@@ -855,5 +855,275 @@ fn choose_details_is_freed_once_it_closes() {
         wait_until(&format!("Choose Details to be freed after {how}"), || {
             gone.upgrade().is_none()
         });
+    }
+}
+
+/// A search lists Folder path and the Recycle Bin Original location and
+/// Date deleted right after Name, as their views show them: checked,
+/// never hidden and never moved, with the other rows moving past them. Date modified, which neither listing
+/// has, is not listed but stays chosen for folders.
+///
+/// parity: VIEW-033, VIEW-042, VIEW-062
+#[test]
+fn a_search_and_the_recycle_bin_list_their_own_columns() {
+    let mut search = DetailsChoice::for_listing(&DEFAULT_CHOSEN, DetailsListing::SearchResults, |_| 120);
+    assert_eq!(
+        columns(&search),
+        [
+            SortColumn::Name,
+            SortColumn::FolderPath,
+            SortColumn::Type,
+            SortColumn::Size,
+            SortColumn::Created,
+            SortColumn::Extension,
+            SortColumn::Owner,
+            SortColumn::Permissions,
+        ]
+    );
+    assert!(search.rows()[1].shown);
+    assert!(!search.can_hide(1) && !search.can_move_up(1) && !search.can_move_down(1));
+    assert!(search.can_move_down(0), "Name moves past Folder path");
+    assert_eq!(search.chosen(), DEFAULT_CHOSEN, "Date modified stays chosen");
+    assert_eq!(search.move_up(2), 0, "Type moves above Name");
+    assert_eq!(
+        columns(&search)[..4],
+        [
+            SortColumn::Type,
+            SortColumn::Name,
+            SortColumn::FolderPath,
+            SortColumn::Size
+        ],
+        "Folder path keeps following Name"
+    );
+    assert_eq!(
+        search.chosen(),
+        [
+            SortColumn::Modified,
+            SortColumn::Type,
+            SortColumn::Name,
+            SortColumn::Size
+        ]
+    );
+
+    let mut bin = DetailsChoice::for_listing(&DEFAULT_CHOSEN, DetailsListing::RecycleBin, |_| 120);
+    assert_eq!(
+        columns(&bin),
+        [
+            SortColumn::Name,
+            SortColumn::OriginalLocation,
+            SortColumn::Deleted,
+            SortColumn::Type,
+            SortColumn::Size,
+            SortColumn::Created,
+            SortColumn::Extension,
+            SortColumn::Owner,
+            SortColumn::Permissions,
+        ]
+    );
+    for fixed in [1, 2] {
+        assert!(bin.rows()[fixed].shown);
+        assert!(!bin.can_hide(fixed) && !bin.can_move_up(fixed) && !bin.can_move_down(fixed));
+        bin.set_shown(fixed, false);
+        assert!(bin.rows()[fixed].shown, "the listing's own columns stay checked");
+    }
+    bin.set_shown(5, true);
+    assert_eq!(bin.move_down(4), 5, "Size moves below Date created");
+    assert_eq!(bin.move_up(3), 0, "Type moves above Name, past its columns");
+    assert_eq!(
+        columns(&bin)[..6],
+        [
+            SortColumn::Type,
+            SortColumn::Name,
+            SortColumn::OriginalLocation,
+            SortColumn::Deleted,
+            SortColumn::Created,
+            SortColumn::Size,
+        ],
+        "Original location and Date deleted keep following Name"
+    );
+    assert_eq!(
+        bin.chosen(),
+        [
+            SortColumn::Modified,
+            SortColumn::Type,
+            SortColumn::Name,
+            SortColumn::Created,
+            SortColumn::Size
+        ]
+    );
+    let deleted = bin.index_of(SortColumn::Deleted).expect("Date deleted");
+    assert_eq!(bin.set_width_text(deleted, "201"), Some(201));
+    assert_eq!(bin.changed_widths(), [(SortColumn::Deleted, 201)]);
+}
+
+/// The labels of Choose Details' rows.
+fn row_labels(shown: &ChooseDetails) -> Vec<String> {
+    shown
+        .row_states()
+        .into_iter()
+        .map(|(label, _, _)| label)
+        .collect()
+}
+
+/// In search results Choose Details lists Folder path after Name and no
+/// Date modified, which the results do not show; OK leaves Date modified
+/// chosen for the folder.
+///
+/// parity: VIEW-033, VIEW-042
+#[gtk::test]
+fn choose_details_lists_a_search_s_columns() {
+    let (_fixture, test) = window_with_files();
+    let details = test.window.folder_pane().details().clone();
+    test.search_for("Garden");
+    wait_until("the search result", || test.names() == ["Garden plan.txt"]);
+    let shown = open_from_more(&test);
+    let labels = row_labels(&shown);
+    assert_eq!(labels[..4], ["Name", "Folder path", "Type", "Size"]);
+    assert!(!labels.iter().any(|label| label == "Date modified"));
+    shown.select(1);
+    let usable = [&shown.move_up, &shown.move_down, &shown.show, &shown.hide].map(WidgetExt::is_sensitive);
+    assert_eq!(usable, [false; 4], "Folder path neither moves nor hides");
+    shown.select(4);
+    shown.show.emit_clicked();
+    shown.ok.emit_clicked();
+    wait_until("OK to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
+    assert_eq!(
+        details.chosen_columns(),
+        [
+            SortColumn::Modified,
+            SortColumn::Type,
+            SortColumn::Size,
+            SortColumn::Created
+        ]
+    );
+}
+
+/// In the Recycle Bin Choose Details lists Original location and Date
+/// deleted after Name, and no Date modified, which the Recycle Bin does
+/// not show. A width typed for Date deleted sizes its column and is the
+/// one saved for the Date modified width the two share. Showing another
+/// column keeps them after Name.
+///
+/// parity: VIEW-033, VIEW-062
+#[gtk::test]
+fn choose_details_lists_the_recycle_bin_s_columns_and_sizes_them() {
+    super::file_ops_support::require_private_trash();
+    let (fixture, test) = window_with_files();
+    let details = test.window.folder_pane().details().clone();
+    gtk::gio::File::for_path(fixture.path("Trip notes.txt"))
+        .trash(gtk::gio::Cancellable::NONE)
+        .expect("the private Recycle Bin");
+    test.window
+        .navigate(ox_core::location::TRASH_URI)
+        .expect("the Recycle Bin");
+    wait_until("the trashed file", || {
+        test.names().iter().any(|name| name == "Trip notes.txt")
+    });
+    wait_for_frames(&test.window, 3);
+    let shown = open_from_more(&test);
+    let labels = row_labels(&shown);
+    assert_eq!(
+        labels[..5],
+        ["Name", "Original location", "Date deleted", "Type", "Size"]
+    );
+    assert!(!labels.iter().any(|label| label == "Date modified"));
+    shown.select(2);
+    assert!(!shown.hide.is_sensitive() && !shown.move_up.is_sensitive());
+    shown.width.set_text("201");
+    shown.ok.emit_clicked();
+    wait_until("OK to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
+    let deleted = details.column(SortColumn::Deleted).expect("Date deleted");
+    assert!(deleted.is_visible());
+    assert_eq!(
+        deleted.fixed_width(),
+        column_widths::fixed_width(SortColumn::Deleted, Some(201))
+    );
+    let modified_width = details
+        .widths_to_save()
+        .into_iter()
+        .find(|width| width.column == ox_core::settings::Column::Modified)
+        .map(|width| width.pixels);
+    assert_eq!(modified_width, Some(201.0));
+    assert_eq!(details.chosen_columns(), DEFAULT_CHOSEN);
+
+    // Showing another column keeps the Recycle Bin's columns after Name.
+    let shown = open_from_more(&test);
+    let created = row_labels(&shown)
+        .iter()
+        .position(|label| label == "Date created")
+        .expect("Date created");
+    shown.select(created);
+    shown.show.emit_clicked();
+    shown.ok.emit_clicked();
+    wait_until("Date created to show", || {
+        details
+            .column(SortColumn::Created)
+            .is_some_and(|column| column.is_visible())
+    });
+    let visible: Vec<SortColumn> = details
+        .column_order()
+        .into_iter()
+        .filter(|column| {
+            details
+                .column(*column)
+                .is_some_and(|view_column| view_column.is_visible())
+        })
+        .collect();
+    assert_eq!(
+        visible,
+        [
+            SortColumn::Name,
+            SortColumn::OriginalLocation,
+            SortColumn::Deleted,
+            SortColumn::Type,
+            SortColumn::Size,
+            SortColumn::Created
+        ]
+    );
+}
+
+/// A folder opened from another application while Choose Details is open
+/// takes the pane; OK then changes nothing there, and saves nothing for
+/// either folder, as the choice was made for the first one.
+///
+/// parity: VIEW-033
+#[gtk::test]
+fn ok_changes_nothing_once_the_pane_shows_another_folder() {
+    let (first, test) = window_with_files();
+    let second = Fixture::empty();
+    second.write("Packing list.txt");
+    let details = test.window.folder_pane().details().clone();
+    let shown = open_from_more(&test);
+    shown.select(4);
+    shown.show.emit_clicked();
+    shown.width.set_text("222");
+    test.window.open_locations_as_tabs(vec![second.uri()]);
+    wait_until("the second folder", || {
+        test.window
+            .current_uri()
+            .is_some_and(|uri| ox_core::location::same_location(&uri, &second.uri()))
+    });
+    shown.ok.emit_clicked();
+    wait_until("OK to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
+    wait_for_frames(&test.window, 3);
+    assert_eq!(details.chosen_columns(), DEFAULT_CHOSEN);
+    let created = details.column(SortColumn::Created).expect("Date created");
+    assert!(!created.is_visible());
+    let settings = Settings::open(test.settings_directory());
+    for folder in [&first, &second] {
+        let saved = settings.data().preferences.view_for(&folder.uri());
+        assert!(
+            !saved
+                .details_columns
+                .is_some_and(|columns| columns.iter().any(|column| column == "created")),
+            "nothing saved for {}",
+            folder.uri()
+        );
     }
 }

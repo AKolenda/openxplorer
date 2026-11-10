@@ -49,7 +49,7 @@ use gtk::subclass::prelude::*;
 use ox_core::format::DateStyle;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
-pub(crate) use column_choice::{chosen_from_keys, without_leading_name};
+pub(crate) use column_choice::{chosen_from_keys, without_leading_name, FOLLOWING_NAME};
 pub(crate) use column_text::shown_cell_text;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, PositionMap};
@@ -227,7 +227,7 @@ pub(crate) enum DetailsListing {
 }
 
 /// Whether `listing` has `column` at all, whatever the room.
-const fn lists_column(listing: DetailsListing, column: SortColumn) -> bool {
+pub(crate) const fn lists_column(listing: DetailsListing, column: SortColumn) -> bool {
     match column {
         SortColumn::Modified => matches!(listing, DetailsListing::Folder),
         SortColumn::FolderPath => matches!(listing, DetailsListing::SearchResults),
@@ -645,6 +645,12 @@ impl DetailsView {
         if !lists_column(listing, column) && !SortColumn::IN_SORT_MENU.contains(&column) {
             self.sort_by(SortOrder::DEFAULT);
         }
+    }
+
+    /// What the view lists now: a folder, search results or the Recycle
+    /// Bin.
+    pub(crate) fn listing(&self) -> DetailsListing {
+        self.imp().listing.get()
     }
 
     /// Gives each column `listing` brings in the width of the column it

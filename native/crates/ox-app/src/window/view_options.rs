@@ -20,6 +20,7 @@ use super::folder_pane::{FolderView, PanePage};
 use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::folder_view::details::{lists_column, DetailsListing, FOLLOWING_NAME};
 use crate::folder_view::sorting::SortColumn;
 use crate::icons::Icon;
 use crate::thumbnails::PreviewPolicy;
@@ -39,13 +40,33 @@ const MENU_COLUMNS: [SortColumn; 8] = [
     SortColumn::Permissions,
 ];
 
+/// The columns the titles' menu lists for `listing`, in its order: those
+/// of [`MENU_COLUMNS`] the listing has, with its own columns (Folder path
+/// in a search, Original location and Date deleted in the Recycle Bin)
+/// after Name, where the view shows them.
+fn menu_columns(listing: DetailsListing) -> Vec<SortColumn> {
+    let mut columns = Vec::new();
+    for column in MENU_COLUMNS {
+        columns.push(column);
+        if column == SortColumn::Name {
+            columns.extend(FOLLOWING_NAME);
+        }
+    }
+    columns.retain(|column| lists_column(listing, *column));
+    columns
+}
+
 /// The titles' menu, as Windows 11 File Explorer's: "Size Column to Fit"
 /// for the column it was opened on (`under`, unavailable outside the
 /// titles), "Size All Columns to Fit", the columns that can be shown or
 /// hidden, checked while they show (Name checked and grayed, as it cannot
 /// be hidden), and "More...", which opens Choose Details. The rows show
 /// check marks only, no icons.
-fn column_menu_entries(chosen: &[SortColumn], under: Option<SortColumn>) -> Vec<MenuEntry> {
+fn column_menu_entries(
+    chosen: &[SortColumn],
+    listing: DetailsListing,
+    under: Option<SortColumn>,
+) -> Vec<MenuEntry> {
     let fit_one = MenuItem::with_text_target(
         &gettext("Size Column to Fit"),
         Icon::Document,
@@ -67,16 +88,18 @@ fn column_menu_entries(chosen: &[SortColumn], under: Option<SortColumn>) -> Vec<
         MenuEntry::Item(fit_all),
         MenuEntry::Divider,
     ];
-    entries.extend(column_toggle_entries(chosen));
+    entries.extend(column_toggle_entries(chosen, listing));
     entries.push(MenuEntry::Divider);
     entries.push(MenuEntry::Item(more));
     entries
 }
 
-/// The titles' menu items that show and hide columns.
-fn column_toggle_entries(chosen: &[SortColumn]) -> Vec<MenuEntry> {
+/// The titles' menu items that show and hide the columns `listing` has.
+/// Name and the listing's own columns are checked and grayed, as they
+/// cannot be hidden.
+fn column_toggle_entries(chosen: &[SortColumn], listing: DetailsListing) -> Vec<MenuEntry> {
     let item = |column: SortColumn| {
-        let is_name = column == SortColumn::Name;
+        let always = !SortColumn::CHOOSABLE.contains(&column);
         let item = MenuItem::with_text_target(
             column.label(),
             Icon::Document,
@@ -84,13 +107,13 @@ fn column_toggle_entries(chosen: &[SortColumn]) -> Vec<MenuEntry> {
             column.as_str(),
         )
         .without_glyph()
-        .disabled_when(is_name);
+        .disabled_when(always);
         MenuEntry::Item(MenuItem {
-            check: ItemCheck::Fixed(is_name || chosen.contains(&column)),
+            check: ItemCheck::Fixed(always || chosen.contains(&column)),
             ..item
         })
     };
-    MENU_COLUMNS.into_iter().map(item).collect()
+    menu_columns(listing).into_iter().map(item).collect()
 }
 
 /// `chosen` with `column` shown at the end, or hidden. Name always shows.
@@ -209,7 +232,11 @@ impl BrowserWindow {
         });
         // The rows are drawn once the menu is in the window, which enables
         // them: the keyboard starts on the first one as the menu maps.
-        popover.set_entries(column_menu_entries(&chosen, details.column_at(x)));
+        popover.set_entries(column_menu_entries(
+            &chosen,
+            details.listing(),
+            details.column_at(x),
+        ));
         #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in i32")]
         popover.set_pointing_to(Some(&gdk::Rectangle::new(at.x() as i32, at.y() as i32, 1, 1)));
         popover.popup();
@@ -315,7 +342,7 @@ mod tests {
     #[test]
     fn the_titles_menu_is_windows_11s_with_check_marks_only() {
         let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
-        let entries = column_menu_entries(&chosen, Some(SortColumn::Size));
+        let entries = column_menu_entries(&chosen, DetailsListing::Folder, Some(SortColumn::Size));
         let item = |label: &str, checked: bool, disabled: bool| {
             Some((label.to_owned(), ItemCheck::Fixed(checked), disabled))
         };
@@ -355,5 +382,43 @@ mod tests {
             chosen,
             "Name cannot be hidden"
         );
+        assert_eq!(
+            toggled(chosen.clone(), SortColumn::Deleted),
+            chosen,
+            "Date deleted cannot be hidden"
+        );
+    }
+
+    /// In search results and the Recycle Bin the titles' menu lists the
+    /// columns they show: their own after Name, checked and grayed, and
+    /// no Date modified, which neither shows.
+    ///
+    /// parity: VIEW-033, VIEW-042, VIEW-062
+    #[test]
+    fn the_titles_menu_lists_a_search_s_and_the_recycle_bin_s_columns() {
+        let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
+        let item = |label: &str, checked: bool, disabled: bool| {
+            Some((label.to_owned(), ItemCheck::Fixed(checked), disabled))
+        };
+        let rest = [
+            item("Type", true, false),
+            item("Size", true, false),
+            item("Date created", false, false),
+            item("File extension", false, false),
+            item("Owner", false, false),
+            item("Permissions", false, false),
+        ];
+        let search = shown(&column_toggle_entries(&chosen, DetailsListing::SearchResults));
+        let mut expected = vec![item("Name", true, true), item("Folder path", true, true)];
+        expected.extend(rest.clone());
+        assert_eq!(search, expected);
+        let bin = shown(&column_toggle_entries(&chosen, DetailsListing::RecycleBin));
+        let mut expected = vec![
+            item("Name", true, true),
+            item("Original location", true, true),
+            item("Date deleted", true, true),
+        ];
+        expected.extend(rest);
+        assert_eq!(bin, expected);
     }
 }
