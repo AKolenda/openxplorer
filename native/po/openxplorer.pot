@@ -2869,6 +2869,14 @@ msgid "update version release upgrade software updates install restart flatpak"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Adds Move tab to new window, Move tab to window… and Open windows… to the menu you get when you right-click a tab. Off, the tab menu looks like Windows 11's."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Adds Recent files, Recent locations, the Recycle Bin and a bar under each drive that shows how full it is. Off, the navigation pane looks like Windows 11's."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Always at the bottom"
 msgstr ""
 
@@ -2922,6 +2930,14 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Shift+F10 opens the classic menu"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Show more items in the navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Show more items in the tab menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2993,11 +3009,19 @@ msgid "hide expand arrows chevron expander triangle sidebar navigation pane tree
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "navigation pane sidebar recent files locations recycle bin trash drive space capacity usage bar extra more rows windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "reset layout widths sidebar resize columns"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "shift f10 keyboard key context menu right-click classic windows 10 11 compact show more options"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "tab menu right-click move tab new window open windows extra more items windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -6133,6 +6157,10 @@ msgid "Single-click to open an item (point to select)"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
+msgid "These apply when “Show more items in the navigation pane” is on in Settings > Appearance."
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
 msgid "Underline icon titles consistent with my browser"
 msgstr ""
 
@@ -7026,6 +7054,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/tab_menu.rs
 msgid "Close other tabs"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_menu.rs
+msgid "Close tabs to the right"
 msgstr ""
 
 #: crates/ox-app/src/window/tab_menu.rs

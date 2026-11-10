@@ -12,12 +12,13 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::{
     self, is_archive_location, is_device_location, is_server_location, parent_location, LocationContext,
+    VirtualPlace,
 };
 use ox_core::ops::JournalDirection;
 use ox_core::places::{NetworkLocation, Place};
 
 use crate::folder_view::shown_name::shown_name;
-use crate::icons::{Art, Icon};
+use crate::icons::{Art, Icon, Tint};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
@@ -36,13 +37,17 @@ struct ActiveLocation {
 }
 
 /// The address-bar icon for a location (`address-icon` in
-/// `renderNavigation`): the page's glyph, the house for the home folder
-/// at `home_uri` (the Home of app.js), the network glyph for SMB and the
-/// other network protocols, as their tabs show, a phone for devices, else
-/// the colour folder.
+/// `renderNavigation`): the page's glyph, the glyph of the Recycle Bin's,
+/// Recent files' or Recent locations' navigation pane row, the house for
+/// the home folder at `home_uri` (the Home of app.js), the network glyph
+/// for SMB and the other network protocols, as their tabs show, a phone
+/// for devices, else the colour folder.
 pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     if let Some(page) = Page::from_uri(uri) {
         return page.icon();
+    }
+    if let Some(glyph) = listed_place_glyph(uri) {
+        return glyph;
     }
     if location::same_location(uri, home_uri) {
         Icon::Home
@@ -141,15 +146,33 @@ fn search_crumb(locations: &LocationContext, uri: &str) -> CrumbButton {
     }
 }
 
-/// A tab's icon, as `renderTabs` picks it: the network glyph on
-/// Network, the gear on Settings, a phone for devices, the colour
-/// folder everywhere else, This PC included, and for a network location
+/// The glyph of the navigation pane row of the Recycle Bin (the empty
+/// bin), Recent files or Recent locations, the places listed like folders
+/// that have a row of their own; `None` for any other location.
+fn listed_place_glyph(uri: &str) -> Option<Icon> {
+    match VirtualPlace::from_uri(uri)? {
+        VirtualPlace::RecycleBin => Some(Icon::Delete),
+        VirtualPlace::Recent => Some(Icon::History),
+        VirtualPlace::RecentLocations => Some(Icon::Clock),
+        VirtualPlace::Home | VirtualPlace::ThisPc | VirtualPlace::Network | VirtualPlace::Settings => None,
+    }
+}
+
+/// A tab's icon: the network glyph on Network, the gear on Settings,
+/// This PC's own icon on This PC and the Recycle Bin's on the Recycle
+/// Bin, as Windows 11 File Explorer's tabs show them, the glyph of their
+/// navigation pane row on Recent files and Recent locations, a phone for
+/// devices, the colour folder everywhere else, and for a network location
 /// (SMB, or a folder under a kernel CIFS/SMB3 mount, NET-006) the location
 /// on the network bar as its row of `network` shows it in the sidebar.
 fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation]) -> Art {
     match Page::from_uri(uri) {
         Some(page @ (Page::Home | Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
-        Some(Page::ThisPc) | None => {}
+        Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
+        None => {}
+    }
+    if let Some(glyph) = listed_place_glyph(uri) {
+        return Art::Glyph(glyph);
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
@@ -462,6 +485,7 @@ impl BrowserWindow {
 mod tests {
     use super::*;
     use crate::test_support::{studio_nas_mapped_drive, studio_nas_server};
+    use ox_core::location::{RECENT_LOCATIONS_URI, RECENT_URI, TRASH_URI};
 
     /// parity: NAV-024
     #[test]
@@ -502,7 +526,7 @@ mod tests {
 
     /// parity: TAB-010, DEV-004, NAV-025, LOOK-015, LOOK-016
     #[test]
-    fn tabs_and_the_address_bar_show_the_current_apps_icons() {
+    fn tabs_and_the_address_bar_show_each_locations_own_icon() {
         let cases = [
             IconCase {
                 uri: "file:///tmp/work",
@@ -524,10 +548,28 @@ mod tests {
                 tab: Art::Glyph(Icon::Phone),
                 address: Icon::Phone,
             },
+            // This PC, the Recycle Bin and the recent lists show the icon
+            // of their navigation pane row, as Windows 11 File Explorer's
+            // This PC and Recycle Bin tabs do.
             IconCase {
                 uri: Page::ThisPc.uri(),
-                tab: Art::Folder,
+                tab: Art::TintedGlyph(Icon::Laptop, Tint::ThisPc),
                 address: Icon::Laptop,
+            },
+            IconCase {
+                uri: TRASH_URI,
+                tab: Art::Glyph(Icon::Delete),
+                address: Icon::Delete,
+            },
+            IconCase {
+                uri: RECENT_URI,
+                tab: Art::Glyph(Icon::History),
+                address: Icon::History,
+            },
+            IconCase {
+                uri: RECENT_LOCATIONS_URI,
+                tab: Art::Glyph(Icon::Clock),
+                address: Icon::Clock,
             },
             IconCase {
                 uri: Page::Network.uri(),

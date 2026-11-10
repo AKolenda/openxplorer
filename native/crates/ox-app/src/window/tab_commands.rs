@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Tab commands Dolphin has beyond opening, closing and switching:
 //! Alt+1…9 and Alt+0 (TAB-007), Open in new tabs for several folders
-//! (TAB-027), Close other tabs (TAB-015) and reopening closed tabs
-//! (TAB-016).
+//! (TAB-027), Close other tabs (TAB-015), Windows 11's Close tabs to the
+//! right (TAB-059) and reopening closed tabs (TAB-016).
 //!
 //! A closed tab is remembered with its history, selection and scroll
 //! position, most recent first, as Dolphin's "Recently Closed Tabs" does.
@@ -47,7 +47,8 @@ impl ClosedTab {
 
 impl BrowserWindow {
     /// Adds `win.show-tab-number`, `win.close-other-tabs`,
-    /// `win.reopen-closed-tab` and `win.restore-closed-tab`.
+    /// `win.close-tabs-to-the-right`, `win.reopen-closed-tab` and
+    /// `win.restore-closed-tab`.
     pub(super) fn install_tab_commands(&self) {
         let show_number = gio::ActionEntry::builder(WindowAction::ShowTabNumber.name())
             .parameter_type(Some(glib::VariantTy::UINT32))
@@ -70,6 +71,10 @@ impl BrowserWindow {
             show_number,
             restore,
             tab_action(WindowAction::CloseOtherTabs, BrowserWindow::close_other_tabs),
+            tab_action(
+                WindowAction::CloseTabsToTheRight,
+                BrowserWindow::close_tabs_to_the_right,
+            ),
             plain_action(
                 WindowAction::OpenSelectionInTabs,
                 BrowserWindow::open_selection_in_tabs,
@@ -139,6 +144,29 @@ impl BrowserWindow {
         };
         self.switch_tab(keep);
         for id in others {
+            self.close_tab(id);
+        }
+    }
+
+    /// Closes every tab to the right of `keep`, through the normal close
+    /// path, as Windows 11 File Explorer's Close tabs to the right does;
+    /// `keep` and the tabs before it stay. When the tab in front closes,
+    /// `keep` comes to the front.
+    fn close_tabs_to_the_right(&self, keep: TabId) {
+        let right: Vec<TabId> = {
+            let session = self.imp().session.borrow();
+            let Some(index) = session.tabs().iter().position(|tab| tab.id == keep) else {
+                return;
+            };
+            session.tabs()[index + 1..].iter().map(|tab| tab.id).collect()
+        };
+        // A tab in front that closes hands the front to `keep`, so no tab
+        // between them is shown on the way.
+        let active = self.imp().session.borrow().active_id();
+        if active.is_some_and(|active| right.contains(&active)) {
+            self.switch_tab(keep);
+        }
+        for id in right.into_iter().rev() {
             self.close_tab(id);
         }
     }

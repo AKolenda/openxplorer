@@ -274,7 +274,7 @@ fn show_item_properties_gives_the_callers_token_to_the_properties_window() {
 /// window of its own with General, Security and Previous Versions, OK,
 /// Cancel and a greyed Apply, every byte of the size and the long dates.
 ///
-/// parity: PROP-001, PROP-003, PROP-006, PROP-033
+/// parity: PROP-001, PROP-003, PROP-006, PROP-033, PROP-038
 #[gtk::test]
 fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
     let fixture = Fixture::standard();
@@ -308,9 +308,16 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
         Some(on_disk_text(&[fixture.path("Notes 2.txt")])),
         "the blocks the file takes, as Windows Explorer's Size on disk"
     );
+    // Created and Modified name the weekday even today, as Windows 11's
+    // Properties window does (PROP-038); Accessed keeps "Today".
+    let weekday = glib::DateTime::now_local()
+        .and_then(|now| now.format("%A"))
+        .expect("today's weekday")
+        .to_string();
     let modified = value_after(&general, "Modified:").expect("a Modified row");
-    assert!(modified.starts_with("Today, "), "{modified}");
-    assert!(value_after(&general, "Accessed:").is_some());
+    assert!(modified.starts_with(&format!("{weekday}, ")), "{modified}");
+    let accessed = value_after(&general, "Accessed:").expect("an Accessed row");
+    assert!(accessed.starts_with("Today, "), "{accessed}");
     assert!(value_after(&general, "Created:").is_some());
     assert_eq!(value_after(&general, "Full path:"), None, "no Full path row");
     assert!(!check(&general, "Read-only").is_active());

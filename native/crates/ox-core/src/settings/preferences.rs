@@ -384,6 +384,18 @@ pub struct Preferences {
     /// default, so they always show; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_expand_arrows: bool,
+    /// The navigation pane adds the app's own rows to Windows 11's: a
+    /// capacity bar under each drive (SIDE-018), Recent files, Recent
+    /// locations and the Recycle Bin (SIDE-025, SIDE-026). On by default,
+    /// as the pane was before; stored only when off, which gives Windows
+    /// 11's pane (SIDE-034).
+    #[serde(skip_serializing_if = "is_true")]
+    pub more_navigation_pane_items: bool,
+    /// A tab's menu is the app's own, with Move tab to new window, Move
+    /// tab to window… and Open windows… (TAB-012). On by default; stored
+    /// only when off, which gives Windows 11's tab menu (TAB-060).
+    #[serde(skip_serializing_if = "is_true")]
+    pub more_tab_menu_items: bool,
     /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
     /// automatic size (Dolphin's Places panel Icon Size). Stored only when
     /// chosen.
@@ -629,6 +641,8 @@ impl Default for Preferences {
             desktop_font: false,
             hide_sidebar: false,
             hide_expand_arrows: false,
+            more_navigation_pane_items: true,
+            more_tab_menu_items: true,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
@@ -825,6 +839,11 @@ impl Preferences {
         replace_if_some(&mut self.progress_details, update.progress_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
+        replace_if_some(
+            &mut self.more_navigation_pane_items,
+            update.more_navigation_pane_items,
+        );
+        replace_if_some(&mut self.more_tab_menu_items, update.more_tab_menu_items);
         let icon_size = update
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
@@ -1029,6 +1048,10 @@ pub struct PreferencesUpdate {
     /// Hide the navigation pane's expand arrows until it is pointed at, or
     /// always show them.
     pub hide_expand_arrows: Option<bool>,
+    /// Keep the app's own rows in the navigation pane, or show Windows'.
+    pub more_navigation_pane_items: Option<bool>,
+    /// Keep the app's own tab menu, or show Windows'.
+    pub more_tab_menu_items: Option<bool>,
     /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
     pub sidebar_icon_size: Option<u32>,
     /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
@@ -1163,6 +1186,8 @@ impl PreferencesUpdate {
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
             hide_expand_arrows: flag("hideExpandArrows"),
+            more_navigation_pane_items: flag("moreNavigationPaneItems"),
+            more_tab_menu_items: flag("moreTabMenuItems"),
             sidebar_icon_size: values
                 .get("sidebarIconSize")
                 .and_then(Value::as_u64)
@@ -1842,6 +1867,38 @@ mod tests {
         assert_eq!(stored["hideExpandArrows"], json!(true));
         let read = PreferencesUpdate::from_json(&stored).expect("read back");
         assert_eq!(read.hide_expand_arrows, Some(true));
+    }
+
+    /// The app's extras beyond Windows 11's tab menu and navigation pane
+    /// start on, as both were before they could be turned off, and are not
+    /// stored then; each one turned off, for Windows' layout, is saved and
+    /// read back, and turned on again leaves the file.
+    ///
+    /// parity: TAB-060, SIDE-034
+    #[test]
+    fn tab_menu_and_navigation_pane_extras_start_on_and_are_stored_when_off() {
+        let keys = ["moreTabMenuItems", "moreNavigationPaneItems"];
+        let mut preferences = Preferences::default();
+        assert!(preferences.more_tab_menu_items && preferences.more_navigation_pane_items);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert!(stored.get(key).is_none(), "{key} is not stored by default");
+        }
+        let all = |on: bool| {
+            let values = keys.iter().map(|key| ((*key).to_owned(), json!(on))).collect();
+            PreferencesUpdate::from_json(&Value::Object(values)).expect("valid preferences")
+        };
+        preferences.apply(&all(false));
+        assert!(!preferences.more_tab_menu_items && !preferences.more_navigation_pane_items);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert_eq!(stored[key], json!(false), "{key} is stored once off");
+        }
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
+        assert_eq!(read, preferences, "read back as saved");
+        preferences.apply(&all(true));
+        assert_eq!(preferences, Preferences::default());
     }
 
     /// The clipboard's extras beyond Windows start on, as they were before

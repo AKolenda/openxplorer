@@ -37,6 +37,9 @@ pub(crate) enum WindowAction {
     ShowTabNumber,
     /// Closes every tab but the one whose id is the `u64` target.
     CloseOtherTabs,
+    /// Closes every tab to the right of the one whose id is the `u64`
+    /// target.
+    CloseTabsToTheRight,
     /// Reopens the most recently closed tab (Ctrl+Shift+T).
     ReopenClosedTab,
     /// Reopens the closed tab at the `u32` target, 0 being the most
@@ -538,6 +541,7 @@ impl WindowAction {
             WindowAction::CloseTabById => "close-tab-by-id",
             WindowAction::ShowTabNumber => "show-tab-number",
             WindowAction::CloseOtherTabs => "close-other-tabs",
+            WindowAction::CloseTabsToTheRight => "close-tabs-to-the-right",
             WindowAction::ReopenClosedTab => "reopen-closed-tab",
             WindowAction::RestoreClosedTab => "restore-closed-tab",
             WindowAction::OpenSelectionInTabs => "open-selection-in-tabs",
