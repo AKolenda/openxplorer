@@ -102,7 +102,6 @@ window.ox.ox-dialog button.dialog-button {
    and no empty room. One style for both hosts, so these rules start at
    the frame. */
 window.ox ox-dialog-frame.message-box .message-box-caption {
-  min-height: 32px;
   padding-left: 12px;
   background-color: @ox_bg;
   border-radius: 8px 8px 0 0;
@@ -127,12 +126,13 @@ window.ox ox-dialog-frame.message-box .dialog-actions {
   padding: 12px 12px;
   border-spacing: 8px;
 }
-/* Buttons 88 wide with their padding and border, as a message box's,
-   narrower than a dialog's (the frame's ox-dialog class outranks the
-   layer's button rule). */
-window.ox ox-dialog-frame.message-box.ox-dialog .dialog-actions button {
+/* Buttons 88 wide with their padding and border, in a window and on a
+   layer alike: the class outranks the window's (network-dialogs.css) and
+   the layer's (in-window-dialogs.css) footer button rules. Their height,
+   32 at 100% with the border, follows the text size (theme/fonts.rs),
+   as the caption's does. */
+window.ox ox-dialog-frame.message-box.ox-dialog .dialog-actions > button.message-box-button {
   min-width: 64px;
-  min-height: 28px;
   padding: 0 11px;
 }
 /* The red button of a destructive question. */

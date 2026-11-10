@@ -289,6 +289,22 @@ const SCALED_HEIGHTS: &[ScaledHeight] = &[
         24.0,
         6.0,
     ),
+    // A message box (DialogFrame::make_message_box) draws its buttons and
+    // caption alike in a window of its own and on a dialog layer, whose
+    // own rules above differ: a 32-pixel button (30 and its border) and
+    // a 32-pixel caption at 100%, as Windows' message box title bar.
+    grows(
+        "window.ox ox-dialog-frame.message-box .dialog-actions > button.message-box-button",
+        30,
+        24.0,
+        6.0,
+    ),
+    grows(
+        "window.ox ox-dialog-frame.message-box .message-box-caption",
+        32,
+        25.0,
+        2.0,
+    ),
 ];
 
 /// The padding of the solid window frame GTK draws without a compositor
@@ -666,6 +682,16 @@ mod tests {
                 "window.ox ox-dialog-layer .ox-dialog .dialog-actions button",
                 30,
                 54,
+            ),
+            (
+                "window.ox ox-dialog-frame.message-box .dialog-actions > button.message-box-button",
+                30,
+                54,
+            ),
+            (
+                "window.ox ox-dialog-frame.message-box .message-box-caption",
+                32,
+                52,
             ),
         ] {
             assert!(

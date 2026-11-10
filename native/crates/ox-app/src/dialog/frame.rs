@@ -358,6 +358,12 @@ impl DialogFrame {
         let button = gtk::Button::with_label(label);
         button.add_css_class(style.css_class());
         self.imp().actions.append(&button);
+        if self.imp().caption.borrow().is_some() {
+            // One size in every host: the dialog window's and the dialog
+            // layer's own button rules differ (message-box-button,
+            // dialogs.css).
+            button.add_css_class("message-box-button");
+        }
         self.add_mnemonic(&button);
         button
     }
