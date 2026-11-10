@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A tab's context menu.
 //!
-//! Windows 11 File Explorer's, in its order: Close tab (with its X and
-//! Ctrl+W), Close other tabs (TAB-015), Close tabs to the right (TAB-059)
-//! and Duplicate tab. "Show more items in the tab menu" adds the items the
-//! app had before (TAB-060), the port of the `contextmenu` handler of
+//! By default the app's own menu, the port of the `contextmenu` handler of
 //! `setupTabDrag` in `v2.0.0:desktop/ui/app.js`: Move tab to new window,
-//! Move tab to window… and Open windows…. The two moves are
-//! [`super::tab_moves`]'s.
+//! Move tab to window…, Duplicate tab, Open windows… and Close tab, then
+//! Dolphin's Close other tabs (TAB-015) and Windows 11's Close tabs to the
+//! right (TAB-059). With Settings' "Show more items in the tab menu" off
+//! it is Windows 11 File Explorer's, in its order: Close tab (with its X
+//! and Ctrl+W), Close other tabs, Close tabs to the right and Duplicate
+//! tab (TAB-060). The two moves are [`super::tab_moves`]'s.
 
 use gtk::subclass::prelude::*;
 
@@ -29,71 +30,74 @@ pub(super) struct TabMenuFacts {
     pub extra_items: bool,
 }
 
-/// The menu of the tab `id`, which shows `uri`. Close other tabs is
-/// disabled on the only tab and Close tabs to the right on the last one.
+/// The menu of the tab `id`, which shows `uri`: the app's own with
+/// `facts.extra_items`, else Windows 11's. Close other tabs is disabled
+/// on the only tab and Close tabs to the right on the last one.
 pub(super) fn tab_menu(id: TabId, uri: &str, facts: TabMenuFacts) -> Vec<MenuEntry> {
     let tab = id.to_variant();
-    let mut entries = vec![
-        MenuItem::with_target(
-            &ox_core::i18n::gettext("Close tab"),
-            Icon::Dismiss,
-            WindowAction::CloseTabById,
-            tab.clone(),
-        )
-        .with_shortcut("Ctrl+W")
-        .into(),
-        MenuItem::with_target(
-            &ox_core::i18n::gettext("Close other tabs"),
-            Icon::Dismiss,
-            WindowAction::CloseOtherTabs,
-            tab.clone(),
-        )
-        .without_glyph()
-        .disabled_when(facts.is_only_tab)
-        .into(),
-        MenuItem::with_target(
-            &ox_core::i18n::gettext("Close tabs to the right"),
-            Icon::Dismiss,
-            WindowAction::CloseTabsToTheRight,
-            tab.clone(),
-        )
-        .without_glyph()
-        .disabled_when(facts.is_last_tab)
-        .into(),
-        MenuItem::with_text_target(
-            &ox_core::i18n::gettext("Duplicate tab"),
-            Icon::Copy,
-            WindowAction::OpenTab,
-            uri,
-        )
-        .into(),
-    ];
-    if facts.extra_items {
-        entries.extend([
-            MenuEntry::Divider,
-            MenuItem::with_target(
-                &ox_core::i18n::gettext("Move tab to new window"),
-                Icon::Share,
-                WindowAction::MoveTabToNewWindow,
-                tab.clone(),
-            )
-            .into(),
-            MenuItem::with_target(
-                &ox_core::i18n::gettext("Move tab to window…"),
-                Icon::Desktop,
-                WindowAction::MoveTabToWindow,
-                tab,
-            )
-            .into(),
-            MenuItem::new(
-                &ox_core::i18n::gettext("Open windows…"),
-                Icon::Desktop,
-                WindowAction::OpenWindows,
-            )
-            .into(),
-        ]);
+    let close_tab = MenuItem::with_target(
+        &ox_core::i18n::gettext("Close tab"),
+        Icon::Dismiss,
+        WindowAction::CloseTabById,
+        tab.clone(),
+    )
+    .with_shortcut("Ctrl+W");
+    let close_others = MenuItem::with_target(
+        &ox_core::i18n::gettext("Close other tabs"),
+        Icon::Dismiss,
+        WindowAction::CloseOtherTabs,
+        tab.clone(),
+    )
+    .disabled_when(facts.is_only_tab);
+    let close_right = MenuItem::with_target(
+        &ox_core::i18n::gettext("Close tabs to the right"),
+        Icon::Dismiss,
+        WindowAction::CloseTabsToTheRight,
+        tab.clone(),
+    )
+    .disabled_when(facts.is_last_tab);
+    let duplicate = MenuItem::with_text_target(
+        &ox_core::i18n::gettext("Duplicate tab"),
+        Icon::Copy,
+        WindowAction::OpenTab,
+        uri,
+    );
+    if !facts.extra_items {
+        // Windows 11 draws no icon beside its two Close … tabs rows.
+        return vec![
+            close_tab.into(),
+            close_others.without_glyph().into(),
+            close_right.without_glyph().into(),
+            duplicate.into(),
+        ];
     }
-    entries
+    vec![
+        MenuItem::with_target(
+            &ox_core::i18n::gettext("Move tab to new window"),
+            Icon::Share,
+            WindowAction::MoveTabToNewWindow,
+            tab.clone(),
+        )
+        .into(),
+        MenuItem::with_target(
+            &ox_core::i18n::gettext("Move tab to window…"),
+            Icon::Desktop,
+            WindowAction::MoveTabToWindow,
+            tab,
+        )
+        .into(),
+        duplicate.into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Open windows…"),
+            Icon::Desktop,
+            WindowAction::OpenWindows,
+        )
+        .into(),
+        MenuEntry::Divider,
+        close_tab.into(),
+        close_others.into(),
+        close_right.into(),
+    ]
 }
 
 impl BrowserWindow {
@@ -156,11 +160,12 @@ mod tests {
             .unwrap_or_else(|| panic!("the menu has {label}"))
     }
 
-    /// Windows 11 File Explorer's tab menu, in its order: Close tab with
-    /// its X and Ctrl+W, Close other tabs and Close tabs to the right
-    /// without an icon, and Duplicate tab; nothing else.
+    /// With "Show more items in the tab menu" off, the menu is Windows 11
+    /// File Explorer's, in its order: Close tab with its X and Ctrl+W,
+    /// Close other tabs and Close tabs to the right without an icon, and
+    /// Duplicate tab; nothing else.
     ///
-    /// parity: TAB-012, TAB-059
+    /// parity: TAB-059, TAB-060
     #[test]
     fn a_tab_menu_offers_windows_items_in_order() {
         let entries = tab_menu(tab(), "file:///tmp", middle_tab(false));
@@ -185,26 +190,26 @@ mod tests {
         assert_eq!(duplicate.glyph, Icon::Copy);
     }
 
-    /// "Show more items in the tab menu" adds the app's own items back
-    /// after Windows', so Move tab to new window, Move tab to window… and
-    /// Open windows… are not lost.
+    /// With "Show more items in the tab menu" on, the default, the menu is
+    /// the app's own, in its order, with Windows 11's Close tabs to the
+    /// right after Close other tabs.
     ///
-    /// parity: TAB-012, TAB-060
+    /// parity: TAB-012, TAB-015, TAB-059, TAB-060
     #[test]
-    fn the_extra_items_follow_windows_items_when_asked_for() {
+    fn the_extra_items_keep_the_apps_own_menu() {
         let entries = tab_menu(tab(), "file:///tmp", middle_tab(true));
 
         assert_eq!(
             labels(&entries),
             [
+                "Move tab to new window",
+                "Move tab to window…",
+                "Duplicate tab",
+                "Open windows…",
+                "-",
                 "Close tab",
                 "Close other tabs",
                 "Close tabs to the right",
-                "Duplicate tab",
-                "-",
-                "Move tab to new window",
-                "Move tab to window…",
-                "Open windows…",
             ]
         );
     }

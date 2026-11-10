@@ -639,8 +639,6 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
     widget.update_property(&[gtk::accessible::Property::Label(&name)]);
 }
 
-/// Runs the tab action `action` on the tab `id` from `widget`, when the
-/// gesture still has one.
 /// Ctrl+W, which a tab's menu shows beside Close tab, closes the tab whose
 /// menu is open, as that row does, and the menu with it. The open menu
 /// takes the keyboard, so the window's own Ctrl+W, which closes the tab in
@@ -668,6 +666,8 @@ fn close_the_menus_tab_on_ctrl_w() -> gtk::ShortcutController {
     shortcuts
 }
 
+/// Runs the tab action `action` on the tab `id` from `widget`, when the
+/// gesture still has one.
 fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant) {
     if let Some(widget) = widget {
         action.activate_from(&widget, Some(id));

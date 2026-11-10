@@ -258,8 +258,7 @@ fn shift_f10_on_a_tab_opens_its_menu() {
     press_shift_f10(&mut pointer);
     let menu = test.window.tab_strip().menu();
     wait_until("Shift+F10 to open the tab's menu", || menu.is_visible());
-    // Windows 11's tab menu starts with Close tab (TAB-012).
-    assert_eq!(menu.row_labels()[0], "Close tab");
+    assert_eq!(menu.row_labels()[0], "Move tab to new window");
     assert!(
         !test.window.context_menu().is_visible(),
         "the file list's menu stays shut"

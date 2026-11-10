@@ -802,19 +802,29 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     assert_eq!(
         menu.row_labels(),
         [
+            "Move tab to new window",
+            "Move tab to window…",
+            "Duplicate tab",
+            "Open windows…",
+            "-",
             "Close tab",
             "Close other tabs",
             "Close tabs to the right",
-            "Duplicate tab",
         ]
     );
+    assert!(
+        menu.row("Move tab to new window").is_sensitive(),
+        "tabs move between windows"
+    );
+    assert!(menu.row("Move tab to window…").is_sensitive());
     assert!(!menu.row("Close other tabs").is_sensitive(), "the only tab");
     assert!(
         !menu.row("Close tabs to the right").is_sensitive(),
         "the last tab"
     );
     menu.popdown();
-    test.set_more_tab_menu_items(true);
+    // Off, the tab menu is Windows 11's (TAB-060).
+    test.set_more_tab_menu_items(false);
     right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
     let menu = test.window.tab_strip().menu();
     assert_eq!(
@@ -824,17 +834,8 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
             "Close other tabs",
             "Close tabs to the right",
             "Duplicate tab",
-            "-",
-            "Move tab to new window",
-            "Move tab to window…",
-            "Open windows…",
         ]
     );
-    assert!(
-        menu.row("Move tab to new window").is_sensitive(),
-        "tabs move between windows"
-    );
-    assert!(menu.row("Move tab to window…").is_sensitive());
     menu.row("Duplicate tab").emit_activate();
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
@@ -892,7 +893,7 @@ fn the_menu_key_and_shift_f10_open_the_focused_tabs_menu() {
         assert!(action.activate(gtk::ShortcutActionFlags::empty(), &tab, None));
         let menu = test.window.tab_strip().menu();
         assert!(menu.is_visible(), "{key:?} opens the tab menu");
-        assert_eq!(menu.row_labels()[0], "Close tab");
+        assert_eq!(menu.row_labels()[0], "Move tab to new window");
         assert!(
             !menu.row("Close other tabs").is_sensitive(),
             "the only tab has no others to close"

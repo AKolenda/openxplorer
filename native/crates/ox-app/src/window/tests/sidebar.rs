@@ -66,22 +66,33 @@ fn capacity_bars(test: &TestWindow) -> usize {
         .count()
 }
 
-/// By default the navigation pane is Windows 11's: Home, the pinned
-/// folders, This PC with its drives, then Network, with no capacity bar
-/// and none of the app's own rows. The Recycle Bin and Recent stay
-/// reachable from the address bar. "Show more items in the navigation
-/// pane" brings the capacity bars, Recent files, Recent locations and the
-/// Recycle Bin back, as the pane was before.
+/// By default the navigation pane keeps the app's own rows: a capacity
+/// bar under each drive, and Recent files, Recent locations and the
+/// Recycle Bin after Network. Turning "Show more items in the navigation
+/// pane" off gives Windows 11's pane: Home, the pinned folders, This PC
+/// with its drives, then Network, with no capacity bar and none of those
+/// rows, while the Recycle Bin and Recent stay reachable from the address
+/// bar. Turned on again, the rows come back.
 ///
 /// parity: SIDE-001, SIDE-034
 #[gtk::test]
-fn the_navigation_pane_is_windows_by_default_and_a_setting_adds_more_rows() {
+fn the_navigation_pane_keeps_more_rows_by_default_and_a_setting_gives_windows_pane() {
     let fixture = Fixture::standard();
     let test = with_fixture_pinned(&fixture);
     let sidebar = test.window.sidebar();
+    for row in MORE_ROWS {
+        wait_for_row(&test, row);
+    }
+    wait_until("the capacity bar under Local Disk", || capacity_bars(&test) > 0);
+    let labels = sidebar.labels();
+    assert_eq!(&labels[labels.len() - 3..], MORE_ROWS, "after Network");
+
+    test.set_more_navigation_pane_items(false);
+    wait_until("the rows to go", || {
+        !sidebar.labels().iter().any(|shown| shown == "Recycle Bin")
+    });
     wait_for(std::time::Duration::from_millis(300));
     settle_frames(&test);
-
     let labels = sidebar.labels();
     let at = |label: &str| {
         labels
@@ -119,14 +130,7 @@ fn the_navigation_pane_is_windows_by_default_and_a_setting_adds_more_rows() {
     for row in MORE_ROWS {
         wait_for_row(&test, row);
     }
-    wait_until("the capacity bar under Local Disk", || capacity_bars(&test) > 0);
-    let labels = sidebar.labels();
-    assert_eq!(&labels[labels.len() - 3..], MORE_ROWS, "after Network, as before");
-
-    test.set_more_navigation_pane_items(false);
-    wait_until("the rows to go again", || {
-        !sidebar.labels().iter().any(|shown| shown == "Recycle Bin")
-    });
+    wait_until("the capacity bar to come back", || capacity_bars(&test) > 0);
 }
 
 /// Lets freshly drawn rows finish their first frames.
@@ -355,8 +359,6 @@ fn dragging_a_pin_before_another_moves_it_there() {
 fn a_volume_to_mount_is_not_dragged_and_a_drop_mounts_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     wait_for_frames(&test.window, 3);
     let sidebar = test.window.sidebar();
     let local_disk = sidebar.middle_of("Local Disk");
@@ -607,8 +609,6 @@ fn the_icon_size_chosen_on_empty_space_redraws_the_rows_and_is_saved() {
 fn hidden_sections_and_places_are_listed_dimmed_and_shown_again() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     let sidebar = test.window.sidebar();
     let menu_labels = |label: &str| {
         // Rows redrawn a moment ago are found by position once laid out.
@@ -774,8 +774,6 @@ fn sidebar_menus_take_the_file_menus_style_strip_and_show_more_options() {
     let fixture = Fixture::standard();
     fs::create_dir(fixture.path("Pinned strip")).expect("fixture subfolder");
     let test = TestWindow::open(&fixture.uri_of("Pinned strip"));
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     test.activate("pin-folder", None);
     wait_until("the pin", || {
         test.window
@@ -888,8 +886,6 @@ fn the_sidebar_and_its_menus_are_captured_light_and_dark() {
     let fixture = Fixture::standard();
     fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
     let test = TestWindow::open(&fixture.uri_of("Projects"));
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     test.activate("pin-folder", None);
     wait_until("the pin", || {
         test.window.sidebar().labels().contains(&"Projects".to_owned())
@@ -952,8 +948,6 @@ fn recent_files_follow_the_desktop_history_setting() {
     };
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     let opened = ox_core::settings::RecentEntry {
         uri: fixture.uri_of("Notes 2.txt"),
         name: "Notes 2.txt".to_owned(),
@@ -1011,8 +1005,6 @@ fn recent_files_opens_and_open_file_location_selects_the_file_in_its_folder() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Documents/plan.txt"), b"Synthetic plan\n").expect("fixture file");
     let test = TestWindow::open(&fixture.uri());
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
 
     assert!(row_named(&test, "Recent files").activate());
@@ -1050,8 +1042,6 @@ fn recent_locations_lists_visited_folders_and_clear_forgets_them() {
     let fixture = Fixture::standard();
     fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
     let test = TestWindow::open(&fixture.uri());
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     assert!(test
         .window
         .sidebar()

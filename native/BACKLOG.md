@@ -30,19 +30,6 @@ is missing.
     while Ctrl+N, Ctrl+H, Ctrl+Tab and Alt+Left/Right/Up stay with the field.
   - XFER-011: a move that cannot be done natively asks "Move by copying?"
     once per operation; Cancel keeps the old refusal.
-  - Windows 11's look by default (2026-11-09), each earlier choice kept
-    behind a setting or noted: the tab menu is Windows' Close tab, Close
-    other tabs, Close tabs to the right and Duplicate tab (TAB-012, TAB-059),
-    with Move tab to new window, Move tab to window… and Open windows… behind
-    Settings → Appearance → Layout → "Show more items in the tab menu"
-    (TAB-060); the navigation pane drops the capacity bars and the Recent
-    files, Recent locations and Recycle Bin rows (SIDE-001, SIDE-018,
-    SIDE-025, SIDE-026), which "Show more items in the navigation pane"
-    brings back (SIDE-034); the This PC and Recycle Bin tabs show their own
-    icons instead of the folder (TAB-010); Properties' Created and Modified
-    always name the weekday instead of "Today" or "Yesterday" (PROP-003,
-    PROP-038). The owner has yet to say whether Windows' layout or the
-    earlier one should be the default.
 - **Windows 11 address and search details (2026-11-10).** Typing "Recycle
   Bin" in the address bar opens it (NAV-033). Search's `?` stands for
   exactly one character (SRCH-004); a Linux name holding a literal `?` is

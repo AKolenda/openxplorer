@@ -441,8 +441,6 @@ fn the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere() {
     trash(&fixture.path("Old draft.txt"));
     require_only_test_items_in_the_recycle_bin();
     let test = TestWindow::open(&fixture.uri());
-    // The rows the app adds to Windows 11's navigation pane (SIDE-034).
-    test.set_more_navigation_pane_items(true);
     let sidebar = test.window.sidebar();
     let bin_tooltip = || {
         let index = sidebar.labels().iter().position(|label| label == "Recycle Bin");
