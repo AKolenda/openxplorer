@@ -93,3 +93,53 @@ fn the_window_edges_and_corners_resize_with_their_cursor() {
         "the close button is pressed in its middle, not {middle:?}"
     );
 }
+
+/// A scroll bar's thumb at the window's right edge scrolls: the edge's
+/// band stands aside over it, though it still resizes above and below the
+/// thumb, and the corner still resizes.
+#[gtk::test]
+fn the_right_edge_leaves_the_file_lists_scroll_thumb_to_the_scroll_bar() {
+    let fixture = Fixture::with_files(300);
+    let test = laid_out(&fixture.uri());
+    let window = &test.window;
+    resize_edges::turn_on_for_test(window);
+    let width = f64::from(window.width());
+    let height = f64::from(window.height());
+    let thumb = descendants::<gtk::Widget>(window)
+        .into_iter()
+        .filter(|widget| widget.css_name() == "slider" && widget.is_mapped())
+        .find(|slider| {
+            let scrollbar = slider.ancestor(gtk::Scrollbar::static_type());
+            let vertical = scrollbar
+                .and_downcast::<gtk::Scrollbar>()
+                .is_some_and(|scrollbar| scrollbar.orientation() == gtk::Orientation::Vertical);
+            let right = slider.compute_bounds(window).is_some_and(|bounds| {
+                f64::from(bounds.x() + bounds.width()) > width - f64::from(INSIDE_EDGE)
+            });
+            vertical && right
+        })
+        .expect("the file list's thumb at the right edge");
+    let bounds = thumb.compute_bounds(window).expect("the thumb is laid out");
+    // The thumb's last column, which the band covers.
+    let thumb_x = f64::from(bounds.x() + bounds.width()) - 0.5;
+    let thumb_y = f64::from(bounds.y() + bounds.height() / 2.0);
+    assert!(
+        thumb_x > width - f64::from(INSIDE_EDGE),
+        "the thumb at {bounds:?} reaches into the band of a window {width} wide"
+    );
+    assert_eq!(
+        window.pick(thumb_x, thumb_y, gtk::PickFlags::DEFAULT).as_ref(),
+        Some(&thumb),
+        "the thumb takes the band's pixels it covers"
+    );
+    let below_thumb = f64::from(bounds.y() + bounds.height()) + 20.0;
+    assert!(below_thumb < height - 20.0, "room below the thumb");
+    assert!(
+        handle_at(window, width - 1.0, below_thumb).is_some(),
+        "the edge resizes beside the trough"
+    );
+    assert!(
+        handle_at(window, width - 1.0, height - 1.0).is_some(),
+        "the corner resizes"
+    );
+}

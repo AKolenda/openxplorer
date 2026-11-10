@@ -29,14 +29,17 @@ window.ox.tiled-left, window.ox.tiled-right, window.ox.tiled-bottom { border-rad
    shadow (its Default theme's window.csd) and adds a clear 16px ring to
    it. GTK takes a press to resize only within the window's shadow, and
    the ring makes the shadow reach 16px out on every side, where GTK's own
-   reaches 6px above the window. Snapped, maximized and full-screen
-   windows keep GTK's shadows (E01). */
+   reaches 6px above the window. Both states list the same four shadows
+   in the same order, the ring first, so the backdrop transition never
+   shrinks the ring and the window never shifts by a pixel. Snapped,
+   maximized and full-screen windows keep GTK's shadows (E01). */
 window.ox.ox-edge-resize.csd:not(.maximized):not(.fullscreen):not(.tiled):not(.tiled-top):not(.tiled-left):not(.tiled-right):not(.tiled-bottom) {
-  box-shadow: 0 3px 9px 1px @ox_window_shadow, 0 0 0 1px @ox_window_edge, 0 0 0 16px transparent;
+  box-shadow: 0 0 0 16px transparent, 0 3px 9px 1px @ox_window_shadow, 0 2px 6px 2px transparent,
+    0 0 0 1px @ox_window_edge;
 }
 window.ox.ox-edge-resize.csd:not(.maximized):not(.fullscreen):not(.tiled):not(.tiled-top):not(.tiled-left):not(.tiled-right):not(.tiled-bottom):backdrop {
-  box-shadow: 0 3px 9px 1px transparent, 0 2px 6px 2px @ox_window_shadow_backdrop, 0 0 0 1px @ox_window_edge_backdrop,
-    0 0 0 16px transparent;
+  box-shadow: 0 0 0 16px transparent, 0 3px 9px 1px transparent, 0 2px 6px 2px @ox_window_shadow_backdrop,
+    0 0 0 1px @ox_window_edge_backdrop;
 }
 /* Without a compositor (a bare X server) GTK draws a solid frame around a
    client-side decorated window instead of a shadow. Its border and padding

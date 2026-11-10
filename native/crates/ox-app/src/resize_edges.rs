@@ -11,7 +11,8 @@
 //!
 //! [`install`] adds a handle for each edge and corner, laid over
 //! everything else in the window: a band [`INSIDE_EDGE`] pixels wide just
-//! inside each edge, and a square [`INSIDE_CORNER`] pixels wide in each
+//! inside each edge, which leaves a scroll bar's thumb under it to the
+//! scroll bar, and a square [`INSIDE_CORNER`] pixels wide in each
 //! corner, which covers the rounded corner. Each shows its resize cursor
 //! (`nw-resize`, `n-resize`, …, the names GTK itself uses) and starts the
 //! compositor's resize from its edge on a primary press; the window does
@@ -69,12 +70,16 @@ mod imp {
     pub(crate) struct ResizeHandle {
         /// The edge or corner the handle resizes from.
         pub(super) edge: Cell<gdk::SurfaceEdge>,
+        /// Set while the handle looks at what lies under it, which it
+        /// stands aside for meanwhile.
+        pub(super) looking_under: Cell<bool>,
     }
 
     impl Default for ResizeHandle {
         fn default() -> Self {
             Self {
                 edge: Cell::new(gdk::SurfaceEdge::North),
+                looking_under: Cell::new(false),
             }
         }
     }
@@ -94,7 +99,25 @@ mod imp {
     }
 
     impl ObjectImpl for ResizeHandle {}
-    impl WidgetImpl for ResizeHandle {}
+
+    impl WidgetImpl for ResizeHandle {
+        /// An edge's band leaves a scroll bar's thumb under it to the
+        /// scroll bar: the file list's thumb lies at the window's right
+        /// edge, 3 pixels wide 2 in from it, and dragging it scrolls.
+        /// The corners resize whatever lies under them.
+        fn contains(&self, x: f64, y: f64) -> bool {
+            if self.looking_under.get() || !self.parent_contains(x, y) {
+                return false;
+            }
+            if super::is_corner(self.edge.get()) {
+                return true;
+            }
+            self.looking_under.set(true);
+            let under = super::under(&self.obj(), x, y);
+            self.looking_under.set(false);
+            !under.is_some_and(|widget| super::is_scroll_thumb(&widget))
+        }
+    }
 }
 
 glib::wrapper! {
@@ -181,13 +204,14 @@ pub(crate) fn install(window: &impl IsA<gtk::Window>) {
     for edge in EDGES {
         ResizeHandle::new(edge).set_parent(window);
     }
-    // GTK picks a window's last children first. A title bar set later
-    // goes last, so the handles go back over it.
-    window.connect_notify_local(Some("titlebar"), |window, _| {
-        for handle in handles(window) {
-            handle.insert_before(window, None::<&gtk::Widget>);
-        }
-    });
+    // GTK picks a window's last children first. The window's content and
+    // a title bar set later go last, and so does the title bar GTK makes
+    // for a window without one when it realizes it (without telling), so
+    // the handles go back over them each time.
+    for property in ["child", "titlebar"] {
+        window.connect_notify_local(Some(property), |window, _| raise(window));
+    }
+    window.connect_realize(raise);
     for property in ["resizable", "maximized", "fullscreened"] {
         window.connect_notify_local(Some(property), |window, _| refresh(window));
     }
@@ -273,6 +297,38 @@ fn is_corner(edge: gdk::SurfaceEdge) -> bool {
             | gdk::SurfaceEdge::SouthEast
             | gdk::SurfaceEdge::SouthWest
     )
+}
+
+/// Puts `window`'s handles back over everything else in it, unless they
+/// are there.
+fn raise(window: &gtk::Window) {
+    if window
+        .last_child()
+        .is_some_and(|child| child.is::<ResizeHandle>())
+    {
+        return;
+    }
+    for handle in handles(window) {
+        handle.insert_before(window, None::<&gtk::Widget>);
+    }
+}
+
+/// What `handle`'s window picks at `x`, `y` in the handle, while the
+/// handle stands aside.
+#[expect(clippy::cast_possible_truncation, reason = "window coordinates are small")]
+fn under(handle: &ResizeHandle, x: f64, y: f64) -> Option<gtk::Widget> {
+    let window = handle.parent()?;
+    let point = handle.compute_point(&window, &gtk::graphene::Point::new(x as f32, y as f32))?;
+    window.pick(
+        f64::from(point.x()),
+        f64::from(point.y()),
+        gtk::PickFlags::DEFAULT,
+    )
+}
+
+/// Whether `widget` is a scroll bar's thumb.
+fn is_scroll_thumb(widget: &gtk::Widget) -> bool {
+    widget.css_name() == "slider" && widget.ancestor(gtk::Scrollbar::static_type()).is_some()
 }
 
 /// The handles [`install`] added to `window`.
