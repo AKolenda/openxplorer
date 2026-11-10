@@ -232,6 +232,43 @@ mod tests {
         assert!(NamePattern::new("bash").matches(".bashrc"));
     }
 
+    /// As in Windows 11 File Explorer, `?` stands for exactly one
+    /// character: `extra_??.txt` finds `extra_30.txt` and `extra_31.txt`
+    /// but neither `extra_2.txt` nor `extra_3.txt`. A Linux name may hold
+    /// a literal `?`; it is still a wildcard, which also matches that `?`.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn a_question_mark_stands_for_exactly_one_character() {
+        let names = [
+            "extra_2.txt",
+            "extra_3.txt",
+            "extra_30.txt",
+            "extra_31.txt",
+            "what?.txt",
+            "ab",
+        ];
+        let found = |text: &str| -> Vec<&str> {
+            let pattern = NamePattern::new(text);
+            names.into_iter().filter(|name| pattern.matches(name)).collect()
+        };
+        assert_eq!(found("extra_??.txt"), ["extra_30.txt", "extra_31.txt"]);
+        assert_eq!(found("extra_?.txt"), ["extra_2.txt", "extra_3.txt"]);
+        assert_eq!(
+            found("?xtra*"),
+            ["extra_2.txt", "extra_3.txt", "extra_30.txt", "extra_31.txt"]
+        );
+        assert_eq!(found("*_3?.txt"), ["extra_30.txt", "extra_31.txt"]);
+        assert_eq!(found("??"), ["ab"]);
+        assert_eq!(found("extra_???.txt"), Vec::<&str>::new());
+        assert_eq!(found("what?.txt"), ["what?.txt"]);
+        assert_eq!(found("wha??.txt"), ["what?.txt"]);
+        assert!(
+            NamePattern::new("what?.txt").matches("whatX.txt"),
+            "? is a wildcard"
+        );
+    }
+
     #[test]
     fn sets_negation_and_plain_brackets() {
         assert!(wildcard_matches("[!a-c]*", "draft"));

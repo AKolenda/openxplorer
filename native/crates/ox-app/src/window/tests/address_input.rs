@@ -502,6 +502,52 @@ fn a_typed_relative_name_or_tilde_opens_in_the_same_tab() {
     assert_eq!(test.window.tab_count(), 1);
 }
 
+/// As in Windows 11 File Explorer, typing "Recycle Bin" or "This PC"
+/// into the address bar and pressing Enter opens that place, ignoring
+/// case and surrounding spaces, from any folder; Back returns to the
+/// folder and Forward to the place.
+///
+/// parity: NAV-033, OPS-040
+#[gtk::test]
+fn typing_recycle_bin_or_this_pc_opens_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the fixture");
+    for typed in ["Recycle Bin", "recycle bin", "  Recycle Bin  ", "RECYCLE BIN"] {
+        test.activate("location", None);
+        test.window.submit_address(typed);
+        wait_until("the Recycle Bin", || {
+            test.window.current_uri().as_deref() == Some(ox_core::location::TRASH_URI)
+        });
+        assert_eq!(
+            test.window.shown_message().as_str(),
+            "",
+            "{typed:?} is not refused"
+        );
+        assert_eq!(test.window.address_bar().mode(), AddressMode::Crumbs);
+        test.activate("back", None);
+        wait_until("the folder again", || {
+            test.window.current_uri() == Some(fixture.uri())
+        });
+    }
+    test.activate("forward", None);
+    wait_until("the Recycle Bin again", || {
+        test.window.current_uri().as_deref() == Some(ox_core::location::TRASH_URI)
+    });
+    for typed in ["This PC", "  this pc  "] {
+        test.activate("location", None);
+        test.window.submit_address(typed);
+        wait_until("This PC", || {
+            test.window.current_uri().as_deref() == Some(Page::ThisPc.uri())
+        });
+        test.activate("back", None);
+        wait_until("the Recycle Bin again", || {
+            test.window.current_uri().as_deref() == Some(ox_core::location::TRASH_URI)
+        });
+    }
+    assert_eq!(test.window.tab_count(), 1);
+}
+
 /// parity: NAV-033, NAV-035
 #[gtk::test]
 fn a_refused_address_is_explained_and_the_field_stays_open() {
