@@ -35,7 +35,8 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::super::menu_popover::MenuPopover;
-use super::super::widget_tree::children;
+use super::super::widget_tree::{children, descendants};
+use super::super::BrowserWindow;
 use super::CommandBar;
 
 impl CommandBar {
@@ -156,6 +157,15 @@ impl CommandBar {
         clickable(&picked)
     }
 
+    /// Opens the menu of the shown menu button named `name` ("View",
+    /// "See more"), as a click on it does; false when the bar shows none.
+    fn open_menu_named(&self, name: &str) -> bool {
+        let named = self.menu_buttons().into_iter().find(|button| {
+            button.is_visible() && button.is_sensitive() && button_name(button).as_deref() == Some(name)
+        });
+        named.inspect(gtk::MenuButton::popup).is_some()
+    }
+
     /// The bar's menu buttons: New, Sort, View, Search options, See more
     /// and the appearance toggle.
     fn menu_buttons(&self) -> Vec<gtk::MenuButton> {
@@ -166,6 +176,26 @@ impl CommandBar {
             .collect();
         buttons.push(imp.appearance_button.get());
         buttons
+    }
+}
+
+impl BrowserWindow {
+    /// Opens the command bar's menu named `name`, for the snapshot hook's
+    /// `command-menu=` step; one open already closes, as after a click.
+    pub(crate) fn open_command_bar_menu(&self, name: &str) -> bool {
+        self.command_bar().open_menu_named(name)
+    }
+}
+
+/// What a menu button shows, or its tooltip's first line for one that
+/// shows only a glyph (See more).
+fn button_name(button: &gtk::MenuButton) -> Option<String> {
+    let label = button
+        .child()
+        .and_then(|content| descendants::<gtk::Label>(&content).into_iter().next());
+    match label {
+        Some(label) => Some(label.text().into()),
+        None => button.tooltip_text()?.lines().next().map(str::to_owned),
     }
 }
 
