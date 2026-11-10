@@ -12,7 +12,9 @@
 //! only Double-click can be chosen, as the app has no single-click mode
 //! (SEL-018); Privacy, whether the navigation pane shows Recent files
 //! ("Show recently used files") and Recent locations ("Show frequently
-//! used folders"), and Clear `OpenXplorer` history (Windows' "Clear File
+//! used folders"), grayed out while Settings' "Show more items in the
+//! navigation pane" is off, as the pane then lists neither (SIDE-034),
+//! and Clear `OpenXplorer` history (Windows' "Clear File
 //! Explorer history", named for the app), which forgets them and the
 //! typed addresses at once. The rest of the app's options are in Settings,
 //! which the command bar's gear and Ctrl+, open (CMD-007).
@@ -58,6 +60,11 @@ const APPLY_QUESTION: &str = message_id("Do you want all folders to match this f
 
 /// The question Reset Folders asks.
 const RESET_QUESTION: &str = message_id("Do you want to reset all folders to their default view settings?");
+
+/// Why Privacy's check boxes are grayed out while the navigation pane
+/// leaves out Recent files and Recent locations (SIDE-034).
+const PRIVACY_NEEDS_MORE_ITEMS: &str =
+    message_id("These apply when “Show more items in the navigation pane” is on in Settings > Appearance.");
 
 /// Why Click items as follows offers only Double-click.
 const NO_SINGLE_CLICK: &str = message_id("OpenXplorer opens items with a double-click.");
@@ -303,6 +310,17 @@ impl ShownSetting {
         shown
     }
 
+    /// Grays the option out, with `reason` in its tooltip and accessible
+    /// description; its value still shows and Restore Defaults still sets
+    /// it.
+    fn gray_out(&self, reason: &str) {
+        for button in std::iter::once(&self.on).chain(self.off.as_ref()) {
+            button.set_sensitive(false);
+            button.set_tooltip_text(Some(reason));
+            button.update_property(&[gtk::accessible::Property::Description(reason)]);
+        }
+    }
+
     /// The value chosen.
     fn value(&self) -> bool {
         self.on.is_active()
@@ -454,7 +472,11 @@ impl OptionsForm {
         general.append(&click_items_group());
         let (privacy, column) = icon_group(&gettext("Privacy"), Icon::ShieldLock);
         for setting in privacy_settings() {
-            settings.push(ShownSetting::add(setting, Tab::General, &column, preferences));
+            let shown = ShownSetting::add(setting, Tab::General, &column, preferences);
+            if !preferences.more_navigation_pane_items {
+                shown.gray_out(gettext_static(PRIVACY_NEEDS_MORE_ITEMS));
+            }
+            settings.push(shown);
         }
         let clear_history = push_button(&gettext("Clear"));
         column.append(&clear_row(&clear_history));

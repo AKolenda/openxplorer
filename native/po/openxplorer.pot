@@ -6125,6 +6125,10 @@ msgid "Single-click to open an item (point to select)"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
+msgid "These apply when “Show more items in the navigation pane” is on in Settings > Appearance."
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
 msgid "Underline icon titles consistent with my browser"
 msgstr ""
 
