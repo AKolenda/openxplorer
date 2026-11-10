@@ -39,7 +39,7 @@
 //! ([`PropertiesWindow`]). [`super::explorer_options`] does what the options that only Folder
 //! Options sets mean in a window.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -311,13 +311,16 @@ impl ShownSetting {
     }
 
     /// Grays the option out, with `reason` in its tooltip and accessible
-    /// description; its value still shows and Restore Defaults still sets
-    /// it.
-    fn gray_out(&self, reason: &str) {
+    /// description, or makes it usable again, without either, for `None`;
+    /// its value still shows and Restore Defaults still sets it.
+    fn gray_out(&self, reason: Option<&str>) {
         for button in std::iter::once(&self.on).chain(self.off.as_ref()) {
-            button.set_sensitive(false);
-            button.set_tooltip_text(Some(reason));
-            button.update_property(&[gtk::accessible::Property::Description(reason)]);
+            button.set_sensitive(reason.is_none());
+            button.set_tooltip_text(reason);
+            match reason {
+                Some(reason) => button.update_property(&[gtk::accessible::Property::Description(reason)]),
+                None => button.reset_property(gtk::AccessibleProperty::Description),
+            }
         }
     }
 
@@ -452,6 +455,8 @@ struct OptionsForm {
     saved_start: Cell<u32>,
     /// Privacy's Clear, which clears File Explorer's history at once.
     clear_history: gtk::Button,
+    /// Where Privacy's two check boxes are in `settings`.
+    privacy: std::ops::Range<usize>,
 }
 
 impl OptionsForm {
@@ -471,13 +476,11 @@ impl OptionsForm {
         general.append(&browse);
         general.append(&click_items_group());
         let (privacy, column) = icon_group(&gettext("Privacy"), Icon::ShieldLock);
+        let privacy_start = settings.len();
         for setting in privacy_settings() {
-            let shown = ShownSetting::add(setting, Tab::General, &column, preferences);
-            if !preferences.more_navigation_pane_items {
-                shown.gray_out(gettext_static(PRIVACY_NEEDS_MORE_ITEMS));
-            }
-            settings.push(shown);
+            settings.push(ShownSetting::add(setting, Tab::General, &column, preferences));
         }
+        let privacy = privacy_start..settings.len();
         let clear_history = push_button(&gettext("Clear"));
         column.append(&clear_row(&clear_history));
         general.append(&privacy);
@@ -526,7 +529,9 @@ impl OptionsForm {
             start,
             places,
             clear_history,
+            privacy,
         });
+        form.follow_navigation_pane(preferences.more_navigation_pane_items);
         for (button, tab) in [
             (restore_general, Tab::General),
             (restore_view, Tab::View),
@@ -539,6 +544,17 @@ impl OptionsForm {
             ));
         }
         form
+    }
+
+    /// Lets Privacy's check boxes be used while the navigation pane lists
+    /// the Recent rows they choose, `more_items` (Settings' "Show more
+    /// items in the navigation pane"), and grays them out, saying why,
+    /// while it does not (SIDE-034).
+    fn follow_navigation_pane(&self, more_items: bool) {
+        let reason = (!more_items).then(|| gettext_static(PRIVACY_NEEDS_MORE_ITEMS));
+        for shown in &self.settings[self.privacy.clone()] {
+            shown.gray_out(reason);
+        }
     }
 
     /// Sets every choice of `tab` to the app's default, to be saved with
@@ -765,6 +781,25 @@ impl BrowserWindow {
             form: Rc::clone(&form),
         }));
         form.follow_with(&options);
+        // Settings may turn the navigation pane's extra rows on or off in
+        // any window while Folder Options is open; Privacy follows.
+        let preferences_changed = self.context().connect_places_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            form,
+            move || {
+                let preferences = window.context().settings_data().preferences;
+                form.follow_navigation_pane(preferences.more_navigation_pane_items);
+            }
+        ));
+        let preferences_changed = RefCell::new(Some(preferences_changed));
+        let context = self.context().clone();
+        options.connect_destroy(move |_| {
+            if let Some(handler) = preferences_changed.take() {
+                context.disconnect(handler);
+            }
+        });
         form.clear_history.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,

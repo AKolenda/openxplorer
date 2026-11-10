@@ -161,6 +161,43 @@ fn privacy_check_boxes_follow_the_navigation_pane_switch() {
     );
 }
 
+/// Privacy's check boxes follow "Show more items in the navigation pane"
+/// while Folder Options is open, whichever window or process changes it:
+/// grayed out, saying why, as soon as it is turned off, and usable again,
+/// without the tooltip, as soon as it is turned back on (SIDE-034).
+///
+/// parity: SIDE-034
+#[gtk::test]
+fn privacy_check_boxes_follow_the_switch_while_folder_options_is_open() {
+    const LABELS: [&str; 2] = ["Show recently used files", "Show frequently used folders"];
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    let checks = LABELS.map(|label| option_check(&options, "General", label));
+    assert!(checks.iter().all(gtk::prelude::WidgetExt::is_sensitive));
+
+    test.set_more_navigation_pane_items(false);
+    wait_until("Privacy to be grayed out", || {
+        checks.iter().all(|check| !check.is_sensitive())
+    });
+    for check in &checks {
+        let tooltip = check.tooltip_text().map(String::from).unwrap_or_default();
+        assert!(
+            tooltip.contains("Show more items in the navigation pane"),
+            "{tooltip:?}"
+        );
+    }
+
+    test.set_more_navigation_pane_items(true);
+    wait_until("Privacy to work again", || {
+        checks.iter().all(gtk::prelude::WidgetExt::is_sensitive)
+    });
+    for check in &checks {
+        assert_eq!(check.tooltip_text(), None);
+    }
+    close_folder_options(&test, &options, "Cancel");
+}
+
 /// View: "Show status bar" and "Show pop-up description for folder and
 /// desktop items" off hide the status bar and the items' infotips, and
 /// "Automatically type into the Search Box" sends text typed in the file
