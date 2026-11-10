@@ -162,7 +162,13 @@ fn three_saved_views(test: &TestWindow, fixture: &Fixture) {
     wait_until("the saved views", || {
         test.context.settings_data().preferences.folder_views.len() == 2
     });
-    test.window.follow_folder_style(&fixture.uri());
+    let store = gtk::subclass::prelude::ObjectSubclassIsExt::imp(&test.window)
+        .session
+        .borrow()
+        .active()
+        .map(|tab| tab.store.clone())
+        .expect("the tab in front");
+    test.window.follow_folder_style(&store, &fixture.uri());
     assert_eq!(test.action_state("sort").as_deref(), Some("size"));
 }
 

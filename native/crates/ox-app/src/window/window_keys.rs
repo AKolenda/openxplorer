@@ -8,10 +8,15 @@
 //! Explorer's Ctrl+1 to Ctrl+9 show the tab of that number, beside the
 //! Alt+digit of Dolphin, and its Ctrl+Shift+E opens the navigation pane
 //! down to the folder shown (CMD-039). A text field keeps
-//! them, and while a dialog is open they do nothing. The one exception is
-//! `state.modalOwner`: while the active tab's Properties dialog is open,
-//! Ctrl+Tab and Ctrl+Shift+Tab switch tabs from any focus, the dialog's
-//! own fields included, and the dialog is suspended with its tab.
+//! them, and while a dialog is open they do nothing, with one difference
+//! from app.js: Ctrl+T and Ctrl+W also work from the address bar while it
+//! is edited and from the search box, as Windows 11 File Explorer takes
+//! them there (a new tab, and closing the tab, or the window with its last
+//! tab), while Ctrl+N does nothing in those fields, as in Windows. The one
+//! exception is `state.modalOwner`: while the active tab's Properties
+//! dialog is open, Ctrl+Tab and Ctrl+Shift+Tab switch tabs from any focus,
+//! the dialog's own fields included, and the dialog is suspended with its
+//! tab.
 //!
 //! These are not application accelerators, which GTK runs before the
 //! focused widget sees the key. The window handles them in the capture
@@ -153,8 +158,9 @@ impl BrowserWindow {
         glib::Propagation::Stop
     }
 
-    /// Whether `command`'s key acts now: not from a text field and not
-    /// while a dialog is open.
+    /// Whether `command`'s key acts now: not while a dialog is open, and
+    /// not from a text field, except Ctrl+T and Ctrl+W from the address
+    /// bar and the search box, as in Windows 11 File Explorer.
     fn window_key_applies(&self, command: KeyCommand) -> bool {
         if self.dialog_layer().shown().is_some() {
             return false;
@@ -163,7 +169,28 @@ impl BrowserWindow {
         if command == KeyCommand::NewWindow && self.is_picking() {
             return false;
         }
-        !self.focus_is_in_text_field()
+        if !self.focus_is_in_text_field() {
+            return true;
+        }
+        let tab_key = matches!(
+            command,
+            KeyCommand::Window(WindowAction::NewTab | WindowAction::CloseTab)
+        );
+        tab_key && self.focus_is_in_address_or_search()
+    }
+
+    /// Whether the keyboard is in the address bar, whose field shows only
+    /// while the address is edited, or in the search box.
+    fn focus_is_in_address_or_search(&self) -> bool {
+        let Some(focus) = GtkWindowExt::focus(self) else {
+            return false;
+        };
+        [
+            self.address_bar().upcast_ref::<gtk::Widget>(),
+            self.search_box().upcast_ref(),
+        ]
+        .into_iter()
+        .any(|field| focus.is_ancestor(field))
     }
 
     /// Whether Ctrl+Tab switches tabs now, for tests.

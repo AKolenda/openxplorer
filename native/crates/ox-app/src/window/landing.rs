@@ -45,7 +45,7 @@ use crate::places::Places;
 use crate::text_size::TextSize;
 use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
-use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
+use super::context_menu::{MENU_KEY, SHIFT_F10_KEY};
 use super::gestures;
 use super::menu_popover::{MenuPopover, MenuStyle};
 use super::place_menus::{classic_or_compact, popup_place_menu, PlaceMenu};
@@ -233,7 +233,9 @@ impl Tile {
     }
 
     /// The style the window's file list opens its right-click menu in,
-    /// the classic one when `classic` asks for it (Shift held, Shift+F10).
+    /// the classic one when `classic` asks for it (Shift held, or
+    /// Shift+F10 with the Settings choice "Shift+F10 opens the classic
+    /// menu" on).
     fn menu_style(&self, classic: bool) -> MenuStyle {
         if classic {
             return MenuStyle::Classic;
@@ -581,7 +583,7 @@ fn connect_header_menu(header: &gtk::Button, group: Group, page: &gtk::Box) {
     ));
     header.add_controller(right_click);
     let shortcuts = gtk::ShortcutController::new();
-    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+    for (key, shift_f10) in [(MENU_KEY, false), (SHIFT_F10_KEY, true)] {
         let action = gtk::CallbackAction::new(glib::clone!(
             #[weak]
             page,
@@ -593,6 +595,7 @@ fn connect_header_menu(header: &gtk::Button, group: Group, page: &gtk::Box) {
                 let Some(point) = header.compute_point(&page, &below) else {
                     return glib::Propagation::Proceed;
                 };
+                let classic = shift_f10 && shift_f10_opens_classic(&page);
                 popup_heading_menu(&page, group, point, classic);
                 glib::Propagation::Stop
             }
@@ -804,11 +807,21 @@ fn connect_menus(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
     }
 }
 
+/// Whether Shift+F10 opens the classic menu in the window `widget` is
+/// in: the Settings choice "Shift+F10 opens the classic menu"; otherwise
+/// it opens the right-click menu's style, as the Menu key does.
+fn shift_f10_opens_classic(widget: &impl IsA<gtk::Widget>) -> bool {
+    widget
+        .root()
+        .and_downcast::<BrowserWindow>()
+        .is_some_and(|window| window.shift_f10_menu_style() == MenuStyle::Classic)
+}
+
 /// The Menu key and Shift+F10 open the selected tile's menu under it;
 /// Alt+Enter opens its Properties.
 fn connect_keys(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
     let shortcuts = gtk::ShortcutController::new();
-    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+    for (key, shift_f10) in [(MENU_KEY, false), (SHIFT_F10_KEY, true)] {
         let menu = gtk::CallbackAction::new(glib::clone!(
             #[strong]
             tiles,
@@ -821,6 +834,7 @@ fn connect_keys(flow: &gtk::FlowBox, tiles: &Rc<Vec<Tile>>) {
                 };
                 let width = f64::from(tile.child.width());
                 let height = f64::from(tile.child.height());
+                let classic = shift_f10 && shift_f10_opens_classic(flow);
                 tile.popup_menu(width / 2.0, height / 2.0, tile.menu_style(classic));
                 glib::Propagation::Stop
             }

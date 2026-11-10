@@ -5748,4 +5748,141 @@ mod tests {
             assert_eq!(Some(looked_up(key)), kept, "the theme hands out the kept {key:?}");
         }
     }
+
+    /// A Save dialog shows Downloads in the style Downloads keeps, grouped
+    /// by date modified, as Windows' dialog shows a folder as Explorer
+    /// does: opened at the folder the application last used, at the
+    /// folder it passes or at its file, and still grouped with a file
+    /// selected, after another file type, Back and Forward, and Downloads
+    /// in the navigation pane.
+    ///
+    /// parity: INT-032, VIEW-022
+    #[gtk::test]
+    fn a_save_dialog_shows_downloads_grouped_as_it_keeps_it() {
+        use ox_core::grouping::GroupBy;
+        use ox_core::settings::{ViewProperties, ViewScope};
+
+        let downloads = glib::home_dir().join("Downloads");
+        fs::create_dir_all(&downloads).expect("a Downloads folder");
+        for number in 0..6 {
+            fs::write(downloads.join(format!("scan {number:02}.png")), "x").expect("a file");
+            fs::write(downloads.join(format!("receipt {number:02}.pdf")), "x").expect("a file");
+        }
+        let uri = gio::File::for_path(&downloads).uri().to_string();
+        for start in ["last folder", "folder", "file"] {
+            let portal = Portal::new();
+            let mut style = ViewProperties {
+                folders_first: false,
+                ..ViewProperties::default()
+            };
+            style.set_grouping(GroupBy::Modified);
+            portal
+                .test
+                .context
+                .remember_view(uri.clone(), style, ViewScope::Folder, |result| {
+                    result.expect("the style is saved");
+                });
+            wait_until("Downloads' own style", || {
+                let preferences = portal.test.context.settings_data().preferences;
+                ox_core::settings::saved_style_for(&preferences.folder_views, &uri).is_some()
+            });
+            let filters = [
+                ("Images".to_owned(), vec![(0_u32, "*.png".to_owned())]).to_variant(),
+                ("PDF".to_owned(), vec![(0_u32, "*.pdf".to_owned())]).to_variant(),
+            ];
+            let mut entries = vec![
+                ("current_name", "scan new.png".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(filters[0].type_(), filters.clone()),
+                ),
+            ];
+            match start {
+                "last folder" => {
+                    ox_core::integration::DialogFolders::open(portal.test.settings_directory())
+                        .remember("org.example.Scanner", None, &uri)
+                        .expect("the memory is written");
+                }
+                "folder" => entries.push(("current_folder", path_variant(&downloads.display().to_string()))),
+                _ => entries.push((
+                    "current_file",
+                    path_variant(&downloads.join("scan 03.png").display().to_string()),
+                )),
+            }
+            let answer = portal.call_as("org.example.Scanner", "", "SaveFile", &entries);
+            let test = &portal.test;
+            let window = &test.window;
+            test.wait_for_listing("Downloads in the dialog");
+            assert_eq!(
+                shown_folder(window).as_deref(),
+                Some(downloads.as_path()),
+                "{start}"
+            );
+            let grouping = || {
+                window
+                    .folder_pane()
+                    .model()
+                    .grouping()
+                    .map(|grouping| grouping.by)
+            };
+            assert_eq!(grouping(), Some(GroupBy::Modified), "opened at its {start}");
+            assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+
+            assert!(window.select_named("scan 02.png"));
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(400));
+            assert_eq!(
+                grouping(),
+                Some(GroupBy::Modified),
+                "with a file selected, {start}"
+            );
+            let types = window
+                .picker()
+                .expect("a picker")
+                .types
+                .clone()
+                .expect("a type list");
+            types.set_selected(1);
+            wait_until("the PDF files", || test.names().len() == 6);
+            assert_eq!(grouping(), Some(GroupBy::Modified), "after another type, {start}");
+
+            window
+                .navigate(&gio::File::for_path(glib::home_dir()).uri())
+                .expect("the home folder");
+            test.wait_for_listing("the home folder");
+            test.activate("back", None);
+            test.wait_for_listing("Downloads after Back");
+            assert_eq!(grouping(), Some(GroupBy::Modified), "after Back, {start}");
+            test.activate("forward", None);
+            test.wait_for_listing("the home folder after Forward");
+            test.activate("back", None);
+            test.wait_for_listing("Downloads after Forward and Back");
+            assert_eq!(
+                grouping(),
+                Some(GroupBy::Modified),
+                "after Forward and Back, {start}"
+            );
+
+            window
+                .navigate(&gio::File::for_path(glib::home_dir()).uri())
+                .expect("the home folder");
+            test.wait_for_listing("the home folder");
+            let labels = window.sidebar().labels();
+            let row = labels
+                .iter()
+                .position(|label| label == "Downloads")
+                .and_then(|index| i32::try_from(index).ok())
+                .and_then(|index| window.sidebar().list().row_at_index(index))
+                .expect("Downloads in the navigation pane");
+            assert!(row.activate());
+            test.wait_for_listing("Downloads from the navigation pane");
+            assert_eq!(
+                grouping(),
+                Some(GroupBy::Modified),
+                "from the navigation pane, {start}"
+            );
+
+            window.cancel_picking();
+            Portal::finish(&answer);
+        }
+    }
 }

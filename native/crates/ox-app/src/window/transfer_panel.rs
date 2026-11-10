@@ -701,6 +701,12 @@ impl TransferPanel {
         self.imp().pause_button.emit_clicked();
     }
 
+    /// Puts the keyboard on Pause, for tests; false when it cannot take it.
+    #[cfg(test)]
+    pub(crate) fn focus_pause(&self) -> bool {
+        self.imp().pause_button.grab_focus()
+    }
+
     /// Follows the description's link to `uri`, for tests.
     #[cfg(test)]
     pub(crate) fn follow_link(&self, uri: &str) {

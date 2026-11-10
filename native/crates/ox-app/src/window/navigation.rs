@@ -114,11 +114,18 @@ impl BrowserWindow {
         }
     }
 
-    /// The home folder or landing page whose title is `typed` ("Home",
-    /// "This PC", "Network"), as the address bar shows them.
+    /// The home folder, landing page or Recycle Bin whose title is `typed`
+    /// ("Home", "This PC", "Network", "Recycle Bin"), as the address bar
+    /// shows them. Typing "Recycle Bin" and pressing Enter opens it, as in
+    /// Windows 11 File Explorer; a folder of that name in the current
+    /// folder still comes first, as for the other titles.
     pub(super) fn place_titled(&self, typed: &str) -> Option<String> {
         if typed.trim().eq_ignore_ascii_case("home") {
             return Some(self.imp().locations.borrow().home_uri());
+        }
+        let recycle_bin = VirtualPlace::RecycleBin;
+        if VirtualPlace::from_title(typed) == Some(recycle_bin) {
+            return Some(recycle_bin.uri().to_owned());
         }
         Page::from_title(typed).map(|page| page.uri().to_owned())
     }
@@ -408,8 +415,16 @@ impl BrowserWindow {
         let had_focus =
             focus == FocusOnShow::Restore && self.folder_panes().iter().any(|pane| pane.view_has_focus());
         self.imp().active_side.set(view.side);
+        // A pane that shows this tab at its location already keeps the
+        // style it shows, as the pane beside does: the pane just left when
+        // the other becomes active again, or the pane that stays when the
+        // other closes and takes its style along. A choice made there a
+        // moment ago may not be saved yet, and the saved style would undo
+        // it.
         if let Some(uri) = self.current_uri() {
-            self.follow_folder_style(&uri);
+            if !self.folder_pane().is_styled_for(&view.store, &uri) {
+                self.follow_folder_style(&view.store, &uri);
+            }
         }
         self.change_model(|| {
             let model = self.folder_pane().model();

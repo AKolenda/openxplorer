@@ -104,7 +104,7 @@ impl BrowserWindow {
     /// Moves the background tab `id` to the folder `uri`; it is listed
     /// when it is next shown, or at once when it is the pane beside the
     /// active one.
-    pub(super) fn navigate_background_tab(&self, id: TabId, uri: &str) {
+    pub(in crate::window) fn navigate_background_tab(&self, id: TabId, uri: &str) {
         let Ok(uri) = self.resolve_address(uri) else {
             return;
         };

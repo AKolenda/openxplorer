@@ -2909,6 +2909,10 @@ msgid "Right-click menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Shift+F10 opens the classic menu"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Sidebar and column widths"
 msgstr ""
 
@@ -2934,6 +2938,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Use the desktop font"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "When on, Shift+F10 opens the Windows 10 menu. When off, it opens the same menu as a right-click and the Menu key, as in Windows 11."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2974,6 +2982,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "reset layout widths sidebar resize columns"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "shift f10 keyboard key context menu right-click classic windows 10 11 compact show more options"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -5141,7 +5153,7 @@ msgstr ""
 msgid "Share with"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Show more options"
 msgstr ""
 
