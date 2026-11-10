@@ -172,6 +172,7 @@ mod imp {
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
+            menu.add_controller(super::close_the_menus_tab_on_ctrl_w());
             menu.connect_closed(glib::clone!(
                 #[weak(rename_to = strip)]
                 self.obj(),
@@ -540,6 +541,22 @@ fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
 }
 
 impl TabStrip {
+    /// Closes the tab menu that is open and returns its tab, the one its
+    /// Close tab row closes; `None`, leaving any other menu open, while no
+    /// tab menu is shown. A right-click leaves a background tab in the
+    /// background, so this is not always the tab in front.
+    pub(in crate::window) fn dismiss_tab_menu(&self) -> Option<TabId> {
+        let menu = self.imp().menu.get().filter(|menu| menu.is_visible())?;
+        let tab = menu
+            .items()
+            .into_iter()
+            .find(|item| item.action == WindowAction::CloseTabById.into())
+            .and_then(|item| item.target)
+            .and_then(|target| TabId::from_variant(&target))?;
+        menu.popdown();
+        Some(tab)
+    }
+
     /// Opens the menu of the tab at `index`, counted from 0, under it;
     /// false when there is no such tab.
     pub(in crate::window) fn open_menu_of_tab(&self, index: usize) -> bool {
@@ -627,6 +644,33 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
 
 /// Runs the tab action `action` on the tab `id` from `widget`, when the
 /// gesture still has one.
+/// Ctrl+W, which a tab's menu shows beside Close tab, closes the tab whose
+/// menu is open, as that row does, and the menu with it. The open menu
+/// takes the keyboard, so the window's own Ctrl+W, which closes the tab in
+/// front, never sees the key; and a right-click leaves a background tab in
+/// the background, so the tab in front is not always the menu's.
+fn close_the_menus_tab_on_ctrl_w() -> gtk::ShortcutController {
+    let shortcuts = gtk::ShortcutController::new();
+    shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let close = gtk::CallbackAction::new(|menu, _| {
+        let Some(strip) = menu.parent().and_downcast::<TabStrip>() else {
+            return glib::Propagation::Proceed;
+        };
+        let Some(tab) = strip.dismiss_tab_menu() else {
+            return glib::Propagation::Proceed;
+        };
+        run_on(
+            Some(strip.upcast()),
+            WindowAction::CloseTabById,
+            &tab.to_variant(),
+        );
+        glib::Propagation::Stop
+    });
+    let trigger = gtk::ShortcutTrigger::parse_string("<Primary>w");
+    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(close)));
+    shortcuts
+}
+
 fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant) {
     if let Some(widget) = widget {
         action.activate_from(&widget, Some(id));
