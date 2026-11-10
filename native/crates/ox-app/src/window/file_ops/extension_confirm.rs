@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Asking before a rename changes a file's extension (OPS-049).
 //!
-//! Windows Explorer asks "If you change a file name extension, the file
-//! might become unusable. Are you sure you want to change it?" when a
+//! Windows 11 asks, in a message box titled "Rename" with the warning
+//! icon, Yes and No, "If you change a file name extension, the file
+//! might become unusable." and "Are you sure you want to change it?" when a
 //! rename adds, removes or changes the part after a file's last dot, since
 //! apps and the desktop pick how to open a file by it. Folders have no
 //! extension, so renaming one never asks, and changing only the case of an
@@ -12,13 +13,13 @@ use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
-/// The question's title.
-const TITLE: &str = crate::i18n::message_id("Change the extension?");
+/// The question's title, Windows 11's.
+const TITLE: &str = crate::i18n::message_id("Rename");
 
-/// The question, in Windows Explorer's words.
+/// The question, in Windows 11's words and on its two lines.
 const MESSAGE: &str = crate::i18n::message_id(
-    "If you change a file name extension, the file might become unusable. Are you sure you \
-                                 want to change it?",
+    "If you change a file name extension, the file might become unusable.\nAre you sure you want to \
+     change it?",
 );
 
 /// The extension of the file name `name`, case-folded: what follows its
@@ -68,20 +69,23 @@ impl BrowserWindow {
         if !changes_extension(old_name, new_name, is_folder) {
             return true;
         }
-        let dialog = Dialog::new(
+        // A message box as Windows 11 draws it: Yes is focused, so Enter
+        // changes the extension; No, Escape and the close button keep the
+        // old name.
+        let dialog = Dialog::message_box(
             parent,
             ox_core::i18n::gettext_static(TITLE),
             ox_core::i18n::gettext_static(MESSAGE),
         );
-        dialog.add_cancel_button();
-        dialog.add_button(
-            ox_core::i18n::gettext_static("Change extension"),
-            ButtonStyle::Accent,
-        );
+        let yes = dialog.add_button(ox_core::i18n::gettext_static("Yes"), ButtonStyle::Accent);
+        let no = dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
+        // Alt+Y and Alt+N in every language, as Windows keeps them.
+        dialog.also_press_with(yes, 'y');
+        dialog.also_press_with(no, 'n');
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
-        answer.is_some()
+        answer == Some(yes)
     }
 }
 

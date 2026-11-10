@@ -31,6 +31,217 @@ pub(in crate::window) fn ask_before_recycling(test: &TestWindow) {
     });
 }
 
+/// The question Windows Explorer asks before a rename changes a file's
+/// extension.
+pub(in crate::window) const EXTENSION_QUESTION: &str =
+    "If you change a file name extension, the file might become unusable.\nAre you sure you want to change it?";
+
+/// Whether `dialog` is the question asked before a rename changes a
+/// file's extension. Its title, "Rename", is also the Rename dialog's, so
+/// the question is told apart by its words.
+pub(in crate::window) fn is_extension_question(dialog: &Dialog) -> bool {
+    dialog
+        .message_text()
+        .starts_with("If you change a file name extension")
+}
+
+/// Checks that `dialog` is the extension question drawn as Windows 11
+/// draws it: a message box titled "Rename" with the warning icon, the two
+/// lines of its question and Yes, focused and pressed by Enter, then No;
+/// Alt+Y and Alt+N press them, and the box is sized to its words.
+pub(in crate::window) fn assert_windows_extension_question(dialog: &Dialog) {
+    assert_eq!(dialog.title_text(), "Rename");
+    assert_eq!(dialog.message_text(), EXTENSION_QUESTION);
+    assert_eq!(dialog.button_labels(), ["Yes", "No"]);
+    assert_windows_message_box(dialog.upcast_ref(), "Yes");
+    assert_eq!(
+        focused_button(dialog).as_deref(),
+        Some("Yes"),
+        "Yes has the keyboard"
+    );
+    let default = dialog.default_widget().and_downcast::<gtk::Button>();
+    assert_eq!(
+        default.and_then(|button| button.label()).as_deref(),
+        Some("Yes"),
+        "Enter presses Yes"
+    );
+    wait_until("the box to be drawn", || dialog.is_mapped() && dialog.width() > 0);
+    let words = assert_sized_to_its_words(dialog);
+    assert_eq!(
+        words.lines, 2,
+        "Windows' two lines, the first kept whole ({} pixels)",
+        words.widest_line
+    );
+    assert!(dialog.height() < 240, "no empty room: {}", dialog.height());
+}
+
+/// What a message box's icon and padding add to the width of its words:
+/// the 32-pixel icon and the 12 pixels after it (the message's 44-pixel
+/// margin) and the content's 16 and 24 pixels each side (dialogs.css).
+const MESSAGE_BOX_ROOM: i32 = 44 + 16 + 24;
+
+/// How a message box laid out its words, in pixels of the font that drew
+/// them: the lines they took, the widest line of the message as written,
+/// and the width the message wraps at.
+pub(in crate::window) struct MessageWords {
+    pub(in crate::window) lines: i32,
+    pub(in crate::window) widest_line: i32,
+    pub(in crate::window) wrap_width: i32,
+}
+
+/// Checks that the message box `widget` is sized to its words rather than
+/// given a dialog's 510 pixels: its words are as wide as their widest line
+/// and never wider than they wrap at, and the box adds only its icon and
+/// padding. Measured in the font that draws them, so it holds in `Noto Sans`
+/// and in the wider `DejaVu Sans` that distribution CI falls back to.
+///
+/// The words wrap where GTK wraps them: `max-width-chars` of the font's
+/// average character or digit, whichever is wider.
+pub(in crate::window) fn assert_sized_to_its_words(widget: &impl IsA<gtk::Widget>) -> MessageWords {
+    let widget = widget.as_ref();
+    let label = descendants::<gtk::Label>(widget)
+        .into_iter()
+        .find(|label| label.has_css_class("dialog-message") && label.is_visible())
+        .expect("the message");
+    let text = label.text();
+    let widest_line = text
+        .split('\n')
+        .map(|line| label.create_pango_layout(Some(line)).pixel_size().0)
+        .max()
+        .unwrap_or_default();
+    let metrics = label.pango_context().metrics(None, None);
+    let character = metrics
+        .approximate_char_width()
+        .max(metrics.approximate_digit_width());
+    let scale = gtk::pango::SCALE;
+    let wrap_width = (label.max_width_chars() * character + scale - 1) / scale;
+    assert!(
+        label.width() <= widest_line.min(wrap_width),
+        "the words are as wide as their widest line ({widest_line}) and wrap at {wrap_width}: {}",
+        label.width()
+    );
+    assert_eq!(
+        widget.width() - label.width(),
+        MESSAGE_BOX_ROOM,
+        "the box is its words, icon and padding, with no empty room ({} wide)",
+        widget.width()
+    );
+    MessageWords {
+        lines: label.layout().line_count(),
+        widest_line,
+        wrap_width,
+    }
+}
+
+/// The keys that press a message box's buttons, as GTK writes them
+/// (`<Alt>y`).
+pub(in crate::window) fn mnemonic_triggers(frame: &crate::dialog::DialogFrame) -> Vec<String> {
+    frame
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .filter_map(|shortcut| shortcut.trigger())
+                .map(|trigger| trigger.to_str().to_string())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Checks the parts every Windows message box of the app shares, inside
+/// `widget`: its caption with the title, the warning icon beside the
+/// words, and Alt with the first letter of each button pressing it.
+/// `default` is the label of the button drawn as the one Enter presses.
+pub(in crate::window) fn assert_windows_message_box(widget: &gtk::Widget, default: &str) {
+    let icon = descendants::<gtk::Image>(widget)
+        .into_iter()
+        .find(|image| image.icon_name().as_deref() == Some("ox-warning-32-color") && image.is_visible());
+    assert!(icon.is_some(), "the warning icon shows");
+    let frame = descendants::<crate::dialog::DialogFrame>(widget)
+        .into_iter()
+        .chain(widget.clone().downcast::<crate::dialog::DialogFrame>())
+        .next()
+        .expect("the box is drawn by a dialog frame");
+    assert!(frame.has_css_class("message-box"), "the shared message-box style");
+    let accent: Vec<String> = descendants::<gtk::Button>(widget)
+        .into_iter()
+        .filter(|button| button.has_css_class("accent") && button.is_visible())
+        .filter_map(|button| button.label().map(String::from))
+        .collect();
+    assert_eq!(accent, [default], "the default button is drawn as the default");
+    let triggers = mnemonic_triggers(&frame);
+    for key in ["<Alt>y", "<Alt>n"] {
+        assert!(
+            triggers.iter().any(|trigger| trigger == key),
+            "{key} presses its button: {triggers:?}"
+        );
+    }
+}
+
+/// `value` in whole pixels.
+#[expect(clippy::cast_possible_truncation, reason = "dialog measures are small")]
+fn pixels(value: f32) -> i32 {
+    value.round() as i32
+}
+
+/// The sizes and places that make a message box's look, inside `widget`:
+/// each button's height and width, the caption's height, the footer's
+/// height, and where the icon and the words sit in the frame. Two boxes
+/// with the same style give the same answer, whichever host shows them.
+pub(in crate::window) fn message_box_metrics(widget: &gtk::Widget) -> Vec<(String, i32)> {
+    let frame = descendants::<crate::dialog::DialogFrame>(widget)
+        .into_iter()
+        .chain(widget.clone().downcast::<crate::dialog::DialogFrame>())
+        .next()
+        .expect("the box is drawn by a dialog frame");
+    let frame_widget = frame.upcast_ref::<gtk::Widget>();
+    let place = |child: &gtk::Widget| {
+        child
+            .compute_point(frame_widget, &gtk::graphene::Point::new(0.0, 0.0))
+            .map_or((-1, -1), |point| (pixels(point.x()), pixels(point.y())))
+    };
+    // The border box, as drawn: a widget's own width and height leave
+    // out its padding and border.
+    let drawn = |child: &gtk::Widget| {
+        child.compute_bounds(frame_widget).map_or((-1, -1), |bounds| {
+            (pixels(bounds.width()), pixels(bounds.height()))
+        })
+    };
+    let mut metrics = Vec::new();
+    for button in descendants::<gtk::Button>(frame_widget) {
+        if let Some(label) = button.label() {
+            let (width, height) = drawn(button.upcast_ref());
+            metrics.push((format!("{label} height"), height));
+            metrics.push((format!("{label} width"), width));
+        }
+    }
+    let by_class = |class: &str| {
+        descendants::<gtk::Widget>(frame_widget)
+            .into_iter()
+            .find(|child| child.has_css_class(class) && child.is_visible())
+            .unwrap_or_else(|| panic!("the box has a {class}"))
+    };
+    let caption = by_class("message-box-caption");
+    metrics.push(("caption height".to_owned(), drawn(&caption).1));
+    let footer = by_class("dialog-actions");
+    metrics.push(("footer height".to_owned(), drawn(&footer).1));
+    let icon = by_class("message-box-icon");
+    let (icon_x, icon_y) = place(&icon);
+    metrics.push(("icon x".to_owned(), icon_x));
+    metrics.push(("icon y".to_owned(), icon_y));
+    metrics.push(("icon size".to_owned(), drawn(&icon).0));
+    let words = by_class("dialog-message");
+    let (words_x, words_y) = place(&words);
+    metrics.push(("words x".to_owned(), words_x));
+    metrics.push(("words y".to_owned(), words_y));
+    metrics
+}
+
 /// The label of the button that has focus in `dialog`, the one Enter
 /// presses.
 pub(in crate::window) fn focused_button(dialog: &Dialog) -> Option<String> {

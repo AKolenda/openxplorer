@@ -324,6 +324,13 @@ fn cancelling_the_hide_question_keeps_the_name_and_the_field() {
     assert!(!fixture.path(".Notes 2.txt").exists());
 }
 
+/// Windows 11 asks in a small message box titled "Rename", with the
+/// warning icon, "If you change a file name extension, the file might
+/// become unusable." and, on the next line, "Are you sure you want to
+/// change it?", and Yes (focused, so Enter renames) and No. No keeps the
+/// old name; whether Windows leaves the name box open after No is not
+/// known, so the field stays open with the typed name, as before.
+///
 /// parity: OPS-049
 #[gtk::test]
 fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
@@ -337,14 +344,9 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     field.set_text("Notes 2.md");
     field.emit_activate();
     let question = open_dialog(&test);
-    assert_eq!(question.title_text(), "Change the extension?");
-    assert_eq!(
-        question.message_text(),
-        "If you change a file name extension, the file might become unusable. Are you sure you \
-         want to change it?"
-    );
-    assert_eq!(question.button_labels(), ["Cancel", "Change extension"]);
-    question.press("Cancel");
+    super::file_ops_support::assert_windows_extension_question(&question);
+    crate::test_support::harness::capture_in_both_themes(&question, "rename-question");
+    question.press("No");
     wait_for_no_dialog(&test);
     wait_until("the field to come back", || field.is_sensitive());
     assert!(is_renaming_in_place(&test), "editing goes on");
@@ -352,10 +354,222 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     assert!(fixture.path("Notes 2.txt").is_file());
 
     field.emit_activate();
-    open_dialog(&test).press("Change extension");
+    open_dialog(&test).press("Yes");
 
     wait_until("the rename", || fixture.path("Notes 2.md").is_file());
     assert!(!fixture.path("Notes 2.txt").exists());
+}
+
+/// The Rename question, a dialog window of its own, and Confirm Save As,
+/// shown on a window's dialog layer, share one message-box style: the
+/// same buttons, caption, footer and places for the icon and the words.
+///
+/// parity: OPS-049, INT-032
+#[gtk::test]
+fn the_rename_question_and_confirm_save_as_share_one_message_box_style() {
+    use crate::dialog::{DialogFrame, DialogWidth};
+    use crate::test_support::harness::{skin, wait_for_frames, ThemeGuard};
+    use crate::window::ButtonStyle;
+    use ox_core::settings::Theme;
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    for theme in [Theme::Light, Theme::Dark] {
+        skin().set_theme(theme);
+        select_names(&test, &["Notes 2.txt"]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        field.set_text("Notes 2.md");
+        field.emit_activate();
+        let question = open_dialog(&test);
+        wait_for_frames(&question, 3);
+        let rename = super::file_ops_support::message_box_metrics(question.upcast_ref());
+        question.close();
+        wait_for_no_dialog(&test);
+        wait_until("the field to come back", || field.is_sensitive());
+        // The unchanged name closes the field without renaming.
+        field.set_text("Notes 2.txt");
+        field.emit_activate();
+        wait_until("the field to close", || !is_renaming_in_place(&test));
+
+        let frame = DialogFrame::new("Confirm Save As", DialogWidth::MessageBox);
+        frame.make_message_box(crate::icons::Icon::WarningColor32);
+        frame.set_message("Notes 2.txt already exists.\nDo you want to replace it?");
+        frame.add_closing_button("Yes", ButtonStyle::Bordered, || {});
+        frame.add_closing_button("No", ButtonStyle::Accent, || {});
+        test.window.present_window_dialog(&frame);
+        wait_for_frames(&test.window, 3);
+        let save_as = super::file_ops_support::message_box_metrics(frame.upcast_ref());
+        frame.close();
+
+        assert_eq!(rename, save_as, "one style in both hosts ({theme:?})");
+        let value = |name: &str| rename.iter().find(|(key, _)| key == name).map(|entry| entry.1);
+        assert_eq!(
+            value("Yes height"),
+            Some(32),
+            "the app's dialog button height: {rename:?}"
+        );
+        assert_eq!(
+            value("caption height"),
+            Some(32),
+            "a message box's caption: {rename:?}"
+        );
+    }
+}
+
+/// In a right-to-left language a message box mirrors: the warning icon
+/// moves to the right, and the words keep clear of it there, as far from
+/// it and from the edges as they are left to right, so the icon never
+/// covers their first characters.
+///
+/// parity: OPS-049, INT-032
+#[gtk::test]
+fn a_right_to_left_message_box_keeps_its_words_clear_of_the_icon() {
+    use crate::dialog::{DialogFrame, DialogWidth};
+    use crate::test_support::harness::wait_for_frames;
+    use crate::window::ButtonStyle;
+    /// Gives back the left-to-right default however the test ends.
+    struct LeftToRight;
+    impl Drop for LeftToRight {
+        fn drop(&mut self) {
+            gtk::Widget::set_default_direction(gtk::TextDirection::Ltr);
+        }
+    }
+    let test = TestWindow::open(&Fixture::standard().uri());
+    let _left_to_right = LeftToRight;
+    // Each edge's distance from the icon and the words, start edge first:
+    // left to right the left, right to left the right.
+    let mut places = Vec::new();
+    for direction in [gtk::TextDirection::Ltr, gtk::TextDirection::Rtl] {
+        gtk::Widget::set_default_direction(direction);
+        let frame = DialogFrame::new("Confirm Save As", DialogWidth::MessageBox);
+        frame.make_message_box(crate::icons::Icon::WarningColor32);
+        frame.set_message("Notes 2.txt already exists.\nDo you want to replace it?");
+        frame.add_closing_button("Yes", ButtonStyle::Bordered, || {});
+        frame.add_closing_button("No", ButtonStyle::Accent, || {});
+        test.window.present_window_dialog(&frame);
+        wait_for_frames(&test.window, 3);
+        let bounds = |class: &str| {
+            descendants::<gtk::Widget>(frame.upcast_ref::<gtk::Widget>())
+                .into_iter()
+                .find(|child| child.has_css_class(class) && child.is_visible())
+                .and_then(|child| child.compute_bounds(&frame))
+                .unwrap_or_else(|| panic!("the box draws its {class}"))
+        };
+        let (content, icon, words) = (
+            bounds("dialog-content"),
+            bounds("message-box-icon"),
+            bounds("dialog-message"),
+        );
+        // Measured from the edges of the content, whose padding mirrors
+        // too; graphene's bounds are whole pixels here, so rounding only
+        // drops the float.
+        let edge = |value: f32| value.round();
+        let (left, right) = (edge(content.x()), edge(content.x() + content.width()));
+        let (icon_left, icon_right) = (edge(icon.x()), edge(icon.x() + icon.width()));
+        let (words_left, words_right) = (edge(words.x()), edge(words.x() + words.width()));
+        let place = if direction == gtk::TextDirection::Rtl {
+            assert!(
+                words_right <= icon_left,
+                "the words end left of the icon: {words:?} {icon:?}"
+            );
+            (right - icon_right, icon_left - words_right, right - words_right)
+        } else {
+            assert!(words_left >= icon_right, "the words start right of the icon");
+            (icon_left - left, words_left - icon_right, words_left - left)
+        };
+        places.push(place);
+        frame.close();
+        wait_until("the box to close", || {
+            test.window.dialog_layer().shown().is_none()
+        });
+    }
+    assert_eq!(
+        places[1], places[0],
+        "right to left, the icon's place, the room after it and the words' place mirror (from the edge, \
+         gap, words)"
+    );
+}
+
+/// A message box keeps its Alt keys where Yes and No are translated to
+/// words that do not start with a Latin letter, as `zh_CN`'s 是 and 否:
+/// Alt with the translated label's first character, and Alt+Y and Alt+N,
+/// as Windows writes them there ("是(Y)").
+///
+/// parity: OPS-049
+#[gtk::test]
+fn a_translated_message_box_keeps_its_alt_keys() {
+    use crate::dialog::{DialogFrame, DialogWidth};
+    use crate::window::ButtonStyle;
+    let _test = TestWindow::open(&Fixture::standard().uri());
+    let frame = DialogFrame::new("重命名", DialogWidth::MessageBox);
+    frame.make_message_box(crate::icons::Icon::WarningColor32);
+    let yes = frame.add_button("是", ButtonStyle::Accent);
+    frame.also_press_with(&yes, 'y');
+    let no = frame.add_button("否", ButtonStyle::Bordered);
+    frame.also_press_with(&no, 'n');
+
+    let triggers = super::file_ops_support::mnemonic_triggers(&frame);
+    let alt = |character: char| {
+        let key = crate::dialog::alt_key(character).expect("a key for the character");
+        gtk::KeyvalTrigger::new(key, gtk::gdk::ModifierType::ALT_MASK)
+            .to_str()
+            .to_string()
+    };
+    for key in [alt('是'), alt('否'), "<Alt>y".to_owned(), "<Alt>n".to_owned()] {
+        assert!(triggers.contains(&key), "{key} presses a button: {triggers:?}");
+    }
+}
+
+/// Escape answers the extension question No, as closing it does: the old
+/// name stays. Enter presses Yes, the focused default button.
+///
+/// parity: OPS-049
+#[gtk::test]
+fn escape_answers_the_extension_question_no_and_enter_yes() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Notes 2.md");
+    field.emit_activate();
+    let question = open_dialog(&test);
+    assert!(super::file_ops_support::is_extension_question(&question));
+    question.close();
+    wait_for_no_dialog(&test);
+    wait_until("the field to come back", || field.is_sensitive());
+    assert!(fixture.path("Notes 2.txt").is_file(), "No: the old name stays");
+    assert!(!fixture.path("Notes 2.md").exists());
+
+    field.emit_activate();
+    let question = open_dialog(&test);
+    let enter = question.default_widget().and_downcast::<gtk::Button>();
+    enter.expect("Enter presses a button").emit_clicked();
+    wait_until("the rename", || fixture.path("Notes 2.md").is_file());
+}
+
+/// With extensions hidden, as by default, the name box holds the name
+/// without its extension, so a new name keeps it and nothing is asked.
+///
+/// parity: OPS-049, VIEW-069
+#[gtk::test]
+fn renaming_with_extensions_hidden_keeps_the_extension_without_asking() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    assert_eq!(field.text(), "Notes 2");
+
+    field.set_text("Plan");
+    field.emit_activate();
+
+    wait_until("the rename", || fixture.path("Plan.txt").is_file());
+    assert!(dialog_over(&test).is_none(), "nothing is asked");
 }
 
 /// A name longer than 255 bytes is refused before the extension question,

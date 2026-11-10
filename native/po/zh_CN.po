@@ -4445,8 +4445,8 @@ msgid "Change the extension?"
 msgstr "要更改扩展名吗？"
 
 #: crates/ox-app/src/window/file_ops/extension_confirm.rs
-msgid "If you change a file name extension, the file might become unusable. Are you sure you want to change it?"
-msgstr "如果更改文件名扩展名，文件可能会变得无法使用。确定要更改吗？"
+msgid "If you change a file name extension, the file might become unusable.\nAre you sure you want to change it?"
+msgstr "如果更改文件名扩展名，文件可能会变得无法使用。\n确定要更改吗？"
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Error while {doing} “{name}”"
