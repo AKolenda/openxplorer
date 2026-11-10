@@ -1408,8 +1408,10 @@ fn copy_path_runs_on_explorers_and_dolphins_keys() {
 /// Submenus within submenus, as template folders within folders in the
 /// New menu, open beside each other, as Windows 11's do: each beside the
 /// row that opens it, with a chevron at the row's right, its check marks,
-/// icons and the reasons a disabled item gives. Only the New menu holds a
-/// pointer grab. Choosing a deep item closes every menu and runs it.
+/// icons and the reasons a disabled item gives. No menu holds a pointer
+/// grab: the command bar's let clicks through (command_bar/menu_group.rs)
+/// and submenus never take one. Choosing a deep item closes every menu
+/// and runs it.
 ///
 /// parity: CMD-031, OPS-003
 #[gtk::test]
@@ -1469,7 +1471,7 @@ fn nested_submenus_open_beside_each_other() {
     let shown = shown_menus();
     assert_eq!(shown.len(), 3, "the New menu and two submenus");
     let grabbing: Vec<&MenuPopover> = shown.iter().filter(|menu| menu.is_autohide()).collect();
-    assert_eq!(grabbing, [&menu], "only the New menu grabs the pointer");
+    assert!(grabbing.is_empty(), "no menu grabs the pointer");
     assert_eq!(work.opens_from().as_ref(), Some(&letters));
     assert_eq!(letters.opens_from().as_ref(), Some(&menu));
     for submenu in [&letters, &work] {

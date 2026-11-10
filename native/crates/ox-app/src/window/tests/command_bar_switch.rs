@@ -14,7 +14,7 @@ use gtk::prelude::*;
 
 use super::command_bar::{command_bar_controls, control_name};
 use super::narrow_windows::resize;
-use crate::test_support::harness::{wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::test_support::pointer::{window_origin, Button, Pointer};
 use crate::window::menu_popover::{row_label, MenuPopover};
 
@@ -294,19 +294,20 @@ fn a_click_elsewhere_closes_the_menu_and_still_acts_there() {
 
     session.open_by_click("Sort");
     let bar = session.test.window.command_bar().clone();
-    let empty = session.on_screen(
-        &bar,
-        (f64::from(bar.width()) * 0.62, f64::from(bar.height()) / 2.0),
-    );
-    let picked = bar.pick(
-        f64::from(bar.width()) * 0.62,
+    // Just past See more, before the commands at the right.
+    let more = menu_button(&session.test, "See more")
+        .compute_bounds(&bar)
+        .expect("See more is laid out in the bar");
+    let gap = (
+        f64::from(more.x() + more.width()) + 30.0,
         f64::from(bar.height()) / 2.0,
-        gtk::PickFlags::DEFAULT,
     );
+    let picked = bar.pick(gap.0, gap.1, gtk::PickFlags::DEFAULT);
     assert!(
         picked.is_none_or(|widget| widget.ancestor(gtk::Button::static_type()).is_none()),
         "the point is on no command"
     );
+    let empty = session.on_screen(&bar, gap);
     session.click_at(empty);
     session.expect_only_open(None, "Sort open, a click on the bar's empty part");
     assert_eq!(
@@ -437,4 +438,42 @@ fn escape_and_the_keyboard_still_work_the_menus() {
             has_keyboard(&session.test, &button)
         });
     }
+}
+
+/// In the dark theme and Compact view the menus open from each other the
+/// same way, and a click on a plain command of the bar while a menu is
+/// open closes the menu and runs the command, as every click reaches
+/// what it is on.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn the_menus_switch_the_same_in_the_dark_theme_and_compact_view() {
+    let _theme = ThemeGuard::keep();
+    let mut session = Session::open(None);
+    session.test.activate("theme", Some("dark"));
+    session.test.activate("compact-density", None);
+    wait_for_frames(&session.test.window, 4);
+    session.open_by_click("View");
+    for next in ["Sort", "New", "See more", "View"] {
+        session.click_button(next);
+        session.expect_only_open(Some(next), &format!("one click on {next}"));
+    }
+
+    let window = session.test.window.clone();
+    let details_pane = move || -> bool {
+        let action = window
+            .lookup_action("details-pane")
+            .expect("the window has Details pane");
+        action
+            .state()
+            .and_then(|state| state.get::<bool>())
+            .expect("Details pane is a toggle")
+    };
+    assert!(!details_pane());
+    let details = super::geometry::button_for(&session.test, "win.details-pane");
+    let point = session.middle_of(&details);
+    session.click_at(point);
+    session.expect_only_open(None, "View open, a click on Details");
+    wait_until("Details to open the details pane", details_pane);
+    session.test.activate("compact-density", None);
 }

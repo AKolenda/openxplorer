@@ -5902,26 +5902,27 @@ mod tests {
 
     /// The command bar's Sort menu in a Save dialog, as Chrome opens one
     /// through the portal: Group by and More open beside the menu, and the
-    /// compositor only ever sees one popup holding a grab, the Sort menu,
-    /// as for a menu without submenus. Each submenu is a popup of the Sort
-    /// menu's surface without a grab of its own (`gdk_popup_get_autohide`,
-    /// what GDK sends `xdg_popup.grab` for), one opens only once the other
-    /// has left the screen, and a submenu leaves the screen before the
-    /// menu. Side menus that each took a second, nested grab once froze
-    /// the KDE Plasma Wayland session in this dialog.
+    /// compositor never sees a popup holding a grab: the command bar's
+    /// menus let clicks through, as Windows 11's do (command_bar/
+    /// menu_group.rs), and each submenu is a popup of the Sort menu's
+    /// surface without a grab of its own (`gdk_popup_get_autohide`, what
+    /// GDK sends `xdg_popup.grab` for). One submenu opens only once the
+    /// other has left the screen, and a submenu leaves the screen before
+    /// the menu. Side menus that each took a second, nested grab once
+    /// froze the KDE Plasma Wayland session in this dialog.
     ///
     /// parity: VIEW-022, INT-032
     #[gtk::test]
-    fn the_sort_menu_of_a_save_dialog_keeps_one_grabbing_popup() {
-        sort_menu_keeps_one_grab("SaveFile", vec![("current_name", "page.html".to_variant())]);
+    fn the_sort_menu_of_a_save_dialog_holds_no_grab() {
+        sort_menu_holds_no_grab("SaveFile", vec![("current_name", "page.html".to_variant())]);
     }
 
     /// The same in an Open dialog.
     ///
     /// parity: VIEW-022, INT-032
     #[gtk::test]
-    fn the_sort_menu_of_an_open_dialog_keeps_one_grabbing_popup() {
-        sort_menu_keeps_one_grab("OpenFile", Vec::new());
+    fn the_sort_menu_of_an_open_dialog_holds_no_grab() {
+        sort_menu_holds_no_grab("OpenFile", Vec::new());
     }
 
     /// A row the pointer rests on in a Save dialog's Sort menu shows the
@@ -6039,8 +6040,8 @@ mod tests {
     }
 
     /// Opens a `method` dialog with `entries` and goes through its Sort
-    /// menu's Group by and More, checking only the Sort menu grabs.
-    fn sort_menu_keeps_one_grab(method: &str, entries: Vec<(&str, glib::Variant)>) {
+    /// menu's Group by and More, checking no menu grabs.
+    fn sort_menu_holds_no_grab(method: &str, entries: Vec<(&str, glib::Variant)>) {
         let fixture = Fixture::empty();
         fixture.write("notes.txt");
         let portal = Portal::new();
@@ -6067,7 +6068,7 @@ mod tests {
 
         sort.popup();
         wait_until("the Sort menu", || menu.is_mapped());
-        assert_eq!(grabbing(), std::slice::from_ref(&menu), "the Sort menu grabs");
+        assert!(grabbing().is_empty(), "the Sort menu lets clicks through");
         let menu_surface = gtk::prelude::NativeExt::surface(&menu).expect("on screen");
 
         // The pointer rests on More, then on Group by.
@@ -6104,11 +6105,7 @@ mod tests {
             Some(&menu_surface),
             "a popup of the Sort menu's"
         );
-        assert_eq!(
-            grabbing(),
-            std::slice::from_ref(&menu),
-            "still only the Sort menu grabs"
-        );
+        assert!(grabbing().is_empty(), "still no menu grabs");
         assert_eq!(shown_popups(window).len(), 2, "the Sort menu and Group by");
 
         // Choosing Type groups the list and closes both, Group by first.
@@ -6137,7 +6134,7 @@ mod tests {
         assert!(menu.press_in_list(gdk::Key::Right));
         let more = menu.open_submenu_menu().expect("Right opens More");
         wait_until("More", || more.is_mapped());
-        assert_eq!(grabbing(), std::slice::from_ref(&menu));
+        assert!(grabbing().is_empty(), "no menu grabs");
         more.row("Size").emit_activate();
         assert_eq!(test.action_state("sort").as_deref(), Some("size"));
         wait_until("the menu to close", || !menu.is_visible());
