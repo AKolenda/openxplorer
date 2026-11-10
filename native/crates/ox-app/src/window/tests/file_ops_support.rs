@@ -118,6 +118,61 @@ pub(in crate::window) fn assert_windows_message_box(widget: &gtk::Widget, defaul
     }
 }
 
+/// The sizes and places that make a message box's look, inside `widget`:
+/// each button's height and width, the caption's height, the footer's
+/// height, and where the icon and the words sit in the frame. Two boxes
+/// with the same style give the same answer, whichever host shows them.
+pub(in crate::window) fn message_box_metrics(widget: &gtk::Widget) -> Vec<(String, i32)> {
+    let frame = descendants::<crate::dialog::DialogFrame>(widget)
+        .into_iter()
+        .chain(widget.clone().downcast::<crate::dialog::DialogFrame>())
+        .next()
+        .expect("the box is drawn by a dialog frame");
+    let frame_widget = frame.upcast_ref::<gtk::Widget>();
+    let place = |child: &gtk::Widget| {
+        child
+            .compute_point(frame_widget, &gtk::graphene::Point::new(0.0, 0.0))
+            .map_or((-1, -1), |point| {
+                (point.x().round() as i32, point.y().round() as i32)
+            })
+    };
+    // The border box, as drawn: a widget's own width and height leave
+    // out its padding and border.
+    let drawn = |child: &gtk::Widget| {
+        child.compute_bounds(frame_widget).map_or((-1, -1), |bounds| {
+            (bounds.width().round() as i32, bounds.height().round() as i32)
+        })
+    };
+    let mut metrics = Vec::new();
+    for button in descendants::<gtk::Button>(frame_widget) {
+        if let Some(label) = button.label() {
+            let (width, height) = drawn(button.upcast_ref());
+            metrics.push((format!("{label} height"), height));
+            metrics.push((format!("{label} width"), width));
+        }
+    }
+    let by_class = |class: &str| {
+        descendants::<gtk::Widget>(frame_widget)
+            .into_iter()
+            .find(|child| child.has_css_class(class) && child.is_visible())
+            .unwrap_or_else(|| panic!("the box has a {class}"))
+    };
+    let caption = by_class("message-box-caption");
+    metrics.push(("caption height".to_owned(), drawn(&caption).1));
+    let footer = by_class("dialog-actions");
+    metrics.push(("footer height".to_owned(), drawn(&footer).1));
+    let icon = by_class("message-box-icon");
+    let (icon_x, icon_y) = place(&icon);
+    metrics.push(("icon x".to_owned(), icon_x));
+    metrics.push(("icon y".to_owned(), icon_y));
+    metrics.push(("icon size".to_owned(), drawn(&icon).0));
+    let words = by_class("dialog-message");
+    let (words_x, words_y) = place(&words);
+    metrics.push(("words x".to_owned(), words_x));
+    metrics.push(("words y".to_owned(), words_y));
+    metrics
+}
+
 /// The label of the button that has focus in `dialog`, the one Enter
 /// presses.
 pub(in crate::window) fn focused_button(dialog: &Dialog) -> Option<String> {

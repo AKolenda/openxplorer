@@ -360,6 +360,64 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     assert!(!fixture.path("Notes 2.txt").exists());
 }
 
+/// The Rename question, a dialog window of its own, and Confirm Save As,
+/// shown on a window's dialog layer, share one message-box style: the
+/// same buttons, caption, footer and places for the icon and the words.
+///
+/// parity: OPS-049, INT-032
+#[gtk::test]
+fn the_rename_question_and_confirm_save_as_share_one_message_box_style() {
+    use crate::dialog::{DialogFrame, DialogWidth};
+    use crate::test_support::harness::{skin, wait_for_frames, ThemeGuard};
+    use crate::window::ButtonStyle;
+    use ox_core::settings::Theme;
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    for theme in [Theme::Light, Theme::Dark] {
+        skin().set_theme(theme);
+        select_names(&test, &["Notes 2.txt"]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        field.set_text("Notes 2.md");
+        field.emit_activate();
+        let question = open_dialog(&test);
+        wait_for_frames(&question, 3);
+        let rename = super::file_ops_support::message_box_metrics(question.upcast_ref());
+        question.close();
+        wait_for_no_dialog(&test);
+        wait_until("the field to come back", || field.is_sensitive());
+        // The unchanged name closes the field without renaming.
+        field.set_text("Notes 2.txt");
+        field.emit_activate();
+        wait_until("the field to close", || !is_renaming_in_place(&test));
+
+        let frame = DialogFrame::new("Confirm Save As", DialogWidth::MessageBox);
+        frame.make_message_box(crate::icons::Icon::WarningColor32);
+        frame.set_message("Notes 2.txt already exists.\nDo you want to replace it?");
+        frame.add_closing_button("Yes", ButtonStyle::Bordered, || {});
+        frame.add_closing_button("No", ButtonStyle::Accent, || {});
+        test.window.present_window_dialog(&frame);
+        wait_for_frames(&test.window, 3);
+        let save_as = super::file_ops_support::message_box_metrics(frame.upcast_ref());
+        frame.close();
+
+        assert_eq!(rename, save_as, "one style in both hosts ({theme:?})");
+        let value = |name: &str| rename.iter().find(|(key, _)| key == name).map(|entry| entry.1);
+        assert_eq!(
+            value("Yes height"),
+            Some(32),
+            "the app's dialog button height: {rename:?}"
+        );
+        assert_eq!(
+            value("caption height"),
+            Some(32),
+            "a message box's caption: {rename:?}"
+        );
+    }
+}
+
 /// Escape answers the extension question No, as closing it does: the old
 /// name stays. Enter presses Yes, the focused default button.
 ///
