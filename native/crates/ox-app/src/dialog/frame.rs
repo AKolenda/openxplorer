@@ -325,6 +325,28 @@ impl DialogFrame {
         mnemonics.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(action)));
     }
 
+    /// Adds, for each Alt key that presses a button of the message box,
+    /// the same letter without Alt, as a Windows message box takes Y and N
+    /// for Yes and No.
+    pub(crate) fn press_with_letters_alone(&self) {
+        let Some(mnemonics) = self.imp().mnemonics.borrow().clone() else {
+            return;
+        };
+        let alt_keys: Vec<gtk::Shortcut> = (0..mnemonics.n_items())
+            .filter_map(|position| mnemonics.item(position).and_downcast::<gtk::Shortcut>())
+            .collect();
+        for shortcut in alt_keys {
+            let Some(trigger) = shortcut.trigger().and_downcast::<gtk::KeyvalTrigger>() else {
+                continue;
+            };
+            if trigger.modifiers() != gtk::gdk::ModifierType::ALT_MASK {
+                continue;
+            }
+            let alone = gtk::KeyvalTrigger::new(trigger.keyval(), gtk::gdk::ModifierType::empty());
+            mnemonics.add_shortcut(gtk::Shortcut::new(Some(alone), shortcut.action()));
+        }
+    }
+
     /// The width the dialog wants: its width class, or for a message box
     /// the natural width of its content.
     pub(crate) fn wanted_width(&self) -> i32 {

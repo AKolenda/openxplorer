@@ -7,7 +7,9 @@
 //! rename adds, removes or changes the part after a file's last dot, since
 //! apps and the desktop pick how to open a file by it. Folders have no
 //! extension, so renaming one never asks, and changing only the case of an
-//! extension (`.JPG` to `.jpg`) does not either.
+//! extension (`.JPG` to `.jpg`) does not either. Y and N answer it without
+//! Alt too, and No ends a rename in place with the old name, as in Windows
+//! 11.
 
 use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
@@ -71,7 +73,7 @@ impl BrowserWindow {
         }
         // A message box as Windows 11 draws it: Yes is focused, so Enter
         // changes the extension; No, Escape and the close button keep the
-        // old name.
+        // old name, and end a rename in place.
         let dialog = Dialog::message_box(
             parent,
             ox_core::i18n::gettext_static(TITLE),
@@ -79,9 +81,12 @@ impl BrowserWindow {
         );
         let yes = dialog.add_button(ox_core::i18n::gettext_static("Yes"), ButtonStyle::Accent);
         let no = dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
-        // Alt+Y and Alt+N in every language, as Windows keeps them.
+        // Alt+Y and Alt+N in every language, as Windows keeps them, and Y
+        // and N alone, as Windows' message box takes its buttons' letters
+        // without Alt.
         dialog.also_press_with(yes, 'y');
         dialog.also_press_with(no, 'n');
+        dialog.press_with_letters_alone();
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

@@ -116,10 +116,13 @@ fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
     for original in 0..3 {
         let fixture = Fixture::standard();
         let test = three_tabs_with_history(&fixture);
+        let before = tab_ids(&test);
+        // The original shows its folder as tiles.
+        test.window.switch_tab(before[original]);
+        test.wait_for_listing("the original");
         test.activate("view", Some("tiles"));
         test.wait_for_listing("tiles");
         // Another tab is in front, so the menu is opened on a tab behind.
-        let before = tab_ids(&test);
         let front = before[(original + 1) % 3];
         test.window.switch_tab(front);
         test.wait_for_listing("the tab in front");

@@ -559,7 +559,16 @@ impl GeneralEdits {
                 .await;
             self.name.set_editable(editable);
             self.hidden.set_sensitive(can_hide);
-            renaming?;
+            if !renaming? {
+                // No to the extension question keeps the old name, which
+                // the field and Hidden show again, as No ends a rename in
+                // place; the other changes still apply.
+                self.is_updating.set(true);
+                self.name.set_text(&original);
+                self.hidden.set_active(original.starts_with('.'));
+                self.is_updating.set(false);
+                return Ok(());
+            }
             let renamed = gtk::gio::File::for_uri(&uri)
                 .parent()
                 .map(|parent| parent.child(&wanted).uri().to_string());

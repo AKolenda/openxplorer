@@ -387,12 +387,9 @@ fn the_rename_question_and_confirm_save_as_share_one_message_box_style() {
         let question = open_dialog(&test);
         wait_for_frames(&question, 3);
         let rename = super::file_ops_support::message_box_metrics(question.upcast_ref());
+        // Closing the question ends the rename with the old name.
         question.close();
         wait_for_no_dialog(&test);
-        wait_until("the field to come back", || field.is_sensitive());
-        // The unchanged name closes the field without renaming.
-        field.set_text("Notes 2.txt");
-        field.emit_activate();
         wait_until("the field to close", || !is_renaming_in_place(&test));
 
         let frame = DialogFrame::new("Confirm Save As", DialogWidth::MessageBox);

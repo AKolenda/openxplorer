@@ -15,9 +15,10 @@ use super::session::TabId;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// The menu of the tab `id`, which shows `uri`; Close other tabs is
-/// disabled when it is the only tab.
-pub(super) fn tab_menu(id: TabId, uri: &str, is_only_tab: bool) -> Vec<MenuEntry> {
+/// The menu of the tab `id`; Close other tabs is disabled when it is the
+/// only tab. Duplicate tab copies it right after itself, in front
+/// ([`BrowserWindow::duplicate_tab`]).
+pub(super) fn tab_menu(id: TabId, is_only_tab: bool) -> Vec<MenuEntry> {
     let tab = id.to_variant();
     vec![
         MenuItem::with_target(
@@ -34,11 +35,11 @@ pub(super) fn tab_menu(id: TabId, uri: &str, is_only_tab: bool) -> Vec<MenuEntry
             tab.clone(),
         )
         .into(),
-        MenuItem::with_text_target(
+        MenuItem::with_target(
             &ox_core::i18n::gettext("Duplicate tab"),
             Icon::Copy,
-            WindowAction::OpenTab,
-            uri,
+            WindowAction::DuplicateTab,
+            tab.clone(),
         )
         .into(),
         MenuItem::new(
@@ -88,7 +89,7 @@ mod tests {
     fn a_tab_menu_offers_the_python_items_in_order() {
         let tab = TabId::from_variant(&1_u64.to_variant()).expect("a tab id is a u64");
 
-        let labels: Vec<String> = tab_menu(tab, "file:///tmp", false)
+        let labels: Vec<String> = tab_menu(tab, false)
             .into_iter()
             .map(|entry| match entry {
                 MenuEntry::Item(item) => item.label,

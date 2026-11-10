@@ -12,7 +12,9 @@
 //! refusal, such as a taken name, shows in the toast and editing goes on,
 //! so the typed name is not lost. While the rename runs the field is
 //! disabled, so a second commit cannot start it again. A name that would
-//! hide the item asks first ([`super::hide_confirm`]). As in Dolphin, Tab
+//! hide the item asks first ([`super::hide_confirm`]). No to the question
+//! about a changed extension ([`super::extension_confirm`]) ends the
+//! rename with the old name, as in Windows 11. As in Dolphin, Tab
 //! and Shift+Tab, and Down and Up in the details view, commit and go on
 //! to rename the next or previous item (OPS-012). With several items
 //! selected, the field edits one of them and Enter gives the typed name to
@@ -350,11 +352,17 @@ impl BrowserWindow {
             self.show_message(&error.to_string());
             return;
         }
-        let confirmed = self
+        // No to the extension question ends the rename with the old name,
+        // the name box closed, as in Windows 11 File Explorer.
+        if !self
             .confirm_extension_change(&target.name, name, target.has_no_extension)
             .await
-            && self.confirm_hiding_rename(&target.name, name).await;
-        if !confirmed {
+        {
+            self.take_rename_next();
+            self.close_name_editor(cell);
+            return;
+        }
+        if !self.confirm_hiding_rename(&target.name, name).await {
             self.take_rename_next();
             editor.set_sensitive(true);
             editor.grab_focus();

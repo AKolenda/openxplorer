@@ -346,6 +346,27 @@ impl Session {
         id
     }
 
+    /// Copies tab `id`, with its history and the view it left in each
+    /// step of it, right after it, and brings the copy to the front, as
+    /// Windows 11 File Explorer's Duplicate tab does; `None` when the tab
+    /// is not open. The copy of a split tab shows its active pane.
+    ///
+    /// # Panics
+    ///
+    /// Only after `u64::MAX` tabs in one window.
+    pub(super) fn duplicate(&mut self, id: TabId) -> Option<TabId> {
+        let index = self.tabs.iter().position(|tab| tab.id == id)?;
+        let original = &self.tabs[index];
+        let (history, left_views) = (original.history.clone(), original.left_views.clone());
+        let copy = self.next_tab_id();
+        let mut tab = Tab::new(copy, history.current());
+        tab.history = history;
+        tab.left_views = left_views;
+        self.tabs.insert(index + 1, tab);
+        self.active = Some(copy);
+        Some(copy)
+    }
+
     /// Moves tab `id` before tab `before`, or to the end when `before` is
     /// `None` or not open (`reorderTab` in app.js). The active tab stays
     /// the same.
