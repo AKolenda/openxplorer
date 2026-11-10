@@ -540,12 +540,15 @@ impl BrowserWindow {
         self.context().reload_settings();
         self.save_selection();
         let active = self.imp().session.borrow().active_id();
+        // A refresh asked while a box is up says nothing of its own when
+        // it ends, even after the box closed: the box already answered.
+        let says_unavailable = !self.has_open_dialog();
         if let Some(id) = active {
             // The user asks for it: a share another application asked to
             // show may be mounted now (Try again, NET-004).
             if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
                 tab.waits_to_mount = false;
-                tab.refresh_asked = true;
+                tab.refresh_asked = says_unavailable;
             }
             self.load_tab(id, LoadMode::Reload);
         }
