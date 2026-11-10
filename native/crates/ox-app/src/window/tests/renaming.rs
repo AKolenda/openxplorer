@@ -418,6 +418,80 @@ fn the_rename_question_and_confirm_save_as_share_one_message_box_style() {
     }
 }
 
+/// In a right-to-left language a message box mirrors: the warning icon
+/// moves to the right, and the words keep clear of it there, as far from
+/// it and from the edges as they are left to right, so the icon never
+/// covers their first characters.
+///
+/// parity: OPS-049, INT-032
+#[gtk::test]
+fn a_right_to_left_message_box_keeps_its_words_clear_of_the_icon() {
+    use crate::dialog::{DialogFrame, DialogWidth};
+    use crate::test_support::harness::wait_for_frames;
+    use crate::window::ButtonStyle;
+    /// Gives back the left-to-right default however the test ends.
+    struct LeftToRight;
+    impl Drop for LeftToRight {
+        fn drop(&mut self) {
+            gtk::Widget::set_default_direction(gtk::TextDirection::Ltr);
+        }
+    }
+    let test = TestWindow::open(&Fixture::standard().uri());
+    let _left_to_right = LeftToRight;
+    // Each edge's distance from the icon and the words, start edge first:
+    // left to right the left, right to left the right.
+    let mut places = Vec::new();
+    for direction in [gtk::TextDirection::Ltr, gtk::TextDirection::Rtl] {
+        gtk::Widget::set_default_direction(direction);
+        let frame = DialogFrame::new("Confirm Save As", DialogWidth::MessageBox);
+        frame.make_message_box(crate::icons::Icon::WarningColor32);
+        frame.set_message("Notes 2.txt already exists.\nDo you want to replace it?");
+        frame.add_closing_button("Yes", ButtonStyle::Bordered, || {});
+        frame.add_closing_button("No", ButtonStyle::Accent, || {});
+        test.window.present_window_dialog(&frame);
+        wait_for_frames(&test.window, 3);
+        let bounds = |class: &str| {
+            descendants::<gtk::Widget>(frame.upcast_ref::<gtk::Widget>())
+                .into_iter()
+                .find(|child| child.has_css_class(class) && child.is_visible())
+                .and_then(|child| child.compute_bounds(&frame))
+                .unwrap_or_else(|| panic!("the box draws its {class}"))
+        };
+        let (content, icon, words) = (
+            bounds("dialog-content"),
+            bounds("message-box-icon"),
+            bounds("dialog-message"),
+        );
+        // Measured from the edges of the content, whose padding mirrors
+        // too; graphene's bounds are whole pixels here, so rounding only
+        // drops the float.
+        let edge = |value: f32| value.round();
+        let (left, right) = (edge(content.x()), edge(content.x() + content.width()));
+        let (icon_left, icon_right) = (edge(icon.x()), edge(icon.x() + icon.width()));
+        let (words_left, words_right) = (edge(words.x()), edge(words.x() + words.width()));
+        let place = if direction == gtk::TextDirection::Rtl {
+            assert!(
+                words_right <= icon_left,
+                "the words end left of the icon: {words:?} {icon:?}"
+            );
+            (right - icon_right, icon_left - words_right, right - words_right)
+        } else {
+            assert!(words_left >= icon_right, "the words start right of the icon");
+            (icon_left - left, words_left - icon_right, words_left - left)
+        };
+        places.push(place);
+        frame.close();
+        wait_until("the box to close", || {
+            test.window.dialog_layer().shown().is_none()
+        });
+    }
+    assert_eq!(
+        places[1], places[0],
+        "right to left, the icon's place, the room after it and the words' place mirror (from the edge, \
+         gap, words)"
+    );
+}
+
 /// A message box keeps its Alt keys where Yes and No are translated to
 /// words that do not start with a Latin letter, as `zh_CN`'s 是 and 否:
 /// Alt with the translated label's first character, and Alt+Y and Alt+N,

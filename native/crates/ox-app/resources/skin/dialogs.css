@@ -122,6 +122,10 @@ window.ox ox-dialog-frame.message-box .dialog-message {
   margin: 0 0 0 44px;
   min-height: 32px;
 }
+/* Right to left, the icon sits at the start, on the right (its overlay's
+   halign is start), so the room for it and the paddings mirror too. */
+window.ox ox-dialog-frame.message-box .dialog-content:dir(rtl) { padding: 8px 16px 20px 24px; }
+window.ox ox-dialog-frame.message-box .dialog-message:dir(rtl) { margin: 0 44px 0 0; }
 window.ox ox-dialog-frame.message-box .dialog-actions {
   padding: 12px 12px;
   border-spacing: 8px;

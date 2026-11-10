@@ -216,8 +216,11 @@ impl Picker {
     /// showed: "summary" over "report" (report.txt) is summary.txt, and
     /// "archive.tar" or "archive" over "backup.tar" (backup.tar.gz)
     /// archive.tar.gz or archive.gz. A name typed with another extension
-    /// of its own ("summary.md"), a path, `~` or a `file:` address, a
-    /// hidden file's name or a name ending in a dot is taken as typed.
+    /// of its own ("summary.md") or with the hidden extension itself, as
+    /// Windows lets a typed extension win ("summary.txt.txt" over
+    /// "report.txt", for report.txt.txt, is summary.txt.txt), a path, `~`
+    /// or a `file:` address, a hidden file's name or a name ending in a
+    /// dot is taken as typed.
     fn named(&self, text: &str) -> String {
         let hidden = self.hidden_extension.borrow();
         let Some((shown, extension)) = hidden.as_ref() else {
@@ -232,7 +235,9 @@ impl Picker {
             .map(str::to_lowercase)
         };
         let typed_extension = own_extension(text);
+        let names_the_hidden_extension = typed_extension.as_deref() == Some(&*extension.to_lowercase());
         let only_the_stem = !text.trim().is_empty()
+            && !names_the_hidden_extension
             && !text.contains('/')
             && text != "~"
             && !text.starts_with("file:")
@@ -3515,6 +3520,15 @@ mod tests {
             ("backup.tar.gz", "backup.tar", "archive.tar", "archive.tar.gz"),
             ("backup.tar.gz", "backup.tar", "archive", "archive.gz"),
             ("report.txt", "report", "summary.md", "summary.md"),
+            // A typed extension wins, also the one File name hides.
+            ("report.txt", "report", "summary.txt", "summary.txt"),
+            (
+                "report.txt.txt",
+                "report.txt",
+                "summary.txt.txt",
+                "summary.txt.txt",
+            ),
+            ("report.txt.txt", "report.txt", "report.txt", "report.txt.txt"),
         ] {
             let fixture = Fixture::empty();
             let portal = Portal::hiding_extensions();
