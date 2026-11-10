@@ -214,9 +214,10 @@ impl Picker {
     /// An edit that only changes the name before the hidden extension
     /// keeps it, as the stem selection left it outside when the whole name
     /// showed: "summary" over "report" (report.txt) is summary.txt, and
-    /// "archive.tar" over "backup.tar" (backup.tar.gz) archive.tar.gz. A
-    /// name typed with an extension of its own ("summary.md"), a path,
-    /// a hidden file's name or a name ending in a dot is taken as typed.
+    /// "archive.tar" or "archive" over "backup.tar" (backup.tar.gz)
+    /// archive.tar.gz or archive.gz. A name typed with another extension
+    /// of its own ("summary.md"), a path, `~` or a `file:` address, a
+    /// hidden file's name or a name ending in a dot is taken as typed.
     fn named(&self, text: &str) -> String {
         let hidden = self.hidden_extension.borrow();
         let Some((shown, extension)) = hidden.as_ref() else {
@@ -230,11 +231,14 @@ impl Picker {
             )
             .map(str::to_lowercase)
         };
+        let typed_extension = own_extension(text);
         let only_the_stem = !text.trim().is_empty()
             && !text.contains('/')
+            && text != "~"
+            && !text.starts_with("file:")
             && !text.starts_with('.')
             && !text.ends_with('.')
-            && own_extension(text) == own_extension(shown);
+            && (typed_extension.is_none() || typed_extension == own_extension(shown));
         if text == shown || only_the_stem {
             format!("{text}{extension}")
         } else {
@@ -754,6 +758,9 @@ impl BrowserWindow {
         };
         let whole = picker.named(&name_box.text());
         if whole.is_empty() {
+            // Nothing to show again, and no extension to keep hiding: a
+            // name typed next is taken as the new setting shows it.
+            picker.hidden_extension.replace(None);
             return;
         }
         let selected = name_box.selection_bounds().is_some();
@@ -3506,6 +3513,7 @@ mod tests {
         for (suggested, shown, typed, saved) in [
             ("report.txt", "report", "summary", "summary.txt"),
             ("backup.tar.gz", "backup.tar", "archive.tar", "archive.tar.gz"),
+            ("backup.tar.gz", "backup.tar", "archive", "archive.gz"),
             ("report.txt", "report", "summary.md", "summary.md"),
         ] {
             let fixture = Fixture::empty();
