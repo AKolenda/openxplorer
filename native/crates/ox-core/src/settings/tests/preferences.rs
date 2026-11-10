@@ -695,7 +695,10 @@ fn a_favorite_is_added_and_removed_by_its_gio_address() {
     store.set_favorite(local, true).expect("added again");
     store.set_favorite(remote, true).expect("added");
     let preferences = Settings::open(root.path()).snapshot().preferences;
-    assert_eq!(preferences.favorites, [canonical.clone(), "sftp://build/srv/plan.txt".to_owned()]);
+    assert_eq!(
+        preferences.favorites,
+        [canonical.clone(), "sftp://build/srv/plan.txt".to_owned()]
+    );
     assert!(preferences.is_favorite(local));
     assert!(preferences.is_favorite(&canonical));
     assert!(preferences.is_favorite("sftp://build/srv/plan.txt"));
@@ -703,5 +706,9 @@ fn a_favorite_is_added_and_removed_by_its_gio_address() {
 
     store.set_favorite(local, false).expect("removed");
     store.set_favorite(remote, false).expect("removed");
-    assert!(Settings::open(root.path()).snapshot().preferences.favorites.is_empty());
+    assert!(Settings::open(root.path())
+        .snapshot()
+        .preferences
+        .favorites
+        .is_empty());
 }

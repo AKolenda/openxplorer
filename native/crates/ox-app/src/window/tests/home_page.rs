@@ -758,7 +758,9 @@ fn shift_f10_on_a_home_item_opens_the_file_lists_menu() {
 fn a_favorite_with_parentheses_is_known_and_removed_by_its_gio_address() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Notes (1)!.txt"), b"Fictional notes\n").expect("fixture file");
-    let address = gtk::gio::File::for_path(fixture.path("Notes (1)!.txt")).uri().to_string();
+    let address = gtk::gio::File::for_path(fixture.path("Notes (1)!.txt"))
+        .uri()
+        .to_string();
     let test = TestWindow::open(&fixture.uri());
     test.activate("add-to-favorites", Some(&address));
     wait_until("the favorite", || {
@@ -791,7 +793,6 @@ fn favorites_rows_come_at_once_and_their_dates_only_when_shown() {
         !test.context.settings_data().preferences.favorites.is_empty()
     });
     crate::test_support::harness::wait_for_frames(&test.window, 3);
-    let before = home_page::favorite_date_reads();
 
     test.window.render_landing();
     home_page::choose_tab(body(&test), "Favorites");
@@ -802,8 +803,13 @@ fn favorites_rows_come_at_once_and_their_dates_only_when_shown() {
     );
     home_page::choose_tab(body(&test), "Recent");
     test.window.render_landing();
+    let before = home_page::favorite_date_reads();
     crate::test_support::harness::wait_for_frames(&test.window, 5);
-    assert_eq!(home_page::favorite_date_reads(), before, "no date read while Recent is shown");
+    assert_eq!(
+        home_page::favorite_date_reads(),
+        before,
+        "no date read while Recent is shown"
+    );
 
     home_page::choose_tab(body(&test), "Favorites");
     wait_until("the date", || {
@@ -826,10 +832,7 @@ fn compact_view_draws_quick_access_tiles_closer() {
     test.activate("pin-location", Some(&fixture.uri_of("Documents")));
     wait_until("a tile", || !home_page::tile_names(body(&test)).is_empty());
     crate::test_support::harness::wait_for_frames(&test.window, 3);
-    let tile = |test: &TestWindow| {
-        let metrics = home_page::metrics(body(test));
-        bounds(test, &metrics.tiles[0]).height
-    };
+    let tile = |test: &TestWindow| bounds(test, &home_page::tile_named(body(test), "Documents")).height;
     assert_eq!(tile(&test), 60);
 
     test.activate("compact-density", None);

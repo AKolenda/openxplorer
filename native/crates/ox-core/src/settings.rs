@@ -55,8 +55,9 @@ pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use pane_options::DetailsPaneOptions;
 pub use preferences::{
-    Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize, DEFAULT_TEXT_SIZE,
-    NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
+    favorite_key, Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize,
+    DEFAULT_TEXT_SIZE, NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS,
+    WINDOW_WIDTHS,
 };
 pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT};
 
@@ -264,10 +265,15 @@ impl Settings {
     /// Every error of [`update_preferences`](Self::update_preferences).
     pub fn set_favorite(&mut self, uri: &str, favorite: bool) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
+            // Compared and kept in the canonical form, so the address
+            // GIO gives the file finds the favorite it added (HOME-014).
+            let Some(key) = favorite_key(uri) else {
+                return Ok(data.preferences.clone());
+            };
             let mut favorites = data.preferences.favorites.clone();
-            favorites.retain(|kept| !same_location(kept, uri));
+            favorites.retain(|kept| favorite_key(kept).as_ref() != Some(&key));
             if favorite {
-                favorites.push(uri.to_owned());
+                favorites.push(key);
             }
             let update = PreferencesUpdate {
                 favorites: Some(favorites),

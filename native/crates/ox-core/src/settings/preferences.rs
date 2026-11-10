@@ -759,6 +759,12 @@ impl Preferences {
         }
     }
 
+    /// Whether `uri` is among the Favorites, compared by its canonical
+    /// form ([`favorite_key`]), as it may come from GIO (HOME-014).
+    pub fn is_favorite(&self, uri: &str) -> bool {
+        favorite_key(uri).is_some_and(|key| self.favorites.contains(&key))
+    }
+
     /// The daily update check: whether it runs, when it last did, and the
     /// release whose notice was dismissed (UPD-001).
     fn apply_update_checks(&mut self, update: &PreferencesUpdate) {
@@ -1211,21 +1217,8 @@ fn read_keys(value: &Value) -> Option<Vec<String>> {
 /// hand, and Home hands each favorite to GIO.
 fn canonical_favorites(favorites: &[String]) -> Vec<String> {
     let mut kept: Vec<String> = Vec::new();
-    for uri in favorites {
-        if uri.is_empty() || uri.len() > MAX_PLACE_LOCATION || uri.contains(char::is_control) {
-            continue;
-        }
-        // An address with its scheme, never a path read against the
-        // current folder; a remote one without its user name, as
-        // settings.json holds none (SAFE-010).
-        if crate::location::scheme(uri).is_none() {
-            continue;
-        }
-        let Ok(location) = crate::location::normalise(uri).map(|uri| crate::location::without_user(&uri))
-        else {
-            continue;
-        };
-        if crate::location::is_virtual_location(&location) || kept.contains(&location) {
+    for location in favorites.iter().filter_map(|uri| favorite_key(uri)) {
+        if kept.contains(&location) {
             continue;
         }
         kept.push(location);
@@ -1234,6 +1227,24 @@ fn canonical_favorites(favorites: &[String]) -> Vec<String> {
         }
     }
     kept
+}
+
+/// The form Favorites keeps `uri` in, and compares it by: an address with
+/// its scheme (never a path read against the current folder), normalised,
+/// a remote one without its user name, as settings.json holds none
+/// (SAFE-010). `None` for what cannot be a favorite: empty, too long,
+/// with control characters or a password, of a scheme the app does not
+/// open, or a virtual place. The address GIO gives a file (with `(`, `!`
+/// or a user name) has the same key as the favorite it adds (HOME-014).
+pub fn favorite_key(uri: &str) -> Option<String> {
+    if uri.is_empty() || uri.len() > MAX_PLACE_LOCATION || uri.contains(char::is_control) {
+        return None;
+    }
+    crate::location::scheme(uri)?;
+    let location = crate::location::normalise(uri)
+        .map(|uri| crate::location::without_user(&uri))
+        .ok()?;
+    (!crate::location::is_virtual_location(&location)).then_some(location)
 }
 
 /// A text size given as a true integer. Python checks `type(size) is int`,
