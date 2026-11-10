@@ -318,13 +318,42 @@ fn a_folder_removed_while_shown_keeps_its_tab_until_f5_says_it_is_not_available(
     );
     assert_eq!(dialog.button_labels(), ["OK"]);
     test.activate("refresh", None);
+    test.wait_for_listing("the second reload");
     settle();
     assert_eq!(dialogs_over(&test), 1, "F5 again opens no second box");
     dialog.press("OK");
     super::file_ops_support::wait_for_no_dialog(&test);
-    test.wait_for_listing("the failed reload");
     assert_eq!(test.window.current_uri(), Some(shown), "the old address stays");
     assert_eq!(dialogs_over(&test), 0);
+}
+
+/// A refresh asked while the box is open, whose listing ends only after
+/// OK closed the box, opens no second box: what was asked while the box
+/// was up is answered by that box.
+///
+/// parity: NAV-039
+#[gtk::test]
+fn a_refresh_asked_while_the_box_is_open_opens_no_box_after_ok() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Letters")).expect("fixture subfolder");
+    let shown = fixture.uri_of("Documents/Letters");
+    let test = TestWindow::open(&shown);
+    test.wait_for_listing("the folder");
+    fs::remove_dir(fixture.path("Documents/Letters")).expect("the fixture folder is removed");
+
+    test.activate("refresh", None);
+    let dialog = super::file_ops_support::open_dialog(&test);
+    test.wait_for_listing("the first reload");
+    // The second refresh starts while the box is open, and OK closes the
+    // box before its listing can end.
+    test.activate("refresh", None);
+    dialog.press("OK");
+    super::file_ops_support::wait_for_no_dialog(&test);
+    test.wait_for_listing("the second reload");
+    settle();
+
+    assert_eq!(dialogs_over(&test), 0, "no box after OK");
+    assert_eq!(test.window.current_uri(), Some(shown), "the old address stays");
 }
 
 /// A tab in the background, or the other side of a split view, whose
