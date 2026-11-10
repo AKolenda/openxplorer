@@ -223,7 +223,7 @@ impl BrowserWindow {
         }
         let (from, to) = (self.pane_on(from), self.pane_on(to));
         self.apply_style_to(to, &Self::style_of_pane(from));
-        to.copy_styled_location(from);
+        to.copy_styled_for(from);
     }
 
     /// Makes the pane on `side` active, when the tab in front is split and
@@ -316,11 +316,11 @@ impl BrowserWindow {
         // just left when the other pane becomes active or the pane a split
         // opened from, keeps the style it shows: a choice made there a
         // moment ago may not be saved yet, and the saved style would undo
-        // it. A tab moved elsewhere in the background keeps its store, so
-        // the location counts too.
+        // it.
         let location = self.beside_location();
-        let shows_it_already = pane.model().shows_store(&beside.store)
-            && location.as_deref().is_some_and(|uri| pane.is_styled_for(uri));
+        let shows_it_already = location
+            .as_deref()
+            .is_some_and(|uri| pane.is_styled_for(&beside.store, uri));
         self.change_model(|| {
             let model = pane.model();
             model.set_query("");
@@ -332,7 +332,7 @@ impl BrowserWindow {
         // Downloads (VIEW-022).
         if !shows_it_already {
             if let Some(uri) = location {
-                self.follow_folder_style_in(pane, &uri);
+                self.follow_folder_style_in(pane, &beside.store, &uri);
             }
         }
         self.update_beside_pane();

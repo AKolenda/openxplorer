@@ -1344,10 +1344,12 @@ fn a_details_heading_spans_its_row_over_the_columns() {
     }
 }
 
-/// A Group by chosen in one pane of a split tab stays when the other pane
-/// becomes active at once, before the choice is saved: the pane just left
-/// keeps what it shows rather than the style saved before. Both with one
-/// style for all folders and with each folder keeping its own.
+/// A Group by chosen in one pane of a split tab stays, before the choice
+/// is saved, when the other pane becomes active at once, when its own pane
+/// becomes active again and when the other pane closes: the pane keeps
+/// what it shows rather than the style saved before. That holds for the
+/// pane the split opened from and for the new one, both with one style for
+/// all folders and with each folder keeping its own.
 ///
 /// parity: VIEW-022, VIEW-059
 #[gtk::test]
@@ -1355,27 +1357,53 @@ fn a_group_by_not_saved_yet_stays_in_the_pane_just_left() {
     use crate::window::session::PaneSide;
 
     for shared in [false, true] {
-        let home = TestHome::new();
-        let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
-        if shared {
-            test.share_one_view();
+        for chosen in [PaneSide::End, PaneSide::Start] {
+            let case = format!("one style for all folders: {shared}, chosen in {chosen:?}");
+            let home = TestHome::new();
+            let test =
+                TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+            if shared {
+                test.share_one_view();
+            }
+            test.activate("split-view", None);
+            test.wait_for_listing("the second pane");
+            assert_eq!(test.window.active_side(), PaneSide::End);
+            test.window.activate_pane(chosen);
+            // Chosen and shown, and not saved yet: the settings still hold
+            // the earlier style.
+            test.window.show_group_by(GroupBy::Type);
+            let grouping_on = |side: PaneSide| {
+                test.window
+                    .pane_on(side)
+                    .model()
+                    .grouping()
+                    .map(|grouping| grouping.by)
+            };
+
+            test.window.activate_pane(chosen.other());
+            assert_eq!(
+                grouping_on(chosen),
+                Some(GroupBy::Type),
+                "the pane just left, {case}"
+            );
+
+            test.window.activate_pane(chosen);
+            assert_eq!(grouping_on(chosen), Some(GroupBy::Type), "active again, {case}");
+            assert_eq!(test.action_state("group-by").as_deref(), Some("type"), "{case}");
+
+            // The other pane closes; the chosen one stays, in the left
+            // folder pane.
+            test.window.activate_pane(chosen.other());
+            test.activate("split-view", None);
+            assert_eq!(test.window.beside_uri(), None, "the split closed, {case}");
+            assert_eq!(test.window.active_side(), PaneSide::Start, "{case}");
+            assert_eq!(
+                grouping_on(PaneSide::Start),
+                Some(GroupBy::Type),
+                "the pane that stays, {case}"
+            );
+            assert_eq!(test.action_state("group-by").as_deref(), Some("type"), "{case}");
         }
-        test.activate("split-view", None);
-        test.wait_for_listing("the second pane");
-        assert_eq!(test.window.active_side(), PaneSide::End);
-        // Chosen and shown, and not saved yet: the settings still hold the
-        // earlier style.
-        test.window.show_group_by(GroupBy::Type);
-
-        test.window.activate_pane(PaneSide::Start);
-
-        let left = test
-            .window
-            .pane_on(PaneSide::End)
-            .model()
-            .grouping()
-            .map(|grouping| grouping.by);
-        assert_eq!(left, Some(GroupBy::Type), "one style for all folders: {shared}");
     }
 }
 

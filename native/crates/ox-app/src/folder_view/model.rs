@@ -248,16 +248,6 @@ impl FolderModel {
         self.filter_model.set_model(store);
     }
 
-    /// Whether the items shown are `store`'s: the tab that owns it is the
-    /// one this model shows.
-    pub(crate) fn shows_store(&self, store: &gio::ListStore) -> bool {
-        self.store
-            .borrow()
-            .as_ref()
-            .and_then(glib::WeakRef::upgrade)
-            .is_some_and(|shown| shown == *store)
-    }
-
     /// Items shown (after filtering), expanded folders' contents included.
     pub(crate) fn n_items(&self) -> u32 {
         self.selection.n_items()
