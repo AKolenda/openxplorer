@@ -118,6 +118,12 @@ pub(in crate::window) fn assert_windows_message_box(widget: &gtk::Widget, defaul
     }
 }
 
+/// `value` in whole pixels.
+#[expect(clippy::cast_possible_truncation, reason = "dialog measures are small")]
+fn pixels(value: f32) -> i32 {
+    value.round() as i32
+}
+
 /// The sizes and places that make a message box's look, inside `widget`:
 /// each button's height and width, the caption's height, the footer's
 /// height, and where the icon and the words sit in the frame. Two boxes
@@ -132,15 +138,13 @@ pub(in crate::window) fn message_box_metrics(widget: &gtk::Widget) -> Vec<(Strin
     let place = |child: &gtk::Widget| {
         child
             .compute_point(frame_widget, &gtk::graphene::Point::new(0.0, 0.0))
-            .map_or((-1, -1), |point| {
-                (point.x().round() as i32, point.y().round() as i32)
-            })
+            .map_or((-1, -1), |point| (pixels(point.x()), pixels(point.y())))
     };
     // The border box, as drawn: a widget's own width and height leave
     // out its padding and border.
     let drawn = |child: &gtk::Widget| {
         child.compute_bounds(frame_widget).map_or((-1, -1), |bounds| {
-            (bounds.width().round() as i32, bounds.height().round() as i32)
+            (pixels(bounds.width()), pixels(bounds.height()))
         })
     };
     let mut metrics = Vec::new();
