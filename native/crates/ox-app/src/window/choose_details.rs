@@ -24,9 +24,11 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::i18n::gettext;
 
+use super::session::PaneSide;
 use super::{BrowserWindow, ButtonStyle, Dialog};
 use crate::folder_view::column_widths;
 use crate::folder_view::sorting::SortColumn;
@@ -737,7 +739,10 @@ impl BrowserWindow {
     /// Opens Choose Details for the active pane's details view
     /// (`win.choose-details`, "More..." in the titles' menu).
     pub(super) fn open_choose_details(&self) {
-        let details = self.folder_pane().details().clone();
+        // OK applies to the pane the window was opened for, even if the
+        // other pane of a split view became active meanwhile.
+        let side = self.imp().active_side.get();
+        let details = self.pane_on(side).details().clone();
         let choice = DetailsChoice::new(&details.chosen_columns(), |column| {
             details.width_on_screen(column)
         });
@@ -757,21 +762,23 @@ impl BrowserWindow {
             let answer = shown.dialog.next_response().await;
             if answer.is_some() {
                 if let Some(window) = window.upgrade() {
-                    window.apply_details_choice(&state.choice.borrow());
+                    window.apply_details_choice(side, &state.choice.borrow());
                 }
                 shown.dialog.finish();
             }
         });
     }
 
-    /// Shows the columns `choice` checks, in its order, with the widths
-    /// typed, and saves them as the titles' menu does.
-    fn apply_details_choice(&self, choice: &DetailsChoice) {
-        let details = self.folder_pane().details();
+    /// Shows the columns `choice` checks in the pane on `side`, in its
+    /// order, with the widths typed, and saves them as the titles' menu
+    /// does.
+    fn apply_details_choice(&self, side: PaneSide, choice: &DetailsChoice) {
+        let pane = self.pane_on(side);
+        let details = pane.details();
         for (column, width) in choice.changed_widths() {
             details.set_column_width(column, width);
         }
         details.show_chosen_columns(choice.chosen());
-        self.remember_style();
+        self.remember_pane_style(pane);
     }
 }
