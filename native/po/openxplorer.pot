@@ -50,7 +50,7 @@ msgid "- This PC lists drives, USB sticks and connected phones. Click one to ope
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size column to fit and Size all columns to fit, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size.\n- While the navigation pane is shown, Ctrl+Shift+E opens it down to the folder you are in and moves to it there. In the navigation pane, the keypad's plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it.\n- Ctrl+F5 refreshes like F5. Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V."
+msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size Column to Fit, Size All Columns to Fit and More..., which opens Choose Details to show, hide, order and size the columns, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.\n- As in Windows, the extensions of known file types are hidden: Notes.txt shows as Notes. View > Show > File name extensions shows them. Renaming keeps the extension.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 on the main keyboard change the text size.\n- While the navigation pane is shown, Ctrl+Shift+E opens it down to the folder you are in and moves to it there. In the navigation pane, the keypad's plus (+) opens the selected folder, its minus (-) closes it and its asterisk (*) opens every folder below it.\n- Ctrl+F5 refreshes like F5. Ctrl+Insert copies and Shift+Insert pastes, like Ctrl+C and Ctrl+V."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -345,7 +345,7 @@ msgstr ""
 msgid "Browse without extracting the entire archive."
 msgstr ""
 
-#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/dialog/window.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/help.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/type_applications.rs
+#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/dialog/frame.rs crates/ox-app/src/dialog/window.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/help.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/type_applications.rs
 msgid "Close"
 msgstr ""
 
@@ -426,7 +426,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/transfer_panel/failure.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
 msgid "Cancel"
 msgstr ""
 
@@ -543,7 +543,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -2909,6 +2909,10 @@ msgid "Right-click menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Shift+F10 opens the classic menu"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Sidebar and column widths"
 msgstr ""
 
@@ -2934,6 +2938,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Use the desktop font"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "When on, Shift+F10 opens the Windows 10 menu. When off, it opens the same menu as a right-click and the Menu key, as in Windows 11."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2974,6 +2982,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "reset layout widths sidebar resize columns"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "shift f10 keyboard key context menu right-click classic windows 10 11 compact show more options"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -4557,6 +4569,38 @@ msgstr ""
 msgid "Minimize"
 msgstr ""
 
+#: crates/ox-app/src/window/choose_details.rs
+msgid "Choose Details"
+msgstr ""
+
+#: crates/ox-app/src/window/choose_details.rs
+msgid "Details:"
+msgstr ""
+
+#: crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Hide"
+msgstr ""
+
+#: crates/ox-app/src/window/choose_details.rs
+msgid "Move Down"
+msgstr ""
+
+#: crates/ox-app/src/window/choose_details.rs
+msgid "Move Up"
+msgstr ""
+
+#: crates/ox-app/src/window/choose_details.rs
+msgid "Select the details you want to display for the items in this folder."
+msgstr ""
+
+#: crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Show"
+msgstr ""
+
+#: crates/ox-app/src/window/choose_details.rs
+msgid "Width of selected column (in pixels):"
+msgstr ""
+
 #: crates/ox-app/src/window/closing.rs
 msgid "A file operation is running"
 msgstr ""
@@ -4672,7 +4716,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -4839,10 +4883,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
 msgid "Shortcut"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
-msgid "Show"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -5125,7 +5165,7 @@ msgstr ""
 msgid "Share with"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Show more options"
 msgstr ""
 
@@ -5567,24 +5607,16 @@ msgstr ""
 msgid "The desktop clipboard could not be claimed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/picker.rs
 msgid "No"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/picker.rs
 msgid "Yes"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/extension_confirm.rs
-msgid "Change extension"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/extension_confirm.rs
-msgid "Change the extension?"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/extension_confirm.rs
-msgid "If you change a file name extension, the file might become unusable. Are you sure you want to change it?"
+msgid "If you change a file name extension, the file might become unusable.\nAre you sure you want to change it?"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -6373,6 +6405,18 @@ msgstr ""
 msgid "Choose one file."
 msgstr ""
 
+#: crates/ox-app/src/window/picker.rs
+msgid "Confirm Save"
+msgstr ""
+
+#: crates/ox-app/src/window/picker.rs
+msgid "Confirm Save As"
+msgstr ""
+
+#: crates/ox-app/src/window/picker.rs
+msgid "Replace"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "The folder “{folder}” does not exist."
@@ -6385,6 +6429,16 @@ msgstr ""
 
 #: crates/ox-app/src/window/picker.rs
 msgid "You don't have permission to save in this location. Contact the administrator to obtain permission."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "{count} files already exist in this folder. Replace them?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "{name} already exists.\nDo you want to replace it?"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6774,7 +6828,7 @@ msgstr ""
 msgid "Show hidden files"
 msgstr ""
 
-#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/view_options.rs
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Size all columns to fit"
 msgstr ""
 
@@ -6857,10 +6911,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
 msgid "Edit…"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/menu.rs
-msgid "Hide"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
@@ -7303,7 +7353,15 @@ msgid "Another file operation is still running."
 msgstr ""
 
 #: crates/ox-app/src/window/view_options.rs
-msgid "Size column to fit"
+msgid "More..."
+msgstr ""
+
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size All Columns to Fit"
+msgstr ""
+
+#: crates/ox-app/src/window/view_options.rs
+msgid "Size Column to Fit"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

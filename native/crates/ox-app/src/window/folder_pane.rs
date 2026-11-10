@@ -17,9 +17,9 @@ mod view;
 use std::cell::Cell;
 use std::rc::Rc;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
@@ -62,7 +62,7 @@ impl PanePage {
 }
 
 mod imp {
-    use std::cell::OnceCell;
+    use std::cell::{OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
@@ -75,6 +75,9 @@ mod imp {
     pub(crate) struct FolderPane {
         /// The widgets and the folder model, built by `constructed`.
         pub(super) parts: OnceCell<PaneParts>,
+        /// The tab, by its store, and the location whose folder style
+        /// the pane shows.
+        pub(super) styled: RefCell<Option<super::StyledFor>>,
     }
 
     #[glib::object_subclass]
@@ -121,7 +124,41 @@ glib::wrapper! {
 /// list (`folder-views.css`).
 const KEYBOARD_ON_EMPTY_LIST: &str = "keyboard-on-empty-list";
 
+/// The tab, by its list store, and the location a pane's style was shown
+/// for.
+#[derive(Debug, Clone)]
+pub(crate) struct StyledFor {
+    store: glib::WeakRef<gio::ListStore>,
+    uri: String,
+}
+
 impl FolderPane {
+    /// Notes that the pane shows the folder style of `uri` for the tab
+    /// whose items are `store`.
+    pub(crate) fn set_styled_for(&self, store: &gio::ListStore, uri: &str) {
+        self.imp().styled.replace(Some(StyledFor {
+            store: store.downgrade(),
+            uri: uri.to_owned(),
+        }));
+    }
+
+    /// Notes that the pane shows the folder style `from` shows, for the
+    /// same tab, as it does once that pane's style is copied to it.
+    pub(crate) fn copy_styled_for(&self, from: &Self) {
+        let styled = from.imp().styled.borrow().clone();
+        self.imp().styled.replace(styled);
+    }
+
+    /// Whether the pane shows the folder style of `uri` for the tab whose
+    /// items are `store`. A tab moved to another folder keeps its store,
+    /// so the location counts too.
+    pub(crate) fn is_styled_for(&self, store: &gio::ListStore, uri: &str) -> bool {
+        self.imp().styled.borrow().as_ref().is_some_and(|styled| {
+            styled.store.upgrade().is_some_and(|shown| shown == *store)
+                && ox_core::location::same_location(&styled.uri, uri)
+        })
+    }
+
     /// Builds the pages, empty and in the details view.
     fn build_parts(&self) {
         let parts = PaneParts::new();

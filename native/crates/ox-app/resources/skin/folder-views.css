@@ -33,8 +33,11 @@ columnview.files > header:hover > button { border-right-color: @ox_border; }
 columnview.files > header > button:hover { background-color: @ox_hover; }
 /* Name never gets narrower than 260px (`minmax(260px,1fr)`, the Name
    default in app.js) plus the 14px end: a narrow window scrolls the list
-   sideways instead. A width the user sets overrides it. */
-columnview.files > header > button:first-child { padding-left: 26px; min-width: 235px; }
+   sideways instead. A width the user sets overrides it. Name's title has
+   its own class (column_titles.rs), as Choose Details can move Name down;
+   the first title, whichever it is, keeps the 14px start. */
+columnview.files > header > button:first-child { padding-left: 26px; }
+columnview.files > header > button.name-title { min-width: 235px; }
 /* Every title is left-aligned, Size's too, as in Windows 11; the sizes
    under it stay right-aligned. Size's padding holds the 14px end. */
 columnview.files > header > button:last-child { border-right: none; padding-right: 26px; }

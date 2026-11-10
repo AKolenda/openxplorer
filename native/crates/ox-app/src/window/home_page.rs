@@ -45,7 +45,7 @@ use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
 use crate::settings_store::Change;
 
-use super::context_menu::{CLASSIC_MENU_KEY, MENU_KEY};
+use super::context_menu::{MENU_KEY, SHIFT_F10_KEY};
 use super::gestures;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover, MenuStyle};
 use super::place_menus::classic_or_compact;
@@ -893,7 +893,7 @@ fn selected_item<'a>(flow: &gtk::FlowBox, items: &'a [Item]) -> Option<&'a Item>
 /// Alt+Enter opens its Properties.
 fn connect_item_keys(flow: &gtk::FlowBox, items: &Rc<Vec<Item>>) {
     let shortcuts = gtk::ShortcutController::new();
-    for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+    for (key, shift_f10) in [(MENU_KEY, false), (SHIFT_F10_KEY, true)] {
         let menu = gtk::CallbackAction::new(glib::clone!(
             #[strong]
             items,
@@ -904,6 +904,14 @@ fn connect_item_keys(flow: &gtk::FlowBox, items: &Rc<Vec<Item>>) {
                 else {
                     return glib::Propagation::Proceed;
                 };
+                // Shift+F10 opens the file list's menu, the classic one
+                // only with the Settings choice "Shift+F10 opens the
+                // classic menu", as on This PC.
+                let classic = shift_f10
+                    && flow
+                        .root()
+                        .and_downcast::<BrowserWindow>()
+                        .is_some_and(|window| window.shift_f10_menu_style() == MenuStyle::Classic);
                 let width = f64::from(item.child.width());
                 let height = f64::from(item.child.height());
                 item.popup_menu(width / 2.0, height / 2.0, classic);
@@ -1724,10 +1732,10 @@ fn item_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
         .unwrap_or_else(|| panic!("Home shows an item named {name}"))
 }
 
-/// The labels of the menu of the item named `name`, opened by the Menu
-/// key, for tests.
+/// The menu of the item named `name`, opened by `accelerator`, for
+/// tests.
 #[cfg(test)]
-pub(crate) fn menu_labels(page: &gtk::Box, name: &str) -> Vec<String> {
+pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuPopover {
     let child = item_named(page, name);
     let flow = child
         .parent()
@@ -1743,7 +1751,7 @@ pub(crate) fn menu_labels(page: &gtk::Box, name: &str) -> Vec<String> {
             .collect()
     };
     let before = menus(&pane).len();
-    let (key, modifiers) = gtk::accelerator_parse(MENU_KEY).expect("a valid accelerator");
+    let (key, modifiers) = gtk::accelerator_parse(accelerator).expect("a valid accelerator");
     let ran = flow
         .observe_controllers()
         .into_iter()
@@ -1761,10 +1769,17 @@ pub(crate) fn menu_labels(page: &gtk::Box, name: &str) -> Vec<String> {
         })
         .and_then(|shortcut| shortcut.action())
         .is_some_and(|action| action.activate(gtk::ShortcutActionFlags::empty(), &flow, None));
-    assert!(ran, "the Menu key opens the item's menu");
+    assert!(ran, "{accelerator} opens the item's menu");
     let opened = menus(&pane);
     assert!(opened.len() > before, "a menu opened");
-    let menu = opened.last().expect("the menu").clone();
+    opened.last().expect("the menu").clone()
+}
+
+/// The labels of the menu of the item named `name`, opened by the Menu
+/// key, for tests.
+#[cfg(test)]
+pub(crate) fn menu_labels(page: &gtk::Box, name: &str) -> Vec<String> {
+    let menu = item_menu(page, name, MENU_KEY);
     let labels = menu.row_labels();
     menu.popdown();
     labels

@@ -59,6 +59,7 @@ mod button_style;
 mod cache_folder;
 mod caller_window;
 mod caption_buttons;
+mod choose_details;
 mod closing;
 mod command_bar;
 mod compact_density;

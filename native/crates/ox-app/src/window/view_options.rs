@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The folder views' options in a window: previews (VIEW-057, VIEW-058)
 //! and item counts (VIEW-037) for the folder shown, and the details
-//! columns the user chose from the titles' menu (VIEW-033) and dragged
-//! into order (VIEW-034).
+//! columns the user chose from the titles' menu or Choose Details
+//! (VIEW-033) and dragged into order (VIEW-034).
 //!
 //! Previews and item counts follow the folder: a network folder gets
 //! neither unless Settings allow previews there, as Dolphin skips remote
@@ -20,29 +20,55 @@ use super::folder_pane::{FolderView, PanePage};
 use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::folder_view::details::{lists_column, DetailsListing, FOLLOWING_NAME};
 use crate::folder_view::sorting::SortColumn;
 use crate::icons::Icon;
 use crate::thumbnails::PreviewPolicy;
 
-/// The glyph of each column in the titles' menu.
-fn column_glyph(column: SortColumn) -> Icon {
-    match column {
-        SortColumn::Modified | SortColumn::Created => Icon::Clock,
-        SortColumn::Size => Icon::HardDrive,
-        SortColumn::Owner => Icon::Organization,
-        SortColumn::Permissions => Icon::ShieldLock,
-        _ => Icon::Document,
+/// The columns the titles' menu shows and hides, in its order: Windows
+/// 11 File Explorer's Name, Date modified, Type, Size and Date created,
+/// then the app's own columns. Windows' Authors, Tags and Title are left
+/// out, as the listing does not read them.
+const MENU_COLUMNS: [SortColumn; 8] = [
+    SortColumn::Name,
+    SortColumn::Modified,
+    SortColumn::Type,
+    SortColumn::Size,
+    SortColumn::Created,
+    SortColumn::Extension,
+    SortColumn::Owner,
+    SortColumn::Permissions,
+];
+
+/// The columns the titles' menu lists for `listing`, in its order: those
+/// of [`MENU_COLUMNS`] the listing has, with its own columns (Folder path
+/// in a search, Original location and Date deleted in the Recycle Bin)
+/// after Name, where the view shows them.
+fn menu_columns(listing: DetailsListing) -> Vec<SortColumn> {
+    let mut columns = Vec::new();
+    for column in MENU_COLUMNS {
+        columns.push(column);
+        if column == SortColumn::Name {
+            columns.extend(FOLLOWING_NAME);
+        }
     }
+    columns.retain(|column| lists_column(listing, *column));
+    columns
 }
 
-/// The titles' menu, as Windows 11 File Explorer's: "Size column to fit"
+/// The titles' menu, as Windows 11 File Explorer's: "Size Column to Fit"
 /// for the column it was opened on (`under`, unavailable outside the
-/// titles), "Size all columns to fit", then every column that can be
-/// shown or hidden, checked while it shows. Name cannot be hidden, so it
-/// is not offered.
-fn column_menu_entries(chosen: &[SortColumn], under: Option<SortColumn>) -> Vec<MenuEntry> {
+/// titles), "Size All Columns to Fit", the columns that can be shown or
+/// hidden, checked while they show (Name checked and grayed, as it cannot
+/// be hidden), and "More...", which opens Choose Details. The rows show
+/// check marks only, no icons.
+fn column_menu_entries(
+    chosen: &[SortColumn],
+    listing: DetailsListing,
+    under: Option<SortColumn>,
+) -> Vec<MenuEntry> {
     let fit_one = MenuItem::with_text_target(
-        &gettext("Size column to fit"),
+        &gettext("Size Column to Fit"),
         Icon::Document,
         WindowAction::FitColumn,
         under.map_or("", SortColumn::as_str),
@@ -50,39 +76,51 @@ fn column_menu_entries(chosen: &[SortColumn], under: Option<SortColumn>) -> Vec<
     .without_glyph()
     .disabled_when(under.is_none());
     let fit_all = MenuItem::new(
-        &gettext("Size all columns to fit"),
+        &gettext("Size All Columns to Fit"),
         Icon::Document,
         WindowAction::FitAllColumns,
     )
     .without_glyph();
+    let more =
+        MenuItem::new(&gettext("More..."), Icon::Document, WindowAction::ChooseDetails).without_glyph();
     let mut entries = vec![
         MenuEntry::Item(fit_one),
         MenuEntry::Item(fit_all),
         MenuEntry::Divider,
     ];
-    entries.extend(column_toggle_entries(chosen));
+    entries.extend(column_toggle_entries(chosen, listing));
+    entries.push(MenuEntry::Divider);
+    entries.push(MenuEntry::Item(more));
     entries
 }
 
-/// The titles' menu items that show and hide columns.
-fn column_toggle_entries(chosen: &[SortColumn]) -> Vec<MenuEntry> {
+/// The titles' menu items that show and hide the columns `listing` has.
+/// Name and the listing's own columns are checked and grayed, as they
+/// cannot be hidden.
+fn column_toggle_entries(chosen: &[SortColumn], listing: DetailsListing) -> Vec<MenuEntry> {
     let item = |column: SortColumn| {
+        let always = !SortColumn::CHOOSABLE.contains(&column);
         let item = MenuItem::with_text_target(
             column.label(),
-            column_glyph(column),
+            Icon::Document,
             WindowAction::DetailsColumn,
             column.as_str(),
-        );
+        )
+        .without_glyph()
+        .disabled_when(always);
         MenuEntry::Item(MenuItem {
-            check: ItemCheck::Fixed(chosen.contains(&column)),
+            check: ItemCheck::Fixed(always || chosen.contains(&column)),
             ..item
         })
     };
-    SortColumn::CHOOSABLE.into_iter().map(item).collect()
+    menu_columns(listing).into_iter().map(item).collect()
 }
 
-/// `chosen` with `column` shown at the end, or hidden.
+/// `chosen` with `column` shown at the end, or hidden. Name always shows.
 fn toggled(mut chosen: Vec<SortColumn>, column: SortColumn) -> Vec<SortColumn> {
+    if !SortColumn::CHOOSABLE.contains(&column) {
+        return chosen;
+    }
     if chosen.contains(&column) {
         chosen.retain(|shown| *shown != column);
     } else {
@@ -108,7 +146,8 @@ impl BrowserWindow {
         let fit_all = plain_action(WindowAction::FitAllColumns, |window| {
             window.fit_details_columns(None);
         });
-        self.add_action_entries([toggle, fit_one, fit_all]);
+        let choose = plain_action(WindowAction::ChooseDetails, BrowserWindow::open_choose_details);
+        self.add_action_entries([toggle, fit_one, fit_all, choose]);
         for pane in self.folder_panes() {
             let details = pane.details();
             details.connect_columns_chosen(glib::clone!(
@@ -119,43 +158,102 @@ impl BrowserWindow {
                 move |_| window.remember_pane_style(&pane)
             ));
             let Some(header) = details.header() else { continue };
+            let column_view = details.column_view().clone();
             let click = gtk::GestureClick::new();
             click.set_button(gdk::BUTTON_SECONDARY);
-            // A real right-click on a title never reached this gesture in
-            // the bubble phase, so the menu did not open: it takes the
-            // press before the titles do.
+            // A real right-click on a title never reached a gesture in the
+            // bubble phase, so the menu did not open: it takes the press
+            // before the titles do. It sits on the column view, not the
+            // titles' row, which ends at the last column: a right-click
+            // on the empty part of the row beyond opens the menu too, as
+            // in Windows.
             click.set_propagation_phase(gtk::PropagationPhase::Capture);
-            click.connect_pressed(glib::clone!(
+            // The press is claimed, so the titles do not take it, and the
+            // menu opens on the release, as Windows opens it and as the
+            // file list's menu opens: opened on the press, the menu lost
+            // the keyboard to the list when the button came up.
+            let in_titles = glib::clone!(
+                #[weak]
+                header,
+                #[weak]
+                column_view,
+                #[upgrade_or]
+                None,
+                move |x: f64, y: f64| {
+                    #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in f32")]
+                    let press = gtk::graphene::Point::new(x as f32, y as f32);
+                    let at = column_view.compute_point(&header, &press)?;
+                    #[expect(clippy::cast_precision_loss, reason = "a row of titles is a few pixels high")]
+                    let height = header.height() as f32;
+                    (0.0..height).contains(&at.y()).then_some(at)
+                }
+            );
+            let in_titles_on_press = in_titles.clone();
+            click.connect_pressed(move |gesture, _, x, y| {
+                if in_titles_on_press(x, y).is_some() {
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+            });
+            click.connect_released(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
                 #[weak]
                 header,
-                move |gesture, _, x, y| {
-                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                move |_, _, x, y| {
+                    let Some(at) = in_titles(x, y) else { return };
                     if let Some(side) = window.side_holding(&header) {
                         window.activate_pane(side);
                     }
-                    window.show_column_menu(&header, x, y);
+                    window.show_column_menu(&header, f64::from(at.x()), f64::from(at.y()));
                 }
             ));
-            header.add_controller(click);
+            column_view.add_controller(click);
         }
     }
 
-    /// The titles' menu at (`x`, `y`) in `header`.
+    /// The titles' menu at (`x`, `y`) in `header`. It belongs to the
+    /// details view: the titles' row takes no keyboard focus, and a menu
+    /// inside it could not take the keyboard either. The view keeps one
+    /// menu, shown again each time, as the file list keeps its menu: a
+    /// menu destroyed as it closed left GTK pointing at its gone surface
+    /// while the pointer was still over it.
     pub(super) fn show_column_menu(&self, header: &gtk::Widget, x: f64, y: f64) -> MenuPopover {
         let details = self.folder_pane().details();
         let chosen = details.chosen_columns();
-        let popover = MenuPopover::new(column_menu_entries(&chosen, details.column_at(x)));
-        popover.set_parent(header);
-        #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in i32")]
-        popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
-        popover.connect_closed(|popover| {
-            let popover = popover.clone();
-            glib::idle_add_local_once(move || popover.unparent());
+        #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in f32")]
+        let point = gtk::graphene::Point::new(x as f32, y as f32);
+        let at = header.compute_point(details, &point).unwrap_or(point);
+        let kept = std::iter::successors(details.first_child(), WidgetExt::next_sibling)
+            .find_map(|child| child.downcast::<MenuPopover>().ok());
+        let popover = kept.unwrap_or_else(|| {
+            let popover = MenuPopover::new(Vec::new());
+            popover.set_parent(details);
+            popover
         });
+        // The rows are drawn once the menu is in the window, which enables
+        // them: the keyboard starts on the first one as the menu maps.
+        popover.set_entries(column_menu_entries(
+            &chosen,
+            details.listing(),
+            details.column_at(x),
+        ));
+        #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in i32")]
+        popover.set_pointing_to(Some(&gdk::Rectangle::new(at.x() as i32, at.y() as i32, 1, 1)));
         popover.popup();
         popover
+    }
+
+    /// Opens the titles' menu on the title of the column whose key is
+    /// `key`, for the snapshot hook's `titles-menu=` step; false when the
+    /// details view does not show it.
+    pub(crate) fn open_titles_menu_on(&self, key: &str) -> bool {
+        let details = self.folder_pane().details();
+        let at = SortColumn::from_key(key).and_then(|column| details.title_middle(column));
+        let (Some(x), Some(header)) = (at, details.header()) else {
+            return false;
+        };
+        self.show_column_menu(&header, x, f64::from(header.height()));
+        true
     }
 
     /// Shows or hides `column` and saves the choice.
@@ -215,29 +313,112 @@ mod tests {
 
     use super::*;
     use crate::folder_view::details::chosen_from_keys;
+    use crate::window::menu_popover::ItemAvailability;
 
-    /// The titles' menu offers every column but Name, checked while it
-    /// shows; choosing one adds it at the end or hides it.
-    ///
-    /// parity: VIEW-033
-    #[test]
-    fn the_titles_menu_shows_and_hides_columns() {
-        let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
-        let entries = column_toggle_entries(&chosen);
-        let checked: Vec<(String, bool)> = entries
+    /// The labels and marks of `entries`, a divider as `None`.
+    fn shown(entries: &[MenuEntry]) -> Vec<Option<(String, ItemCheck, bool)>> {
+        entries
             .iter()
-            .filter_map(|entry| match entry {
-                MenuEntry::Item(item) => Some((item.label.clone(), item.check == ItemCheck::Fixed(true))),
+            .map(|entry| match entry {
+                MenuEntry::Item(item) => Some((
+                    item.label.clone(),
+                    item.check.clone(),
+                    item.availability == ItemAvailability::Disabled,
+                )),
                 MenuEntry::Divider => None,
             })
-            .collect();
-        assert_eq!(checked.len(), SortColumn::CHOOSABLE.len());
-        assert!(!checked.iter().any(|(label, _)| label == "Name"));
-        assert!(checked.contains(&("Type".to_owned(), true)));
-        assert!(checked.contains(&("Owner".to_owned(), false)));
+            .collect()
+    }
+
+    /// The titles' menu is Windows 11 File Explorer's: "Size Column to
+    /// Fit", "Size All Columns to Fit", a divider, the columns as check
+    /// items (Name first, checked and grayed, as it cannot be hidden;
+    /// Windows' Date modified, Type, Size and Date created in its order,
+    /// then the app's own File extension, Owner and Permissions), a
+    /// divider and "More...". No row shows an icon. Choosing a column
+    /// adds it at the end or hides it.
+    ///
+    /// parity: VIEW-033, VIEW-072
+    #[test]
+    fn the_titles_menu_is_windows_11s_with_check_marks_only() {
+        let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
+        let entries = column_menu_entries(&chosen, DetailsListing::Folder, Some(SortColumn::Size));
+        let item = |label: &str, checked: bool, disabled: bool| {
+            Some((label.to_owned(), ItemCheck::Fixed(checked), disabled))
+        };
+        let command = |label: &str| Some((label.to_owned(), ItemCheck::Plain, false));
+        assert_eq!(
+            shown(&entries),
+            [
+                command("Size Column to Fit"),
+                command("Size All Columns to Fit"),
+                None,
+                item("Name", true, true),
+                item("Date modified", true, false),
+                item("Type", true, false),
+                item("Size", true, false),
+                item("Date created", false, false),
+                item("File extension", false, false),
+                item("Owner", false, false),
+                item("Permissions", false, false),
+                None,
+                command("More..."),
+            ]
+        );
+        let items = entries.iter().filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item),
+            MenuEntry::Divider => None,
+        });
+        for item in items {
+            assert!(!item.shows_glyph, "{} shows no icon", item.label);
+            assert!(item.application_icon.is_none(), "{} shows no icon", item.label);
+        }
 
         let with_owner = toggled(chosen.clone(), SortColumn::Owner);
         assert_eq!(with_owner.last(), Some(&SortColumn::Owner));
-        assert!(!toggled(chosen, SortColumn::Type).contains(&SortColumn::Type));
+        assert!(!toggled(chosen.clone(), SortColumn::Type).contains(&SortColumn::Type));
+        assert_eq!(
+            toggled(chosen.clone(), SortColumn::Name),
+            chosen,
+            "Name cannot be hidden"
+        );
+        assert_eq!(
+            toggled(chosen.clone(), SortColumn::Deleted),
+            chosen,
+            "Date deleted cannot be hidden"
+        );
+    }
+
+    /// In search results and the Recycle Bin the titles' menu lists the
+    /// columns they show: their own after Name, checked and grayed, and
+    /// no Date modified, which neither shows.
+    ///
+    /// parity: VIEW-033, VIEW-042, VIEW-062
+    #[test]
+    fn the_titles_menu_lists_a_search_s_and_the_recycle_bin_s_columns() {
+        let chosen = chosen_from_keys(&ViewOptions::default().details_columns);
+        let item = |label: &str, checked: bool, disabled: bool| {
+            Some((label.to_owned(), ItemCheck::Fixed(checked), disabled))
+        };
+        let rest = [
+            item("Type", true, false),
+            item("Size", true, false),
+            item("Date created", false, false),
+            item("File extension", false, false),
+            item("Owner", false, false),
+            item("Permissions", false, false),
+        ];
+        let search = shown(&column_toggle_entries(&chosen, DetailsListing::SearchResults));
+        let mut expected = vec![item("Name", true, true), item("Folder path", true, true)];
+        expected.extend(rest.clone());
+        assert_eq!(search, expected);
+        let bin = shown(&column_toggle_entries(&chosen, DetailsListing::RecycleBin));
+        let mut expected = vec![
+            item("Name", true, true),
+            item("Original location", true, true),
+            item("Date deleted", true, true),
+        ];
+        expected.extend(rest);
+        assert_eq!(bin, expected);
     }
 }

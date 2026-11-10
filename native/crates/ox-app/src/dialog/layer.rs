@@ -84,7 +84,7 @@ mod imp {
             let room_width = (width - 2 * LAYER_MARGIN).max(1);
             let room_height = (height - 2 * LAYER_MARGIN).max(1);
             let minimum_width = frame.measure(gtk::Orientation::Horizontal, -1).0;
-            let frame_width = frame.width().pixels().min(room_width).max(minimum_width);
+            let frame_width = frame.wanted_width().min(room_width).max(minimum_width);
             let natural_height = frame.measure(gtk::Orientation::Vertical, frame_width).1;
             let frame_height = natural_height.min(room_height);
             let x = (width - frame_width) / 2;

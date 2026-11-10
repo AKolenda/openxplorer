@@ -20,7 +20,11 @@
 //! still worded as it was left, and the details stay hidden: the two
 //! files are compared only in the File Conflict window that "Compare info
 //! for both files" opens. The details come back with the progress once
-//! the question is answered.
+//! the question is answered. Escape closes the question and cancels that
+//! action, as Windows 11 closes its Replace or Skip Files dialog on
+//! Escape and copies nothing: nothing has been written while it asks.
+//! Escape acts on the action with the keyboard only, so it never stops
+//! another action, nor one that runs.
 //!
 //! The window shows once an action has run for [`SHOW_DELAY`], so a
 //! quick operation shows nothing, and it does not take the focus (the UX
@@ -123,6 +127,21 @@ mod imp {
                 window,
                 move |_| window.toggle_details()
             ));
+            let escape = gtk::EventControllerKey::new();
+            escape.connect_key_pressed(glib::clone!(
+                #[weak]
+                window,
+                #[upgrade_or]
+                glib::Propagation::Proceed,
+                move |_, key, _, _| {
+                    if key == gtk::gdk::Key::Escape && window.cancel_name_question() {
+                        glib::Propagation::Stop
+                    } else {
+                        glib::Propagation::Proceed
+                    }
+                }
+            ));
+            window.add_controller(escape);
         }
 
         fn dispose(&self) {
@@ -227,6 +246,33 @@ impl ProgressWindow {
             }
         }
         self.destroy();
+    }
+
+    /// Escape in the window stops the action that asks Replace or Skip
+    /// Files, as its Cancel would, and the question closes with it. The
+    /// action with the keyboard decides: Escape stops it only while it
+    /// asks, and never another one, so Escape on a running copy's Pause
+    /// leaves every action as it is, as Escape never stops a running
+    /// action in Windows 11's progress window. With the keyboard on no
+    /// action, Escape stops the one that asks when it is the only one.
+    /// False when nothing stopped.
+    fn cancel_name_question(&self) -> bool {
+        let actions = self.actions();
+        let focus = GtkWindowExt::focus(self);
+        let with_keyboard = focus
+            .as_ref()
+            .and_then(|focus| actions.iter().find(|action| focus.is_ancestor(*action)));
+        let action = if let Some(action) = with_keyboard {
+            Some(action).filter(|action| action.asks_about_names())
+        } else {
+            let mut asking = actions.iter().filter(|action| action.asks_about_names());
+            asking.next().filter(|_| asking.next().is_none())
+        };
+        let Some(action) = action else {
+            return false;
+        };
+        action.cancel();
+        true
     }
 
     /// The running actions, in the order they started.

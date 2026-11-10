@@ -705,3 +705,45 @@ fn folding_both_sections_at_once_saves_both() {
         saved == ["files", "quickAccess"]
     });
 }
+
+/// Shift+F10 on a Home item opens the menu the file list's Shift+F10
+/// opens: the right-click menu's style, or the classic menu with the
+/// Settings choice "Shift+F10 opens the classic menu".
+///
+/// parity: HOME-013
+#[gtk::test]
+fn shift_f10_on_a_home_item_opens_the_file_lists_menu() {
+    use crate::window::menu_popover::MenuStyle;
+
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Documents")));
+    wait_until("the Documents tile", || {
+        home_page::tile_names(body(&test)).contains(&"Documents".to_owned())
+    });
+
+    let menu = home_page::item_menu(body(&test), "Documents", "<Shift>F10");
+    let style = menu.style();
+    menu.popdown();
+    assert_eq!(
+        style,
+        test.window.preferred_menu_style(),
+        "the right-click menu's style"
+    );
+    assert_ne!(style, MenuStyle::Classic);
+
+    let classic = PreferencesUpdate {
+        shift_f10_classic: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&classic)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the choice to be read", || {
+        test.context.settings_data().preferences.shift_f10_classic
+    });
+    let menu = home_page::item_menu(body(&test), "Documents", "<Shift>F10");
+    assert_eq!(menu.style(), MenuStyle::Classic);
+    menu.popdown();
+}

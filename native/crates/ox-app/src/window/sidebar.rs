@@ -36,7 +36,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::location::same_location;
 
-use super::context_menu::{menu_style_for, CLASSIC_MENU_KEY, MENU_KEY};
+use super::context_menu::{menu_style_for, MENU_KEY, SHIFT_F10_KEY};
 use super::folder_tree::FolderTree;
 use super::menu_popover::{MenuPopover, MenuStyle};
 use super::window_action::WindowAction;
@@ -85,6 +85,9 @@ mod imp {
         /// Where in the list the menu last opened, for "Show more options",
         /// which opens the classic menu there.
         pub(super) menu_point: Cell<Option<(f64, f64)>>,
+        /// The row the Menu key or Shift+F10 opened the menu from, which
+        /// takes the keyboard back when the menu closes.
+        pub(super) menu_opener: glib::WeakRef<gtk::Widget>,
         /// The rows' icon size in pixels, 0 for automatic (SIDE-012).
         pub(super) icon_size: Cell<u32>,
         /// Which rows show something hidden, in row order (SIDE-010).
@@ -293,8 +296,9 @@ impl Sidebar {
     /// A right-click on a row opens its menu there, in the style the file
     /// list's right-click menu takes (the Settings choice "Right-click
     /// menu"), or the classic one while Shift is held, as in Windows 11.
-    /// From the keyboard, the Menu key opens the focused row's menu and
-    /// Shift+F10 its classic menu, as on the file list.
+    /// From the keyboard, the Menu key and Shift+F10 open the focused
+    /// row's menu, as on the file list, Shift+F10 the classic menu when
+    /// the Settings choice "Shift+F10 opens the classic menu" is on.
     fn open_menus_on_right_click(&self, list: &gtk::ListBox) {
         let menu = MenuPopover::new(Vec::new());
         // Placed as the file list's right-click menu is: at the pointer,
@@ -302,6 +306,20 @@ impl Sidebar {
         menu.set_offset(0, 0);
         menu.set_position(gtk::PositionType::Bottom);
         menu.set_parent(self);
+        // As on the file list and the tabs, the row a key opened the menu
+        // from takes the keyboard back when it closes, Escape included.
+        menu.connect_closed(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            move |_| {
+                // Kept for "Show more options", which reopens the menu.
+                if let Some(row) = sidebar.imp().menu_opener.upgrade() {
+                    if row.is_drawable() {
+                        row.grab_focus();
+                    }
+                }
+            }
+        ));
         self.imp()
             .menu
             .set(menu)
@@ -315,6 +333,7 @@ impl Sidebar {
             self,
             move |gesture, _, x, y| {
                 let style = menu_style_for(sidebar.preferred_menu_style(), gesture.current_event_state());
+                sidebar.imp().menu_opener.set(None);
                 if sidebar.show_menu(x, y, style) {
                     gesture.set_state(gtk::EventSequenceState::Claimed);
                 }
@@ -327,15 +346,15 @@ impl Sidebar {
     /// The Menu key and Shift+F10 on the list.
     fn menu_shortcuts(&self) -> gtk::ShortcutController {
         let shortcuts = gtk::ShortcutController::new();
-        for (key, classic) in [(MENU_KEY, false), (CLASSIC_MENU_KEY, true)] {
+        for (key, shift_f10) in [(MENU_KEY, false), (SHIFT_F10_KEY, true)] {
             let action = gtk::CallbackAction::new(glib::clone!(
                 #[weak(rename_to = sidebar)]
                 self,
                 #[upgrade_or]
                 glib::Propagation::Proceed,
                 move |_, _| {
-                    let style = if classic {
-                        MenuStyle::Classic
+                    let style = if shift_f10 {
+                        sidebar.shift_f10_menu_style()
                     } else {
                         sidebar.preferred_menu_style()
                     };
@@ -416,6 +435,14 @@ impl Sidebar {
             .map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
     }
 
+    /// The style Shift+F10 opens in the window's file list; the compact
+    /// one outside a window.
+    fn shift_f10_menu_style(&self) -> MenuStyle {
+        self.root()
+            .and_downcast::<super::BrowserWindow>()
+            .map_or(MenuStyle::Compact, |window| window.shift_f10_menu_style())
+    }
+
     /// Opens the menu of the focused row in `style`, below the start of
     /// its label; false without a focused row.
     fn show_focused_row_menu(&self, style: MenuStyle) -> bool {
@@ -428,6 +455,7 @@ impl Sidebar {
         };
         let x = f64::from(bounds.x()) + 24.0;
         let y = f64::from(bounds.y() + bounds.height() / 2.0);
+        self.imp().menu_opener.set(Some(row.upcast_ref()));
         self.show_menu(x, y, style)
     }
 

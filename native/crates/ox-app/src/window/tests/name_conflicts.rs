@@ -11,10 +11,13 @@ use std::fs;
 use gtk::prelude::*;
 
 use super::file_ops_support::{answer_conflicts, dialog_over, is_enabled, select_names, ConflictAnswer};
+use crate::resize_edges::ResizeHandle;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button as PointerButton, Pointer};
 use crate::window::conflict_window::FileConflictWindow;
 use crate::window::progress_window::ProgressWindow;
+use crate::window::transfer_panel::{TransferKind, TransferPanel};
+use ox_core::transfer::Cancellation;
 
 /// Copies the files `names` of Documents, each with other contents than
 /// the file of that name in the fixture's folder, then shows that folder.
@@ -515,4 +518,233 @@ fn a_pasted_replace_overwrites_the_old_file_when_the_switch_is_off() {
         b"Another file\n",
         "the source stays"
     );
+}
+
+/// Every name in `folder`, hidden ones included, sorted.
+fn every_name_in(folder: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(folder)
+        .expect("the folder is read")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+/// Copies or cuts (`cut`) the files `names` of Documents, each the
+/// namesake, with other contents, of a file in the fixture's folder, then
+/// pastes them into that folder, presses Escape with the real keyboard
+/// in the "Replace or Skip Files" question, and checks, as Windows 11
+/// does it, that the question and the progress window closed and that
+/// nothing changed in either folder: no file copied, moved or replaced,
+/// and no partial file left behind.
+fn escape_cancels_the_question(names: &[&str], cut: bool) {
+    let mut pointer = Pointer::connect();
+    let fixture = Fixture::standard();
+    for name in names {
+        fs::write(fixture.path(&format!("Documents/{name}")), b"Another file\n")
+            .expect("the namesake is written");
+    }
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    select_names(&test, names);
+    test.activate(if cut { "cut" } else { "copy" }, None);
+    test.activate("go-to", Some(&fixture.uri()));
+    wait_until("the fixture's folder", || {
+        !test.window.is_loading() && test.names().iter().any(|name| name == "Documents")
+    });
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    let destination_before = every_name_in(fixture.root());
+    let source_before = every_name_in(&fixture.path("Documents"));
+
+    test.activate("paste", None);
+    let progress = question_window(&test);
+    crate::test_support::harness::wait_for_frames(&progress, 4);
+    // The keyboard goes to the window under the pointer.
+    point_into(&mut pointer, &progress);
+    pointer.tap_key(gtk::gdk::Key::Escape);
+    wait_until("Escape to close the question and the progress window", || {
+        test.context.progress_window().is_none()
+    });
+    wait_until("the paste to end", || !test.window.is_writing_files());
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    pointer.move_to(720, 500);
+
+    assert!(
+        !gtk::Window::list_toplevels()
+            .iter()
+            .any(|window| window.is::<ProgressWindow>() && window.is_visible()),
+        "no progress window is left"
+    );
+    assert_eq!(
+        every_name_in(fixture.root()),
+        destination_before,
+        "nothing new in the destination"
+    );
+    assert_eq!(
+        every_name_in(&fixture.path("Documents")),
+        source_before,
+        "nothing left the source"
+    );
+    for name in names {
+        assert_eq!(
+            fs::read(fixture.path(name)).unwrap(),
+            b"Synthetic test data\n",
+            "{name} was not replaced"
+        );
+    }
+    assert!(dialog_over(&test).is_none(), "no report over the browsing window");
+}
+
+/// Escape on "Replace or Skip Files" for one taken name of a copy closes
+/// the question and cancels the copy, as Windows 11 does: nothing is
+/// copied.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn escape_cancels_a_copy_that_asks_about_one_name() {
+    escape_cancels_the_question(&["Notes 2.txt"], false);
+}
+
+/// The same for several taken names.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn escape_cancels_a_copy_that_asks_about_several_names() {
+    escape_cancels_the_question(&["Notes 2.txt", "Notes 10.txt"], false);
+}
+
+/// Escape on "Replace or Skip Files" for one taken name of a move (Cut,
+/// Paste) cancels the move: everything stays where it was.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn escape_cancels_a_move_that_asks_about_one_name() {
+    escape_cancels_the_question(&["Notes 2.txt"], true);
+}
+
+/// The same for several taken names of a move.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn escape_cancels_a_move_that_asks_about_several_names() {
+    escape_cancels_the_question(&["Notes 2.txt", "Notes 10.txt"], true);
+}
+
+/// Escape stops only the action the keyboard is on: with one copy at
+/// "Replace or Skip Files" and the keyboard on another, running action's
+/// Pause, Escape stops neither, as Escape never stops a running action in
+/// Windows 11's progress window. Escape on the asking copy's own question
+/// then stops that copy only, and the running action goes on.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn escape_on_a_running_actions_pause_leaves_the_question_of_another() {
+    let mut pointer = Pointer::connect();
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+    test.activate("paste", None);
+    let progress = question_window(&test);
+    let asking = progress.actions().into_iter().next().expect("the copy shows");
+    let running_cancel = Cancellation::new();
+    let running = TransferPanel::for_window(&test.window);
+    running.start(TransferKind::Files, "Copying 1 item", running_cancel.clone());
+    wait_until("both actions to show", || progress.actions().len() == 2);
+    crate::test_support::harness::wait_for_frames(&progress, 4);
+    wait_until("the running action's Pause to take the keyboard", || {
+        running.focus_pause()
+    });
+    // The keyboard goes to the window under the pointer.
+    point_into(&mut pointer, &progress);
+    pointer.tap_key(gtk::gdk::Key::Escape);
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+    assert!(asking.asks_about_names(), "the copy still asks");
+    assert!(test.window.is_writing_files(), "the copy still waits");
+    assert!(!running_cancel.is_cancelled(), "the running action goes on");
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Synthetic test data\n",
+        "nothing was replaced"
+    );
+
+    assert!(
+        button(&asking, "Skip this file").grab_focus(),
+        "the question takes the keyboard"
+    );
+    pointer.tap_key(gtk::gdk::Key::Escape);
+    wait_until("Escape to stop the copy that asks", || {
+        !asking.asks_about_names() && !test.window.is_writing_files()
+    });
+    pointer.move_to(720, 500);
+    assert!(!running_cancel.is_cancelled(), "the running action still goes on");
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Synthetic test data\n",
+        "the cancelled copy replaced nothing"
+    );
+    running.cancel();
+    running.finish();
+}
+
+/// Enter in "Replace or Skip Files" still answers with the row the
+/// keyboard is on, here Skip this file reached with Tab: Escape's new
+/// meaning takes nothing from Enter.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn enter_still_answers_with_the_focused_row() {
+    let mut pointer = Pointer::connect();
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+
+    test.activate("paste", None);
+    let progress = question_window(&test);
+    crate::test_support::harness::wait_for_frames(&progress, 4);
+    point_into(&mut pointer, &progress);
+    let skip = button(&progress, "Skip this file");
+    assert!(skip.grab_focus(), "the row takes the keyboard");
+    pointer.tap_key(gtk::gdk::Key::Return);
+    pointer.move_to(720, 500);
+    assert_no_report_of_skipped_files(&test);
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Synthetic test data\n",
+        "Enter on Skip this file kept the file"
+    );
+}
+
+/// The File Conflicts window resizes from inside its edges too: its
+/// handles lie over its content and the title bar GTK gives it when it
+/// realizes it, though both come after the handles.
+#[gtk::test]
+fn the_file_conflict_window_resizes_from_inside_its_edges() {
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+    test.activate("paste", None);
+    let progress = question_window(&test);
+    button(&progress, "Compare info for both files").emit_clicked();
+    let conflicts = conflict_window(&progress);
+    wait_until("the File Conflict window is laid out", || conflicts.width() > 0);
+    assert!(
+        conflicts
+            .last_child()
+            .is_some_and(|child| child.is::<ResizeHandle>()),
+        "the handles are over everything"
+    );
+    crate::resize_edges::turn_on_for_test(&conflicts);
+    let width = f64::from(conflicts.width());
+    let height = f64::from(conflicts.height());
+    for (x, y) in [
+        (width - 2.0, height / 2.0),
+        (2.0, height / 2.0),
+        (width / 2.0, height - 2.0),
+        (width / 2.0, 2.0),
+    ] {
+        let picked = conflicts.pick(x, y, gtk::PickFlags::DEFAULT);
+        assert!(
+            picked.is_some_and(|widget| widget.is::<ResizeHandle>()),
+            "a handle at {x}, {y}"
+        );
+    }
+    button(&conflicts, "Cancel").emit_clicked();
 }

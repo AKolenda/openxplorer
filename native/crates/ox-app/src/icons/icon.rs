@@ -327,6 +327,10 @@ pub(crate) enum Icon {
     VideoColor32,
     /// `video_48_color`: the same at large sizes.
     VideoColor48,
+    /// `warning_32_color`: the warning icon of a message box, such as
+    /// Rename's question about a changed extension and Confirm Save As,
+    /// in colour as Windows draws it.
+    WarningColor32,
     /// `weather_moon_20_regular`: the dark appearance.
     WeatherMoon,
     /// `weather_sunny_20_regular`: the light appearance.
@@ -452,6 +456,7 @@ impl Icon {
             Icon::Settings => "ox-settings-20-symbolic",
             Icon::Share => "ox-share-20-symbolic",
             Icon::ShieldLock => "ox-shield-lock-20-symbolic",
+            Icon::WarningColor32 => "ox-warning-32-color",
             Icon::SquareMultiple => "ox-square-multiple-20-symbolic",
             Icon::Star => "ox-star-20-symbolic",
             Icon::StarFilled => "ox-star-20-filled-symbolic",
@@ -494,7 +499,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 124] = [
+pub(crate) const ALL_ICONS: [Icon; 125] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
@@ -613,6 +618,7 @@ pub(crate) const ALL_ICONS: [Icon; 124] = [
     Icon::VideoColor20,
     Icon::VideoColor32,
     Icon::VideoColor48,
+    Icon::WarningColor32,
     Icon::WeatherMoon,
     Icon::WeatherSunny,
     Icon::WindowConsole,

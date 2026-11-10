@@ -15,7 +15,9 @@ icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
 (the dot that marks a chosen view, sort or open pane). Added on 2026-11-06,
 also awaiting the owner's review: `apps_list_detail_20_regular` (Tiles) and
 `content_view_20_regular` (Content). Added on 2026-11-08, also awaiting the
-owner's review: `search_settings_20_regular` (Search options while searching). Undo, Redo and Pin
+owner's review: `search_settings_20_regular` (Search options while searching). Added on 2026-11-09, also awaiting the owner's review: `warning_32_color`
+(the warning icon of the Rename and Confirm Save As message boxes, which Windows 11
+draws in colour). Undo, Redo and Pin
 are drawn in Windows' blue (#0078d4, or #60cdff in the dark theme) by the menu's CSS, and Redo shows
 `arrow_undo_20_regular` mirrored by it (`-gtk-icon-transform`), as Windows
 11 draws them; the files are not changed. Microsoft publishes no colour
@@ -187,5 +189,6 @@ it.
 | `status/ox-shield-lock-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/shield_lock_20_regular.svg` | 1ee2491675efa4f0882313130035a5ae4bcf7b3a0634fe33f60ddf30390dbc2b |
 | `status/ox-star-20-filled-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/star_20_filled.svg` | cc9978158a2dc62250a2321e1ba54d6f96108e3ec739eef52ed48c628604cbac |
 | `status/ox-star-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/star_20_regular.svg` | ed9f5a8c58c4a2b0f240467fe5f63d5849425004971214bee6ba8afbced27e7d |
+| `status/ox-warning-32-color.svg` | Fluent UI System Icons 1.1.343 | `icons/warning_32_color.svg` | d8013191359f101085880ce06483b8e660ad96b37360ef9c5bc25bd37ce368d9 |
 | `status/ox-weather-moon-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/weather_moon_20_regular.svg` | b2d3062ea927710445bb892b35988e106978fc57fe37ede9cf37549eb0d58cd7 |
 | `status/ox-weather-sunny-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/weather_sunny_20_regular.svg` | 488eef0eb62101ae3350dc2ae0c8ca77f4caacdcd56946dd0b503e63940b9b02 |

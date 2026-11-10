@@ -213,6 +213,23 @@ impl Dialog {
         dialog
     }
 
+    /// A Windows message box over `parent`: `title` in its caption, the
+    /// warning icon beside `message`, and the buttons added next, as
+    /// Windows 11 asks "Rename" before an extension changes
+    /// ([`DialogFrame::make_message_box`]). The window is as large as its
+    /// content needs, not the 510 pixels of a dialog. Its close button,
+    /// like Escape, answers "cancelled".
+    pub(crate) fn message_box(parent: &impl IsA<gtk::Window>, title: &str, message: &str) -> Self {
+        let dialog = Self::new(parent, title, message);
+        dialog.add_css_class("message-box");
+        dialog.set_default_size(-1, -1);
+        dialog
+            .imp()
+            .frame
+            .make_message_box(crate::icons::Icon::WarningColor32);
+        dialog
+    }
+
     /// The title and the close button, as a handle the window is dragged
     /// by, as the Properties window's title bar is.
     fn title_bar(&self, title: &str) -> gtk::WindowHandle {
@@ -368,6 +385,14 @@ impl Dialog {
             self.set_default_widget(Some(&button));
         }
         answer
+    }
+
+    /// Lets Alt with `letter` press `answer`'s button too, as Windows'
+    /// translated message boxes keep the English key ("是(Y)").
+    pub(crate) fn also_press_with(&self, answer: DialogButton, letter: char) {
+        if let Some(button) = self.imp().buttons.borrow().get(answer.0) {
+            self.imp().frame.also_press_with(button, letter);
+        }
     }
 
     /// A button appended to the actions and remembered.

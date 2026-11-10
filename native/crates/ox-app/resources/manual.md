@@ -34,7 +34,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 - View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.
 - View > Split view toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.
 - View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.
-- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size column to fit and Size all columns to fit, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.
+- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns and has Size Column to Fit, Size All Columns to Fit and More..., which opens Choose Details to show, hide, order and size the columns, and headings can be reordered. Ctrl+plus on the number pad also sizes all columns to fit.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
 - Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.
 - Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P shows the details pane and Alt+P the preview pane, which take turns in one place; F9 shows the navigation pane.

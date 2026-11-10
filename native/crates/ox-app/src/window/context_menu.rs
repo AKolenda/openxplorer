@@ -7,11 +7,15 @@
 //! A right-click on an unselected item selects only it first and opens
 //! that item's menu; on blank space it clears the selection and opens the
 //! folder's menu. The Settings choice "Right-click menu" picks the
-//! classic or the compact style for a right-click; the keyboard always
-//! opens the classic menu (CMD-013), pointing at the first selected item
-//! as in Windows 11 and Dolphin (CMD-014). The compact menu's "Show more
-//! options" and the folder menu's "New…" open their menus at the same
-//! point. What the menus list is in [`entries`].
+//! classic or the compact style for a right-click, and the Menu key and
+//! Shift+F10 open the same style, as Windows 11 Explorer opens its new
+//! menu on both; Shift+right-click and "Show more options" open the
+//! classic one. The Settings choice "Shift+F10 opens the classic menu"
+//! gives Shift+F10 the classic menu back (CMD-013). The keyboard's menus
+//! point at the first selected item as in Windows 11 and Dolphin
+//! (CMD-014). The compact menu's "Show more options" and the folder
+//! menu's "New…" open their menus at the same point. What the menus list
+//! is in [`entries`].
 
 mod entries;
 
@@ -351,10 +355,23 @@ impl BrowserWindow {
         Some((uri.to_owned(), self.is_favorite(uri)))
     }
 
-    /// Opens the classic menu from Shift+F10, pointing at the first
-    /// selected item, or near the top of the view without one.
+    /// Opens Shift+F10's menu ([`Self::shift_f10_menu_style`]), pointing
+    /// at the first selected item, or near the top of the view without
+    /// one.
     pub(super) fn open_context_menu_from_keyboard(&self) {
-        self.open_keyboard_menu(MenuStyle::Classic);
+        self.open_keyboard_menu(self.shift_f10_menu_style());
+    }
+
+    /// The style Shift+F10 opens: the right-click menu's, as the Menu key
+    /// opens it and as Windows 11 Explorer opens its new menu on both
+    /// keys, or the classic menu when the Settings choice "Shift+F10
+    /// opens the classic menu" is on.
+    pub(super) fn shift_f10_menu_style(&self) -> MenuStyle {
+        if self.context().settings_data().preferences.shift_f10_classic {
+            MenuStyle::Classic
+        } else {
+            self.preferred_menu_style()
+        }
     }
 
     /// Opens the menu the Menu key opens, the right-click menu's style,
@@ -551,15 +568,17 @@ fn context_menu_of(view: &gtk::Widget) -> Option<MenuPopover> {
 /// The key that opens the right-click menu's style from the keyboard.
 pub(super) const MENU_KEY: &str = "Menu";
 
-/// The key that opens the classic menu, `win.context-menu`, as "Show more
-/// options" does.
-pub(super) const CLASSIC_MENU_KEY: &str = "<Shift>F10";
+/// Shift+F10, `win.context-menu`: the right-click menu's style, or the
+/// classic menu when the Settings choice says so
+/// ([`BrowserWindow::shift_f10_menu_style`]).
+pub(super) const SHIFT_F10_KEY: &str = "<Shift>F10";
 
 impl BrowserWindow {
-    /// The Menu key opens the right-click menu's style and Shift+F10 the
-    /// classic menu, as in Windows 11 Explorer. They are view shortcuts,
-    /// not application accelerators, so the address and search entries
-    /// keep their own text menus on those keys.
+    /// The Menu key and Shift+F10 open the right-click menu's style, as in
+    /// Windows 11 Explorer, Shift+F10 the classic menu when the Settings
+    /// choice says so. They are view shortcuts, not application
+    /// accelerators, so the address and search entries keep their own
+    /// text menus on those keys.
     fn context_menu_shortcuts(&self) -> gtk::ShortcutController {
         let shortcuts = gtk::ShortcutController::new();
         let menu_key = gtk::CallbackAction::new(glib::clone!(
@@ -574,9 +593,9 @@ impl BrowserWindow {
         ));
         let menu_key_trigger = gtk::ShortcutTrigger::parse_string(MENU_KEY);
         shortcuts.add_shortcut(gtk::Shortcut::new(menu_key_trigger, Some(menu_key)));
-        let classic = gtk::ShortcutTrigger::parse_string(CLASSIC_MENU_KEY);
+        let shift_f10 = gtk::ShortcutTrigger::parse_string(SHIFT_F10_KEY);
         let action = gtk::NamedAction::new(&WindowAction::ContextMenu.detailed_name());
-        shortcuts.add_shortcut(gtk::Shortcut::new(classic, Some(action)));
+        shortcuts.add_shortcut(gtk::Shortcut::new(shift_f10, Some(action)));
         shortcuts
     }
 }
