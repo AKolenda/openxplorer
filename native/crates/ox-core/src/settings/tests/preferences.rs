@@ -676,3 +676,32 @@ fn the_shift_f10_classic_menu_choice_is_off_and_saved_only_when_on() {
             .shift_f10_classic
     );
 }
+
+/// A favorite is matched by its canonical form, so the address GIO gives a
+/// file (with `(`, `!` or a remote user name) adds it once and removes it
+/// again, and is known as a favorite (HOME-014).
+///
+/// parity: HOME-014
+#[test]
+fn a_favorite_is_added_and_removed_by_its_gio_address() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    let local = "file:///home/ana/Notes%20(1)!.txt";
+    let remote = "sftp://ana@build/srv/plan.txt";
+    let canonical = favorite_key(local).expect("a local file");
+    assert_eq!(favorite_key(remote).as_deref(), Some("sftp://build/srv/plan.txt"));
+
+    store.set_favorite(local, true).expect("added");
+    store.set_favorite(local, true).expect("added again");
+    store.set_favorite(remote, true).expect("added");
+    let preferences = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(preferences.favorites, [canonical.clone(), "sftp://build/srv/plan.txt".to_owned()]);
+    assert!(preferences.is_favorite(local));
+    assert!(preferences.is_favorite(&canonical));
+    assert!(preferences.is_favorite("sftp://build/srv/plan.txt"));
+    assert!(!preferences.is_favorite("file:///home/ana/Other.txt"));
+
+    store.set_favorite(local, false).expect("removed");
+    store.set_favorite(remote, false).expect("removed");
+    assert!(Settings::open(root.path()).snapshot().preferences.favorites.is_empty());
+}
