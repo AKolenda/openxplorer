@@ -28,15 +28,10 @@ is missing.
     from text fields. Typing with an input method (IME) is not verified.
   - XFER-011: a move that cannot be done natively asks "Move by copying?"
     once per operation; Cancel keeps the old refusal.
-- **Changed to Windows 11's behavior (2026-11-09).** A folder removed or
-  renamed by another program keeps its tab and address instead of moving to
-  the nearest existing parent (NAV-039, which followed Dolphin until then);
-  a refresh then says "Location is not available". Still to check against
-  Windows: what its list shows behind that box and after OK, and whether
-  Back, Forward or a typed address to the gone folder also shows the box.
-  Typing "Recycle Bin" in the address bar opens it (NAV-033). Search's `?`
-  stands for exactly one character (SRCH-004); a Linux name holding a
-  literal `?` is matched by it too, and there is no escape for it.
+- **Windows 11 address and search details (2026-11-10).** Typing "Recycle
+  Bin" in the address bar opens it (NAV-033). Search's `?` stands for
+  exactly one character (SRCH-004); a Linux name holding a literal `?` is
+  matched by it too, and there is no escape for it.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon

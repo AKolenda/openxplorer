@@ -534,25 +534,17 @@ impl BrowserWindow {
         // A folder grouped by date counts from today, also after a night
         // the computer slept through.
         self.follow_the_day();
-        // A search in a folder found gone ends, so the folder is listed
-        // and says it is unavailable (NAV-039).
-        if self.searches_in_gone_folder() {
-            self.end_search_in_gone_folder();
-        } else if self.refresh_search() {
+        if self.refresh_search() {
             return;
         }
         self.context().reload_settings();
         self.save_selection();
         let active = self.imp().session.borrow().active_id();
-        // A refresh asked while a box is up says nothing of its own when
-        // it ends, even after the box closed: the box already answered.
-        let says_unavailable = !self.has_open_dialog();
         if let Some(id) = active {
             // The user asks for it: a share another application asked to
             // show may be mounted now (Try again, NET-004).
             if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
                 tab.waits_to_mount = false;
-                tab.refresh_asked = says_unavailable;
             }
             self.load_tab(id, LoadMode::Reload);
         }

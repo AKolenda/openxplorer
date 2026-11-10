@@ -120,12 +120,6 @@ pub(super) struct Tab {
     /// The running listing lists the same location again (F5, Try again
     /// or a change the folder watch saw), so the page on screen stays.
     pub reloading: bool,
-    /// The next listing is a refresh the user asked for (F5, Refresh, Try
-    /// again), so a folder found gone says so in a box (NAV-039).
-    pub refresh_asked: bool,
-    /// A listing nobody asked for found the folder gone, and the tab kept
-    /// its address (NAV-039); cleared once the tab lists a location.
-    pub folder_gone: bool,
     /// URIs of the selected items, restored after a reload or tab switch.
     pub selected: Vec<String>,
     /// The next listing scrolls to the first selected item, as a
@@ -189,8 +183,6 @@ impl Tab {
             listing_state: ListingState::NotListed,
             error: None,
             reloading: false,
-            refresh_asked: false,
-            folder_gone: false,
             selected: Vec::new(),
             reveals_selection: false,
             renames_selection: false,

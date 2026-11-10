@@ -53,7 +53,6 @@ impl BrowserWindow {
             uri: run.uri.clone(),
             generation: run.generation,
             was_shown: run.was_shown,
-            asked: run.asked,
         };
         let mode = run.mode;
         let listing = loader::Listing::spawn(async move {

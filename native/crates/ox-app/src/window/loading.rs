@@ -26,9 +26,8 @@
 //!   discovers the computers on the network, each pass's new ones a batch
 //!   (`crate::network::discover_computers`), and records whether
 //!   discovery could run, for Network's info bar.
-//! - A folder that disappears while shown keeps its tab and address, as
-//!   in Windows 11; a refresh then says "Location is not available"
-//!   (NAV-039).
+//! - A folder that disappears while shown gives way to the nearest
+//!   existing folder above it (NAV-039).
 //! - A folder whose drive or share goes away drops its rows and says the
 //!   drive or share was disconnected.
 
@@ -85,8 +84,6 @@ struct LoadStart {
     generation: u64,
     /// The previous listing of the location succeeded, so it was shown.
     was_shown: bool,
-    /// The user asked for this listing (F5, Refresh, Try again).
-    asked: bool,
 }
 
 /// One listing of one tab.
@@ -100,8 +97,6 @@ struct LoadRun {
     mode: LoadMode,
     /// The previous listing of the location succeeded, so it was shown.
     was_shown: bool,
-    /// The user asked for this listing (F5, Refresh, Try again).
-    asked: bool,
     /// Whether an unmounted share may still be mounted.
     mount_retry: MountRetry,
     /// A reload's rows, held back until the listing is complete.
@@ -180,10 +175,6 @@ impl BrowserWindow {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;
         let was_shown = tab.error.is_none();
-        if mode == LoadMode::Navigate {
-            tab.folder_gone = false;
-        }
-        let asked = std::mem::take(&mut tab.refresh_asked) && mode == LoadMode::Reload;
         let generation = tab.begin_load();
         tab.reloading = mode == LoadMode::Reload;
         let uri = tab.uri().to_owned();
@@ -191,7 +182,6 @@ impl BrowserWindow {
             uri,
             generation,
             was_shown,
-            asked,
         })
     }
 
@@ -302,7 +292,6 @@ impl BrowserWindow {
             uri: start.uri.clone(),
             generation: start.generation,
             was_shown: start.was_shown,
-            asked: start.asked,
             mode,
             mount_retry,
             held_rows: RefCell::default(),
@@ -392,14 +381,8 @@ impl BrowserWindow {
                 self.open_folder_of_file(id, run.mode);
                 return;
             }
-            // NAV-039: as in Windows 11, a folder found gone keeps its tab
-            // and address; only a refresh the user asked for says so.
-            Err(error @ EntryError::NotFound(_)) if run.asked => {
-                self.say_folder_is_unavailable(run);
-                self.fail_load(id, run.mode, error);
-            }
-            Err(EntryError::NotFound(_)) if run.mode == LoadMode::Reload && run.was_shown => {
-                self.keep_removed_folder(run);
+            Err(error @ EntryError::NotFound(_)) if run.mode == LoadMode::Reload && run.was_shown => {
+                self.leave_removed_folder(run, error);
                 return;
             }
             Err(error) if error.needs_mount() && may_mount => {
@@ -413,9 +396,6 @@ impl BrowserWindow {
             Err(error) => self.fail_load(id, run.mode, error),
         }
         if is_listed {
-            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
-                tab.folder_gone = false;
-            }
             // NET-016: a listed share joins Network for the session only.
             self.context().remember_network(&run.uri);
             // OPEN-025: a folder on disk or on a share that was visited and
