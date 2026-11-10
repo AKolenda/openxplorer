@@ -436,6 +436,10 @@ class DrawnIconTests(unittest.TestCase):
             'a path builder': SourceLine('glyphs.rs', 'let path = gsk::PathBuilder::new();'),
             'a Cairo context': SourceLine('glyphs.rs', 'fn draw(context: &cairo::Context) {'),
             'Cairo imported': SourceLine('glyphs.rs', 'use gtk::cairo;'),
+            'Cairo renamed': SourceLine('glyphs.rs', 'use gtk::cairo as x;'),
+            'Cairo renamed in braces': SourceLine('glyphs.rs', 'use gtk::{cairo as shapes, gdk};'),
+            'a Cairo context in full': SourceLine(
+                'glyphs.rs', 'let context = gtk::cairo::Context::new(&surface);'),
             'a drawing area': SourceLine('glyphs.rs', 'let area = gtk::DrawingArea::new();'),
             'a drawing area in a template': SourceLine(
                 'resources/ui/art.ui', '<object class="GtkDrawingArea" id="art"/>'),
@@ -484,6 +488,16 @@ class DrawnIconTests(unittest.TestCase):
         self.write('resources/ui/address-bar.ui', '<object class="GtkImage" id="icon"/>')
         self.write('resources/icons/icons.gresource.xml',
                    '<file>scalable/actions/ox-add-20-symbolic.svg</file>')
+        self.assertEqual(check.drawn_icon_lines(self.root), [])
+
+    def test_cairo_input_regions_pass(self) -> None:
+        """Cairo's Region and RectangleInt, which set where presses reach a window, draw nothing."""
+        self.write('ox-app/src/resize_edges.rs', '\n'.join([
+            'let rectangle = gtk::cairo::RectangleInt::new(x, y, width, height);',
+            'surface.set_input_region(Some(&gtk::cairo::Region::create_rectangle(&rectangle)));',
+            'let region = cairo::Region::create();',
+            'use gtk::cairo::RectangleInt;',
+        ]))
         self.assertEqual(check.drawn_icon_lines(self.root), [])
 
     def test_the_vendored_svg_files_are_not_read(self) -> None:

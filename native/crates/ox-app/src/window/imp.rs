@@ -383,6 +383,8 @@ impl ObjectImpl for BrowserWindow {
         // In GTK's one default group a modal dialog held back them all.
         gtk::WindowGroup::new().add_window(&*window);
         window.finish_title_bar();
+        // Its edges and corners resize it from inside too (Windows 11).
+        crate::resize_edges::install(&*window);
         window.add_navigation_buttons();
         self.transfer_panel
             .set(TransferPanel::for_window(&window))
@@ -407,6 +409,7 @@ impl ObjectImpl for BrowserWindow {
 impl WidgetImpl for BrowserWindow {
     fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
         self.parent_size_allocate(width, height, baseline);
+        crate::resize_edges::allocate(&*self.obj(), width, height);
         self.obj().follow_width(width);
     }
 }
