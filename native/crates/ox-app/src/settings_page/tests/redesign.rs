@@ -20,7 +20,7 @@ use crate::test_support::harness::{descendants, wait_until};
 /// then, and the row that offers it now, then the rows added since and the
 /// rows of the commands that came from the command bar's "…" menu
 /// (CMD-007), by their menu labels.
-const MOVED_ROWS: [(&str, &str); 73] = [
+const MOVED_ROWS: [(&str, &str); 75] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -149,6 +149,14 @@ const MOVED_ROWS: [(&str, &str); 73] = [
     ("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ("Cache this folder for search", "Cache this folder for search"),
     ("Show the search filter bar", "Show the search filter bar"),
+    (
+        "Show more items in the navigation pane",
+        "Show more items in the navigation pane",
+    ),
+    (
+        "Show more items in the tab menu",
+        "Show more items in the tab menu",
+    ),
     ("Keyboard shortcuts", "Keyboard shortcuts"),
     ("Help", "Help"),
 ];
@@ -184,7 +192,9 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// The pages are the mockup's, and every setting row of the earlier
 /// layout is on one of them, found by its earlier name too: none was
 /// left out, and the only rows added are those of the commands that left
-/// the "…" menu, and Search's "Show the search filter bar" (SRCH-046).
+/// the "…" menu, Search's "Show the search filter bar" (SRCH-046), and
+/// Layout's two switches that add the app's own items to Windows 11's
+/// navigation pane and tab menu (SIDE-034, TAB-060).
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -584,6 +594,8 @@ fn the_search_finds_settings_by_the_words_people_use() {
         (
             "wastebasket",
             &[
+                // It brings the Recycle Bin back to the navigation pane.
+                "Show more items in the navigation pane",
                 "When replacing a file, move the old one to the Recycle Bin",
                 "Moving items to the Recycle Bin",
                 "Emptying the Recycle Bin",
