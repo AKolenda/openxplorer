@@ -480,7 +480,7 @@ impl OptionsForm {
         for setting in privacy_settings() {
             settings.push(ShownSetting::add(setting, Tab::General, &column, preferences));
         }
-        let privacy = privacy_start..settings.len();
+        let privacy_rows = privacy_start..settings.len();
         let clear_history = push_button(&gettext("Clear"));
         column.append(&clear_row(&clear_history));
         general.append(&privacy);
@@ -529,7 +529,7 @@ impl OptionsForm {
             start,
             places,
             clear_history,
-            privacy,
+            privacy: privacy_rows,
         });
         form.follow_navigation_pane(preferences.more_navigation_pane_items);
         for (button, tab) in [
