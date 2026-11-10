@@ -583,14 +583,25 @@ fn recent_lists_nothing_while_the_desktop_remembers_no_recent_files() {
         home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
     });
 
-    let settings = gtk::Settings::default().expect("the display's settings");
-    settings.set_gtk_recent_files_enabled(false);
+    // GNOME's privacy switch, which leaves the desktop's list, and so
+    // what `GVfs` lists, as it was.
+    let schema = gtk::gio::SettingsSchemaSource::default()
+        .and_then(|source| source.lookup("org.gnome.desktop.privacy", true))
+        .expect("this test needs GNOME's privacy settings schema");
+    assert!(schema.has_key("remember-recent-files"));
+    let privacy = gtk::gio::Settings::new("org.gnome.desktop.privacy");
+    let remembered = privacy.boolean("remember-recent-files");
+    privacy
+        .set_boolean("remember-recent-files", false)
+        .expect("the setting is writable");
     test.activate("refresh", None);
     let emptied = (0..200).any(|_| {
         crate::test_support::harness::wait_for_frames(&test.window, 1);
         home_page::list_names(body(&test)).is_empty() && home_page::empty_text(body(&test)).is_some()
     });
-    settings.set_gtk_recent_files_enabled(true);
+    privacy
+        .set_boolean("remember-recent-files", remembered)
+        .expect("the setting is writable");
     assert!(emptied, "Recent lists nothing while recent files are off");
 }
 
@@ -609,7 +620,10 @@ fn home_leaves_the_window_idle_and_still_follows_its_width() {
     crate::test_support::harness::wait_for_frames(&test.window, 5);
     let wide = home_page::tiles_per_row(body(&test));
 
-    let clock = test.window.frame_clock().expect("a shown window has a frame clock");
+    let clock = test
+        .window
+        .frame_clock()
+        .expect("a shown window has a frame clock");
     let before = clock.frame_counter();
     let pause = std::rc::Rc::new(std::cell::Cell::new(false));
     let done = pause.clone();
@@ -619,7 +633,9 @@ fn home_leaves_the_window_idle_and_still_follows_its_width() {
     assert!(frames < 6, "{frames} frames drawn while nothing changed");
 
     test.window.set_default_size(700, 800);
-    wait_until("fewer tiles per row", || home_page::tiles_per_row(body(&test)) < wide);
+    wait_until("fewer tiles per row", || {
+        home_page::tiles_per_row(body(&test)) < wide
+    });
 }
 
 /// A Favorites row opens as a double-click opens the item in its
@@ -636,7 +652,10 @@ fn a_favorite_opens_as_a_double_click_in_its_folder_does() {
     );
     fs::write(fixture.path("Documents link.desktop"), link).expect("the fixture is writable");
     let test = home_window(&fixture);
-    test.activate("add-to-favorites", Some(&fixture.uri_of("Documents%20link.desktop")));
+    test.activate(
+        "add-to-favorites",
+        Some(&fixture.uri_of("Documents link.desktop")),
+    );
     home_page::choose_tab(body(&test), "Favorites");
     wait_until("the favorite", || {
         home_page::list_names(body(&test)) == ["Documents link.desktop"]
@@ -670,7 +689,11 @@ fn folding_both_sections_at_once_saves_both() {
     folds[1].emit_clicked();
 
     wait_until("both folds saved", || {
-        let mut saved = Settings::open(test.settings_directory()).data().preferences.home_folded;
+        let mut saved = Settings::open(test.settings_directory())
+            .data()
+            .preferences
+            .home_folded
+            .clone();
         saved.sort();
         saved == ["files", "quickAccess"]
     });

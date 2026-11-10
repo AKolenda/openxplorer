@@ -1265,6 +1265,20 @@ pub(super) fn leave(page: &gtk::Box) {
     page.remove_css_class(HOME_CLASS);
 }
 
+/// Whether Recent keeps a file last used at `used` (seconds since the
+/// epoch), it being `now`, under the desktop's privacy `policy`: none
+/// while it remembers no recent files, else those used within its
+/// maximum age, as the navigation pane's Recent locations keeps them.
+fn kept_by_policy(used: Option<u64>, now: u64, policy: crate::app_context::RecentPolicy) -> bool {
+    if !policy.remember {
+        return false;
+    }
+    match policy.max_age_days {
+        None => true,
+        Some(days) => used.is_some_and(|used| now.saturating_sub(used) <= days * 86_400),
+    }
+}
+
 /// The recently used files `GVfs` lists, newest first, each with the file
 /// it stands for; folders and rows without a file are left out.
 async fn recent_files() -> Vec<(Entry, String, Option<u64>)> {
@@ -1851,6 +1865,16 @@ pub(crate) fn tile_folder(page: &gtk::Box, name: &str) -> gtk::Widget {
         .upcast()
 }
 
+/// How many tiles a row of Quick access holds now, for tests.
+#[cfg(test)]
+pub(crate) fn tiles_per_row(page: &gtk::Box) -> u32 {
+    descendants_with_class(page, "home-tiles")
+        .into_iter()
+        .next()
+        .and_downcast::<gtk::FlowBox>()
+        .map_or(0, |flow| flow.max_children_per_line())
+}
+
 /// The widgets the spacing test measures, for tests.
 #[cfg(test)]
 pub(crate) struct Metrics {
@@ -1934,13 +1958,25 @@ mod layout_tests {
         use crate::app_context::RecentPolicy;
         const DAY: u64 = 86_400;
         let now = 100 * DAY;
-        let off = RecentPolicy { remember: false, max_age_days: None };
-        let week = RecentPolicy { remember: true, max_age_days: Some(7) };
-        let always = RecentPolicy { remember: true, max_age_days: None };
+        let off = RecentPolicy {
+            remember: false,
+            max_age_days: None,
+        };
+        let week = RecentPolicy {
+            remember: true,
+            max_age_days: Some(7),
+        };
+        let always = RecentPolicy {
+            remember: true,
+            max_age_days: None,
+        };
         assert!(!kept_by_policy(Some(now), now, off));
         assert!(kept_by_policy(Some(now - 7 * DAY), now, week));
         assert!(!kept_by_policy(Some(now - 8 * DAY), now, week));
-        assert!(!kept_by_policy(None, now, week), "an undated file is not known to be recent");
+        assert!(
+            !kept_by_policy(None, now, week),
+            "an undated file is not known to be recent"
+        );
         assert!(kept_by_policy(Some(1), now, always));
     }
 

@@ -33,7 +33,7 @@ mod search_cache;
 mod write_holds;
 
 pub(crate) use default_open::add_to_desktop_history;
-pub(crate) use recent_privacy::desktop_recent_policy;
+pub(crate) use recent_privacy::{desktop_recent_policy, RecentPolicy};
 pub(crate) use write_holds::WriteHold;
 
 use std::path::PathBuf;
