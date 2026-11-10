@@ -3623,8 +3623,9 @@ mod tests {
             "No has the keyboard, so Enter replaces nothing"
         );
         crate::test_support::harness::wait_for_frames(window, 3);
-        let (width, height) = (gtk::prelude::WidgetExt::width(&question), question.height());
-        assert!(width < 420, "sized to its words, not 510 pixels: {width}");
+        let words = crate::window::tests::file_ops_support::assert_sized_to_its_words(&question);
+        assert_eq!(words.lines, 2, "the name and the question, each on a line");
+        let height = question.height();
         assert!(height < 200, "no empty room: {height}");
         crate::test_support::harness::capture_in_both_themes(window, "confirm-save-as-short");
 
@@ -3686,11 +3687,14 @@ mod tests {
             format!("{long} already exists.\nDo you want to replace it?")
         );
         crate::test_support::harness::wait_for_frames(window, 3);
-        let (width, height) = (gtk::prelude::WidgetExt::width(&question), question.height());
+        // The box stops at the width its words wrap at, in any font.
+        let words = crate::window::tests::file_ops_support::assert_sized_to_its_words(&question);
         assert!(
-            width <= 520,
-            "the box wraps the name instead of widening: {width}"
+            words.widest_line > words.wrap_width && words.lines > 2,
+            "the box wraps the name instead of widening: {} lines",
+            words.lines
         );
+        let height = question.height();
         assert!(height < 260, "no empty room under the words: {height}");
         crate::test_support::harness::capture_in_both_themes(window, "confirm-save-as-long");
         press_in(&question, "No");

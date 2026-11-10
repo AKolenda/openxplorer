@@ -66,12 +66,71 @@ pub(in crate::window) fn assert_windows_extension_question(dialog: &Dialog) {
         "Enter presses Yes"
     );
     wait_until("the box to be drawn", || dialog.is_mapped() && dialog.width() > 0);
-    assert!(
-        dialog.width() < 480,
-        "a compact box sized to its words, not a 510-pixel dialog: {}",
-        dialog.width()
+    let words = assert_sized_to_its_words(dialog);
+    assert_eq!(
+        words.lines, 2,
+        "Windows' two lines, the first kept whole ({} pixels)",
+        words.widest_line
     );
     assert!(dialog.height() < 240, "no empty room: {}", dialog.height());
+}
+
+/// What a message box's icon and padding add to the width of its words:
+/// the 32-pixel icon and the 12 pixels after it (the message's 44-pixel
+/// margin) and the content's 16 and 24 pixels each side (dialogs.css).
+const MESSAGE_BOX_ROOM: i32 = 44 + 16 + 24;
+
+/// How a message box laid out its words, in pixels of the font that drew
+/// them: the lines they took, the widest line of the message as written,
+/// and the width the message wraps at.
+pub(in crate::window) struct MessageWords {
+    pub(in crate::window) lines: i32,
+    pub(in crate::window) widest_line: i32,
+    pub(in crate::window) wrap_width: i32,
+}
+
+/// Checks that the message box `widget` is sized to its words rather than
+/// given a dialog's 510 pixels: its words are as wide as their widest line
+/// and never wider than they wrap at, and the box adds only its icon and
+/// padding. Measured in the font that draws them, so it holds in `Noto Sans`
+/// and in the wider `DejaVu Sans` that distribution CI falls back to.
+///
+/// The words wrap where GTK wraps them: `max-width-chars` of the font's
+/// average character or digit, whichever is wider.
+pub(in crate::window) fn assert_sized_to_its_words(widget: &impl IsA<gtk::Widget>) -> MessageWords {
+    let widget = widget.as_ref();
+    let label = descendants::<gtk::Label>(widget)
+        .into_iter()
+        .find(|label| label.has_css_class("dialog-message") && label.is_visible())
+        .expect("the message");
+    let text = label.text();
+    let widest_line = text
+        .split('\n')
+        .map(|line| label.create_pango_layout(Some(line)).pixel_size().0)
+        .max()
+        .unwrap_or_default();
+    let metrics = label.pango_context().metrics(None, None);
+    let character = metrics
+        .approximate_char_width()
+        .max(metrics.approximate_digit_width());
+    let scale = gtk::pango::SCALE;
+    let wrap_width = (label.max_width_chars() * character + scale - 1) / scale;
+    assert!(
+        label.width() <= widest_line.min(wrap_width),
+        "the words are as wide as their widest line ({widest_line}) and wrap at {wrap_width}: {}",
+        label.width()
+    );
+    assert_eq!(
+        widget.width() - label.width(),
+        MESSAGE_BOX_ROOM,
+        "the box is its words, icon and padding, with no empty room ({} wide)",
+        widget.width()
+    );
+    MessageWords {
+        lines: label.layout().line_count(),
+        widest_line,
+        wrap_width,
+    }
 }
 
 /// The keys that press a message box's buttons, as GTK writes them
