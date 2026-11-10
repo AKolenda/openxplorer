@@ -213,6 +213,61 @@ fn a_files_menu_adds_it_to_favorites_while_home_shows_them() {
     assert!(labels(&test).contains(&"Remove from Favorites".to_owned()));
 }
 
+/// A file menu's Add to Favorites, opened while "Open Quick access on
+/// Home" was on, changes nothing once the option is off: whether this
+/// window already knows it (the command checks) or another window turned
+/// it off in the settings file meanwhile (the saved change checks).
+///
+/// parity: HOME-014
+#[gtk::test]
+fn a_menu_left_open_adds_no_favorite_once_the_option_is_off() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    open_quick_access_on_home(&test, true);
+    // Waits until every change queued before this one has been saved.
+    let settle_changes = |test: &TestWindow| {
+        let saved = std::rc::Rc::new(std::cell::Cell::new(false));
+        let done = saved.clone();
+        test.context
+            .update_preferences(PreferencesUpdate::default(), move |result| {
+                result.expect("an empty change saves");
+                done.set(true);
+            });
+        wait_until("the queued changes", || saved.get());
+    };
+    let favorites_on_disk = |test: &TestWindow| {
+        Settings::open(test.settings_directory())
+            .snapshot()
+            .preferences
+            .favorites
+    };
+
+    // Another window turns the option off; this one has not read it yet.
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    let off = PreferencesUpdate {
+        home_quick_access: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&off)
+        .expect("turned off elsewhere");
+    assert!(test.context.settings_data().preferences.home_quick_access);
+    menu.row("Add to Favorites").emit_activate();
+    settle_changes(&test);
+    assert!(favorites_on_disk(&test).is_empty(), "nothing saved");
+
+    // This window has read that the option is off.
+    open_quick_access_on_home(&test, true);
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    open_quick_access_on_home(&test, false);
+    menu.row("Add to Favorites").emit_activate();
+    settle_changes(&test);
+    assert!(favorites_on_disk(&test).is_empty(), "nothing saved");
+    assert!(test.context.settings_data().preferences.favorites.is_empty());
+}
+
 /// Recent lists the desktop's recently used files from `GVfs`, as the
 /// navigation pane's Recent files does; a row opens the real file, and
 /// Open file location opens its folder with it selected.

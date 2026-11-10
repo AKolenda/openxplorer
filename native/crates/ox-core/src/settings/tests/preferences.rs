@@ -713,6 +713,11 @@ fn the_shift_f10_classic_menu_choice_is_off_and_saved_only_when_on() {
 fn a_favorite_is_added_and_removed_by_its_gio_address() {
     let root = temporary_folder();
     let mut store = Settings::open(root.path());
+    let shown = PreferencesUpdate {
+        home_quick_access: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    store.update_preferences(&shown).expect("Home shows Favorites");
     let local = "file:///home/ana/Notes%20(1)!.txt";
     let remote = "sftp://ana@build/srv/plan.txt";
     let canonical = favorite_key(local).expect("a local file");
@@ -738,4 +743,40 @@ fn a_favorite_is_added_and_removed_by_its_gio_address() {
         .preferences
         .favorites
         .is_empty());
+}
+
+/// Favorites change only while "Open Quick access on Home" is on, as the
+/// file holds it when the change runs: a command from a menu opened
+/// before the option was turned off, in this window or another, adds or
+/// removes nothing (HOME-014).
+///
+/// parity: HOME-014
+#[test]
+fn favorites_change_only_while_home_shows_them() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    let notes = "file:///home/ana/Notes.txt";
+    let plan = "file:///home/ana/Plan.txt";
+    let option = |on: bool| PreferencesUpdate {
+        home_quick_access: Some(on),
+        ..PreferencesUpdate::default()
+    };
+    store.set_favorite(notes, true).expect("ignored while off");
+    assert!(Settings::open(root.path())
+        .snapshot()
+        .preferences
+        .favorites
+        .is_empty());
+
+    store.update_preferences(&option(true)).expect("on");
+    store.set_favorite(notes, true).expect("added");
+    // Another window turns the option off; this store has not read it.
+    Settings::open(root.path())
+        .update_preferences(&option(false))
+        .expect("off elsewhere");
+    store.set_favorite(plan, true).expect("ignored");
+    store.set_favorite(notes, false).expect("ignored");
+    let preferences = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(preferences.favorites, [notes]);
+    assert!(!preferences.home_quick_access);
 }

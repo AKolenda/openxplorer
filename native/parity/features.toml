@@ -1297,7 +1297,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-core/src/settings.rs (Settings::set_favorite); native/crates/ox-app/src/window/context_menu/entries.rs (favorite_item). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_favorite_file_is_listed_opened_and_removed, a_files_menu_adds_it_to_favorites_while_home_shows_them). Microsoft: Pin to Quick access was extended to files (build 22557) and pinned files became Favorites (build 22593). The wording 'Add to Favorites' and 'Remove from Favorites' is not on an official page; the app's Pin to Quick access still takes folders only (the folders-only rule of pinEntries), so Favorites has its own commands."
+native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-core/src/settings.rs (Settings::set_favorite); native/crates/ox-app/src/window/context_menu/entries.rs (favorite_item). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_favorite_file_is_listed_opened_and_removed, a_files_menu_adds_it_to_favorites_while_home_shows_them, a_menu_left_open_adds_no_favorite_once_the_option_is_off). Microsoft: Pin to Quick access was extended to files (build 22557) and pinned files became Favorites (build 22593). The wording 'Add to Favorites' and 'Remove from Favorites' is not on an official page; the app's Pin to Quick access still takes folders only (the folders-only rule of pinEntries), so Favorites has its own commands."
 
 [[feature]]
 id = "HOME-015"

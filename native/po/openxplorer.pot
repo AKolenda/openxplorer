@@ -2003,7 +2003,7 @@ msgstr ""
 msgid "Opens with"
 msgstr ""
 
-#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Properties"
 msgstr ""
 
@@ -2610,7 +2610,7 @@ msgstr ""
 msgid "Folder versions:"
 msgstr ""
 
-#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open"
 msgstr ""
 
@@ -5035,6 +5035,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
+msgid "Add to Favorites"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Additional options"
 msgstr ""
@@ -5071,7 +5075,7 @@ msgstr ""
 msgid "Compressed (zipped) folder"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Copy as path"
 msgstr ""
 
@@ -5155,6 +5159,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Refresh"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
+msgid "Remove from Favorites"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -6235,6 +6243,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/home_page.rs
 msgid "Folders you pin to Quick access show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Open file location"
 msgstr ""
 
 #: crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/sidebar/entries.rs

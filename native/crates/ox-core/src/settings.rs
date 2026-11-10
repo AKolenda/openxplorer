@@ -258,13 +258,19 @@ impl Settings {
 
     /// Adds the file at `uri` to Favorites, at the end, or removes it
     /// (HOME-014), changing only that entry of `favorites` as the file now
-    /// holds it. Returns the resulting preferences.
+    /// holds it. Favorites change only while Home shows them ("Open Quick
+    /// access on Home", `home_quick_access`, as the file holds it when the
+    /// change runs): a menu opened before the option was turned off
+    /// changes nothing. Returns the resulting preferences.
     ///
     /// # Errors
     ///
     /// Every error of [`update_preferences`](Self::update_preferences).
     pub fn set_favorite(&mut self, uri: &str, favorite: bool) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
+            if !data.preferences.home_quick_access {
+                return Ok(data.preferences.clone());
+            }
             // Compared and kept in the canonical form, so the address
             // GIO gives the file finds the favorite it added (HOME-014).
             let Some(key) = favorite_key(uri) else {

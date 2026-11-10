@@ -41,6 +41,7 @@ use ox_core::location::{LocationContext, RECENT_URI};
 use ox_core::places::Place;
 use ox_core::settings::{Preferences, SettingsError};
 
+use crate::i18n::message_id;
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
 use crate::settings_store::Change;
@@ -235,7 +236,8 @@ fn copy_entries(entries: &[MenuEntry]) -> Vec<MenuEntry> {
     entries.to_vec()
 }
 
-/// An item of a file's menu running `action` on `uri`.
+/// An item of a file's menu running `action` on `uri`; `label` is a
+/// message id ([`message_id`]), translated here.
 fn file_item(label: &str, glyph: Icon, action: WindowAction, uri: &str) -> MenuEntry {
     MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri).into()
 }
@@ -244,18 +246,23 @@ fn file_item(label: &str, glyph: Icon, action: WindowAction, uri: &str) -> MenuE
 fn file_menu(uri: &str, is_favorite: bool) -> Vec<MenuEntry> {
     let favorite = if is_favorite {
         file_item(
-            "Remove from Favorites",
+            message_id("Remove from Favorites"),
             Icon::StarFilled,
             WindowAction::RemoveFromFavorites,
             uri,
         )
     } else {
-        file_item("Add to Favorites", Icon::Star, WindowAction::AddToFavorites, uri)
+        file_item(
+            message_id("Add to Favorites"),
+            Icon::Star,
+            WindowAction::AddToFavorites,
+            uri,
+        )
     };
     vec![
-        file_item("Open", Icon::Open, WindowAction::OpenItemAt, uri),
+        file_item(message_id("Open"), Icon::Open, WindowAction::OpenItemAt, uri),
         file_item(
-            "Open file location",
+            message_id("Open file location"),
             Icon::Folder,
             WindowAction::OpenFileLocationOf,
             uri,
@@ -263,8 +270,18 @@ fn file_menu(uri: &str, is_favorite: bool) -> Vec<MenuEntry> {
         MenuEntry::Divider,
         favorite,
         MenuEntry::Divider,
-        file_item("Copy as path", Icon::Copy, WindowAction::CopyPathOf, uri),
-        file_item("Properties", Icon::Info, WindowAction::PropertiesOf, uri),
+        file_item(
+            message_id("Copy as path"),
+            Icon::Copy,
+            WindowAction::CopyPathOf,
+            uri,
+        ),
+        file_item(
+            message_id("Properties"),
+            Icon::Info,
+            WindowAction::PropertiesOf,
+            uri,
+        ),
     ]
 }
 
@@ -1582,8 +1599,14 @@ impl BrowserWindow {
     }
 
     /// Adds the file at `uri` to Favorites, or removes it; every window
-    /// draws Home again once it is saved.
+    /// draws Home again once it is saved. Nothing changes while "Open
+    /// Quick access on Home" is off, here or, should another window turn
+    /// it off meanwhile, when the change runs
+    /// ([`ox_core::settings::Settings::set_favorite`]).
     fn set_favorite(&self, uri: &str, favorite: bool) {
+        if !self.context().settings_data().preferences.home_quick_access {
+            return;
+        }
         let uri = uri.to_owned();
         let change: Change = Box::new(move |settings| settings.set_favorite(&uri, favorite).map(|_| ()));
         self.context().change_settings(

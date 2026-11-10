@@ -257,12 +257,16 @@ fn favorite_item(facts: &ItemFacts) -> Option<MenuEntry> {
     let (uri, is_favorite) = facts.favorite.as_ref()?;
     let (label, glyph, action) = if *is_favorite {
         (
-            "Remove from Favorites",
+            crate::i18n::message_id("Remove from Favorites"),
             Icon::StarFilled,
             WindowAction::RemoveFromFavorites,
         )
     } else {
-        ("Add to Favorites", Icon::Star, WindowAction::AddToFavorites)
+        (
+            crate::i18n::message_id("Add to Favorites"),
+            Icon::Star,
+            WindowAction::AddToFavorites,
+        )
     };
     Some(MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri).into())
 }
