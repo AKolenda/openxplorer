@@ -646,6 +646,33 @@ fn a_template_keeps_downloads_grouped_by_date() {
     assert_eq!(style.grouping(), GroupBy::Modified);
 }
 
+/// The command bar's Update button shows until the user turns it off in
+/// Settings › About; only the choice to hide it is stored, so a file
+/// that saved `showUpdateButton: true` reads as the default and drops
+/// the key on its next save.
+///
+/// parity: UPD-001
+#[test]
+fn the_command_bar_update_button_shows_until_turned_off() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert!(store.snapshot().preferences.show_update_button);
+    save_preferences(&mut store, &json!({"showUpdateButton": false}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(file.contains("\"showUpdateButton\": false"), "{file}");
+    let reopened = Settings::open(root.path()).snapshot().preferences;
+    assert!(!reopened.show_update_button);
+    save_preferences(&mut store, &json!({"showUpdateButton": true}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(!file.contains("showUpdateButton"), "shown is not stored");
+    assert!(
+        Settings::open(root.path())
+            .snapshot()
+            .preferences
+            .show_update_button
+    );
+}
+
 /// "Shift+F10 opens the classic menu" is off as it comes, so Shift+F10
 /// opens the right-click menu as in Windows 11; turned on, it is saved
 /// and read back, and stored only while on.

@@ -325,6 +325,7 @@ impl BrowserWindow {
         self.follow_file_name_extensions_preference();
         self.follow_folder_options(&preferences);
         self.follow_picture_paste_preference();
+        self.show_command_bar_update();
         for (side, uri) in self.shown_panes() {
             let pane = self.pane_on(side);
             let style = preferences.view_for(&uri);

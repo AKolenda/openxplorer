@@ -271,7 +271,8 @@ fn checking_offers_a_newer_release_and_the_status_bar_says_so() {
 
 /// The daily check at launch pops up a notice for the release it finds;
 /// Later closes it and saves the release, whose notice then never pops up
-/// again, while the command bar's Update stays.
+/// again, while the command bar's Update and the status bar's Update
+/// available stay.
 ///
 /// parity: UPD-001
 #[gtk::test]
@@ -291,6 +292,8 @@ fn the_daily_check_pops_up_a_notice_that_later_dismisses() {
     notice.click_later();
     assert_eq!(notice.shown_update(), None);
     assert_eq!(test.window.shown_update_button().as_deref(), Some("Update"));
+    assert!(test.window.shows_status_bar_update(), "Later keeps it");
+    assert_eq!(test.window.status_bar_update_label(), "Update available");
     wait_until("the dismissal to be saved", || {
         test.context
             .settings_data()
@@ -618,4 +621,130 @@ fn browsing_never_checks_and_untrusted_text_stays_text() {
         "the release notes are not shown"
     );
     dialog.close();
+}
+
+/// The switch of Settings › About › "Show the Update button in the
+/// command bar" in `test`'s window, opening Settings there.
+fn update_button_switch(test: &TestWindow) -> gtk::Switch {
+    test.window
+        .open_settings(Some(crate::settings_page::SettingsView::Category(
+            crate::settings_page::Category::About,
+        )));
+    let title = descendants::<gtk::Label>(&test.window)
+        .into_iter()
+        .find(|label| label.text() == "Show the Update button in the command bar")
+        .expect("About has the setting");
+    let mut widget = title.parent();
+    while let Some(row) = widget {
+        if let Some(switch) = descendants::<gtk::Switch>(&row).into_iter().next() {
+            return switch;
+        }
+        widget = row.parent();
+    }
+    panic!("the setting has a switch")
+}
+
+/// Settings › About › "Show the Update button in the command bar", on by
+/// default, hides the command bar's Update when turned off, while the
+/// status bar's Update available stays, and shows it again when turned
+/// back on.
+///
+/// parity: UPD-001
+#[gtk::test]
+fn turning_off_the_update_button_keeps_only_the_status_bar() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    simulated.updates.check_automatically(None);
+    wait_until("the check", || !simulated.updates.state().is_busy());
+    assert!(test.window.shows_status_bar_update());
+    assert_eq!(
+        test.window.shown_update_button().as_deref(),
+        Some("Update"),
+        "on by default"
+    );
+
+    let switch = update_button_switch(&test);
+    assert!(switch.is_active(), "the setting is on by default");
+    switch.set_active(false);
+    wait_until("the choice to be saved", || {
+        !test.context.settings_data().preferences.show_update_button
+    });
+    // Back in a folder, as the user goes after changing the setting.
+    test.activate("new-tab", None);
+    test.wait_for_listing("a folder tab");
+    wait_until("the command bar's Update to hide", || {
+        test.window.shown_update_button().is_none()
+    });
+    assert!(test.window.shows_status_bar_update(), "the status bar keeps it");
+
+    let switch = update_button_switch(&test);
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.show_update_button
+    });
+    test.activate("new-tab", None);
+    test.wait_for_listing("a folder tab");
+    wait_until("the command bar's Update", || {
+        test.window.shown_update_button().as_deref() == Some("Update")
+    });
+}
+
+/// Saves `update` and waits until the windows have it.
+fn save_preferences(test: &TestWindow, update: ox_core::settings::PreferencesUpdate) {
+    let saved = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&saved);
+    test.context.update_preferences(update, move |result| {
+        result.expect("the preferences are saved");
+        done.set(true);
+    });
+    wait_until("the preferences to be saved", || saved.get());
+}
+
+/// With Folder Options' status bar hidden, the command bar's Update shows
+/// while a release waits even though "Show the Update button in the
+/// command bar" was turned off, so a window always has a way to the
+/// update; with the status bar shown again, it hides.
+///
+/// parity: UPD-001
+#[gtk::test]
+fn a_hidden_status_bar_brings_the_command_bar_update_back() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    simulated.updates.check_automatically(None);
+    wait_until("the check", || !simulated.updates.state().is_busy());
+    save_preferences(
+        &test,
+        ox_core::settings::PreferencesUpdate {
+            show_update_button: Some(false),
+            ..ox_core::settings::PreferencesUpdate::default()
+        },
+    );
+    wait_until("the command bar's Update to hide", || {
+        test.window.shown_update_button().is_none()
+    });
+
+    save_preferences(
+        &test,
+        ox_core::settings::PreferencesUpdate {
+            hide_status_bar: Some(true),
+            ..ox_core::settings::PreferencesUpdate::default()
+        },
+    );
+    assert!(!test.context.settings_data().preferences.show_update_button);
+    wait_until("the command bar's Update", || {
+        test.window.shown_update_button().as_deref() == Some("Update")
+    });
+
+    save_preferences(
+        &test,
+        ox_core::settings::PreferencesUpdate {
+            hide_status_bar: Some(false),
+            ..ox_core::settings::PreferencesUpdate::default()
+        },
+    );
+    wait_until("the command bar's Update to hide", || {
+        test.window.shown_update_button().is_none()
+    });
 }

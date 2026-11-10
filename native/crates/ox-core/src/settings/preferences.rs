@@ -530,6 +530,10 @@ pub struct Preferences {
     /// On by default; stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub update_checks: bool,
+    /// Show the command bar's Update button while a release waits
+    /// (UPD-001). On by default, as the owner chose; stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub show_update_button: bool,
     /// When the app last looked for a release by itself, in seconds since
     /// the Unix epoch. Stored once it has.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -639,6 +643,7 @@ impl Default for Preferences {
             folder_views: Vec::new(),
             downloads_group_by: None,
             update_checks: true,
+            show_update_button: true,
             update_checked_at: None,
             update_notice_dismissed: None,
         }
@@ -725,10 +730,12 @@ impl Preferences {
         }
     }
 
-    /// The daily update check: whether it runs, when it last did, and the
+    /// The daily update check: whether it runs, when it last did, whether
+    /// the command bar shows Update, and the
     /// release whose notice was dismissed (UPD-001).
     fn apply_update_checks(&mut self, update: &PreferencesUpdate) {
         replace_if_some(&mut self.update_checks, update.update_checks);
+        replace_if_some(&mut self.show_update_button, update.show_update_button);
         if let Some(checked_at) = update.update_checked_at {
             self.update_checked_at = Some(checked_at);
         }
@@ -1047,6 +1054,8 @@ pub struct PreferencesUpdate {
     pub downloads_group_by: Option<GroupBy>,
     /// Look for a newer release once a day when the app starts.
     pub update_checks: Option<bool>,
+    /// Show the command bar's Update button while a release waits.
+    pub show_update_button: Option<bool>,
     /// When the app last looked for a release by itself.
     pub update_checked_at: Option<u64>,
     /// The release whose update notice was dismissed; a value that is not
@@ -1143,6 +1152,7 @@ impl PreferencesUpdate {
                 .and_then(Value::as_str)
                 .and_then(GroupBy::from_key),
             update_checks: flag("updateChecks"),
+            show_update_button: flag("showUpdateButton"),
             update_checked_at: values.get("updateCheckedAt").and_then(Value::as_u64),
             update_notice_dismissed: text("updateNoticeDismissed").map(str::to_owned),
         })
