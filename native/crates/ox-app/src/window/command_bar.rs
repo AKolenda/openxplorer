@@ -4,8 +4,10 @@
 //! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
 //! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
 //! New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾,
-//! View ▾, See more ("…"), then at the right Update while a release waits,
-//! Settings and the Details toggle; the appearance toggle there is hidden,
+//! View ▾, See more ("…"), then at the right Update while a release waits
+//! (unless Settings › About › "Show the Update button in the command
+//! bar" is off), Settings
+//! and the Details toggle; the appearance toggle there is hidden,
 //! as Settings › Appearance chooses the theme. Every control runs a window or application
 //! action. New is disabled where nothing can be created, and Delete is named
 //! plainly "Delete", as in Windows Explorer, or "Delete permanently" in the
@@ -308,7 +310,7 @@ impl CommandBar {
     ///
     /// Settings › Appearance chooses the theme, so the appearance toggle
     /// stays built but hidden; Update shows only while a release waits
-    /// ([`Self::show_update`]).
+    /// and Settings › About leaves it on ([`Self::show_update`]).
     fn finish_right_commands(&self) {
         self.finish_update_button();
         self.finish_appearance_button();
