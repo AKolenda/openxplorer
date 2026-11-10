@@ -23,7 +23,7 @@ use crate::window::window_action::WindowAction;
 
 /// How a test names a command bar control: "|" for a separator, the
 /// visible label of a text command, else the first line of its tooltip.
-fn control_name(control: &gtk::Widget) -> Option<String> {
+pub(super) fn control_name(control: &gtk::Widget) -> Option<String> {
     if control.is::<gtk::Separator>() {
         return Some("|".to_owned());
     }
