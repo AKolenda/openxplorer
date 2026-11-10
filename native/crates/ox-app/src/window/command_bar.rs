@@ -18,8 +18,10 @@
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at
 //! its right; the file commands come from [`EDIT_COMMANDS`] and the menus
-//! of [`menus`].
+//! of [`menus`]. Its menus work as one group ([`menu_group`]): while one
+//! is open, one click on another menu button opens that one.
 
+mod menu_group;
 pub(in crate::window) mod menus;
 
 use gtk::glib;
@@ -180,6 +182,15 @@ mod imp {
         /// What the "…" menu shows now: Map network drive or not, Pin
         /// or Unpin.
         pub(super) more_state: RefCell<super::MoreMenuState>,
+        /// The menu button whose menu is open (`menu_group.rs`).
+        pub(super) open_menu: RefCell<Option<gtk::MenuButton>>,
+        /// The window whose going inactive closes the open menu.
+        pub(super) watched_window: glib::WeakRef<gtk::Window>,
+        /// The surface that last had the pointer's motion.
+        pub(super) pointer_surface: glib::WeakRef<gtk::gdk::Surface>,
+        /// The row or button of the open menu a press was taken for,
+        /// clicked on the release (`menu_group.rs`).
+        pub(super) held_press: RefCell<Option<gtk::Widget>>,
     }
 
     #[glib::object_subclass]
@@ -204,6 +215,7 @@ mod imp {
             let bar = self.obj();
             bar.add_file_commands();
             bar.finish_right_commands();
+            bar.group_menus();
         }
     }
 

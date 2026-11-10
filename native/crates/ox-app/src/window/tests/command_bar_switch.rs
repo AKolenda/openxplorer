@@ -238,18 +238,15 @@ fn search_options_and_view_open_from_each_other_with_one_click() {
 fn the_menus_of_a_narrow_window_open_from_each_other_with_one_click() {
     let mut session = Session::open(Some(672));
     assert!(session.test.window.width() <= 680, "a compact window");
-    for (first, second) in [
-        ("See more", "New"),
-        ("New", "See more"),
-        ("View", "See more"),
-        ("See more", "Sort"),
-    ] {
-        session.open_by_click(first);
-        session.click_button(second);
-        session.expect_only_open(Some(second), &format!("{first} open, one click on {second}"));
+    session.open_by_click("See more");
+    let mut open = "See more";
+    for next in ["New", "See more", "View", "See more", "Sort", "See more"] {
+        session.click_button(next);
+        session.expect_only_open(Some(next), &format!("{open} open, one click on {next}"));
+        open = next;
     }
-    session.click_button("Sort");
-    session.expect_only_open(None, "Sort open, a click on Sort");
+    session.click_button(open);
+    session.expect_only_open(None, &format!("{open} open, a click on {open}"));
 }
 
 /// Clicks on Sort, View and See more in quick succession while New is
@@ -317,6 +314,44 @@ fn a_click_elsewhere_closes_the_menu_and_still_acts_there() {
         ["Notes 2.txt"],
         "the selection stays"
     );
+
+    // The address bar starts editing the address, as a click on it does.
+    session.open_by_click("New");
+    let address_bar = session.test.window.address_bar().clone();
+    let on_address = session.on_screen(
+        &address_bar,
+        (
+            f64::from(address_bar.width()) * 0.9,
+            f64::from(address_bar.height()) / 2.0,
+        ),
+    );
+    session.click_at(on_address);
+    session.expect_only_open(None, "New open, a click on the address bar");
+    let entry = address_bar.entry();
+    wait_until("the address to be edited", || {
+        entry.is_mapped() && has_keyboard(&session.test, &entry)
+    });
+    session.pointer.tap_key(gdk::Key::Escape);
+    wait_until("the address edit to end", || !entry.is_mapped());
+
+    // The navigation pane goes where it is clicked.
+    session.open_by_click("See more");
+    let sidebar = session.test.window.sidebar().clone();
+    let index = sidebar
+        .labels()
+        .iter()
+        .position(|label| label == "This PC")
+        .expect("the navigation pane lists This PC");
+    let row = sidebar
+        .list()
+        .row_at_index(i32::try_from(index).expect("a few rows"))
+        .expect("This PC's row");
+    let on_row = session.middle_of(&row);
+    session.click_at(on_row);
+    session.expect_only_open(None, "See more open, a click on This PC");
+    wait_until("This PC to show", || {
+        session.test.window.current_uri().as_deref() == Some(crate::locations::Page::ThisPc.uri())
+    });
 }
 
 /// A click on an item runs it and closes the menu, opening no other.
@@ -326,7 +361,7 @@ fn a_click_elsewhere_closes_the_menu_and_still_acts_there() {
 fn a_click_on_an_item_runs_it_and_opens_no_other_menu() {
     let mut session = Session::open(None);
     let window = session.test.window.clone();
-    let details_pane = move || {
+    let details_pane = move || -> bool {
         let action = window
             .lookup_action("details-pane")
             .expect("the window has Details pane");
@@ -342,7 +377,28 @@ fn a_click_on_an_item_runs_it_and_opens_no_other_menu() {
     let point = session.on_screen(&row, (24.0, f64::from(row.height()) / 2.0));
     session.click_at(point);
     session.expect_only_open(None, "a click on Details pane");
-    wait_until("the details pane to open", details_pane);
+    wait_until("the details pane to open", details_pane.clone());
+
+    // The pointer resting on a row while the window lays itself out
+    // again, as when the folder is listed again: the click still goes to
+    // the row, not to the file under the menu.
+    session.open_by_click("View");
+    let menu = menu_of(&session.test, "View");
+    let row = row_of(&menu, "Details pane");
+    let point = session.on_screen(&row, (24.0, f64::from(row.height()) / 2.0));
+    session.pointer.move_to(point.0, point.1);
+    wait_for(QUIET);
+    session.test.window.folder_pane().queue_resize();
+    wait_for_frames(&session.test.window, 3);
+    wait_for(QUIET);
+    session.pointer.press(Button::Primary);
+    session.pointer.release(Button::Primary);
+    session.expect_only_open(None, "a click on Details pane after a layout");
+    wait_until("the details pane to close", || !details_pane());
+    assert!(
+        session.test.selected_names().is_empty(),
+        "no file under the menu selected"
+    );
 }
 
 /// Escape closes the menu a click opened and gives the keyboard back to
