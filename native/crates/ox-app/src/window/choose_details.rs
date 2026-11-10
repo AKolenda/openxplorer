@@ -216,6 +216,18 @@ pub(crate) struct ChooseDetails {
     pub(crate) cancel: gtk::Button,
 }
 
+/// Choose Details as its controls' callbacks hold it: weakly, so the
+/// window is freed once it closes.
+#[derive(Debug, Clone)]
+struct WeakChooseDetails(glib::WeakRef<Dialog>);
+
+impl WeakChooseDetails {
+    /// The window's controls, while it is still there.
+    fn upgrade(&self) -> Option<ChooseDetails> {
+        ChooseDetails::of(self.0.upgrade()?)
+    }
+}
+
 /// What the window's controls share while it is open.
 struct State {
     /// The list as the user has changed it.
@@ -237,6 +249,11 @@ impl ChooseDetails {
             })
             .find(|dialog| list_of(dialog).is_some())?;
         Self::of(dialog)
+    }
+
+    /// A handle that does not keep the window alive.
+    fn weak(&self) -> WeakChooseDetails {
+        WeakChooseDetails(self.dialog.downgrade())
     }
 
     /// The controls of `dialog`, a Choose Details window.
@@ -494,49 +511,74 @@ impl ChooseDetails {
         }
     }
 
-    /// Connects the controls to `state` and lists its rows.
+    /// Connects the controls to `state` and lists its rows. The callbacks
+    /// reach the controls through [`WeakChooseDetails`]: the controls own
+    /// their callbacks, so a callback owning the controls would keep the
+    /// closed window alive.
     fn connect(&self, state: &Rc<State>) {
+        let handle = self.weak();
         self.list.connect_row_selected(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong]
+            handle,
             #[strong]
             state,
-            move |_, _| shown.refresh(&state)
+            move |_, _| {
+                if let Some(shown) = handle.upgrade() {
+                    shown.refresh(&state);
+                }
+            }
         ));
         self.show.connect_clicked(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong]
+            handle,
             #[strong]
             state,
-            move |_| shown.set_selected_shown(&state, true)
+            move |_| {
+                if let Some(shown) = handle.upgrade() {
+                    shown.set_selected_shown(&state, true);
+                }
+            }
         ));
         self.hide.connect_clicked(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong]
+            handle,
             #[strong]
             state,
-            move |_| shown.set_selected_shown(&state, false)
+            move |_| {
+                if let Some(shown) = handle.upgrade() {
+                    shown.set_selected_shown(&state, false);
+                }
+            }
         ));
         self.move_up.connect_clicked(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong]
+            handle,
             #[strong]
             state,
-            move |button| shown.move_selected(&state, DetailsChoice::move_up, button)
+            move |button| {
+                if let Some(shown) = handle.upgrade() {
+                    shown.move_selected(&state, DetailsChoice::move_up, button);
+                }
+            }
         ));
         self.move_down.connect_clicked(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong]
+            handle,
             #[strong]
             state,
-            move |button| shown.move_selected(&state, DetailsChoice::move_down, button)
+            move |button| {
+                if let Some(shown) = handle.upgrade() {
+                    shown.move_selected(&state, DetailsChoice::move_down, button);
+                }
+            }
         ));
         self.width.connect_changed(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong]
+            handle,
             #[strong]
             state,
             move |entry| {
+                let Some(shown) = handle.upgrade() else { return };
                 if state.filling.get() {
                     return;
                 }
@@ -557,13 +599,14 @@ impl ChooseDetails {
     fn follow_check_box(&self, state: &Rc<State>, row: &gtk::ListBoxRow) {
         let Some(check) = check_of(row) else { return };
         check.connect_toggled(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong(rename_to = handle)]
+            self.weak(),
             #[strong]
             state,
             #[weak]
             row,
             move |check| {
+                let Some(shown) = handle.upgrade() else { return };
                 if state.filling.get() {
                     return;
                 }
@@ -579,11 +622,14 @@ impl ChooseDetails {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         keys.connect_key_pressed(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong(rename_to = handle)]
+            self.weak(),
             #[strong]
             state,
             move |_, key, _, modifiers| {
+                let Some(shown) = handle.upgrade() else {
+                    return glib::Propagation::Proceed;
+                };
                 if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
                     return glib::Propagation::Proceed;
                 }
@@ -643,9 +689,12 @@ impl ChooseDetails {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         keys.connect_key_pressed(glib::clone!(
-            #[strong(rename_to = shown)]
-            self,
+            #[strong(rename_to = handle)]
+            self.weak(),
             move |_, key, _, modifiers| {
+                let Some(shown) = handle.upgrade() else {
+                    return glib::Propagation::Proceed;
+                };
                 let backward = key == gdk::Key::ISO_Left_Tab
                     || (matches!(key, gdk::Key::Tab | gdk::Key::KP_Tab)
                         && modifiers.contains(gdk::ModifierType::SHIFT_MASK));

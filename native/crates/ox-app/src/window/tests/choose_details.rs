@@ -253,7 +253,7 @@ fn more_opens_choose_details_as_windows_draws_it() {
         .expect("Name's check box");
     name_check.set_active(false);
     assert!(name_check.is_active(), "a click leaves Name checked");
-    assert_eq!(shown.row_states()[0].1, true);
+    assert!(shown.row_states()[0].1, "Name stays checked");
     shown.select(1);
     assert_eq!(sensitive(&shown), [true, true, false, true], "Date modified");
     shown.select(4);
@@ -804,6 +804,9 @@ fn the_titles_menu_opens_in_search_results_and_the_recycle_bin() {
     check_menu("the Recycle Bin");
 }
 
+/// A way to close Choose Details, and its name.
+type Closing = (&'static str, fn(&ChooseDetails));
+
 /// Choose Details is freed once it closes, by OK, Cancel or Escape:
 /// its controls hold no callback that keeps the window itself alive, so
 /// opening it again and again does not keep every earlier one.
@@ -812,7 +815,7 @@ fn the_titles_menu_opens_in_search_results_and_the_recycle_bin() {
 #[gtk::test]
 fn choose_details_is_freed_once_it_closes() {
     let (_fixture, test) = window_with_files();
-    let closings: [(&str, fn(&ChooseDetails)); 3] = [
+    let closings: [Closing; 3] = [
         ("OK", |shown| shown.ok.emit_clicked()),
         ("Cancel", |shown| shown.cancel.emit_clicked()),
         ("Escape", |shown| shown.dialog.close()),
