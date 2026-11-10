@@ -413,6 +413,24 @@ fn name_moved_down_shows_after_the_column_above_it() {
             SortColumn::Size
         ]
     );
+    // Name keeps its minimum width where it went, and the column now in
+    // front does not take it.
+    let header = details.header().expect("the titles' row");
+    let titles: Vec<gtk::Widget> =
+        std::iter::successors(header.first_child(), WidgetExt::next_sibling).collect();
+    let minimum_of = |column: SortColumn| {
+        let order = details.column_order();
+        let index = order.iter().position(|shown| *shown == column).expect("a column");
+        titles[index].measure(gtk::Orientation::Horizontal, -1).0
+    };
+    assert!(
+        minimum_of(SortColumn::Name) >= 235,
+        "Name keeps its minimum width"
+    );
+    assert!(
+        minimum_of(SortColumn::Modified) < 235,
+        "Date modified does not take it"
+    );
     wait_until("the folder's columns to be saved", || {
         Settings::open(test.settings_directory())
             .data()
