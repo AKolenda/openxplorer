@@ -441,6 +441,13 @@ impl AppContext {
         self.settings().change(change, Box::new(|_| {}));
     }
 
+    /// Queues `change` off the main thread, in turn with every other
+    /// change, without telling the windows: for a choice only the window
+    /// that made it shows, such as a section of Home folded.
+    pub(crate) fn remember_change(&self, change: Change) {
+        self.settings().change(change, Box::new(|_| {}));
+    }
+
     /// Saves `properties` as the display style of `uri` with `scope` off
     /// the main thread (VIEW-020); `reply` hears the outcome.
     pub(crate) fn remember_view(

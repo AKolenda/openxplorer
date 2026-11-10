@@ -39,7 +39,7 @@ use gtk::{gio, glib};
 use ox_core::entry::{self, Entry};
 use ox_core::location::{same_location, LocationContext, RECENT_URI};
 use ox_core::places::Place;
-use ox_core::settings::{Preferences, PreferencesUpdate, SettingsError};
+use ox_core::settings::{Preferences, SettingsError};
 
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
@@ -391,11 +391,53 @@ const NARROWEST_DETAIL: i32 = 90;
 /// The page's own padding across (`.landing .page.home-page`).
 const PAGE_PADDING: i32 = 20;
 
-/// The width of the pane Home is scrolled in: what is on screen, which
-/// a wide page does not widen.
-fn visible_width(widget: &impl IsA<gtk::Widget>) -> Option<i32> {
-    let scroller = widget.ancestor(gtk::ScrolledWindow::static_type())?;
-    Some(scroller.width()).filter(|width| *width > 0)
+/// Runs `apply` with the width of the pane Home is scrolled in (what is
+/// on screen, which a wide page does not widen) once `widget` is shown,
+/// and again whenever that width changes, as the pane's horizontal
+/// adjustment says. Nothing runs between changes, so an idle window
+/// draws nothing.
+fn follow_visible_width(widget: &impl IsA<gtk::Widget>, apply: Rc<dyn Fn(i32)>) {
+    let watched: Rc<std::cell::RefCell<Option<(gtk::Adjustment, glib::SignalHandlerId)>>> = Rc::default();
+    let on_map = watched.clone();
+    widget.connect_map(move |widget| {
+        let Some(scroller) = widget
+            .ancestor(gtk::ScrolledWindow::static_type())
+            .and_downcast::<gtk::ScrolledWindow>()
+        else {
+            return;
+        };
+        let adjustment = scroller.hadjustment();
+        // Changes asked for while the pane is laid out wait until it is.
+        let later = apply.clone();
+        let id = adjustment.connect_page_size_notify(move |adjustment| {
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a pane is a few thousand pixels wide"
+            )]
+            let width = adjustment.page_size().round() as i32;
+            let later = later.clone();
+            glib::idle_add_local_once(move || later(width));
+        });
+        if let Some((earlier, earlier_id)) = on_map.replace(Some((adjustment, id))) {
+            earlier.disconnect(earlier_id);
+        }
+        let first = apply.clone();
+        let scroller = scroller.downgrade();
+        glib::idle_add_local_once(move || {
+            if let Some(width) = scroller
+                .upgrade()
+                .map(|scroller| scroller.width())
+                .filter(|width| *width > 0)
+            {
+                first(width);
+            }
+        });
+    });
+    widget.connect_unmap(move |_| {
+        if let Some((adjustment, id)) = watched.take() {
+            adjustment.disconnect(id);
+        }
+    });
 }
 
 /// Name, Date accessed and File location's widths in `room` pixels:
@@ -480,22 +522,21 @@ impl Columns {
         row.append(&name);
         row.append(&date);
         row.append(&location);
-        row.add_tick_callback(move |row, _| {
-            if let Some(room) = visible_width(row) {
+        let cells = [name.downgrade(), date.downgrade(), location.downgrade()];
+        follow_visible_width(
+            &row,
+            Rc::new(move |room| {
                 let room = room - LIST_INDENT - ROW_INDENT - PAGE_PADDING;
                 let (name_width, date_width, location_width) = column_widths(room);
-                for (cell, width) in [
-                    (&name, name_width),
-                    (&date, date_width),
-                    (&location, location_width),
-                ] {
-                    if cell.width_request() != width {
-                        cell.set_size_request(width, -1);
+                for (cell, width) in cells.iter().zip([name_width, date_width, location_width]) {
+                    if let Some(cell) = cell.upgrade() {
+                        if cell.width_request() != width {
+                            cell.set_size_request(width, -1);
+                        }
                     }
                 }
-            }
-            glib::ControlFlow::Continue
-        });
+            }),
+        );
         row
     }
 }
@@ -904,16 +945,20 @@ const TILE_BOX_PADDING: i32 = 8;
 /// per row as fit and stays at the start of the row.
 fn keep_tiles_apart(flow: &gtk::FlowBox) {
     flow.set_halign(gtk::Align::Start);
-    flow.add_tick_callback(|flow, _| {
-        if let Some(room) = visible_width(flow) {
+    let weak = flow.downgrade();
+    follow_visible_width(
+        flow,
+        Rc::new(move |room| {
+            let Some(flow) = weak.upgrade() else {
+                return;
+            };
             let fit = (room - TILES_INDENT - PAGE_PADDING - TILE_BOX_PADDING) / TILE_PITCH;
             let per_row = u32::try_from(fit.max(1)).unwrap_or(1).min(MOST_TILES_PER_ROW);
             if flow.max_children_per_line() != per_row {
                 flow.set_max_children_per_line(per_row);
             }
-        }
-        glib::ControlFlow::Continue
-    });
+        }),
+    );
 }
 
 /// A box of `items`: tiles for Quick access, one row each for the lists.
@@ -1282,6 +1327,16 @@ fn kept_by_policy(used: Option<u64>, now: u64, policy: crate::app_context::Recen
 /// The recently used files `GVfs` lists, newest first, each with the file
 /// it stands for; folders and rows without a file are left out.
 async fn recent_files() -> Vec<(Entry, String, Option<u64>)> {
+    // The desktop's privacy settings, as the navigation pane's Recent
+    // locations follows them: no file while it remembers none, and only
+    // those used within its maximum age.
+    let policy = crate::app_context::desktop_recent_policy();
+    if !policy.remember {
+        return Vec::new();
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs());
     let folder = gio::File::for_uri(RECENT_URI);
     let attributes = format!("{},{RECENT_ATTRIBUTES}", entry::ATTRIBUTES);
     let Ok(enumerator) = folder
@@ -1312,6 +1367,9 @@ async fn recent_files() -> Vec<(Entry, String, Option<u64>)> {
                 continue;
             };
             let used = info.attribute_int64("recent::modified");
+            if !kept_by_policy(u64::try_from(used).ok().filter(|used| *used > 0), now, policy) {
+                continue;
+            }
             found.push((used, entry, target));
         }
     }
@@ -1507,33 +1565,24 @@ impl BrowserWindow {
     /// Saves that `section` of Home is folded or not, without drawing
     /// anything again: this window shows it already.
     fn save_home_folded(&self, section: Section, folded: bool) {
-        let mut keys = self.context().settings_data().preferences.home_folded;
-        keys.retain(|key| key != section.key());
-        if folded {
-            keys.push(section.key().to_owned());
-        }
-        self.context().remember_preferences(PreferencesUpdate {
-            home_folded: Some(keys),
-            ..PreferencesUpdate::default()
-        });
+        // Changes only this section's key of the file as it is when the
+        // change runs, so two folds in a row both stay.
+        let key = section.key();
+        let change: Change = Box::new(move |settings| settings.set_home_folded(key, folded).map(|_| ()));
+        self.context().remember_change(change);
     }
 
     /// Opens the item at `uri` as a double-click does: a folder in the
     /// tab, a file in its default application. A file that is gone is
     /// said so in a dialog, as the file list says it.
     fn open_item_at(&self, uri: &str) {
-        let uri = uri.to_owned();
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move {
-                match super::activation::query_entry(&uri).await {
-                    Ok(entry) if entry.is_dir => window.navigate_or_report(&entry.uri),
-                    Ok(entry) => window.open_file(&entry),
-                    Err(error) => window.show_message(&error.to_string()),
-                }
-            }
-        ));
+        // Only the location is known here: the double-click's steps read
+        // the item, mounting its share first, and stand it for that file,
+        // as a Recent files row stands for the file it names.
+        let file = gio::File::for_uri(uri);
+        let mut entry = entry::entry_from_info(&file, &gio::FileInfo::new());
+        entry.meta.recent_target = Some(uri.to_owned());
+        self.activate_listed_entry(entry);
     }
 }
 

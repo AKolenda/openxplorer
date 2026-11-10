@@ -624,11 +624,18 @@ fn home_leaves_the_window_idle_and_still_follows_its_width() {
         .window
         .frame_clock()
         .expect("a shown window has a frame clock");
+    let pause = |milliseconds: u64| {
+        let over = std::rc::Rc::new(std::cell::Cell::new(false));
+        let done = over.clone();
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(milliseconds), move || {
+            done.set(true);
+        });
+        wait_until("a pause", || over.get());
+    };
+    // The lists fill as `GVfs` and the settings answer; then nothing.
+    pause(800);
     let before = clock.frame_counter();
-    let pause = std::rc::Rc::new(std::cell::Cell::new(false));
-    let done = pause.clone();
-    gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(600), move || done.set(true));
-    wait_until("600 ms", || pause.get());
+    pause(600);
     let frames = clock.frame_counter() - before;
     assert!(frames < 6, "{frames} frames drawn while nothing changed");
 

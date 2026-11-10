@@ -737,14 +737,8 @@ impl Preferences {
         if let Some(places) = places {
             self.hidden_sidebar_places.clone_from(places);
         }
-        let favorites = update.favorites.as_ref().filter(|favorites| {
-            favorites.len() <= MAX_FAVORITES
-                && favorites.iter().all(|uri| {
-                    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
-                })
-        });
-        if let Some(favorites) = favorites {
-            self.favorites.clone_from(favorites);
+        if let Some(favorites) = &update.favorites {
+            self.favorites = canonical_favorites(favorites);
         }
         let folded = update.home_folded.as_ref().filter(|keys| {
             keys.len() <= MAX_HIDDEN_SECTIONS
@@ -1199,6 +1193,39 @@ fn read_keys(value: &Value) -> Option<Vec<String>> {
         .collect()
 }
 
+/// The favorites of `favorites` that name a location the app can open,
+/// in their canonical form, each once, at most [`MAX_FAVORITES`]: a local
+/// path, a share, a remote folder (without its user name) or a connected
+/// device, never one with a password, of another scheme, a relative path
+/// or a virtual place. The file may have been edited by
+/// hand, and Home hands each favorite to GIO.
+fn canonical_favorites(favorites: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for uri in favorites {
+        if uri.is_empty() || uri.len() > MAX_PLACE_LOCATION || uri.contains(char::is_control) {
+            continue;
+        }
+        // An address with its scheme, never a path read against the
+        // current folder; a remote one without its user name, as
+        // settings.json holds none (SAFE-010).
+        if crate::location::scheme(uri).is_none() {
+            continue;
+        }
+        let Ok(location) = crate::location::normalise(uri).map(|uri| crate::location::without_user(&uri))
+        else {
+            continue;
+        };
+        if crate::location::is_virtual_location(&location) || kept.contains(&location) {
+            continue;
+        }
+        kept.push(location);
+        if kept.len() == MAX_FAVORITES {
+            break;
+        }
+    }
+    kept
+}
+
 /// A text size given as a true integer. Python checks `type(size) is int`,
 /// so 150.0 and "150" are ignored.
 fn read_text_size(value: &Value) -> Option<u32> {
@@ -1270,7 +1297,8 @@ mod tests {
     /// Favorites from a damaged or hand-edited file keep only locations
     /// the app can open, in their canonical form, each once: a name with
     /// credentials, another URI scheme, a virtual place or a relative path
-    /// is left out, never handed to GIO by Home (HOME-014).
+    /// is left out, and a remote one loses its user name, so nothing
+    /// else is handed to GIO by Home (HOME-014).
     #[test]
     fn favorites_keep_only_canonical_locations() {
         let update = PreferencesUpdate::from_json(&json!({
@@ -1292,7 +1320,11 @@ mod tests {
         preferences.apply(&update);
         assert_eq!(
             preferences.favorites,
-            ["file:///home/ana/Notes%201.txt", "smb://nas/Team/plan.odt"]
+            [
+                "file:///home/ana/Notes%201.txt",
+                "smb://nas/Team/plan.odt",
+                "sftp://host/plan.txt"
+            ]
         );
     }
 
