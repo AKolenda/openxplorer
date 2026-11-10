@@ -26,9 +26,10 @@ fn columns(choice: &DetailsChoice) -> Vec<SortColumn> {
 }
 
 /// The list starts with the shown columns in their order, Name first,
-/// then the others in alphabetical order, as Windows lists them. Name can
-/// neither move nor be hidden, nothing moves above it, and the shown rows
-/// in their order are the columns chosen.
+/// then the others in alphabetical order, as Windows lists them. As in
+/// Windows, Name cannot be hidden but moves down like any other row, and
+/// only the first row cannot move up. A Name moved down is listed where it
+/// is.
 ///
 /// parity: VIEW-033, VIEW-034
 #[test]
@@ -67,17 +68,29 @@ fn the_choice_lists_the_shown_columns_first_then_the_rest_alphabetically() {
 
     let last = choice.rows().len() - 1;
     assert!(
-        !choice.can_move_up(0) && !choice.can_move_down(0),
-        "Name stays first"
+        !choice.can_move_up(0) && choice.can_move_down(0),
+        "Name moves down only"
     );
     assert!(!choice.can_hide(0) && !choice.can_show(0), "Name always shows");
-    assert!(!choice.can_move_up(1), "nothing moves above Name");
+    assert!(choice.can_move_up(1), "a row may go above Name");
     assert!(choice.can_move_down(1) && choice.can_hide(1) && !choice.can_show(1));
     assert!(choice.can_move_up(last) && !choice.can_move_down(last));
     assert!(choice.can_show(4) && !choice.can_hide(4));
+
+    let moved = DetailsChoice::new(
+        &[SortColumn::Modified, SortColumn::Name, SortColumn::Size],
+        |_| 120,
+    );
+    assert_eq!(
+        columns(&moved)[..3],
+        [SortColumn::Modified, SortColumn::Name, SortColumn::Size]
+    );
+    assert!(moved.rows()[1].shown && !moved.can_hide(1));
 }
 
-/// Show, Hide and the moves change the columns chosen; Name stays.
+/// Show, Hide and the moves change the columns chosen. Name stays shown;
+/// moved down, it is chosen where it is, and back at the top it is left
+/// out, as the columns were always saved.
 ///
 /// parity: VIEW-033, VIEW-034
 #[test]
@@ -107,8 +120,30 @@ fn showing_hiding_and_moving_change_the_columns_chosen() {
     );
     choice.set_shown(0, false);
     assert!(choice.rows()[0].shown, "Name cannot be hidden");
-    assert_eq!(choice.move_up(1), 1, "nothing moves above Name");
-    assert_eq!(choice.move_down(0), 0, "Name stays first");
+    assert_eq!(choice.move_up(0), 0, "the first row cannot move up");
+    assert_eq!(choice.move_down(0), 1, "Name moves down");
+    // Only the hidden Type is above it: Name still comes first.
+    assert_eq!(
+        choice.chosen(),
+        [SortColumn::Created, SortColumn::Modified, SortColumn::Size]
+    );
+    assert_eq!(choice.move_down(1), 2);
+    assert_eq!(
+        choice.chosen(),
+        [
+            SortColumn::Created,
+            SortColumn::Name,
+            SortColumn::Modified,
+            SortColumn::Size
+        ]
+    );
+    assert_eq!(choice.move_up(2), 1);
+    assert_eq!(choice.move_up(1), 0, "Name back at the top");
+    assert_eq!(choice.move_down(0), 1);
+    assert_eq!(
+        choice.chosen(),
+        [SortColumn::Created, SortColumn::Modified, SortColumn::Size]
+    );
 }
 
 /// The width field takes digits only; a width is kept within the
@@ -165,7 +200,8 @@ fn open_from_more(test: &TestWindow) -> ChooseDetails {
 /// "Details:" over the columns as check boxes (the shown ones first),
 /// Move Up, Move Down, Show and Hide beside them, the selected column's
 /// width under them and OK and Cancel at the bottom. It opens on Name,
-/// which cannot move or be hidden, and it does not resize.
+/// drawn like the other rows, which can only move down, and it does not
+/// resize.
 ///
 /// parity: VIEW-033, VIEW-034
 #[gtk::test]
@@ -193,7 +229,7 @@ fn more_opens_choose_details_as_windows_draws_it() {
     assert_eq!(
         shown.row_states(),
         [
-            ("Name".to_owned(), true, false),
+            ("Name".to_owned(), true, true),
             ("Date modified".to_owned(), true, true),
             ("Type".to_owned(), true, true),
             ("Size".to_owned(), true, true),
@@ -207,12 +243,19 @@ fn more_opens_choose_details_as_windows_draws_it() {
     let sensitive = |shown: &ChooseDetails| {
         [&shown.move_up, &shown.move_down, &shown.show, &shown.hide].map(WidgetExt::is_sensitive)
     };
-    assert_eq!(sensitive(&shown), [false, false, false, false], "Name");
+    assert_eq!(sensitive(&shown), [false, true, false, false], "Name");
     let name_width: u32 = shown.width.text().parse().expect("Name's width in pixels");
     assert!(name_width >= 140, "Name's width on screen, {name_width}");
 
+    let name_check = descendants::<gtk::CheckButton>(&shown.list)
+        .into_iter()
+        .next()
+        .expect("Name's check box");
+    name_check.set_active(false);
+    assert!(name_check.is_active(), "a click leaves Name checked");
+    assert_eq!(shown.row_states()[0].1, true);
     shown.select(1);
-    assert_eq!(sensitive(&shown), [false, true, false, true], "Date modified");
+    assert_eq!(sensitive(&shown), [true, true, false, true], "Date modified");
     shown.select(4);
     assert_eq!(sensitive(&shown), [true, true, true, false], "Date created");
     shown.select(7);
@@ -323,6 +366,83 @@ fn ok_applies_the_choice_and_cancel_discards_it() {
     shown.select(2);
     assert_eq!(shown.width.text(), "222");
     shown.cancel.emit_clicked();
+}
+
+/// Name moved down with Move Down shows after the column now above it,
+/// is saved there for the folder and is listed there when Choose Details
+/// opens again, as in Windows.
+///
+/// parity: VIEW-033, VIEW-034
+#[gtk::test]
+fn name_moved_down_shows_after_the_column_above_it() {
+    let (fixture, test) = window_with_files();
+    let details = test.window.folder_pane().details().clone();
+    let shown = open_from_more(&test);
+    shown.select(0);
+    shown.move_down.emit_clicked();
+    assert_eq!(shown.selected_index(), Some(1));
+    assert!(shown.move_up.is_sensitive() && !shown.hide.is_sensitive());
+    shown.ok.emit_clicked();
+    wait_until("OK to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
+    assert_eq!(
+        details.chosen_columns(),
+        [
+            SortColumn::Modified,
+            SortColumn::Name,
+            SortColumn::Type,
+            SortColumn::Size
+        ]
+    );
+    let visible: Vec<SortColumn> = details
+        .column_order()
+        .into_iter()
+        .filter(|column| {
+            details
+                .column(*column)
+                .is_some_and(|view_column| view_column.is_visible())
+        })
+        .collect();
+    assert_eq!(
+        visible,
+        [
+            SortColumn::Modified,
+            SortColumn::Name,
+            SortColumn::Type,
+            SortColumn::Size
+        ]
+    );
+    wait_until("the folder's columns to be saved", || {
+        Settings::open(test.settings_directory())
+            .data()
+            .preferences
+            .view_for(&fixture.uri())
+            .details_columns
+            .as_deref()
+            == Some(
+                &[
+                    "modified".to_owned(),
+                    "name".to_owned(),
+                    "type".to_owned(),
+                    "size".to_owned(),
+                ][..],
+            )
+    });
+    let again = open_from_more(&test);
+    let labels: Vec<String> = again
+        .row_states()
+        .into_iter()
+        .map(|(label, _, _)| label)
+        .collect();
+    assert_eq!(labels[..2], ["Date modified".to_owned(), "Name".to_owned()]);
+    // Back to the top: the columns are saved as they always were.
+    again.select(1);
+    again.move_up.emit_clicked();
+    again.ok.emit_clicked();
+    wait_until("Name back in front", || {
+        details.chosen_columns() == [SortColumn::Modified, SortColumn::Type, SortColumn::Size]
+    });
 }
 
 /// With one view for every folder, OK saves the columns for all of them,
@@ -469,7 +589,7 @@ fn choose_details_works_with_the_keyboard_alone() {
 }
 
 /// A real right-click on the empty part of the titles' row opens the
-/// menu too, with Size Column to Fit greyed, and a real click on
+/// menu too, with Size Column to Fit grayed, and a real click on
 /// "More..." opens Choose Details.
 ///
 /// parity: VIEW-033
@@ -565,7 +685,7 @@ fn escape_menu(pointer: &mut Pointer, details: &DetailsView) {
 
 /// With the real pointer: a right-click on each column title opens the
 /// titles' menu fitting that column, and a click on each column's row
-/// shows or hides it; Name's row is greyed and a click on it changes
+/// shows or hides it; Name's row is grayed and a click on it changes
 /// nothing.
 ///
 /// parity: VIEW-033
@@ -620,7 +740,7 @@ fn real_clicks_on_every_title_and_every_column_row() {
         pointer.press(Button::Primary);
         pointer.release(Button::Primary);
         if column == SortColumn::Name {
-            assert!(!row.is_sensitive(), "Name is greyed");
+            assert!(!row.is_sensitive(), "Name is grayed");
             escape_menu(&mut pointer, &details);
         } else {
             wait_until("the menu to close", || open_titles_menu(&details).is_none());

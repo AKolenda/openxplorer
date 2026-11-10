@@ -42,7 +42,7 @@ const MENU_COLUMNS: [SortColumn; 8] = [
 /// The titles' menu, as Windows 11 File Explorer's: "Size Column to Fit"
 /// for the column it was opened on (`under`, unavailable outside the
 /// titles), "Size All Columns to Fit", the columns that can be shown or
-/// hidden, checked while they show (Name checked and greyed, as it cannot
+/// hidden, checked while they show (Name checked and grayed, as it cannot
 /// be hidden), and "More...", which opens Choose Details. The rows show
 /// check marks only, no icons.
 fn column_menu_entries(chosen: &[SortColumn], under: Option<SortColumn>) -> Vec<MenuEntry> {
@@ -305,7 +305,7 @@ mod tests {
 
     /// The titles' menu is Windows 11 File Explorer's: "Size Column to
     /// Fit", "Size All Columns to Fit", a divider, the columns as check
-    /// items (Name first, checked and greyed, as it cannot be hidden;
+    /// items (Name first, checked and grayed, as it cannot be hidden;
     /// Windows' Date modified, Type, Size and Date created in its order,
     /// then the app's own File extension, Owner and Permissions), a
     /// divider and "More...". No row shows an icon. Choosing a column

@@ -49,7 +49,7 @@ use gtk::subclass::prelude::*;
 use ox_core::format::DateStyle;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
-pub(crate) use column_choice::chosen_from_keys;
+pub(crate) use column_choice::{chosen_from_keys, without_leading_name};
 pub(crate) use column_text::shown_cell_text;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, PositionMap};

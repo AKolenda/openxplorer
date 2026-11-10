@@ -2,8 +2,11 @@
 //! Which details columns show, and in what order (VIEW-033, VIEW-034).
 //!
 //! The header's menu shows and hides columns, as in Dolphin and Windows
-//! Explorer, and titles are dragged to move their columns. Name always
-//! stays first, and Folder path follows it in a search. The view reports
+//! Explorer, and titles are dragged to move their columns. Name stays
+//! first unless Choose Details moved it down, as Windows lets it; Folder
+//! path follows it in a search. Only a Name that is not first is listed
+//! among the chosen columns (and saved as `name`), so the columns saved
+//! for a Name in front are the keys they always were. The view reports
 //! the order the user dragged the columns into ([`COLUMNS_CHOSEN`]) so the
 //! window can save it with the shown columns.
 
@@ -20,21 +23,40 @@ pub(super) fn default_chosen() -> Vec<SortColumn> {
     chosen_from_keys(DEFAULT_DETAILS_COLUMNS)
 }
 
-/// The choosable columns among the column `keys`, in their order.
+/// The choosable columns among the column `keys`, and Name where it is
+/// not first, in their order.
 pub(crate) fn chosen_from_keys(keys: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<SortColumn> {
     let columns = keys
         .into_iter()
         .filter_map(|key| SortColumn::from_key(key.as_ref()));
-    columns
-        .filter(|column| SortColumn::CHOOSABLE.contains(column))
-        .collect()
+    let chosen = columns
+        .filter(|column| *column == SortColumn::Name || SortColumn::CHOOSABLE.contains(column))
+        .collect();
+    without_leading_name(chosen)
 }
 
-/// Every column in the order the view lays them out: Name, Folder path,
-/// the `chosen` ones, then the hidden ones.
+/// `chosen` without Name when it comes first, where Name goes anyway.
+pub(crate) fn without_leading_name(mut chosen: Vec<SortColumn>) -> Vec<SortColumn> {
+    if chosen.first() == Some(&SortColumn::Name) {
+        chosen.remove(0);
+    }
+    chosen
+}
+
+/// Every column in the order the view lays them out: Name (first unless
+/// `chosen` places it) with Folder path after it, the `chosen` ones, then
+/// the hidden ones.
 fn column_layout(chosen: &[SortColumn]) -> Vec<SortColumn> {
-    let mut layout = vec![SortColumn::Name, SortColumn::FolderPath];
-    layout.extend_from_slice(chosen);
+    let mut layout = Vec::new();
+    if !chosen.contains(&SortColumn::Name) {
+        layout.extend([SortColumn::Name, SortColumn::FolderPath]);
+    }
+    for column in chosen {
+        layout.push(*column);
+        if *column == SortColumn::Name {
+            layout.push(SortColumn::FolderPath);
+        }
+    }
     let rest = SortColumn::ALL
         .into_iter()
         .filter(|column| !layout.contains(column));
@@ -43,14 +65,16 @@ fn column_layout(chosen: &[SortColumn]) -> Vec<SortColumn> {
 }
 
 impl DetailsView {
-    /// The columns shown after Name, in their order.
+    /// The columns shown, in their order, Name among them only where
+    /// Choose Details moved it down.
     pub(crate) fn chosen_columns(&self) -> Vec<SortColumn> {
         self.imp().chosen.borrow().clone()
     }
 
-    /// Shows the `chosen` columns after Name, in that order, and hides the
-    /// other choosable ones.
+    /// Shows the `chosen` columns in that order, after Name unless they
+    /// place it, and hides the other choosable ones.
     pub(crate) fn show_chosen_columns(&self, chosen: Vec<SortColumn>) {
+        let chosen = without_leading_name(chosen);
         if *self.imp().chosen.borrow() == chosen {
             return;
         }
@@ -73,7 +97,7 @@ impl DetailsView {
     }
 
     /// The columns in the order the view lays them out now.
-    pub(super) fn column_order(&self) -> Vec<SortColumn> {
+    pub(crate) fn column_order(&self) -> Vec<SortColumn> {
         let columns = self.column_view().columns();
         let ids = columns.iter::<gtk::ColumnViewColumn>().filter_map(Result::ok);
         ids.filter_map(|column| SortColumn::from_key(&column.id()?))
@@ -120,6 +144,7 @@ impl DetailsView {
     }
 
     /// A title was dragged: keeps the chosen columns in their new order.
+    /// A Name Choose Details placed keeps its place among them.
     fn column_dragged(&self) {
         let chosen = self.chosen_columns();
         let order = self.column_order();
@@ -127,6 +152,7 @@ impl DetailsView {
             .into_iter()
             .filter(|column| chosen.contains(column))
             .collect();
+        let dragged = without_leading_name(dragged);
         self.arrange_columns_as(dragged.clone());
         if dragged != chosen {
             self.emit_by_name::<()>(COLUMNS_CHOSEN, &[]);

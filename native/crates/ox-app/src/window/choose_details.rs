@@ -3,10 +3,12 @@
 //! in Windows 11 File Explorer (VIEW-033, VIEW-034).
 //!
 //! The window lists every column the app can fill as a check box: the
-//! shown ones first, in their order, Name at the top, then the others in
+//! shown ones first, in their order (Name at the top unless it was moved
+//! down), then the others in
 //! alphabetical order. Beside the list, Move Up, Move Down, Show and Hide
-//! act on the selected column, greyed where they cannot: Name always
-//! shows and stays first. Under it, "Width of selected column (in
+//! act on the selected column, grayed where they cannot, as in Windows:
+//! Name always shows, its check box drawn checked and never cleared, but
+//! it moves like any other column. Under it, "Width of selected column (in
 //! pixels):" holds the selected column's width, digits only, kept within
 //! the column's limits. OK shows the checked columns in the list's order
 //! with the widths typed and saves them as the titles' menu does, for the
@@ -60,22 +62,19 @@ pub(crate) struct DetailsChoice {
 }
 
 impl DetailsChoice {
-    /// The list for a view showing the `chosen` columns after Name, each
-    /// `width_of` pixels wide: Name and the chosen ones in their order,
-    /// then the other columns in alphabetical order.
+    /// The list for a view showing the `chosen` columns (after Name,
+    /// unless they place it), each `width_of` pixels wide: the shown ones
+    /// in their order, then the other columns in alphabetical order.
     pub(crate) fn new(chosen: &[SortColumn], width_of: impl Fn(SortColumn) -> u32) -> Self {
         let mut hidden: Vec<SortColumn> = SortColumn::CHOOSABLE
             .into_iter()
             .filter(|column| !chosen.contains(column))
             .collect();
         hidden.sort_by_cached_key(|column| column.label().to_lowercase());
-        let shown = std::iter::once(SortColumn::Name)
-            .chain(
-                chosen
-                    .iter()
-                    .copied()
-                    .filter(|column| *column != SortColumn::Name),
-            )
+        let leading_name = (!chosen.contains(&SortColumn::Name)).then_some(SortColumn::Name);
+        let shown = leading_name
+            .into_iter()
+            .chain(chosen.iter().copied())
             .map(|column| (column, true));
         let rows = shown
             .chain(hidden.into_iter().map(|column| (column, false)))
@@ -94,22 +93,24 @@ impl DetailsChoice {
         &self.rows
     }
 
-    /// Whether the row at `index` can be moved, as every one but Name can.
-    fn is_movable(&self, index: usize) -> bool {
+    /// Whether Move Up applies to the row at `index`: every row but the
+    /// first, as in Windows.
+    pub(crate) fn can_move_up(&self, index: usize) -> bool {
+        index > 0 && index < self.rows.len()
+    }
+
+    /// Whether Move Down applies to the row at `index`: every row but the
+    /// last, Name included, as in Windows.
+    pub(crate) fn can_move_down(&self, index: usize) -> bool {
+        index + 1 < self.rows.len()
+    }
+
+    /// Whether the row at `index` can be cleared, as every one but Name
+    /// can.
+    fn can_clear(&self, index: usize) -> bool {
         self.rows
             .get(index)
             .is_some_and(|row| row.column != SortColumn::Name)
-    }
-
-    /// Whether Move Up applies to the row at `index`: nothing goes above
-    /// Name.
-    pub(crate) fn can_move_up(&self, index: usize) -> bool {
-        self.is_movable(index) && self.is_movable(index - 1)
-    }
-
-    /// Whether Move Down applies to the row at `index`.
-    pub(crate) fn can_move_down(&self, index: usize) -> bool {
-        self.is_movable(index) && self.is_movable(index + 1)
     }
 
     /// Whether Show applies to the row at `index`: it is not checked.
@@ -120,7 +121,7 @@ impl DetailsChoice {
     /// Whether Hide applies to the row at `index`: it is checked and not
     /// Name.
     pub(crate) fn can_hide(&self, index: usize) -> bool {
-        self.is_movable(index) && self.rows[index].shown
+        self.can_clear(index) && self.rows[index].shown
     }
 
     /// Moves the row at `index` up one, if it can, and returns where it is.
@@ -144,7 +145,7 @@ impl DetailsChoice {
 
     /// Checks or clears the row at `index`; Name stays checked.
     pub(crate) fn set_shown(&mut self, index: usize, shown: bool) {
-        if self.is_movable(index) {
+        if self.can_clear(index) {
             self.rows[index].shown = shown;
         }
     }
@@ -166,13 +167,11 @@ impl DetailsChoice {
         Some(row.width)
     }
 
-    /// The checked columns after Name, in the list's order.
+    /// The checked columns in the list's order, Name among them only
+    /// when it is not first.
     pub(crate) fn chosen(&self) -> Vec<SortColumn> {
-        self.rows
-            .iter()
-            .filter(|row| row.shown && row.column != SortColumn::Name)
-            .map(|row| row.column)
-            .collect()
+        let shown = self.rows.iter().filter(|row| row.shown).map(|row| row.column);
+        crate::folder_view::details::without_leading_name(shown.collect())
     }
 
     /// The columns whose width the user typed, with that width.
@@ -267,7 +266,7 @@ impl ChooseDetails {
     }
 
     /// Each row's label, whether it is checked and whether its check box
-    /// can be changed.
+    /// is drawn usable (not grayed).
     #[cfg(test)]
     pub(crate) fn row_states(&self) -> Vec<(String, bool, bool)> {
         super::widget_tree::descendants::<gtk::CheckButton>(&self.list)
@@ -311,13 +310,14 @@ fn side_button(label: &str) -> gtk::Button {
 
 /// A row of the columns' list: the column's check box. The row takes the
 /// keyboard; its check box is clicked, or checked with Space on the row.
+/// Name's is drawn like the others, checked, as Windows draws it: a click
+/// or Space leaves it checked.
 fn choice_row(row: ChoiceRow) -> gtk::ListBoxRow {
     let check = gtk::CheckButton::builder()
         .label(row.column.label())
         .active(row.shown)
         .focusable(false)
         .focus_on_click(false)
-        .sensitive(row.column != SortColumn::Name)
         .build();
     let list_row = gtk::ListBoxRow::builder().child(&check).build();
     list_row.update_property(&[gtk::accessible::Property::Label(row.column.label())]);
