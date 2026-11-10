@@ -72,6 +72,7 @@ mod recent_rows;
 mod recycle_bin;
 mod renaming;
 mod renaming_several;
+mod resize_edges;
 mod restore_conflicts;
 mod right_drag;
 mod search;

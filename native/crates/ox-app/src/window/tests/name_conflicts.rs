@@ -11,6 +11,7 @@ use std::fs;
 use gtk::prelude::*;
 
 use super::file_ops_support::{answer_conflicts, dialog_over, is_enabled, select_names, ConflictAnswer};
+use crate::resize_edges::ResizeHandle;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button as PointerButton, Pointer};
 use crate::window::conflict_window::FileConflictWindow;
@@ -652,4 +653,40 @@ fn enter_still_answers_with_the_focused_row() {
         b"Synthetic test data\n",
         "Enter on Skip this file kept the file"
     );
+}
+
+/// The File Conflicts window resizes from inside its edges too: its
+/// handles lie over its content and the title bar GTK gives it when it
+/// realizes it, though both come after the handles.
+#[gtk::test]
+fn the_file_conflict_window_resizes_from_inside_its_edges() {
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+    test.activate("paste", None);
+    let progress = question_window(&test);
+    button(&progress, "Compare info for both files").emit_clicked();
+    let conflicts = conflict_window(&progress);
+    wait_until("the File Conflict window is laid out", || conflicts.width() > 0);
+    assert!(
+        conflicts
+            .last_child()
+            .is_some_and(|child| child.is::<ResizeHandle>()),
+        "the handles are over everything"
+    );
+    crate::resize_edges::turn_on_for_test(&conflicts);
+    let width = f64::from(conflicts.width());
+    let height = f64::from(conflicts.height());
+    for (x, y) in [
+        (width - 2.0, height / 2.0),
+        (2.0, height / 2.0),
+        (width / 2.0, height - 2.0),
+        (width / 2.0, 2.0),
+    ] {
+        let picked = conflicts.pick(x, y, gtk::PickFlags::DEFAULT);
+        assert!(
+            picked.is_some_and(|widget| widget.is::<ResizeHandle>()),
+            "a handle at {x}, {y}"
+        );
+    }
+    button(&conflicts, "Cancel").emit_clicked();
 }

@@ -80,8 +80,20 @@ mod imp {
         type ParentType = gtk::Window;
     }
 
-    impl ObjectImpl for FileConflictWindow {}
-    impl WidgetImpl for FileConflictWindow {}
+    impl ObjectImpl for FileConflictWindow {
+        /// Its edges and corners resize it from inside too (Windows 11).
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::resize_edges::install(&*self.obj());
+        }
+    }
+
+    impl WidgetImpl for FileConflictWindow {
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.parent_size_allocate(width, height, baseline);
+            crate::resize_edges::allocate(&*self.obj(), width, height);
+        }
+    }
 
     impl WindowImpl for FileConflictWindow {
         /// Closing the window is Cancel: back to the question.
