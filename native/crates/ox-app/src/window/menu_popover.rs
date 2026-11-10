@@ -635,8 +635,6 @@ impl MenuPopover {
         self.refit_if_shown();
     }
 
-    /// Fills the strip with a button per strip item, in the compact style
-    /// only.
     /// Whether Shift+F10 opens the classic menu in the window the menu is
     /// in: the Settings choice "Shift+F10 opens the classic menu". The rows
     /// are drawn again each time the menu shows, inside its window.
@@ -646,6 +644,8 @@ impl MenuPopover {
             .is_some_and(|window| window.context().settings_data().preferences.shift_f10_classic)
     }
 
+    /// Fills the strip with a button per strip item, in the compact style
+    /// only.
     fn redraw_strip(&self) {
         let strip = self.strip();
         while let Some(child) = strip.first_child() {
