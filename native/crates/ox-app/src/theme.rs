@@ -11,6 +11,7 @@
 pub(crate) mod accent;
 mod appearance_button;
 pub(crate) mod contrast;
+mod cursor_theme;
 pub(crate) mod desktop_text;
 mod fonts;
 mod providers;
@@ -111,9 +112,12 @@ glib::wrapper! {
 
 impl Skin {
     /// Forces GTK's built-in theme and installs the skin on `display`: its
-    /// stylesheets and the app's bundled icons.
+    /// stylesheets and the app's bundled icons. It also keeps the pointer's
+    /// cursors drawable when the desktop names a missing cursor theme
+    /// ([`cursor_theme`]).
     pub(crate) fn install(display: &gdk::Display) -> Self {
         icons::register(display);
+        cursor_theme::follow(display);
         Self::with_providers(Providers::install(display))
     }
 
