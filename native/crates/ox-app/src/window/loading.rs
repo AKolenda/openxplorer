@@ -180,6 +180,9 @@ impl BrowserWindow {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;
         let was_shown = tab.error.is_none();
+        if mode == LoadMode::Navigate {
+            tab.folder_gone = false;
+        }
         let asked = std::mem::take(&mut tab.refresh_asked) && mode == LoadMode::Reload;
         let generation = tab.begin_load();
         tab.reloading = mode == LoadMode::Reload;
@@ -410,6 +413,9 @@ impl BrowserWindow {
             Err(error) => self.fail_load(id, run.mode, error),
         }
         if is_listed {
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.folder_gone = false;
+            }
             // NET-016: a listed share joins Network for the session only.
             self.context().remember_network(&run.uri);
             // OPEN-025: a folder on disk or on a share that was visited and

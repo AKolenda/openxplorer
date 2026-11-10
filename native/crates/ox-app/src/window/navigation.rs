@@ -534,7 +534,11 @@ impl BrowserWindow {
         // A folder grouped by date counts from today, also after a night
         // the computer slept through.
         self.follow_the_day();
-        if self.refresh_search() {
+        // A search in a folder found gone ends, so the folder is listed
+        // and says it is unavailable (NAV-039).
+        if self.searches_in_gone_folder() {
+            self.end_search_in_gone_folder();
+        } else if self.refresh_search() {
             return;
         }
         self.context().reload_settings();

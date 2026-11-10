@@ -45,6 +45,7 @@ impl BrowserWindow {
         let id = run.tab;
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.watch = None;
+            tab.folder_gone = true;
         }
         if self.imp().session.borrow_mut().end_listing(id) == ListingEnd::TabClosed {
             return;
@@ -53,6 +54,24 @@ impl BrowserWindow {
         if self.imp().session.borrow().is_active(id) {
             self.update_status();
         }
+    }
+
+    /// Whether the active tab shows a search in a folder found gone: F5
+    /// then lists the folder instead of running the search again, so it
+    /// says the folder is unavailable.
+    pub(in crate::window) fn searches_in_gone_folder(&self) -> bool {
+        let session = self.imp().session.borrow();
+        self.is_searching() && session.active().is_some_and(|tab| tab.folder_gone)
+    }
+
+    /// Ends the search of the active tab, whose folder is gone, keeping
+    /// the tab at the folder's address, as leaving the search does.
+    pub(in crate::window) fn end_search_in_gone_folder(&self) {
+        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
+            tab.history.set_current_search(None);
+        }
+        self.end_search();
+        self.render_location();
     }
 
     /// The user refreshed `run`'s folder and it is not there: says so in
