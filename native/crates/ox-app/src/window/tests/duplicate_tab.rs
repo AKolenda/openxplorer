@@ -14,10 +14,11 @@ use gtk::subclass::prelude::*;
 
 use super::shift_f10_keys::press_shift_f10;
 use super::support::{click_gesture, middle_of};
-use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::test_support::pointer::Pointer;
 use crate::window::folder_pane::FolderView;
 use crate::window::session::TabId;
+use ox_core::settings::Theme;
 
 /// The folders the three tabs went to, left to right.
 const FOLDERS: [&str; 3] = ["Alpha", "Beta", "Gamma"];
@@ -113,7 +114,12 @@ fn assert_copied_after(
 /// parity: TAB-012, TAB-013
 #[gtk::test]
 fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
-    for original in 0..3 {
+    let _theme = ThemeGuard::keep();
+    for ((theme, theme_name), original) in [(Theme::Light, "light"), (Theme::Dark, "dark")]
+        .into_iter()
+        .flat_map(|theme| (0..3).map(move |original| (theme, original)))
+    {
+        skin().set_theme(theme);
         let fixture = Fixture::standard();
         let test = three_tabs_with_history(&fixture);
         let before = tab_ids(&test);
@@ -127,7 +133,7 @@ fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
         test.window.switch_tab(front);
         test.wait_for_listing("the tab in front");
         wait_for_frames(&test.window, 2);
-        let case = format!("tab {} of 3", original + 1);
+        let case = format!("{theme_name}: tab {} of 3", original + 1);
 
         let tab = tab_widget(&test, original);
         let point = middle_of(&tab, &tab);
@@ -154,8 +160,18 @@ fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
 /// parity: TAB-012, TAB-013
 #[gtk::test]
 fn duplicate_tab_from_the_keyboard_puts_the_copy_right_after_its_tab() {
-    let fixture = Fixture::standard();
+    let _theme = ThemeGuard::keep();
     let mut keyboard = Pointer::connect();
+    for (theme, theme_name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
+        skin().set_theme(theme);
+        duplicate_from_the_keyboard(&mut keyboard, theme_name);
+    }
+}
+
+/// Duplicates the middle of three tabs from the keyboard, in the theme
+/// `theme_name` names, and checks the copy.
+fn duplicate_from_the_keyboard(keyboard: &mut Pointer, theme_name: &str) {
+    let fixture = Fixture::standard();
     let test = three_tabs_with_history(&fixture);
     let before = tab_ids(&test);
     // The middle tab, in front, with the keyboard on it.
@@ -167,7 +183,7 @@ fn duplicate_tab_from_the_keyboard_puts_the_copy_right_after_its_tab() {
     assert!(tab.grab_focus(), "the tab in front takes the keyboard");
     wait_for_frames(&test.window, 2);
 
-    press_shift_f10(&mut keyboard);
+    press_shift_f10(keyboard);
     let menu = test.window.tab_strip().menu();
     wait_until("Shift+F10 to open the tab's menu", || menu.is_visible());
     let duplicate = menu.row("Duplicate tab");
@@ -187,7 +203,7 @@ fn duplicate_tab_from_the_keyboard_puts_the_copy_right_after_its_tab() {
         &before,
         original,
         FolderView::Details,
-        "Shift+F10, Duplicate tab",
+        &format!("{theme_name}: Shift+F10, Duplicate tab"),
     );
 }
 

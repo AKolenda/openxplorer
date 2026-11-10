@@ -12,8 +12,11 @@ use super::file_ops_support::{
     is_renaming_in_place, name_editor, open_dialog, select_names, wait_for_no_dialog,
 };
 use crate::dialog::Dialog;
-use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::test_support::pointer::{screen_point, Button as PointerButton, Pointer};
+use ox_core::settings::Theme;
 
 /// One way of answering the question.
 #[derive(Debug, Clone, Copy)]
@@ -117,11 +120,21 @@ fn shows_name(test: &TestWindow, name: &str) -> bool {
         .any(|label| label.is_mapped() && label.text() == name)
 }
 
+/// [`answer_in`] the light and the dark theme.
+fn answer_the_question(answer: Answer) {
+    let _theme = ThemeGuard::keep();
+    for (theme, name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
+        skin().set_theme(theme);
+        answer_in(answer, name);
+    }
+}
+
 /// Renames "Notes 2.txt" in place to "Notes 2.md" with F2 and Enter on the
 /// real keyboard, answers the question with `answer` and checks the
-/// result, then checks that F2 starts a new rename of the item.
-fn answer_the_question(answer: Answer) {
-    let case = format!("{answer:?}");
+/// result, then checks that F2 starts a new rename of the item; `theme`
+/// names the theme for the messages.
+fn answer_in(answer: Answer, theme: &str) {
+    let case = format!("{theme}: {answer:?}");
     let fixture = Fixture::standard();
     let mut pointer = Pointer::connect();
     let test = TestWindow::open(&fixture.uri());

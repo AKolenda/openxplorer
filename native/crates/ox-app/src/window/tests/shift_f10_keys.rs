@@ -11,10 +11,12 @@ use gtk::prelude::*;
 
 use super::context_menus::choose_menu_style;
 use super::file_ops_support::select_names;
-use crate::test_support::harness::{wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    skin, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::test_support::pointer::{screen_point, Pointer};
 use crate::window::menu_popover::{MenuPopover, MenuStyle};
-use ox_core::settings::ContextMenu;
+use ox_core::settings::{ContextMenu, Theme};
 
 /// How long the keys get to take effect.
 const SETTLE: std::time::Duration = std::time::Duration::from_millis(300);
@@ -533,7 +535,7 @@ fn open_menu_from_the_keyboard(pointer: &mut Pointer, test: &TestWindow, menu_ke
 
 /// With several items selected, Shift+F10 and the Menu key open the menu
 /// at the item the keyboard moved to last, as Windows 11 File Explorer
-/// does (with extra_2.txt clicked and Shift+Down pressed three times, at
+/// does (with `extra_2.txt` clicked and Shift+Down pressed three times, at
 /// the fourth item), in Details, List, Tiles, Large icons and the compact
 /// view; at the first selected item when the keyboard is on an item that
 /// is not selected. The pointer is parked far away.
@@ -546,47 +548,51 @@ fn the_keyboards_menu_opens_at_the_focused_item_of_a_selection() {
     let test = TestWindow::open(&fixture.uri());
     choose_menu_style(&test, ContextMenu::Win11);
     let mut moved_on = false;
-    for (view, compact) in [
-        ("details", false),
-        ("list", false),
-        ("tiles", false),
-        ("large", false),
-        ("details", true),
-    ] {
-        test.activate("view", Some(view));
-        if compact != test.context.settings_data().preferences.compact_density {
-            test.activate("compact-density", None);
-        }
-        test.wait_for_listing(view);
-        wait_for_frames(&test.window, 3);
-        for selection in [
-            KeyboardSelection::One,
-            KeyboardSelection::ShiftDown,
-            KeyboardSelection::ShiftUp,
-            KeyboardSelection::CtrlSpaceSelects,
-            KeyboardSelection::CtrlSpaceUnselects,
-            KeyboardSelection::CtrlA,
+    let _theme = ThemeGuard::keep();
+    for (theme, theme_name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
+        skin().set_theme(theme);
+        for (view, compact) in [
+            ("details", false),
+            ("list", false),
+            ("tiles", false),
+            ("large", false),
+            ("details", true),
         ] {
-            for menu_key in [false, true] {
-                let key = if menu_key { "Menu key" } else { "Shift+F10" };
-                let case = format!(
-                    "{view}{}: {selection:?}, {key}",
-                    if compact { " compact" } else { "" }
-                );
-                let start = if matches!(selection, KeyboardSelection::ShiftUp) {
-                    5
-                } else {
-                    2
-                };
-                park_pointer(&mut pointer, &test);
-                select_from_the_keyboard(&mut pointer, &test, start, selection);
-                let expected = expected_menu_item(&test, &case);
-                let first = test.window.folder_pane().model().first_selected();
-                moved_on |= first != Some(expected);
-                let menu = open_menu_from_the_keyboard(&mut pointer, &test, menu_key);
-                assert!(!menu.strip_labels().is_empty(), "{case}: the item's menu");
-                assert_points_at_item(&test, &menu, expected, &case);
-                escape_closes(&mut pointer, &test, &menu, &case);
+            test.activate("view", Some(view));
+            if compact != test.context.settings_data().preferences.compact_density {
+                test.activate("compact-density", None);
+            }
+            test.wait_for_listing(view);
+            wait_for_frames(&test.window, 3);
+            for selection in [
+                KeyboardSelection::One,
+                KeyboardSelection::ShiftDown,
+                KeyboardSelection::ShiftUp,
+                KeyboardSelection::CtrlSpaceSelects,
+                KeyboardSelection::CtrlSpaceUnselects,
+                KeyboardSelection::CtrlA,
+            ] {
+                for menu_key in [false, true] {
+                    let key = if menu_key { "Menu key" } else { "Shift+F10" };
+                    let case = format!(
+                        "{theme_name} {view}{}: {selection:?}, {key}",
+                        if compact { " compact" } else { "" }
+                    );
+                    let start = if matches!(selection, KeyboardSelection::ShiftUp) {
+                        5
+                    } else {
+                        2
+                    };
+                    park_pointer(&mut pointer, &test);
+                    select_from_the_keyboard(&mut pointer, &test, start, selection);
+                    let expected = expected_menu_item(&test, &case);
+                    let first = test.window.folder_pane().model().first_selected();
+                    moved_on |= first != Some(expected);
+                    let menu = open_menu_from_the_keyboard(&mut pointer, &test, menu_key);
+                    assert!(!menu.strip_labels().is_empty(), "{case}: the item's menu");
+                    assert_points_at_item(&test, &menu, expected, &case);
+                    escape_closes(&mut pointer, &test, &menu, &case);
+                }
             }
         }
     }
@@ -610,70 +616,74 @@ fn the_keyboards_menu_scrolls_to_the_focused_item_first() {
     let mut pointer = Pointer::connect();
     let test = TestWindow::open(&fixture.uri());
     choose_menu_style(&test, ContextMenu::Win11);
-    for (view, compact) in [
-        ("details", false),
-        ("list", false),
-        ("tiles", false),
-        ("large", false),
-        ("details", true),
-    ] {
-        test.activate("view", Some(view));
-        if compact != test.context.settings_data().preferences.compact_density {
-            test.activate("compact-density", None);
-        }
-        test.wait_for_listing(view);
-        wait_for_frames(&test.window, 3);
-        for menu_key in [false, true] {
-            let case = format!(
-                "{view}{}: {}",
-                if compact { " compact" } else { "" },
-                if menu_key { "Menu key" } else { "Shift+F10" }
-            );
-            park_pointer(&mut pointer, &test);
-            select_from_the_keyboard(&mut pointer, &test, 2, KeyboardSelection::ShiftDown);
-            let expected = expected_menu_item(&test, &case);
-            assert_ne!(
-                Some(expected),
-                test.window.folder_pane().model().first_selected(),
-                "{case}"
-            );
-            // The list scrolled to its end, away from the selection.
-            let view_widget = test.window.folder_pane().view_widget();
-            let scroller = view_widget
-                .ancestor(gtk::ScrolledWindow::static_type())
-                .and_downcast::<gtk::ScrolledWindow>()
-                .expect("the view scrolls");
-            // The compact list's columns scroll sideways.
-            let vertical = scroller.vadjustment();
-            let adjustment = if vertical.upper() > vertical.page_size() + 1.0 {
-                vertical
-            } else {
-                scroller.hadjustment()
-            };
-            adjustment.set_value(adjustment.upper() - adjustment.page_size());
-            wait_for_frames(&test.window, 4);
-            // On screen when a press in the middle of its row or tile
-            // would land on it: GTK keeps the focused row's widget, where
-            // it was, when it scrolls away.
-            let shown = |position: u32| {
-                let pane = test.window.folder_pane();
-                let view = pane.input_widget();
-                pane.owners()
-                    .widget_at(position)
-                    .and_then(|row| row.compute_bounds(&view))
-                    .and_then(|bounds| {
-                        let center = bounds.center();
-                        pane.owners()
-                            .position_at(&view, f64::from(center.x()), f64::from(center.y()))
-                    })
-                    == Some(position)
-            };
-            assert!(!shown(expected), "{case}: the focused item is out of sight");
+    let _theme = ThemeGuard::keep();
+    for (theme, theme_name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
+        skin().set_theme(theme);
+        for (view, compact) in [
+            ("details", false),
+            ("list", false),
+            ("tiles", false),
+            ("large", false),
+            ("details", true),
+        ] {
+            test.activate("view", Some(view));
+            if compact != test.context.settings_data().preferences.compact_density {
+                test.activate("compact-density", None);
+            }
+            test.wait_for_listing(view);
+            wait_for_frames(&test.window, 3);
+            for menu_key in [false, true] {
+                let case = format!(
+                    "{theme_name} {view}{}: {}",
+                    if compact { " compact" } else { "" },
+                    if menu_key { "Menu key" } else { "Shift+F10" }
+                );
+                park_pointer(&mut pointer, &test);
+                select_from_the_keyboard(&mut pointer, &test, 2, KeyboardSelection::ShiftDown);
+                let expected = expected_menu_item(&test, &case);
+                assert_ne!(
+                    Some(expected),
+                    test.window.folder_pane().model().first_selected(),
+                    "{case}"
+                );
+                // The list scrolled to its end, away from the selection.
+                let view_widget = test.window.folder_pane().view_widget();
+                let scroller = view_widget
+                    .ancestor(gtk::ScrolledWindow::static_type())
+                    .and_downcast::<gtk::ScrolledWindow>()
+                    .expect("the view scrolls");
+                // The compact list's columns scroll sideways.
+                let vertical = scroller.vadjustment();
+                let adjustment = if vertical.upper() > vertical.page_size() + 1.0 {
+                    vertical
+                } else {
+                    scroller.hadjustment()
+                };
+                adjustment.set_value(adjustment.upper() - adjustment.page_size());
+                wait_for_frames(&test.window, 4);
+                // On screen when a press in the middle of its row or tile
+                // would land on it: GTK keeps the focused row's widget, where
+                // it was, when it scrolls away.
+                let shown = |position: u32| {
+                    let pane = test.window.folder_pane();
+                    let view = pane.input_widget();
+                    pane.owners()
+                        .widget_at(position)
+                        .and_then(|row| row.compute_bounds(&view))
+                        .and_then(|bounds| {
+                            let center = bounds.center();
+                            pane.owners()
+                                .position_at(&view, f64::from(center.x()), f64::from(center.y()))
+                        })
+                        == Some(position)
+                };
+                assert!(!shown(expected), "{case}: the focused item is out of sight");
 
-            let menu = open_menu_from_the_keyboard(&mut pointer, &test, menu_key);
-            assert!(shown(expected), "{case}: the focused item came into view");
-            assert_points_at_item(&test, &menu, expected, &case);
-            escape_closes(&mut pointer, &test, &menu, &case);
+                let menu = open_menu_from_the_keyboard(&mut pointer, &test, menu_key);
+                assert!(shown(expected), "{case}: the focused item came into view");
+                assert_points_at_item(&test, &menu, expected, &case);
+                escape_closes(&mut pointer, &test, &menu, &case);
+            }
         }
     }
     if test.context.settings_data().preferences.compact_density {
