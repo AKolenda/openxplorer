@@ -15,6 +15,13 @@
 //! folder or for every folder (Folder Options); Cancel, Escape and the
 //! close button change nothing.
 //!
+//! The list follows what the view lists: a search adds Folder path and
+//! the Recycle Bin Original location and Date deleted, right after Name
+//! where the view shows them, checked, never hidden or moved; Date modified, which neither shows, is left out and stays
+//! chosen for folders. OK applies the choice only while the pane still
+//! shows the tab, location and listing it was opened for: a folder opened
+//! from another application meanwhile is left as it is.
+//!
 //! The keyboard reaches everything: the arrows move through the columns,
 //! Space checks or clears the selected one, Tab leaves the list for the
 //! buttons and the width, Enter in the list or the width is OK, Escape is
@@ -28,9 +35,10 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::i18n::gettext;
 
-use super::session::PaneSide;
+use super::session::{PaneSide, TabId};
 use super::{BrowserWindow, ButtonStyle, Dialog};
 use crate::folder_view::column_widths;
+use crate::folder_view::details::{lists_column, DetailsListing, FOLLOWING_NAME};
 use crate::folder_view::sorting::SortColumn;
 
 /// The widget name of the columns' list, by which an open Choose Details
@@ -56,27 +64,65 @@ pub(crate) struct ChoiceRow {
     pub(crate) width_typed: bool,
 }
 
+/// Whether `column` is one a listing always shows right after Name:
+/// Folder path in a search, Original location and Date deleted in the
+/// Recycle Bin. Choose Details lists it checked there, and it neither
+/// hides nor moves.
+fn is_fixed(column: SortColumn) -> bool {
+    FOLLOWING_NAME.contains(&column)
+}
+
 /// The window's list of columns and what the user changed in it, before
 /// OK applies it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DetailsChoice {
     rows: Vec<ChoiceRow>,
+    /// The chosen columns the listing does not have, such as Date
+    /// modified in a search or the Recycle Bin, with their places among
+    /// the chosen ones: they are not listed, and OK keeps them chosen for
+    /// the listings that have them.
+    unlisted: Vec<(usize, SortColumn)>,
 }
 
 impl DetailsChoice {
-    /// The list for a view showing the `chosen` columns (after Name,
-    /// unless they place it), each `width_of` pixels wide: the shown ones
-    /// in their order, then the other columns in alphabetical order.
+    /// The list for a folder's view showing the `chosen` columns (after
+    /// Name, unless they place it), each `width_of` pixels wide: the shown
+    /// ones in their order, then the other columns in alphabetical order.
+    #[cfg(test)]
     pub(crate) fn new(chosen: &[SortColumn], width_of: impl Fn(SortColumn) -> u32) -> Self {
+        Self::for_listing(chosen, DetailsListing::Folder, width_of)
+    }
+
+    /// The list for a view of `listing` showing the `chosen` columns, as
+    /// [`DetailsChoice::new`] makes it, with only the columns `listing`
+    /// has: Folder path in a search, Original location and Date deleted
+    /// in the Recycle Bin, after Name as the view shows them, and no Date
+    /// modified in either.
+    pub(crate) fn for_listing(
+        chosen: &[SortColumn],
+        listing: DetailsListing,
+        width_of: impl Fn(SortColumn) -> u32,
+    ) -> Self {
+        let listed = |column: &SortColumn| lists_column(listing, *column);
+        let unlisted = chosen
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, column)| !listed(column))
+            .collect();
         let mut hidden: Vec<SortColumn> = SortColumn::CHOOSABLE
             .into_iter()
-            .filter(|column| !chosen.contains(column))
+            .filter(|column| !chosen.contains(column) && listed(column))
             .collect();
         hidden.sort_by_cached_key(|column| column.label().to_lowercase());
         let leading_name = (!chosen.contains(&SortColumn::Name)).then_some(SortColumn::Name);
+        let fixed = SortColumn::ALL
+            .into_iter()
+            .filter(|column| is_fixed(*column) && listed(column));
         let shown = leading_name
             .into_iter()
-            .chain(chosen.iter().copied())
+            .chain(chosen.iter().copied().filter(listed))
+            .chain(fixed)
             .map(|column| (column, true));
         let rows = shown
             .chain(hidden.into_iter().map(|column| (column, false)))
@@ -87,7 +133,22 @@ impl DetailsChoice {
                 width_typed: false,
             })
             .collect();
-        Self { rows }
+        let mut choice = Self { rows, unlisted };
+        choice.place_fixed_rows();
+        choice
+    }
+
+    /// Puts the listing's own columns where the view shows them: right
+    /// after Name, wherever Name is.
+    fn place_fixed_rows(&mut self) {
+        let (fixed, mut rows): (Vec<ChoiceRow>, Vec<ChoiceRow>) =
+            self.rows.drain(..).partition(|row| is_fixed(row.column));
+        let after_name = rows
+            .iter()
+            .position(|row| row.column == SortColumn::Name)
+            .map_or(0, |name| name + 1);
+        rows.splice(after_name..after_name, fixed);
+        self.rows = rows;
     }
 
     /// The rows, in order.
@@ -95,24 +156,41 @@ impl DetailsChoice {
         &self.rows
     }
 
+    /// The index of `column`'s row.
+    pub(crate) fn index_of(&self, column: SortColumn) -> Option<usize> {
+        self.rows.iter().position(|row| row.column == column)
+    }
+
+    /// The row a move of the row at `index` swaps with, among `others`
+    /// (the indexes above or below it, nearest first): the nearest one
+    /// that moves, as the listing's own columns keep their places.
+    fn swap_partner(&self, index: usize, mut others: impl Iterator<Item = usize>) -> Option<usize> {
+        let row = self.rows.get(index)?;
+        if is_fixed(row.column) {
+            return None;
+        }
+        others.find(|other| !is_fixed(self.rows[*other].column))
+    }
+
     /// Whether Move Up applies to the row at `index`: every row but the
-    /// first, as in Windows.
+    /// first, as in Windows, and none of the listing's own columns.
     pub(crate) fn can_move_up(&self, index: usize) -> bool {
-        index > 0 && index < self.rows.len()
+        self.swap_partner(index, (0..index).rev()).is_some()
     }
 
     /// Whether Move Down applies to the row at `index`: every row but the
-    /// last, Name included, as in Windows.
+    /// last, Name included, as in Windows, and none of the listing's own
+    /// columns.
     pub(crate) fn can_move_down(&self, index: usize) -> bool {
-        index + 1 < self.rows.len()
+        self.swap_partner(index, index + 1..self.rows.len()).is_some()
     }
 
     /// Whether the row at `index` can be cleared, as every one but Name
-    /// can.
+    /// and the listing's own columns can.
     fn can_clear(&self, index: usize) -> bool {
         self.rows
             .get(index)
-            .is_some_and(|row| row.column != SortColumn::Name)
+            .is_some_and(|row| row.column != SortColumn::Name && !is_fixed(row.column))
     }
 
     /// Whether Show applies to the row at `index`: it is not checked.
@@ -120,32 +198,40 @@ impl DetailsChoice {
         self.rows.get(index).is_some_and(|row| !row.shown)
     }
 
-    /// Whether Hide applies to the row at `index`: it is checked and not
-    /// Name.
+    /// Whether Hide applies to the row at `index`: it is checked and can
+    /// be cleared.
     pub(crate) fn can_hide(&self, index: usize) -> bool {
         self.can_clear(index) && self.rows[index].shown
     }
 
-    /// Moves the row at `index` up one, if it can, and returns where it is.
+    /// Swaps the row at `index` with `partner`, if it has one, and
+    /// returns where the row is then.
+    fn move_to(&mut self, index: usize, partner: Option<usize>) -> usize {
+        let Some(partner) = partner else {
+            return index;
+        };
+        let column = self.rows[index].column;
+        self.rows.swap(index, partner);
+        self.place_fixed_rows();
+        self.index_of(column).unwrap_or(partner)
+    }
+
+    /// Moves the row at `index` up one, past the listing's own columns,
+    /// if it can, and returns where it is.
     pub(crate) fn move_up(&mut self, index: usize) -> usize {
-        if !self.can_move_up(index) {
-            return index;
-        }
-        self.rows.swap(index - 1, index);
-        index - 1
+        let partner = self.swap_partner(index, (0..index).rev());
+        self.move_to(index, partner)
     }
 
-    /// Moves the row at `index` down one, if it can, and returns where it
-    /// is.
+    /// Moves the row at `index` down one, past the listing's own columns,
+    /// if it can, and returns where it is.
     pub(crate) fn move_down(&mut self, index: usize) -> usize {
-        if !self.can_move_down(index) {
-            return index;
-        }
-        self.rows.swap(index, index + 1);
-        index + 1
+        let partner = self.swap_partner(index, index + 1..self.rows.len());
+        self.move_to(index, partner)
     }
 
-    /// Checks or clears the row at `index`; Name stays checked.
+    /// Checks or clears the row at `index`; Name and the listing's own
+    /// columns stay checked.
     pub(crate) fn set_shown(&mut self, index: usize, shown: bool) {
         if self.can_clear(index) {
             self.rows[index].shown = shown;
@@ -170,10 +256,19 @@ impl DetailsChoice {
     }
 
     /// The checked columns in the list's order, Name among them only
-    /// when it is not first.
+    /// when it is not first, with the chosen columns the listing does not
+    /// have back in their places.
     pub(crate) fn chosen(&self) -> Vec<SortColumn> {
-        let shown = self.rows.iter().filter(|row| row.shown).map(|row| row.column);
-        crate::folder_view::details::without_leading_name(shown.collect())
+        let shown = self
+            .rows
+            .iter()
+            .filter(|row| row.shown && !is_fixed(row.column))
+            .map(|row| row.column);
+        let mut chosen = crate::folder_view::details::without_leading_name(shown.collect());
+        for (place, column) in &self.unlisted {
+            chosen.insert((*place).min(chosen.len()), *column);
+        }
+        chosen
     }
 
     /// The columns whose width the user typed, with that width.
@@ -184,6 +279,18 @@ impl DetailsChoice {
             .map(|row| (row.column, row.width))
             .collect()
     }
+}
+
+/// What a Choose Details window was opened for: the tab its pane showed,
+/// that tab's location and what the details view listed there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ChoiceTarget {
+    /// The tab.
+    tab: TabId,
+    /// Its location.
+    uri: String,
+    /// What the details view listed.
+    listing: DetailsListing,
 }
 
 /// The digits of `text`, which is all the width field takes.
@@ -471,7 +578,8 @@ impl ChooseDetails {
         self.width.set_sensitive(selected.is_some());
     }
 
-    /// Checks or clears the selected column, from Show, Hide or Space.
+    /// Checks or clears the selected column, from Show, Hide, Space or
+    /// its check box.
     fn set_selected_shown(&self, state: &State, shown: bool) {
         let Some(index) = self.selected_index() else {
             return;
@@ -742,8 +850,9 @@ impl BrowserWindow {
         // OK applies to the pane the window was opened for, even if the
         // other pane of a split view became active meanwhile.
         let side = self.imp().active_side.get();
+        let target = self.choice_target(side);
         let details = self.pane_on(side).details().clone();
-        let choice = DetailsChoice::new(&details.chosen_columns(), |column| {
+        let choice = DetailsChoice::for_listing(&details.chosen_columns(), details.listing(), |column| {
             details.width_on_screen(column)
         });
         let state = Rc::new(State {
@@ -761,12 +870,36 @@ impl BrowserWindow {
         glib::spawn_future_local(async move {
             let answer = shown.dialog.next_response().await;
             if answer.is_some() {
-                if let Some(window) = window.upgrade() {
+                // The pane's widgets serve every tab: a folder opened from
+                // another application while the window was open may show
+                // in the pane by now, and the choice was made for another
+                // folder and listing. It is then dropped, as Cancel does.
+                let window = window.upgrade();
+                let same = window
+                    .as_ref()
+                    .is_some_and(|window| target.is_some() && window.choice_target(side) == target);
+                if let (Some(window), true) = (window, same) {
                     window.apply_details_choice(side, &state.choice.borrow());
                 }
                 shown.dialog.finish();
             }
         });
+    }
+
+    /// What the pane on `side` shows now, for Choose Details to check it
+    /// still shows it on OK: its tab, the tab's location and what the
+    /// details view lists there.
+    fn choice_target(&self, side: PaneSide) -> Option<ChoiceTarget> {
+        let (tab, uri) = {
+            let session = self.imp().session.borrow();
+            let active = session.active()?;
+            let shown = std::iter::once(active)
+                .chain(active.beside())
+                .find(|tab| tab.side == side)?;
+            (shown.id, shown.uri().to_owned())
+        };
+        let listing = self.pane_on(side).details().listing();
+        Some(ChoiceTarget { tab, uri, listing })
     }
 
     /// Shows the columns `choice` checks in the pane on `side`, in its
