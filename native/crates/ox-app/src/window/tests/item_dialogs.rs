@@ -1048,7 +1048,9 @@ fn an_invalid_name_in_properties_is_refused_before_the_extension_question() {
 }
 
 /// The name asks before it changes a file's extension, as Windows
-/// Explorer does, and renames only once the user confirms.
+/// Explorer does, and renames only once the user confirms. No keeps the
+/// old name, which the field shows again, with no message, as No ends a
+/// rename in place.
 ///
 /// parity: PROP-005, OPS-049
 #[gtk::test]
@@ -1066,11 +1068,26 @@ fn the_name_in_properties_asks_before_changing_the_extension() {
     assert_eq!(question.title_text(), "Rename", "the question is over Properties");
     super::file_ops_support::assert_windows_extension_question(&question);
     question.press("No");
-    let refusal = refusal_over(&window);
-    assert_eq!(refusal.message_text(), "The name was not changed.");
-    refusal.press("OK");
+    wait_until("no question", || extension_questions(&window) == 0);
+    wait_until("the old name back in the field", || name.text() == "Notes 2.txt");
     assert!(fixture.path("Notes 2.txt").is_file());
+    assert!(!fixture.path("Notes 2.md").exists());
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "no message after No"
+    );
+    assert!(
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|toplevel| toplevel.downcast::<Dialog>().ok())
+            .all(
+                |dialog| !dialog.is_visible() || dialog.transient_for().as_ref() != Some(window.upcast_ref())
+            ),
+        "no message over Properties after No"
+    );
+    assert!(!window.is_closed(), "Apply keeps the window open");
 
+    name.set_text("Notes 2.md");
     press(&window, "Apply");
     wait_until("the question again", || extension_questions(&window) == 1);
     message_over(&window).press("Yes");
@@ -1092,7 +1109,9 @@ fn extension_questions(window: &PropertiesWindow) -> usize {
         .count()
 }
 
-/// Pressing OK twice quickly asks about the extension once, not twice.
+/// Pressing OK twice quickly asks about the extension once, not twice;
+/// No keeps the old name without a message, and OK then closes the
+/// window, with nothing left to apply.
 ///
 /// parity: PROP-005, OPS-049
 #[gtk::test]
@@ -1112,8 +1131,9 @@ fn ok_twice_in_properties_asks_about_the_extension_once() {
     assert_eq!(extension_questions(&window), 1, "one question");
     message_over(&window).press("No");
     wait_until("no question", || extension_questions(&window) == 0);
-    refusal_over(&window).press("OK");
+    wait_until("the window to close", || window.is_closed());
     assert!(fixture.path("Notes 2.txt").is_file());
+    assert!(!fixture.path("Notes 2.md").exists());
 }
 
 /// A link to a folder is renamed without the extension question, as
