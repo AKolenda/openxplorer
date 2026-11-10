@@ -803,3 +803,36 @@ fn the_titles_menu_opens_in_search_results_and_the_recycle_bin() {
     wait_for_frames(&test.window, 3);
     check_menu("the Recycle Bin");
 }
+
+/// Choose Details is freed once it closes, by OK, Cancel or Escape:
+/// its controls hold no callback that keeps the window itself alive, so
+/// opening it again and again does not keep every earlier one.
+///
+/// parity: VIEW-033
+#[gtk::test]
+fn choose_details_is_freed_once_it_closes() {
+    let (_fixture, test) = window_with_files();
+    let closings: [(&str, fn(&ChooseDetails)); 3] = [
+        ("OK", |shown| shown.ok.emit_clicked()),
+        ("Cancel", |shown| shown.cancel.emit_clicked()),
+        ("Escape", |shown| shown.dialog.close()),
+    ];
+    for (how, close) in closings {
+        let gone = {
+            let shown = open_from_more(&test);
+            shown.select(4);
+            shown.show.emit_clicked();
+            shown.move_up.emit_clicked();
+            shown.width.set_text("150");
+            let gone = shown.dialog.downgrade();
+            close(&shown);
+            gone
+        };
+        wait_until(&format!("Choose Details to close with {how}"), || {
+            ChooseDetails::shown_over(&test.window).is_none()
+        });
+        wait_until(&format!("Choose Details to be freed after {how}"), || {
+            gone.upgrade().is_none()
+        });
+    }
+}
