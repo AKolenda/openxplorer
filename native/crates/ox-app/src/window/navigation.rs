@@ -415,8 +415,16 @@ impl BrowserWindow {
         let had_focus =
             focus == FocusOnShow::Restore && self.folder_panes().iter().any(|pane| pane.view_has_focus());
         self.imp().active_side.set(view.side);
+        // A pane that shows this tab at its location already keeps the
+        // style it shows, as the pane beside does: the pane just left when
+        // the other becomes active again, or the pane that stays when the
+        // other closes and takes its style along. A choice made there a
+        // moment ago may not be saved yet, and the saved style would undo
+        // it.
         if let Some(uri) = self.current_uri() {
-            self.follow_folder_style(&uri);
+            if !self.folder_pane().is_styled_for(&view.store, &uri) {
+                self.follow_folder_style(&view.store, &uri);
+            }
         }
         self.change_model(|| {
             let model = self.folder_pane().model();
