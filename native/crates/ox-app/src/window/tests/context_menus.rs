@@ -651,13 +651,14 @@ fn the_compact_folder_menu_opens_its_submenus_beside_it() {
     assert!(menu.is_visible(), "the folder menu stays open");
 }
 
-/// Shift+F10 (`win.context-menu`) opens the classic menu of the selection,
-/// and the Menu key the right-click menu's style, as in Windows 11
-/// Explorer.
+/// Shift+F10 (`win.context-menu`) and the Menu key both open the
+/// right-click menu's style for the selection, Windows 11's compact menu
+/// as it comes, as in Windows 11 Explorer, where the classic menu shows
+/// only through "Show more options" or Shift+right-click.
 ///
 /// parity: CMD-013, CMD-014
 #[gtk::test]
-fn shift_f10_opens_the_classic_menu_and_the_menu_key_the_compact_one() {
+fn shift_f10_and_the_menu_key_open_the_right_click_menu() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     choose_menu_style(&test, ContextMenu::Win11);
@@ -669,10 +670,13 @@ fn shift_f10_opens_the_classic_menu_and_the_menu_key_the_compact_one() {
     assert!(menu.is_visible());
     assert_eq!(
         menu.style(),
-        MenuStyle::Classic,
-        "Shift+F10 opens the classic menu"
+        MenuStyle::Compact,
+        "Shift+F10 opens the right-click menu, Windows 11's"
     );
-    assert_eq!(menu.row_labels()[0], "Open");
+    assert_eq!(
+        menu.row_labels().last().map(String::as_str),
+        Some("Show more options")
+    );
     menu.popdown();
 
     let view = test.window.folder_pane().input_widget();

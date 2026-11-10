@@ -204,10 +204,11 @@ fn reopen_items(test: &TestWindow) -> Vec<(String, Option<String>)> {
 }
 
 /// The tab keys go through the window's capture-phase shortcuts: Ctrl+T
-/// from the list opens a tab but is left to the search box when it has
-/// focus; Alt+1, Ctrl+W and Ctrl+Shift+T work from the list.
+/// opens a tab from the list and, as in Windows 11, from the search box,
+/// where Ctrl+N is left to the field; Alt+1, Ctrl+W and Ctrl+Shift+T work
+/// from the list.
 ///
-/// parity: TAB-001, TAB-005, TAB-006, TAB-016
+/// parity: TAB-001, TAB-005, TAB-006, TAB-016, CMD-017
 #[gtk::test]
 fn the_tab_keys_reach_the_window_through_its_shortcuts() {
     let fixture = Fixture::standard();
@@ -218,7 +219,9 @@ fn the_tab_keys_reach_the_window_through_its_shortcuts() {
     press_shortcut(&test, gtk::gdk::Key::t, control);
     let after_ctrl_t = test.window.tab_count();
     test.window.search_box().entry().grab_focus();
-    let search_took_key = !press_shortcut_where_focused(&test, gtk::gdk::Key::t, control);
+    let search_took_ctrl_n = !press_shortcut_where_focused(&test, gtk::gdk::Key::n, control);
+    let window_took_ctrl_t = press_shortcut_where_focused(&test, gtk::gdk::Key::t, control);
+    test.wait_for_listing("the tab Ctrl+T opened from the search box");
     let from_search = test.window.tab_count();
     press_shortcut(&test, gtk::gdk::Key::_1, gtk::gdk::ModifierType::ALT_MASK);
     let first = test.active_tab();
@@ -231,11 +234,12 @@ fn the_tab_keys_reach_the_window_through_its_shortcuts() {
     );
     test.wait_for_listing("the reopened tab");
 
-    assert_eq!((after_ctrl_t, from_search), (2, 2));
-    assert!(search_took_key, "the window leaves Ctrl+T to the text field");
+    assert_eq!((after_ctrl_t, from_search), (2, 3));
+    assert!(search_took_ctrl_n, "the window leaves Ctrl+N to the search box");
+    assert!(window_took_ctrl_t, "Ctrl+T opens a tab from the search box");
     assert_eq!(first, Some(first_tab), "Alt+1 shows the first tab");
-    assert_eq!(after_ctrl_w, 1);
-    assert_eq!(test.window.tab_count(), 2, "Ctrl+Shift+T reopened it");
+    assert_eq!(after_ctrl_w, 2);
+    assert_eq!(test.window.tab_count(), 3, "Ctrl+Shift+T reopened it");
 }
 
 /// parity: TAB-058

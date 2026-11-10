@@ -135,7 +135,10 @@ impl BrowserWindow {
         if mode == LoadMode::Navigate {
             self.clear_rows(id);
             if is_active {
-                self.follow_folder_style(&start.uri);
+                let store = self.imp().session.borrow().tab(id).map(|tab| tab.store.clone());
+                if let Some(store) = store {
+                    self.follow_folder_style(&store, &start.uri);
+                }
             }
         }
         let signing_out = self.context().network().sign_out_registry();

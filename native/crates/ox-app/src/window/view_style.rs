@@ -10,6 +10,7 @@
 //! shown in its own style. The Sort menu's further keys (VIEW-019), groups
 //! (VIEW-022) and the date style (VIEW-004) are applied here too.
 
+use gtk::gio;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format::DateStyle;
@@ -190,15 +191,16 @@ impl BrowserWindow {
         self.imp().applying_style.set(applying);
     }
 
-    /// Shows the folder at `uri` in its own style, when each folder keeps
-    /// one (VIEW-020); with one style for all folders, the window keeps
-    /// the style it shows, but for the groups of Downloads, which is
-    /// grouped by date modified until the user chooses otherwise there
-    /// (VIEW-022).
-    pub(super) fn follow_folder_style(&self, uri: &str) {
+    /// Shows the folder at `uri`, in the tab whose items are `store`, in
+    /// its own style, when each folder keeps one (VIEW-020); with one
+    /// style for all folders, the window keeps the style it shows, but for
+    /// the groups of Downloads, which is grouped by date modified until the
+    /// user chooses otherwise there (VIEW-022).
+    pub(super) fn follow_folder_style(&self, store: &gio::ListStore, uri: &str) {
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
+        self.folder_pane().set_styled_for(store, uri);
         if preferences.per_folder_views {
             self.apply_style(&style);
             return;
@@ -210,6 +212,34 @@ impl BrowserWindow {
             .map_or(GroupBy::None, |grouping| grouping.by);
         if shown != style.grouping() {
             self.show_group_by(style.grouping());
+        }
+    }
+
+    /// Shows the folder at `uri`, in the tab whose items are `store`, in
+    /// `pane`, which is not the active one,
+    /// as [`Self::follow_folder_style`] shows the active pane's: in the
+    /// folder's own style when each folder keeps one, else keeping the
+    /// pane's style but for the groups of Downloads (VIEW-022). The pane
+    /// beside the active one of a split tab is shown this way whenever the
+    /// tab is shown, so Downloads there keeps its date groups.
+    pub(super) fn follow_folder_style_in(&self, pane: &FolderPane, store: &gio::ListStore, uri: &str) {
+        let preferences = self.context().settings_data().preferences;
+        let downloads = self.downloads_location();
+        let style = preferences.view_in(uri, downloads.as_deref());
+        pane.set_styled_for(store, uri);
+        if preferences.per_folder_views {
+            self.apply_style_to(pane, &style);
+            return;
+        }
+        let shown = pane
+            .model()
+            .grouping()
+            .map_or(GroupBy::None, |grouping| grouping.by);
+        if shown != style.grouping() {
+            let applying = self.imp().applying_style.replace(true);
+            group_pane(pane, Grouping::of(style.grouping(), pane_sort_state(pane)));
+            self.update_expandability_for(pane);
+            self.imp().applying_style.set(applying);
         }
     }
 

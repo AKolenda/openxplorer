@@ -261,6 +261,11 @@ pub struct Preferences {
         skip_serializing_if = "StripPosition::is_pointer"
     )]
     pub strip_position: StripPosition,
+    /// Shift+F10 opens the classic (Windows 10) menu instead of the
+    /// right-click menu's style, which Windows 11 opens on Shift+F10.
+    /// Stored only when on.
+    #[serde(rename = "shiftF10Classic", skip_serializing_if = "std::ops::Not::not")]
+    pub shift_f10_classic: bool,
     /// Folder item counts were turned on in this app. Files of older
     /// releases store `viewOptions.countFolderItems: true`, then the
     /// default, whenever any view option changed, so without this mark
@@ -587,6 +592,7 @@ impl Default for Preferences {
             auto_index: true,
             context_menu: ContextMenu::default(),
             strip_position: StripPosition::Pointer,
+            shift_f10_classic: false,
             classic_menu_chosen: false,
             item_counts_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
@@ -782,6 +788,7 @@ impl Preferences {
         self.apply_confirmations(update);
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
+        replace_if_some(&mut self.shift_f10_classic, update.shift_f10_classic);
         replace_if_some(&mut self.progress_details, update.progress_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
@@ -946,6 +953,8 @@ pub struct PreferencesUpdate {
     pub context_menu: Option<ContextMenu>,
     /// Where the compact menu's strip sits.
     pub strip_position: Option<StripPosition>,
+    /// Whether Shift+F10 opens the classic menu.
+    pub shift_f10_classic: Option<bool>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
     /// The size new windows open at.
@@ -1095,6 +1104,7 @@ impl PreferencesUpdate {
             column_widths: values.get("columnWidths").and_then(read_column_widths),
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
             strip_position: text("menuStripPosition").and_then(StripPosition::from_key),
+            shift_f10_classic: flag("shiftF10Classic"),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
             dialog_size: values.get("dialogSize").and_then(WindowSize::from_json),

@@ -187,6 +187,46 @@ impl DetailsView {
         view_column.set_fixed_width(column_widths::clamped_fixed_width(column, current + step));
     }
 
+    /// The width `column` has, in the pixels settings save and Choose
+    /// Details shows: its own width, or for Name filling the spare width,
+    /// the width of its title on screen.
+    pub(crate) fn width_on_screen(&self, column: SortColumn) -> u32 {
+        let fixed = self
+            .column(column)
+            .map_or(-1, |view_column| view_column.fixed_width());
+        let on_screen = || {
+            let header = self.header()?;
+            let titles = self.titles(&header);
+            let title = titles.into_iter().find(|(shown, _)| *shown == column)?.1;
+            let bounds = title.compute_bounds(&title)?;
+            #[expect(clippy::cast_possible_truncation, reason = "a title's width fits in i32")]
+            let width = bounds.width().round() as i32;
+            Some(width)
+        };
+        let width = if fixed > 0 { Some(fixed) } else { on_screen() };
+        let saved = width.and_then(|width| column_widths::saved_width(column, width));
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a saved width is a positive number of pixels"
+        )]
+        let pixels = saved.map(|saved| saved.round() as u32);
+        pixels
+            .or_else(|| column_widths::start_width(column, None))
+            .unwrap_or(*column_widths::width_limits(column).start())
+    }
+
+    /// Gives `column` a width of its own, `width` pixels as settings save
+    /// it, as Choose Details does; Name then stops filling the spare
+    /// width. The width is saved as a drag's is.
+    pub(crate) fn set_column_width(&self, column: SortColumn, width: u32) {
+        let Some(view_column) = self.column(column) else {
+            return;
+        };
+        view_column.set_expand(false);
+        view_column.set_fixed_width(column_widths::fixed_width(column, Some(width)));
+    }
+
     /// Fits `column` to the widest text among the first
     /// [`FIT_ITEM_LIMIT`] shown items (`fitColumn`), and never narrower
     /// than its title, as Windows File Explorer fits a column.
@@ -244,6 +284,18 @@ impl DetailsView {
         #[expect(clippy::cast_possible_truncation, reason = "a title's width fits in i32")]
         let padding = ((f64::from(outer) - f64::from(title.width())).ceil() as i32).max(0);
         needed + padding
+    }
+
+    /// The middle of `column`'s shown title, a position in the titles'
+    /// row.
+    pub(crate) fn title_middle(&self, column: SortColumn) -> Option<f64> {
+        let header = self.header()?;
+        let titles = self.titles(&header);
+        let (_, title) = titles
+            .into_iter()
+            .find(|(shown, title)| *shown == column && title.is_visible())?;
+        let bounds = title.compute_bounds(&header)?;
+        Some(f64::from(bounds.x() + bounds.width() / 2.0))
     }
 
     /// The shown column whose title is under `x`, a position in the

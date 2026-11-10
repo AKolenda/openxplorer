@@ -161,6 +161,9 @@ pub(crate) enum WindowAction {
     /// Fits every shown details column to its widest content and title
     /// ("Size all columns to fit", Ctrl+keypad plus, VIEW-072).
     FitAllColumns,
+    /// Opens Choose Details for the details columns ("More..." in the
+    /// column titles' menu, VIEW-033).
+    ChooseDetails,
     /// Stops the listing of the folder shown (VIEW-049).
     Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
@@ -579,6 +582,7 @@ impl WindowAction {
             WindowAction::DetailsColumn => "details-column",
             WindowAction::FitColumn => "fit-column",
             WindowAction::FitAllColumns => "fit-all-columns",
+            WindowAction::ChooseDetails => "choose-details",
             WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SplitView => "split-view",

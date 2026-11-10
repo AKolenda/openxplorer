@@ -23,9 +23,11 @@ is missing.
     range anchor, so Shift+click extends from the last clicked item.
   - SEL-035 (with SEL-036): a lone Space selects the current item and never
     deselects it, instead of starting a type-ahead prefix.
-  - CMD-017: Menu and Shift+F10 in a text field open the field's own menu, and
-    Ctrl+H, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab and Alt+Left/Right/Up also act
-    from text fields. Typing with an input method (IME) is not verified.
+  - CMD-017: Menu and Shift+F10 in a text field open the field's own menu.
+    Typing with an input method (IME) is not verified. Decided on 2026-11-09
+    after a comparison with Windows 11: Ctrl+T and Ctrl+W also work from the
+    address bar while it is edited and from the search box, as in Windows 11,
+    while Ctrl+N, Ctrl+H, Ctrl+Tab and Alt+Left/Right/Up stay with the field.
   - XFER-011: a move that cannot be done natively asks "Move by copying?"
     once per operation; Cancel keeps the old refusal.
   - Windows 11's look by default (2026-11-09), each earlier choice kept
@@ -41,6 +43,10 @@ is missing.
     always name the weekday instead of "Today" or "Yesterday" (PROP-003,
     PROP-038). The owner has yet to say whether Windows' layout or the
     earlier one should be the default.
+- **Windows 11 address and search details (2026-11-10).** Typing "Recycle
+  Bin" in the address bar opens it (NAV-033). Search's `?` stands for
+  exactly one character (SRCH-004); a Linux name holding a literal `?` is
+  matched by it too, and there is no escape for it.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon

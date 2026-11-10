@@ -20,7 +20,7 @@ use crate::test_support::harness::{descendants, wait_until};
 /// then, and the row that offers it now, then the rows added since and the
 /// rows of the commands that came from the command bar's "…" menu
 /// (CMD-007), by their menu labels.
-const MOVED_ROWS: [(&str, &str); 75] = [
+const MOVED_ROWS: [(&str, &str); 76] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -159,6 +159,10 @@ const MOVED_ROWS: [(&str, &str); 75] = [
     ),
     ("Keyboard shortcuts", "Keyboard shortcuts"),
     ("Help", "Help"),
+    (
+        "Shift+F10 opens the classic menu",
+        "Shift+F10 opens the classic menu",
+    ),
 ];
 
 /// Every row of every page.

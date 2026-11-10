@@ -513,6 +513,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Show more items in the tab menu",
             "Right-click menu",
             "Buttons in the right-click menu",
+            "Shift+F10 opens the classic menu",
             "Sidebar and column widths"
         ]
     );
@@ -745,6 +746,36 @@ fn the_expand_arrows_switch_saves_the_choice() {
     });
     wait_until("the window to follow", || {
         settings.test.window.hides_expand_arrows()
+    });
+}
+
+/// "Shift+F10 opens the classic menu" sits with the right-click menu's
+/// rows, is off by default, as Windows 11 opens its new menu on
+/// Shift+F10, and saves the choice, which the open window then takes up.
+///
+/// parity: CMD-013
+#[gtk::test]
+fn the_shift_f10_switch_is_off_and_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let row = settings.row("Shift+F10 opens the classic menu");
+    let switch = switch_of(&row);
+    assert!(!switch.is_active(), "off by default");
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().shift_f10_classic
+    });
+    wait_until("the window to follow", || {
+        settings
+            .test
+            .context
+            .settings_data()
+            .preferences
+            .shift_f10_classic
+    });
+    switch.set_active(false);
+    wait_until("the choice to be saved off", || {
+        !settings.saved_preferences().shift_f10_classic
     });
 }
 

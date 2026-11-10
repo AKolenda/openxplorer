@@ -16,6 +16,9 @@
 //! - `tab-menu=<number>`: opens the right-click menu of the tab at
 //!   `<number>`, counted from 1, under it, as the Menu key on that tab
 //!   does;
+//! - `titles-menu=<column>`: opens the details view's column titles'
+//!   menu on the title of `<column>` (`name`, `size`, ...), as a
+//!   right-click on it does;
 //! - `submenu=<label>`: opens the submenu of the open context menu's
 //!   item `<label>`, such as `Send to`, as Right on its row does;
 //! - `tab=<name>`: shows the tab named `<name>` (`general`, `security`,
@@ -83,6 +86,8 @@ pub(crate) enum SceneStep {
     },
     /// Open the menu of the tab at this number, counted from 1.
     TabMenu(usize),
+    /// Open the column titles' menu on this column's title.
+    TitlesMenu(String),
     /// Open the submenu of the open context menu's item with this label.
     Submenu(String),
     /// Show this tab of the Properties window opened last.
@@ -142,6 +147,7 @@ impl SceneStep {
                 .ok()
                 .filter(|number| *number > 0)
                 .map(Self::TabMenu),
+            "titles-menu" => Some(Self::TitlesMenu(argument.to_owned())),
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
             "focus" => Some(Self::Focus(argument.to_owned())),
@@ -196,6 +202,10 @@ impl SceneStep {
                 .open_tab_menu(*number)
                 .then_some(crate::window::MENU_OPENING_MOTION)
                 .ok_or_else(|| format!("there is no tab {number}")),
+            Self::TitlesMenu(column) => window
+                .open_titles_menu_on(column)
+                .then_some(crate::window::MENU_OPENING_MOTION)
+                .ok_or_else(|| format!("the details view shows no column “{column}”")),
             Self::Submenu(label) => (window.open_context_submenu(label)
                 || window.open_search_options_submenu(label))
             .then_some(crate::window::MENU_OPENING_MOTION)
@@ -401,7 +411,7 @@ mod tests {
     #[test]
     fn a_scene_lists_selections_and_actions_in_order() {
         let scene = SceneStep::parse_scene(
-            "select=Notes.md; action=context-menu;submenu=Send to;action=open-tab:/home/demo;tab=details;row=Camera model;focus=share;wait=250",
+            "select=Notes.md; action=context-menu;submenu=Send to;titles-menu=size;action=open-tab:/home/demo;tab=details;row=Camera model;focus=share;wait=250",
         )
         .expect("a valid scene");
         assert_eq!(
@@ -413,6 +423,7 @@ mod tests {
                     target: None
                 },
                 SceneStep::Submenu("Send to".to_owned()),
+                SceneStep::TitlesMenu("size".to_owned()),
                 SceneStep::Action {
                     name: "open-tab".to_owned(),
                     target: Some("/home/demo".to_owned())

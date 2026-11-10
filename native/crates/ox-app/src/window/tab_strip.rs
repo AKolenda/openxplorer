@@ -519,10 +519,7 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
 /// "Keyboard shortcuts in Windows").
 fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
     let shortcuts = gtk::ShortcutController::new();
-    for key in [
-        super::context_menu::MENU_KEY,
-        super::context_menu::CLASSIC_MENU_KEY,
-    ] {
+    for key in [super::context_menu::MENU_KEY, super::context_menu::SHIFT_F10_KEY] {
         let uri = uri.to_owned();
         let action = gtk::CallbackAction::new(move |tab, _| {
             let Some(strip) = tab.ancestor(TabStrip::static_type()).and_downcast::<TabStrip>() else {

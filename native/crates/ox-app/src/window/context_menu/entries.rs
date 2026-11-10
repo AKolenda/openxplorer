@@ -745,20 +745,23 @@ fn properties_item() -> MenuEntry {
 }
 
 /// "Show more options", the compact menu's last item, which opens the
-/// classic menu in its place (Shift+F10).
+/// classic menu in its place.
 fn show_more_options_item() -> MenuEntry {
     more_options_item(WindowAction::ShowMoreOptions)
 }
 
 /// "Show more options" that runs `action`, which opens its menu's classic
-/// style in its place: the file list's, or the navigation pane's.
+/// style in its place: the file list's, or the navigation pane's. It shows
+/// no key, as in Windows 11, where Shift+F10 opens the new menu; the menu
+/// shows "Shift+F10" beside it only while the Settings choice "Shift+F10
+/// opens the classic menu" makes that key open what the row opens
+/// (`menu_popover.rs`, `with_more_options_key`).
 pub(crate) fn more_options_item(action: WindowAction) -> MenuEntry {
     item(
         ox_core::i18n::gettext_static("Show more options"),
         Icon::MoreHorizontal,
         action,
     )
-    .with_shortcut("Shift+F10")
     .into()
 }
 
