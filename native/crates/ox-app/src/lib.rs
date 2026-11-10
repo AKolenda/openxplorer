@@ -39,6 +39,7 @@ mod operation_session;
 mod picture_guard;
 mod places;
 mod properties;
+mod resize_edges;
 mod resizer_control;
 mod search;
 mod settings_page;

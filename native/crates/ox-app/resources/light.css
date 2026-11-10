@@ -89,6 +89,12 @@
 @define-color ox_scrollbar_trough alpha(@ox_flyout, .85);  /* §4.12 */
 @define-color ox_shadow_ambient alpha(black, .12);  /* C44 */
 @define-color ox_shadow_key alpha(black, .14);
+/* GTK's own window edge ($_wm_border in its Default theme), redrawn with
+   the resize ring of skin/base.css (E01) */
+@define-color ox_window_edge alpha(black, .23);
+@define-color ox_window_edge_backdrop alpha(black, .18);
+@define-color ox_window_shadow alpha(black, .5);
+@define-color ox_window_shadow_backdrop alpha(black, .2);
 /* The current app's own shadows, the same in both themes */
 @define-color ox_tab_shadow alpha(black, .012);     /* the active tab */
 @define-color ox_menu_shadow alpha(black, .2);      /* E03 classic menus */
