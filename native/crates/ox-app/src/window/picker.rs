@@ -210,10 +210,35 @@ impl Picker {
     /// The name File name stands for when it holds `text`: the text, with
     /// the extension it hides given back while the text is still the name
     /// shown without it.
+    ///
+    /// An edit that only changes the name before the hidden extension
+    /// keeps it, as the stem selection left it outside when the whole name
+    /// showed: "summary" over "report" (report.txt) is summary.txt, and
+    /// "archive.tar" over "backup.tar" (backup.tar.gz) archive.tar.gz. A
+    /// name typed with an extension of its own ("summary.md"), a path,
+    /// a hidden file's name or a name ending in a dot is taken as typed.
     fn named(&self, text: &str) -> String {
-        match self.hidden_extension.borrow().as_ref() {
-            Some((shown, extension)) if shown == text => format!("{text}{extension}"),
-            _ => text.to_owned(),
+        let hidden = self.hidden_extension.borrow();
+        let Some((shown, extension)) = hidden.as_ref() else {
+            return text.to_owned();
+        };
+        let own_extension = |name: &str| {
+            crate::folder_view::shown_name::hidden_extension(
+                name,
+                false,
+                crate::folder_view::shown_name::Extensions::Hidden,
+            )
+            .map(str::to_lowercase)
+        };
+        let only_the_stem = !text.trim().is_empty()
+            && !text.contains('/')
+            && !text.starts_with('.')
+            && !text.ends_with('.')
+            && own_extension(text) == own_extension(shown);
+        if text == shown || only_the_stem {
+            format!("{text}{extension}")
+        } else {
+            text.to_owned()
         }
     }
 }
@@ -716,6 +741,28 @@ impl BrowserWindow {
         }
     }
 
+    /// Shows a Save dialog's File name again as names are shown now, after
+    /// file name extensions were turned on or off: the name it stands for,
+    /// with or without its known extension, and its remembered extension
+    /// with it, so the box changes as the file list does.
+    pub(super) fn show_picker_name_again(&self) {
+        let Some(picker) = self.picker() else {
+            return;
+        };
+        let (ChooserMode::Save { .. }, Some(name_box)) = (&picker.request.mode, &picker.name) else {
+            return;
+        };
+        let whole = picker.named(&name_box.text());
+        if whole.is_empty() {
+            return;
+        }
+        let selected = name_box.selection_bounds().is_some();
+        self.show_in_name_box(&picker, name_box, &whole);
+        if selected {
+            select_name(&picker, name_box);
+        }
+    }
+
     /// Puts the file name `name` into a Save dialog's File name as the
     /// window shows names, as Windows 11's dialog does: while extensions
     /// of known types are hidden, without its extension (`extra_2` for
@@ -1210,6 +1257,11 @@ impl BrowserWindow {
             ),
         );
         let keep = frame.add_closing_button(&labels.1, keep_style, || {});
+        // The English keys in every language, as Windows keeps them
+        // ("是(Y)"): Y and N, or R and C.
+        let (replace_key, keep_key) = if keep_focused { ('y', 'n') } else { ('r', 'c') };
+        frame.also_press_with(&replace, replace_key);
+        frame.also_press_with(&keep, keep_key);
         // However the question ends: a button, Escape, or the dialog
         // closing under it.
         frame.connect_closed(glib::clone!(

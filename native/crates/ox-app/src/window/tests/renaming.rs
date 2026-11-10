@@ -419,7 +419,7 @@ fn the_rename_question_and_confirm_save_as_share_one_message_box_style() {
 }
 
 /// A message box keeps its Alt keys where Yes and No are translated to
-/// words that do not start with a Latin letter, as zh_CN's 是 and 否:
+/// words that do not start with a Latin letter, as `zh_CN`'s 是 and 否:
 /// Alt with the translated label's first character, and Alt+Y and Alt+N,
 /// as Windows writes them there ("是(Y)").
 ///

@@ -277,11 +277,11 @@ impl DialogFrame {
 
     /// Lets Alt with the first character of `button`'s label press it, in
     /// a message box: Alt+Y for Yes, and in a translation whose label does
-    /// not start with a Latin letter, such as zh_CN's 是, Alt with that
+    /// not start with a Latin letter, such as `zh_CN`'s 是, Alt with that
     /// character ([`Self::also_press_with`] adds Windows' Latin key there).
     fn add_mnemonic(&self, button: &gtk::Button) {
         let first = button.label().and_then(|label| label.chars().next());
-        if let Some(character) = first.filter(char::is_ascii_alphanumeric) {
+        if let Some(character) = first.filter(|character| character.is_alphanumeric()) {
             self.add_mnemonic_key(button, character);
         }
     }

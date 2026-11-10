@@ -78,7 +78,10 @@ impl BrowserWindow {
             ox_core::i18n::gettext_static(MESSAGE),
         );
         let yes = dialog.add_button(ox_core::i18n::gettext_static("Yes"), ButtonStyle::Accent);
-        dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
+        let no = dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
+        // Alt+Y and Alt+N in every language, as Windows keeps them.
+        dialog.also_press_with(yes, 'y');
+        dialog.also_press_with(no, 'n');
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
