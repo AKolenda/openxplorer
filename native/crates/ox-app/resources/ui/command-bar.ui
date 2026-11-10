@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- The command bar (section.commandbar in v2.0.0:desktop/ui/index.html): the
-     file commands, then at the right Update while a release waits and
-     Settings › About asks for it, the
+     file commands, then at the right Update while a release waits
+     (unless Settings › About turns it off), the
      hidden appearance toggle, Settings and the Details toggle
      (src/window/command_bar.rs). The gaps are CSS border-spacing, which
      narrow windows shrink. -->
@@ -35,8 +35,8 @@
       </object>
     </child>
     <child>
-      <!-- Update: shown, when Settings › About › "Show the Update button
-           in the command bar" is on, while a newer release is available
+      <!-- Update: shown, unless Settings › About › "Show the Update
+           button in the command bar" is off, while a newer release is available
            ("Update") or an installed one waits for a restart
            ("Restart"); it opens Software updates. -->
       <object class="GtkButton" id="update_button">

@@ -496,9 +496,10 @@ impl BrowserWindow {
         });
     }
 
-    /// Shows the application's updates in this window: the status bar's
-    /// notice, the command bar's Update when Settings asks for it, the notice the daily check pops
-    /// up, and the lock while an update installs (UPD-005).
+    /// Shows the application's updates in this window: the command bar's
+    /// Update (unless Settings › About turns it off), the status bar's
+    /// notice, the notice the daily check pops up, and the lock while an
+    /// update installs (UPD-005).
     fn follow_updates(&self) {
         let updates = self.context().updates();
         let handler = updates.connect_state_changed(glib::clone!(
@@ -535,10 +536,9 @@ impl BrowserWindow {
         self.set_sensitive(!state.is_installing());
     }
 
-    /// The command bar's Update, "Update" or "Restart", only while
-    /// Settings › About › "Show the Update button in the command bar" is
-    /// on, as Windows 11 Explorer's command bar has no such button; the
-    /// status bar's Update available shows either way.
+    /// The command bar's Update, "Update" or "Restart", while Settings ›
+    /// About › "Show the Update button in the command bar" is on, as it is
+    /// by default; the status bar's Update available shows either way.
     pub(super) fn show_command_bar_update(&self) {
         let state = self.context().updates().state();
         let shown = self.context().settings_data().preferences.show_update_button;

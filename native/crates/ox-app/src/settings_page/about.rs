@@ -14,9 +14,8 @@
 //! turning it on asks for an administrator's password (turning it off
 //! does not, for an administrator at the machine, whom the rule already
 //! lets through), and it shows whether the rule is there. "Show the Update
-//! button in the command bar", off by default as Windows 11 File
-//! Explorer's command bar has no such button, brings back the command
-//! bar's Update while a release waits. "Read license & source
+//! button in the command bar", on by default, hides the command bar's
+//! Update when turned off; the status bar's Update available stays. "Read license & source
 //! information" runs `win.license`, the licence dialog. "Keyboard
 //! shortcuts" and "Help" run `win.keyboard-shortcuts` (Ctrl+?) and
 //! `win.help` (F1): they, the licence and the build left the command
@@ -189,7 +188,7 @@ fn automatic_checks_row(page: &SettingsPage) -> SettingRow {
     row
 }
 
-/// "Show the Update button in the command bar": off by default.
+/// "Show the Update button in the command bar": on by default.
 fn update_button_row(page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(UPDATE_BUTTON);
     let binding = PreferenceBinding {

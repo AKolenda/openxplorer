@@ -54,7 +54,7 @@ pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
             Some(group) => controls.extend(children(&group).filter(WidgetExt::is_visible)),
             // The appearance toggle is hidden, as Settings › Appearance
             // chooses the theme; Update shows only while a release waits
-            // and Settings asks for it.
+            // and Settings › About leaves it on.
             None if child.is_visible() => controls.push(child),
             None => {}
         }

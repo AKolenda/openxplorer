@@ -531,9 +531,8 @@ pub struct Preferences {
     #[serde(skip_serializing_if = "is_true")]
     pub update_checks: bool,
     /// Show the command bar's Update button while a release waits
-    /// (UPD-001). Off by default, as Windows 11 Explorer's command bar has
-    /// no such button; stored only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// (UPD-001). On by default, as the owner chose; stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
     pub show_update_button: bool,
     /// When the app last looked for a release by itself, in seconds since
     /// the Unix epoch. Stored once it has.
@@ -644,7 +643,7 @@ impl Default for Preferences {
             folder_views: Vec::new(),
             downloads_group_by: None,
             update_checks: true,
-            show_update_button: false,
+            show_update_button: true,
             update_checked_at: None,
             update_notice_dismissed: None,
         }
