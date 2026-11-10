@@ -159,6 +159,7 @@ impl BrowserWindow {
         self.install_stop_action();
         self.install_integration_actions();
         self.install_context_menu_actions();
+        self.install_home_page_actions();
         let [journal, clipboard] = self.install_file_actions();
         let mut handlers = self.imp().handlers.borrow_mut();
         handlers.journal = Some(journal);
@@ -174,7 +175,7 @@ impl BrowserWindow {
                 if window.refuse_while_tabs_move() {
                     return;
                 }
-                let home = window.imp().locations.borrow().home_uri();
+                let home = window.home_location();
                 if let Err(error) = window.add_tab(&home) {
                     window.show_message(&error.to_string());
                 }

@@ -77,7 +77,7 @@ impl BrowserWindow {
     pub(super) fn resolve_address(&self, address: &str) -> Result<String, LocationError> {
         let typed = address.trim();
         if locations::is_home_alias(typed) {
-            return Ok(self.imp().locations.borrow().home_uri());
+            return Ok(self.home_location());
         }
         if let Some(page) = Page::from_uri(typed) {
             return Ok(page.uri().to_owned());
@@ -114,14 +114,16 @@ impl BrowserWindow {
         }
     }
 
-    /// The home folder, landing page or Recycle Bin whose title is `typed`
-    /// ("Home", "This PC", "Network", "Recycle Bin"), as the address bar
-    /// shows them. Typing "Recycle Bin" and pressing Enter opens it, as in
-    /// Windows 11 File Explorer; a folder of that name in the current
-    /// folder still comes first, as for the other titles.
+    /// The place whose title is `typed` ("Home", "This PC", "Network",
+    /// "Recycle Bin"), as the address bar shows them: "Home" leads where
+    /// the navigation pane's Home does, the home folder or, while "Open
+    /// Quick access on Home" is on, the Home page. Typing "Recycle Bin"
+    /// and pressing Enter opens it, as in Windows 11 File Explorer; a
+    /// folder of that name in the current folder still comes first, as for
+    /// the other titles.
     pub(super) fn place_titled(&self, typed: &str) -> Option<String> {
         if typed.trim().eq_ignore_ascii_case("home") {
-            return Some(self.imp().locations.borrow().home_uri());
+            return Some(self.home_location());
         }
         let recycle_bin = VirtualPlace::RecycleBin;
         if VirtualPlace::from_title(typed) == Some(recycle_bin) {
@@ -645,11 +647,21 @@ impl BrowserWindow {
         }
     }
 
-    /// Opens the home folder in the active tab (Alt+Home), as the sidebar's
-    /// Home does.
+    /// Opens Home in the active tab (Alt+Home), as the sidebar's Home
+    /// does.
     pub(super) fn go_home(&self) {
-        let home = self.imp().locations.borrow().home_uri();
+        let home = self.home_location();
         self.navigate_or_report(&home);
+    }
+
+    /// Where Home leads: the Home page with Quick access, Recent and
+    /// Favorites while its option is on (HOME-012), else the home folder,
+    /// as in the Python app (NAV-038).
+    pub(super) fn home_location(&self) -> String {
+        if self.context().settings_data().preferences.home_quick_access {
+            return Page::Home.uri().to_owned();
+        }
+        self.imp().locations.borrow().home_uri()
     }
 }
 

@@ -405,6 +405,17 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the one selected search result in a new
     /// window, with the result selected there.
     OpenFileLocationInWindow,
+    /// Adds the file in the string target to Favorites (HOME-014).
+    AddToFavorites,
+    /// Removes the file in the string target from Favorites (HOME-014).
+    RemoveFromFavorites,
+    /// Opens the item in the string target as a double-click does: a
+    /// folder in the tab, a file in its default application (Home's
+    /// Recent and Favorites).
+    OpenItemAt,
+    /// Opens the folder of the item in the string target with the item
+    /// selected (Home's Open file location).
+    OpenFileLocationOf,
     /// Save search: adds the search shown to the sidebar (SRCH-038).
     SaveSearch,
     /// Opens the saved search whose `(folder, text)` is the target.
@@ -677,6 +688,10 @@ impl WindowAction {
             WindowAction::RunServiceAction => "run-service-action",
             WindowAction::OpenFileLocationInTab => "open-file-location-in-tab",
             WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
+            WindowAction::AddToFavorites => "add-to-favorites",
+            WindowAction::RemoveFromFavorites => "remove-from-favorites",
+            WindowAction::OpenItemAt => "open-item-at",
+            WindowAction::OpenFileLocationOf => "open-file-location-of",
             WindowAction::SaveSearch => "save-search",
             WindowAction::OpenSavedSearch => "open-saved-search",
             WindowAction::ForgetSavedSearch => "forget-saved-search",

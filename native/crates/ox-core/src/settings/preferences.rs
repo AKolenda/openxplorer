@@ -403,6 +403,20 @@ pub struct Preferences {
     /// after the current tab (Dolphin's `OpenNewTabAfterLastTab`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub open_tabs_at_end: bool,
+    /// Home shows Quick access and the Recent and Favorites lists, as
+    /// Windows 11 File Explorer's Home does, instead of the home folder's
+    /// contents (HOME-012). Off by default; stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub home_quick_access: bool,
+    /// The files added to Favorites, by location, in the order they were
+    /// added (HOME-014). Stored only when there is one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub favorites: Vec<String>,
+    /// The sections of Home the user folded, by the keys the app gives
+    /// them, so Home opens as it was left (HOME-016). Stored only when one
+    /// is folded.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub home_folded: Vec<String>,
     /// A start without locations reopens the tabs of the last window
     /// closed (Dolphin's `RememberOpenedTabs`, Explorer's "Restore
     /// previous folder windows at logon"); off, as in Explorer.
@@ -561,6 +575,8 @@ const MAX_SECTION_KEY: usize = 32;
 /// The most sidebar places that may be hidden one by one, and the longest
 /// location.
 const MAX_HIDDEN_PLACES: usize = 64;
+/// The most files Favorites keeps.
+const MAX_FAVORITES: usize = 500;
 const MAX_PLACE_LOCATION: usize = 4096;
 
 /// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
@@ -617,6 +633,9 @@ impl Default for Preferences {
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
             open_tabs_at_end: false,
+            home_quick_access: false,
+            favorites: Vec::new(),
+            home_folded: Vec::new(),
             restore_session: false,
             startup_folder: None,
             begin_in_split_view: false,
@@ -728,6 +747,26 @@ impl Preferences {
         if let Some(places) = places {
             self.hidden_sidebar_places.clone_from(places);
         }
+        if let Some(favorites) = &update.favorites {
+            self.favorites = canonical_favorites(favorites);
+        }
+        let folded = update.home_folded.as_ref().filter(|keys| {
+            keys.len() <= MAX_HIDDEN_SECTIONS
+                && keys.iter().all(|key| {
+                    !key.is_empty()
+                        && key.len() <= MAX_SECTION_KEY
+                        && key.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+        });
+        if let Some(folded) = folded {
+            self.home_folded.clone_from(folded);
+        }
+    }
+
+    /// Whether `uri` is among the Favorites, compared by its canonical
+    /// form ([`favorite_key`]), as it may come from GIO (HOME-014).
+    pub fn is_favorite(&self, uri: &str) -> bool {
+        favorite_key(uri).is_some_and(|key| self.favorites.contains(&key))
     }
 
     /// The daily update check: whether it runs, when it last did, whether
@@ -814,6 +853,7 @@ impl Preferences {
         }
         let columns_changed = self.apply_view_options(update);
         replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
+        replace_if_some(&mut self.home_quick_access, update.home_quick_access);
         replace_if_some(&mut self.restore_session, update.restore_session);
         replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
         replace_if_some(
@@ -999,6 +1039,13 @@ pub struct PreferencesUpdate {
     pub hidden_sidebar_places: Option<Vec<String>>,
     /// Open tabs from a folder at the end, or after the current tab.
     pub open_tabs_at_end: Option<bool>,
+    /// Open Quick access on Home.
+    pub home_quick_access: Option<bool>,
+    /// Replaces the Favorites; up to 500 locations, else ignored.
+    pub favorites: Option<Vec<String>>,
+    /// Replaces Home's folded sections; up to 16 short ASCII keys, else
+    /// ignored.
+    pub home_folded: Option<Vec<String>>,
     /// Reopen the last window's tabs on a start without locations.
     pub restore_session: Option<bool>,
     /// Where new windows open; empty for Home. A location the location
@@ -1123,6 +1170,9 @@ impl PreferencesUpdate {
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
             open_tabs_at_end: flag("openTabsAtEnd"),
+            home_quick_access: flag("homeQuickAccess"),
+            favorites: values.get("favorites").and_then(read_keys),
+            home_folded: values.get("homeFolded").and_then(read_keys),
             restore_session: flag("restoreSession"),
             startup_folder: text("startupFolder").map(str::to_owned),
             begin_in_split_view: flag("beginInSplitView"),
@@ -1166,6 +1216,44 @@ fn read_keys(value: &Value) -> Option<Vec<String>> {
         .iter()
         .map(|key| key.as_str().map(str::to_owned))
         .collect()
+}
+
+/// The favorites of `favorites` that name a location the app can open,
+/// in their canonical form, each once, at most [`MAX_FAVORITES`]: a local
+/// path, a share, a remote folder (without its user name) or a connected
+/// device, never one with a password, of another scheme, a relative path
+/// or a virtual place. The file may have been edited by
+/// hand, and Home hands each favorite to GIO.
+fn canonical_favorites(favorites: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for location in favorites.iter().filter_map(|uri| favorite_key(uri)) {
+        if kept.contains(&location) {
+            continue;
+        }
+        kept.push(location);
+        if kept.len() == MAX_FAVORITES {
+            break;
+        }
+    }
+    kept
+}
+
+/// The form Favorites keeps `uri` in, and compares it by: an address with
+/// its scheme (never a path read against the current folder), normalised,
+/// a remote one without its user name, as settings.json holds none
+/// (SAFE-010). `None` for what cannot be a favorite: empty, too long,
+/// with control characters or a password, of a scheme the app does not
+/// open, or a virtual place. The address GIO gives a file (with `(`, `!`
+/// or a user name) has the same key as the favorite it adds (HOME-014).
+pub fn favorite_key(uri: &str) -> Option<String> {
+    if uri.is_empty() || uri.len() > MAX_PLACE_LOCATION || uri.contains(char::is_control) {
+        return None;
+    }
+    crate::location::scheme(uri)?;
+    let location = crate::location::normalise(uri)
+        .map(|uri| crate::location::without_user(&uri))
+        .ok()?;
+    (!crate::location::is_virtual_location(&location)).then_some(location)
 }
 
 /// A text size given as a true integer. Python checks `type(size) is int`,
@@ -1235,6 +1323,40 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    /// Favorites from a damaged or hand-edited file keep only locations
+    /// the app can open, in their canonical form, each once: a name with
+    /// credentials, another URI scheme, a virtual place or a relative path
+    /// is left out, and a remote one loses its user name, so nothing
+    /// else is handed to GIO by Home (HOME-014).
+    #[test]
+    fn favorites_keep_only_canonical_locations() {
+        let update = PreferencesUpdate::from_json(&json!({
+            "favorites": [
+                "file:///home/ana/Notes%201.txt",
+                "file:///home/ana/./Notes 1.txt",
+                "smb://NAS/Team/plan.odt",
+                "smb://ana:secret@nas/Team/plan.odt",
+                "sftp://ana@host/plan.txt",
+                "http://example.com/x",
+                "javascript:alert(1)",
+                "trash:///old.txt",
+                "relative/path.txt",
+                ""
+            ]
+        }))
+        .expect("an object");
+        let mut preferences = Preferences::default();
+        preferences.apply(&update);
+        assert_eq!(
+            preferences.favorites,
+            [
+                "file:///home/ana/Notes%201.txt",
+                "smb://nas/Team/plan.odt",
+                "sftp://host/plan.txt"
+            ]
+        );
+    }
 
     /// Downloads is grouped by date modified until the user chooses
     /// another Group by there, kept apart from the shared style, or in its
