@@ -43,6 +43,8 @@ impl BrowserWindow {
     /// Draws the rows closer, or at their usual spacing.
     fn show_compact_density(&self, compact: bool) {
         toggle_class(self, DENSITY_CLASS, compact);
+        // Home's rows take their height when drawn (HOME-015).
+        self.render_landing();
     }
 
     /// Whether Compact view is on, `None` before the action is installed.

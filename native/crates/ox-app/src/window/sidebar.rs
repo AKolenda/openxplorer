@@ -25,7 +25,7 @@
 mod collapsing;
 mod drop_spots;
 pub(super) mod entries;
-mod menu;
+pub(super) mod menu;
 mod row;
 
 use std::cell::RefCell;

@@ -910,7 +910,7 @@ msgstr ""
 msgid "Small icons"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/window/home_page.rs
 msgid "Date accessed"
 msgstr ""
 
@@ -950,7 +950,7 @@ msgstr ""
 msgid "Folder path"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-app/src/window/home_page.rs crates/ox-core/src/grouping.rs
 msgid "Name"
 msgstr ""
 
@@ -2003,7 +2003,7 @@ msgstr ""
 msgid "Opens with"
 msgstr ""
 
-#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Properties"
 msgstr ""
 
@@ -2610,7 +2610,7 @@ msgstr ""
 msgid "Folder versions:"
 msgstr ""
 
-#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open"
 msgstr ""
 
@@ -3882,7 +3882,7 @@ msgstr ""
 msgid "Network drive"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/indexed_folders/candidates.rs crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+#: crates/ox-app/src/settings_page/indexed_folders/candidates.rs crates/ox-app/src/settings_page/indexed_folders/root_row.rs crates/ox-app/src/window/home_page.rs
 msgid "Pinned"
 msgstr ""
 
@@ -4191,12 +4191,20 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
+msgid "Home shows your Quick access folders, the files you opened lately and your favorite files, as in Windows 11, instead of the home folder's contents. Off by default."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
 msgid "New windows open at"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Open Quick access on Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -4225,6 +4233,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
 msgid "Use current location"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "home page quick access recent files favorites favourites pinned folders windows 11 start page landing"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -5047,6 +5059,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
+msgid "Add to Favorites"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Additional options"
 msgstr ""
@@ -5083,7 +5099,7 @@ msgstr ""
 msgid "Compressed (zipped) folder"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Copy as path"
 msgstr ""
 
@@ -5169,6 +5185,10 @@ msgstr ""
 msgid "Refresh"
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
+msgid "Remove from Favorites"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Rename items…"
 msgstr ""
@@ -5237,7 +5257,7 @@ msgstr ""
 msgid "This link points to an address OpenXplorer cannot open."
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs
+#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-app/src/window/home_page.rs
 msgid "File location"
 msgstr ""
 
@@ -6232,6 +6252,43 @@ msgstr ""
 msgid "Topic"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/home_page.rs
+msgid "Could not save Favorites: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Favorites"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Files you add to Favorites show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Files you open recently show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Folders you pin to Quick access show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Open file location"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/sidebar/entries.rs
+msgid "Quick access"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Recent"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Recent and Favorites"
+msgstr ""
+
 #: crates/ox-app/src/window/imp.rs
 msgid "Wait until the files are written, or cancel that, before closing this dialog."
 msgstr ""
@@ -6857,10 +6914,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Opened this session"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/entries.rs
-msgid "Quick access"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
@@ -8614,10 +8667,6 @@ msgstr ""
 
 #: crates/ox-core/src/location/text.rs
 msgid "Percent-encoded text in the address must be valid UTF-8."
-msgstr ""
-
-#: crates/ox-core/src/location/virtual_place.rs
-msgid "Recent"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

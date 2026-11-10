@@ -20,7 +20,7 @@ Right-click a Details heading to choose columns, then drag headings to reorder t
 
 Choose View → Split view to open two panes. Click either pane to make its path, selection and commands active. Each pane keeps its own folder and history. Choosing Split view again closes the active pane and keeps the other.
 
-Settings → General → Start up lets you choose where new windows open and turn on Reopen my tabs when OpenXplorer starts. Session restoration is off by default. New tabs normally open beside the current tab.
+Settings → General → Start up lets you choose where new windows open and turn on Reopen my tabs when OpenXplorer starts. Session restoration is off by default. Home opens your home folder unless you turn on Open Quick access on Home: then Home, Alt+Home, new tabs and new windows open a Home page laid out as Windows 11's, with your Quick access folders as tiles and a Recent and a Favorites list of files. A file's menu then has Add to Favorites. Sections fold with their chevrons and stay folded. New tabs normally open beside the current tab.
 
 ## Previews and the folder tree
 

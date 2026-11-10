@@ -167,7 +167,7 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
 /// on the network bar as its row of `network` shows it in the sidebar.
 fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation]) -> Art {
     match Page::from_uri(uri) {
-        Some(page @ (Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
+        Some(page @ (Page::Home | Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
         None => {}
     }

@@ -202,9 +202,9 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// left out, and the only rows added are those of the commands that left
 /// the "…" menu, Search's "Show the search filter bar" (SRCH-046),
 /// "Shift+F10 opens the classic menu" (CMD-013), About's "Show the Update
-/// button in the command bar" (UPD-001), and Layout's two switches that
-/// keep the app's own items in the navigation pane and tab menu (SIDE-034,
-/// TAB-060).
+/// button in the command bar" (UPD-001), Home's "Open Quick access on
+/// Home" (HOME-012), and Layout's two switches that keep the app's own
+/// items in the navigation pane and tab menu (SIDE-034, TAB-060).
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -225,7 +225,16 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         ]
     );
     let rows = every_row(&settings);
-    assert_eq!(rows.len(), MOVED_ROWS.len(), "as many rows as before");
+    // "Open Quick access on Home" came later.
+    let added_since = ["Open Quick access on Home"];
+    for title in added_since {
+        settings.row(title);
+    }
+    assert_eq!(
+        rows.len(),
+        MOVED_ROWS.len() + added_since.len(),
+        "as many rows as before, and the ones added since"
+    );
     for (earlier, now) in MOVED_ROWS {
         let row = settings.row(now);
         settings.page.search(earlier);

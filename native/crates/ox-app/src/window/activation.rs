@@ -295,7 +295,14 @@ impl BrowserWindow {
         let Some(item) = self.folder_pane().model().item(position) else {
             return;
         };
-        let entry = item.entry().clone();
+        self.activate_listed_entry(item.entry().clone());
+    }
+
+    /// Opens `entry` as a double-click on it does: read again, a share
+    /// mounted or signed in to first, a folder in the tab, a file in its
+    /// application, a link followed, an item gone said so. Home's Recent
+    /// and Favorites rows open this way too.
+    pub(super) fn activate_listed_entry(&self, entry: Entry) {
         // An item listed inside a ZIP has no file of its own to read again
         // (ARC-026).
         if self.activate_zip_member(&entry) {

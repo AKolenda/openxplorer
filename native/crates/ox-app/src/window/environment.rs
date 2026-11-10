@@ -179,7 +179,12 @@ impl BrowserWindow {
     pub(super) fn render_places(&self) {
         let places = self.places();
         let searches = self.context().saved_searches();
-        let mut entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
+        let mut entries = sidebar::sidebar_entries(
+            &places,
+            &searches,
+            &self.imp().locations.borrow(),
+            self.context().settings_data().preferences.home_quick_access,
+        );
         // Windows 11's navigation pane has neither capacity bars nor
         // Recent files, Recent locations and the Recycle Bin; Settings'
         // "Show more items in the navigation pane" adds them (SIDE-034).
@@ -241,6 +246,36 @@ impl BrowserWindow {
             return;
         };
         let body = self.pane_on(side).landing();
+        if page == Page::Home && !self.context().settings_data().preferences.home_quick_access {
+            // "Open Quick access on Home" was turned off while the pane
+            // showed Home: it goes to the home folder (NAV-038), which
+            // loading a tab on the Home page does while the setting is off.
+            let id = {
+                let session = self.imp().session.borrow();
+                let active = session.active();
+                active
+                    .into_iter()
+                    .chain(active.and_then(super::session::Tab::beside))
+                    .find(|tab| tab.side == side)
+                    .map(|tab| tab.id)
+            };
+            if let Some(id) = id {
+                glib::idle_add_local_once(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move || window.load_tab(id, super::loading::LoadMode::Navigate)
+                ));
+            }
+            return;
+        }
+        if page == Page::Home {
+            body.remove_css_class("this-pc");
+            let preferences = self.context().settings_data().preferences;
+            let locations = self.imp().locations.borrow();
+            super::home_page::render(body, places, &preferences, &locations);
+            return;
+        }
+        super::home_page::leave(body);
         let locations = self.imp().locations.borrow();
         landing::render(body, page, places, &locations, self.skin().drawn_text_size());
     }
