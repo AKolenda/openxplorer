@@ -539,9 +539,12 @@ impl BrowserWindow {
     /// The command bar's Update, "Update" or "Restart", while Settings ›
     /// About › "Show the Update button in the command bar" is on, as it is
     /// by default; the status bar's Update available shows either way.
+    /// While Folder Options hides the status bar, the command bar shows it
+    /// whatever the setting, so the window keeps a way to the update.
     pub(super) fn show_command_bar_update(&self) {
         let state = self.context().updates().state();
-        let shown = self.context().settings_data().preferences.show_update_button;
+        let preferences = self.context().settings_data().preferences;
+        let shown = preferences.show_update_button || preferences.hide_status_bar;
         let label = state.command_bar_label().filter(|_| shown);
         let notice = state.status_bar_notice();
         self.command_bar().show_update(label, notice.as_deref());

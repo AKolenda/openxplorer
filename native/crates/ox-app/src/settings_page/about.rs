@@ -15,7 +15,9 @@
 //! does not, for an administrator at the machine, whom the rule already
 //! lets through), and it shows whether the rule is there. "Show the Update
 //! button in the command bar", on by default, hides the command bar's
-//! Update when turned off; the status bar's Update available stays. "Read license & source
+//! Update when turned off; the status bar's Update available stays, and
+//! while Folder Options hides the status bar, the command bar shows
+//! Update whatever this setting says. "Read license & source
 //! information" runs `win.license`, the licence dialog. "Keyboard
 //! shortcuts" and "Help" run `win.keyboard-shortcuts` (Ctrl+?) and
 //! `win.help` (F1): they, the licence and the build left the command
@@ -85,7 +87,8 @@ const PASSWORDLESS_UPDATES: RowText = RowText {
 const UPDATE_BUTTON: RowText = RowText {
     title: "Show the Update button in the command bar",
     description: "While a newer release is available, show Update beside the Settings gear, as well as \
-                  Update available in the status bar.",
+                  Update available in the status bar. While the status bar is hidden, the command bar shows \
+                  Update anyway.",
     keywords: "update button command bar toolbar accent restart show hide notify",
 };
 
