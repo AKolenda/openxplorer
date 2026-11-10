@@ -4160,7 +4160,7 @@ msgid "Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "Home lists the home folder's contents instead of Quick access, Recent and Favorites. Off by default."
+msgid "Home shows your Quick access folders, the files you opened lately and your favorite files, as in Windows 11, instead of the home folder's contents. Off by default."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -4168,7 +4168,7 @@ msgid "New windows open at"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "Open the home folder on Home"
+msgid "Open Quick access on Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -4200,7 +4200,7 @@ msgid "Use current location"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "home page home folder quick access recent files favorites favourites pinned folders windows 11 start page landing"
+msgid "home page quick access recent files favorites favourites pinned folders windows 11 start page landing"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs

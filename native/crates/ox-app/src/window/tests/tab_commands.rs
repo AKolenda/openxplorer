@@ -187,7 +187,7 @@ fn reopen_items(test: &TestWindow) -> Vec<(String, Option<String>)> {
 #[gtk::test]
 fn the_tab_keys_reach_the_window_through_its_shortcuts() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
+    let test = TestWindow::open(&fixture.uri());
     let control = gtk::gdk::ModifierType::CONTROL_MASK;
     let first_tab = tab_ids(&test)[0];
 

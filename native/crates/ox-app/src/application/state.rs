@@ -390,14 +390,14 @@ fn startup_location(context: &AppContext) -> String {
         // its listing asks for.
         file.path().is_none_or(|path| path.is_dir())
     };
-    // An unset startup folder opens Home, as "Open File Explorer to:
-    // Home" does (HOME-012): the home folder while "Open the home folder
-    // on Home" is on (NAV-038).
+    // An unset startup folder opens Home: the home folder (NAV-038), or,
+    // while "Open Quick access on Home" is on, the Home page, as "Open
+    // File Explorer to: Home" does (HOME-012).
     let home = || {
-        if context.settings_data().preferences.home_opens_folder {
-            file_uri(&glib::home_dir())
-        } else {
+        if context.settings_data().preferences.home_quick_access {
             VirtualPlace::Home.uri().to_owned()
+        } else {
+            file_uri(&glib::home_dir())
         }
     };
     chosen.filter(exists).unwrap_or_else(home)
@@ -640,18 +640,16 @@ mod tests {
         assert_eq!(browser_windows().len(), 1);
     }
 
-    /// A new window opens Home, which is Windows 11's Home page unless
-    /// "Open the home folder on Home" is on (HOME-012).
-    ///
     /// parity: TAB-042
     #[gtk::test]
-    fn a_new_window_starts_on_home() {
+    fn a_new_window_starts_in_the_home_folder() {
         let app = TestApp::new();
         app.state.activate(&application());
         let [window] = &browser_windows()[..] else {
             panic!("one window is open");
         };
-        assert_eq!(window.current_uri().as_deref(), Some(VirtualPlace::Home.uri()));
+        let home = file_uri(&glib::home_dir());
+        assert_eq!(window.current_uri(), Some(home));
     }
 
     #[gtk::test]

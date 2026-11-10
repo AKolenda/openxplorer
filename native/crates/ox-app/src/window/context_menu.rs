@@ -345,13 +345,13 @@ impl BrowserWindow {
     /// (HOME-014): the real file, a Recent row's included, and whether it
     /// is one already.
     fn favorite_fact(&self, entry: &Entry, is_single: bool) -> Option<(String, bool)> {
-        if !is_single || entry.is_dir || self.context().settings_data().preferences.home_opens_folder {
+        if !is_single || entry.is_dir || !self.context().settings_data().preferences.home_quick_access {
             return None;
         }
         let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);
-        if ox_core::location::is_virtual_location(uri) {
-            return None;
-        }
+        // Only a file Favorites can keep: not one inside an archive, on a
+        // web address or in a virtual place.
+        ox_core::settings::favorite_location(uri)?;
         Some((uri.to_owned(), self.is_favorite(uri)))
     }
 

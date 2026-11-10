@@ -23,17 +23,17 @@ use crate::volumes::{VolumeKind, VolumeRow};
 /// search or Properties applies to it.
 ///
 /// Only these of ox-core's [`VirtualPlace`]s are pages; the Recycle Bin
-/// and the recent lists are listed folders. Home is one (HOME-012) unless
-/// "Open the home folder on Home" is on; then, as in the Python app,
-/// `home:` opens the home folder (NAV-038, [`is_home_alias`]). This
-/// PC is a landing page in the folder pane; Settings takes the place of
-/// the whole browsing area, as `.settings-open` does in
-/// `v2.0.0:desktop/ui/style.css`. Network lists the computers found on the
+/// and the recent lists are listed folders. Home is one only while
+/// "Open Quick access on Home" is on (HOME-012); otherwise, as in the
+/// Python app, `home:` opens the home folder (NAV-038,
+/// [`is_home_alias`]). This PC is a landing page in the folder pane;
+/// Settings takes the place of the whole browsing area, as
+/// `.settings-open` does in `v2.0.0:desktop/ui/style.css`. Network lists the computers found on the
 /// network like a folder, as Windows 11 does ([`Page::draws_itself`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Page {
     /// Quick access and the Recent and Favorites lists, as Windows 11's
-    /// Home.
+    /// Home, while its option is on.
     Home,
     /// Quick access, devices and drives, and saved network locations.
     ThisPc,

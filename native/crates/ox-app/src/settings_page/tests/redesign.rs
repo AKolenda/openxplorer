@@ -189,7 +189,7 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// layout is on one of them, found by its earlier name too: none was
 /// left out, and the only rows added are those of the commands that left
 /// the "…" menu, Search's "Show the search filter bar" (SRCH-046), and
-/// since then Home's "Open the home folder on Home" (HOME-012).
+/// since then Home's "Open Quick access on Home" (HOME-012).
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -210,8 +210,8 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         ]
     );
     let rows = every_row(&settings);
-    // "Open the home folder on Home" came later.
-    let added_since = ["Open the home folder on Home"];
+    // "Open Quick access on Home" came later.
+    let added_since = ["Open Quick access on Home"];
     for title in added_since {
         settings.row(title);
     }

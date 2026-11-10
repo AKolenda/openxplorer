@@ -87,7 +87,7 @@ fn window_with_tree(fixture: &Fixture) -> (TestWindow, String) {
 #[gtk::test]
 fn ctrl_and_a_number_show_the_tab_of_that_number() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
+    let test = TestWindow::open(&fixture.uri());
     test.activate("new-tab", None);
     test.activate("new-tab", None);
     settle();

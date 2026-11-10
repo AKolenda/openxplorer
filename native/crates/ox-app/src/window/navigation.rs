@@ -116,8 +116,8 @@ impl BrowserWindow {
 
     /// The place whose title is `typed` ("Home", "This PC", "Network",
     /// "Recycle Bin"), as the address bar shows them: "Home" leads where
-    /// the navigation pane's Home does, the Home page or, while "Open the
-    /// home folder on Home" is on, the home folder. Typing "Recycle Bin"
+    /// the navigation pane's Home does, the home folder or, while "Open
+    /// Quick access on Home" is on, the Home page. Typing "Recycle Bin"
     /// and pressing Enter opens it, as in Windows 11 File Explorer; a
     /// folder of that name in the current folder still comes first, as for
     /// the other titles.
@@ -655,13 +655,13 @@ impl BrowserWindow {
     }
 
     /// Where Home leads: the Home page with Quick access, Recent and
-    /// Favorites (HOME-012), or the home folder, as in the Python app,
-    /// while "Open the home folder on Home" is on (NAV-038).
+    /// Favorites while its option is on (HOME-012), else the home folder,
+    /// as in the Python app (NAV-038).
     pub(super) fn home_location(&self) -> String {
-        if self.context().settings_data().preferences.home_opens_folder {
-            return self.imp().locations.borrow().home_uri();
+        if self.context().settings_data().preferences.home_quick_access {
+            return Page::Home.uri().to_owned();
         }
-        Page::Home.uri().to_owned()
+        self.imp().locations.borrow().home_uri()
     }
 }
 

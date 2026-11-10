@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Home laid out as Windows 11 File Explorer's Home (HOME-012 to
-//! HOME-016), by default. The setting "Open the home folder on Home"
-//! (off by default) brings back the home folder on Home, as the Python
-//! app's did (NAV-038).
+//! HOME-016), while Settings > General > Start up > "Open Quick access
+//! on Home" is on. It is off by default: Home then opens the home
+//! folder, as the Python app's did (NAV-038).
 //!
 //! Only what Microsoft documents is drawn:
 //!
@@ -39,7 +39,7 @@ use gtk::{gio, glib};
 use ox_core::entry::{self, Entry};
 use ox_core::location::{same_location, LocationContext, RECENT_URI};
 use ox_core::places::Place;
-use ox_core::settings::{Preferences, SettingsError};
+use ox_core::settings::{favorite_location, Preferences, SettingsError};
 
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
@@ -1073,11 +1073,6 @@ fn fill_list(page: &gtk::Box, list: &gtk::Box, items: Vec<Item>, tab: Tab, colum
         list.append(&item_box(page, items, Section::Files, true));
     }
     recount(page);
-    // The column groups live as long as the list.
-    let kept = columns.clone();
-    list.connect_destroy(move |_| {
-        let _ = &kept;
-    });
 }
 
 /// The heading of Quick access: a chevron, the title and a line to the
@@ -1421,7 +1416,9 @@ fn watch_recent_files(page: &gtk::Box) {
                 let Some(page) = page.upgrade() else {
                     return;
                 };
-                if !page.has_css_class(HOME_CLASS) {
+                // A pane that went on to a folder keeps its hidden Home
+                // until it shows a page again, which draws Home anew.
+                if !page.has_css_class(HOME_CLASS) || !page.is_mapped() {
                     return;
                 }
                 let Some(list) = descendants_with_class(&page, Tab::Recent.list_class())
@@ -1450,11 +1447,17 @@ fn is_compact(page: &gtk::Box) -> bool {
 }
 
 /// When each of `favorites` was last opened (`time::access`), read off
-/// the main thread; `None` for a file that cannot be read now.
+/// the main thread; `None` for a file that cannot be read now, or one on
+/// a share or device, which drawing Home never reads (HOME-014).
 async fn favorite_times(favorites: &[String]) -> Vec<Option<u64>> {
     let mut times = Vec::with_capacity(favorites.len());
     for uri in favorites {
-        let info = gio::File::for_uri(uri)
+        let file = gio::File::for_uri(uri);
+        if !file.is_native() {
+            times.push(None);
+            continue;
+        }
+        let info = file
             .query_info_future(
                 "time::access",
                 gio::FileQueryInfoFlags::NONE,
@@ -1564,10 +1567,17 @@ impl BrowserWindow {
         );
     }
 
-    /// Whether the file at `uri` is among the Favorites.
+    /// Whether the file at `uri` is among the Favorites, which hold it
+    /// as [`favorite_location`] writes it (a remote one without its user
+    /// name).
     pub(super) fn is_favorite(&self, uri: &str) -> bool {
+        let Some(location) = favorite_location(uri) else {
+            return false;
+        };
         let favorites = self.context().settings_data().preferences.favorites;
-        favorites.iter().any(|favorite| same_location(favorite, uri))
+        favorites
+            .iter()
+            .any(|favorite| same_location(favorite, &location))
     }
 
     /// Saves that `section` of Home is folded or not, without drawing

@@ -918,7 +918,7 @@ python_tests = [
 ]
 bridge = ["environment", "list"]
 native = "done"
-native_note = "Since HOME-012 this is behind Settings > General > Start up > 'Open the home folder on Home' (homeOpensFolder, off by default): by default Home opens Windows 11's Home page (ox:home) with Quick access, Recent and Favorites. With the setting on, the sidebar Home entry, Alt+Home, new tabs, Ctrl+T and new windows open the real home folder, as here. The home folder itself is unchanged either way: reachable as before (typing ~ or its path, the This PC drive, crumbs) and its tab still titled 'Home'. Tests: native/crates/ox-app/src/window/tests/home_page.rs (home_is_windows_home_by_default_and_the_setting_opens_the_home_folder); native/crates/ox-app/src/window/tests/history.rs (home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home); native/crates/ox-app/src/locations.rs (the_legacy_home_page_means_the_home_folder)."
+native_note = "The default (owner decision 2026-11-10: Home stays the home folder by default; Windows 11's Home page is an opt-in setting). Only Settings > General > Start up > 'Open Quick access on Home' (homeQuickAccess, off by default) makes Home open Windows 11's Home page instead (HOME-012). Tests: native/crates/ox-app/src/window/tests/history.rs (home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home); native/crates/ox-app/src/window/tests/home_page.rs (home_is_the_home_folder_by_default_and_the_setting_opens_windows_home); native/crates/ox-app/src/locations.rs (the_legacy_home_page_means_the_home_folder)."
 
 [[feature]]
 id = "NAV-039"
@@ -1244,13 +1244,13 @@ python_tests = []
 bridge = ["environment", "activateItem", "open", "openWith"]
 gnome = "GtkRecentManager (recently-used.xbel) is the GNOME equivalent; not used"
 native = "done"
-native_note = "Recording ported: native/crates/ox-app/src/app_context.rs (open_file records each opened file); native/crates/ox-core/src/settings/mutate.rs (remember_open_keeps_thirty_newest_unique_files) and the settings round trips with the Python app. Decision: the native app shows what 1.1.4 shows, which is no recent-files page, because 'home:' always resolved to the home folder and the 'Recently opened' table was unreachable. Showing recent files (a Recent place as in GNOME's recent:/// or Dolphin's Recent Files) would be a new feature for the owner to schedule."
+native_note = "Recording ported: native/crates/ox-app/src/app_context.rs (open_file records each opened file); native/crates/ox-core/src/settings/mutate.rs (remember_open_keeps_thirty_newest_unique_files) and the settings round trips with the Python app. Decision: the native app shows what 1.1.4 shows, which is no recent-files page, because 'home:' always resolved to the home folder and the 'Recently opened' table was unreachable. Showing recent files (a Recent place as in GNOME's recent:/// or Dolphin's Recent Files) would be a new feature for the owner to schedule. Scheduled as an opt-in (owner decision 2026-11-10: Home stays the home folder by default; Windows 11's Home page is an opt-in setting): with 'Open Quick access on Home' on, Home's Recent list shows the desktop's recently used files (HOME-015)."
 
 [[feature]]
 id = "HOME-012"
 area = "HOME"
 title = "Home laid out as Windows 11's Home, behind an option"
-behaviour = "By default the navigation pane's Home row, Alt+Home, the HomePage key, a new tab, a new window with no startup folder and a typed 'home:' open the Home page (ox:home), titled Home with the house icon: a 'Quick access' section, then a Recent / Favorites switcher with Recent shown first. Back and Forward step to and from it as to any location; F5 draws it again."
+behaviour = "Settings > General > Start up > 'Open Quick access on Home' (homeQuickAccess, off by default and stored only when on; owner decision 2026-11-10: Home stays the home folder by default; Windows 11's Home page is an opt-in setting). Off, Home opens the home folder as before (NAV-038). On, the navigation pane's Home row, Alt+Home, the HomePage key, a new tab, a new window with no startup folder and a typed 'home:' open the Home page (ox:home), titled Home with the house icon: a 'Quick access' section, then a Recent / Favorites switcher with Recent shown first. Back and Forward step to and from it as to any location; F5 draws it again."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
@@ -1262,7 +1262,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-app/src/locations.rs (Page::Home); BrowserWindow::home_location in native/crates/ox-app/src/window/navigation.rs. Settings > General > Start up > 'Open the home folder on Home' (homeOpensFolder, off by default and stored only when on) brings back the home folder on Home (NAV-038). Tested in native/crates/ox-app/src/window/tests/home_page.rs (home_is_windows_home_by_default_and_the_setting_opens_the_home_folder). Microsoft names the sections Quick access, Favorites and Recent (build 23475) and shows tabs for Recent, Favorites and Shared (build 22635.3930); Shared needs a Microsoft account and is left out. Layout, sizes, order of the tabs on screen and which tab opens first are not documented: check them in Windows."
+native_note = "native/crates/ox-app/src/window/home_page.rs; native/crates/ox-app/src/locations.rs (Page::Home); BrowserWindow::home_location in native/crates/ox-app/src/window/navigation.rs. Tested in native/crates/ox-app/src/window/tests/home_page.rs (home_is_the_home_folder_by_default_and_the_setting_opens_windows_home, a_real_click_on_the_home_row_opens_the_home_page_whatever_else_the_settings_hold, the_address_bars_home_opens_the_home_page). Microsoft names the sections Quick access, Favorites and Recent (build 23475) and shows tabs for Recent, Favorites and Shared (build 22635.3930); Shared needs a Microsoft account and is left out. Layout, sizes, order of the tabs on screen and which tab opens first are not documented: check them in Windows."
 
 [[feature]]
 id = "HOME-013"
@@ -1285,7 +1285,7 @@ native_note = "native/crates/ox-app/src/window/home_page.rs (folder_tile, reusin
 id = "HOME-014"
 area = "HOME"
 title = "Home: Favorites, with Add to Favorites and Remove from Favorites"
-behaviour = "A file's right-click menu (compact and classic) offers 'Add to Favorites' while Home shows Favorites (not with 'Open the home folder on Home'), or 'Remove from Favorites' for a favorite; so do the rows of Recent. Favorites lists those files in the order added (favorites in the settings file, up to 500 locations, the name read from the location so no drive or share is read to draw Home). A double-click or Enter opens the real file in its default application; the menu has Open, Open file location, Remove from Favorites, Copy as path and Properties. Empty, it says 'Files you add to Favorites show here.'"
+behaviour = "A file's right-click menu (compact and classic) offers 'Add to Favorites' while 'Open Quick access on Home' is on, or 'Remove from Favorites' for a favorite; so do the rows of Recent. Favorites lists those files in the order added (favorites in the settings file, up to 500 locations, the name read from the location so no drive or share is read to draw Home). A double-click or Enter opens the real file in its default application; the menu has Open, Open file location, Remove from Favorites, Copy as path and Properties. Empty, it says 'Files you add to Favorites show here.'"
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
@@ -1314,7 +1314,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/home_page.rs (recent_files, watch_recent_files). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_recent_file_opens_the_real_file_and_its_location). Microsoft: Home's files offer 'Open file location' (Release Preview 26100.7015). Columns, how many files, 'Remove from list' and the empty wording are not documented, so no columns and no Remove from list are drawn."
+native_note = "native/crates/ox-app/src/window/home_page.rs (recent_files, watch_recent_files). Tested in native/crates/ox-app/src/window/tests/home_page.rs (a_recent_file_opens_the_real_file_and_its_location, the_list_has_name_date_accessed_and_file_location_columns, recent_lists_nothing_while_the_desktop_remembers_no_recent_files). Microsoft: Home's files offer 'Open file location' (Release Preview 26100.7015). The columns Name, Date accessed and File location are those of a Windows 11 screenshot; how many files, 'Remove from list' and the empty wording are not documented, so no Remove from list is drawn."
 
 [[feature]]
 id = "HOME-016"

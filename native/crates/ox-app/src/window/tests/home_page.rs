@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Home laid out as Windows 11 File Explorer's Home, by default; the
-//! setting "Open the home folder on Home" (off by default) brings back
-//! the home folder on Home (NAV-038). Quick access holds the
+//! Home laid out as Windows 11 File Explorer's Home while "Open Quick
+//! access on Home" is on; off, the default, Home opens the home folder
+//! (NAV-038). Quick access holds the
 //! navigation pane's pinned folders as tiles, and a Recent / Favorites
 //! switcher lists the desktop's recently used files (`GVfs` `recent:///`)
 //! and the files added to Favorites. Every name below is fictional.
@@ -20,10 +20,10 @@ use crate::window::home_page;
 /// The Home page's address.
 const HOME_PAGE: &str = "ox:home";
 
-/// Sets "Open the home folder on Home" for `test`'s settings.
-fn open_the_home_folder_on_home(test: &TestWindow, on: bool) {
+/// Sets "Open Quick access on Home" for `test`'s settings.
+fn open_quick_access_on_home(test: &TestWindow, on: bool) {
     let update = PreferencesUpdate {
-        home_opens_folder: Some(on),
+        home_quick_access: Some(on),
         ..PreferencesUpdate::default()
     };
     Settings::open(test.settings_directory())
@@ -31,14 +31,15 @@ fn open_the_home_folder_on_home(test: &TestWindow, on: bool) {
         .expect("the settings file takes the choice");
     test.context.reload_settings();
     wait_until("the setting to be read", || {
-        test.context.settings_data().preferences.home_opens_folder == on
+        test.context.settings_data().preferences.home_quick_access == on
     });
 }
 
-/// A window on the fixture showing the Home page, as Home opens by
-/// default.
+/// A window on the fixture showing the Home page, with "Open Quick
+/// access on Home" on.
 fn home_window(fixture: &Fixture) -> TestWindow {
     let test = TestWindow::open(&fixture.uri());
+    open_quick_access_on_home(&test, true);
     test.activate("home", None);
     wait_until("the Home page", || {
         test.window.current_uri().as_deref() == Some(HOME_PAGE)
@@ -66,16 +67,23 @@ fn press_key(widget: &impl IsA<gtk::Widget>, key: gtk::gdk::Key) -> bool {
     )
 }
 
-/// By default the navigation pane's Home row, Alt+Home and a new tab
-/// open the Home page, titled Home, with Quick access and the Recent and
-/// Favorites switcher; "Open the home folder on Home" brings back the
-/// home folder there (the owner's NAV-038).
+/// By default Home opens the home folder (the owner's NAV-038). With
+/// "Open Quick access on Home" on, the navigation pane's Home row,
+/// Alt+Home and a new tab open the Home page, titled Home, with Quick
+/// access and the Recent and Favorites switcher.
 ///
 /// parity: NAV-038, HOME-012
 #[gtk::test]
-fn home_is_windows_home_by_default_and_the_setting_opens_the_home_folder() {
+fn home_is_the_home_folder_by_default_and_the_setting_opens_windows_home() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.activate("home", None);
+    test.wait_for_listing("the home folder");
+    let home_folder = test.window.current_uri().expect("a location");
+    assert!(home_folder.starts_with("file:///"), "{home_folder}");
+    assert_eq!(test.window.title().as_deref(), Some("Home — OpenXplorer"));
+
+    open_quick_access_on_home(&test, true);
     let home_row = test
         .window
         .sidebar()
@@ -97,13 +105,6 @@ fn home_is_windows_home_by_default_and_the_setting_opens_the_home_folder() {
     wait_until("a new tab on Home", || {
         test.window.tab_count() == 2 && test.window.current_uri().as_deref() == Some(HOME_PAGE)
     });
-
-    open_the_home_folder_on_home(&test, true);
-    test.activate("home", None);
-    test.wait_for_listing("the home folder");
-    let home_folder = test.window.current_uri().expect("a location");
-    assert!(home_folder.starts_with("file:///"), "{home_folder}");
-    assert_eq!(test.window.title().as_deref(), Some("Home — OpenXplorer"));
 }
 
 /// Quick access on Home is the navigation pane's list: a folder pinned
@@ -186,8 +187,8 @@ fn a_favorite_file_is_listed_opened_and_removed() {
     assert!(test.context.settings_data().preferences.favorites.is_empty());
 }
 
-/// A file's right-click menu offers Add to Favorites while Home shows
-/// Favorites, not with "Open the home folder on Home", and Remove from
+/// A file's right-click menu offers Add to Favorites only while Home
+/// shows Favorites ("Open Quick access on Home"), and Remove from
 /// Favorites once it is one.
 ///
 /// parity: HOME-014
@@ -202,10 +203,9 @@ fn a_files_menu_adds_it_to_favorites_while_home_shows_them() {
         menu.popdown();
         labels
     };
-    assert!(labels(&test).contains(&"Add to Favorites".to_owned()));
-    open_the_home_folder_on_home(&test, true);
     assert!(!labels(&test).contains(&"Add to Favorites".to_owned()));
-    open_the_home_folder_on_home(&test, false);
+    open_quick_access_on_home(&test, true);
+    assert!(labels(&test).contains(&"Add to Favorites".to_owned()));
     test.activate("add-to-favorites", Some(&fixture.uri_of("Notes 2.txt")));
     wait_until("the favorite", || {
         !test.context.settings_data().preferences.favorites.is_empty()
@@ -381,28 +381,34 @@ fn click_the_home_row(test: &TestWindow) {
     );
 }
 
-/// A real click on the navigation pane's Home row opens the Home page,
-/// whatever the settings file holds besides "Open the home folder on
-/// Home": nothing at all (no file, or an empty file) or other choices,
-/// This PC as the startup folder among them.
+/// A real click on the navigation pane's Home row opens the Home page
+/// while "Open Quick access on Home" is on, whatever else the settings
+/// file holds (This PC as the startup folder among other choices). With
+/// no settings file, or an empty one, it opens the home folder.
 ///
-/// parity: HOME-012
+/// parity: NAV-038, HOME-012
 #[gtk::test]
 fn a_real_click_on_the_home_row_opens_the_home_page_whatever_else_the_settings_hold() {
     let fixture = Fixture::standard();
-
-    let test = TestWindow::open(&fixture.uri());
-    click_the_home_row(&test);
 
     let test = TestWindow::open(&fixture.uri());
     fs::write(test.settings_directory().join("settings.json"), b"").expect("an empty settings file");
     test.context.reload_settings();
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");
-    click_the_home_row(&test);
+    test.window
+        .sidebar()
+        .list()
+        .row_at_index(0)
+        .expect("Home comes first")
+        .activate();
+    test.wait_for_listing("the home folder");
+    let home_folder = test.window.current_uri().expect("a location");
+    assert!(home_folder.starts_with("file:///"), "{home_folder}");
 
     let test = TestWindow::open(&fixture.uri());
     let others = PreferencesUpdate {
+        home_quick_access: Some(true),
         startup_folder: Some(ox_core::location::PC_URI.to_owned()),
         show_hidden: Some(true),
         show_full_path: Some(true),
@@ -415,11 +421,12 @@ fn a_real_click_on_the_home_row_opens_the_home_page_whatever_else_the_settings_h
     wait_until("the choices to be read", || {
         test.context.settings_data().preferences.show_hidden
     });
-    assert!(!test.context.settings_data().preferences.home_opens_folder);
+    assert!(test.context.settings_data().preferences.home_quick_access);
     click_the_home_row(&test);
 }
 
-/// The address bar leads to the same Home as the navigation pane: the
+/// The address bar leads to the same Home as the navigation pane: with
+/// "Open Quick access on Home" on, the
 /// chevron's "Home" and the Home page's own address, "Home", typed or
 /// left as it is and entered, open the Home page.
 ///
@@ -428,6 +435,7 @@ fn a_real_click_on_the_home_row_opens_the_home_page_whatever_else_the_settings_h
 fn the_address_bars_home_opens_the_home_page() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    open_quick_access_on_home(&test, true);
     test.window.submit_address("Home");
     wait_until("the Home page from a typed Home", || {
         test.window.current_uri().as_deref() == Some(HOME_PAGE)

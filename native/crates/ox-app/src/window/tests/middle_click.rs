@@ -156,8 +156,7 @@ fn middle_clicking_a_sidebar_place_opens_it_in_a_background_tab() {
 
     middle_click_at(sidebar.list(), middle_of(&row, sidebar.list()));
 
-    // Home is Windows 11's Home page by default (HOME-012).
-    let home_uri = ox_core::location::HOME_URI.to_owned();
+    let home_uri = ox_core::location::file_uri(&gtk::glib::home_dir());
     assert_eq!(tab_uris(&test), [fixture.uri(), home_uri]);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }

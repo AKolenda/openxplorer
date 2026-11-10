@@ -226,9 +226,9 @@ fn the_chevron_after_the_icon_lists_the_top_level_places() {
     let menu = open_menu(&test);
     assert_eq!(menu.row_labels(), ["Home", "This PC", "Network", "Recycle Bin"]);
     menu.row("Home").activate();
-    // Home as the navigation pane opens it: the Home page (HOME-012).
-    wait_until("the Home page", || {
-        test.window.current_uri().as_deref() == Some(ox_core::location::HOME_URI)
+    let home = test.window.imp().locations.borrow().home_uri();
+    wait_until("the home folder", || {
+        test.window.current_uri() == Some(home.clone())
     });
 }
 

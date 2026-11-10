@@ -403,12 +403,11 @@ pub struct Preferences {
     /// after the current tab (Dolphin's `OpenNewTabAfterLastTab`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub open_tabs_at_end: bool,
-    /// Home opens the home folder, as the Python app's did (NAV-038),
-    /// instead of the Home page with Quick access and the Recent and
-    /// Favorites lists that Windows 11 File Explorer shows (HOME-012).
-    /// Off by default; stored only when on.
+    /// Home shows Quick access and the Recent and Favorites lists, as
+    /// Windows 11 File Explorer's Home does, instead of the home folder's
+    /// contents (HOME-012). Off by default; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub home_opens_folder: bool,
+    pub home_quick_access: bool,
     /// The files added to Favorites, by location, in the order they were
     /// added (HOME-014). Stored only when there is one.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -630,7 +629,7 @@ impl Default for Preferences {
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
             open_tabs_at_end: false,
-            home_opens_folder: false,
+            home_quick_access: false,
             favorites: Vec::new(),
             home_folded: Vec::new(),
             restore_session: false,
@@ -841,7 +840,7 @@ impl Preferences {
         }
         let columns_changed = self.apply_view_options(update);
         replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
-        replace_if_some(&mut self.home_opens_folder, update.home_opens_folder);
+        replace_if_some(&mut self.home_quick_access, update.home_quick_access);
         replace_if_some(&mut self.restore_session, update.restore_session);
         replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
         replace_if_some(
@@ -1027,8 +1026,8 @@ pub struct PreferencesUpdate {
     pub hidden_sidebar_places: Option<Vec<String>>,
     /// Open tabs from a folder at the end, or after the current tab.
     pub open_tabs_at_end: Option<bool>,
-    /// Open the home folder on Home instead of the Home page.
-    pub home_opens_folder: Option<bool>,
+    /// Open Quick access on Home.
+    pub home_quick_access: Option<bool>,
     /// Replaces the Favorites; up to 500 locations, else ignored.
     pub favorites: Option<Vec<String>>,
     /// Replaces Home's folded sections; up to 16 short ASCII keys, else
@@ -1156,7 +1155,7 @@ impl PreferencesUpdate {
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
             open_tabs_at_end: flag("openTabsAtEnd"),
-            home_opens_folder: flag("homeOpensFolder"),
+            home_quick_access: flag("homeQuickAccess"),
             favorites: values.get("favorites").and_then(read_keys),
             home_folded: values.get("homeFolded").and_then(read_keys),
             restore_session: flag("restoreSession"),
@@ -1212,20 +1211,10 @@ fn read_keys(value: &Value) -> Option<Vec<String>> {
 fn canonical_favorites(favorites: &[String]) -> Vec<String> {
     let mut kept: Vec<String> = Vec::new();
     for uri in favorites {
-        if uri.is_empty() || uri.len() > MAX_PLACE_LOCATION || uri.contains(char::is_control) {
-            continue;
-        }
-        // An address with its scheme, never a path read against the
-        // current folder; a remote one without its user name, as
-        // settings.json holds none (SAFE-010).
-        if crate::location::scheme(uri).is_none() {
-            continue;
-        }
-        let Ok(location) = crate::location::normalise(uri).map(|uri| crate::location::without_user(&uri))
-        else {
+        let Some(location) = favorite_location(uri) else {
             continue;
         };
-        if crate::location::is_virtual_location(&location) || kept.contains(&location) {
+        if kept.contains(&location) {
             continue;
         }
         kept.push(location);
@@ -1234,6 +1223,22 @@ fn canonical_favorites(favorites: &[String]) -> Vec<String> {
         }
     }
     kept
+}
+
+/// How `favorites` holds the file at `uri` (HOME-014): its canonical
+/// location, or `None` for one Favorites never keeps (see
+/// [`PreferencesUpdate::favorites`]).
+#[must_use]
+pub fn favorite_location(uri: &str) -> Option<String> {
+    if uri.is_empty() || uri.len() > MAX_PLACE_LOCATION || uri.contains(char::is_control) {
+        return None;
+    }
+    // An address with its scheme, never a path read against the current
+    // folder; a remote one without its user name, as settings.json holds
+    // none (SAFE-010).
+    crate::location::scheme(uri)?;
+    let location = crate::location::without_user(&crate::location::normalise(uri).ok()?);
+    (!crate::location::is_virtual_location(&location)).then_some(location)
 }
 
 /// A text size given as a true integer. Python checks `type(size) is int`,

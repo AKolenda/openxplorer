@@ -226,7 +226,7 @@ fn going_up_or_to_an_ancestor_crumb_selects_the_folder_left() {
 #[gtk::test]
 fn alt_home_and_the_homepage_key_open_the_home_folder() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
+    let test = TestWindow::open(&fixture.uri());
     test.window.folder_pane().focus_view();
 
     assert!(press_shortcut_where_focused(&test, gdk::Key::Home, ALT));
@@ -362,7 +362,7 @@ fn navigating_ends_the_search_prefix_and_address_editing_and_updates_the_frame()
 #[gtk::test]
 fn home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open_with_home_folder_on_home(&fixture.uri());
+    let test = TestWindow::open(&fixture.uri());
     let home_row = test
         .window
         .sidebar()

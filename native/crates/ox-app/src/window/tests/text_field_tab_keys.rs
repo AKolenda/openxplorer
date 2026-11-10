@@ -123,8 +123,8 @@ fn ctrl_t_opens_a_tab_from(field: Field) {
             || test.window.tab_count() == tabs + 1,
         );
         test.wait_for_listing("the new tab");
-        // Home as the New tab button opens it: the Home page, or the home
-        // folder with "Open the home folder on Home" (HOME-012).
+        // Home as the New tab button opens it: the home folder, or the
+        // Home page with "Open Quick access on Home" (HOME-012).
         assert_eq!(
             test.window.current_uri(),
             Some(test.window.home_location()),
