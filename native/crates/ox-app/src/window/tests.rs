@@ -12,6 +12,7 @@ mod address_bar;
 mod address_input;
 mod archives;
 mod captures;
+mod choose_details;
 mod chrome;
 mod clipboard;
 mod clipboard_interop;

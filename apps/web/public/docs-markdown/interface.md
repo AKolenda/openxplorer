@@ -4,7 +4,7 @@ Make the workspace fit the way you work.
 
 ## Your workspace, your widths
 
-Resize the sidebar and column edges. Double-click an edge to reset or fit it, depending on the control. In Details, Ctrl + on the number pad, or Size all columns to fit in the menu of a right-clicked column title, fits every column to its contents, as in Windows File Explorer. Width preferences survive restarts. Local and SMB ancestors remain individual breadcrumb buttons. As in Windows 11, the arrow before the first one lists Home, This PC, Network and the Recycle Bin, the arrow after each one lists all of its subfolders, and on a long path the first ones fold into a « button that lists them.
+Resize the sidebar and column edges. Double-click an edge to reset or fit it, depending on the control. In Details, Ctrl + on the number pad, or Size All Columns to Fit in the menu of a right-clicked column title, fits every column to its contents, as in Windows File Explorer. The same menu shows and hides columns, and More... opens Choose Details, where columns are shown, hidden, put in order and given a width in pixels. Width preferences survive restarts. Local and SMB ancestors remain individual breadcrumb buttons. As in Windows 11, the arrow before the first one lists Home, This PC, Network and the Recycle Bin, the arrow after each one lists all of its subfolders, and on a long path the first ones fold into a « button that lists them.
 
 ![Historical directory in an amber-badged Previous version tab, with a read-only banner](../assets/screenshots/snapshot-tab.png)
 
