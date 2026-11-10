@@ -645,3 +645,34 @@ fn a_template_keeps_downloads_grouped_by_date() {
     assert_eq!(style.mode, "icons");
     assert_eq!(style.grouping(), GroupBy::Modified);
 }
+
+/// "Shift+F10 opens the classic menu" is off as it comes, so Shift+F10
+/// opens the right-click menu as in Windows 11; turned on, it is saved
+/// and read back, and stored only while on.
+/// parity: CMD-013
+#[test]
+fn the_shift_f10_classic_menu_choice_is_off_and_saved_only_when_on() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert!(!store.snapshot().preferences.shift_f10_classic, "off as it comes");
+
+    save_preferences(&mut store, &json!({"shiftF10Classic": true}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(file.contains("\"shiftF10Classic\": true"), "{file}");
+    assert!(
+        Settings::open(root.path())
+            .snapshot()
+            .preferences
+            .shift_f10_classic
+    );
+
+    save_preferences(&mut store, &json!({"shiftF10Classic": false}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(!file.contains("shiftF10Classic"), "{file}");
+    assert!(
+        !Settings::open(root.path())
+            .snapshot()
+            .preferences
+            .shift_f10_classic
+    );
+}

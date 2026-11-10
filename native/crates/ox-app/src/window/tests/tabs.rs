@@ -290,12 +290,13 @@ fn the_new_tab_button_opens_the_home_folder_in_front() {
     assert_eq!(test.window.tab_count(), 2);
 }
 
-/// Ctrl+Tab and Ctrl+T stay out of text fields, and Properties, a window
-/// of its own, keeps neither from the browser window.
+/// Ctrl+Tab stays out of text fields, while Ctrl+T works from the search
+/// box, as in Windows 11 File Explorer, and Properties, a window of its
+/// own, keeps neither from the browser window.
 ///
 /// parity: TAB-005
 #[gtk::test]
-fn tab_keys_stay_out_of_text_fields_and_properties_windows_keep_none() {
+fn ctrl_tab_stays_out_of_text_fields_ctrl_t_works_from_search_and_properties_keep_none() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window.folder_pane().focus_view();
@@ -309,7 +310,11 @@ fn tab_keys_stay_out_of_text_fields_and_properties_windows_keep_none() {
     test.wait_for_properties("Example projects Properties");
     test.window.folder_pane().focus_view();
 
-    assert_eq!(in_search, (false, false), "a text field keeps the keys");
+    assert_eq!(
+        in_search,
+        (false, true),
+        "the search box keeps Ctrl+Tab, and Ctrl+T opens a tab from it"
+    );
     assert!(
         test.window.tab_keys_apply() && test.window.new_tab_key_applies(),
         "Properties is a window of its own and keeps no key from this one"
