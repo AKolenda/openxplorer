@@ -36,6 +36,9 @@ fn hides_place(test: &TestWindow, uri: &str) -> bool {
 fn the_general_tab_opens_folders_in_their_own_window_and_clears_history() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The Privacy check boxes work while the navigation pane lists the
+    // Recent rows (SIDE-034).
+    test.set_more_navigation_pane_items(true);
     let options = open_folder_options(&test);
     let general = |label: &str| option_check(&options, "General", label);
     assert!(general("Open each folder in the same window").is_active());
@@ -106,6 +109,59 @@ fn the_general_tab_opens_folders_in_their_own_window_and_clears_history() {
             "{way}: this window stays"
         );
     }
+}
+
+/// Privacy's "Show recently used files" and "Show frequently used
+/// folders" choose whether the navigation pane lists Recent files and
+/// Recent locations, which it lists only while Settings' "Show more items
+/// in the navigation pane" is on (SIDE-034). While it is off, the default,
+/// both are grayed out and say where to turn the rows on; Folder Options
+/// does not turn that switch on. While it is on, they work as before.
+///
+/// parity: VIEW-020, SIDE-034
+#[gtk::test]
+fn privacy_check_boxes_follow_the_navigation_pane_switch() {
+    const LABELS: [&str; 2] = ["Show recently used files", "Show frequently used folders"];
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    for label in LABELS {
+        let check = option_check(&options, "General", label);
+        assert!(!check.is_sensitive(), "{label} is grayed out");
+        let tooltip = check.tooltip_text().map(String::from).unwrap_or_default();
+        assert!(
+            tooltip.contains("Show more items in the navigation pane")
+                && tooltip.contains("Settings > Appearance"),
+            "{label}: {tooltip:?}"
+        );
+    }
+    close_folder_options(&test, &options, "Cancel");
+    assert!(
+        !test
+            .context
+            .settings_data()
+            .preferences
+            .more_navigation_pane_items,
+        "Folder Options leaves the switch off"
+    );
+
+    test.set_more_navigation_pane_items(true);
+    let options = open_folder_options(&test);
+    for label in LABELS {
+        let check = option_check(&options, "General", label);
+        assert!(check.is_sensitive(), "{label} works with the switch on");
+        assert_eq!(check.tooltip_text(), None, "{label}");
+    }
+    let recent_rows = || {
+        let labels = test.window.sidebar().labels();
+        ["Recent files", "Recent locations"].map(|row| labels.iter().any(|label| label == row))
+    };
+    wait_until("the Recent rows", || recent_rows() == [true, true]);
+    option_check(&options, "General", LABELS[0]).set_active(false);
+    close_folder_options(&test, &options, "OK");
+    wait_until("Recent files to leave the pane", || {
+        recent_rows() == [false, true]
+    });
 }
 
 /// View: "Show status bar" and "Show pop-up description for folder and
