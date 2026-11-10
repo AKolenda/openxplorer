@@ -1127,3 +1127,71 @@ fn ok_changes_nothing_once_the_pane_shows_another_folder() {
         );
     }
 }
+
+/// A folder arranged as Date modified, Name, Type and Size keeps that
+/// order when Choose Details is accepted unchanged in search results or
+/// the Recycle Bin, which do not list Date modified and so show Name
+/// first.
+///
+/// parity: VIEW-033, VIEW-034
+#[test]
+fn accepting_an_unchanged_choice_keeps_a_placed_name_where_it_was() {
+    let arranged = [
+        SortColumn::Modified,
+        SortColumn::Name,
+        SortColumn::Type,
+        SortColumn::Size,
+    ];
+    for listing in [DetailsListing::SearchResults, DetailsListing::RecycleBin] {
+        let choice = DetailsChoice::for_listing(&arranged, listing, |_| 120);
+        assert_eq!(choice.rows()[0].column, SortColumn::Name, "{listing:?}");
+        assert_eq!(choice.chosen(), arranged, "{listing:?}");
+    }
+    let default_name = DetailsChoice::for_listing(&DEFAULT_CHOSEN, DetailsListing::SearchResults, |_| 120);
+    assert_eq!(default_name.chosen(), DEFAULT_CHOSEN);
+}
+
+/// With one view for every folder arranged as Date modified, Name, Type
+/// and Size, OK on an unchanged Choose Details in search results saves
+/// that order again, Name's place included.
+///
+/// parity: VIEW-033, VIEW-034
+#[gtk::test]
+fn ok_in_a_search_keeps_the_shared_order_with_name_moved_down() {
+    let (_fixture, test) = window_with_files();
+    test.share_one_view();
+    let details = test.window.folder_pane().details().clone();
+    let saved = || {
+        test.context
+            .settings_data()
+            .preferences
+            .view_options
+            .details_columns
+    };
+    let shown = open_from_more(&test);
+    shown.select(0);
+    shown.move_down.emit_clicked();
+    shown.ok.emit_clicked();
+    wait_until("Name after Date modified to be saved", || {
+        saved() == ["modified", "name", "type", "size"]
+    });
+    test.search_for("Garden");
+    wait_until("the search result", || test.names() == ["Garden plan.txt"]);
+    let shown = open_from_more(&test);
+    assert_eq!(row_labels(&shown)[..4], ["Name", "Folder path", "Type", "Size"]);
+    shown.ok.emit_clicked();
+    wait_until("OK to close it", || {
+        ChooseDetails::shown_over(&test.window).is_none()
+    });
+    wait_for_frames(&test.window, 3);
+    assert_eq!(
+        details.chosen_columns(),
+        [
+            SortColumn::Modified,
+            SortColumn::Name,
+            SortColumn::Type,
+            SortColumn::Size
+        ]
+    );
+    assert_eq!(saved(), ["modified", "name", "type", "size"]);
+}

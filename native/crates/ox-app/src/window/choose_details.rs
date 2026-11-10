@@ -82,6 +82,10 @@ pub(crate) struct DetailsChoice {
     /// the chosen ones: they are not listed, and OK keeps them chosen for
     /// the listings that have them.
     unlisted: Vec<(usize, SortColumn)>,
+    /// Whether Name was among the chosen columns, placed by Choose
+    /// Details, rather than first by default: the places of `unlisted`
+    /// count it then.
+    name_placed: bool,
 }
 
 impl DetailsChoice {
@@ -133,7 +137,12 @@ impl DetailsChoice {
                 width_typed: false,
             })
             .collect();
-        let mut choice = Self { rows, unlisted };
+        let name_placed = chosen.contains(&SortColumn::Name);
+        let mut choice = Self {
+            rows,
+            unlisted,
+            name_placed,
+        };
         choice.place_fixed_rows();
         choice
     }
@@ -258,17 +267,26 @@ impl DetailsChoice {
     /// The checked columns in the list's order, Name among them only
     /// when it is not first, with the chosen columns the listing does not
     /// have back in their places.
+    ///
+    /// Those places count Name only where it was placed, so a Name first
+    /// by default is set aside before they go back, and a leading Name is
+    /// dropped only once they are back: a folder arranged as Date
+    /// modified, Name, Type and Size keeps that order through a search,
+    /// where Date modified is not listed and Name comes first.
     pub(crate) fn chosen(&self) -> Vec<SortColumn> {
         let shown = self
             .rows
             .iter()
             .filter(|row| row.shown && !is_fixed(row.column))
             .map(|row| row.column);
-        let mut chosen = crate::folder_view::details::without_leading_name(shown.collect());
+        let mut chosen: Vec<SortColumn> = shown.collect();
+        if !self.name_placed && chosen.first() == Some(&SortColumn::Name) {
+            chosen.remove(0);
+        }
         for (place, column) in &self.unlisted {
             chosen.insert((*place).min(chosen.len()), *column);
         }
-        chosen
+        crate::folder_view::details::without_leading_name(chosen)
     }
 
     /// The columns whose width the user typed, with that width.
