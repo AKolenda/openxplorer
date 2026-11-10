@@ -223,6 +223,7 @@ impl BrowserWindow {
         }
         let (from, to) = (self.pane_on(from), self.pane_on(to));
         self.apply_style_to(to, &Self::style_of_pane(from));
+        to.copy_styled_location(from);
     }
 
     /// Makes the pane on `side` active, when the tab in front is split and

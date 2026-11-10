@@ -129,6 +129,13 @@ impl FolderPane {
         self.imp().styled_location.replace(Some(uri.to_owned()));
     }
 
+    /// Notes that the pane shows the folder style `from` shows, as it
+    /// does once that pane's style is copied to it.
+    pub(crate) fn copy_styled_location(&self, from: &Self) {
+        let styled = from.imp().styled_location.borrow().clone();
+        self.imp().styled_location.replace(styled);
+    }
+
     /// Whether the pane shows the folder style of `uri`.
     pub(crate) fn is_styled_for(&self, uri: &str) -> bool {
         self.imp()
