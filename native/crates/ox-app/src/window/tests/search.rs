@@ -107,6 +107,36 @@ fn a_folder_nobody_indexed_is_searched_with_its_subfolders() {
     assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.TXT"]);
 }
 
+/// `?` stands for exactly one character, in the folder and in its
+/// subfolders, as in Windows 11 File Explorer.
+///
+/// parity: SRCH-004, SRCH-035
+#[gtk::test]
+fn a_question_mark_finds_names_with_one_character_there() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Deep")).expect("fixture subfolder");
+    for name in [
+        "extra_2.txt",
+        "extra_3.txt",
+        "extra_30.txt",
+        "extra_31.txt",
+        "what?.txt",
+    ] {
+        fs::write(fixture.path(name), b"x").expect("fixture file");
+    }
+    fs::write(fixture.path("Documents/Deep/extra_32.txt"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.search_for("extra_??.txt");
+    assert_eq!(test.names(), ["extra_30.txt", "extra_31.txt", "extra_32.txt"]);
+    test.search_for("extra_?.txt");
+    assert_eq!(test.names(), ["extra_2.txt", "extra_3.txt"]);
+    test.search_for("what?.txt");
+    assert_eq!(test.names(), ["what?.txt"]);
+    test.search_for("extra_????.txt");
+    assert!(test.names().is_empty());
+}
+
 /// parity: SRCH-035, PERF-005
 #[gtk::test]
 fn a_live_search_caps_the_initial_listing_and_reports_truncation() {
