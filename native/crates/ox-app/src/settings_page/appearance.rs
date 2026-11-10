@@ -63,6 +63,14 @@ const MENU_BUTTONS: RowText = RowText {
                bottom pointer position windows 11 compact",
 };
 
+const SHIFT_F10_CLASSIC: RowText = RowText {
+    title: "Shift+F10 opens the classic menu",
+    description: "When on, Shift+F10 opens the Windows 10 menu. When off, it opens the same menu \
+                  as a right-click and the Menu key, as in Windows 11.",
+    keywords: "shift f10 keyboard key context menu right-click classic windows 10 11 compact \
+               show more options",
+};
+
 const HIDE_EXPAND_ARROWS: RowText = RowText {
     title: "Hide expand arrows in the sidebar",
     description: "As in Windows, the navigation pane's arrows (This PC, Network and the folder tree) \
@@ -296,6 +304,22 @@ fn menu_buttons_row(page: &SettingsPage) -> SettingRow {
     row
 }
 
+/// "Shift+F10 opens the classic menu": the switch saves the choice, which
+/// the keyboard menus read when Shift+F10 opens one
+/// (`src/window/context_menu.rs`).
+fn shift_f10_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(SHIFT_F10_CLASSIC);
+    let switch = page.preference_switch(PreferenceBinding {
+        read: |preferences| preferences.shift_f10_classic,
+        write: |on| PreferencesUpdate {
+            shift_f10_classic: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    });
+    row.add_control(&switch, ControlName::RowTitle);
+    row
+}
+
 /// "Use the desktop font": the switch saves the choice and the skin draws
 /// it in every window at once.
 fn desktop_font_row(page: &SettingsPage) -> SettingRow {
@@ -368,8 +392,8 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
     });
 }
 
-/// The compact view, the navigation pane's arrows, the right-click menu
-/// and the pane widths.
+/// The compact view, the navigation pane's arrows, the right-click menu,
+/// Shift+F10's menu and the pane widths.
 fn layout_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
     group.add_row(&super::files_folders::compact_view_row(page));
@@ -385,6 +409,7 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     group.add_row(&arrows);
     group.add_row(&right_click_menu_row(page));
     group.add_row(&menu_buttons_row(page));
+    group.add_row(&shift_f10_row(page));
     let row = SettingRow::new(PANE_WIDTHS);
     let reset = parts::button_with_glyph(&ox_core::i18n::gettext("Reset"), Icon::ArrowClockwise);
     WindowAction::ResetLayout.assign_to(&reset);
