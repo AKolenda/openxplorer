@@ -566,3 +566,112 @@ fn home_is_spaced_as_windows_11_home() {
         "Home counts its tiles and rows"
     );
 }
+
+/// Recent follows the desktop's privacy settings as the navigation
+/// pane's Recent locations does: with recent files turned off it lists
+/// nothing, though `GVfs` still lists the earlier files.
+///
+/// parity: HOME-015
+#[gtk::test]
+fn recent_lists_nothing_while_the_desktop_remembers_no_recent_files() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Fictional plan\n").expect("fixture file");
+    add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
+    let test = home_window(&fixture);
+    wait_until("the recent file", || {
+        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+    });
+
+    let settings = gtk::Settings::default().expect("the display's settings");
+    settings.set_gtk_recent_files_enabled(false);
+    test.activate("refresh", None);
+    let emptied = (0..200).any(|_| {
+        crate::test_support::harness::wait_for_frames(&test.window, 1);
+        home_page::list_names(body(&test)).is_empty() && home_page::empty_text(body(&test)).is_some()
+    });
+    settings.set_gtk_recent_files_enabled(true);
+    assert!(emptied, "Recent lists nothing while recent files are off");
+}
+
+/// Home leaves the window idle once drawn: nothing asks for a frame on
+/// every frame to watch the width; a narrower window still gets fewer
+/// tiles per row.
+///
+/// parity: HOME-013
+#[gtk::test]
+fn home_leaves_the_window_idle_and_still_follows_its_width() {
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.window.set_default_size(1600, 1000);
+    test.activate("pin-location", Some(&fixture.uri_of("Documents")));
+    wait_until("a tile", || !home_page::tile_names(body(&test)).is_empty());
+    crate::test_support::harness::wait_for_frames(&test.window, 5);
+    let wide = home_page::tiles_per_row(body(&test));
+
+    let clock = test.window.frame_clock().expect("a shown window has a frame clock");
+    let before = clock.frame_counter();
+    let pause = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = pause.clone();
+    gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(600), move || done.set(true));
+    wait_until("600 ms", || pause.get());
+    let frames = clock.frame_counter() - before;
+    assert!(frames < 6, "{frames} frames drawn while nothing changed");
+
+    test.window.set_default_size(700, 800);
+    wait_until("fewer tiles per row", || home_page::tiles_per_row(body(&test)) < wide);
+}
+
+/// A Favorites row opens as a double-click opens the item in its
+/// folder, through the same steps: a desktop link to a folder opens the
+/// folder rather than being handed to an application.
+///
+/// parity: HOME-014
+#[gtk::test]
+fn a_favorite_opens_as_a_double_click_in_its_folder_does() {
+    let fixture = Fixture::standard();
+    let link = format!(
+        "[Desktop Entry]\nType=Link\nName=Documents\nURL={}\n",
+        fixture.uri_of("Documents")
+    );
+    fs::write(fixture.path("Documents link.desktop"), link).expect("the fixture is writable");
+    let test = home_window(&fixture);
+    test.activate("add-to-favorites", Some(&fixture.uri_of("Documents%20link.desktop")));
+    home_page::choose_tab(body(&test), "Favorites");
+    wait_until("the favorite", || {
+        home_page::list_names(body(&test)) == ["Documents link.desktop"]
+    });
+
+    home_page::open_item(body(&test), "Documents link.desktop");
+
+    wait_until("the linked folder", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents"))
+    });
+    assert!(
+        test.context.recorded_launches().is_empty(),
+        "the link file is not opened"
+    );
+}
+
+/// Folding both sections at once saves both: each fold changes only its
+/// own key of the settings file as it then is.
+///
+/// parity: HOME-016
+#[gtk::test]
+fn folding_both_sections_at_once_saves_both() {
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Documents")));
+    wait_until("the Documents tile", || {
+        !home_page::tile_names(body(&test)).is_empty()
+    });
+    let folds = home_page::fold_buttons(body(&test));
+    folds[0].emit_clicked();
+    folds[1].emit_clicked();
+
+    wait_until("both folds saved", || {
+        let mut saved = Settings::open(test.settings_directory()).data().preferences.home_folded;
+        saved.sort();
+        saved == ["files", "quickAccess"]
+    });
+}

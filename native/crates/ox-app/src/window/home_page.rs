@@ -1926,6 +1926,24 @@ mod layout_tests {
         assert_eq!(file_location("file:///srv/shared/a.txt", home), "/srv/shared");
     }
 
+    /// Recent keeps no file while the desktop remembers none, and only
+    /// those used within its maximum age.
+    #[test]
+    fn recent_follows_the_desktops_privacy_policy() {
+        use super::kept_by_policy;
+        use crate::app_context::RecentPolicy;
+        const DAY: u64 = 86_400;
+        let now = 100 * DAY;
+        let off = RecentPolicy { remember: false, max_age_days: None };
+        let week = RecentPolicy { remember: true, max_age_days: Some(7) };
+        let always = RecentPolicy { remember: true, max_age_days: None };
+        assert!(!kept_by_policy(Some(now), now, off));
+        assert!(kept_by_policy(Some(now - 7 * DAY), now, week));
+        assert!(!kept_by_policy(Some(now - 8 * DAY), now, week));
+        assert!(!kept_by_policy(None, now, week), "an undated file is not known to be recent");
+        assert!(kept_by_policy(Some(1), now, always));
+    }
+
     /// The columns keep Windows' widths while they fit, then Name
     /// narrows, then the other two, never below their narrowest.
     #[test]

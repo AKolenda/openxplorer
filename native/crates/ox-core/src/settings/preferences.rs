@@ -1267,6 +1267,35 @@ mod tests {
 
     use super::*;
 
+    /// Favorites from a damaged or hand-edited file keep only locations
+    /// the app can open, in their canonical form, each once: a name with
+    /// credentials, another URI scheme, a virtual place or a relative path
+    /// is left out, never handed to GIO by Home (HOME-014).
+    #[test]
+    fn favorites_keep_only_canonical_locations() {
+        let update = PreferencesUpdate::from_json(&json!({
+            "favorites": [
+                "file:///home/ana/Notes%201.txt",
+                "file:///home/ana/./Notes 1.txt",
+                "smb://NAS/Team/plan.odt",
+                "smb://ana:secret@nas/Team/plan.odt",
+                "sftp://ana@host/plan.txt",
+                "http://example.com/x",
+                "javascript:alert(1)",
+                "trash:///old.txt",
+                "relative/path.txt",
+                ""
+            ]
+        }))
+        .expect("an object");
+        let mut preferences = Preferences::default();
+        preferences.apply(&update);
+        assert_eq!(
+            preferences.favorites,
+            ["file:///home/ana/Notes%201.txt", "smb://nas/Team/plan.odt"]
+        );
+    }
+
     /// Downloads is grouped by date modified until the user chooses
     /// another Group by there, kept apart from the shared style, or in its
     /// own style when each folder keeps one; other folders are unchanged.
