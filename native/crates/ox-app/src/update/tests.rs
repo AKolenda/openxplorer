@@ -695,3 +695,53 @@ fn the_command_bar_shows_update_only_when_settings_ask() {
     });
     assert!(test.window.shows_status_bar_update(), "the status bar keeps it");
 }
+
+/// Saves `update` and waits until the windows have it.
+fn save_preferences(test: &TestWindow, update: ox_core::settings::PreferencesUpdate) {
+    let saved = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&saved);
+    test.context.update_preferences(update, move |result| {
+        result.expect("the preferences are saved");
+        done.set(true);
+    });
+    wait_until("the preferences to be saved", || saved.get());
+}
+
+/// With Folder Options' status bar hidden, the command bar's Update shows
+/// while a release waits even though "Show the Update button in the
+/// command bar" is off, so a window always has a way to the update; with
+/// the status bar shown again, it hides.
+///
+/// parity: UPD-001
+#[gtk::test]
+fn a_hidden_status_bar_brings_the_command_bar_update_back() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    simulated.updates.check_automatically(None);
+    wait_until("the check", || !simulated.updates.state().is_busy());
+    assert_eq!(test.window.shown_update_button(), None);
+
+    save_preferences(
+        &test,
+        ox_core::settings::PreferencesUpdate {
+            hide_status_bar: Some(true),
+            ..ox_core::settings::PreferencesUpdate::default()
+        },
+    );
+    assert!(!test.context.settings_data().preferences.show_update_button);
+    wait_until("the command bar's Update", || {
+        test.window.shown_update_button().as_deref() == Some("Update")
+    });
+
+    save_preferences(
+        &test,
+        ox_core::settings::PreferencesUpdate {
+            hide_status_bar: Some(false),
+            ..ox_core::settings::PreferencesUpdate::default()
+        },
+    );
+    wait_until("the command bar's Update to hide", || {
+        test.window.shown_update_button().is_none()
+    });
+}
