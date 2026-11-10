@@ -144,10 +144,8 @@ fn escape_during_a_drag_onto_a_navigation_pane_row_moves_nothing() {
     pointer.move_to(720, 500);
 }
 
-/// Escape during a real drag of a file onto another tab leaves the file
-/// where it was after the release over the tab. (On check.py's display a
-/// real drag shows no label over a tab, and a drop there without Escape
-/// moves nothing either, so this guards the outcome only.)
+/// Escape during a real drag of a file onto another tab calls the drag
+/// off: the release over the tab moves nothing.
 ///
 /// parity: DND-029
 #[gtk::test]
