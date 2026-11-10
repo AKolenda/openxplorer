@@ -615,11 +615,13 @@ impl MenuPopover {
         } else {
             GlyphColumn::None
         };
+        let more_options_key = self.shift_f10_opens_classic_menu().then_some(SHIFT_F10_TEXT);
         for entry in &entries {
             let MenuEntry::Item(item) = entry else {
                 after_divider = true;
                 continue;
             };
+            let item = &with_more_options_key(item, more_options_key);
             let can_choose = self.can_choose(item);
             let row = item_row(item, self.check_mark(item), marks, glyphs);
             row.set_sensitive(can_choose);
@@ -635,6 +637,15 @@ impl MenuPopover {
 
     /// Fills the strip with a button per strip item, in the compact style
     /// only.
+    /// Whether Shift+F10 opens the classic menu in the window the menu is
+    /// in: the Settings choice "Shift+F10 opens the classic menu". The rows
+    /// are drawn again each time the menu shows, inside its window.
+    fn shift_f10_opens_classic_menu(&self) -> bool {
+        self.root()
+            .and_downcast::<super::BrowserWindow>()
+            .is_some_and(|window| window.context().settings_data().preferences.shift_f10_classic)
+    }
+
     fn redraw_strip(&self) {
         let strip = self.strip();
         while let Some(child) = strip.first_child() {
@@ -1237,6 +1248,29 @@ fn mark_slot(item: &MenuItem, check: CheckMark) -> gtk::Widget {
     let image = icons::image(mark, ROW_GLYPH);
     image.add_css_class("menu-mark");
     image.upcast()
+}
+
+/// The key text "Show more options" shows when Shift+F10 opens the classic
+/// menu.
+const SHIFT_F10_TEXT: &str = "Shift+F10";
+
+/// `item`, a "Show more options" row (of the file list's, the navigation
+/// pane's or a place's menu) showing `key`, or none; any other item as it
+/// is.
+fn with_more_options_key(item: &MenuItem, key: Option<&'static str>) -> MenuItem {
+    let opens_classic_menu = matches!(
+        item.action,
+        MenuAction::Window(
+            super::window_action::WindowAction::ShowMoreOptions
+                | super::window_action::WindowAction::SidebarMoreOptions
+                | super::window_action::WindowAction::PlaceMoreOptions
+        )
+    );
+    let mut item = item.clone();
+    if opens_classic_menu {
+        item.shortcut = key;
+    }
+    item
 }
 
 /// A row's mark column when the menu has one, its glyph (the

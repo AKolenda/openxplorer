@@ -153,6 +153,17 @@ thread_local! {
     static DRAGGED: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
 }
 
+/// Remembers `drag`, which just began from a folder view, the navigation
+/// pane or This PC's tiles, as the file drag Escape calls off.
+fn remember_file_drag(drag: &gdk::Drag) {
+    FILE_DRAG.with(|now| now.borrow().set(Some(drag)));
+}
+
+/// The file drag ended: Escape has nothing to call off.
+fn forget_file_drag() {
+    FILE_DRAG.with(|now| now.borrow().set(None));
+}
+
 /// Calls off the file drag in progress, as GTK calls a drag off on
 /// Escape: its `cancel` signal, which lets the pointer go and tells the
 /// drop target it left, and the drag source ends the drag without a drop.
@@ -161,7 +172,7 @@ fn cancel_file_drag() -> bool {
     let Some(drag) = FILE_DRAG.with(|now| now.borrow().upgrade()) else {
         return false;
     };
-    FILE_DRAG.with(|now| now.borrow().set(None));
+    forget_file_drag();
     drag.emit_by_name::<()>("cancel", &[&gdk::DragCancelReason::UserCancelled]);
     true
 }
@@ -306,6 +317,7 @@ pub(super) fn attach_drive_tile_drag(
     });
     source.connect_drag_begin(move |source, drag| {
         mark_drag_button(drag);
+        remember_file_drag(drag);
         if let Some(window) = window_of(source) {
             window.begin_file_drag(drag);
         }
@@ -313,6 +325,7 @@ pub(super) fn attach_drive_tile_drag(
     source.connect_drag_end(move |source, drag, _| {
         super::drag_surface::keep_finished_drag(drag);
         SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
+        forget_file_drag();
         label::forget_drag_label();
         if let Some(window) = window_of(source) {
             window.end_file_drag();
@@ -413,7 +426,7 @@ impl BrowserWindow {
             self,
             move |_, drag| {
                 mark_drag_button(drag);
-                FILE_DRAG.with(|now| now.borrow().set(Some(drag)));
+                remember_file_drag(drag);
                 window.begin_file_drag(drag);
             }
         ));
@@ -423,7 +436,7 @@ impl BrowserWindow {
             move |_, drag, _| {
                 super::drag_surface::keep_finished_drag(drag);
                 SECONDARY_DRAG.with(|secondary| secondary.borrow().set(None));
-                FILE_DRAG.with(|now| now.borrow().set(None));
+                forget_file_drag();
                 label::forget_drag_label();
                 window.end_file_drag();
             }
