@@ -16,6 +16,8 @@ use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow}
 use crate::test_support::pointer::{screen_point, Button as PointerButton, Pointer};
 use crate::window::conflict_window::FileConflictWindow;
 use crate::window::progress_window::ProgressWindow;
+use crate::window::transfer_panel::{TransferKind, TransferPanel};
+use ox_core::transfer::Cancellation;
 
 /// Copies the files `names` of Documents, each with other contents than
 /// the file of that name in the fixture's folder, then shows that folder.
@@ -626,6 +628,62 @@ fn escape_cancels_a_move_that_asks_about_one_name() {
 #[gtk::test]
 fn escape_cancels_a_move_that_asks_about_several_names() {
     escape_cancels_the_question(&["Notes 2.txt", "Notes 10.txt"], true);
+}
+
+/// Escape stops only the action the keyboard is on: with one copy at
+/// "Replace or Skip Files" and the keyboard on another, running action's
+/// Pause, Escape stops neither, as Escape never stops a running action in
+/// Windows 11's progress window. Escape on the asking copy's own question
+/// then stops that copy only, and the running action goes on.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn escape_on_a_running_actions_pause_leaves_the_question_of_another() {
+    let mut pointer = Pointer::connect();
+    let fixture = Fixture::standard();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+    test.activate("paste", None);
+    let progress = question_window(&test);
+    let asking = progress.actions().into_iter().next().expect("the copy shows");
+    let running_cancel = Cancellation::new();
+    let running = TransferPanel::for_window(&test.window);
+    running.start(TransferKind::Files, "Copying 1 item", running_cancel.clone());
+    wait_until("both actions to show", || progress.actions().len() == 2);
+    crate::test_support::harness::wait_for_frames(&progress, 4);
+    wait_until("the running action's Pause to take the keyboard", || {
+        running.focus_pause()
+    });
+    // The keyboard goes to the window under the pointer.
+    point_into(&mut pointer, &progress);
+    pointer.tap_key(gtk::gdk::Key::Escape);
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+    assert!(asking.asks_about_names(), "the copy still asks");
+    assert!(test.window.is_writing_files(), "the copy still waits");
+    assert!(!running_cancel.is_cancelled(), "the running action goes on");
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Synthetic test data\n",
+        "nothing was replaced"
+    );
+
+    assert!(
+        button(&asking, "Skip this file").grab_focus(),
+        "the question takes the keyboard"
+    );
+    pointer.tap_key(gtk::gdk::Key::Escape);
+    wait_until("Escape to stop the copy that asks", || {
+        !asking.asks_about_names() && !test.window.is_writing_files()
+    });
+    pointer.move_to(720, 500);
+    assert!(!running_cancel.is_cancelled(), "the running action still goes on");
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Synthetic test data\n",
+        "the cancelled copy replaced nothing"
+    );
+    running.cancel();
+    running.finish();
 }
 
 /// Enter in "Replace or Skip Files" still answers with the row the
