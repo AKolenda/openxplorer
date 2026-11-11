@@ -516,8 +516,9 @@ mod tests {
         assert!(pixbuf_may_read("application/x-font-ttf", &font));
     }
 
-    /// Previews follow Settings: off, only in folders on this computer,
-    /// and not for files over the limit.
+    /// Previews follow Settings: off, only in folders on this computer
+    /// with network previews off (they are on by default), and not for
+    /// files over the limit.
     ///
     /// parity: VIEW-058
     #[test]
@@ -525,7 +526,10 @@ mod tests {
         let mut picture = crate::test_support::file_entry("photo.jpg");
         picture.content_type = Some("image/jpeg".to_owned());
         picture.size = Some(PREVIEW_SIZE_LIMIT + 1);
-        let options = ViewOptions::default();
+        let options = ViewOptions {
+            remote_previews: false,
+            ..ViewOptions::default()
+        };
 
         assert!(
             !PreviewPolicy::for_folder(&options, false).allows(&picture),
@@ -575,10 +579,8 @@ mod tests {
             request.target_uri.as_deref(),
             Some("file:///home/demo/Pictures/photo.jpg")
         );
-        let everywhere = ViewOptions {
-            remote_previews: true,
-            ..ViewOptions::default()
-        };
+        let everywhere = ViewOptions::default();
+        assert!(PreviewPolicy::for_folder(&everywhere, true).allows(&picture));
         assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&shared));
         assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&recent));
     }
