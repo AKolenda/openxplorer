@@ -2,6 +2,8 @@
 
 A Windows File Explorer-inspired file manager for Linux, **developed for Zorin OS first and foremost**. Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, split panes, a folder tree, Details, Compact, List and icon views with thumbnails, clickable paths, pinned folders, search, undoable file operations and light/dark themes.
 
+<a href="https://github.com/AKolenda/openxplorer/releases/latest"><img src="https://img.shields.io/github/v/release/AKolenda/openxplorer?style=for-the-badge&label=Download&color=0067c0&logo=linux&logoColor=white" alt="Download OpenXplorer" height="40"></a>
+
 **[Releases](https://github.com/AKolenda/openxplorer/releases)** · **[Website](https://openxplorer.app)** · **[Installation](docs/installation.md)** · **[Documentation](docs/introduction.md)**
 
 ![OpenXplorer browsing fictional sample files](apps/web/public/assets/screenshots/explorer-light.png)
