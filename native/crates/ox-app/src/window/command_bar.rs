@@ -188,9 +188,9 @@ mod imp {
         pub(super) watched_window: glib::WeakRef<gtk::Window>,
         /// The surface that last had the pointer's motion.
         pub(super) pointer_surface: glib::WeakRef<gtk::gdk::Surface>,
-        /// The row or button of the open menu a press was taken for,
-        /// clicked on the release (`menu_group.rs`).
-        pub(super) held_press: RefCell<Option<gtk::Widget>>,
+        /// A press on the open menu taken from the window, until its
+        /// release (`menu_group.rs`).
+        pub(super) held_press: RefCell<Option<super::menu_group::HeldPress>>,
     }
 
     #[glib::object_subclass]

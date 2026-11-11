@@ -24,8 +24,12 @@
 //! while the pointer is over a menu; a grab is what normally stops that.
 //! The next press on the menu, before the pointer moves, would then go to
 //! the file or control under the menu. The group follows which surface
-//! last had the pointer's motion, as GTK does, and takes such a press
-//! from the window and gives it to the menu's row or button under it.
+//! last had the pointer's motion, as GTK does, and takes such a press,
+//! and its release, from the window, wherever on the menu it is, so it
+//! never reaches what is under the menu. It then does what the click
+//! would have done in the menu: a primary press and release on the same
+//! row or button runs it; a press between the items, one dragged off its
+//! item before the release, or a right or middle click runs nothing.
 //!
 //! The keyboard is unchanged: a menu takes it when it opens, Escape
 //! closes it and gives it back to the button.
@@ -120,28 +124,45 @@ impl CommandBar {
                 imp.pointer_surface.set(event.surface().as_ref());
                 glib::Propagation::Proceed
             }
-            gdk::EventType::ButtonPress => match self.press_sent_past_menu(event) {
-                Some(target) => {
-                    imp.held_press.replace(Some(target));
-                    glib::Propagation::Stop
+            gdk::EventType::ButtonPress => {
+                if imp.held_press.borrow().is_some() {
+                    // Another button pressed while one is held: part of
+                    // the same click on the menu.
+                    return glib::Propagation::Stop;
                 }
-                None => glib::Propagation::Proceed,
-            },
-            gdk::EventType::ButtonRelease => match imp.held_press.take() {
-                Some(target) => {
-                    click(&target);
-                    glib::Propagation::Stop
+                match self.press_sent_past_menu(event) {
+                    Some(held) => {
+                        imp.held_press.replace(Some(held));
+                        glib::Propagation::Stop
+                    }
+                    None => glib::Propagation::Proceed,
                 }
-                None => glib::Propagation::Proceed,
-            },
+            }
+            gdk::EventType::ButtonRelease => {
+                let Some(pointer_button) = pointer_button(event) else {
+                    return glib::Propagation::Proceed;
+                };
+                let held = imp.held_press.borrow().as_ref().map(|held| held.button);
+                match held {
+                    None => glib::Propagation::Proceed,
+                    Some(button) if button != pointer_button => glib::Propagation::Stop,
+                    Some(_) => {
+                        if let Some(held) = imp.held_press.take() {
+                            held.release(event);
+                        }
+                        glib::Propagation::Stop
+                    }
+                }
+            }
             _ => glib::Propagation::Proceed,
         }
     }
 
     /// For a press on the open menu, or a submenu of it, while GTK's
-    /// pointer target is in the window, not in that menu: the menu's row
-    /// or button under the press.
-    fn press_sent_past_menu(&self, event: &gdk::Event) -> Option<gtk::Widget> {
+    /// pointer target is in the window, not in that menu: the press to
+    /// take from the window, with the menu's row or button under it, if
+    /// any.
+    fn press_sent_past_menu(&self, event: &gdk::Event) -> Option<HeldPress> {
         let button = self.open_menu()?;
         let surface = event.surface()?;
         if self.imp().pointer_surface.upgrade().as_ref() == Some(&surface) {
@@ -151,10 +172,11 @@ impl CommandBar {
         if !menu.is_ancestor(&button) {
             return None;
         }
-        let (x, y) = event.position()?;
-        let (shadow_x, shadow_y) = menu.surface_transform();
-        let picked = menu.pick(x - shadow_x, y - shadow_y, gtk::PickFlags::DEFAULT)?;
-        clickable(&picked)
+        Some(HeldPress {
+            button: pointer_button(event)?,
+            target: item_at(&menu, event),
+            menu,
+        })
     }
 
     /// Opens the menu of the shown menu button named `name` ("View",
@@ -199,11 +221,47 @@ fn button_name(button: &gtk::MenuButton) -> Option<String> {
     }
 }
 
-/// The row or button of a menu that holds `widget`.
-fn clickable(widget: &gtk::Widget) -> Option<gtk::Widget> {
-    widget
+/// A press on the open menu taken from the window, until its release.
+#[derive(Debug)]
+pub(super) struct HeldPress {
+    /// The pointer button pressed.
+    button: u32,
+    /// The menu, or submenu, pressed on.
+    menu: MenuPopover,
+    /// Its row or button under the press; none between its items.
+    target: Option<gtk::Widget>,
+}
+
+impl HeldPress {
+    /// Does what the click ends as in the menu, at `release`: runs the row
+    /// or button pressed when the primary button is let go on it again.
+    fn release(self, release: &gdk::Event) {
+        let Some(target) = self.target else {
+            return;
+        };
+        let on_menu = release.surface() == self.menu.surface();
+        let still_on_target = on_menu && item_at(&self.menu, release).as_ref() == Some(&target);
+        if self.button == gdk::BUTTON_PRIMARY && still_on_target {
+            click(&target);
+        }
+    }
+}
+
+/// The pointer button of a press or release.
+fn pointer_button(event: &gdk::Event) -> Option<u32> {
+    event
+        .downcast_ref::<gdk::ButtonEvent>()
+        .map(gdk::ButtonEvent::button)
+}
+
+/// The row or button of `menu` at `event`'s position on its surface.
+fn item_at(menu: &MenuPopover, event: &gdk::Event) -> Option<gtk::Widget> {
+    let (x, y) = event.position()?;
+    let (shadow_x, shadow_y) = menu.surface_transform();
+    let picked = menu.pick(x - shadow_x, y - shadow_y, gtk::PickFlags::DEFAULT)?;
+    picked
         .ancestor(gtk::ListBoxRow::static_type())
-        .or_else(|| widget.ancestor(gtk::Button::static_type()))
+        .or_else(|| picked.ancestor(gtk::Button::static_type()))
 }
 
 /// Does what a click on a menu's row or button does.

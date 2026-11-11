@@ -596,8 +596,8 @@ fn a_press_on_an_item_runs_it_only_if_released_there_with_the_primary_button() {
 
     // Dragged out of the menu, onto the files, before the release.
     let row = row_of(&menu, "Details pane");
-    let row_middle = row.compute_point(&menu, &gtk::graphene::Point::new(0.0, row.height() as f32 / 2.0));
-    let row_y = f64::from(row_middle.expect("the row is in the menu").y());
+    let row_bounds = row.compute_bounds(&menu).expect("the row is in the menu");
+    let row_y = f64::from(row_bounds.y() + row_bounds.height() / 2.0);
     let outside = session.on_screen(&menu, (f64::from(menu.width()) + 80.0, row_y));
     rest_on_menu_through_a_layout(&mut session, details);
     session.pointer.press(Button::Primary);

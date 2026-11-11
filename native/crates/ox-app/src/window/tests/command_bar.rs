@@ -1409,7 +1409,7 @@ fn copy_path_runs_on_explorers_and_dolphins_keys() {
 /// New menu, open beside each other, as Windows 11's do: each beside the
 /// row that opens it, with a chevron at the row's right, its check marks,
 /// icons and the reasons a disabled item gives. No menu holds a pointer
-/// grab: the command bar's let clicks through (command_bar/menu_group.rs)
+/// grab: the command bar's let clicks through (`command_bar/menu_group.rs`)
 /// and submenus never take one. Choosing a deep item closes every menu
 /// and runs it.
 ///

@@ -5903,10 +5903,11 @@ mod tests {
     /// The command bar's Sort menu in a Save dialog, as Chrome opens one
     /// through the portal: Group by and More open beside the menu, and the
     /// compositor never sees a popup holding a grab: the command bar's
-    /// menus let clicks through, as Windows 11's do (command_bar/
-    /// menu_group.rs), and each submenu is a popup of the Sort menu's
-    /// surface without a grab of its own (`gdk_popup_get_autohide`, what
-    /// GDK sends `xdg_popup.grab` for). One submenu opens only once the
+    /// menus let clicks through, as Windows 11's do
+    /// (`command_bar/menu_group.rs`), and each submenu is a popup of the
+    /// Sort menu's surface without a grab of its own
+    /// (`gdk_popup_get_autohide`, what GDK sends `xdg_popup.grab` for).
+    /// One submenu opens only once the
     /// other has left the screen, and a submenu leaves the screen before
     /// the menu. Side menus that each took a second, nested grab once
     /// froze the KDE Plasma Wayland session in this dialog.
