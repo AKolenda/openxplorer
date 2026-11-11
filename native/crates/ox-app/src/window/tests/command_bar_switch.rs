@@ -39,8 +39,12 @@ struct Session {
 impl Session {
     /// A window on a folder with a few files, wide or `width` pixels.
     fn open(width: Option<i32>) -> Self {
+        Self::open_on(Fixture::standard(), width)
+    }
+
+    /// A window on `fixture`'s folder, wide or `width` pixels.
+    fn open_on(fixture: Fixture, width: Option<i32>) -> Self {
         let mut pointer = Pointer::connect();
-        let fixture = Fixture::standard();
         let test = TestWindow::open(&fixture.uri());
         if let Some(width) = width {
             resize(&test, width);
@@ -476,4 +480,163 @@ fn the_menus_switch_the_same_in_the_dark_theme_and_compact_view() {
     session.expect_only_open(None, "View open, a click on Details");
     wait_until("Details to open the details pane", details_pane);
     session.test.activate("compact-density", None);
+}
+
+/// Rests the pointer at `point` on an open menu while the window lays
+/// itself out again, as when the folder is listed again. On X11, GTK's
+/// pointer target is then the widget of the window under the menu, not
+/// the menu, until the pointer moves.
+fn rest_on_menu_through_a_layout(session: &mut Session, point: (i32, i32)) {
+    session.pointer.move_to(point.0, point.1);
+    wait_for(QUIET);
+    session.test.window.folder_pane().queue_resize();
+    wait_for_frames(&session.test.window, 3);
+    wait_for(QUIET);
+}
+
+/// A window on a folder whose files fill the list, so that every point of
+/// the list under a menu is on a file.
+fn session_over_many_files() -> Session {
+    let session = Session::open_on(Fixture::with_files(60), None);
+    assert!(session.test.selected_names().is_empty());
+    session
+}
+
+/// Whether the window toggle `name` (`details-pane`, `preview-pane`) is
+/// on.
+fn toggle_is_on(test: &TestWindow, name: &str) -> bool {
+    let action = test
+        .window
+        .lookup_action(name)
+        .expect("the window has the toggle");
+    action
+        .state()
+        .and_then(|state| state.get::<bool>())
+        .expect("a toggle")
+}
+
+/// A press and release on a part of the open menu that is no item, such
+/// as the gap a divider leaves, never reaches the file under the menu,
+/// also right after the window laid itself out with the pointer resting
+/// there; the menu stays open, as such a click does nothing in a menu.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn a_click_between_a_menus_items_never_reaches_the_file_under_it() {
+    let mut session = session_over_many_files();
+    session.open_by_click("View");
+    let menu = menu_of(&session.test, "View");
+    let row = row_of(&menu, "Details pane");
+    let bounds = row
+        .compute_bounds(&menu)
+        .expect("the row is laid out in the menu");
+    // In the divider's gap just above the row.
+    let gap = (f64::from(bounds.x()) + 24.0, f64::from(bounds.y()) - 2.0);
+    let picked = menu
+        .pick(gap.0, gap.1, gtk::PickFlags::DEFAULT)
+        .expect("the gap is in the menu");
+    assert!(
+        picked.ancestor(gtk::ListBoxRow::static_type()).is_none()
+            && picked.ancestor(gtk::Button::static_type()).is_none(),
+        "the gap is on no item: {:?}",
+        picked.type_().name()
+    );
+    let point = session.on_screen(&menu, gap);
+
+    rest_on_menu_through_a_layout(&mut session, point);
+    session.pointer.press(Button::Primary);
+    session.pointer.release(Button::Primary);
+    wait_for(QUIET);
+
+    assert!(
+        session.test.selected_names().is_empty(),
+        "no file under the menu selected"
+    );
+    assert_eq!(
+        session.open_menus(),
+        ["View"],
+        "a click on no item leaves the menu open"
+    );
+    assert!(!toggle_is_on(&session.test, "details-pane"), "nothing ran");
+}
+
+/// After the window laid itself out with the pointer resting on an item,
+/// a press there runs the item only when the primary button is released
+/// on that same item: a press dragged to another item or out of the menu
+/// before the release, or a right or middle click, runs nothing, as in
+/// any menu, and reaches no file under the menu.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn a_press_on_an_item_runs_it_only_if_released_there_with_the_primary_button() {
+    let mut session = session_over_many_files();
+    session.open_by_click("View");
+    let menu = menu_of(&session.test, "View");
+    let middle_of_row = |session: &Session, label: &str| {
+        let row = row_of(&menu, label);
+        session.on_screen(&row, (24.0, f64::from(row.height()) / 2.0))
+    };
+    let details = middle_of_row(&session, "Details pane");
+    let preview = middle_of_row(&session, "Preview pane");
+
+    // Dragged to Preview pane before the release.
+    rest_on_menu_through_a_layout(&mut session, details);
+    session.pointer.press(Button::Primary);
+    session.pointer.glide(details, preview, 6);
+    session.pointer.release(Button::Primary);
+    wait_for(QUIET);
+    assert!(
+        !toggle_is_on(&session.test, "details-pane"),
+        "the item pressed did not run"
+    );
+    assert!(
+        !toggle_is_on(&session.test, "preview-pane"),
+        "nor the item released on"
+    );
+
+    // Dragged out of the menu, onto the files, before the release.
+    let row = row_of(&menu, "Details pane");
+    let row_middle = row.compute_point(&menu, &gtk::graphene::Point::new(0.0, row.height() as f32 / 2.0));
+    let row_y = f64::from(row_middle.expect("the row is in the menu").y());
+    let outside = session.on_screen(&menu, (f64::from(menu.width()) + 80.0, row_y));
+    rest_on_menu_through_a_layout(&mut session, details);
+    session.pointer.press(Button::Primary);
+    session.pointer.glide(details, outside, 8);
+    session.pointer.release(Button::Primary);
+    wait_for(QUIET);
+    assert!(
+        !toggle_is_on(&session.test, "details-pane"),
+        "a press dragged off the menu ran nothing"
+    );
+
+    // A right click and a middle click.
+    for button in [Button::Secondary, Button::Middle] {
+        if session.open_menus().is_empty() {
+            session.open_by_click("View");
+        }
+        rest_on_menu_through_a_layout(&mut session, details);
+        session.pointer.press(button);
+        session.pointer.release(button);
+        wait_for(QUIET);
+        assert!(
+            !toggle_is_on(&session.test, "details-pane"),
+            "a {button:?} click ran nothing"
+        );
+    }
+    assert!(
+        session.test.selected_names().is_empty(),
+        "no file under the menu selected"
+    );
+
+    // A primary click released on the item pressed still runs it.
+    if session.open_menus().is_empty() {
+        session.open_by_click("View");
+    }
+    rest_on_menu_through_a_layout(&mut session, details);
+    session.pointer.press(Button::Primary);
+    session.pointer.release(Button::Primary);
+    session.expect_only_open(None, "a click on Details pane");
+    wait_until("the details pane to open", || {
+        toggle_is_on(&session.test, "details-pane")
+    });
 }
