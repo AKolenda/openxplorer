@@ -33,8 +33,9 @@
 //! would have done in the menu: a primary press and release on the same
 //! row or button runs it; a press between the items, one dragged off its
 //! item before the release, or a right or middle click runs nothing. The
-//! wheel and the touchpad's scrolling are sent the same wrong way, and
-//! are taken too, so they never scroll the files under the menu.
+//! wheel and the touchpad's scrolling and gestures are sent the same
+//! wrong way, and are taken too, so they never scroll or zoom the files
+//! under the menu.
 //!
 //! The keyboard is unchanged: a menu takes it when it opens, Escape
 //! closes it and gives it back to the button.
@@ -212,7 +213,15 @@ impl CommandBar {
                     }
                 }
             }
-            gdk::EventType::Scroll if self.menu_sent_past(event).is_some() => glib::Propagation::Stop,
+            // GTK sends these to the same remembered target as presses.
+            gdk::EventType::Scroll
+            | gdk::EventType::TouchpadSwipe
+            | gdk::EventType::TouchpadPinch
+            | gdk::EventType::TouchpadHold
+                if self.menu_sent_past(event).is_some() =>
+            {
+                glib::Propagation::Stop
+            }
             _ => glib::Propagation::Proceed,
         }
     }
