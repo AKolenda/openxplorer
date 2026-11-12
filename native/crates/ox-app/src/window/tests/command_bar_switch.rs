@@ -36,7 +36,7 @@ struct Session {
     pointer: Pointer,
     test: TestWindow,
     origin: (i32, i32),
-    _fixture: Fixture,
+    fixture: Fixture,
 }
 
 impl Session {
@@ -58,7 +58,7 @@ impl Session {
             pointer,
             test,
             origin,
-            _fixture: fixture,
+            fixture,
         }
     }
 
@@ -817,9 +817,16 @@ fn the_open_menu_closes_when_the_tab_or_location_changes() {
         session.test.window.imp().session.borrow().tabs().len() == 2
     });
     wait_for_frames(&session.test.window, 3);
-    for (action, what) in [("next-tab", "the next tab"), ("up", "the folder above")] {
-        session.open_by_click("View");
-        session.test.activate(action, None);
-        session.expect_only_open(None, &format!("View open, the window shows {what}"));
-    }
+    session.open_by_click("View");
+    session.test.activate("next-tab", None);
+    session.expect_only_open(None, "View open, the window shows the next tab");
+
+    // A subfolder of the test's own folder, so nothing outside it is
+    // listed.
+    session.test.activate("previous-tab", None);
+    wait_for_frames(&session.test.window, 3);
+    let documents = session.fixture.uri_of("Documents");
+    session.open_by_click("View");
+    session.test.activate("go-to", Some(&documents));
+    session.expect_only_open(None, "View open, the window shows another folder");
 }
