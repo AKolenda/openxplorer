@@ -11,10 +11,13 @@ use std::time::Duration;
 
 use gtk::gdk;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use super::command_bar::{command_bar_controls, control_name};
 use super::narrow_windows::resize;
-use crate::test_support::harness::{wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard};
+use crate::test_support::harness::{
+    descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::test_support::pointer::{window_origin, Button, Pointer};
 use crate::window::menu_popover::{row_label, MenuPopover};
 
@@ -639,4 +642,184 @@ fn a_press_on_an_item_runs_it_only_if_released_there_with_the_primary_button() {
     wait_until("the details pane to open", || {
         toggle_is_on(&session.test, "details-pane")
     });
+}
+
+/// The file list's scrolled window: the one in the folder pane that can
+/// scroll down.
+fn file_list_scroller(test: &TestWindow) -> gtk::ScrolledWindow {
+    descendants::<gtk::ScrolledWindow>(test.window.folder_pane())
+        .into_iter()
+        .find(|scroller| {
+            let adjustment = scroller.vadjustment();
+            scroller.is_mapped() && adjustment.upper() > adjustment.page_size() + 1.0
+        })
+        .expect("the file list scrolls")
+}
+
+/// The wheel turned over an open menu, also right after the window laid
+/// itself out with the pointer resting on the menu, never scrolls the
+/// file list under the menu.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn the_wheel_over_an_open_menu_never_scrolls_the_files_under_it() {
+    let mut session = session_over_many_files();
+    let scroller = file_list_scroller(&session.test);
+    let top = scroller.vadjustment().value();
+    session.open_by_click("View");
+    let menu = menu_of(&session.test, "View");
+    let row = row_of(&menu, "Details pane");
+    let point = session.on_screen(&row, (24.0, f64::from(row.height()) / 2.0));
+
+    rest_on_menu_through_a_layout(&mut session, point);
+    for _ in 0..3 {
+        session.pointer.press(Button::WheelDown);
+        session.pointer.release(Button::WheelDown);
+    }
+    wait_for(QUIET);
+
+    assert!(
+        (scroller.vadjustment().value() - top).abs() < f64::EPSILON,
+        "the file list did not scroll"
+    );
+    assert_eq!(session.open_menus(), ["View"], "the wheel leaves the menu open");
+}
+
+/// A right or middle click on the open menu's own button closes it, as a
+/// click elsewhere does: only a primary click toggles the button.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn a_right_or_middle_click_on_the_open_menus_button_closes_it() {
+    let mut session = Session::open(None);
+    for button in [Button::Secondary, Button::Middle] {
+        session.open_by_click("View");
+        let point = session.middle_of(&menu_button(&session.test, "View"));
+        session.pointer.move_to(point.0, point.1);
+        session.pointer.press(button);
+        session.pointer.release(button);
+        session.expect_only_open(None, &format!("View open, a {button:?} click on View"));
+    }
+}
+
+/// Tab, Shift+Tab, F6 and Shift+F6 never leave an open menu on screen
+/// while the keyboard is outside it: the menu keeps the keyboard, or it
+/// closes.
+///
+/// parity: CMD-005, CMD-031
+#[gtk::test]
+fn the_keyboard_never_leaves_an_open_menu_behind() {
+    let mut session = Session::open(None);
+    for (shift, key) in [
+        (false, gdk::Key::Tab),
+        (true, gdk::Key::Tab),
+        (false, gdk::Key::F6),
+        (true, gdk::Key::F6),
+    ] {
+        session.open_by_click("View");
+        let menu = menu_of(&session.test, "View");
+        wait_until("the keyboard in the menu", || has_keyboard(&session.test, &menu));
+        if shift {
+            session.pointer.hold_key(gdk::Key::Shift_L);
+        }
+        session.pointer.tap_key(key);
+        if shift {
+            session.pointer.let_go_key(gdk::Key::Shift_L);
+        }
+        wait_for(QUIET);
+        let open = !session.open_menus().is_empty();
+        assert!(
+            !open || has_keyboard(&session.test, &menu),
+            "{key:?} (Shift {shift}): View is open while the keyboard is on {:?}",
+            gtk::prelude::GtkWindowExt::focus(&session.test.window).map(|focus| focus.type_().name())
+        );
+        for name in MENUS {
+            menu_button(&session.test, name).popdown();
+        }
+        wait_for(QUIET);
+    }
+}
+
+/// With real keys: Right on Show opens its submenu with the keyboard in
+/// it, Escape closes only the submenu and gives the keyboard back to the
+/// View menu, and a second Escape closes View and gives it back to its
+/// button.
+///
+/// parity: CMD-005, CMD-031
+#[gtk::test]
+fn escape_closes_a_submenu_then_its_menu() {
+    let mut session = Session::open(None);
+    session.open_by_click("View");
+    let menu = menu_of(&session.test, "View");
+    wait_until("the keyboard in the menu", || has_keyboard(&session.test, &menu));
+    let show = row_of(&menu, "Show");
+    for _ in 0..30 {
+        if has_keyboard(&session.test, &show) {
+            break;
+        }
+        session.pointer.tap_key(gdk::Key::Down);
+    }
+    assert!(has_keyboard(&session.test, &show), "Down reaches Show");
+    session.pointer.tap_key(gdk::Key::Right);
+    wait_until("Show's submenu", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.is_mapped())
+    });
+    let submenu = menu.open_submenu_menu().expect("Show's submenu");
+    wait_until("the keyboard in the submenu", || {
+        has_keyboard(&session.test, &submenu)
+    });
+
+    session.pointer.tap_key(gdk::Key::Escape);
+    wait_until("the submenu to close", || !submenu.is_mapped());
+    wait_for(QUIET);
+    assert_eq!(session.open_menus(), ["View"], "View stays open");
+    assert!(has_keyboard(&session.test, &menu), "the keyboard is back in View");
+
+    session.pointer.tap_key(gdk::Key::Escape);
+    session.expect_only_open(None, "a second Escape");
+    let button = menu_button(&session.test, "View");
+    wait_until("the keyboard back on View", || {
+        has_keyboard(&session.test, &button)
+    });
+}
+
+/// The open menu closes when the window stops being the active one, as
+/// when another app's window comes in front.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn the_open_menu_closes_when_another_window_comes_in_front() {
+    let mut session = Session::open(None);
+    session.open_by_click("Sort");
+    let other = gtk::Window::builder()
+        .title("Another app")
+        .default_width(300)
+        .default_height(200)
+        .build();
+    other.present();
+    wait_until("the window to stop being active", || {
+        !session.test.window.is_active()
+    });
+    session.expect_only_open(None, "another window in front");
+    crate::test_support::harness::put_away(&other);
+}
+
+/// The open menu closes when the window shows another tab or location,
+/// as when a key goes back, up or to the next tab while it is open.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn the_open_menu_closes_when_the_tab_or_location_changes() {
+    let mut session = Session::open(None);
+    session.test.activate("new-tab", None);
+    wait_until("two tabs", || {
+        session.test.window.imp().session.borrow().tabs().len() == 2
+    });
+    wait_for_frames(&session.test.window, 3);
+    for (action, what) in [("next-tab", "the next tab"), ("up", "the folder above")] {
+        session.open_by_click("View");
+        session.test.activate(action, None);
+        session.expect_only_open(None, &format!("View open, the window shows {what}"));
+    }
 }
