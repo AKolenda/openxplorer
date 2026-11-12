@@ -1088,9 +1088,10 @@ impl MenuPopover {
 /// and the Sort menu once stayed on screen until a window of another app
 /// was clicked; the command bar's menus never close themselves so (see
 /// `command_bar/menu_group.rs`). The press goes on to whatever it is on.
-/// A press on the button a menu drops down from is left to that button,
-/// which closes the menu when clicked: closed here first, the click would
-/// open it again.
+/// A primary press on the button a menu drops down from is left to that
+/// button, which closes the menu when clicked: closed here first, the
+/// click would open it again. A right or middle press there closes the
+/// menu here, as the button toggles only on the primary button.
 pub(super) fn close_menus_on_press(window: &impl IsA<gtk::Widget>) {
     let gesture = gtk::GestureClick::new();
     gesture.set_button(0);
@@ -1100,16 +1101,20 @@ pub(super) fn close_menus_on_press(window: &impl IsA<gtk::Widget>) {
         gesture.set_state(gtk::EventSequenceState::Denied);
         let pressed = gesture.current_event().and_then(|event| event.surface());
         if let Some(window) = gesture.widget() {
-            let on_widget = window.pick(x, y, gtk::PickFlags::DEFAULT);
+            // A touch counts as the primary button.
+            let primary = gesture.current_button() == gdk::BUTTON_PRIMARY;
+            let on_widget = primary
+                .then(|| window.pick(x, y, gtk::PickFlags::DEFAULT))
+                .flatten();
             close_menus_in(&window, pressed.as_ref(), on_widget.as_ref());
         }
     });
     window.as_ref().add_controller(gesture);
 }
 
-/// Closes the menus of `root` for a press on `pressed`, at `on_widget`
-/// in `root`: all of them, unless the press is on one of them, but for a
-/// menu whose own menu button holds `on_widget`. A menu that is closed but
+/// Closes the menus of `root` for a press on `pressed`: all of them,
+/// unless the press is on one of them, but for a menu whose own menu
+/// button holds `on_widget`, where a primary press was made. A menu that is closed but
 /// whose surface is still on screen is taken off it.
 pub(super) fn close_menus_in(
     root: &gtk::Widget,

@@ -50,9 +50,7 @@ pub(crate) enum Button {
     Primary = 1,
     Middle = 2,
     Secondary = 3,
-    /// The wheel turned one notch up, as X11 reports it.
-    WheelUp = 4,
-    /// The wheel turned one notch down.
+    /// The wheel turned one notch down, as X11 reports it.
     WheelDown = 5,
 }
 

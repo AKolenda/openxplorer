@@ -191,6 +191,13 @@ mod imp {
         /// A press on the open menu taken from the window, until its
         /// release (`menu_group.rs`).
         pub(super) held_press: RefCell<Option<super::menu_group::HeldPress>>,
+        /// Whether a pointer button or a touch is down in the window.
+        pub(super) pointer_down: Cell<bool>,
+        /// Where the keyboard is in the window (`menu_group.rs`).
+        pub(super) keyboard_on: glib::WeakRef<gtk::Widget>,
+        /// The tab and location the window showed when it last told the
+        /// bar.
+        pub(super) shown_location: RefCell<Option<(Option<crate::window::session::TabId>, String)>>,
     }
 
     #[glib::object_subclass]

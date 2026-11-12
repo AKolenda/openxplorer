@@ -14,7 +14,10 @@
 //! ([`super::super::menu_popover::close_menus_on_press`]), which leaves a
 //! press on a menu's own button to that button, by the window going
 //! inactive (a click in another app), and by this group when another of
-//! its menus opens. [`CommandBar::open_menu`] is the one menu of the bar
+//! its menus opens, when the keyboard moves out of it (Shift+Tab), and
+//! when the window shows another tab or folder. A menu that holds the
+//! pointer is closed by all of these as a matter of course; one that does
+//! not must be told. [`CommandBar::open_menu`] is the one menu of the bar
 //! that is open.
 //!
 //! Without a grab, one thing needs mending, on X11 only. GTK keeps one
@@ -29,7 +32,9 @@
 //! never reaches what is under the menu. It then does what the click
 //! would have done in the menu: a primary press and release on the same
 //! row or button runs it; a press between the items, one dragged off its
-//! item before the release, or a right or middle click runs nothing.
+//! item before the release, or a right or middle click runs nothing. The
+//! wheel and the touchpad's scrolling are sent the same wrong way, and
+//! are taken too, so they never scroll the files under the menu.
 //!
 //! The keyboard is unchanged: a menu takes it when it opens, Escape
 //! closes it and gives it back to the button.
@@ -39,6 +44,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::super::menu_popover::MenuPopover;
+use super::super::session::TabId;
 use super::super::widget_tree::{children, descendants};
 use super::super::BrowserWindow;
 use super::CommandBar;
@@ -97,11 +103,18 @@ impl CommandBar {
             self,
             move |window| {
                 if !window.is_active() {
+                    // A release outside the window is never seen here.
+                    bar.imp().pointer_down.set(false);
                     if let Some(button) = bar.open_menu() {
                         button.popdown();
                     }
                 }
             }
+        ));
+        window.connect_focus_widget_notify(glib::clone!(
+            #[weak(rename_to = bar)]
+            self,
+            move |window| bar.follow_keyboard(gtk::prelude::GtkWindowExt::focus(window).as_ref())
         ));
         let pointer_events = gtk::EventControllerLegacy::new();
         pointer_events.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -115,10 +128,55 @@ impl CommandBar {
         window.add_controller(pointer_events);
     }
 
+    /// Closes the open menu when the keyboard moves from inside it, or a
+    /// submenu of it, to anything else in the window, as Shift+Tab can.
+    /// A focus that goes for a moment, as when the menu rebuilds its rows,
+    /// closes nothing, nor does one a pointer press moves: the press itself
+    /// closes the menu, or, on the menu's own button, the click does.
+    fn follow_keyboard(&self, focus: Option<&gtk::Widget>) {
+        let imp = self.imp();
+        let before = imp.keyboard_on.upgrade();
+        imp.keyboard_on.set(focus);
+        if imp.pointer_down.get() {
+            return;
+        }
+        let Some((button, focus)) = self.open_menu().zip(focus) else {
+            return;
+        };
+        let Some(menu) = button.popover() else {
+            return;
+        };
+        let inside =
+            |widget: &gtk::Widget| widget == menu.upcast_ref::<gtk::Widget>() || widget.is_ancestor(&menu);
+        if before.as_ref().is_some_and(inside) && !inside(focus) {
+            button.popdown();
+        }
+    }
+
+    /// Closes the open menu when the window shows another tab or another
+    /// location than when it last told the bar, as after Ctrl+Tab or Alt+Up
+    /// pressed while the menu is open.
+    pub(in crate::window) fn follow_shown_location(&self, tab: Option<TabId>, uri: &str) {
+        let shown = (tab, uri.to_owned());
+        let before = self.imp().shown_location.replace(Some(shown.clone()));
+        if before.is_some_and(|before| before != shown) {
+            if let Some(button) = self.open_menu() {
+                button.popdown();
+            }
+        }
+    }
+
     /// Follows which surface has the pointer, and takes a press on the
     /// open menu that GTK sends to the window under it, and its release.
     fn follow_pointer_event(&self, event: &gdk::Event) -> glib::Propagation {
         let imp = self.imp();
+        match event.event_type() {
+            gdk::EventType::ButtonPress | gdk::EventType::TouchBegin => imp.pointer_down.set(true),
+            gdk::EventType::ButtonRelease | gdk::EventType::TouchEnd | gdk::EventType::TouchCancel => {
+                imp.pointer_down.set(false);
+            }
+            _ => {}
+        }
         match event.event_type() {
             gdk::EventType::MotionNotify | gdk::EventType::EnterNotify => {
                 imp.pointer_surface.set(event.surface().as_ref());
@@ -154,8 +212,21 @@ impl CommandBar {
                     }
                 }
             }
+            gdk::EventType::Scroll if self.menu_sent_past(event).is_some() => glib::Propagation::Stop,
             _ => glib::Propagation::Proceed,
         }
+    }
+
+    /// The open menu, or a submenu of it, when `event` happened on it
+    /// while GTK's pointer target is in the window, not in that menu.
+    fn menu_sent_past(&self, event: &gdk::Event) -> Option<MenuPopover> {
+        let button = self.open_menu()?;
+        let surface = event.surface()?;
+        if self.imp().pointer_surface.upgrade().as_ref() == Some(&surface) {
+            return None;
+        }
+        let menu = gtk::Native::for_surface(&surface).and_downcast::<MenuPopover>()?;
+        menu.is_ancestor(&button).then_some(menu)
     }
 
     /// For a press on the open menu, or a submenu of it, while GTK's
@@ -163,15 +234,7 @@ impl CommandBar {
     /// take from the window, with the menu's row or button under it, if
     /// any.
     fn press_sent_past_menu(&self, event: &gdk::Event) -> Option<HeldPress> {
-        let button = self.open_menu()?;
-        let surface = event.surface()?;
-        if self.imp().pointer_surface.upgrade().as_ref() == Some(&surface) {
-            return None;
-        }
-        let menu = gtk::Native::for_surface(&surface).and_downcast::<MenuPopover>()?;
-        if !menu.is_ancestor(&button) {
-            return None;
-        }
+        let menu = self.menu_sent_past(event)?;
         Some(HeldPress {
             button: pointer_button(event)?,
             target: item_at(&menu, event),
