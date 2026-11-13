@@ -356,8 +356,8 @@ impl BrowserWindow {
     }
 
     /// Opens Shift+F10's menu ([`Self::shift_f10_menu_style`]), pointing
-    /// at the first selected item, or near the top of the view without
-    /// one.
+    /// at the selected item the keyboard is on ([`keyboard_menu_item`]),
+    /// or near the top of the view without a selection.
     pub(super) fn open_context_menu_from_keyboard(&self) {
         self.open_keyboard_menu(self.shift_f10_menu_style());
     }
@@ -380,8 +380,10 @@ impl BrowserWindow {
         self.open_keyboard_menu(self.preferred_menu_style());
     }
 
-    /// Opens a menu in `style` from the keyboard, pointing at the first
-    /// selected item, or near the top of the view without one.
+    /// Opens a menu in `style` from the keyboard, pointing at the
+    /// selected item the keyboard is on ([`keyboard_menu_item`]), or near
+    /// the top of the view without a selection. An item out of sight
+    /// comes into view first, and the menu opens once it is drawn there.
     fn open_keyboard_menu(&self, style: MenuStyle) {
         let view = self.folder_pane().input_widget();
         if let Some(heading) = self.focused_heading() {
@@ -389,13 +391,61 @@ impl BrowserWindow {
             self.open_context_menu(&view, &keyboard_menu_anchor(row), style, Some(&heading));
             return;
         }
-        let selected = self.folder_pane().model().first_selected();
-        if let Some(position) = selected {
-            self.folder_pane().reveal(position);
-        }
-        let row = selected.and_then(|position| self.folder_pane().owners().widget_at(position));
-        let bounds = row.and_then(|row| row.compute_bounds(&view));
-        self.open_context_menu(&view, &keyboard_menu_anchor(bounds), style, None);
+        let pane = self.folder_pane();
+        let Some(position) = keyboard_menu_item(&pane.model().selected_positions(), pane.focused_position())
+        else {
+            self.open_context_menu(&view, &keyboard_menu_anchor(None), style, None);
+            return;
+        };
+        let was_shown = self.item_is_shown(&view, position);
+        pane.reveal(position);
+        let clock = view.frame_clock().filter(|_| !was_shown);
+        let Some(clock) = clock else {
+            self.open_keyboard_menu_at(&view, position, style);
+            return;
+        };
+        // GTK lays the item out in its new place in the next frame; until
+        // then its row is where it was before the scroll.
+        let handler = std::rc::Rc::new(std::cell::Cell::new(None));
+        let id = clock.connect_after_paint(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            view,
+            #[strong]
+            handler,
+            move |clock| {
+                if let Some(id) = handler.take() {
+                    clock.disconnect(id);
+                }
+                window.open_keyboard_menu_at(&view, position, style);
+            }
+        ));
+        handler.set(Some(id));
+        view.queue_allocate();
+    }
+
+    /// Opens a menu in `style` pointing at the item at `position` of
+    /// `view`, the keyboard's menu.
+    fn open_keyboard_menu_at(&self, view: &gtk::Widget, position: u32, style: MenuStyle) {
+        let row = self.folder_pane().owners().widget_at(position);
+        let bounds = row.and_then(|row| row.compute_bounds(view));
+        self.open_context_menu(view, &keyboard_menu_anchor(bounds), style, None);
+    }
+
+    /// Whether the item at `position` shows in `view`: a press in the
+    /// middle of its row or tile lands on it. GTK keeps the row with
+    /// keyboard focus where it was when the list scrolls it away.
+    fn item_is_shown(&self, view: &gtk::Widget, position: u32) -> bool {
+        let owners = self.folder_pane().owners();
+        let Some(bounds) = owners
+            .widget_at(position)
+            .and_then(|row| row.compute_bounds(view))
+        else {
+            return false;
+        };
+        let center = bounds.center();
+        owners.position_at(view, f64::from(center.x()), f64::from(center.y())) == Some(position)
     }
 
     /// "Show more options": the classic menu where the compact one was.
@@ -541,6 +591,18 @@ impl BrowserWindow {
     }
 }
 
+/// The item a menu opened from the keyboard is for, among the `selected`
+/// positions, ascending: the one with keyboard focus, `focused`, when it
+/// is selected, as Windows 11 File Explorer opens it at the item the
+/// keyboard moved to last (Shift+Down three times from a click opens it
+/// at the fourth item); else the first selected item. `None` without a
+/// selection.
+fn keyboard_menu_item(selected: &[u32], focused: Option<u32>) -> Option<u32> {
+    focused
+        .filter(|focused| selected.contains(focused))
+        .or_else(|| selected.first().copied())
+}
+
 /// Where a menu opened from the keyboard points: into the selected row,
 /// [`KEYBOARD_MENU_INSET`] from its start, or near the top of the view
 /// without one.
@@ -672,6 +734,23 @@ mod tests {
 
     fn entry(label: &str, action: WindowAction) -> MenuEntry {
         super::super::menu_popover::MenuItem::new(label, crate::icons::Icon::Info, action).into()
+    }
+
+    /// The keyboard's menu is for the selected item the keyboard is on,
+    /// else for the first selected one.
+    ///
+    /// parity: CMD-014
+    #[test]
+    fn the_keyboards_menu_is_for_the_focused_selected_item() {
+        assert_eq!(keyboard_menu_item(&[1, 2, 3, 4], Some(4)), Some(4), "Shift+Down");
+        assert_eq!(keyboard_menu_item(&[1, 2, 3, 4], Some(1)), Some(1), "Shift+Up");
+        assert_eq!(
+            keyboard_menu_item(&[1, 2], Some(5)),
+            Some(1),
+            "the keyboard on an item not selected"
+        );
+        assert_eq!(keyboard_menu_item(&[3], None), Some(3));
+        assert_eq!(keyboard_menu_item(&[], Some(2)), None, "nothing selected");
     }
 
     /// The service actions and "Open as administrator…" go above "Show

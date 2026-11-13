@@ -37,6 +37,9 @@ pub(crate) enum WindowAction {
     ShowTabNumber,
     /// Closes every tab but the one whose id is the `u64` target.
     CloseOtherTabs,
+    /// Copies the tab whose id is the `u64` target right after it, in
+    /// front, with its history (Duplicate tab).
+    DuplicateTab,
     /// Closes every tab to the right of the one whose id is the `u64`
     /// target.
     CloseTabsToTheRight,
@@ -541,6 +544,7 @@ impl WindowAction {
             WindowAction::CloseTabById => "close-tab-by-id",
             WindowAction::ShowTabNumber => "show-tab-number",
             WindowAction::CloseOtherTabs => "close-other-tabs",
+            WindowAction::DuplicateTab => "duplicate-tab",
             WindowAction::CloseTabsToTheRight => "close-tabs-to-the-right",
             WindowAction::ReopenClosedTab => "reopen-closed-tab",
             WindowAction::RestoreClosedTab => "restore-closed-tab",

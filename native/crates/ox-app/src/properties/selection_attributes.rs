@@ -357,7 +357,7 @@ impl SelectionAttributes {
             } else {
                 item.name.trim_start_matches('.').to_owned()
             };
-            opener
+            let renamed = opener
                 .rename_item_at(
                     parent,
                     &item.uri,
@@ -366,6 +366,9 @@ impl SelectionAttributes {
                     item.is_folder || item.links_to_folder,
                 )
                 .await?;
+            if !renamed {
+                return Err(BrowserWindow::not_renamed_message());
+            }
             let renamed = gio::File::for_uri(&item.uri)
                 .parent()
                 .map(|folder| folder.child(&wanted).uri().to_string());

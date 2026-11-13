@@ -232,8 +232,9 @@ impl BrowserWindow {
     /// Renames the item at `uri`, called `old_name`, to `name`, as the
     /// name field of Properties asks (PROP-005): the same checks, question
     /// about a changed extension, asked over `parent`, the Properties
-    /// window, write protection and Undo as Rename. The error is the
-    /// message to show.
+    /// window, write protection and Undo as Rename. True once renamed;
+    /// false when No to the question kept the old name, which, as No ends
+    /// a rename in place, is no error. The error is the message to show.
     pub(crate) async fn rename_item_at(
         &self,
         parent: &gtk::Window,
@@ -241,7 +242,7 @@ impl BrowserWindow {
         old_name: &str,
         name: &str,
         is_folder: bool,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
         // An invalid name is refused before anything is asked, as renaming
         // in place and the Rename dialog refuse it.
         ox_core::location::validate_name(name).map_err(|error| error.to_string())?;
@@ -249,14 +250,19 @@ impl BrowserWindow {
             .confirm_extension_change_over(parent, old_name, name, is_folder)
             .await
         {
-            return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
+            return Ok(false);
         }
         let (context, _writing) = self.admit_write()?;
         let renamed = rename_item(uri, name, &context)
             .await
             .map_err(|error| error.to_string())?;
         self.finish_rename(renamed);
-        Ok(())
+        Ok(true)
+    }
+
+    /// The message that says a name was not changed.
+    pub(crate) fn not_renamed_message() -> String {
+        ox_core::i18n::gettext_static(NOT_RENAMED).to_owned()
     }
 
     /// Remembers the rename for Undo and selects the item under its new

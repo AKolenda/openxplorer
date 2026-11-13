@@ -328,8 +328,7 @@ fn cancelling_the_hide_question_keeps_the_name_and_the_field() {
 /// warning icon, "If you change a file name extension, the file might
 /// become unusable." and, on the next line, "Are you sure you want to
 /// change it?", and Yes (focused, so Enter renames) and No. No keeps the
-/// old name; whether Windows leaves the name box open after No is not
-/// known, so the field stays open with the typed name, as before.
+/// old name and closes the name box, as Windows 11 does; F2 starts again.
 ///
 /// parity: OPS-049
 #[gtk::test]
@@ -348,11 +347,14 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     crate::test_support::harness::capture_in_both_themes(&question, "rename-question");
     question.press("No");
     wait_for_no_dialog(&test);
-    wait_until("the field to come back", || field.is_sensitive());
-    assert!(is_renaming_in_place(&test), "editing goes on");
-    assert_eq!(field.text(), "Notes 2.md", "the typed name is kept");
-    assert!(fixture.path("Notes 2.txt").is_file());
+    wait_until("the name box to close", || !is_renaming_in_place(&test));
+    assert!(fixture.path("Notes 2.txt").is_file(), "No keeps the old name");
+    assert!(!fixture.path("Notes 2.md").exists());
 
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    assert_eq!(field.text(), "Notes 2.txt", "F2 starts again from the old name");
+    field.set_text("Notes 2.md");
     field.emit_activate();
     open_dialog(&test).press("Yes");
 
@@ -385,12 +387,9 @@ fn the_rename_question_and_confirm_save_as_share_one_message_box_style() {
         let question = open_dialog(&test);
         wait_for_frames(&question, 3);
         let rename = super::file_ops_support::message_box_metrics(question.upcast_ref());
+        // Closing the question ends the rename with the old name.
         question.close();
         wait_for_no_dialog(&test);
-        wait_until("the field to come back", || field.is_sensitive());
-        // The unchanged name closes the field without renaming.
-        field.set_text("Notes 2.txt");
-        field.emit_activate();
         wait_until("the field to close", || !is_renaming_in_place(&test));
 
         let frame = DialogFrame::new("Confirm Save As", DialogWidth::MessageBox);
@@ -523,7 +522,8 @@ fn a_translated_message_box_keeps_its_alt_keys() {
 }
 
 /// Escape answers the extension question No, as closing it does: the old
-/// name stays. Enter presses Yes, the focused default button.
+/// name stays and the name box closes. Enter presses Yes, the focused
+/// default button.
 ///
 /// parity: OPS-049
 #[gtk::test]
@@ -541,10 +541,13 @@ fn escape_answers_the_extension_question_no_and_enter_yes() {
     assert!(super::file_ops_support::is_extension_question(&question));
     question.close();
     wait_for_no_dialog(&test);
-    wait_until("the field to come back", || field.is_sensitive());
+    wait_until("the name box to close", || !is_renaming_in_place(&test));
     assert!(fixture.path("Notes 2.txt").is_file(), "No: the old name stays");
     assert!(!fixture.path("Notes 2.md").exists());
 
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    field.set_text("Notes 2.md");
     field.emit_activate();
     let question = open_dialog(&test);
     let enter = question.default_widget().and_downcast::<gtk::Button>();

@@ -839,7 +839,10 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     menu.row("Duplicate tab").emit_activate();
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
-    assert!(!test.window.is_action_enabled("back"), "the history stays behind");
+    assert!(
+        test.window.is_action_enabled("back"),
+        "the copy keeps the history, as in Windows 11"
+    );
 }
 
 /// The Menu key and Shift+F10 on the focused tab open that tab's menu
