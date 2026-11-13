@@ -203,7 +203,17 @@ mod imp {
             // before that it cannot take focus.
             // A submenu gets the keyboard from the row that opened it,
             // and only when the keyboard opened it.
-            popover.connect_show(super::MenuPopover::redraw);
+            popover.connect_show(|popover| {
+                popover.redraw();
+                // GTK moves the keyboard into a menu that holds the
+                // pointer (autohide) itself; a top-level menu without that
+                // grab, as the command bar's (command_bar/menu_group.rs),
+                // takes it here once its rows are built: when it is first
+                // mapped, it has none yet.
+                if !popover.is_autohide() && !popover.imp().is_submenu.get() && popover.is_mapped() {
+                    popover.focus_first_item();
+                }
+            });
             popover.connect_map(|popover| {
                 if !popover.imp().is_submenu.get() {
                     popover.focus_first_item();
@@ -1076,26 +1086,41 @@ impl MenuPopover {
 /// in it but on a menu. A menu normally closes itself on such a press, but
 /// on KDE Plasma a press in the app's own window is the app's to handle,
 /// and the Sort menu once stayed on screen until a window of another app
-/// was clicked. The press goes on to whatever it is on.
+/// was clicked; the command bar's menus never close themselves so (see
+/// `command_bar/menu_group.rs`). The press goes on to whatever it is on.
+/// A primary press on the button a menu drops down from is left to that
+/// button, which closes the menu when clicked: closed here first, the
+/// click would open it again. A right or middle press there closes the
+/// menu here, as the button toggles only on the primary button.
 pub(super) fn close_menus_on_press(window: &impl IsA<gtk::Widget>) {
     let gesture = gtk::GestureClick::new();
     gesture.set_button(0);
     gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
-    gesture.connect_pressed(|gesture, _, _, _| {
+    gesture.connect_pressed(|gesture, _, x, y| {
         // Only watching: the press is not taken from the widgets under it.
         gesture.set_state(gtk::EventSequenceState::Denied);
         let pressed = gesture.current_event().and_then(|event| event.surface());
         if let Some(window) = gesture.widget() {
-            close_menus_in(&window, pressed.as_ref());
+            // A touch counts as the primary button.
+            let primary = gesture.current_button() == gdk::BUTTON_PRIMARY;
+            let on_widget = primary
+                .then(|| window.pick(x, y, gtk::PickFlags::DEFAULT))
+                .flatten();
+            close_menus_in(&window, pressed.as_ref(), on_widget.as_ref());
         }
     });
     window.as_ref().add_controller(gesture);
 }
 
 /// Closes the menus of `root` for a press on `pressed`: all of them,
-/// unless the press is on one of them. A menu that is closed but whose
-/// surface is still on screen is taken off it.
-pub(super) fn close_menus_in(root: &gtk::Widget, pressed: Option<&gdk::Surface>) {
+/// unless the press is on one of them, but for a menu whose own menu
+/// button holds `on_widget`, where a primary press was made. A menu that is closed but
+/// whose surface is still on screen is taken off it.
+pub(super) fn close_menus_in(
+    root: &gtk::Widget,
+    pressed: Option<&gdk::Surface>,
+    on_widget: Option<&gtk::Widget>,
+) {
     let mut menus = Vec::new();
     collect_menus(root, &mut menus);
     let on_a_menu = pressed.is_some_and(|pressed| {
@@ -1106,8 +1131,16 @@ pub(super) fn close_menus_in(root: &gtk::Widget, pressed: Option<&gdk::Surface>)
     if on_a_menu {
         return;
     }
+    let on_own_button = |menu: &MenuPopover| {
+        let button = menu.parent().and_downcast::<gtk::MenuButton>();
+        button.is_some_and(|button| {
+            on_widget.is_some_and(|widget| {
+                widget == button.upcast_ref::<gtk::Widget>() || widget.is_ancestor(&button)
+            })
+        })
+    };
     for menu in &menus {
-        if menu.is_visible() {
+        if menu.is_visible() && !on_own_button(menu) {
             menu.popdown();
         }
     }

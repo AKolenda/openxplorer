@@ -19,6 +19,10 @@
 //! - `titles-menu=<column>`: opens the details view's column titles'
 //!   menu on the title of `<column>` (`name`, `size`, ...), as a
 //!   right-click on it does;
+//! - `command-menu=<name>`: opens the command bar's menu named `<name>`
+//!   (`New`, `Sort`, `View`, `See more`), as a click on its button does;
+//!   a menu of the bar open already closes, as when that click is made
+//!   while it is open;
 //! - `submenu=<label>`: opens the submenu of the open context menu's
 //!   item `<label>`, such as `Send to`, as Right on its row does;
 //! - `tab=<name>`: shows the tab named `<name>` (`general`, `security`,
@@ -88,6 +92,8 @@ pub(crate) enum SceneStep {
     TabMenu(usize),
     /// Open the column titles' menu on this column's title.
     TitlesMenu(String),
+    /// Open the command bar's menu with this name.
+    CommandMenu(String),
     /// Open the submenu of the open context menu's item with this label.
     Submenu(String),
     /// Show this tab of the Properties window opened last.
@@ -148,6 +154,7 @@ impl SceneStep {
                 .filter(|number| *number > 0)
                 .map(Self::TabMenu),
             "titles-menu" => Some(Self::TitlesMenu(argument.to_owned())),
+            "command-menu" => Some(Self::CommandMenu(argument.to_owned())),
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
             "focus" => Some(Self::Focus(argument.to_owned())),
@@ -206,6 +213,10 @@ impl SceneStep {
                 .open_titles_menu_on(column)
                 .then_some(crate::window::MENU_OPENING_MOTION)
                 .ok_or_else(|| format!("the details view shows no column “{column}”")),
+            Self::CommandMenu(name) => window
+                .open_command_bar_menu(name)
+                .then_some(crate::window::MENU_OPENING_MOTION)
+                .ok_or_else(|| format!("the command bar shows no menu “{name}”")),
             Self::Submenu(label) => (window.open_context_submenu(label)
                 || window.open_search_options_submenu(label))
             .then_some(crate::window::MENU_OPENING_MOTION)
@@ -407,6 +418,18 @@ fn triggered(trigger: &gtk::ShortcutTrigger, key: gdk::Key, modifiers: gdk::Modi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_scene_opens_command_bar_menus_by_name() {
+        assert_eq!(
+            SceneStep::parse_scene("command-menu=View; command-menu=See more"),
+            Some(vec![
+                SceneStep::CommandMenu("View".to_owned()),
+                SceneStep::CommandMenu("See more".to_owned()),
+            ])
+        );
+        assert_eq!(SceneStep::parse_scene("command-menu="), None);
+    }
 
     #[test]
     fn a_scene_lists_selections_and_actions_in_order() {
