@@ -63,8 +63,51 @@ impl CommandBar {
                 self,
                 move |button| bar.follow_menu(button)
             ));
+            // After the button's own click, or its cancelling: GTK runs
+            // the click from the end of its gesture, so a handler run
+            // after that end sees whether the button closed its menu.
+            if let Some(click) = click_gesture_of(&button) {
+                let pressed = button.downgrade();
+                click.connect_local(
+                    "end",
+                    true,
+                    glib::clone!(
+                        #[weak(rename_to = bar)]
+                        self,
+                        #[upgrade_or]
+                        None,
+                        move |_| {
+                            if let Some(button) = pressed.upgrade() {
+                                bar.after_click_on(&button);
+                            }
+                            None
+                        }
+                    ),
+                );
+            }
         }
         self.connect_realize(CommandBar::watch_window);
+    }
+
+    /// After a press on `button` ended: when it began on the button of
+    /// the menu open then, and the menu is still open, the button's click
+    /// was cancelled, as when the press is dragged off the button. The
+    /// press moved the keyboard to the button, which `follow_keyboard`
+    /// left to the click; the menu closes if the keyboard is outside it.
+    fn after_click_on(&self, button: &gtk::MenuButton) {
+        let pressed_on_open = self.imp().pressed_with_menu_open.take();
+        if pressed_on_open.as_ref() != Some(button) || self.open_menu().as_ref() != Some(button) {
+            return;
+        }
+        let Some(menu) = button.popover() else {
+            return;
+        };
+        let focus = button.root().and_then(|root| root.focus());
+        let inside =
+            focus.is_some_and(|focus| focus == *menu.upcast_ref::<gtk::Widget>() || focus.is_ancestor(&menu));
+        if !inside {
+            button.popdown();
+        }
     }
 
     /// The menu button whose menu is open, if any.
@@ -172,7 +215,10 @@ impl CommandBar {
     fn follow_pointer_event(&self, event: &gdk::Event) -> glib::Propagation {
         let imp = self.imp();
         match event.event_type() {
-            gdk::EventType::ButtonPress | gdk::EventType::TouchBegin => imp.pointer_down.set(true),
+            gdk::EventType::ButtonPress | gdk::EventType::TouchBegin => {
+                imp.pointer_down.set(true);
+                imp.pressed_with_menu_open.replace(self.open_menu());
+            }
             gdk::EventType::ButtonRelease | gdk::EventType::TouchEnd | gdk::EventType::TouchCancel => {
                 imp.pointer_down.set(false);
             }
@@ -279,6 +325,17 @@ impl BrowserWindow {
     pub(crate) fn open_command_bar_menu(&self, name: &str) -> bool {
         self.command_bar().open_menu_named(name)
     }
+}
+
+/// The click gesture of the button inside `button`, through which GTK
+/// toggles the menu on a click.
+fn click_gesture_of(button: &gtk::MenuButton) -> Option<gtk::GestureClick> {
+    let inner = children(button).find(ObjectExt::is::<gtk::ToggleButton>)?;
+    inner
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .find_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
 }
 
 /// What a menu button shows, or its tooltip's first line for one that

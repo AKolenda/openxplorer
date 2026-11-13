@@ -193,6 +193,9 @@ mod imp {
         pub(super) held_press: RefCell<Option<super::menu_group::HeldPress>>,
         /// Whether a pointer button or a touch is down in the window.
         pub(super) pointer_down: Cell<bool>,
+        /// The menu button whose menu was open when the last press began
+        /// (`menu_group.rs`).
+        pub(super) pressed_with_menu_open: RefCell<Option<gtk::MenuButton>>,
         /// Where the keyboard is in the window (`menu_group.rs`).
         pub(super) keyboard_on: glib::WeakRef<gtk::Widget>,
         /// The tab and location the window showed when it last told the
